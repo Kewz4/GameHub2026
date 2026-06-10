@@ -33,5 +33,9 @@ export function getGameOrigin(game: OriginSource): GameOrigin {
   if (exe && PLATFORM_SCHEMES.some((scheme) => exe.startsWith(scheme))) {
     return "sync";
   }
-  return "catalog";
+  // Legacy records without libraryOrigin: GOG/Xbox/BattleNet don't set
+  // scheme-based paths, and installed Epic games use real file paths.
+  // Default to "sync" — catalog is only reliable for records created after
+  // v2.5 where libraryOrigin is explicitly stamped.
+  return "sync";
 }

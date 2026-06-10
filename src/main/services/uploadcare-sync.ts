@@ -57,6 +57,32 @@ export class UploadcareSync {
     return uuid;
   }
 
+  /**
+   * Upload an image file to Uploadcare and return its CDN URL.
+   * Used for profile photos and banner images.
+   */
+  static async uploadImage(filePath: string): Promise<string> {
+    const mimeType = await (
+      await import("file-type")
+    ).fileTypeFromFile(filePath);
+    const form = new FormData();
+    form.append("UPLOADCARE_PUB_KEY", PUBLIC_KEY);
+    form.append("UPLOADCARE_STORE", "1");
+    form.append("file", fs.createReadStream(filePath), {
+      filename: `profile-${Date.now()}${mimeType ? `.${mimeType.ext}` : ""}`,
+      contentType: mimeType?.mime ?? "image/webp",
+    });
+
+    const res = await axios.post<{ file: string }>(UPLOAD_BASE, form, {
+      headers: form.getHeaders(),
+      timeout: 60_000,
+    });
+
+    const uuid = res.data.file;
+    logger.log(`Uploadcare: uploaded image ${uuid}`);
+    return `${CDN_BASE}/${uuid}/`;
+  }
+
   /** Strip everything except letters and digits, lowercase. The Uploadcare
    * CDN does the same to filenames, so legacy uploads can only be matched
    * after normalizing both sides. */
