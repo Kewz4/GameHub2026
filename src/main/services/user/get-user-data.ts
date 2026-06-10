@@ -1,12 +1,42 @@
-import { User, type ProfileVisibility, type UserDetails } from "@types";
+import {
+  User,
+  type ProfileVisibility,
+  type UserDetails,
+  type UserPreferences,
+} from "@types";
 import { HydraApi } from "../hydra-api";
 import { UserNotLoggedInError } from "@shared";
 import { logger } from "../logger";
 import { db } from "@main/level";
 import { levelKeys } from "@main/level/sublevels";
 
+/** HydraAPI rejects ucarecdn.com image URLs, so uploads are stored locally in
+ * userPreferences. Overlay them so the user's own images always show. */
+const overlayLocalImages = async <
+  T extends {
+    profileImageUrl?: string | null;
+    backgroundImageUrl?: string | null;
+  },
+>(
+  user: T
+): Promise<T> => {
+  const prefs = await db
+    .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+      valueEncoding: "json",
+    })
+    .catch(() => null);
+
+  return {
+    ...user,
+    profileImageUrl: prefs?.localProfileImageUrl ?? user.profileImageUrl,
+    backgroundImageUrl:
+      prefs?.localBackgroundImageUrl ?? user.backgroundImageUrl,
+  };
+};
+
 export const getUserData = async () => {
   return HydraApi.get<UserDetails>(`/profile/me`)
+    .then((me) => overlayLocalImages(me))
     .then(async (me) => {
       try {
         const user = await db.get<string, User>(levelKeys.user, {
@@ -42,7 +72,7 @@ export const getUserData = async () => {
         });
 
         if (loggedUser) {
-          return {
+          return overlayLocalImages({
             ...loggedUser,
             username: "",
             bio: "",
@@ -62,7 +92,7 @@ export const getUserData = async () => {
                   expiresAt: loggedUser.subscription.expiresAt,
                 }
               : null,
-          } as UserDetails;
+          } as UserDetails);
         }
       } catch (dbError) {
         logger.error("Failed to read user from DB", dbError);

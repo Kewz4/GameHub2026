@@ -204,7 +204,22 @@ export function UserProfileContextProvider({
 
     return window.electron.hydraApi
       .get<UserProfile>(`/users/${userId}`)
-      .then((userProfile) => {
+      .then(async (userProfile) => {
+        // HydraAPI rejects ucarecdn.com image URLs, so the user's own images
+        // live in userPreferences — overlay them when viewing own profile.
+        if (userDetails?.id === userProfile.id) {
+          const prefs = await window.electron
+            .getUserPreferences()
+            .catch(() => null);
+          userProfile = {
+            ...userProfile,
+            profileImageUrl:
+              prefs?.localProfileImageUrl ?? userProfile.profileImageUrl,
+            backgroundImageUrl:
+              prefs?.localBackgroundImageUrl ?? userProfile.backgroundImageUrl,
+          };
+        }
+
         setUserProfile(userProfile);
 
         if (userProfile.profileImageUrl) {
@@ -217,7 +232,15 @@ export function UserProfileContextProvider({
         showErrorToast(t("user_not_found"));
         navigate(-1);
       });
-  }, [navigate, getUserStats, getUserLibraryGames, showErrorToast, userId, t]);
+  }, [
+    navigate,
+    getUserStats,
+    getUserLibraryGames,
+    showErrorToast,
+    userId,
+    userDetails?.id,
+    t,
+  ]);
 
   const getBadges = useCallback(async () => {
     const language = i18n.language.split("-")[0];

@@ -1,4 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { EpicAuthModal } from "@renderer/pages/settings/epic-auth-modal";
+import { GogAuthModal } from "@renderer/pages/settings/gog-auth-modal";
 import { useTranslation } from "react-i18next";
 import { Button, TextField } from "@renderer/components";
 import { useAppSelector } from "@renderer/hooks";
@@ -129,27 +131,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   } | null>(null);
 
   const [epicBusy, setEpicBusy] = useState(false);
-  const [epicWindowOpen, setEpicWindowOpen] = useState(false);
+  const [epicModalOpen, setEpicModalOpen] = useState(false);
   const [epicLinked, setEpicLinked] = useState(false);
   const [epicAccount, setEpicAccount] = useState<string | null>(null);
-  const epicWebviewContainerRef = useRef<HTMLDivElement>(null);
-  const epicWebviewHandledRef = useRef(false);
 
   const [gogBusy, _setGogBusy] = useState(false);
-  const [gogWindowOpen, setGogWindowOpen] = useState(false);
+  const [gogModalOpen, setGogModalOpen] = useState(false);
   const [gogLinked, setGogLinked] = useState(false);
   const [gogUsername, setGogUsername] = useState<string | null>(null);
-  const gogWebviewContainerRef = useRef<HTMLDivElement>(null);
-  const gogWebviewHandledRef = useRef(false);
-
-  const webviewOpen = epicWindowOpen || gogWindowOpen;
-  useEffect(() => {
-    if (webviewOpen) {
-      window.electron.setWindowSize(960, 1050, 960, 1050).catch(() => {});
-    } else {
-      window.electron.setWindowSize(960, 680, 960, 680).catch(() => {});
-    }
-  }, [webviewOpen]);
 
   const [xboxBusy, setXboxBusy] = useState(false);
   const [xboxWindowOpen, setXboxWindowOpen] = useState(false);
@@ -282,8 +271,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       if (!status?.binaryFound) {
         await window.electron.installLegendary().catch(() => null);
       }
-      epicWebviewHandledRef.current = false;
-      setEpicWindowOpen(true);
+      setEpicModalOpen(true);
     } catch {
       // ignore
     } finally {
@@ -291,162 +279,38 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }
   };
 
-  useEffect(() => {
-    if (!epicWindowOpen || !epicWebviewContainerRef.current) return;
-
-    interface WebviewElement extends HTMLElement {
-      src: string;
-      getURL(): string;
-      executeJavaScript(code: string): Promise<string>;
-    }
-
-    const REDIRECT_API =
-      "https://www.epicgames.com/id/api/redirect" +
-      "?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code";
-    const EPIC_LOGIN_URL =
-      "https://www.epicgames.com/id/login" +
-      "?redirectUrl=" +
-      encodeURIComponent(REDIRECT_API) +
-      "&noRedirect=true";
-
-    const wv = document.createElement("webview") as unknown as WebviewElement;
-    wv.src = EPIC_LOGIN_URL;
-    wv.style.width = "100%";
-    wv.style.height = "100%";
-    wv.style.display = "block";
-    epicWebviewContainerRef.current.appendChild(wv);
-
-    const tryExtract = async (url: string) => {
-      if (epicWebviewHandledRef.current) return;
-      if (!url.includes("/id/api/redirect")) return;
-      await new Promise((r) => setTimeout(r, 200));
-      let bodyText = "";
-      try {
-        bodyText = await wv.executeJavaScript("document.body.innerText");
-      } catch {
-        return;
-      }
-      let code: string | null = null;
-      try {
-        const json = JSON.parse(bodyText.trim());
-        code =
-          json?.authorizationCode || json?.exchangeCode || json?.code || null;
-      } catch {
-        try {
-          code = new URL(url).searchParams.get("code");
-        } catch {
-          /* ignore */
-        }
-      }
-      if (!code || typeof code !== "string" || code.length < 8) return;
-      epicWebviewHandledRef.current = true;
-      const result = await window.electron
-        .completeEpicAuth(code)
-        .catch(() => ({ success: false as const }));
-      setEpicWindowOpen(false);
-      if (result?.success) {
+  const handleEpicAuthResult = useCallback(
+    (result: { success: boolean; account?: string }) => {
+      if (result.success) {
         setEpicLinked(true);
-        setEpicAccount(
-          (result as { success: true; account?: string }).account ?? "Epic"
-        );
+        setEpicAccount(result.account ?? "Epic");
         window.electron.syncEpicLibrary().catch(() => {});
       }
-    };
-
-    const onWillNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-    const onDidNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-    const onDidFinishLoad = () => void tryExtract(wv.getURL());
-
-    wv.addEventListener("will-navigate", onWillNavigate);
-    wv.addEventListener("did-navigate", onDidNavigate);
-    wv.addEventListener("did-navigate-in-page", onDidNavigate);
-    wv.addEventListener("did-finish-load", onDidFinishLoad);
-
-    const container = epicWebviewContainerRef.current;
-    return () => {
-      wv.removeEventListener("will-navigate", onWillNavigate);
-      wv.removeEventListener("did-navigate", onDidNavigate);
-      wv.removeEventListener("did-navigate-in-page", onDidNavigate);
-      wv.removeEventListener("did-finish-load", onDidFinishLoad);
-      if (container.contains(wv)) container.removeChild(wv);
-    };
-  }, [epicWindowOpen]);
+    },
+    []
+  );
 
   const handleGogConnect = () => {
-    gogWebviewHandledRef.current = false;
-    setGogWindowOpen(true);
+    setGogModalOpen(true);
   };
 
-  useEffect(() => {
-    if (!gogWindowOpen || !gogWebviewContainerRef.current) return;
-
-    interface WebviewElement extends HTMLElement {
-      src: string;
-      getURL(): string;
-    }
-
-    const GOG_CLIENT_ID = "46899977096215655";
-    const GOG_REDIRECT_URI =
-      "https://embed.gog.com/on_login_success?origin=client";
-    const GOG_AUTH_URL =
-      `https://auth.gog.com/auth?client_id=${GOG_CLIENT_ID}` +
-      `&redirect_uri=${encodeURIComponent(GOG_REDIRECT_URI)}` +
-      `&response_type=code&layout=client2`;
-
-    const wv = document.createElement("webview") as unknown as WebviewElement;
-    wv.src = GOG_AUTH_URL;
-    wv.style.width = "100%";
-    wv.style.height = "100%";
-    wv.style.display = "block";
-    gogWebviewContainerRef.current.appendChild(wv);
-
-    const tryExtract = async (url: string) => {
-      if (gogWebviewHandledRef.current) return;
-      if (!url.includes("on_login_success")) return;
-      let code: string | null = null;
-      try {
-        code = new URL(url).searchParams.get("code");
-      } catch {
-        return;
-      }
-      if (!code) return;
-      gogWebviewHandledRef.current = true;
-      const result = await window.electron
-        .completeGogAuth(code)
-        .catch(() => null);
-      setGogWindowOpen(false);
-      if (result) {
-        await window.electron.updateUserPreferences({
-          gogRefreshToken: result.refresh_token,
-        });
-        setGogLinked(true);
-        setGogUsername(result.username ?? "GOG User");
-        const gogdlStatus = await window.electron
-          .getGogdlStatus()
-          .catch(() => ({ binaryFound: false }));
-        if (!gogdlStatus.binaryFound)
-          window.electron.installGogdl().catch(() => {});
-        window.electron.syncGogLibrary().catch(() => {});
-      }
-    };
-
-    const onWillNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-    const onDidNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-
-    wv.addEventListener("will-navigate", onWillNavigate);
-    wv.addEventListener("did-navigate", onDidNavigate);
-
-    const container = gogWebviewContainerRef.current;
-    return () => {
-      wv.removeEventListener("will-navigate", onWillNavigate);
-      wv.removeEventListener("did-navigate", onDidNavigate);
-      if (container.contains(wv)) container.removeChild(wv);
-    };
-  }, [gogWindowOpen]);
+  const handleGogAuthResult = useCallback(
+    async (result: { refresh_token: string; username: string } | null) => {
+      if (!result) return;
+      await window.electron.updateUserPreferences({
+        gogRefreshToken: result.refresh_token,
+      });
+      setGogLinked(true);
+      setGogUsername(result.username ?? "GOG User");
+      const gogdlStatus = await window.electron
+        .getGogdlStatus()
+        .catch(() => ({ binaryFound: false }));
+      if (!gogdlStatus.binaryFound)
+        window.electron.installGogdl().catch(() => {});
+      window.electron.syncGogLibrary().catch(() => {});
+    },
+    []
+  );
 
   const handleXboxConnect = async () => {
     setXboxBusy(true);
@@ -946,33 +810,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </Button>
                   </div>
                 </>
-              ) : epicWindowOpen ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    ref={epicWebviewContainerRef}
-                    style={{
-                      height: "calc(100vh - 220px)",
-                      minHeight: "560px",
-                      borderRadius: "8px",
-                      overflow: "hidden",
-                    }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                      type="button"
-                      className="onboarding-skip"
-                      onClick={() => setEpicWindowOpen(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
               ) : (
                 <div className="onboarding-actions">
                   <button
@@ -1025,33 +862,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </Button>
                   </div>
                 </>
-              ) : gogWindowOpen ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  <div
-                    ref={gogWebviewContainerRef}
-                    style={{
-                      height: "calc(100vh - 220px)",
-                      minHeight: "560px",
-                      borderRadius: "8px",
-                      overflow: "hidden",
-                    }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                      type="button"
-                      className="onboarding-skip"
-                      onClick={() => setGogWindowOpen(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
               ) : (
                 <div className="onboarding-actions">
                   <button
@@ -1225,6 +1035,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           )}
         </div>
       </div>
+
+      <EpicAuthModal
+        visible={epicModalOpen}
+        onClose={() => setEpicModalOpen(false)}
+        onSuccess={handleEpicAuthResult}
+      />
+      <GogAuthModal
+        visible={gogModalOpen}
+        onClose={() => setGogModalOpen(false)}
+        onSuccess={handleGogAuthResult}
+      />
     </div>
   );
 }
