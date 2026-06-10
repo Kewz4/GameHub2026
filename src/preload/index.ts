@@ -1085,6 +1085,14 @@ contextBridge.exposeInMainWorld("electron", {
     return () => ipcRenderer.off("installer:progress", listener);
   },
 
+  /* Epic/GOG Direct Login */
+  epicDirectLogin: (email: string, password: string) =>
+    ipcRenderer.invoke("epicDirectLogin", email, password),
+  epicDirectLoginMfa: (otp: string, mfaToken: string, challengeType: string) =>
+    ipcRenderer.invoke("epicDirectLoginMfa", otp, mfaToken, challengeType),
+  gogDirectLogin: (email: string, password: string) =>
+    ipcRenderer.invoke("gogDirectLogin", email, password),
+
   // Debug console window
   openConsoleWindow: () => ipcRenderer.invoke("openConsoleWindow"),
   onConsoleLog: (

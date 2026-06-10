@@ -1,6 +1,4 @@
-; Refresh the Windows icon cache after install/update so the app icon
-; shows correctly without requiring an Explorer restart.
+; Refresh the Windows icon cache after install/update.
 !macro customInstall
-  nsExec::ExecToLog '"$SYSDIR\ie4uinit.exe" -ClearIconCache'
-  nsExec::ExecToLog '"$SYSDIR\ie4uinit.exe" -show'
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
 !macroend

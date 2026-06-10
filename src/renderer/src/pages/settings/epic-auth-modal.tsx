@@ -1,21 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Modal } from "@renderer/components";
-
-interface WebviewElement extends HTMLElement {
-  src: string;
-  getURL(): string;
-  executeJavaScript(code: string): Promise<string>;
-}
-
-const REDIRECT_API =
-  "https://www.epicgames.com/id/api/redirect" +
-  "?clientId=34a02cf8f4414e29b15921876da36f9a&responseType=code";
-
-const EPIC_LOGIN_URL =
-  "https://www.epicgames.com/id/login" +
-  "?redirectUrl=" +
-  encodeURIComponent(REDIRECT_API) +
-  "&noRedirect=true";
+import { useState } from "react";
+import { Modal, Button, TextField } from "@renderer/components";
 
 export interface EpicAuthModalProps {
   visible: boolean;
@@ -23,90 +7,71 @@ export interface EpicAuthModalProps {
   onSuccess: (result: { success: boolean; account?: string }) => void;
 }
 
-export function EpicAuthModal({
-  visible,
-  onClose,
-  onSuccess,
-}: Readonly<EpicAuthModalProps>) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const handledRef = useRef(false);
+export function EpicAuthModal({ visible, onClose, onSuccess }: Readonly<EpicAuthModalProps>) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaToken, setMfaToken] = useState("");
+  const [challengeType, setChallengeType] = useState("");
+  const [needsMfa, setNeedsMfa] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!visible || !containerRef.current) return;
-    handledRef.current = false;
+  const reset = () => {
+    setEmail(""); setPassword(""); setMfaCode("");
+    setMfaToken(""); setChallengeType("");
+    setNeedsMfa(false); setError(null); setLoading(false);
+  };
 
-    const wv = document.createElement("webview") as unknown as WebviewElement;
-    wv.src = EPIC_LOGIN_URL;
-    wv.style.width = "100%";
-    wv.style.height = "560px";
-    wv.style.display = "block";
-    containerRef.current.appendChild(wv);
+  const handleClose = () => { reset(); onClose(); };
 
-    const tryExtract = async (url: string) => {
-      if (handledRef.current) return;
-      if (!url.includes("/id/api/redirect")) return;
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true); setError(null);
+    const result = await window.electron.epicDirectLogin(email, password).catch(() => ({ success: false as const, error: "Network error." }));
+    setLoading(false);
+    if (result.success) {
+      reset(); onSuccess({ success: true, account: result.account });
+    } else if ("mfaRequired" in result && result.mfaRequired) {
+      setMfaToken(result.mfaToken);
+      setChallengeType(result.challengeType);
+      setNeedsMfa(true);
+    } else {
+      setError("error" in result ? result.error : "Login failed.");
+    }
+  };
 
-      await new Promise((r) => setTimeout(r, 200));
-
-      let bodyText = "";
-      try {
-        bodyText = await wv.executeJavaScript("document.body.innerText");
-      } catch {
-        return;
-      }
-
-      let code: string | null = null;
-      try {
-        const json = JSON.parse(bodyText.trim());
-        code =
-          json?.authorizationCode || json?.exchangeCode || json?.code || null;
-      } catch {
-        try {
-          code = new URL(url).searchParams.get("code");
-        } catch {
-          // ignore
-        }
-      }
-
-      if (!code || typeof code !== "string" || code.length < 8) return;
-
-      handledRef.current = true;
-      const result = await window.electron
-        .completeEpicAuth(code)
-        .catch(() => ({ success: false as const }));
-      onSuccess(result);
-      onClose();
-    };
-
-    const onWillNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-    const onDidNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-    const onDidFinishLoad = () => void tryExtract(wv.getURL());
-
-    wv.addEventListener("will-navigate", onWillNavigate);
-    wv.addEventListener("did-navigate", onDidNavigate);
-    wv.addEventListener("did-navigate-in-page", onDidNavigate);
-    wv.addEventListener("did-finish-load", onDidFinishLoad);
-
-    const container = containerRef.current;
-    return () => {
-      wv.removeEventListener("will-navigate", onWillNavigate);
-      wv.removeEventListener("did-navigate", onDidNavigate);
-      wv.removeEventListener("did-navigate-in-page", onDidNavigate);
-      wv.removeEventListener("did-finish-load", onDidFinishLoad);
-      if (container.contains(wv)) container.removeChild(wv);
-    };
-  }, [visible, onClose, onSuccess]);
+  const handleMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true); setError(null);
+    const result = await window.electron.epicDirectLoginMfa(mfaCode, mfaToken, challengeType).catch(() => ({ success: false as const, error: "Network error." }));
+    setLoading(false);
+    if (result.success) {
+      reset(); onSuccess({ success: true, account: result.account });
+    } else {
+      setError("error" in result ? result.error : "MFA failed.");
+    }
+  };
 
   return (
-    <Modal
-      visible={visible}
-      title="Sign in to Epic Games"
-      description="Log in to your Epic Games account to enable downloads."
-      onClose={onClose}
-    >
-      <div ref={containerRef} style={{ minHeight: "560px" }} />
+    <Modal visible={visible} title="Sign in to Epic Games" description="Enter your Epic Games credentials." onClose={handleClose}>
+      {!needsMfa ? (
+        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <TextField label="Email" type="email" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} required />
+          <TextField label="Password" type="password" value={password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} required />
+          {error && <p style={{ color: "var(--color-error, #f87171)", fontSize: "13px", margin: 0 }}>{error}</p>}
+          <Button type="submit" disabled={loading}>{loading ? "Signing in…" : "Sign In"}</Button>
+        </form>
+      ) : (
+        <form onSubmit={handleMfa} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <p style={{ margin: 0, fontSize: "14px" }}>
+            A {challengeType === "EMAIL" ? "code was sent to your email" : "verification code is required"}.
+          </p>
+          <TextField label="Verification Code" value={mfaCode} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMfaCode(e.target.value)} required autoFocus />
+          {error && <p style={{ color: "var(--color-error, #f87171)", fontSize: "13px", margin: 0 }}>{error}</p>}
+          <Button type="submit" disabled={loading}>{loading ? "Verifying…" : "Verify"}</Button>
+        </form>
+      )}
     </Modal>
   );
 }

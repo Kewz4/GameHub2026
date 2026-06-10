@@ -64,7 +64,10 @@ const updateProfile = async (
   }
 
   // Best-effort HydraAPI sync — ignore errors (backend may reject ucarecdn.com).
-  return patchUserProfile(payload).catch(() => ({})) as Promise<UserProfile>;
+  // Fall back to current profile from server to avoid corrupting Redux state.
+  return patchUserProfile(payload).catch(async () => {
+    return HydraApi.get<UserProfile>("/profile/me").catch(() => ({}) as UserProfile);
+  }) as Promise<UserProfile>;
 };
 
 registerEvent("updateProfile", updateProfile);

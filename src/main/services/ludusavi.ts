@@ -172,7 +172,8 @@ export class Ludusavi {
   public static async findSavePathsFast(
     shop: GameShop,
     title: string,
-    objectId?: string | null
+    objectId?: string | null,
+    executablePathOverride?: string | null
   ): Promise<string[]> {
     await this.ensureManifest();
 
@@ -192,15 +193,21 @@ export class Ludusavi {
 
     if (rawPaths.length === 0) return [];
 
-    const steamInstallDir =
-      shop === "steam" && objectId
-        ? await Promise.race([
-            this.getSteamGameInstallDir(objectId),
-            new Promise<null>((resolve) =>
-              setTimeout(() => resolve(null), 5_000)
-            ),
-          ])
-        : null;
+    // Resolve install dir: prefer executablePathOverride if it's a real file path
+    const platformUrlPrefixes = ["steam://", "legendary://", "gog://", "epic://", "heroic://"];
+    const isPlatformUrl = executablePathOverride
+      ? platformUrlPrefixes.some((prefix) => executablePathOverride.startsWith(prefix))
+      : true;
+
+    let steamInstallDir: string | null = null;
+    if (executablePathOverride && !isPlatformUrl) {
+      steamInstallDir = path.dirname(executablePathOverride);
+    } else if (shop === "steam" && objectId) {
+      steamInstallDir = await Promise.race([
+        this.getSteamGameInstallDir(objectId),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+      ]);
+    }
 
     return rawPaths
       .map((p) => this.expandLudusaviPath(p, steamInstallDir))

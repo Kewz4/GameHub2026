@@ -1,90 +1,41 @@
-import { useEffect, useRef } from "react";
-import { Modal } from "@renderer/components";
-
-interface WebviewElement extends HTMLElement {
-  src: string;
-  getURL(): string;
-}
-
-const GOG_CLIENT_ID = "46899977096215655";
-const GOG_REDIRECT_URI = "https://embed.gog.com/on_login_success?origin=client";
-
-const GOG_AUTH_URL =
-  `https://auth.gog.com/auth?client_id=${GOG_CLIENT_ID}` +
-  `&redirect_uri=${encodeURIComponent(GOG_REDIRECT_URI)}` +
-  `&response_type=code&layout=client2`;
+import { useState } from "react";
+import { Modal, Button, TextField } from "@renderer/components";
 
 export interface GogAuthModalProps {
   visible: boolean;
   onClose: () => void;
-  onSuccess: (
-    result: { refresh_token: string; username: string } | null
-  ) => void;
+  onSuccess: (result: { refresh_token: string; username: string } | null) => void;
 }
 
-export function GogAuthModal({
-  visible,
-  onClose,
-  onSuccess,
-}: Readonly<GogAuthModalProps>) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const handledRef = useRef(false);
+export function GogAuthModal({ visible, onClose, onSuccess }: Readonly<GogAuthModalProps>) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!visible || !containerRef.current) return;
-    handledRef.current = false;
+  const reset = () => { setEmail(""); setPassword(""); setError(null); setLoading(false); };
+  const handleClose = () => { reset(); onClose(); };
 
-    const wv = document.createElement("webview") as unknown as WebviewElement;
-    wv.src = GOG_AUTH_URL;
-    wv.style.width = "100%";
-    wv.style.height = "560px";
-    wv.style.display = "block";
-    containerRef.current.appendChild(wv);
-
-    const tryExtract = async (url: string) => {
-      if (handledRef.current) return;
-      if (!url.includes("on_login_success")) return;
-
-      let code: string | null = null;
-      try {
-        code = new URL(url).searchParams.get("code");
-      } catch {
-        return;
-      }
-      if (!code) return;
-
-      handledRef.current = true;
-      const result = await window.electron
-        .completeGogAuth(code)
-        .catch(() => null);
-      onSuccess(result);
-      onClose();
-    };
-
-    const onWillNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-    const onDidNavigate = (e: Event) =>
-      void tryExtract((e as Event & { url: string }).url);
-
-    wv.addEventListener("will-navigate", onWillNavigate);
-    wv.addEventListener("did-navigate", onDidNavigate);
-
-    const container = containerRef.current;
-    return () => {
-      wv.removeEventListener("will-navigate", onWillNavigate);
-      wv.removeEventListener("did-navigate", onDidNavigate);
-      if (container.contains(wv)) container.removeChild(wv);
-    };
-  }, [visible, onClose, onSuccess]);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true); setError(null);
+    const result = await window.electron.gogDirectLogin(email, password).catch(() => ({ success: false as const, error: "Network error." }));
+    setLoading(false);
+    if (result.success) {
+      reset(); onSuccess({ refresh_token: result.refresh_token, username: result.username });
+    } else {
+      setError(result.error);
+    }
+  };
 
   return (
-    <Modal
-      visible={visible}
-      title="Sign in to GOG"
-      description="Log in to your GOG account to enable downloads."
-      onClose={onClose}
-    >
-      <div ref={containerRef} style={{ minHeight: "560px" }} />
+    <Modal visible={visible} title="Sign in to GOG" description="Enter your GOG credentials." onClose={handleClose}>
+      <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <TextField label="Email" type="email" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} required />
+        <TextField label="Password" type="password" value={password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} required />
+        {error && <p style={{ color: "var(--color-error, #f87171)", fontSize: "13px", margin: 0 }}>{error}</p>}
+        <Button type="submit" disabled={loading}>{loading ? "Signing in…" : "Sign In"}</Button>
+      </form>
     </Modal>
   );
 }

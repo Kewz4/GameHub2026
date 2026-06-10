@@ -204,6 +204,29 @@ declare global {
     completeGogAuth: (
       code: string
     ) => Promise<{ refresh_token: string; username: string } | null>;
+    epicDirectLogin: (
+      email: string,
+      password: string
+    ) => Promise<
+      | { success: true; account: string }
+      | { success: false; mfaRequired: true; mfaToken: string; challengeType: string }
+      | { success: false; mfaRequired?: false; error: string }
+    >;
+    epicDirectLoginMfa: (
+      otp: string,
+      mfaToken: string,
+      challengeType: string
+    ) => Promise<
+      | { success: true; account: string }
+      | { success: false; error: string }
+    >;
+    gogDirectLogin: (
+      email: string,
+      password: string
+    ) => Promise<
+      | { success: true; username: string; refresh_token: string }
+      | { success: false; error: string }
+    >;
     syncEpicLibrary: () => Promise<{
       total: number;
       added: number;

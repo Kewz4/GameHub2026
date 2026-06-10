@@ -23,7 +23,8 @@ const getGameSaveFolder = async (
 
     // Fast path: read manifest.yaml directly (no ludusavi binary unless title
     // doesn't match exactly). Returns only fully-expanded paths.
-    const paths = await Ludusavi.findSavePathsFast(shop, gameTitle, objectId);
+    const executablePath = game?.executablePath ?? null;
+    const paths = await Ludusavi.findSavePathsFast(shop, gameTitle, objectId, executablePath);
 
     if (paths.length > 0) {
       const first = paths[0];
