@@ -220,6 +220,14 @@ contextBridge.exposeInMainWorld("electron", {
   openLegendaryAuthWindow: () => ipcRenderer.invoke("openLegendaryAuthWindow"),
   completeEpicAuth: (code: string) =>
     ipcRenderer.invoke("completeEpicAuth", code),
+  epicDirectLogin: (email: string, password: string) =>
+    ipcRenderer.invoke("epicDirectLogin", email, password),
+  epicDirectLoginMfa: (otp: string, mfaToken: string, challengeType: string) =>
+    ipcRenderer.invoke("epicDirectLoginMfa", otp, mfaToken, challengeType),
+  openEpicSocialAuthWindow: (provider: "google" | "facebook" | "apple") =>
+    ipcRenderer.invoke("openEpicSocialAuthWindow", provider),
+  gogDirectLogin: (email: string, password: string) =>
+    ipcRenderer.invoke("gogDirectLogin", email, password),
   epicSignOut: () => ipcRenderer.invoke("epicSignOut"),
   completeGogAuth: (code: string) =>
     ipcRenderer.invoke("completeGogAuth", code),
@@ -1084,14 +1092,6 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("installer:progress", listener);
     return () => ipcRenderer.off("installer:progress", listener);
   },
-
-  /* Epic/GOG Direct Login */
-  epicDirectLogin: (email: string, password: string) =>
-    ipcRenderer.invoke("epicDirectLogin", email, password),
-  epicDirectLoginMfa: (otp: string, mfaToken: string, challengeType: string) =>
-    ipcRenderer.invoke("epicDirectLoginMfa", otp, mfaToken, challengeType),
-  gogDirectLogin: (email: string, password: string) =>
-    ipcRenderer.invoke("gogDirectLogin", email, password),
 
   // Debug console window
   openConsoleWindow: () => ipcRenderer.invoke("openConsoleWindow"),

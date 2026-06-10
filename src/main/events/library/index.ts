@@ -73,6 +73,9 @@ import "./install-gogdl";
 
 import "./start-steam-openid-login";
 
+import "./epic-direct-login";
+import "./open-epic-social-auth-window";
+
 //UPDATEDD
 
 import "./transfer-game-files";
@@ -81,7 +84,4 @@ import "./generate-missing-metadata";
 import "./merge-duplicate-games";
 import "./find-library-game-by-title";
 import "./get-gogdl-status";
-import "./complete-epic-auth";
-import "./complete-gog-auth";
-import "./epic-direct-login";
 import "./gog-direct-login";

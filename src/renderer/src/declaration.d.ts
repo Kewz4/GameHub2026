@@ -195,22 +195,18 @@ declare global {
     completeEpicAuth: (
       code: string
     ) => Promise<{ success: boolean; account?: string }>;
-    epicSignOut: () => Promise<{
-      binaryFound: boolean;
-      binaryPath: string | null;
-      account: string | null;
-      authenticated: boolean;
-    }>;
-    completeGogAuth: (
-      code: string
-    ) => Promise<{ refresh_token: string; username: string } | null>;
     epicDirectLogin: (
       email: string,
       password: string
     ) => Promise<
       | { success: true; account: string }
-      | { success: false; mfaRequired: true; mfaToken: string; challengeType: string }
-      | { success: false; mfaRequired?: false; error: string }
+      | {
+          success: false;
+          mfaRequired: true;
+          mfaToken: string;
+          challengeType: string;
+        }
+      | { success: false; error: string }
     >;
     epicDirectLoginMfa: (
       otp: string,
@@ -220,6 +216,18 @@ declare global {
       | { success: true; account: string }
       | { success: false; error: string }
     >;
+    openEpicSocialAuthWindow: (
+      provider: "google" | "facebook" | "apple"
+    ) => Promise<{ success: boolean; account?: string }>;
+    epicSignOut: () => Promise<{
+      binaryFound: boolean;
+      binaryPath: string | null;
+      account: string | null;
+      authenticated: boolean;
+    }>;
+    completeGogAuth: (
+      code: string
+    ) => Promise<{ refresh_token: string; username: string } | null>;
     gogDirectLogin: (
       email: string,
       password: string

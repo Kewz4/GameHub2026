@@ -10,33 +10,65 @@ import { db, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
 import { logger } from "@main/services";
 
-const EPIC_OAUTH = "https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token";
-const EPIC_EXCHANGE = "https://account-public-service-prod.ol.epicgames.com/account/api/oauth/exchange";
-// Launcher client credentials (same ones used by the webview flow)
-const CLIENT_ID = "34a02cf8f4414e29b15921876da36f9a";
-const CLIENT_SECRET = "daafbccc737745039dffe53d94fc76cf";
-const BASIC_AUTH = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64");
+const EPIC_CLIENT_ID = "34a02cf8f4414e29b15921876da36f9a";
+const EPIC_CLIENT_SECRET = "daafbccc737745039dffe53d94fc76cf";
+const TOKEN_URL =
+  "https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token";
+const EXCHANGE_URL = "https://www.epicgames.com/id/api/exchange";
+
+const basicAuth = Buffer.from(
+  `${EPIC_CLIENT_ID}:${EPIC_CLIENT_SECRET}`
+).toString("base64");
+
+interface EpicTokenResponse {
+  access_token?: string;
+  error?: string;
+  errorMessage?: string;
+  errorCode?: string;
+  metadata?: {
+    mfaToken?: string;
+    challengeType?: string;
+  };
+  mfa_token?: string;
+  challenge_type?: string;
+}
 
 export type EpicLoginResult =
   | { success: true; account: string }
-  | { success: false; mfaRequired: true; mfaToken: string; challengeType: string }
-  | { success: false; mfaRequired?: false; error: string };
+  | {
+      success: false;
+      mfaRequired: true;
+      mfaToken: string;
+      challengeType: string;
+    }
+  | { success: false; error: string };
 
-async function getExchangeCodeAndAuth(accessToken: string, prefs: UserPreferences | null): Promise<{ success: true; account: string } | { success: false; error: string }> {
-  const exchangeRes = await axios.get<{ code: string }>(EPIC_EXCHANGE, {
+async function exchangeAndAuth(
+  accessToken: string
+): Promise<{ success: true; account: string } | { success: false; error: string }> {
+  const exchangeRes = await axios.get<{ code: string }>(EXCHANGE_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    timeout: 15_000,
   });
+
   const code = exchangeRes.data.code;
+  if (!code) return { success: false, error: "No exchange code returned" };
+
+  const prefs = await db
+    .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+      valueEncoding: "json",
+    })
+    .catch(() => null);
 
   let binary = findLegendaryBinary(prefs?.legendaryBinaryPath);
   if (!binary) {
     binary = await downloadLegendary();
   }
-  await authenticateLegendary(code, binary);
 
+  await authenticateLegendary(code, binary);
   let status = await getLegendaryStatus(binary);
   for (let i = 0; i < 5 && !status.account; i++) {
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 600));
     status = await getLegendaryStatus(binary);
   }
   return { success: true, account: status.account ?? "Epic Games" };
@@ -47,33 +79,52 @@ const epicDirectLogin = async (
   email: string,
   password: string
 ): Promise<EpicLoginResult> => {
-  const prefs = await db.get<string, UserPreferences | null>(levelKeys.userPreferences, { valueEncoding: "json" }).catch(() => null);
-
   try {
-    const res = await axios.post(
-      EPIC_OAUTH,
-      new URLSearchParams({ grant_type: "password", username: email, password, token_type: "eg1" }),
+    const res = await axios.post<EpicTokenResponse>(
+      TOKEN_URL,
+      new URLSearchParams({
+        grant_type: "password",
+        username: email,
+        password,
+        token_type: "eg1",
+      }),
       {
         headers: {
-          Authorization: `Basic ${BASIC_AUTH}`,
+          Authorization: `Basic ${basicAuth}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
+        timeout: 20_000,
+        validateStatus: () => true,
       }
     );
-    return await getExchangeCodeAndAuth(res.data.access_token, prefs);
-  } catch (err: unknown) {
-    const data = (err as { response?: { data?: { errorCode?: string; mfa_token?: string; challenge?: string } } })?.response?.data;
-    const errorCode = data?.errorCode ?? "";
-    if (errorCode.includes("two_factor_authentication.required") || errorCode.includes("mfa")) {
+
+    if (res.data.access_token) {
+      return exchangeAndAuth(res.data.access_token);
+    }
+
+    // MFA required
+    if (
+      res.data.errorCode?.includes("mfa_required") ||
+      res.data.error?.includes("mfa_required")
+    ) {
+      const mfaToken =
+        res.data.mfa_token ?? res.data.metadata?.mfaToken ?? "";
+      const challengeType =
+        res.data.challenge_type ?? res.data.metadata?.challengeType ?? "TOTP";
       return {
         success: false,
         mfaRequired: true,
-        mfaToken: data?.mfa_token ?? "",
-        challengeType: data?.challenge ?? "EMAIL",
+        mfaToken,
+        challengeType,
       };
     }
-    logger.error("Epic direct login failed", err);
-    return { success: false, error: "Invalid email or password. Check your credentials and try again." };
+
+    const message =
+      res.data.errorMessage ?? res.data.error ?? "Login failed";
+    return { success: false, error: message };
+  } catch (err: any) {
+    logger.error("epicDirectLogin failed", err);
+    return { success: false, error: err?.message ?? "Unknown error" };
   }
 };
 
@@ -83,23 +134,36 @@ const epicDirectLoginMfa = async (
   mfaToken: string,
   challengeType: string
 ): Promise<EpicLoginResult> => {
-  const prefs = await db.get<string, UserPreferences | null>(levelKeys.userPreferences, { valueEncoding: "json" }).catch(() => null);
-
   try {
-    const res = await axios.post(
-      EPIC_OAUTH,
-      new URLSearchParams({ grant_type: "otp", otp, challenge_type: challengeType, mfa_token: mfaToken }),
+    const res = await axios.post<EpicTokenResponse>(
+      TOKEN_URL,
+      new URLSearchParams({
+        grant_type: "mfa_otp",
+        mfa_token: mfaToken,
+        otp,
+        challenge_type: challengeType,
+        token_type: "eg1",
+      }),
       {
         headers: {
-          Authorization: `Basic ${BASIC_AUTH}`,
+          Authorization: `Basic ${basicAuth}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
+        timeout: 20_000,
+        validateStatus: () => true,
       }
     );
-    return await getExchangeCodeAndAuth(res.data.access_token, prefs);
-  } catch (err) {
-    logger.error("Epic MFA login failed", err);
-    return { success: false, error: "MFA code incorrect or expired. Try again." };
+
+    if (res.data.access_token) {
+      return exchangeAndAuth(res.data.access_token);
+    }
+
+    const message =
+      res.data.errorMessage ?? res.data.error ?? "MFA verification failed";
+    return { success: false, error: message };
+  } catch (err: any) {
+    logger.error("epicDirectLoginMfa failed", err);
+    return { success: false, error: err?.message ?? "Unknown error" };
   }
 };
 
