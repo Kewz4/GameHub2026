@@ -164,9 +164,9 @@ export class Ludusavi {
   }
 
   /**
-   * Return path templates from the manifest for a game's save files.
-   * Unlike backupGame, this does not require the game to be installed.
-   * Expands common ludusavi variables to real paths where possible.
+   * Return path templates from the manifest for a game's save files by
+   * parsing manifest.yaml directly. `find --api` only returns game names,
+   * not file path templates, so we must read the YAML ourselves.
    */
   public static async findManifestSavePaths(
     shop: GameShop,
@@ -175,53 +175,96 @@ export class Ludusavi {
   ): Promise<string[]> {
     await this.ensureManifest();
 
-    const attempts: string[][] = [];
-    if (shop === "steam" && objectId && /^\d+$/.test(objectId)) {
-      attempts.push(["find", "--api", "--steam-id", objectId]);
-    }
-    if (shop === "gog" && objectId && /^\d+$/.test(objectId)) {
-      attempts.push(["find", "--api", "--gog-id", objectId]);
-    }
-    attempts.push(["find", "--api", "--fuzzy", title]);
+    const canonicalName = await this.findCanonicalName(shop, title, objectId);
+    if (!canonicalName) return [];
 
-    for (const findArgs of attempts) {
-      const args = ["--config", this.configPath, ...findArgs];
-      const rawPaths = await new Promise<string[]>((resolve) => {
-        cp.execFile(
-          this.binaryPath,
-          args,
-          { timeout: 30_000 },
-          (err, stdout) => {
-            if (err) return resolve([]);
-            try {
-              const parsed = JSON.parse(stdout) as {
-                games?: Record<
-                  string,
-                  { files?: Record<string, unknown> } | undefined
-                >;
-              };
-              const games = parsed.games ?? {};
-              const gameName = Object.keys(games)[0];
-              if (!gameName) return resolve([]);
-              const files = games[gameName]?.files ?? {};
-              resolve(Object.keys(files));
-            } catch {
-              resolve([]);
-            }
-          }
-        );
-      });
+    const manifestPath = path.join(this.configPath, "manifest.yaml");
+    if (!fs.existsSync(manifestPath)) return [];
 
-      if (rawPaths.length > 0) {
-        const steamInstallDir =
-          shop === "steam" && objectId
-            ? await this.getSteamGameInstallDir(objectId)
-            : null;
-        return rawPaths.map((p) => this.expandLudusaviPath(p, steamInstallDir));
+    const rawPaths = this.extractPathsFromManifest(manifestPath, canonicalName);
+    if (rawPaths.length === 0) return [];
+
+    const steamInstallDir =
+      shop === "steam" && objectId
+        ? await Promise.race([
+            this.getSteamGameInstallDir(objectId),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+          ])
+        : null;
+
+    return rawPaths.map((p) => this.expandLudusaviPath(p, steamInstallDir));
+  }
+
+  /**
+   * Extract file path templates for a game from manifest.yaml using a
+   * line-by-line scan. Avoids loading the entire multi-MB YAML into memory.
+   */
+  private static extractPathsFromManifest(
+    manifestPath: string,
+    gameName: string
+  ): string[] {
+    const content = fs.readFileSync(manifestPath, "utf-8");
+    const lines = content.split("\n");
+
+    // Find the line that starts the game's section (exact key match)
+    const gameHeader = `"${gameName}":`;
+    const altHeader = `${gameName}:`;
+    let gameStart = -1;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trimEnd();
+      if (trimmed === gameHeader || trimmed === altHeader) {
+        gameStart = i;
+        break;
+      }
+    }
+    if (gameStart === -1) return [];
+
+    // Collect lines that belong to this game's section (until next top-level key)
+    const sectionLines: string[] = [];
+    for (let i = gameStart + 1; i < lines.length; i++) {
+      const line = lines[i];
+      // A new top-level entry starts with a non-space, non-empty character
+      if (line.length > 0 && line[0] !== " " && line[0] !== "\t") break;
+      sectionLines.push(line);
+    }
+
+    // Find the `files:` subsection and collect its keys (path templates)
+    const paths: string[] = [];
+    let inFiles = false;
+    const filesIndent = /^(\s+)files:/;
+    let filesDepth = -1;
+
+    for (const line of sectionLines) {
+      if (!inFiles) {
+        const m = filesIndent.exec(line);
+        if (m) {
+          inFiles = true;
+          filesDepth = m[1].length;
+        }
+        continue;
+      }
+
+      // A key at filesDepth+2 spaces is a path template entry
+      const keyMatch = /^(\s+)"?([^":]+)"?\s*:/.exec(line);
+      if (keyMatch) {
+        const indent = keyMatch[1].length;
+        if (indent <= filesDepth) {
+          // Exited the files section
+          break;
+        }
+        if (indent === filesDepth + 2) {
+          const raw = keyMatch[2].trim();
+          if (raw) paths.push(raw);
+        }
+      } else if (line.trim() === "" || /^\s*#/.test(line)) {
+        continue;
+      } else {
+        const spaceCount = line.length - line.trimStart().length;
+        if (spaceCount <= filesDepth) break;
       }
     }
 
-    return [];
+    return paths;
   }
 
   /** Expand ludusavi path template variables to real paths. */
@@ -319,6 +362,7 @@ export class Ludusavi {
       cp.execFile(
         this.binaryPath,
         args,
+        { timeout: 60_000 },
         (err: cp.ExecFileException | null, stdout: string, stderr: string) => {
           if (stderr?.trim()) {
             logger.verbose(`[ludusavi:stderr] ${stderr.trim()}`);

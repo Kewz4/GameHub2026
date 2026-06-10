@@ -2,10 +2,38 @@ import { registerEvent } from "../register-event";
 import { HydraApi } from "@main/services";
 import type { UpdateProfileRequest, UserProfile } from "@types";
 import { omit } from "lodash-es";
-import { UploadcareSync } from "@main/services/uploadcare-sync";
+import fs from "node:fs";
+import path from "node:path";
+import axios from "axios";
+import { fileTypeFromFile } from "file-type";
 
 export const patchUserProfile = async (updateProfile: UpdateProfileRequest) => {
   return HydraApi.patch<UserProfile>("/profile", updateProfile);
+};
+
+const uploadImageToHydra = async (
+  type: "profile-image" | "background-image",
+  imagePath: string
+): Promise<string | undefined> => {
+  const stat = fs.statSync(imagePath);
+  const fileBuffer = fs.readFileSync(imagePath);
+  const mimeType = await fileTypeFromFile(imagePath);
+  const imageExt = path.extname(imagePath).slice(1);
+
+  const response = await HydraApi.post<
+    Record<string, string> & { presignedUrl: string }
+  >(`/presigned-urls/${type}`, {
+    imageExt,
+    imageLength: stat.size,
+  });
+
+  await axios.put(response.presignedUrl, fileBuffer, {
+    headers: { "Content-Type": mimeType?.mime ?? "image/webp" },
+  });
+
+  return type === "background-image"
+    ? response["backgroundImageUrl"]
+    : response["profileImageUrl"];
 };
 
 const updateProfile = async (
@@ -21,7 +49,8 @@ const updateProfile = async (
     if (updateProfile.profileImageUrl === null) {
       payload["profileImageUrl"] = null;
     } else {
-      const profileImageUrl = await UploadcareSync.uploadImage(
+      const profileImageUrl = await uploadImageToHydra(
+        "profile-image",
         updateProfile.profileImageUrl
       ).catch(() => undefined);
       payload["profileImageUrl"] = profileImageUrl;
@@ -32,7 +61,8 @@ const updateProfile = async (
     if (updateProfile.backgroundImageUrl === null) {
       payload["backgroundImageUrl"] = null;
     } else {
-      const backgroundImageUrl = await UploadcareSync.uploadImage(
+      const backgroundImageUrl = await uploadImageToHydra(
+        "background-image",
         updateProfile.backgroundImageUrl
       ).catch(() => undefined);
       payload["backgroundImageUrl"] = backgroundImageUrl;
