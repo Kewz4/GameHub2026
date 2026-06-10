@@ -188,6 +188,8 @@ export interface UserPreferences {
   xboxXuid?: string | null;
   cloudSyncUserId?: string | null;
   onboardingComplete?: boolean;
+  localProfileImageUrl?: string | null;
+  localBackgroundImageUrl?: string | null;
 }
 
 export interface ScreenState {

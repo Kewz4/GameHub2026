@@ -4,10 +4,60 @@ import i18n from "i18next";
 import path from "node:path";
 import fs from "node:fs";
 import url from "node:url";
+import os from "node:os";
 
 // Ensure app name matches productName so electron-updater uses
 // "GameHub-updater" instead of "hydralauncher-updater" for its temp dir.
 app.setName("GameHub");
+
+// Auth backup dir: outside the install directory so NSIS updates never wipe it.
+const AUTH_BACKUP_DIR = path.join(
+  process.env.LOCALAPPDATA ??
+    path.join(os.homedir(), "AppData", "Local"),
+  "GameHub-auth-backup"
+);
+
+/** Copy legendary-config and session to a safe location before exit. */
+function backupAuth(): void {
+  if (process.platform !== "win32") return;
+  try {
+    const userData = app.getPath("userData");
+    fs.mkdirSync(AUTH_BACKUP_DIR, { recursive: true });
+    for (const folder of ["legendary-config", "session"]) {
+      const src = path.join(userData, folder);
+      const dst = path.join(AUTH_BACKUP_DIR, folder);
+      if (!fs.existsSync(src)) continue;
+      if (fs.existsSync(dst))
+        fs.rmSync(dst, { recursive: true, force: true });
+      fs.cpSync(src, dst, { recursive: true });
+    }
+  } catch {
+    // backup is best-effort
+  }
+}
+
+/**
+ * If legendary-config or session was wiped by an NSIS update, restore from
+ * the backup written on last exit. Must be called before app.whenReady() so
+ * Electron hasn't locked the session directory yet.
+ */
+function restoreAuthIfMissing(): void {
+  if (process.platform !== "win32") return;
+  if (!fs.existsSync(AUTH_BACKUP_DIR)) return;
+  try {
+    const userData = app.getPath("userData");
+    for (const folder of ["legendary-config", "session"]) {
+      const dst = path.join(userData, folder);
+      const src = path.join(AUTH_BACKUP_DIR, folder);
+      if (!fs.existsSync(dst) && fs.existsSync(src)) {
+        fs.mkdirSync(path.dirname(dst), { recursive: true });
+        fs.cpSync(src, dst, { recursive: true });
+      }
+    }
+  } catch {
+    // restore is best-effort
+  }
+}
 
 // Detect portable mode: electron-builder NSIS portable sets PORTABLE_EXECUTABLE_DIR;
 // our custom installer writes a "portable" marker file next to the exe.
@@ -59,6 +109,10 @@ if (_portableExeDir) {
     app.setPath("appData", dataDir);
   }
 }
+
+// Restore Epic/GOG auth if NSIS update wiped the data directory.
+// Must run after app paths are set but before app.whenReady().
+restoreAuthIfMissing();
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import {
   logger,
@@ -391,6 +445,8 @@ app.on("before-quit", async (e) => {
     /* Disconnects Python RPC */
     PythonRPC.kill();
     await clearGamesPlaytime();
+    // Backup Epic/GOG auth so NSIS updates don't wipe sessions permanently.
+    backupAuth();
     canAppBeClosed = true;
     app.quit();
   }

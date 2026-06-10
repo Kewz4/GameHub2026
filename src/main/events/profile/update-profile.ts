@@ -2,38 +2,12 @@ import { registerEvent } from "../register-event";
 import { HydraApi } from "@main/services";
 import type { UpdateProfileRequest, UserProfile } from "@types";
 import { omit } from "lodash-es";
-import fs from "node:fs";
-import path from "node:path";
-import axios from "axios";
-import { fileTypeFromFile } from "file-type";
+import { UploadcareSync } from "@main/services/uploadcare-sync";
+import { db, levelKeys } from "@main/level";
+import type { UserPreferences } from "@types";
 
 export const patchUserProfile = async (updateProfile: UpdateProfileRequest) => {
   return HydraApi.patch<UserProfile>("/profile", updateProfile);
-};
-
-const uploadImageToHydra = async (
-  type: "profile-image" | "background-image",
-  imagePath: string
-): Promise<string | undefined> => {
-  const stat = fs.statSync(imagePath);
-  const fileBuffer = fs.readFileSync(imagePath);
-  const mimeType = await fileTypeFromFile(imagePath);
-  const imageExt = path.extname(imagePath).slice(1);
-
-  const response = await HydraApi.post<
-    Record<string, string> & { presignedUrl: string }
-  >(`/presigned-urls/${type}`, {
-    imageExt,
-    imageLength: stat.size,
-  });
-
-  await axios.put(response.presignedUrl, fileBuffer, {
-    headers: { "Content-Type": mimeType?.mime ?? "image/webp" },
-  });
-
-  return type === "background-image"
-    ? response["backgroundImageUrl"]
-    : response["profileImageUrl"];
 };
 
 const updateProfile = async (
@@ -45,31 +19,52 @@ const updateProfile = async (
     "backgroundImageUrl",
   ]);
 
+  const prefUpdates: Partial<UserPreferences> = {};
+
   if (updateProfile.profileImageUrl !== undefined) {
     if (updateProfile.profileImageUrl === null) {
       payload["profileImageUrl"] = null;
+      prefUpdates.localProfileImageUrl = null;
     } else {
-      const profileImageUrl = await uploadImageToHydra(
-        "profile-image",
+      // Upload to Uploadcare; store locally so the app always shows the image
+      // even if HydraAPI rejects the ucarecdn.com domain.
+      const uploadcareUrl = await UploadcareSync.uploadImage(
         updateProfile.profileImageUrl
       ).catch(() => undefined);
-      payload["profileImageUrl"] = profileImageUrl;
+      payload["profileImageUrl"] = uploadcareUrl ?? null;
+      prefUpdates.localProfileImageUrl = uploadcareUrl ?? null;
     }
   }
 
   if (updateProfile.backgroundImageUrl !== undefined) {
     if (updateProfile.backgroundImageUrl === null) {
       payload["backgroundImageUrl"] = null;
+      prefUpdates.localBackgroundImageUrl = null;
     } else {
-      const backgroundImageUrl = await uploadImageToHydra(
-        "background-image",
+      const uploadcareUrl = await UploadcareSync.uploadImage(
         updateProfile.backgroundImageUrl
       ).catch(() => undefined);
-      payload["backgroundImageUrl"] = backgroundImageUrl;
+      payload["backgroundImageUrl"] = uploadcareUrl ?? null;
+      prefUpdates.localBackgroundImageUrl = uploadcareUrl ?? null;
     }
   }
 
-  return patchUserProfile(payload);
+  // Persist URLs locally so they survive even if HydraAPI rejects them.
+  if (Object.keys(prefUpdates).length > 0) {
+    const prefs = await db
+      .get<string, UserPreferences>(levelKeys.userPreferences, {
+        valueEncoding: "json",
+      })
+      .catch(() => ({}) as UserPreferences);
+    await db.put(
+      levelKeys.userPreferences,
+      { ...prefs, ...prefUpdates },
+      { valueEncoding: "json" }
+    );
+  }
+
+  // Best-effort HydraAPI sync — ignore errors (backend may reject ucarecdn.com).
+  return patchUserProfile(payload).catch(() => ({})) as Promise<UserProfile>;
 };
 
 registerEvent("updateProfile", updateProfile);

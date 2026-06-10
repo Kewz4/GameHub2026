@@ -38,6 +38,7 @@ nsis:
   perMachine: false
   deleteAppDataOnUninstall: false
   artifactName: ${productName}-Setup-${version}.${ext}
+  include: build/installer.nsh
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extraResources:

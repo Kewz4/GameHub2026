@@ -164,6 +164,50 @@ export class Ludusavi {
   }
 
   /**
+   * Fast manifest-only save path lookup — no ludusavi binary invoked.
+   * Reads manifest.yaml directly and expands variables. Returns only
+   * fully-expanded paths (no templates). Falls back to the binary-based
+   * canonical-name lookup if the title doesn't match the manifest directly.
+   */
+  public static async findSavePathsFast(
+    shop: GameShop,
+    title: string,
+    objectId?: string | null
+  ): Promise<string[]> {
+    await this.ensureManifest();
+
+    const manifestPath = path.join(this.configPath, "manifest.yaml");
+    if (!fs.existsSync(manifestPath)) return [];
+
+    // Try exact title first (no binary)
+    let rawPaths = this.extractPathsFromManifest(manifestPath, title);
+
+    // If not found, try canonical name via ludusavi binary (slower, one shot)
+    if (rawPaths.length === 0) {
+      const canonical = await this.findCanonicalName(shop, title, objectId);
+      if (canonical && canonical !== title) {
+        rawPaths = this.extractPathsFromManifest(manifestPath, canonical);
+      }
+    }
+
+    if (rawPaths.length === 0) return [];
+
+    const steamInstallDir =
+      shop === "steam" && objectId
+        ? await Promise.race([
+            this.getSteamGameInstallDir(objectId),
+            new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), 5_000)
+            ),
+          ])
+        : null;
+
+    return rawPaths
+      .map((p) => this.expandLudusaviPath(p, steamInstallDir))
+      .filter((p) => !p.includes("<")); // only return fully-expanded paths
+  }
+
+  /**
    * Return path templates from the manifest for a game's save files by
    * parsing manifest.yaml directly. `find --api` only returns game names,
    * not file path templates, so we must read the YAML ourselves.

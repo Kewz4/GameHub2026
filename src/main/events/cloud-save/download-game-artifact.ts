@@ -123,11 +123,21 @@ const downloadGameArtifact = async (
 
     await tar.x({ file: zipLocation, cwd: backupPath });
 
-    // Determine homeDir and winePrefix from the artifact's metadata
-    // (stored when uploading; we use a best-effort restore with local paths)
+    // The tar was created with cwd=backupPath and contains a subdirectory named
+    // after the game's canonical ludusavi title (NOT the objectId). Find it.
+    const gameFolderName = (() => {
+      try {
+        const entries = fs.readdirSync(backupPath, { withFileTypes: true });
+        const dir = entries.find((e) => e.isDirectory());
+        return dir?.name ?? objectId;
+      } catch {
+        return objectId;
+      }
+    })();
+
     restoreLudusaviBackup(
       backupPath,
-      objectId,
+      gameFolderName,
       normalizePath(
         CloudSync.getWindowsLikeUserProfilePath(effectiveWinePrefixPath)
       ),

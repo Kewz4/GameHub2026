@@ -212,6 +212,34 @@ export class UploadcareSync {
     logger.log(`Uploadcare: deleted ${uuid}`);
   }
 
+  /**
+   * Create an Uploadcare file group from a list of file UUIDs.
+   * Useful for grouping all saves for a game or profile images per user.
+   * Returns the group ID in the format "{uuid}~{count}".
+   * https://uploadcare.com/docs/api/upload/#tag/Groups/operation/createFilesGroup
+   */
+  static async createGroup(uuids: string[]): Promise<string> {
+    const form = new FormData();
+    form.append("pub_key", PUBLIC_KEY);
+    uuids.forEach((uuid, i) => form.append(`files[${i}]`, uuid));
+
+    const res = await axios.post<{ id: string }>(
+      "https://upload.uploadcare.com/group/",
+      form,
+      {
+        headers: (
+          form as unknown as { getHeaders(): Record<string, string> }
+        ).getHeaders?.() ?? {},
+        timeout: 20_000,
+      }
+    );
+
+    logger.log(
+      `Uploadcare: created group ${res.data.id} with ${uuids.length} files`
+    );
+    return res.data.id;
+  }
+
   /** Generate a stable user ID to namespace uploads. */
   static generateUserId(): string {
     return crypto.randomUUID();
