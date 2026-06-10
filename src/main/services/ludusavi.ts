@@ -2,6 +2,7 @@ import type { GameShop, LudusaviBackup, LudusaviConfig } from "@types";
 
 import { app } from "electron";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import YAML from "yaml";
 import cp from "node:child_process";
@@ -159,6 +160,137 @@ export class Ludusavi {
     }
 
     logger.warn(`[ludusavi] could not find "${title}" in manifest`);
+    return null;
+  }
+
+  /**
+   * Return path templates from the manifest for a game's save files.
+   * Unlike backupGame, this does not require the game to be installed.
+   * Expands common ludusavi variables to real paths where possible.
+   */
+  public static async findManifestSavePaths(
+    shop: GameShop,
+    title: string,
+    objectId?: string | null
+  ): Promise<string[]> {
+    await this.ensureManifest();
+
+    const attempts: string[][] = [];
+    if (shop === "steam" && objectId && /^\d+$/.test(objectId)) {
+      attempts.push(["find", "--api", "--steam-id", objectId]);
+    }
+    if (shop === "gog" && objectId && /^\d+$/.test(objectId)) {
+      attempts.push(["find", "--api", "--gog-id", objectId]);
+    }
+    attempts.push(["find", "--api", "--fuzzy", title]);
+
+    for (const findArgs of attempts) {
+      const args = ["--config", this.configPath, ...findArgs];
+      const rawPaths = await new Promise<string[]>((resolve) => {
+        cp.execFile(
+          this.binaryPath,
+          args,
+          { timeout: 30_000 },
+          (err, stdout) => {
+            if (err) return resolve([]);
+            try {
+              const parsed = JSON.parse(stdout) as {
+                games?: Record<
+                  string,
+                  { files?: Record<string, unknown> } | undefined
+                >;
+              };
+              const games = parsed.games ?? {};
+              const gameName = Object.keys(games)[0];
+              if (!gameName) return resolve([]);
+              const files = games[gameName]?.files ?? {};
+              resolve(Object.keys(files));
+            } catch {
+              resolve([]);
+            }
+          }
+        );
+      });
+
+      if (rawPaths.length > 0) {
+        const steamInstallDir =
+          shop === "steam" && objectId
+            ? await this.getSteamGameInstallDir(objectId)
+            : null;
+        return rawPaths.map((p) => this.expandLudusaviPath(p, steamInstallDir));
+      }
+    }
+
+    return [];
+  }
+
+  /** Expand ludusavi path template variables to real paths. */
+  private static expandLudusaviPath(
+    template: string,
+    steamInstallDir: string | null
+  ): string {
+    const home = os.homedir();
+    const appData =
+      process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
+    const localAppData =
+      process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local");
+    const documents = path.join(home, "Documents");
+    const xdgData =
+      process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share");
+    const xdgConfig = process.env.XDG_CONFIG_HOME ?? path.join(home, ".config");
+
+    return template
+      .replace(/<base>/g, steamInstallDir ?? "<base>")
+      .replace(/<game>/g, steamInstallDir ?? "<game>")
+      .replace(/<root>/g, steamInstallDir ?? "<root>")
+      .replace(/<home>/g, home)
+      .replace(/<winAppData>/g, appData)
+      .replace(/<winLocalAppData>/g, localAppData)
+      .replace(/<winDocuments>/g, documents)
+      .replace(/<xdgHome>/g, home)
+      .replace(/<xdgData>/g, xdgData)
+      .replace(/<xdgConfig>/g, xdgConfig)
+      .replace(/\//g, path.sep)
+      .replace(/\\/g, path.sep);
+  }
+
+  /** Look up the install directory for a Steam game by reading its appmanifest. */
+  private static async getSteamGameInstallDir(
+    appId: string
+  ): Promise<string | null> {
+    try {
+      const { getSteamLocation } = await import("./steam");
+      const steamPath = await getSteamLocation().catch(() => null);
+      if (!steamPath) return null;
+
+      const libraryPaths: string[] = [path.join(steamPath, "steamapps")];
+
+      const libraryFoldersPath = path.join(
+        steamPath,
+        "steamapps",
+        "libraryfolders.vdf"
+      );
+      if (fs.existsSync(libraryFoldersPath)) {
+        const vdf = fs.readFileSync(libraryFoldersPath, "utf-8");
+        const pathMatches = vdf.matchAll(/"path"\s+"([^"]+)"/g);
+        for (const m of pathMatches) {
+          libraryPaths.push(path.join(m[1], "steamapps"));
+        }
+      }
+
+      for (const steamapps of libraryPaths) {
+        const manifest = path.join(steamapps, `appmanifest_${appId}.acf`);
+        if (!fs.existsSync(manifest)) continue;
+
+        const acf = fs.readFileSync(manifest, "utf-8");
+        const installDirMatch = acf.match(/"installdir"\s+"([^"]+)"/);
+        if (installDirMatch) {
+          return path.join(steamapps, "common", installDirMatch[1]);
+        }
+      }
+    } catch {
+      // ignore
+    }
     return null;
   }
 

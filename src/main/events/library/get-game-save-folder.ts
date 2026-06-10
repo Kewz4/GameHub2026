@@ -42,11 +42,41 @@ const getGameSaveFolder = async (
     }
 
     const filePaths = Object.keys(gameData.files);
-    if (filePaths.length === 0) {
-      return null;
+    if (filePaths.length > 0) {
+      const firstPath = filePaths[0];
+      // Path might be a directory (trailing separator) rather than a file
+      return firstPath.endsWith(path.sep) || firstPath.endsWith("/")
+        ? firstPath.replace(/[/\\]+$/, "")
+        : path.dirname(firstPath);
     }
 
-    return path.dirname(filePaths[0]);
+    // backup --preview found the game in the manifest but no live save files
+    // (game not installed or no saves yet). Fall back to the manifest's raw
+    // path templates so the UI still shows a meaningful folder path.
+    logger.info(
+      `[getGameSaveFolder] No live files for ${shop}:${objectId}, trying manifest paths`
+    );
+    const manifestPaths = await Ludusavi.findManifestSavePaths(
+      shop,
+      gameTitle,
+      objectId
+    );
+
+    for (const p of manifestPaths) {
+      if (!p.includes("<")) {
+        return p.replace(/[/\\]+$/, "");
+      }
+    }
+
+    // Return first entry even if unexpanded so user sees something
+    if (manifestPaths.length > 0) {
+      logger.info(
+        `[getGameSaveFolder] Returning unexpanded manifest path: ${manifestPaths[0]}`
+      );
+      return manifestPaths[0].replace(/[/\\]+$/, "");
+    }
+
+    return null;
   } catch (error) {
     logger.error("[getGameSaveFolder] Error getting save folder:", error);
     return null;

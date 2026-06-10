@@ -25,6 +25,22 @@ const _portableExeDir =
         app.isPackaged &&
         !fs.existsSync(path.join(exeDir, SETUP_MARKER_FILE))
       ) {
+        // NSIS auto-update wipes the marker. If data already exists at the
+        // default Electron userData path (Roaming/GameHub), restore the marker
+        // and keep using the normal userData path so Epic/GOG sessions survive.
+        const defaultData = path.join(process.env.APPDATA ?? "", "GameHub");
+        const hasExistingData =
+          fs.existsSync(path.join(defaultData, "LOCK")) ||
+          fs.existsSync(path.join(defaultData, "level-db")) ||
+          fs.existsSync(path.join(defaultData, "legendary-config"));
+        if (hasExistingData) {
+          try {
+            fs.writeFileSync(path.join(exeDir, SETUP_MARKER_FILE), "", "utf8");
+          } catch {
+            // ignore
+          }
+          return null;
+        }
         return exeDir;
       }
     } catch {
