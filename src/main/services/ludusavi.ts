@@ -188,7 +188,9 @@ export class Ludusavi {
       shop === "steam" && objectId
         ? await Promise.race([
             this.getSteamGameInstallDir(objectId),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+            new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), 5_000)
+            ),
           ])
         : null;
 
