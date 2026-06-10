@@ -12,8 +12,7 @@ app.setName("GameHub");
 
 // Auth backup dir: outside the install directory so NSIS updates never wipe it.
 const AUTH_BACKUP_DIR = path.join(
-  process.env.LOCALAPPDATA ??
-    path.join(os.homedir(), "AppData", "Local"),
+  process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"),
   "GameHub-auth-backup"
 );
 
@@ -27,8 +26,7 @@ function backupAuth(): void {
       const src = path.join(userData, folder);
       const dst = path.join(AUTH_BACKUP_DIR, folder);
       if (!fs.existsSync(src)) continue;
-      if (fs.existsSync(dst))
-        fs.rmSync(dst, { recursive: true, force: true });
+      if (fs.existsSync(dst)) fs.rmSync(dst, { recursive: true, force: true });
       fs.cpSync(src, dst, { recursive: true });
     }
   } catch {

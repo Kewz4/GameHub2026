@@ -227,9 +227,10 @@ export class UploadcareSync {
       "https://upload.uploadcare.com/group/",
       form,
       {
-        headers: (
-          form as unknown as { getHeaders(): Record<string, string> }
-        ).getHeaders?.() ?? {},
+        headers:
+          (
+            form as unknown as { getHeaders(): Record<string, string> }
+          ).getHeaders?.() ?? {},
         timeout: 20_000,
       }
     );

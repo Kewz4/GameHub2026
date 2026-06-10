@@ -17,9 +17,7 @@ const getGameSaveFolder = async (
     const gameTitle = game?.title ?? assets?.title ?? null;
 
     if (!gameTitle) {
-      logger.warn(
-        `[getGameSaveFolder] No title for ${shop}:${objectId}`
-      );
+      logger.warn(`[getGameSaveFolder] No title for ${shop}:${objectId}`);
       return null;
     }
 
