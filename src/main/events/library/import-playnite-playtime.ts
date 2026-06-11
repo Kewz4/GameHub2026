@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { registerEvent } from "../register-event";
-import { gamesSublevel, levelKeys } from "@main/level";
+import { gamesSublevel } from "@main/level";
 import { logger } from "@main/services";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 
@@ -69,11 +69,10 @@ function parseLiteDB(data: Buffer): PlayniteGame[] {
       const gameId = findStringField(chunk, "GameId");
 
       if (
-        name &&
+        name !== null &&
         playtime !== null &&
         name.length > 1 &&
-        // Filter out Playnite UI link records (short single-word labels)
-        name.includes(" ") || (name.length > 8 && /[a-zA-Z0-9]/.test(name[0]))
+        (name.includes(" ") || (name.length > 8 && /[a-zA-Z0-9]/.test(name[0])))
       ) {
         games.push({
           name,
@@ -166,8 +165,8 @@ const importPlaynitePlaytime = async (
     });
 
     matched.push({
-      title: match.game.title,
-      addedHours: Math.round(addedMs / 3600000 * 10) / 10,
+      title: match.game.title ?? pg.name,
+      addedHours: Math.round((addedMs / 3600000) * 10) / 10,
     });
 
     logger.info(
