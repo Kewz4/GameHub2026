@@ -40,7 +40,13 @@ export function EpicAuthModal({
     wv.style.width = "100%";
     wv.style.height = "100%";
     wv.style.display = "block";
-    containerRef.current.appendChild(wv);
+    // Append only after the modal has fully laid out — a webview attached
+    // while an ancestor is mid-animation gets a stale guest viewport size.
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        containerRef.current?.appendChild(wv);
+      });
+    });
 
     const tryExtract = async (url: string) => {
       if (handledRef.current) return;
@@ -91,6 +97,7 @@ export function EpicAuthModal({
 
     const container = containerRef.current;
     return () => {
+      cancelAnimationFrame(raf);
       wv.removeEventListener("will-navigate", onWillNavigate);
       wv.removeEventListener("did-navigate", onDidNavigate);
       wv.removeEventListener("did-navigate-in-page", onDidNavigate);
@@ -107,6 +114,7 @@ export function EpicAuthModal({
       onClose={onClose}
       large
       noContentPadding
+      noAnimation
     >
       <div ref={containerRef} style={{ height: "100%", minHeight: "480px" }} />
     </Modal>

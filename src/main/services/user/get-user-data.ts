@@ -34,9 +34,43 @@ const overlayLocalImages = async <
   };
 };
 
+/** The banner lives on Uploadcare tagged with the Hydra account id. If this
+ * install has no local banner yet (fresh install / cleared data), restore the
+ * account's latest one so the banner follows the account everywhere. */
+const restoreAccountBanner = async (userId: string): Promise<void> => {
+  try {
+    const prefs = await db
+      .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+        valueEncoding: "json",
+      })
+      .catch(() => null);
+
+    if (prefs?.localBackgroundImageUrl) return;
+
+    const { UploadcareSync } = await import("../uploadcare-sync");
+    const bannerUrl = await UploadcareSync.findLatestImageByKind(
+      "profile-banner",
+      userId
+    );
+    if (!bannerUrl) return;
+
+    await db.put(
+      levelKeys.userPreferences,
+      { ...(prefs ?? {}), localBackgroundImageUrl: bannerUrl },
+      { valueEncoding: "json" }
+    );
+    logger.log(`Restored account banner from Uploadcare: ${bannerUrl}`);
+  } catch (error) {
+    logger.error("Failed to restore account banner", error);
+  }
+};
+
 export const getUserData = async () => {
   return HydraApi.get<UserDetails>(`/profile/me`)
-    .then((me) => overlayLocalImages(me))
+    .then(async (me) => {
+      if (me?.id) await restoreAccountBanner(me.id);
+      return overlayLocalImages(me);
+    })
     .then(async (me) => {
       try {
         const user = await db.get<string, User>(levelKeys.user, {

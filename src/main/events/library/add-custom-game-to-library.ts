@@ -123,7 +123,7 @@ const addCustomGameToLibrary = async (
         executablePath,
         launchOptions: null,
         favorite: false,
-        automaticCloudSync: false,
+        automaticCloudSync: true,
         hasManuallyUpdatedPlaytime: false,
       };
       const catalogueAssets = {
@@ -189,7 +189,7 @@ const addCustomGameToLibrary = async (
     executablePath,
     launchOptions: null,
     favorite: false,
-    automaticCloudSync: false,
+    automaticCloudSync: true,
     hasManuallyUpdatedPlaytime: false,
   };
 

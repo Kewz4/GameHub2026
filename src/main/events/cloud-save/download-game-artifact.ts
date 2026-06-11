@@ -34,12 +34,45 @@ export const addWinePrefixToWindowsPath = (
   return path.join(winePrefixPath, windowsPath.replace("C:", "drive_c"));
 };
 
+/**
+ * Backups store absolute paths from the machine that created them. If the
+ * destination's drive doesn't exist here (e.g. backup says E:\ but the game
+ * lives on D:\), remap onto the game's current install dir — or at least onto
+ * a drive that exists.
+ */
+const remapMissingDrive = (
+  destinationPath: string,
+  executablePath?: string | null
+): string => {
+  const root = path.parse(destinationPath).root; // e.g. "E:\"
+  if (!root || fs.existsSync(root)) return destinationPath;
+  if (!executablePath) return destinationPath;
+
+  const exeDir = path.dirname(executablePath);
+
+  // If the destination contains the game's current folder name, graft the
+  // remainder onto the local install dir:
+  //   E:\Games\Neon Abyss\SavesDir + D:\Stuff\Neon Abyss\game.exe
+  //   → D:\Stuff\Neon Abyss\SavesDir
+  const gameFolder = path.basename(exeDir).toLowerCase();
+  const destSegments = destinationPath.split(/[\\/]/);
+  const idx = destSegments.findIndex((s) => s.toLowerCase() === gameFolder);
+  if (idx !== -1) {
+    return path.join(exeDir, ...destSegments.slice(idx + 1));
+  }
+
+  // Otherwise just swap the dead drive for the game's drive
+  const exeRoot = path.parse(exeDir).root;
+  return path.join(exeRoot, destinationPath.slice(root.length));
+};
+
 const restoreLudusaviBackup = (
   backupPath: string,
   title: string,
   homeDir: string,
   winePrefixPath?: string | null,
-  artifactWinePrefixPath?: string | null
+  artifactWinePrefixPath?: string | null,
+  executablePath?: string | null
 ) => {
   const gameBackupPath = path.join(backupPath, title);
   const mappingYamlPath = path.join(gameBackupPath, "mapping.yaml");
@@ -63,23 +96,29 @@ const restoreLudusaviBackup = (
       const sourcePath = path.join(gameBackupPath, sourcePathWithDrives);
       logger.info(`Source path: ${sourcePath}`);
 
-      const destinationPath = transformLudusaviBackupPathIntoWindowsPath(
-        key,
-        artifactWinePrefixPath
-      )
-        .replace(
-          homeDir,
-          addWinePrefixToWindowsPath(userProfilePath, winePrefixPath)
-        )
-        .replace(
-          publicProfilePath,
-          addWinePrefixToWindowsPath(publicProfilePath, winePrefixPath)
-        );
+      const destinationPath = remapMissingDrive(
+        transformLudusaviBackupPathIntoWindowsPath(key, artifactWinePrefixPath)
+          .replace(
+            homeDir,
+            addWinePrefixToWindowsPath(userProfilePath, winePrefixPath)
+          )
+          .replace(
+            publicProfilePath,
+            addWinePrefixToWindowsPath(publicProfilePath, winePrefixPath)
+          ),
+        executablePath
+      );
 
       logger.info(`Moving ${sourcePath} to ${destinationPath}`);
-      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-      if (fs.existsSync(destinationPath)) fs.unlinkSync(destinationPath);
-      fs.renameSync(sourcePath, destinationPath);
+      try {
+        fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+        if (fs.existsSync(destinationPath)) fs.unlinkSync(destinationPath);
+        fs.renameSync(sourcePath, destinationPath);
+      } catch (err) {
+        // Don't abort the whole restore because one file's destination is
+        // unreachable on this machine
+        logger.error(`Failed to restore ${destinationPath}`, err);
+      }
     });
   });
 };
@@ -142,7 +181,8 @@ const downloadGameArtifact = async (
         CloudSync.getWindowsLikeUserProfilePath(effectiveWinePrefixPath)
       ),
       effectiveWinePrefixPath,
-      effectiveWinePrefixPath
+      effectiveWinePrefixPath,
+      game?.executablePath
     );
 
     fs.unlinkSync(zipLocation);

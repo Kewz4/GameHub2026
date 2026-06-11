@@ -13,8 +13,6 @@ const getGameArtifacts = async (
   objectId: string,
   shop: GameShop
 ) => {
-  if (shop === "custom") return [];
-
   const prefs = await db
     .get<
       string,

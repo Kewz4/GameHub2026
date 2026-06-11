@@ -15,6 +15,9 @@ export interface ModalProps {
   onClose: () => void;
   large?: boolean;
   noContentPadding?: boolean;
+  /** Disable the scale animation. Required for modals that host a <webview> —
+   * an animated transform on an ancestor breaks the guest view's sizing. */
+  noAnimation?: boolean;
   children: React.ReactNode;
   clickOutsideToClose?: boolean;
 }
@@ -26,6 +29,7 @@ export function Modal({
   onClose,
   large,
   noContentPadding,
+  noAnimation,
   children,
   clickOutsideToClose = true,
 }: ModalProps) {
@@ -124,6 +128,7 @@ export function Modal({
         className={cn("modal", {
           "modal--closing": isClosing,
           "modal--large": large,
+          "modal--no-animation": noAnimation,
         })}
         role="dialog"
         aria-describedby={description}

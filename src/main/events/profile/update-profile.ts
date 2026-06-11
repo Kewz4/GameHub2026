@@ -41,8 +41,15 @@ const updateProfile = async (
       payload["backgroundImageUrl"] = null;
       prefUpdates.localBackgroundImageUrl = null;
     } else {
+      // Tag with the Hydra account id so any install can restore the banner
+      const me = await HydraApi.get<UserProfile>("/profile/me").catch(
+        () => null
+      );
       const uploadcareUrl = await UploadcareSync.uploadImage(
-        updateProfile.backgroundImageUrl
+        updateProfile.backgroundImageUrl,
+        me?.id
+          ? { kind: "profile-banner", hydraUserId: me.id }
+          : { kind: "profile-banner" }
       ).catch(() => undefined);
       payload["backgroundImageUrl"] = uploadcareUrl ?? null;
       prefUpdates.localBackgroundImageUrl = uploadcareUrl ?? null;

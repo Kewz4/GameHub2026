@@ -61,7 +61,10 @@ export class UploadcareSync {
    * Upload an image file to Uploadcare and return its CDN URL.
    * Used for profile photos and banner images.
    */
-  static async uploadImage(filePath: string): Promise<string> {
+  static async uploadImage(
+    filePath: string,
+    metadata?: Record<string, string>
+  ): Promise<string> {
     const mimeType = await (
       await import("file-type")
     ).fileTypeFromFile(filePath);
@@ -73,6 +76,12 @@ export class UploadcareSync {
       contentType: mimeType?.mime ?? "image/webp",
     });
 
+    if (metadata) {
+      for (const [key, value] of Object.entries(metadata)) {
+        form.append(`metadata[${key}]`, value);
+      }
+    }
+
     const res = await axios.post<{ file: string }>(UPLOAD_BASE, form, {
       headers: form.getHeaders(),
       timeout: 60_000,
@@ -81,6 +90,24 @@ export class UploadcareSync {
     const uuid = res.data.file;
     logger.log(`Uploadcare: uploaded image ${uuid}`);
     return `${CDN_BASE}/${uuid}/`;
+  }
+
+  /** Find the newest uploaded image tagged with the given kind for a Hydra
+   * account (e.g. profile banner), so it can be restored on any install. */
+  static async findLatestImageByKind(
+    kind: string,
+    hydraUserId: string
+  ): Promise<string | null> {
+    try {
+      const results = await this.fetchAllFiles();
+      const match = results.find(
+        (f) =>
+          f.metadata?.kind === kind && f.metadata?.hydraUserId === hydraUserId
+      );
+      return match ? `${CDN_BASE}/${match.uuid}/` : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Strip everything except letters and digits, lowercase. The Uploadcare

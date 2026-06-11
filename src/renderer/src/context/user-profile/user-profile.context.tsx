@@ -101,6 +101,49 @@ export function UserProfileContextProvider({
       });
   }, [userId]);
 
+  // Custom games only exist locally — when viewing your own profile, merge
+  // them in so they show up alongside the server-known library
+  const getLocalCustomGames = useCallback(async (): Promise<{
+    library: UserGame[];
+    pinned: UserGame[];
+  }> => {
+    try {
+      const localLibrary = await window.electron.getLibrary();
+      const customGames = localLibrary
+        .filter((g) => g.shop === "custom" && !g.isDeleted)
+        .map(
+          (g) =>
+            ({
+              objectId: g.objectId,
+              shop: g.shop,
+              title: g.title,
+              playTimeInSeconds: Math.floor(
+                (g.playTimeInMilliseconds ?? 0) / 1000
+              ),
+              lastTimePlayed: g.lastTimePlayed ?? null,
+              unlockedAchievementCount: 0,
+              achievementCount: 0,
+              achievementsPointsEarnedSum: 0,
+              hasManuallyUpdatedPlaytime: g.hasManuallyUpdatedPlaytime ?? false,
+              isFavorite: g.favorite ?? false,
+              isPinned: g.isPinned ?? false,
+              pinnedDate: g.pinnedDate ?? null,
+              iconUrl: g.iconUrl ?? null,
+              libraryImageUrl: g.libraryImageUrl ?? g.iconUrl ?? "",
+              libraryHeroImageUrl: g.libraryHeroImageUrl ?? "",
+              logoImageUrl: g.logoImageUrl ?? "",
+              coverImageUrl: g.coverImageUrl ?? g.libraryImageUrl ?? "",
+            }) as unknown as UserGame
+        );
+      return {
+        library: customGames.filter((g) => !g.isPinned),
+        pinned: customGames.filter((g) => g.isPinned),
+      };
+    } catch {
+      return { library: [], pinned: [] };
+    }
+  }, []);
+
   const getUserLibraryGames = useCallback(
     async (sortBy?: string, reset = true) => {
       if (reset) {
@@ -127,13 +170,18 @@ export function UserProfileContextProvider({
           pinnedGames: UserGame[];
         }>(url);
 
+        const isOwnProfile = userDetails?.id === userId;
+        const localCustom = isOwnProfile
+          ? await getLocalCustomGames()
+          : { library: [], pinned: [] };
+
         if (response) {
-          setLibraryGames(response.library);
-          setPinnedGames(response.pinnedGames);
+          setLibraryGames([...localCustom.library, ...response.library]);
+          setPinnedGames([...localCustom.pinned, ...response.pinnedGames]);
           setHasMoreLibraryGames(response.library.length === 12);
         } else {
-          setLibraryGames([]);
-          setPinnedGames([]);
+          setLibraryGames(localCustom.library);
+          setPinnedGames(localCustom.pinned);
           setHasMoreLibraryGames(false);
         }
       } catch (error) {
@@ -144,7 +192,7 @@ export function UserProfileContextProvider({
         setIsLoadingLibraryGames(false);
       }
     },
-    [userId]
+    [userId, userDetails?.id, getLocalCustomGames]
   );
 
   const loadMoreLibraryGames = useCallback(

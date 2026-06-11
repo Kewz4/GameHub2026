@@ -15,18 +15,30 @@ const toggleGamePin = async (
     const game = await gamesSublevel.get(gameKey);
     if (!game) return;
 
+    // Custom games don't exist on the Hydra API — pin them locally only.
+    // For catalogue games, an API failure shouldn't block the local pin.
+    const isLocalOnly = shop === "custom";
+
     if (pin) {
-      const response = await HydraApi.put<UserGame>(
-        `/profile/games/${shop}/${objectId}/pin`
-      );
+      let pinnedDate = new Date();
+      if (!isLocalOnly) {
+        const response = await HydraApi.put<UserGame>(
+          `/profile/games/${shop}/${objectId}/pin`
+        ).catch(() => null);
+        if (response?.pinnedDate) pinnedDate = new Date(response.pinnedDate);
+      }
 
       await gamesSublevel.put(gameKey, {
         ...game,
         isPinned: pin,
-        pinnedDate: new Date(response.pinnedDate!),
+        pinnedDate,
       });
     } else {
-      await HydraApi.put(`/profile/games/${shop}/${objectId}/unpin`);
+      if (!isLocalOnly) {
+        await HydraApi.put(`/profile/games/${shop}/${objectId}/unpin`).catch(
+          () => null
+        );
+      }
 
       await gamesSublevel.put(gameKey, {
         ...game,

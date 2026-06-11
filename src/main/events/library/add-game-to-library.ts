@@ -41,7 +41,7 @@ const addGameToLibrary = async (
       playTimeInMilliseconds: 0,
       lastTimePlayed: null,
       addedToLibraryAt: new Date(),
-      automaticCloudSync: shop !== "custom",
+      automaticCloudSync: true,
       libraryOrigin: "catalog" as const,
     };
 

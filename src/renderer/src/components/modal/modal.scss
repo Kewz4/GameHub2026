@@ -25,6 +25,12 @@
     align-self: stretch;
   }
 
+  // Webview-hosting modals: any animated transform on an ancestor breaks the
+  // Electron guest view's size, leaving the page rendered at a stale viewport.
+  &--no-animation {
+    animation: none;
+  }
+
   &__content {
     flex: 1;
     min-height: 0;
