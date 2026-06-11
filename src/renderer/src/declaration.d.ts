@@ -536,7 +536,7 @@ declare global {
     onBackupDownloadComplete: (
       objectId: string,
       shop: GameShop,
-      cb: () => void
+      cb: (success: boolean) => void
     ) => () => Electron.IpcRenderer;
     onUploadComplete: (
       objectId: string,

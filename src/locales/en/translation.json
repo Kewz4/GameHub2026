@@ -392,6 +392,7 @@
     "backup_failed": "Backup failed",
     "backup_deleted": "Backup deleted",
     "backup_restored": "Backup restored",
+    "backup_download_failed": "Backup download failed — the file may no longer exist",
     "see_all_achievements": "See all achievements",
     "sign_in_to_see_achievements": "Sign in to see achievements",
     "mapping_method_automatic": "Automatic",

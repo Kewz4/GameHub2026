@@ -175,3 +175,20 @@ export function relaunchFrom(destDir: string): void {
 export function openInstallFolder(destDir: string): void {
   shell.openPath(destDir);
 }
+
+/**
+ * On every packaged launch, refresh Desktop and Start Menu shortcuts so they
+ * always point to the current exe. This fixes stale shortcuts left behind when
+ * the user switches from the old custom installer to a portable or NSIS build.
+ * Pinned taskbar shortcuts cannot be updated programmatically — the user must
+ * re-pin manually if theirs points to an old path.
+ */
+export function refreshShortcuts(): void {
+  if (process.platform !== "win32") return;
+  if (!app.isPackaged) return;
+  try {
+    createShortcuts(process.execPath);
+  } catch {
+    // ignore — non-critical
+  }
+}

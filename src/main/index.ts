@@ -270,7 +270,8 @@ app.whenReady().then(async () => {
   );
   const isRunDeepLink = deepLinkArg?.startsWith("hydralauncher://run");
 
-  const { needsSetup } = await import("./services/installer");
+  const { needsSetup, refreshShortcuts } = await import("./services/installer");
+  refreshShortcuts();
 
   // Ctrl+Shift+L / Cmd+Shift+L toggles the debug console window
   globalShortcut.register("CommandOrControl+Shift+L", () => {
