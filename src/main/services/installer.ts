@@ -81,6 +81,8 @@ function writeSetupMarker(dir: string) {
 }
 
 function createShortcuts(exePath: string) {
+  if (process.platform !== "win32") return;
+
   const vbsPath = app.isPackaged
     ? path.join(process.resourcesPath, "windows.vbs")
     : undefined;
@@ -91,12 +93,7 @@ function createShortcuts(exePath: string) {
     VBScriptPath: vbsPath,
   };
 
-  // Desktop
-  createDesktopShortcut({
-    windows: { ...shortcutBase, outputPath: app.getPath("desktop") },
-  });
-
-  // Start Menu
+  const desktop = app.getPath("desktop");
   const startMenu = path.join(
     process.env.APPDATA ?? "",
     "Microsoft",
@@ -104,6 +101,19 @@ function createShortcuts(exePath: string) {
     "Start Menu",
     "Programs"
   );
+
+  // Remove stale shortcuts from any previous install location before writing
+  // new ones so broken taskbar shortcuts don't persist after a move.
+  for (const dir of [desktop, startMenu]) {
+    const stale = path.join(dir, "GameHub.lnk");
+    try {
+      if (fs.existsSync(stale)) fs.unlinkSync(stale);
+    } catch {
+      // ignore — can't remove a pinned taskbar shortcut from here
+    }
+  }
+
+  createDesktopShortcut({ windows: { ...shortcutBase, outputPath: desktop } });
   createDesktopShortcut({
     windows: { ...shortcutBase, outputPath: startMenu },
   });
