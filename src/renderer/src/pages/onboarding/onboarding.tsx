@@ -11,7 +11,6 @@ import {
   BellIcon,
   GearIcon,
   FileDirectoryIcon,
-  CloudIcon,
   SearchIcon,
 } from "@primer/octicons-react";
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
@@ -386,9 +385,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setLudusaviBusy(true);
     setLudusaviResult("");
     try {
-      const ipc = (window.electron as Record<string, unknown>).uploadLudusaviBackup;
-      if (typeof ipc === "function") {
-        await (ipc as (p: string) => Promise<void>)(folderPath);
+      if (typeof (window.electron as unknown as Record<string, unknown>).uploadLudusaviBackup === "function") {
+        await (window.electron as unknown as { uploadLudusaviBackup: (p: string) => Promise<void> }).uploadLudusaviBackup(folderPath);
         setLudusaviResult("Saves imported successfully.");
       } else {
         setLudusaviResult("Feature coming soon.");
@@ -405,8 +403,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setScanBusy(true);
     setScanResult("");
     try {
-      const count = await window.electron.scanInstalledGames();
-      setScanResult(`Found ${count ?? 0} games.`);
+      const result = await window.electron.scanInstalledGames();
+      setScanResult(`Found ${result?.total ?? 0} games.`);
     } catch {
       setScanResult("Scan failed.");
     } finally {
@@ -422,14 +420,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setScanBusy(true);
     setScanResult("");
     try {
-      const ipc = (window.electron as Record<string, unknown>).selectiveScanInstalledGames;
-      let count: number | undefined;
-      if (typeof ipc === "function") {
-        count = await (ipc as (paths: string[]) => Promise<number>)(result.filePaths);
-      } else {
-        count = await window.electron.scanInstalledGames();
-      }
-      setScanResult(`Found ${count ?? 0} games.`);
+      const scanRes = await window.electron.selectiveScanInstalledGames(result.filePaths);
+      setScanResult(`Found ${scanRes?.total ?? 0} games.`);
     } catch {
       setScanResult("Scan failed.");
     } finally {
@@ -473,7 +465,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   };
 
   const hasLudusaviUpload =
-    typeof (window.electron as Record<string, unknown>).uploadLudusaviBackup === "function";
+    typeof (window.electron as unknown as Record<string, unknown>).uploadLudusaviBackup === "function";
 
   const isWelcome = currentStep === "welcome";
   const isDone = currentStep === "done";
