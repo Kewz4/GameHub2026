@@ -270,8 +270,13 @@ export function UserProfileContextProvider({
             .getUserPreferences()
             .catch(() => null);
           const localBg = prefs?.localBackgroundImageUrl;
+          // Normalize Windows backslashes to forward slashes so the local:
+          // protocol handler receives a valid URL on all platforms.
+          const localBgNorm = localBg?.replace(/\\/g, "/");
           const resolvedBg = localBg
-            ? localBg.startsWith("http") ? localBg : `local:${localBg}`
+            ? localBgNorm!.startsWith("http") || localBgNorm!.startsWith("file:")
+              ? localBgNorm!
+              : `local:${localBgNorm!}`
             : userProfile.backgroundImageUrl;
           userProfile = {
             ...userProfile,

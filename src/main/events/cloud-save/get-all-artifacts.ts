@@ -7,6 +7,9 @@ import type { CatalogueSearchResult, UserPreferences } from "@types";
 
 /** Resolve a game not present in the local library via the Hydra catalogue,
  * so cloud saves still show proper title/icon and navigate to a real page. */
+/** Strip apostrophes/quotes for loose comparison */
+const stripQuotes = (s: string) => s.replace(/[''`"]/g, "");
+
 const resolveFromCatalogue = async (
   title: string
 ): Promise<CatalogueSearchResult | null> => {
@@ -30,8 +33,13 @@ const resolveFromCatalogue = async (
       { needsAuth: false }
     );
     const titleNorm = normalizeGameTitle(title);
+    const titleNormNoQuotes = stripQuotes(titleNorm);
+    // Try strict normalize match first, then apostrophe-insensitive match
     return (
       resp?.edges?.find((r) => normalizeGameTitle(r.title) === titleNorm) ??
+      resp?.edges?.find(
+        (r) => stripQuotes(normalizeGameTitle(r.title)) === titleNormNoQuotes
+      ) ??
       null
     );
   } catch {
@@ -97,7 +105,9 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
           resolvedShop = catalogueMatch.shop;
           resolvedObjectId = catalogueMatch.objectId;
           resolvedTitle = catalogueMatch.title;
-          resolvedIconUrl = catalogueMatch.libraryImageUrl ?? null;
+          resolvedIconUrl =
+            catalogueMatch.libraryImageUrl ??
+            (catalogueMatch as Record<string, unknown>).iconUrl as string ?? null;
         }
       }
 

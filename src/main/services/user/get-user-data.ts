@@ -9,6 +9,7 @@ import { UserNotLoggedInError } from "@shared";
 import { logger } from "../logger";
 import { db } from "@main/level";
 import { levelKeys } from "@main/level/sublevels";
+import fs from "node:fs";
 
 /** HydraAPI rejects ucarecdn.com image URLs, so uploads are stored locally in
  * userPreferences. Overlay them so the user's own images always show. */
@@ -26,11 +27,20 @@ const overlayLocalImages = async <
     })
     .catch(() => null);
 
+  const rawBg = prefs?.localBackgroundImageUrl;
+  // Convert local file path to a usable URL for the renderer.
+  // Use the CDN/http URL as-is; convert local paths via file: protocol so
+  // Electron's renderer can load them without the local: custom protocol.
+  const resolvedBg = rawBg
+    ? rawBg.startsWith("http") || rawBg.startsWith("file:")
+      ? rawBg
+      : `file:///${rawBg.replace(/\\/g, "/")}`
+    : user.backgroundImageUrl;
+
   return {
     ...user,
     profileImageUrl: prefs?.localProfileImageUrl ?? user.profileImageUrl,
-    backgroundImageUrl:
-      prefs?.localBackgroundImageUrl ?? user.backgroundImageUrl,
+    backgroundImageUrl: resolvedBg,
   };
 };
 
@@ -45,7 +55,14 @@ const restoreAccountBanner = async (userId: string): Promise<void> => {
       })
       .catch(() => null);
 
-    if (prefs?.localBackgroundImageUrl) return;
+    const existingBg = prefs?.localBackgroundImageUrl;
+    if (existingBg) {
+      // If it's an HTTP URL, we already have it
+      if (existingBg.startsWith("http") || existingBg.startsWith("file:")) return;
+      // If it's a local file path, only skip if the file actually exists
+      if (fs.existsSync(existingBg)) return;
+      // File missing (cleared data, new machine) — fall through to restore from CDN
+    }
 
     const { UploadcareSync } = await import("../uploadcare-sync");
     const bannerUrl = await UploadcareSync.findLatestImageByKind(
