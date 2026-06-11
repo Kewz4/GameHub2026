@@ -165,10 +165,16 @@ export class UploadcareSync {
         if (meta.shop && meta.objectId) {
           if (meta.shop !== shop) return false;
           // Exact objectId match — or title-as-objectId legacy match
-          return (
-            meta.objectId === objectId ||
-            (gameTitle != null && meta.objectId === gameTitle)
+          if (meta.objectId === objectId) return true;
+          if (gameTitle != null && meta.objectId === gameTitle) return true;
+          // Ludusavi imports that stored the game title as objectId will have
+          // the right filename even if we don't have the title available.
+          // Fall through to filename matching so they still show up.
+          const filename = this.normalizeName(
+            (f.original_filename as string) ?? ""
           );
+          if (titlePrefix && filename.startsWith(titlePrefix)) return true;
+          return false;
         }
         // Legacy uploads (no metadata): match by filename.
         // Format is `{shop}-{objectId}-{timestamp}.tar`; older builds used

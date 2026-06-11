@@ -25,6 +25,10 @@ const getGameArtifacts = async (
   const gameKey = levelKeys.game(shop, objectId);
   const game = await gamesSublevel.get(gameKey).catch(() => null);
   const assets = await gamesShopAssetsSublevel.get(gameKey).catch(() => null);
+
+  // gameTitle is passed to listArtifacts to match legacy Ludusavi imports that
+  // stored the game title as objectId in Uploadcare metadata (e.g. "Neon Abyss"
+  // instead of "788100"). Without it, those artifacts would not be found.
   const gameTitle = game?.title ?? assets?.title ?? null;
 
   return UploadcareSync.listArtifacts(userId, shop, objectId, gameTitle);
