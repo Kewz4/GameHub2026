@@ -35,10 +35,6 @@ function getExeVersionField(exePath: string, field: string): Promise<string | nu
   });
 }
 
-function looksLikeExeFilename(name: string): boolean {
-  return /\.exe$/i.test(name) || /^[a-z0-9_\-]+$/i.test(name.replace(/\s/g, ""));
-}
-
 async function getExeDescription(exePath: string): Promise<string | null> {
   const filename = path.basename(exePath, path.extname(exePath));
 
