@@ -15,7 +15,7 @@ import { levelDBService } from "@renderer/services/leveldb.service";
 import app from "../../../app.scss?inline";
 import styles from "../../../components/achievements/notification/achievement-notification.scss?inline";
 import root from "react-shadow";
-import gameHubIconUrl from "@renderer/assets/icons/gamehub.svg?url";
+import gameHubIconUrl from "@renderer/assets/icons/gamehub-white.svg?url";
 
 const NOTIFICATION_TIMEOUT = 4000;
 

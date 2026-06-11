@@ -1,9 +1,11 @@
+@use "../../scss/globals.scss";
+
 .update-checker {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #0f0f14;
-  color: #e2e2ea;
+  background: globals.$background-color;
+  color: globals.$muted-color;
   font-family: "Noto Sans", system-ui, sans-serif;
   user-select: none;
   overflow: hidden;
@@ -39,23 +41,23 @@
     font-size: 15px;
     font-weight: 700;
     letter-spacing: 0.02em;
-    color: #f0f1f7;
+    color: globals.$muted-color;
   }
 
   &__subtitle {
     font-size: 11px;
-    color: #6b6d7c;
+    color: rgba(255, 255, 255, 0.35);
     margin-top: 1px;
   }
 
   &__status {
     font-size: 13px;
-    color: #a8aab8;
+    color: globals.$body-color;
     min-height: 18px;
   }
 
   &__status--error {
-    color: #e05c6a;
+    color: globals.$error-color;
   }
 
   &__progress-wrap {
@@ -80,7 +82,7 @@
 
   &__progress-label {
     font-size: 11px;
-    color: #6b6d7c;
+    color: rgba(255, 255, 255, 0.35);
     display: flex;
     justify-content: space-between;
   }
@@ -113,17 +115,17 @@
 
     &--ghost {
       background: transparent;
-      color: #6b6d7c;
+      color: rgba(255, 255, 255, 0.35);
       padding: 7px 0;
 
       &:hover {
-        color: #a8aab8;
+        color: globals.$body-color;
       }
     }
 
     &--console {
       background: rgba(255, 255, 255, 0.06);
-      color: #a8aab8;
+      color: globals.$body-color;
       font-size: 11px;
       padding: 5px 12px;
     }

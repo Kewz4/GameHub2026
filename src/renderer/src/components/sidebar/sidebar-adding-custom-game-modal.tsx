@@ -117,7 +117,7 @@ export function SidebarAddingCustomGameModal({
 
       navigate(
         buildGameDetailsPath({
-          shop: "custom",
+          shop: newGame.shop,
           objectId: newGame.objectId,
           title: newGame.title,
         })

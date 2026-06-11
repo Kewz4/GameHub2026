@@ -109,17 +109,40 @@ export const getGogGamePlaytimeMs = async (
   clientId: string
 ): Promise<number> => {
   try {
-    // GOG reports sessions as pages; fetch up to 500 sessions (most users have far fewer)
-    const response = await axios.get(
-      `https://gameplay.gog.com/clients/${clientId}/users/${userId}/sessions`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: { limit: 500 },
-      }
+    // Try the direct playtime summary endpoint first (fastest, single request)
+    const playtimeRes = await axios.get(
+      `https://gameplay.gog.com/clients/${clientId}/users/${userId}/playtime`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
     );
-    const items: { time?: number }[] = response.data?.items ?? [];
-    // Each session has `time` in seconds
-    const totalSeconds = items.reduce((sum, s) => sum + (s.time ?? 0), 0);
+    const totalSeconds =
+      playtimeRes.data?.time_played ??
+      playtimeRes.data?.playtime ??
+      playtimeRes.data?.total_playtime;
+    if (typeof totalSeconds === "number" && totalSeconds > 0) {
+      return totalSeconds * 1000;
+    }
+  } catch {
+    // fall through to sessions-based approach
+  }
+
+  try {
+    // Fall back: sum all individual sessions (paginated)
+    let totalSeconds = 0;
+    let pageToken: string | undefined;
+
+    do {
+      const response = await axios.get(
+        `https://gameplay.gog.com/clients/${clientId}/users/${userId}/sessions`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          params: { page_size: 200, ...(pageToken ? { page_token: pageToken } : {}) },
+        }
+      );
+      const items: { time?: number }[] = response.data?.items ?? [];
+      totalSeconds += items.reduce((sum, s) => sum + (s.time ?? 0), 0);
+      pageToken = response.data?.next_page_token ?? undefined;
+    } while (pageToken);
+
     return totalSeconds * 1000;
   } catch {
     return 0;

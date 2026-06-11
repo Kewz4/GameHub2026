@@ -144,6 +144,7 @@ export const getLegendaryGames = async (
     ...legendaryBaseArgs(),
     "list",
     "--json",
+    "--force-refresh",
   ]);
   const data = JSON.parse(output);
 
