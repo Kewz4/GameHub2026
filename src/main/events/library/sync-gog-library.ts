@@ -16,6 +16,7 @@ import {
 } from "@main/services/gog-account";
 import { createGame } from "@main/services/library-sync";
 import { logger } from "@main/services";
+import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
@@ -196,6 +197,7 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
     }
 
     logger.log(`GOG library sync complete: ${added} games added`);
+    void generateMissingMetadataInternal();
     return { total: ownedIds.length, added, addedGames };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

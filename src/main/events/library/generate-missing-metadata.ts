@@ -104,3 +104,6 @@ const generateMissingMetadata = async (
 };
 
 registerEvent("generateMissingMetadata", generateMissingMetadata);
+
+export const generateMissingMetadataInternal = () =>
+  generateMissingMetadata({} as Electron.IpcMainInvokeEvent);

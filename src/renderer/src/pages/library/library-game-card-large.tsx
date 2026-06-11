@@ -211,9 +211,16 @@ export const LibraryGameCardLarge = memo(function LibraryGameCardLarge({
           )}
         </div>
 
-        {shopIcon[game.shop] && (
+        {(shopIcon[game.shop] || game.alternativeShops?.length) && (
           <div className="library-game-card-large__shop-badge">
             {shopIcon[game.shop]}
+            {game.alternativeShops?.map((alt) =>
+              shopIcon[alt.shop] ? (
+                <span key={`${alt.shop}:${alt.objectId}`}>
+                  {shopIcon[alt.shop]}
+                </span>
+              ) : null
+            )}
           </div>
         )}
 

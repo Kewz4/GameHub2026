@@ -86,10 +86,22 @@ export function HeroPanelPlaytime() {
     </div>
   );
 
-  if (!game.lastTimePlayed) {
+  if (!game.lastTimePlayed && !game.playTimeInMilliseconds) {
     return (
       <>
         <p>{t("not_played_yet", { title: game?.title })}</p>
+        {isExtracting && extractionInProgressInfo}
+        {!isExtracting && hasDownload && downloadInProgressInfo}
+      </>
+    );
+  }
+
+  if (!game.lastTimePlayed && game.playTimeInMilliseconds) {
+    return (
+      <>
+        <p className="hero-panel-playtime__play-time">
+          {t("play_time", { amount: formattedPlayTime })}
+        </p>
         {isExtracting && extractionInProgressInfo}
         {!isExtracting && hasDownload && downloadInProgressInfo}
       </>

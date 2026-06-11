@@ -5,6 +5,7 @@ import { createGame } from "@main/services/library-sync";
 import { logger } from "@main/services";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
+import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 
 const syncSteamLibrary = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -102,6 +103,8 @@ const syncSteamLibrary = async (
   }
 
   logger.log(`Steam library sync complete: ${added} games added`);
+
+  void generateMissingMetadataInternal();
 
   return { total: ownedGames.length, added };
 };

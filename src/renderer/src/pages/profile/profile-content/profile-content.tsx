@@ -82,6 +82,7 @@ export function ProfileContent() {
     loadMoreLibraryGames,
     hasMoreLibraryGames,
     isLoadingLibraryGames,
+    localLibraryCount,
   } = useContext(userProfileContext);
   const { userDetails } = useUserDetails();
   const [statsIndex, setStatsIndex] = useState(0);
@@ -365,6 +366,7 @@ export function ProfileContent() {
                   userStats={userStats}
                   onLoadMore={handleLoadMore}
                   isMe={isMe}
+                  localLibraryCount={isMe ? localLibraryCount : null}
                 />
               )}
 
@@ -438,6 +440,7 @@ export function ProfileContent() {
     pinnedGames,
 
     sortBy,
+    localLibraryCount,
     activeTab,
     // ensure reviews UI updates correctly
     reviews,

@@ -139,6 +139,13 @@ export const LibraryGameCard = memo(function LibraryGameCard({
           <div className="library-game-card__shop-badge">
             <GameHubLogo className="library-game-card__shop-icon library-game-card__shop-icon--gamehub" />
             {getGameOrigin(game) === "sync" && shopIcon[game.shop]}
+            {game.alternativeShops?.map((alt) =>
+              shopIcon[alt.shop] ? (
+                <span key={`${alt.shop}:${alt.objectId}`}>
+                  {shopIcon[alt.shop]}
+                </span>
+              ) : null
+            )}
           </div>
           <div className="library-game-card__playtime">
             {game.hasManuallyUpdatedPlaytime ? (

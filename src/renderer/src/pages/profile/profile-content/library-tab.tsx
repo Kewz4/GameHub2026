@@ -19,6 +19,7 @@ interface LibraryTabProps {
   userStats: { libraryCount: number } | null;
   onLoadMore: () => void;
   isMe: boolean;
+  localLibraryCount?: number | null;
 }
 
 export function LibraryTab({
@@ -31,6 +32,7 @@ export function LibraryTab({
   userStats,
   onLoadMore,
   isMe,
+  localLibraryCount,
 }: Readonly<LibraryTabProps>) {
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
@@ -91,9 +93,11 @@ export function LibraryTab({
               <div className="profile-content__section-header">
                 <div className="profile-content__section-title-group">
                   <h2>{t("library")}</h2>
-                  {userStats && (
+                  {(localLibraryCount != null || userStats) && (
                     <span className="profile-content__section-badge">
-                      {numberFormatter.format(userStats.libraryCount)}
+                      {numberFormatter.format(
+                        localLibraryCount ?? userStats!.libraryCount
+                      )}
                     </span>
                   )}
                 </div>

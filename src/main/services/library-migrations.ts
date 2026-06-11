@@ -1,6 +1,7 @@
 import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
+import { WindowManager } from "./window-manager";
 import {
   compactGameTitle,
   normalizeGameTitle,
@@ -121,8 +122,11 @@ export const runLibraryMigrations = async (): Promise<void> => {
         desired = "catalog";
       }
 
-      if (desired && game.libraryOrigin !== desired) {
-        await gamesSublevel.put(key, { ...game, libraryOrigin: desired });
+      const updates: Partial<typeof game> = {};
+      if (desired && game.libraryOrigin !== desired) updates.libraryOrigin = desired;
+      if (game.automaticCloudSync !== true) updates.automaticCloudSync = true;
+      if (Object.keys(updates).length > 0) {
+        await gamesSublevel.put(key, { ...game, ...updates });
       }
     } catch (err) {
       logger.error(`[LibraryMigrations] Failed migrating ${key}`, err);
@@ -130,4 +134,6 @@ export const runLibraryMigrations = async (): Promise<void> => {
   }
 
   logger.info("[LibraryMigrations] Library migration pass complete");
+  // Notify the renderer so platform filters and library data reflect any stamps
+  WindowManager.sendToAppWindows("on-library-batch-complete");
 };

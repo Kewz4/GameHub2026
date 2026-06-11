@@ -8,6 +8,7 @@ import { syncXboxGameAchievements } from "@main/services/achievements/get-xbox-a
 import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
+import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 
 const syncGamePassLibrary = async () => {
   const prefs = await db
@@ -107,6 +108,7 @@ const syncGamePassLibrary = async () => {
   }
 
   logger.log(`Xbox Game Pass sync complete: ${added} games added`);
+  void generateMissingMetadataInternal();
   return { total: games.length, added };
 };
 

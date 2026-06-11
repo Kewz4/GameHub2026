@@ -12,6 +12,7 @@ import {
 } from "@main/services/legendary";
 import { createGame } from "@main/services/library-sync";
 import { logger } from "@main/services";
+import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
@@ -142,6 +143,7 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   }
 
   logger.log(`Epic library sync complete: ${added} games added`);
+  void generateMissingMetadataInternal();
   return { total: games.length, added, addedGames };
 };
 

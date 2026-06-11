@@ -23,6 +23,8 @@ export interface UserProfileContext {
   pinnedGames: UserGame[];
   hasMoreLibraryGames: boolean;
   isLoadingLibraryGames: boolean;
+  /** Total local library count — accurate for own profile, null otherwise */
+  localLibraryCount: number | null;
 }
 
 export const DEFAULT_USER_PROFILE_BACKGROUND = "#151515B3";
@@ -42,6 +44,7 @@ export const userProfileContext = createContext<UserProfileContext>({
   pinnedGames: [],
   hasMoreLibraryGames: false,
   isLoadingLibraryGames: false,
+  localLibraryCount: null,
 });
 
 const { Provider } = userProfileContext;
@@ -71,6 +74,9 @@ export function UserProfileContextProvider({
   const [libraryPage, setLibraryPage] = useState(0);
   const [hasMoreLibraryGames, setHasMoreLibraryGames] = useState(true);
   const [isLoadingLibraryGames, setIsLoadingLibraryGames] = useState(false);
+  const [localLibraryCount, setLocalLibraryCount] = useState<number | null>(
+    null
+  );
 
   const isMe = userDetails?.id === userProfile?.id;
 
@@ -175,6 +181,37 @@ export function UserProfileContextProvider({
           ? await getLocalLibraryGames()
           : { library: [], pinned: [] };
 
+        if (isOwnProfile) {
+          const allLocal = await window.electron.getLibrary().catch(() => []);
+          setLocalLibraryCount(allLocal.filter((g) => !g.isDeleted).length);
+        }
+
+        const sortGames = (games: UserGame[]): UserGame[] => {
+          if (!sortBy) return games;
+          return [...games].sort((a, b) => {
+            switch (sortBy) {
+              case "playtime":
+                return b.playTimeInSeconds - a.playTimeInSeconds;
+              case "achievementCount":
+                return (
+                  (b.unlockedAchievementCount ?? 0) -
+                  (a.unlockedAchievementCount ?? 0)
+                );
+              case "playedRecently": {
+                const aT = a.lastTimePlayed
+                  ? new Date(a.lastTimePlayed).getTime()
+                  : 0;
+                const bT = b.lastTimePlayed
+                  ? new Date(b.lastTimePlayed).getTime()
+                  : 0;
+                return bT - aT;
+              }
+              default:
+                return 0;
+            }
+          });
+        };
+
         if (response) {
           const serverIds = new Set(response.library.map((g) => g.objectId));
           const localUnique = localCustom.library.filter(
@@ -186,11 +223,13 @@ export function UserProfileContextProvider({
           const localPinnedUnique = localCustom.pinned.filter(
             (g) => !serverPinnedIds.has(g.objectId)
           );
-          setLibraryGames([...localUnique, ...response.library]);
+          setLibraryGames(
+            sortGames([...localUnique, ...response.library])
+          );
           setPinnedGames([...localPinnedUnique, ...response.pinnedGames]);
           setHasMoreLibraryGames(response.library.length === 12);
         } else {
-          setLibraryGames(localCustom.library);
+          setLibraryGames(sortGames(localCustom.library));
           setPinnedGames(localCustom.pinned);
           setHasMoreLibraryGames(false);
         }
@@ -348,6 +387,7 @@ export function UserProfileContextProvider({
         pinnedGames,
         hasMoreLibraryGames,
         isLoadingLibraryGames,
+        localLibraryCount,
       }}
     >
       {children}

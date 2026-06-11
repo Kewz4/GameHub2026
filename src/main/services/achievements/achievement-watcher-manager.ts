@@ -140,16 +140,15 @@ const compareFile = (game: Game, file: AchievementFile) => {
     fileStats.set(file.filePath, currentStat.mtimeMs);
 
     if (!previousStat || previousStat === -1) {
-      if (currentStat.mtimeMs) {
-        achievementsLogger.log(
-          "First change in file",
-          file.filePath,
-          previousStat,
-          currentStat.mtimeMs
-        );
-
-        return processAchievementFileDiff(game, file);
-      }
+      // First time seeing this file — record the baseline silently.
+      // preSearchAchievements() already handles discovering achievements that
+      // exist at startup without notifications; the watcher is only for changes
+      // that happen while the game is actively running.
+      achievementsLogger.log(
+        "First sight — recording baseline without notification",
+        file.filePath
+      );
+      return;
     }
 
     if (previousStat === currentStat.mtimeMs) {
