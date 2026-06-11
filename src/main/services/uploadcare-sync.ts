@@ -193,7 +193,28 @@ export class UploadcareSync {
 
   /** Download a file by UUID to a local path. */
   static async downloadFile(uuid: string, destPath: string): Promise<void> {
-    const res = await axios.get(`${CDN_BASE}/${uuid}/`, {
+    // Fetch the actual CDN URL from the REST API so we use the exact URL
+    // Uploadcare has for this file (handles custom CDN domains and avoids
+    // 404s from constructing the URL manually).
+    let downloadUrl = `${CDN_BASE}/${uuid}/`;
+    try {
+      const info = await axios.get<{ original_file_url?: string; cdn_url?: string }>(
+        `${API_BASE}/files/${uuid}/`,
+        {
+          headers: {
+            Authorization: AUTH_HEADER,
+            Accept: "application/vnd.uploadcare-v0.7+json",
+          },
+          timeout: 10_000,
+        }
+      );
+      const url = info.data.original_file_url ?? info.data.cdn_url;
+      if (url) downloadUrl = url;
+    } catch {
+      // ignore — fall through to the default CDN URL
+    }
+
+    const res = await axios.get(downloadUrl, {
       responseType: "arraybuffer",
       timeout: 120_000,
     });
