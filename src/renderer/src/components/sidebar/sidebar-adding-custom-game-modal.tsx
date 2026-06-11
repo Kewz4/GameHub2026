@@ -113,7 +113,7 @@ export function SidebarAddingCustomGameModal({
       );
 
       showSuccessToast(t("custom_game_modal_success"));
-      updateLibrary();
+      await updateLibrary();
 
       navigate(
         buildGameDetailsPath({
