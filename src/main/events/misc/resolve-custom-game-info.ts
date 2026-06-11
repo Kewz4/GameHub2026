@@ -54,6 +54,7 @@ async function getExeDescription(exePath: string): Promise<string | null> {
 function cleanFolderName(name: string): string {
   return name
     .replace(/[_]/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2") // NeonAbyss → Neon Abyss
     .replace(/\s*v?\d+\.\d+[\d.]*\s*$/i, "") // strip trailing version like v1.2.3
     .replace(/\s+/g, " ")
     .trim();
