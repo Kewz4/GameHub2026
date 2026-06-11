@@ -181,13 +181,13 @@ export class Ludusavi {
     if (!fs.existsSync(manifestPath)) return [];
 
     // Try exact title first (no binary)
-    let rawPaths = this.extractPathsFromManifest(manifestPath, title);
+    let { paths: rawPaths, installDirName } = this.extractPathsFromManifest(manifestPath, title);
 
     // If not found, try canonical name via ludusavi binary (slower, one shot)
     if (rawPaths.length === 0) {
       const canonical = await this.findCanonicalName(shop, title, objectId);
       if (canonical && canonical !== title) {
-        rawPaths = this.extractPathsFromManifest(manifestPath, canonical);
+        ({ paths: rawPaths, installDirName } = this.extractPathsFromManifest(manifestPath, canonical));
       }
     }
 
@@ -199,18 +199,25 @@ export class Ludusavi {
       ? platformUrlPrefixes.some((prefix) => executablePathOverride.startsWith(prefix))
       : true;
 
-    let steamInstallDir: string | null = null;
+    let resolvedInstallDir: string | null = null;
     if (executablePathOverride && !isPlatformUrl) {
-      steamInstallDir = path.dirname(executablePathOverride);
+      resolvedInstallDir = path.dirname(executablePathOverride);
     } else if (shop === "steam" && objectId) {
-      steamInstallDir = await Promise.race([
+      resolvedInstallDir = await Promise.race([
         this.getSteamGameInstallDir(objectId),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
       ]);
     }
 
+    // If no full install path found but we have the manifest installDir name,
+    // build a synthetic <base> using known Steam library roots
+    if (!resolvedInstallDir && installDirName && shop === "steam") {
+      const syntheticDir = await this.resolveSteamInstallDirByName(installDirName);
+      if (syntheticDir) resolvedInstallDir = syntheticDir;
+    }
+
     return rawPaths
-      .map((p) => this.expandLudusaviPath(p, steamInstallDir))
+      .map((p) => this.expandLudusaviPath(p, resolvedInstallDir, objectId))
       .filter((p) => !p.includes("<")); // only return fully-expanded paths
   }
 
@@ -232,7 +239,7 @@ export class Ludusavi {
     const manifestPath = path.join(this.configPath, "manifest.yaml");
     if (!fs.existsSync(manifestPath)) return [];
 
-    const rawPaths = this.extractPathsFromManifest(manifestPath, canonicalName);
+    const { paths: rawPaths } = this.extractPathsFromManifest(manifestPath, canonicalName);
     if (rawPaths.length === 0) return [];
 
     const steamInstallDir =
@@ -245,17 +252,17 @@ export class Ludusavi {
           ])
         : null;
 
-    return rawPaths.map((p) => this.expandLudusaviPath(p, steamInstallDir));
+    return rawPaths.map((p) => this.expandLudusaviPath(p, steamInstallDir, objectId));
   }
 
   /**
-   * Extract file path templates for a game from manifest.yaml using a
-   * line-by-line scan. Avoids loading the entire multi-MB YAML into memory.
+   * Extract file path templates and installDir name for a game from manifest.yaml
+   * using a line-by-line scan. Avoids loading the entire multi-MB YAML into memory.
    */
   private static extractPathsFromManifest(
     manifestPath: string,
     gameName: string
-  ): string[] {
+  ): { paths: string[]; installDirName: string | null } {
     const content = fs.readFileSync(manifestPath, "utf-8");
     const lines = content.split("\n");
 
@@ -270,29 +277,59 @@ export class Ludusavi {
         break;
       }
     }
-    if (gameStart === -1) return [];
+    if (gameStart === -1) return { paths: [], installDirName: null };
 
     // Collect lines that belong to this game's section (until next top-level key)
     const sectionLines: string[] = [];
     for (let i = gameStart + 1; i < lines.length; i++) {
       const line = lines[i];
-      // A new top-level entry starts with a non-space, non-empty character
       if (line.length > 0 && line[0] !== " " && line[0] !== "\t") break;
       sectionLines.push(line);
     }
 
-    // Find the `files:` subsection and collect its keys (path templates)
     const paths: string[] = [];
     let inFiles = false;
+    let inInstallDir = false;
+    let installDirName: string | null = null;
     const filesIndent = /^(\s+)files:/;
+    const installDirIndent = /^(\s+)installDir:/;
     let filesDepth = -1;
+    let installDirDepth = -1;
 
     for (const line of sectionLines) {
+      // Detect installDir section
+      if (!inInstallDir && !inFiles) {
+        const m = installDirIndent.exec(line);
+        if (m) {
+          inInstallDir = true;
+          installDirDepth = m[1].length;
+          continue;
+        }
+      }
+
+      if (inInstallDir) {
+        const keyMatch = /^(\s+)"?([^":]+)"?\s*:/.exec(line);
+        if (keyMatch) {
+          const indent = keyMatch[1].length;
+          if (indent <= installDirDepth) {
+            inInstallDir = false;
+          } else if (indent === installDirDepth + 2 && !installDirName) {
+            installDirName = keyMatch[2].trim() || null;
+            continue;
+          }
+        } else {
+          const spaceCount = line.length - line.trimStart().length;
+          if (line.trim() && spaceCount <= installDirDepth) inInstallDir = false;
+        }
+      }
+
+      // Detect files section
       if (!inFiles) {
         const m = filesIndent.exec(line);
         if (m) {
           inFiles = true;
           filesDepth = m[1].length;
+          inInstallDir = false;
         }
         continue;
       }
@@ -301,10 +338,7 @@ export class Ludusavi {
       const keyMatch = /^(\s+)"?([^":]+)"?\s*:/.exec(line);
       if (keyMatch) {
         const indent = keyMatch[1].length;
-        if (indent <= filesDepth) {
-          // Exited the files section
-          break;
-        }
+        if (indent <= filesDepth) break;
         if (indent === filesDepth + 2) {
           const raw = keyMatch[2].trim();
           if (raw) paths.push(raw);
@@ -317,37 +351,84 @@ export class Ludusavi {
       }
     }
 
-    return paths;
+    return { paths, installDirName };
   }
 
   /** Expand ludusavi path template variables to real paths. */
   private static expandLudusaviPath(
     template: string,
-    steamInstallDir: string | null
+    installDir: string | null,
+    storeGameId?: string | null
   ): string {
     const home = os.homedir();
     const appData =
       process.env.APPDATA ?? path.join(home, "AppData", "Roaming");
     const localAppData =
       process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local");
-    const documents = path.join(home, "Documents");
+    // <root> = steamapps/common dir, <game> = folder name, <base> = <root>/<game>
+    const installRoot = installDir ? path.dirname(installDir) : null;
+    const gameFolderName = installDir ? path.basename(installDir) : null;
+
     const xdgData =
       process.env.XDG_DATA_HOME ?? path.join(home, ".local", "share");
     const xdgConfig = process.env.XDG_CONFIG_HOME ?? path.join(home, ".config");
 
-    return template
-      .replace(/<base>/g, steamInstallDir ?? "<base>")
-      .replace(/<game>/g, steamInstallDir ?? "<game>")
-      .replace(/<root>/g, steamInstallDir ?? "<root>")
+    let result = template
+      .replace(/<base>/g, installDir ?? "<base>")
+      .replace(/<root>/g, installRoot ?? "<root>")
+      .replace(/<game>/g, gameFolderName ?? "<game>")
       .replace(/<home>/g, home)
       .replace(/<winAppData>/g, appData)
       .replace(/<winLocalAppData>/g, localAppData)
-      .replace(/<winDocuments>/g, documents)
+      .replace(
+        /<winLocalAppDataLow>/g,
+        path.join(home, "AppData", "LocalLow")
+      )
+      .replace(/<winDocuments>/g, path.join(home, "Documents"))
+      .replace(/<winPublic>/g, path.join("C:\\Users", "Public"))
+      .replace(/<winProgramData>/g, process.env.PROGRAMDATA ?? "C:\\ProgramData")
+      .replace(/<winDir>/g, process.env.WINDIR ?? "C:\\Windows")
+      .replace(/<osUserName>/g, os.userInfo().username)
       .replace(/<xdgHome>/g, home)
       .replace(/<xdgData>/g, xdgData)
-      .replace(/<xdgConfig>/g, xdgConfig)
+      .replace(/<xdgConfig>/g, xdgConfig);
+
+    if (storeGameId) {
+      result = result.replace(/<storeGameId>/g, storeGameId);
+    }
+
+    return result
       .replace(/\//g, path.sep)
       .replace(/\\/g, path.sep);
+  }
+
+  /** Find an install dir in Steam library roots by folder name (from manifest installDir). */
+  private static async resolveSteamInstallDirByName(
+    folderName: string
+  ): Promise<string | null> {
+    try {
+      const { getSteamLocation } = await import("./steam");
+      const steamPath = await getSteamLocation().catch(() => null);
+      if (!steamPath) return null;
+
+      const libraryPaths: string[] = [path.join(steamPath, "steamapps", "common")];
+
+      const libraryFoldersPath = path.join(steamPath, "steamapps", "libraryfolders.vdf");
+      if (fs.existsSync(libraryFoldersPath)) {
+        const vdf = fs.readFileSync(libraryFoldersPath, "utf-8");
+        for (const m of vdf.matchAll(/"path"\s+"([^"]+)"/g)) {
+          libraryPaths.push(path.join(m[1], "steamapps", "common"));
+        }
+      }
+
+      for (const commonDir of libraryPaths) {
+        const candidate = path.join(commonDir, folderName);
+        if (fs.existsSync(candidate)) return candidate;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
   }
 
   /** Look up the install directory for a Steam game by reading its appmanifest. */
