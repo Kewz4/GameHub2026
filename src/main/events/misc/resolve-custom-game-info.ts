@@ -21,7 +21,7 @@ export interface CustomGameInfo {
 function getExeVersionField(exePath: string, field: string): Promise<string | null> {
   return new Promise((resolve) => {
     if (process.platform !== "win32") return resolve(null);
-    const script = `(Get-Item "${exePath.replace(/"/g, '\\"')}").VersionInfo.${field}`;
+    const script = `[Console]::OutputEncoding = [Text.Encoding]::UTF8; (Get-Item "${exePath.replace(/"/g, '\\"')}").VersionInfo.${field}`;
     cp.execFile(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
@@ -108,11 +108,11 @@ async function searchCatalogue(title: string): Promise<CatalogueSearchResult | n
     const titleNorm = normalizeGameTitle(title);
     // Exact normalised match first
     let match = resp?.edges?.find((r) => normalizeGameTitle(r.title) === titleNorm);
-    // Loose: our candidate is contained in the result title (handles "GoW" → "God of War …")
+    // Loose: result title contains our query (handles abbreviations like "GoW" → "God of War …")
+    // Do NOT match in reverse — a shorter result like "God of War" must not swallow "God of War Ragnarök"
     if (!match) {
       match = resp?.edges?.find((r) =>
-        normalizeGameTitle(r.title).includes(titleNorm) ||
-        titleNorm.includes(normalizeGameTitle(r.title))
+        normalizeGameTitle(r.title).includes(titleNorm)
       );
     }
     return match ?? null;

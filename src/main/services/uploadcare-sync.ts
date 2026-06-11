@@ -136,7 +136,12 @@ export class UploadcareSync {
         // backup. The shop+objectId match is the real identity.
         void userId;
         if (meta.shop && meta.objectId) {
-          return meta.shop === shop && meta.objectId === objectId;
+          if (meta.shop !== shop) return false;
+          // Exact objectId match — or title-as-objectId legacy match
+          return (
+            meta.objectId === objectId ||
+            (gameTitle != null && meta.objectId === gameTitle)
+          );
         }
         // Legacy uploads (no metadata): match by filename.
         // Format is `{shop}-{objectId}-{timestamp}.tar`; older builds used

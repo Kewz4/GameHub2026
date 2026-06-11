@@ -47,6 +47,7 @@ export class UpdateManager {
     autoUpdater
       .removeAllListeners()
       .on("update-available", (info: UpdateInfo) => {
+        if (info.version === app.getVersion()) return;
         this.pendingUpdateInfo = info;
         this.newVersion = info.version;
         this.sendEvent({ type: "update-available", info });

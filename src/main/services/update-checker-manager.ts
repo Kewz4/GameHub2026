@@ -28,9 +28,23 @@ export class UpdateCheckerManager {
     null;
   private static portableExtractDir = "";
 
-  static readonly isPortable =
-    !!process.env.PORTABLE_EXECUTABLE_DIR ||
-    !!process.env.PORTABLE_EXECUTABLE_FILE;
+  static readonly isPortable = (() => {
+    if (process.env.PORTABLE_EXECUTABLE_DIR || process.env.PORTABLE_EXECUTABLE_FILE)
+      return true;
+    // ZIP portable: packaged win32 build with no .gamehub-setup marker means
+    // the user extracted the ZIP and is running directly (never went through the
+    // NSIS installer), so we must use the portable update path.
+    if (process.platform === "win32" && app.isPackaged) {
+      try {
+        const exeDir = path.dirname(process.execPath);
+        if (fs.existsSync(path.join(exeDir, "portable"))) return true;
+        if (!fs.existsSync(path.join(exeDir, ".gamehub-setup"))) return true;
+      } catch {
+        // ignore
+      }
+    }
+    return false;
+  })();
 
   static setSendEvent(fn: (event: UpdateCheckerEvent) => void) {
     this.sendEventFn = fn;

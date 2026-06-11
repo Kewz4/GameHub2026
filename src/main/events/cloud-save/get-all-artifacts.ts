@@ -21,6 +21,8 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
       let game = await gamesSublevel
         .get(levelKeys.game(artifact.shop, artifact.objectId))
         .catch(() => null);
+      let resolvedShop = artifact.shop;
+      let resolvedObjectId = artifact.objectId;
 
       // Legacy imports used the game title as objectId — search by title
       if (!game) {
@@ -30,11 +32,18 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
             !g.isDeleted &&
             g.title?.toLowerCase() === artifact.objectId?.toLowerCase()
         );
-        if (match) game = match[1];
+        if (match) {
+          game = match[1];
+          // Use the real shop/objectId from the DB so navigation works correctly
+          resolvedShop = game.shop;
+          resolvedObjectId = game.objectId;
+        }
       }
 
       return {
         ...artifact,
+        shop: resolvedShop,
+        objectId: resolvedObjectId,
         gameTitle: game?.title ?? artifact.objectId ?? `${artifact.shop}:${artifact.objectId}`,
         gameIconUrl: game?.customIconUrl ?? game?.iconUrl ?? null,
       };

@@ -44,7 +44,12 @@ const EDITION_WORDS = new Set([
 ]);
 
 export function normalizeGameTitle(title: string): string {
-  let s = title.trim().toLowerCase();
+  // Strip diacritics (ö→o, é→e, etc.) so cross-encoding comparisons work
+  let s = title
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
 
   // Replace punctuation separators (colon, dash variants) with a space
   s = s.replace(/\s*[:\-–—]\s*/g, " ");
