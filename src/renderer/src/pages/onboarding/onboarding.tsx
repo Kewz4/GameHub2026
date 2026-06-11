@@ -11,6 +11,8 @@ import {
   BellIcon,
   GearIcon,
   FileDirectoryIcon,
+  CloudIcon,
+  SearchIcon,
 } from "@primer/octicons-react";
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
@@ -27,10 +29,12 @@ type StepId =
   | "language"
   | "install-path"
   | "account"
+  | "integrations-select"
   | "steam"
   | "epic"
   | "gog"
   | "xbox"
+  | "tools"
   | "notifications"
   | "startup"
   | "done";
@@ -40,10 +44,12 @@ const ALL_STEPS: StepId[] = [
   "language",
   "install-path",
   "account",
+  "integrations-select",
   "steam",
   "epic",
   "gog",
   "xbox",
+  "tools",
   "notifications",
   "startup",
   "done",
@@ -53,10 +59,12 @@ const NAV_STEPS: StepId[] = [
   "language",
   "install-path",
   "account",
+  "integrations-select",
   "steam",
   "epic",
   "gog",
   "xbox",
+  "tools",
   "notifications",
   "startup",
 ];
@@ -66,14 +74,18 @@ const STEP_LABELS: Record<StepId, string> = {
   language: "Language",
   "install-path": "Install Path",
   account: "Account",
+  "integrations-select": "Platforms",
   steam: "Steam",
   epic: "Epic Games",
   gog: "GOG",
   xbox: "Xbox",
+  tools: "Tools",
   notifications: "Notifications",
   startup: "Startup",
   done: "Done",
 };
+
+const PLATFORM_STEPS: StepId[] = ["steam", "epic", "gog", "xbox"];
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -119,6 +131,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [accountWindowOpen, setAccountWindowOpen] = useState(false);
   const [accountLinked, setAccountLinked] = useState(false);
 
+  const [selectedIntegrations, setSelectedIntegrations] = useState<Set<string>>(new Set());
+
   const [steamInput, setSteamInput] = useState("");
   const [steamApiKey, setSteamApiKey] = useState("");
   const [steamLinked, setSteamLinked] = useState(false);
@@ -146,12 +160,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     userPreferences?.xboxGamertag ?? null
   );
 
+  // Tools step state
+  const [ludusaviResult, setLudusaviResult] = useState<string>("");
+  const [ludusaviBusy, setLudusaviBusy] = useState(false);
+  const [scanResult, setScanResult] = useState<string>("");
+  const [scanBusy, setScanBusy] = useState(false);
+
   const [downloadNotifs, setDownloadNotifs] = useState(true);
   const [achievementNotifs, setAchievementNotifs] = useState(true);
   const [startMinimized, setStartMinimized] = useState(false);
 
   const currentStep = ALL_STEPS[stepIndex];
-  void ALL_STEPS.indexOf(currentStep);
 
   useEffect(() => {
     window.electron.getDefaultDownloadsPath().then((p) => {
@@ -165,18 +184,44 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     const unsub = window.electron.onSignIn(() => {
       setAccountLinked(true);
       setAccountWindowOpen(false);
-      setStepIndex((i) => Math.min(i + 1, ALL_STEPS.length - 1));
+      setStepIndex(ALL_STEPS.indexOf("integrations-select"));
     });
     return unsub;
   }, [accountWindowOpen]);
 
-  const next = useCallback(() => {
-    setStepIndex((i) => Math.min(i + 1, ALL_STEPS.length - 1));
-  }, []);
+  const getNextStep = useCallback(
+    (from: StepId): StepId => {
+      if (from === "account") return "integrations-select";
+      if (from === "integrations-select") {
+        const firstSelected = PLATFORM_STEPS.find((s) =>
+          selectedIntegrations.has(s)
+        );
+        return (firstSelected as StepId) ?? "tools";
+      }
+      if (PLATFORM_STEPS.includes(from)) {
+        const remaining = PLATFORM_STEPS.filter((s) =>
+          selectedIntegrations.has(s)
+        );
+        const idx = remaining.indexOf(from);
+        if (idx >= 0 && idx < remaining.length - 1)
+          return remaining[idx + 1] as StepId;
+        return "tools";
+      }
+      if (from === "tools") return "notifications";
+      // Default linear progression for other steps
+      const idx = ALL_STEPS.indexOf(from);
+      return ALL_STEPS[idx + 1] as StepId;
+    },
+    [selectedIntegrations]
+  );
 
-  const skipIntegrations = useCallback(() => {
-    setStepIndex(ALL_STEPS.indexOf("notifications"));
-  }, []);
+  const next = useCallback(() => {
+    setStepIndex((i) => {
+      const current = ALL_STEPS[i];
+      const nextStep = getNextStep(current);
+      return ALL_STEPS.indexOf(nextStep);
+    });
+  }, [getNextStep]);
 
   const finish = useCallback(async () => {
     await window.electron.updateUserPreferences({
@@ -212,6 +257,18 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const handleAccountSignIn = () => {
     setAccountWindowOpen(true);
     window.electron.openAuthWindow(AuthPage.SignIn);
+  };
+
+  const toggleIntegration = (platform: string) => {
+    setSelectedIntegrations((prev) => {
+      const next = new Set(prev);
+      if (next.has(platform)) {
+        next.delete(platform);
+      } else {
+        next.add(platform);
+      }
+      return next;
+    });
   };
 
   const handleSteamOpenIdConnect = async () => {
@@ -315,6 +372,69 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }
   };
 
+  const handleLudusaviImport = async () => {
+    const result = await window.electron.showOpenDialog({
+      properties: ["openDirectory"],
+    });
+    if (!result || result.canceled || !result.filePaths[0]) return;
+    const folderPath = result.filePaths[0];
+    setLudusaviBusy(true);
+    setLudusaviResult("");
+    try {
+      const ipc = (window.electron as Record<string, unknown>).uploadLudusaviBackup;
+      if (typeof ipc === "function") {
+        await (ipc as (p: string) => Promise<void>)(folderPath);
+        setLudusaviResult("Saves imported successfully.");
+      } else {
+        setLudusaviResult("Feature coming soon.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLudusaviResult(msg || "Import failed.");
+    } finally {
+      setLudusaviBusy(false);
+    }
+  };
+
+  const handleDeepScan = async () => {
+    setScanBusy(true);
+    setScanResult("");
+    try {
+      const count = await window.electron.scanInstalledGames();
+      setScanResult(`Found ${count ?? 0} games.`);
+    } catch {
+      setScanResult("Scan failed.");
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  const handleSelectiveScan = async () => {
+    const result = await window.electron.showOpenDialog({
+      properties: ["openDirectory"],
+    });
+    if (!result || result.canceled || !result.filePaths[0]) return;
+    setScanBusy(true);
+    setScanResult("");
+    try {
+      const ipc = (window.electron as Record<string, unknown>).selectiveScanInstalledGames;
+      let count: number | undefined;
+      if (typeof ipc === "function") {
+        count = await (ipc as (paths: string[]) => Promise<number>)(result.filePaths);
+      } else {
+        count = await window.electron.scanInstalledGames();
+      }
+      setScanResult(`Found ${count ?? 0} games.`);
+    } catch {
+      setScanResult("Scan failed.");
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  const hasLudusaviUpload =
+    typeof (window.electron as Record<string, unknown>).uploadLudusaviBackup === "function";
+
   const isWelcome = currentStep === "welcome";
   const isDone = currentStep === "done";
   const showSidebar = !isWelcome && !isDone;
@@ -403,6 +523,26 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               )}
 
               <div className="onboarding-sidebar__section-label">Platforms</div>
+              <div
+                className={[
+                  "onboarding-nav-item",
+                  navStepIsActive("integrations-select")
+                    ? "onboarding-nav-item--active"
+                    : "",
+                  navStepIsDone("integrations-select")
+                    ? "onboarding-nav-item--done"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <span className="onboarding-nav-item__dot">
+                  {navStepIsDone("integrations-select") ? "✓" : ""}
+                </span>
+                <span className="onboarding-nav-item__label">
+                  {STEP_LABELS["integrations-select"]}
+                </span>
+              </div>
               {(["steam", "epic", "gog", "xbox"] as StepId[]).map((s) => {
                 const PlatformIcon = {
                   steam: SteamLogo,
@@ -410,6 +550,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   gog: GogLogo,
                   xbox: XboxLogo,
                 }[s];
+                const isSelected = selectedIntegrations.has(s);
                 return (
                   <div
                     key={s}
@@ -420,6 +561,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    style={!isSelected ? { opacity: 0.4 } : undefined}
                   >
                     <span className="onboarding-nav-item__dot">
                       {navStepIsDone(s) ? "✓" : ""}
@@ -431,6 +573,24 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </div>
                 );
               })}
+
+              <div className="onboarding-sidebar__section-label">Tools</div>
+              <div
+                className={[
+                  "onboarding-nav-item",
+                  navStepIsActive("tools") ? "onboarding-nav-item--active" : "",
+                  navStepIsDone("tools") ? "onboarding-nav-item--done" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <span className="onboarding-nav-item__dot">
+                  {navStepIsDone("tools") ? "✓" : ""}
+                </span>
+                <span className="onboarding-nav-item__label">
+                  {STEP_LABELS["tools"]}
+                </span>
+              </div>
 
               <div className="onboarding-sidebar__section-label">
                 Preferences
@@ -590,7 +750,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   <button
                     type="button"
                     className="onboarding-skip"
-                    onClick={skipIntegrations}
+                    onClick={next}
                   >
                     Skip — use without account
                   </button>
@@ -600,6 +760,80 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </Button>
                 </div>
               )}
+            </>
+          )}
+
+          {/* ── Integrations Select ── */}
+          {currentStep === "integrations-select" && (
+            <>
+              <div className="onboarding-step-header">
+                <div className="onboarding-step-header__icon">
+                  <GearIcon size={20} />
+                </div>
+                <div>
+                  <h2>Connect Platforms</h2>
+                  <p>Select the platforms you want to set up</p>
+                </div>
+              </div>
+              <p className="onboarding-step-description">
+                Choose which platforms to connect. You can set up each one in
+                the next steps, or skip all to continue.
+              </p>
+              <div className="onboarding-integrations-grid">
+                {(
+                  [
+                    { id: "steam", name: "Steam", Icon: SteamLogo },
+                    { id: "epic", name: "Epic Games", Icon: EpicLogo },
+                    { id: "gog", name: "GOG", Icon: GogLogo },
+                    { id: "xbox", name: "Xbox", Icon: XboxLogo },
+                  ] as const
+                ).map(({ id, name, Icon }) => {
+                  const isSelected = selectedIntegrations.has(id);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={[
+                        "onboarding-integration-card",
+                        isSelected
+                          ? "onboarding-integration-card--selected"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => toggleIntegration(id)}
+                    >
+                      <Icon className="onboarding-integration-card__icon" />
+                      <span className="onboarding-integration-card__name">
+                        {name}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleIntegration(id)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ pointerEvents: "none" }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="onboarding-actions">
+                <button
+                  type="button"
+                  className="onboarding-skip"
+                  onClick={() =>
+                    setStepIndex(ALL_STEPS.indexOf("tools"))
+                  }
+                >
+                  Skip All
+                </button>
+                <Button type="button" onClick={next}>
+                  {selectedIntegrations.size > 0
+                    ? "Set Up Selected"
+                    : "Continue"}
+                </Button>
+              </div>
             </>
           )}
 
@@ -927,6 +1161,100 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </Button>
                 </div>
               )}
+            </>
+          )}
+
+          {/* ── Tools ── */}
+          {currentStep === "tools" && (
+            <>
+              <div className="onboarding-step-header">
+                <div className="onboarding-step-header__icon">
+                  <GearIcon size={20} />
+                </div>
+                <div>
+                  <h2>Tools</h2>
+                  <p>Import saves and scan for installed games</p>
+                </div>
+              </div>
+
+              {/* Card 1: Ludusavi — only if signed in */}
+              {accountLinked && (
+                <div className="onboarding-tool-card">
+                  <div className="onboarding-tool-card__header">
+                    <CloudIcon size={18} />
+                    <span className="onboarding-tool-card__title">
+                      Import Cloud Saves from Ludusavi
+                    </span>
+                  </div>
+                  {hasLudusaviUpload ? (
+                    <>
+                      <p className="onboarding-tool-card__desc">
+                        Import an existing Ludusavi backup folder and upload
+                        your saves to GameHub Cloud.
+                      </p>
+                      <div className="onboarding-tool-card__actions">
+                        <Button
+                          type="button"
+                          disabled={ludusaviBusy}
+                          onClick={handleLudusaviImport}
+                        >
+                          {ludusaviBusy ? "Importing…" : "Import Saves"}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="onboarding-tool-card__desc">
+                      Open your game page → Cloud Sync → Create Backup to back
+                      up saves manually.
+                    </p>
+                  )}
+                  {ludusaviResult && (
+                    <p className="onboarding-tool-card__result">
+                      {ludusaviResult}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Card 2: Scan for Games */}
+              <div className="onboarding-tool-card">
+                <div className="onboarding-tool-card__header">
+                  <SearchIcon size={18} />
+                  <span className="onboarding-tool-card__title">
+                    Scan for Installed Games
+                  </span>
+                </div>
+                <p className="onboarding-tool-card__desc">
+                  Let GameHub automatically detect your installed games and set
+                  up their paths.
+                </p>
+                <div className="onboarding-tool-card__actions">
+                  <Button
+                    type="button"
+                    disabled={scanBusy}
+                    onClick={handleDeepScan}
+                  >
+                    {scanBusy ? "Scanning…" : "Deep Scan"}
+                  </Button>
+                  <Button
+                    type="button"
+                    theme="outline"
+                    disabled={scanBusy}
+                    onClick={handleSelectiveScan}
+                  >
+                    Selective Scan
+                  </Button>
+                </div>
+                {scanResult && (
+                  <p className="onboarding-tool-card__result">{scanResult}</p>
+                )}
+              </div>
+
+              <div className="onboarding-actions">
+                <Button type="button" onClick={next}>
+                  Continue
+                </Button>
+              </div>
             </>
           )}
 

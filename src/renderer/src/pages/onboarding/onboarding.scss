@@ -442,3 +442,80 @@
     background: rgba(255, 255, 255, 0.1);
   }
 }
+
+// ── Integrations selection grid ───────────────────────────────────────────────
+
+.onboarding-integrations-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.onboarding-integration-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+
+  &--selected {
+    border-color: #6a5acd;
+    background: rgba(106, 90, 205, 0.12);
+  }
+
+  &__icon {
+    width: 40px;
+    height: 40px;
+    opacity: 0.85;
+  }
+
+  &__name {
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+}
+
+// ── Tool cards ────────────────────────────────────────────────────────────────
+
+.onboarding-tool-card {
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  margin-bottom: 12px;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  &__title {
+    font-weight: 600;
+  }
+
+  &__desc {
+    font-size: 0.82rem;
+    opacity: 0.65;
+    margin-bottom: 12px;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__result {
+    font-size: 0.82rem;
+    opacity: 0.75;
+    margin-top: 8px;
+  }
+}
