@@ -38,7 +38,7 @@ export function EpicAuthModal({
     const wv = document.createElement("webview") as unknown as WebviewElement;
     wv.src = EPIC_LOGIN_URL;
     wv.style.width = "100%";
-    wv.style.height = "640px";
+    wv.style.height = "100%";
     wv.style.display = "block";
     containerRef.current.appendChild(wv);
 
@@ -108,7 +108,7 @@ export function EpicAuthModal({
       large
       noContentPadding
     >
-      <div ref={containerRef} style={{ minHeight: "640px" }} />
+      <div ref={containerRef} style={{ height: "100%", minHeight: "480px" }} />
     </Modal>
   );
 }
