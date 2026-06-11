@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { registerEvent } from "../register-event";
-import { gamesSublevel } from "@main/level";
-import { logger } from "@main/services";
+import { gamesSublevel, levelKeys } from "@main/level";
+import { HydraApi, logger } from "@main/services";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import type { CatalogueSearchResult } from "@types";
 
 interface PlayniteGame {
   name: string;
@@ -135,43 +136,120 @@ const importPlaynitePlaytime = async (
 
   const matched: ImportResult["games"] = [];
 
+  const searchCatalogue = async (
+    title: string,
+    steamId?: string
+  ): Promise<CatalogueSearchResult | null> => {
+    try {
+      const resp = await HydraApi.post<{ edges: CatalogueSearchResult[] }>(
+        "/catalogue/search",
+        {
+          title,
+          sortBy: "popularity",
+          sortOrder: "desc",
+          downloadSourceFingerprints: [],
+          tags: [],
+          publishers: [],
+          genres: [],
+          developers: [],
+          protondbSupportBadges: [],
+          deckCompatibility: [],
+          take: 5,
+          skip: 0,
+        },
+        { needsAuth: false }
+      );
+      const titleNorm = normalizeGameTitle(title);
+      return (
+        resp?.edges?.find((r) => steamId && r.objectId === steamId) ??
+        resp?.edges?.find(
+          (r) => normalizeGameTitle(r.title) === titleNorm
+        ) ??
+        null
+      );
+    } catch {
+      return null;
+    }
+  };
+
   for (const pg of gamesWithPlaytime) {
     const pgTitleNorm = normalizeGameTitle(pg.name);
     const pgPlaytimeMs = pg.playtimeSeconds * 1000;
+    const steamId = /^\d{5,10}$/.test(pg.gameId) ? pg.gameId : undefined;
 
-    // Match by Steam objectId (numeric gameId)
-    const byId =
-      /^\d{5,10}$/.test(pg.gameId)
-        ? localGames.find(({ game }) => game.objectId === pg.gameId)
-        : null;
-
-    // Match by normalized title
-    const byTitle =
-      byId ??
+    // 1. Match by Steam objectId or title in local library
+    const localById = steamId
+      ? localGames.find(({ game }) => game.objectId === steamId)
+      : null;
+    const localByTitle =
+      localById ??
       localGames.find(
         ({ game }) => normalizeGameTitle(game.title ?? "") === pgTitleNorm
       );
+    const localMatch = localById ?? localByTitle;
 
-    const match = byId ?? byTitle;
-    if (!match) continue;
+    if (localMatch) {
+      const existing = localMatch.game.playTimeInMilliseconds ?? 0;
+      if (pgPlaytimeMs <= existing) continue;
+      const addedMs = pgPlaytimeMs - existing;
+      await gamesSublevel.put(localMatch.key, {
+        ...localMatch.game,
+        playTimeInMilliseconds: pgPlaytimeMs,
+      });
+      matched.push({
+        title: localMatch.game.title ?? pg.name,
+        addedHours: Math.round((addedMs / 3600000) * 10) / 10,
+      });
+      logger.info(
+        `[Playnite] Updated playtime for ${localMatch.game.title}: +${(addedMs / 3600000).toFixed(1)}h`
+      );
+      continue;
+    }
 
-    const existing = match.game.playTimeInMilliseconds ?? 0;
-    if (pgPlaytimeMs <= existing) continue; // don't reduce playtime
+    // 2. Not in local library — search HydraAPI catalogue and add the game
+    const catalogueMatch = await searchCatalogue(pg.name, steamId);
+    if (!catalogueMatch) continue;
 
-    const addedMs = pgPlaytimeMs - existing;
-    await gamesSublevel.put(match.key, {
-      ...match.game,
-      playTimeInMilliseconds: pgPlaytimeMs,
-    });
+    const gameKey = levelKeys.game(catalogueMatch.shop, catalogueMatch.objectId);
+    const existingGame = await gamesSublevel.get(gameKey).catch(() => null);
 
-    matched.push({
-      title: match.game.title ?? pg.name,
-      addedHours: Math.round((addedMs / 3600000) * 10) / 10,
-    });
-
-    logger.info(
-      `[Playnite] Updated playtime for ${match.game.title}: +${(addedMs / 3600000).toFixed(1)}h`
-    );
+    if (!existingGame || existingGame.isDeleted) {
+      await gamesSublevel.put(gameKey, {
+        title: catalogueMatch.title,
+        objectId: catalogueMatch.objectId,
+        shop: catalogueMatch.shop,
+        iconUrl: catalogueMatch.libraryImageUrl ?? null,
+        libraryHeroImageUrl: null,
+        logoImageUrl: null,
+        remoteId: null,
+        isDeleted: false,
+        playTimeInMilliseconds: pgPlaytimeMs,
+        lastTimePlayed: null,
+        addedToLibraryAt: new Date(),
+        automaticCloudSync: false,
+        libraryOrigin: "catalog" as const,
+      });
+      matched.push({
+        title: catalogueMatch.title,
+        addedHours: Math.round((pgPlaytimeMs / 3600000) * 10) / 10,
+      });
+      logger.info(
+        `[Playnite] Added ${catalogueMatch.title} to library with ${(pgPlaytimeMs / 3600000).toFixed(1)}h playtime`
+      );
+    } else if (pgPlaytimeMs > (existingGame.playTimeInMilliseconds ?? 0)) {
+      const addedMs = pgPlaytimeMs - (existingGame.playTimeInMilliseconds ?? 0);
+      await gamesSublevel.put(gameKey, {
+        ...existingGame,
+        playTimeInMilliseconds: pgPlaytimeMs,
+      });
+      matched.push({
+        title: catalogueMatch.title,
+        addedHours: Math.round((addedMs / 3600000) * 10) / 10,
+      });
+      logger.info(
+        `[Playnite] Updated playtime for ${catalogueMatch.title}: +${(addedMs / 3600000).toFixed(1)}h`
+      );
+    }
   }
 
   return {

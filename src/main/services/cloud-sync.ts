@@ -147,6 +147,7 @@ export class CloudSync {
         userId: userId ?? "anonymous",
         shop,
         objectId,
+        ...(game?.title ? { gameName: game.title } : {}),
         hostname: os.hostname(),
         ...(downloadOptionTitle ? { downloadOptionTitle } : {}),
         ...(label ? { label } : {}),

@@ -343,6 +343,7 @@ export interface GameArtifact {
   downloadCount: number;
   label?: string;
   isFrozen: boolean;
+  gameName?: string;
 }
 
 export interface GameArtifactWithGame extends GameArtifact {

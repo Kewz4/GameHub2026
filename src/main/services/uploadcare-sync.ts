@@ -204,7 +204,13 @@ export class UploadcareSync {
     // cloudSyncUserId and would orphan every existing backup.
     void userId;
     return results
-      .filter((f) => f.metadata?.shop && f.metadata?.objectId)
+      .filter(
+        (f) =>
+          f.metadata?.shop &&
+          f.metadata?.objectId &&
+          f.metadata.shop !== "undefined" &&
+          f.metadata.objectId !== "nan"
+      )
       .map((f) => ({
         id: f.uuid as string,
         artifactLengthInBytes: f.size as number,
@@ -218,6 +224,7 @@ export class UploadcareSync {
         isFrozen: false,
         shop: f.metadata.shop as GameShop,
         objectId: f.metadata.objectId as string,
+        gameName: (f.metadata?.gameName as string) ?? undefined,
         gameTitle: "",
         gameIconUrl: null,
       }));

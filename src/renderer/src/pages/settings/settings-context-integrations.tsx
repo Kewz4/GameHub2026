@@ -6,6 +6,7 @@ import { SettingsGogAccount } from "./settings-gog-account";
 import { SettingsBattleNet } from "./settings-battlenet";
 import { SettingsXbox } from "./settings-xbox";
 import { SettingsLudusaviImport } from "./settings-ludusavi-import";
+import { SettingsPlayniteImport } from "./settings-playnite-import";
 import { useUserDetails } from "@renderer/hooks";
 
 export function SettingsContextIntegrations() {
@@ -57,6 +58,11 @@ export function SettingsContextIntegrations() {
       <div className="settings-context-panel__group">
         <h3>Import Ludusavi Backup</h3>
         <SettingsLudusaviImport />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>Import Playnite Playtime</h3>
+        <SettingsPlayniteImport />
       </div>
     </div>
   );

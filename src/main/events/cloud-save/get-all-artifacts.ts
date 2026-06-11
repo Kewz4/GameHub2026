@@ -75,12 +75,14 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
       let resolvedIconUrl: string | null = null;
 
       // Legacy imports used the game title as objectId — search by title
+      // (use apostrophe-insensitive comparison to handle curly vs straight quotes)
       if (!game) {
         const all = await gamesSublevel.iterator().all().catch(() => []);
+        const objectIdNorm = stripQuotes(artifact.objectId?.toLowerCase() ?? "");
         const match = all.find(
           ([, g]) =>
             !g.isDeleted &&
-            g.title?.toLowerCase() === artifact.objectId?.toLowerCase()
+            stripQuotes(g.title?.toLowerCase() ?? "") === objectIdNorm
         );
         if (match) {
           game = match[1];
@@ -91,23 +93,27 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
       }
 
       // Not in library at all — resolve via the Hydra catalogue so the entry
-      // still gets metadata and navigates to a real game page
-      if (!game && artifact.objectId) {
-        const cacheKey = artifact.objectId.toLowerCase();
-        if (!catalogueCache.has(cacheKey)) {
-          catalogueCache.set(
-            cacheKey,
-            await resolveFromCatalogue(artifact.objectId)
-          );
-        }
-        const catalogueMatch = catalogueCache.get(cacheKey);
-        if (catalogueMatch) {
-          resolvedShop = catalogueMatch.shop;
-          resolvedObjectId = catalogueMatch.objectId;
-          resolvedTitle = catalogueMatch.title;
-          resolvedIconUrl =
-            catalogueMatch.libraryImageUrl ??
-            (catalogueMatch as Record<string, unknown>).iconUrl as string ?? null;
+      // still gets metadata and navigates to a real game page.
+      // Use gameName from metadata if available; fall back to objectId only if
+      // it looks like a title (not a numeric Steam App ID).
+      if (!game) {
+        const searchTerm =
+          artifact.gameName ??
+          (/^\d+$/.test(artifact.objectId ?? "") ? null : artifact.objectId);
+        if (searchTerm) {
+          const cacheKey = searchTerm.toLowerCase();
+          if (!catalogueCache.has(cacheKey)) {
+            catalogueCache.set(cacheKey, await resolveFromCatalogue(searchTerm));
+          }
+          const catalogueMatch = catalogueCache.get(cacheKey);
+          if (catalogueMatch) {
+            resolvedShop = catalogueMatch.shop;
+            resolvedObjectId = catalogueMatch.objectId;
+            resolvedTitle = catalogueMatch.title;
+            resolvedIconUrl =
+              catalogueMatch.libraryImageUrl ??
+              (catalogueMatch as Record<string, unknown>).iconUrl as string ?? null;
+          }
         }
       }
 
@@ -118,6 +124,7 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
         gameTitle:
           game?.title ??
           resolvedTitle ??
+          artifact.gameName ??
           artifact.objectId ??
           `${artifact.shop}:${artifact.objectId}`,
         gameIconUrl:
