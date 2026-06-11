@@ -562,6 +562,7 @@ declare global {
     ping: () => string;
     getDefaultDownloadsPath: () => Promise<string>;
     isPortableVersion: () => Promise<boolean>;
+    getExeName: (exePath: string) => Promise<string | null>;
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;

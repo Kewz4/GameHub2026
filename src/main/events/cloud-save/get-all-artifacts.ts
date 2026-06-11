@@ -18,13 +18,24 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
   // Enrich with game title and icon from local DB
   const enriched = await Promise.all(
     artifacts.map(async (artifact) => {
-      const game = await gamesSublevel
+      let game = await gamesSublevel
         .get(levelKeys.game(artifact.shop, artifact.objectId))
         .catch(() => null);
 
+      // Legacy imports used the game title as objectId — search by title
+      if (!game) {
+        const all = await gamesSublevel.iterator().all().catch(() => []);
+        const match = all.find(
+          ([, g]) =>
+            !g.isDeleted &&
+            g.title?.toLowerCase() === artifact.objectId?.toLowerCase()
+        );
+        if (match) game = match[1];
+      }
+
       return {
         ...artifact,
-        gameTitle: game?.title ?? `${artifact.shop}:${artifact.objectId}`,
+        gameTitle: game?.title ?? artifact.objectId ?? `${artifact.shop}:${artifact.objectId}`,
         gameIconUrl: game?.customIconUrl ?? game?.iconUrl ?? null,
       };
     })

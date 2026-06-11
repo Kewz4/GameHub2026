@@ -38,7 +38,7 @@ export function EpicAuthModal({
     const wv = document.createElement("webview") as unknown as WebviewElement;
     wv.src = EPIC_LOGIN_URL;
     wv.style.width = "100%";
-    wv.style.height = "560px";
+    wv.style.height = "640px";
     wv.style.display = "block";
     containerRef.current.appendChild(wv);
 
@@ -105,8 +105,10 @@ export function EpicAuthModal({
       title="Sign in to Epic Games"
       description="Log in to your Epic Games account to enable downloads."
       onClose={onClose}
+      large
+      noContentPadding
     >
-      <div ref={containerRef} style={{ minHeight: "560px" }} />
+      <div ref={containerRef} style={{ minHeight: "640px" }} />
     </Modal>
   );
 }

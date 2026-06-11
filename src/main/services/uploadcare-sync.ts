@@ -203,12 +203,30 @@ export class UploadcareSync {
 
   /** Delete a file by UUID. */
   static async deleteFile(uuid: string): Promise<void> {
-    await axios.delete(`${API_BASE}/files/${uuid}/`, {
-      headers: {
-        Authorization: AUTH_HEADER,
-        Accept: "application/vnd.uploadcare-v0.7+json",
-      },
-    });
+    // Try DELETE /files/{uuid}/ first; fall back to the storage endpoint
+    // if the primary returns 405 (some account tiers restrict it).
+    try {
+      await axios.delete(`${API_BASE}/files/${uuid}/`, {
+        headers: {
+          Authorization: AUTH_HEADER,
+          Accept: "application/vnd.uploadcare-v0.7+json",
+        },
+      });
+    } catch (err: any) {
+      if (err?.response?.status === 405) {
+        // Use batch delete endpoint as fallback
+        await axios.delete(`${API_BASE}/files/storage/`, {
+          headers: {
+            Authorization: AUTH_HEADER,
+            Accept: "application/vnd.uploadcare-v0.7+json",
+            "Content-Type": "application/json",
+          },
+          data: [uuid],
+        });
+      } else {
+        throw err;
+      }
+    }
     logger.log(`Uploadcare: deleted ${uuid}`);
   }
 

@@ -46,9 +46,14 @@ export function SidebarAddingCustomGameModal({
       setExecutablePath(selectedPath);
 
       if (!gameName.trim()) {
-        const fileName = selectedPath.split(/[\\/]/).pop() || "";
-        const gameNameFromFile = fileName.replace(/\.[^/.]+$/, "");
-        setGameName(gameNameFromFile);
+        // Try to read FileDescription/ProductName from the exe version info
+        const exeDesc = await window.electron.getExeName(selectedPath).catch(() => null);
+        if (exeDesc) {
+          setGameName(exeDesc);
+        } else {
+          const fileName = selectedPath.split(/[\\/]/).pop() || "";
+          setGameName(fileName.replace(/\.[^/.]+$/, ""));
+        }
       }
     }
   };
