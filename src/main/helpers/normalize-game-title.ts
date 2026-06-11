@@ -43,6 +43,18 @@ const EDITION_WORDS = new Set([
   "bundle",
 ]);
 
+/**
+ * Aggressive form of normalizeGameTitle for cross-source matching: also strips
+ * everything that isn't a letter or digit, so spacing and punctuation
+ * differences can't break a match.
+ *
+ *   "NeonAbyss"  → "neonabyss"     "Neon Abyss" → "neonabyss"
+ *   "Marvel's Spider-Man" → "marvelsspiderman"
+ */
+export function compactGameTitle(title: string): string {
+  return normalizeGameTitle(title).replace(/[^a-z0-9]/g, "");
+}
+
 export function normalizeGameTitle(title: string): string {
   // Strip diacritics (ö→o, é→e, etc.) so cross-encoding comparisons work
   let s = title

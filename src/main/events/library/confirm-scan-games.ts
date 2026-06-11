@@ -15,7 +15,12 @@ const confirmScanGames = async (
   for (const { key, executablePath } of approvedGames) {
     const game = await gamesSublevel.get(key).catch(() => null);
     if (!game) continue;
-    await gamesSublevel.put(key, { ...game, executablePath });
+    await gamesSublevel.put(key, {
+      ...game,
+      executablePath,
+      // Found installed on disk = owned, not a catalogue-only entry
+      libraryOrigin: "sync",
+    });
     logger.info(`[ConfirmScanGames] Confirmed ${key}: ${executablePath}`);
   }
 

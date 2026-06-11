@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Modal, Button } from "@renderer/components";
+import { useEffect, useState } from "react";
+import { Modal } from "../modal/modal";
+import { Button } from "../button/button";
 
 export interface ScannedGame {
   title: string;
@@ -14,8 +15,19 @@ interface Props {
   onClose: () => void;
 }
 
-export function ScanApprovalModal({ visible, foundGames, onConfirm, onClose }: Props) {
-  const [approved, setApproved] = useState<Set<string>>(() => new Set(foundGames.map((g) => g.key)));
+export function ScanApprovalModal({
+  visible,
+  foundGames,
+  onConfirm,
+  onClose,
+}: Readonly<Props>) {
+  const [approved, setApproved] = useState<Set<string>>(new Set());
+
+  // Re-initialize the approval set whenever a new scan result arrives —
+  // a useState initializer would only capture the (empty) first render.
+  useEffect(() => {
+    setApproved(new Set(foundGames.map((g) => g.key)));
+  }, [foundGames]);
 
   const toggle = (key: string) => {
     setApproved((prev) => {
@@ -44,7 +56,9 @@ export function ScanApprovalModal({ visible, foundGames, onConfirm, onClose }: P
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {foundGames.length === 0 ? (
-          <p style={{ opacity: 0.6, margin: 0 }}>No games were found during the scan.</p>
+          <p style={{ opacity: 0.6, margin: 0 }}>
+            No games were found during the scan.
+          </p>
         ) : (
           <>
             <div style={{ display: "flex", gap: "8px" }}>
@@ -109,10 +123,23 @@ export function ScanApprovalModal({ visible, foundGames, onConfirm, onClose }: P
                     type="checkbox"
                     checked={approved.has(g.key)}
                     onChange={() => toggle(g.key)}
-                    style={{ accentColor: "var(--color-primary, #8c67ef)", width: "16px", height: "16px" }}
+                    style={{
+                      accentColor: "var(--color-primary, #8c67ef)",
+                      width: "16px",
+                      height: "16px",
+                    }}
                   />
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" }}>
-                    <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>{g.title}</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>
+                      {g.title}
+                    </span>
                     <span
                       style={{
                         fontSize: "0.74rem",

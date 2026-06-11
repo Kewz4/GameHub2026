@@ -121,6 +121,12 @@ export const loadState = async () => {
     uploadGamesBatch();
     void migrateDownloadSources();
 
+    // Repair corrupted library records (title-as-objectId) and stamp
+    // libraryOrigin on legacy entries. Non-blocking.
+    import("./services/library-migrations")
+      .then(({ runLibraryMigrations }) => runLibraryMigrations())
+      .catch(() => {});
+
     const { syncDownloadSourcesFromApi } = await import("./services/user");
     void syncDownloadSourcesFromApi();
 

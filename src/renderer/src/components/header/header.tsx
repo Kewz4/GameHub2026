@@ -28,7 +28,7 @@ import { AutoUpdateSubHeader } from "./auto-update-sub-header";
 import { ScanGamesModal } from "./scan-games-modal";
 import { setFilters, setLibrarySearchQuery } from "@renderer/features";
 import cn from "classnames";
-import { SearchDropdown } from "@renderer/components";
+import { SearchDropdown, ScanApprovalModal } from "@renderer/components";
 import { buildGameDetailsPath } from "@renderer/helpers";
 import type { GameShop } from "@types";
 import { debounce } from "lodash-es";
@@ -102,9 +102,19 @@ export function Header() {
   const [isScanning, setIsScanning] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [scanResult, setScanResult] = useState<{
-    foundGames: { title: string; executablePath: string }[];
+    foundGames: { title: string; executablePath: string; key: string }[];
     total: number;
   } | null>(null);
+  const [scanProgress, setScanProgress] = useState<{
+    scanned: number;
+    total: number;
+    foundCount: number;
+    currentTitle: string;
+  } | null>(null);
+  const [scanCandidates, setScanCandidates] = useState<
+    { title: string; executablePath: string; key: string }[]
+  >([]);
+  const [showScanApproval, setShowScanApproval] = useState(false);
 
 
   const { t } = useTranslation("header");
@@ -315,23 +325,50 @@ export function Header() {
 
     setIsScanning(true);
     setScanResult(null);
+    setScanProgress(null);
 
     try {
+      // Dry run: collect candidates first, then let the user approve/deny
+      // each game before anything is written to the library.
       let result;
       if (mode === "selective" && paths?.length) {
-        result = await window.electron.selectiveScanInstalledGames(paths);
+        result = await window.electron.selectiveScanInstalledGames(paths, true);
       } else {
-        result = await window.electron.scanInstalledGames();
+        result = await window.electron.scanInstalledGames(true);
       }
-      setScanResult(result);
+
+      if (result.foundGames.length > 0) {
+        setScanCandidates(result.foundGames);
+        setShowScanApproval(true);
+      } else {
+        setScanResult({ foundGames: [], total: result.total });
+      }
     } finally {
       setIsScanning(false);
+      setScanProgress(null);
     }
+  };
+
+  const handleScanApprovalConfirm = async (
+    approved: { title: string; executablePath: string; key: string }[]
+  ) => {
+    setShowScanApproval(false);
+    await window.electron.confirmScanGames(
+      approved.map(({ key, executablePath }) => ({ key, executablePath }))
+    );
+    setScanResult({ foundGames: approved, total: scanCandidates.length });
   };
 
   const handleClearScanResult = () => {
     setScanResult(null);
   };
+
+  useEffect(() => {
+    const unsubscribe = window.electron.onScanProgress((progress) => {
+      setScanProgress(progress);
+    });
+    return unsubscribe;
+  }, []);
 
   const handleRefreshLibraries = async () => {
     if (isRefreshing) return;
@@ -501,9 +538,17 @@ export function Header() {
         visible={showScanModal}
         onClose={() => setShowScanModal(false)}
         isScanning={isScanning}
+        scanProgress={scanProgress}
         scanResult={scanResult}
         onStartScan={handleStartScan}
         onClearResult={handleClearScanResult}
+      />
+
+      <ScanApprovalModal
+        visible={showScanApproval}
+        foundGames={scanCandidates}
+        onConfirm={handleScanApprovalConfirm}
+        onClose={() => setShowScanApproval(false)}
       />
     </>
   );

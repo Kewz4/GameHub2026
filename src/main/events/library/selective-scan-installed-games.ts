@@ -35,7 +35,16 @@ const selectiveScanInstalledGames = async (
 
   const foundGames: FoundGame[] = [];
 
+  let scanned = 0;
   for (const { key, game } of games) {
+    scanned++;
+    WindowManager.sendToAppWindows("on-scan-progress", {
+      scanned,
+      total: games.length,
+      foundCount: foundGames.length,
+      currentTitle: game.title,
+    });
+
     const executableNames = GameExecutables.getExecutablesForGame(game.objectId);
     if (!executableNames?.length) continue;
     const normalizedNames = new Set(executableNames.map((n) => n.toLowerCase()));
@@ -44,7 +53,12 @@ const selectiveScanInstalledGames = async (
       const foundPath = await findExecutableInFolder(scanPath, normalizedNames);
       if (foundPath) {
         if (!dryRun) {
-          await gamesSublevel.put(key, { ...game, executablePath: foundPath });
+          await gamesSublevel.put(key, {
+            ...game,
+            executablePath: foundPath,
+            // Found installed on disk = owned, not a catalogue-only entry
+            libraryOrigin: "sync",
+          });
         }
         foundGames.push({ title: game.title, executablePath: foundPath, key });
         break;

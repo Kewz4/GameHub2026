@@ -4,6 +4,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import type { GameArtifact, GameArtifactWithGame, GameShop } from "@types";
 import { logger } from "./logger";
+import { compactGameTitle } from "@main/helpers/normalize-game-title";
 
 const UPLOAD_BASE = "https://upload.uploadcare.com/base/";
 const API_BASE = "https://api.uploadcare.com";
@@ -154,6 +155,10 @@ export class UploadcareSync {
     const titlePrefix = gameTitle
       ? this.normalizeName(`${shop}-${gameTitle}-`)
       : null;
+    // Compact (space/punctuation-insensitive) title for legacy matching:
+    // Ludusavi imports stored folder names like "NeonAbyss" as objectId while
+    // the library title is "Neon Abyss" — exact compares can never match.
+    const titleCompact = gameTitle ? compactGameTitle(gameTitle) : null;
 
     return results
       .filter((f) => {
@@ -166,10 +171,17 @@ export class UploadcareSync {
           if (meta.shop !== shop) return false;
           // Exact objectId match — or title-as-objectId legacy match
           if (meta.objectId === objectId) return true;
-          if (gameTitle != null && meta.objectId === gameTitle) return true;
-          // Ludusavi imports that stored the game title as objectId will have
-          // the right filename even if we don't have the title available.
-          // Fall through to filename matching so they still show up.
+          if (titleCompact) {
+            // Legacy: metadata objectId or gameName is a title variant
+            if (compactGameTitle(meta.objectId as string) === titleCompact)
+              return true;
+            if (
+              meta.gameName &&
+              compactGameTitle(meta.gameName as string) === titleCompact
+            )
+              return true;
+          }
+          // Last resort: filename prefix (covers odd encodings)
           const filename = this.normalizeName(
             (f.original_filename as string) ?? ""
           );

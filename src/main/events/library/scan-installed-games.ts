@@ -80,7 +80,16 @@ const scanInstalledGames = async (
   const foundGames: FoundGame[] = [];
   const gamesToScan = games.filter((g) => !g.game.executablePath);
 
+  let scanned = 0;
   for (const { key, game } of gamesToScan) {
+    scanned++;
+    WindowManager.sendToAppWindows("on-scan-progress", {
+      scanned,
+      total: gamesToScan.length,
+      foundCount: foundGames.length,
+      currentTitle: game.title,
+    });
+
     const executableNames = GameExecutables.getExecutablesForGame(
       game.objectId
     );
@@ -95,7 +104,12 @@ const scanInstalledGames = async (
 
     if (foundPath) {
       if (!dryRun) {
-        await gamesSublevel.put(key, { ...game, executablePath: foundPath });
+        await gamesSublevel.put(key, {
+          ...game,
+          executablePath: foundPath,
+          // Found installed on disk = owned, not a catalogue-only entry
+          libraryOrigin: "sync",
+        });
       }
 
       logger.info(

@@ -16,10 +16,18 @@ interface ScanResult {
   total: number;
 }
 
+interface ScanProgress {
+  scanned: number;
+  total: number;
+  foundCount: number;
+  currentTitle: string;
+}
+
 export interface ScanGamesModalProps {
   visible: boolean;
   onClose: () => void;
   isScanning: boolean;
+  scanProgress?: ScanProgress | null;
   scanResult: ScanResult | null;
   onStartScan: (mode: "deep" | "selective", paths?: string[]) => void;
   onClearResult: () => void;
@@ -29,6 +37,7 @@ export function ScanGamesModal({
   visible,
   onClose,
   isScanning,
+  scanProgress,
   scanResult,
   onStartScan,
   onClearResult,
@@ -148,6 +157,45 @@ export function ScanGamesModal({
             <p className="scan-games-modal__scanning-text">
               {t("scan_games_in_progress")}
             </p>
+            {scanProgress && scanProgress.total > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  width: "100%",
+                }}
+              >
+                <div
+                  style={{
+                    height: "4px",
+                    background: "rgba(255,255,255,0.12)",
+                    borderRadius: "2px",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${Math.round((scanProgress.scanned / scanProgress.total) * 100)}%`,
+                      background: "var(--color-primary, #8c67ef)",
+                      borderRadius: "2px",
+                      transition: "width 0.2s ease",
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    opacity: 0.6,
+                    textAlign: "center",
+                  }}
+                >
+                  {scanProgress.scanned}/{scanProgress.total} —{" "}
+                  {scanProgress.currentTitle} ({scanProgress.foundCount} found)
+                </span>
+              </div>
+            )}
           </div>
         )}
 

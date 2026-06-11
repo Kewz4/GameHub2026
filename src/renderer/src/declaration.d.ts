@@ -466,6 +466,14 @@ declare global {
       total: number;
     }>;
     confirmScanGames: (approvedGames: Array<{ key: string; executablePath: string }>) => Promise<void>;
+    onScanProgress: (
+      cb: (progress: {
+        scanned: number;
+        total: number;
+        foundCount: number;
+        currentTitle: string;
+      }) => void
+    ) => () => void;
     importPlaynitePlaytime: (dbPath?: string) => Promise<{
       matched: number;
       total: number;

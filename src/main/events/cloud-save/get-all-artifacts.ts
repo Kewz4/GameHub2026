@@ -2,14 +2,14 @@ import { UploadcareSync } from "@main/services/uploadcare-sync";
 import { registerEvent } from "../register-event";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import { HydraApi } from "@main/services";
-import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import {
+  compactGameTitle,
+  normalizeGameTitle,
+} from "@main/helpers/normalize-game-title";
 import type { CatalogueSearchResult, UserPreferences } from "@types";
 
 /** Resolve a game not present in the local library via the Hydra catalogue,
  * so cloud saves still show proper title/icon and navigate to a real page. */
-/** Strip apostrophes/quotes for loose comparison */
-const stripQuotes = (s: string) => s.replace(/[''`"]/g, "");
-
 const resolveFromCatalogue = async (
   title: string
 ): Promise<CatalogueSearchResult | null> => {
@@ -33,13 +33,11 @@ const resolveFromCatalogue = async (
       { needsAuth: false }
     );
     const titleNorm = normalizeGameTitle(title);
-    const titleNormNoQuotes = stripQuotes(titleNorm);
-    // Try strict normalize match first, then apostrophe-insensitive match
+    const titleCompact = compactGameTitle(title);
+    // Strict normalize match first, then space/punctuation-insensitive match
     return (
       resp?.edges?.find((r) => normalizeGameTitle(r.title) === titleNorm) ??
-      resp?.edges?.find(
-        (r) => stripQuotes(normalizeGameTitle(r.title)) === titleNormNoQuotes
-      ) ??
+      resp?.edges?.find((r) => compactGameTitle(r.title) === titleCompact) ??
       null
     );
   } catch {
@@ -74,15 +72,19 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
       let resolvedTitle: string | null = null;
       let resolvedIconUrl: string | null = null;
 
-      // Legacy imports used the game title as objectId — search by title
-      // (use apostrophe-insensitive comparison to handle curly vs straight quotes)
+      // Legacy imports used the game title as objectId — search by title.
+      // Compact comparison handles spacing/punctuation variants ("NeonAbyss"
+      // vs "Neon Abyss") and curly vs straight apostrophes alike. Also try
+      // the gameName metadata field when present.
       if (!game) {
         const all = await gamesSublevel.iterator().all().catch(() => []);
-        const objectIdNorm = stripQuotes(artifact.objectId?.toLowerCase() ?? "");
+        const candidates = [artifact.objectId, artifact.gameName]
+          .filter((s): s is string => Boolean(s))
+          .map((s) => compactGameTitle(s));
         const match = all.find(
           ([, g]) =>
             !g.isDeleted &&
-            stripQuotes(g.title?.toLowerCase() ?? "") === objectIdNorm
+            candidates.includes(compactGameTitle(g.title ?? ""))
         );
         if (match) {
           game = match[1];

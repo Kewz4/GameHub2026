@@ -392,6 +392,26 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths, dryRun),
   confirmScanGames: (approvedGames: Array<{ key: string; executablePath: string }>) =>
     ipcRenderer.invoke("confirmScanGames", approvedGames),
+  onScanProgress: (
+    cb: (progress: {
+      scanned: number;
+      total: number;
+      foundCount: number;
+      currentTitle: string;
+    }) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      progress: {
+        scanned: number;
+        total: number;
+        foundCount: number;
+        currentTitle: string;
+      }
+    ) => cb(progress);
+    ipcRenderer.on("on-scan-progress", listener);
+    return () => ipcRenderer.removeListener("on-scan-progress", listener);
+  },
   importPlaynitePlaytime: (dbPath?: string) =>
     ipcRenderer.invoke("importPlaynitePlaytime", dbPath),
   getDefaultWinePrefixSelectionPath: () =>

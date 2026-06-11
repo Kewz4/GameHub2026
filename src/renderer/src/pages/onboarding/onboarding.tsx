@@ -1,9 +1,13 @@
 import { useState, useCallback, useEffect } from "react";
-import { ScanApprovalModal, type ScannedGame } from "./scan-approval-modal";
 import { EpicAuthModal } from "@renderer/pages/settings/epic-auth-modal";
 import { GogAuthModal } from "@renderer/pages/settings/gog-auth-modal";
 import { useTranslation } from "react-i18next";
-import { Button, TextField } from "@renderer/components";
+import {
+  Button,
+  TextField,
+  ScanApprovalModal,
+  type ScannedGame,
+} from "@renderer/components";
 import { useAppSelector } from "@renderer/hooks";
 import {
   CheckCircleFillIcon,
@@ -167,6 +171,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [ludusaviBusy, setLudusaviBusy] = useState(false);
   const [scanResult, setScanResult] = useState<string>("");
   const [scanBusy, setScanBusy] = useState(false);
+  const [scanProgress, setScanProgress] = useState<{
+    scanned: number;
+    total: number;
+    foundCount: number;
+    currentTitle: string;
+  } | null>(null);
   const [scanCandidates, setScanCandidates] = useState<ScannedGame[]>([]);
   const [showScanApproval, setShowScanApproval] = useState(false);
   const [playniteResult, setPlayniteResult] = useState<string>("");
@@ -402,9 +412,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }
   };
 
+  useEffect(() => {
+    const unsubscribe = window.electron.onScanProgress((progress) => {
+      setScanProgress(progress);
+    });
+    return unsubscribe;
+  }, []);
+
   const handleDeepScan = async () => {
     setScanBusy(true);
     setScanResult("");
+    setScanProgress(null);
     try {
       const result = await window.electron.scanInstalledGames(true);
       if (result.foundGames.length === 0) {
@@ -417,6 +435,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setScanResult("Scan failed.");
     } finally {
       setScanBusy(false);
+      setScanProgress(null);
     }
   };
 
@@ -427,6 +446,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     if (!result || result.canceled || !result.filePaths[0]) return;
     setScanBusy(true);
     setScanResult("");
+    setScanProgress(null);
     try {
       const scanRes = await window.electron.selectiveScanInstalledGames(result.filePaths, true);
       if (scanRes.foundGames.length === 0) {
@@ -439,6 +459,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setScanResult("Scan failed.");
     } finally {
       setScanBusy(false);
+      setScanProgress(null);
     }
   };
 
@@ -1346,6 +1367,33 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     Selective Scan
                   </Button>
                 </div>
+                {scanBusy && scanProgress && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div
+                      style={{
+                        height: "4px",
+                        background: "rgba(255,255,255,0.12)",
+                        borderRadius: "2px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: "100%",
+                          width: `${scanProgress.total > 0 ? Math.round((scanProgress.scanned / scanProgress.total) * 100) : 0}%`,
+                          background: "var(--color-primary, #8c67ef)",
+                          borderRadius: "2px",
+                          transition: "width 0.2s ease",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>
+                      {scanProgress.scanned}/{scanProgress.total} —{" "}
+                      {scanProgress.currentTitle} ({scanProgress.foundCount}{" "}
+                      found)
+                    </span>
+                  </div>
+                )}
                 {scanResult && (
                   <p className="onboarding-tool-card__result">{scanResult}</p>
                 )}
