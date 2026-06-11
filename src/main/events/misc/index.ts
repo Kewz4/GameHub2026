@@ -1,5 +1,6 @@
 import "./can-install-common-redist";
 import "./get-exe-name";
+import "./resolve-custom-game-info";
 import "./check-homebrew-folder-exists";
 import "./clipboard-write-text";
 import "./close-game-launcher-window";

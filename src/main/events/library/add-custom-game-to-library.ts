@@ -13,7 +13,9 @@ const addCustomGameToLibrary = async (
   executablePath: string,
   iconUrl?: string,
   logoImageUrl?: string,
-  libraryHeroImageUrl?: string
+  libraryHeroImageUrl?: string,
+  coverImageUrl?: string,
+  libraryImageUrl?: string
 ) => {
   const objectId = randomUUID();
   const shop: GameShop = "custom";
@@ -146,11 +148,14 @@ const addCustomGameToLibrary = async (
     // Catalogue search failed — fall through to custom entry creation
   }
 
-  // For truly custom (no catalogue match): try to enrich with SGDB artwork
+  // For truly custom (no catalogue match): try to enrich with SGDB artwork.
+  // Caller-supplied assets (from resolveCustomGameInfo) take priority.
   const bestAssets = await fetchBestAssets("custom", objectId, title, {
     iconUrl: iconUrl || null,
     libraryHeroImageUrl: libraryHeroImageUrl || null,
     logoImageUrl: logoImageUrl || null,
+    coverImageUrl: coverImageUrl || null,
+    libraryImageUrl: libraryImageUrl || null,
   });
 
   const assets = {
@@ -158,21 +163,21 @@ const addCustomGameToLibrary = async (
     objectId,
     shop,
     title,
-    iconUrl: bestAssets.iconUrl,
-    libraryHeroImageUrl: bestAssets.libraryHeroImageUrl,
-    libraryImageUrl: bestAssets.libraryImageUrl,
-    logoImageUrl: bestAssets.logoImageUrl,
+    iconUrl: iconUrl || bestAssets.iconUrl,
+    libraryHeroImageUrl: libraryHeroImageUrl || bestAssets.libraryHeroImageUrl,
+    libraryImageUrl: libraryImageUrl || bestAssets.libraryImageUrl,
+    logoImageUrl: logoImageUrl || bestAssets.logoImageUrl,
     logoPosition: null,
-    coverImageUrl: bestAssets.coverImageUrl,
+    coverImageUrl: coverImageUrl || bestAssets.coverImageUrl,
     downloadSources: [],
   };
   await gamesShopAssetsSublevel.put(gameKey, assets);
 
   const game = {
     title,
-    iconUrl: bestAssets.iconUrl,
-    logoImageUrl: bestAssets.logoImageUrl,
-    libraryHeroImageUrl: bestAssets.libraryHeroImageUrl,
+    iconUrl: iconUrl || bestAssets.iconUrl,
+    logoImageUrl: logoImageUrl || bestAssets.logoImageUrl,
+    libraryHeroImageUrl: libraryHeroImageUrl || bestAssets.libraryHeroImageUrl,
     objectId,
     shop,
     remoteId: null,

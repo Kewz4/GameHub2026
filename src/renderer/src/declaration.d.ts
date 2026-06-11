@@ -294,7 +294,9 @@ declare global {
       executablePath: string,
       iconUrl?: string,
       logoImageUrl?: string,
-      libraryHeroImageUrl?: string
+      libraryHeroImageUrl?: string,
+      coverImageUrl?: string,
+      libraryImageUrl?: string
     ) => Promise<Game>;
     updateCustomGame: (params: {
       shop: GameShop;
@@ -563,6 +565,16 @@ declare global {
     getDefaultDownloadsPath: () => Promise<string>;
     isPortableVersion: () => Promise<boolean>;
     getExeName: (exePath: string) => Promise<string | null>;
+    resolveCustomGameInfo: (exePath: string) => Promise<{
+      title: string;
+      objectId: string | null;
+      shop: import("@types").GameShop | null;
+      iconUrl: string | null;
+      coverImageUrl: string | null;
+      libraryHeroImageUrl: string | null;
+      logoImageUrl: string | null;
+      libraryImageUrl: string | null;
+    }>;
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;

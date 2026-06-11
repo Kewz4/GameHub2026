@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { FileDirectoryIcon } from "@primer/octicons-react";
@@ -9,12 +9,23 @@ import {
   buildGameDetailsPath,
   generateRandomGradient,
 } from "@renderer/helpers";
+import type { GameShop } from "@types";
 
 import "./sidebar-adding-custom-game-modal.scss";
 
 export interface SidebarAddingCustomGameModalProps {
   visible: boolean;
   onClose: () => void;
+}
+
+interface ResolvedInfo {
+  objectId: string | null;
+  shop: GameShop | null;
+  iconUrl: string | null;
+  coverImageUrl: string | null;
+  libraryHeroImageUrl: string | null;
+  logoImageUrl: string | null;
+  libraryImageUrl: string | null;
 }
 
 export function SidebarAddingCustomGameModal({
@@ -29,6 +40,8 @@ export function SidebarAddingCustomGameModal({
   const [gameName, setGameName] = useState("");
   const [executablePath, setExecutablePath] = useState("");
   const [isAdding, setIsAdding] = useState(false);
+  const [isResolving, setIsResolving] = useState(false);
+  const resolvedInfoRef = useRef<ResolvedInfo | null>(null);
 
   const handleSelectExecutable = async () => {
     const { filePaths } = await window.electron.showOpenDialog({
@@ -41,25 +54,40 @@ export function SidebarAddingCustomGameModal({
       ],
     });
 
-    if (filePaths && filePaths.length > 0) {
-      const selectedPath = filePaths[0];
-      setExecutablePath(selectedPath);
+    if (!filePaths || filePaths.length === 0) return;
 
-      if (!gameName.trim()) {
-        // Try to read FileDescription/ProductName from the exe version info
-        const exeDesc = await window.electron.getExeName(selectedPath).catch(() => null);
-        if (exeDesc) {
-          setGameName(exeDesc);
-        } else {
-          const fileName = selectedPath.split(/[\\/]/).pop() || "";
-          setGameName(fileName.replace(/\.[^/.]+$/, ""));
-        }
+    const selectedPath = filePaths[0];
+    setExecutablePath(selectedPath);
+    resolvedInfoRef.current = null;
+
+    // Don't overwrite a name the user already typed
+    if (!gameName.trim()) {
+      setIsResolving(true);
+      try {
+        const info = await window.electron.resolveCustomGameInfo(selectedPath);
+        setGameName(info.title);
+        resolvedInfoRef.current = {
+          objectId: info.objectId,
+          shop: info.shop,
+          iconUrl: info.iconUrl,
+          coverImageUrl: info.coverImageUrl,
+          libraryHeroImageUrl: info.libraryHeroImageUrl,
+          logoImageUrl: info.logoImageUrl,
+          libraryImageUrl: info.libraryImageUrl,
+        };
+      } catch {
+        const fileName = selectedPath.split(/[\\/]/).pop() || "";
+        setGameName(fileName.replace(/\.[^/.]+$/, ""));
+      } finally {
+        setIsResolving(false);
       }
     }
   };
 
   const handleGameNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setGameName(event.target.value);
+    // Name was edited manually — clear catalogue match so we don't use stale assets
+    resolvedInfoRef.current = null;
   };
 
   const handleAddGame = async () => {
@@ -71,33 +99,33 @@ export function SidebarAddingCustomGameModal({
     setIsAdding(true);
 
     try {
-      // Generate gradient URL only for hero image
-      const gameNameForSeed = gameName.trim();
-      const iconUrl = ""; // Don't use gradient for icon
-      const logoImageUrl = ""; // Don't use gradient for logo
-      const libraryHeroImageUrl = generateRandomGradient(); // Only use gradient for hero
+      const info = resolvedInfoRef.current;
+      const heroUrl = info?.libraryHeroImageUrl ?? generateRandomGradient();
 
       const newGame = await window.electron.addCustomGameToLibrary(
-        gameNameForSeed,
+        gameName.trim(),
         executablePath,
-        iconUrl,
-        logoImageUrl,
-        libraryHeroImageUrl
+        info?.iconUrl ?? "",
+        info?.logoImageUrl ?? "",
+        heroUrl,
+        info?.coverImageUrl ?? undefined,
+        info?.libraryImageUrl ?? undefined
       );
 
       showSuccessToast(t("custom_game_modal_success"));
       updateLibrary();
 
-      const gameDetailsPath = buildGameDetailsPath({
-        shop: "custom",
-        objectId: newGame.objectId,
-        title: newGame.title,
-      });
-
-      navigate(gameDetailsPath);
+      navigate(
+        buildGameDetailsPath({
+          shop: "custom",
+          objectId: newGame.objectId,
+          title: newGame.title,
+        })
+      );
 
       setGameName("");
       setExecutablePath("");
+      resolvedInfoRef.current = null;
       onClose();
     } catch (error) {
       console.error("Failed to add custom game:", error);
@@ -110,13 +138,15 @@ export function SidebarAddingCustomGameModal({
   };
 
   const handleClose = () => {
-    if (!isAdding) {
+    if (!isAdding && !isResolving) {
       setGameName("");
       setExecutablePath("");
+      resolvedInfoRef.current = null;
       onClose();
     }
   };
 
+  const isBusy = isAdding || isResolving;
   const isFormValid = gameName.trim() && executablePath.trim();
 
   return (
@@ -139,7 +169,7 @@ export function SidebarAddingCustomGameModal({
                 type="button"
                 theme="outline"
                 onClick={handleSelectExecutable}
-                disabled={isAdding}
+                disabled={isBusy}
               >
                 <FileDirectoryIcon />
                 {t("custom_game_modal_browse")}
@@ -149,11 +179,15 @@ export function SidebarAddingCustomGameModal({
 
           <TextField
             label={t("custom_game_modal_title")}
-            placeholder={t("custom_game_modal_enter_title")}
+            placeholder={
+              isResolving
+                ? "Detecting game name…"
+                : t("custom_game_modal_enter_title")
+            }
             value={gameName}
             onChange={handleGameNameChange}
             theme="dark"
-            disabled={isAdding}
+            disabled={isBusy}
           />
         </div>
 
@@ -162,7 +196,7 @@ export function SidebarAddingCustomGameModal({
             type="button"
             theme="outline"
             onClick={handleClose}
-            disabled={isAdding}
+            disabled={isBusy}
           >
             {t("custom_game_modal_cancel")}
           </Button>
@@ -170,11 +204,13 @@ export function SidebarAddingCustomGameModal({
             type="button"
             theme="primary"
             onClick={handleAddGame}
-            disabled={!isFormValid || isAdding}
+            disabled={!isFormValid || isBusy}
           >
-            {isAdding
-              ? t("custom_game_modal_adding")
-              : t("custom_game_modal_add")}
+            {isResolving
+              ? "Detecting…"
+              : isAdding
+                ? t("custom_game_modal_adding")
+                : t("custom_game_modal_add")}
           </Button>
         </div>
       </div>

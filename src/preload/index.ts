@@ -564,6 +564,8 @@ contextBridge.exposeInMainWorld("electron", {
   openCheckout: () => ipcRenderer.invoke("openCheckout"),
   getExeName: (exePath: string) =>
     ipcRenderer.invoke("getExeName", exePath) as Promise<string | null>,
+  resolveCustomGameInfo: (exePath: string) =>
+    ipcRenderer.invoke("resolveCustomGameInfo", exePath),
   showOpenDialog: (options: Electron.OpenDialogOptions) =>
     ipcRenderer.invoke("showOpenDialog", options),
   showItemInFolder: (path: string) =>
