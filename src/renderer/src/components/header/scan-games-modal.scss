@@ -105,3 +105,60 @@
     gap: calc(globals.$spacing-unit * 2);
   }
 }
+
+.scan-mode-cards {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.scan-mode-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  &--selected {
+    border-color: #6a5acd;
+    background: rgba(106,90,205,0.1);
+  }
+  &__icon { opacity: 0.7; }
+  &__label { font-size: 0.9rem; font-weight: 600; }
+  &__desc { font-size: 0.78rem; opacity: 0.6; text-align: center; }
+}
+.scan-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.scan-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  &__path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &__remove { background: none; border: none; cursor: pointer; color: inherit; opacity: 0.5; padding: 0; &:hover { opacity: 1; } }
+}
+.scan-add-folder-btn {
+  background: none;
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  padding: 8px;
+  width: 100%;
+  font-size: 0.82rem;
+  opacity: 0.7;
+  &:hover { opacity: 1; border-color: rgba(255,255,255,0.4); }
+}

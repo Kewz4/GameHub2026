@@ -34,6 +34,7 @@ import "./remove-game-from-library";
 import "./remove-game";
 import "./reset-game-achievements";
 import "./scan-installed-games";
+import "./selective-scan-installed-games";
 import "./select-game-proton-path";
 import "./select-game-wine-prefix";
 import "./toggle-automatic-cloud-sync";

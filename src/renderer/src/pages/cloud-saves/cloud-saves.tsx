@@ -9,6 +9,8 @@ import {
   DownloadIcon,
   TrashIcon,
   AlertIcon,
+  ChevronDownIcon,
+  LinkExternalIcon,
 } from "@primer/octicons-react";
 import { buildGameDetailsPath } from "@renderer/helpers";
 import "./cloud-saves.scss";
@@ -41,6 +43,7 @@ export default function CloudSaves() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const loadArtifacts = useCallback(async () => {
     setLoading(true);
@@ -70,13 +73,25 @@ export default function CloudSaves() {
     return map;
   }, [artifacts, filterShop, filterObjectId]);
 
+  const toggleGroup = useCallback((key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
   const handleRestore = useCallback(
     async (artifact: GameArtifactWithGame) => {
       setRestoringId(artifact.id);
       try {
         await window.electron.downloadGameArtifact(
           artifact.objectId,
-          artifact.shop,
+          artifact.shop as GameShop,
           artifact.id
         );
         showSuccessToast(
@@ -189,41 +204,59 @@ export default function CloudSaves() {
           {keys.map((key) => {
             const entries = grouped[key];
             const first = entries[0];
+            const isExpanded = expandedGroups.has(key);
             return (
               <div key={key} className="cloud-saves__game-group">
-                <button
-                  type="button"
-                  className="cloud-saves__game-header"
-                  onClick={() =>
-                    navigate(
-                      buildGameDetailsPath({
-                        shop: first.shop as GameShop,
-                        objectId: first.objectId,
-                        title: first.gameTitle ?? first.objectId,
-                      })
-                    )
-                  }
-                >
-                  {first.gameIconUrl ? (
-                    <img
-                      src={first.gameIconUrl}
-                      alt={first.gameTitle}
-                      className="cloud-saves__game-icon"
+                <div className="cloud-saves__game-header">
+                  <button
+                    type="button"
+                    className="cloud-saves__game-header-toggle"
+                    onClick={() => toggleGroup(key)}
+                    aria-expanded={isExpanded}
+                  >
+                    <ChevronDownIcon
+                      size={16}
+                      className={`cloud-saves__chevron${isExpanded ? " cloud-saves__chevron--expanded" : ""}`}
                     />
-                  ) : (
-                    <div className="cloud-saves__game-icon cloud-saves__game-icon--placeholder">
-                      <CloudIcon size={14} />
-                    </div>
-                  )}
-                  <span className="cloud-saves__game-title">
-                    {first.gameTitle}
-                  </span>
-                  <span className="cloud-saves__game-badge">
-                    {entries.length} save{entries.length !== 1 ? "s" : ""}
-                  </span>
-                </button>
+                    {first.gameIconUrl ? (
+                      <img
+                        src={first.gameIconUrl}
+                        alt={first.gameTitle}
+                        className="cloud-saves__game-icon"
+                      />
+                    ) : (
+                      <div className="cloud-saves__game-icon cloud-saves__game-icon--placeholder">
+                        <CloudIcon size={14} />
+                      </div>
+                    )}
+                    <span className="cloud-saves__game-title">
+                      {first.gameTitle}
+                    </span>
+                    <span className="cloud-saves__game-badge">
+                      {entries.length} save{entries.length !== 1 ? "s" : ""}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="cloud-saves__icon-btn cloud-saves__game-link-btn"
+                    title="Go to game page"
+                    onClick={() =>
+                      navigate(
+                        buildGameDetailsPath({
+                          shop: first.shop as GameShop,
+                          objectId: first.objectId,
+                          title: first.gameTitle ?? first.objectId,
+                        })
+                      )
+                    }
+                  >
+                    <LinkExternalIcon size={14} />
+                  </button>
+                </div>
 
-                <div className="cloud-saves__entries">
+                <div
+                  className={`cloud-saves__entries${isExpanded ? " cloud-saves__entries--open" : ""}`}
+                >
                   {entries.map((artifact) => {
                     const isRestoring = restoringId === artifact.id;
                     const isDeleting = deletingId === artifact.id;

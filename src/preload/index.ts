@@ -388,6 +388,8 @@ contextBridge.exposeInMainWorld("electron", {
   extractGameDownload: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("extractGameDownload", shop, objectId),
   scanInstalledGames: () => ipcRenderer.invoke("scanInstalledGames"),
+  selectiveScanInstalledGames: (scanPaths: string[]) =>
+    ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths),
   getDefaultWinePrefixSelectionPath: () =>
     ipcRenderer.invoke("getDefaultWinePrefixSelectionPath"),
   createSteamShortcut: (

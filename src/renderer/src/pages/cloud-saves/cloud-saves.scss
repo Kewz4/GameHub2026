@@ -123,19 +123,40 @@
   &__game-header {
     display: flex;
     align-items: center;
-    gap: calc(globals.$spacing-unit * 1.5);
-    width: 100%;
-    padding: 14px 16px;
     background: globals.$dark-background-color;
-    border: none;
     border-bottom: 1px solid globals.$border-color;
+  }
+
+  &__game-header-toggle {
+    display: flex;
+    align-items: center;
+    gap: calc(globals.$spacing-unit * 1.5);
+    flex: 1;
+    padding: 14px 16px;
+    background: none;
+    border: none;
     color: #fff;
     cursor: pointer;
     text-align: left;
     transition: background-color 0.1s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+
+  &__game-link-btn {
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+
+  &__chevron {
+    flex-shrink: 0;
+    color: globals.$muted-color;
+    transition: transform 0.2s ease;
+
+    &--expanded {
+      transform: rotate(180deg);
     }
   }
 
@@ -175,8 +196,12 @@
   }
 
   &__entries {
-    display: flex;
+    display: none;
     flex-direction: column;
+
+    &--open {
+      display: flex;
+    }
   }
 
   &__entry {

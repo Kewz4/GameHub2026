@@ -461,6 +461,10 @@ declare global {
       foundGames: { title: string; executablePath: string }[];
       total: number;
     }>;
+    selectiveScanInstalledGames: (scanPaths: string[]) => Promise<{
+      foundGames: { title: string; executablePath: string }[];
+      total: number;
+    }>;
     onExtractionComplete: (
       cb: (shop: GameShop, objectId: string) => void
     ) => () => Electron.IpcRenderer;

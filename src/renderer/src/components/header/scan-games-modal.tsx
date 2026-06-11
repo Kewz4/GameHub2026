@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SyncIcon } from "@primer/octicons-react";
+import { SyncIcon, SearchIcon, FileDirectoryIcon, XIcon } from "@primer/octicons-react";
 
 import { Button, Modal } from "@renderer/components";
 
@@ -20,7 +21,7 @@ export interface ScanGamesModalProps {
   onClose: () => void;
   isScanning: boolean;
   scanResult: ScanResult | null;
-  onStartScan: () => void;
+  onStartScan: (mode: "deep" | "selective", paths?: string[]) => void;
   onClearResult: () => void;
 }
 
@@ -33,18 +34,38 @@ export function ScanGamesModal({
   onClearResult,
 }: Readonly<ScanGamesModalProps>) {
   const { t } = useTranslation("header");
+  const [scanMode, setScanMode] = useState<"deep" | "selective">("deep");
+  const [folderPaths, setFolderPaths] = useState<string[]>([]);
 
   const handleClose = () => {
     onClose();
   };
 
   const handleStartScan = () => {
-    onStartScan();
+    onStartScan(scanMode, scanMode === "selective" ? folderPaths : undefined);
   };
 
   const handleScanAgain = () => {
     onClearResult();
-    onStartScan();
+  };
+
+  const handleAddFolder = async () => {
+    const result = await window.electron.showOpenDialog({
+      properties: ["openDirectory"],
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+      setFolderPaths((prev) => {
+        const next = [...prev];
+        for (const p of result.filePaths) {
+          if (!next.includes(p)) next.push(p);
+        }
+        return next;
+      });
+    }
+  };
+
+  const handleRemoveFolder = (p: string) => {
+    setFolderPaths((prev) => prev.filter((f) => f !== p));
   };
 
   return (
@@ -56,9 +77,69 @@ export function ScanGamesModal({
     >
       <div className="scan-games-modal">
         {!scanResult && !isScanning && (
-          <p className="scan-games-modal__description">
-            {t("scan_games_description")}
-          </p>
+          <>
+            <div className="scan-mode-cards">
+              <button
+                type="button"
+                className={`scan-mode-card${scanMode === "deep" ? " scan-mode-card--selected" : ""}`}
+                onClick={() => setScanMode("deep")}
+              >
+                <span className="scan-mode-card__icon">
+                  <SearchIcon size={24} />
+                </span>
+                <span className="scan-mode-card__label">Deep Scan</span>
+                <span className="scan-mode-card__desc">
+                  Scans all default directories automatically
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`scan-mode-card${scanMode === "selective" ? " scan-mode-card--selected" : ""}`}
+                onClick={() => setScanMode("selective")}
+              >
+                <span className="scan-mode-card__icon">
+                  <FileDirectoryIcon size={24} />
+                </span>
+                <span className="scan-mode-card__label">Selective Scan</span>
+                <span className="scan-mode-card__desc">
+                  Choose specific folders to scan
+                </span>
+              </button>
+            </div>
+
+            {scanMode === "selective" && (
+              <>
+                <div className="scan-folder-list">
+                  {folderPaths.map((p) => (
+                    <div key={p} className="scan-folder-item">
+                      <span className="scan-folder-item__path">{p}</span>
+                      <button
+                        type="button"
+                        className="scan-folder-item__remove"
+                        onClick={() => handleRemoveFolder(p)}
+                        title="Remove folder"
+                      >
+                        <XIcon size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="scan-add-folder-btn"
+                  onClick={handleAddFolder}
+                >
+                  + Add Folder
+                </button>
+              </>
+            )}
+
+            {scanMode === "deep" && (
+              <p className="scan-games-modal__description">
+                {t("scan_games_description")}
+              </p>
+            )}
+          </>
         )}
 
         {isScanning && !scanResult && (
@@ -110,7 +191,13 @@ export function ScanGamesModal({
             {scanResult ? t("scan_games_close") : t("scan_games_cancel")}
           </Button>
           {!scanResult && (
-            <Button onClick={handleStartScan} disabled={isScanning}>
+            <Button
+              onClick={handleStartScan}
+              disabled={
+                isScanning ||
+                (scanMode === "selective" && folderPaths.length === 0)
+              }
+            >
               {t("scan_games_start")}
             </Button>
           )}

@@ -45,6 +45,7 @@ export function Header() {
   const inputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const scanButtonTooltipId = useId();
+  const refreshButtonTooltipId = useId();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -99,10 +100,12 @@ export function Header() {
   });
   const [showScanModal, setShowScanModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [scanResult, setScanResult] = useState<{
     foundGames: { title: string; executablePath: string }[];
     total: number;
   } | null>(null);
+
 
   const { t } = useTranslation("header");
 
@@ -307,15 +310,19 @@ export function Header() {
     setActiveIndex(-1);
   };
 
-  const handleStartScan = async () => {
+  const handleStartScan = async (mode: "deep" | "selective", paths?: string[]) => {
     if (isScanning) return;
 
     setIsScanning(true);
     setScanResult(null);
-    setShowScanModal(false);
 
     try {
-      const result = await window.electron.scanInstalledGames();
+      let result;
+      if (mode === "selective" && paths?.length) {
+        result = await window.electron.selectiveScanInstalledGames(paths);
+      } else {
+        result = await window.electron.scanInstalledGames();
+      }
       setScanResult(result);
     } finally {
       setIsScanning(false);
@@ -324,6 +331,20 @@ export function Header() {
 
   const handleClearScanResult = () => {
     setScanResult(null);
+  };
+
+  const handleRefreshLibraries = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        window.electron.syncSteamLibrary("").catch(() => {}),
+        window.electron.syncEpicLibrary().catch(() => {}),
+        window.electron.syncGogLibrary().catch(() => {}),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -376,18 +397,32 @@ export function Header() {
 
         <section className="header__section">
           {isOnLibraryPage && window.electron.platform === "win32" && (
-            <button
-              type="button"
-              className={cn("header__action-button", {
-                "header__action-button--scanning": isScanning,
-              })}
-              onClick={() => setShowScanModal(true)}
-              data-tooltip-id={scanButtonTooltipId}
-              data-tooltip-content={t("scan_games_tooltip")}
-              data-tooltip-place="bottom"
-            >
-              <SyncIcon size={16} />
-            </button>
+            <>
+              <button
+                type="button"
+                className={cn("header__action-button", {
+                  "header__action-button--scanning": isScanning,
+                })}
+                onClick={() => setShowScanModal(true)}
+                data-tooltip-id={scanButtonTooltipId}
+                data-tooltip-content={t("scan_games_tooltip")}
+                data-tooltip-place="bottom"
+              >
+                <SearchIcon size={16} />
+              </button>
+              <button
+                type="button"
+                className={cn("header__action-button", {
+                  "header__action-button--scanning": isRefreshing,
+                })}
+                onClick={handleRefreshLibraries}
+                data-tooltip-id={refreshButtonTooltipId}
+                data-tooltip-content="Refresh all libraries"
+                data-tooltip-place="bottom"
+              >
+                <SyncIcon size={16} />
+              </button>
+            </>
           )}
 
           <div
@@ -432,7 +467,10 @@ export function Header() {
       </header>
 
       {isOnLibraryPage && window.electron.platform === "win32" && (
-        <Tooltip id={scanButtonTooltipId} style={{ zIndex: 1 }} />
+        <>
+          <Tooltip id={scanButtonTooltipId} style={{ zIndex: 1 }} />
+          <Tooltip id={refreshButtonTooltipId} style={{ zIndex: 1 }} />
+        </>
       )}
 
       <AutoUpdateSubHeader />
