@@ -130,7 +130,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     avatarfull: string;
   } | null>(null);
 
-  const [epicBusy, setEpicBusy] = useState(false);
   const [epicModalOpen, setEpicModalOpen] = useState(false);
   const [epicLinked, setEpicLinked] = useState(false);
   const [epicAccount, setEpicAccount] = useState<string | null>(null);
@@ -262,21 +261,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }
   };
 
-  const handleEpicConnect = async () => {
-    setEpicBusy(true);
-    try {
-      const status = await window.electron
-        .getLegendaryStatus()
-        .catch(() => null);
-      if (!status?.binaryFound) {
-        await window.electron.installLegendary().catch(() => null);
-      }
-      setEpicModalOpen(true);
-    } catch {
-      // ignore
-    } finally {
-      setEpicBusy(false);
-    }
+  const handleEpicConnect = () => {
+    setEpicModalOpen(true);
   };
 
   const handleEpicAuthResult = useCallback(
@@ -816,17 +802,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     type="button"
                     className="onboarding-skip"
                     onClick={next}
-                    disabled={epicBusy}
                   >
                     Skip for now
                   </button>
                   <Button
                     type="button"
                     onClick={handleEpicConnect}
-                    disabled={epicBusy}
                   >
                     <PersonIcon size={14} />
-                    {epicBusy ? "Opening…" : "Connect Epic"}
+                    Connect Epic
                   </Button>
                 </div>
               )}

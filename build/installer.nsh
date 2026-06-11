@@ -1,13 +1,26 @@
-; Rebuild the Windows icon cache after install/update so the new exe icon
-; shows on shortcuts and the taskbar. SHChangeNotify alone is not enough on
-; Win10/11 — the cache DBs must be purged and ie4uinit must rebuild them.
+; Rebuild icon cache and stamp the setup marker after every install/update.
+; The marker prevents the setup wizard from re-appearing on auto-updates.
 !macro customInstall
-  ; Purge the per-user icon cache databases (locked files are skipped)
+  ; ── Write setup marker so needsSetup() returns false after updates ──
+  FileOpen $0 "$INSTDIR\.gamehub-setup" w
+  FileClose $0
+
+  ; ── Purge per-user icon cache so the new exe icon shows immediately ──
+  ; IconCache.db (root)
   Delete /REBOOTOK "$LOCALAPPDATA\IconCache.db"
-  Delete /REBOOTOK "$LOCALAPPDATA\Microsoft\Windows\Explorer\iconcache_*.db"
-  ; Win10/11: rebuild the icon cache ("-show" is the modern flag;
-  ; "-ClearIconCache" is a no-op on these versions)
+
+  ; Explorer iconcache_*.db — NSIS Delete does not support wildcards,
+  ; so enumerate with FindFirst / FindNext.
+  FindFirst $0 $1 "$LOCALAPPDATA\Microsoft\Windows\Explorer\iconcache_*.db"
+  ${While} $1 != ""
+    Delete /REBOOTOK "$LOCALAPPDATA\Microsoft\Windows\Explorer\$1"
+    FindNext $0 $1
+  ${EndWhile}
+  FindClose $0
+
+  ; Win10/11: trigger a cache rebuild ("-show" is the modern flag)
   ExecWait '"$SYSDIR\ie4uinit.exe" -show'
-  ; Notify the shell that icons/associations changed (SHCNE_ASSOCCHANGED)
+
+  ; Notify the shell that file associations / icons changed
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
 !macroend
