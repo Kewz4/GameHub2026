@@ -465,6 +465,12 @@ declare global {
       foundGames: { title: string; executablePath: string }[];
       total: number;
     }>;
+    importPlaynitePlaytime: (dbPath?: string) => Promise<{
+      matched: number;
+      total: number;
+      games: Array<{ title: string; addedHours: number }>;
+      detectedPath: string | null;
+    }>;
     onExtractionComplete: (
       cb: (shop: GameShop, objectId: string) => void
     ) => () => Electron.IpcRenderer;

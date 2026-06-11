@@ -518,4 +518,10 @@
     opacity: 0.75;
     margin-top: 8px;
   }
+
+  &__svg-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
 }

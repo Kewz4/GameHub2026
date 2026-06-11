@@ -18,6 +18,8 @@ import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
 import GogLogo from "@renderer/assets/gog-logo.svg?react";
 import XboxLogo from "@renderer/assets/xbox-logo.svg?react";
+import LudusaviIcon from "@renderer/assets/ludusavi-icon.svg?react";
+import PlayniteIcon from "@renderer/assets/playnite-icon.svg?react";
 import gamehubIcon from "@renderer/assets/icons/gamehub.png";
 import { AuthPage } from "@shared";
 import { orderBy } from "lodash-es";
@@ -165,6 +167,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [ludusaviBusy, setLudusaviBusy] = useState(false);
   const [scanResult, setScanResult] = useState<string>("");
   const [scanBusy, setScanBusy] = useState(false);
+  const [playniteResult, setPlayniteResult] = useState<string>("");
+  const [playniteBusy, setPlayniteBusy] = useState(false);
+  const [playniteDetectedPath, setPlayniteDetectedPath] = useState<string | null>(null);
 
   const [downloadNotifs, setDownloadNotifs] = useState(true);
   const [achievementNotifs, setAchievementNotifs] = useState(true);
@@ -430,6 +435,41 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     } finally {
       setScanBusy(false);
     }
+  };
+
+  const handlePlayniteImport = async (dbPath?: string) => {
+    setPlayniteBusy(true);
+    setPlayniteResult("");
+    try {
+      const result = await window.electron.importPlaynitePlaytime(dbPath);
+      if (result.detectedPath && !playniteDetectedPath) {
+        setPlayniteDetectedPath(result.detectedPath);
+      }
+      if (result.matched === 0) {
+        setPlayniteResult(
+          result.total === 0
+            ? "No Playnite games with playtime found."
+            : `No matching games found (${result.total} Playnite games scanned).`
+        );
+      } else {
+        setPlayniteResult(
+          `Imported playtime for ${result.matched} game${result.matched !== 1 ? "s" : ""}.`
+        );
+      }
+    } catch {
+      setPlayniteResult("Import failed.");
+    } finally {
+      setPlayniteBusy(false);
+    }
+  };
+
+  const handlePickPlayniteDb = async () => {
+    const result = await window.electron.showOpenDialog({
+      properties: ["openFile"],
+      filters: [{ name: "LiteDB", extensions: ["db"] }],
+    });
+    if (!result || result.canceled || !result.filePaths[0]) return;
+    handlePlayniteImport(result.filePaths[0]);
   };
 
   const hasLudusaviUpload =
@@ -1181,7 +1221,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               {accountLinked && (
                 <div className="onboarding-tool-card">
                   <div className="onboarding-tool-card__header">
-                    <CloudIcon size={18} />
+                    <LudusaviIcon className="onboarding-tool-card__svg-icon" />
                     <span className="onboarding-tool-card__title">
                       Import Cloud Saves from Ludusavi
                     </span>
@@ -1216,7 +1256,49 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </div>
               )}
 
-              {/* Card 2: Scan for Games */}
+              {/* Card 2: Playnite playtime import */}
+              <div className="onboarding-tool-card">
+                <div className="onboarding-tool-card__header">
+                  <PlayniteIcon className="onboarding-tool-card__svg-icon" />
+                  <span className="onboarding-tool-card__title">
+                    Import Playtime from Playnite
+                  </span>
+                </div>
+                <p className="onboarding-tool-card__desc">
+                  Sync your playtime hours from Playnite&apos;s library database.
+                  {playniteDetectedPath ? (
+                    <> GameHub detected your Playnite library automatically.</>
+                  ) : (
+                    <> Auto-detects{" "}
+                      <code style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+                        %AppData%\Playnite\library\games.db
+                      </code>
+                      {" "}or pick the file manually.</>
+                  )}
+                </p>
+                <div className="onboarding-tool-card__actions">
+                  <Button
+                    type="button"
+                    disabled={playniteBusy}
+                    onClick={() => handlePlayniteImport()}
+                  >
+                    {playniteBusy ? "Importing…" : playniteDetectedPath ? "Import Playtime" : "Auto-detect & Import"}
+                  </Button>
+                  <Button
+                    type="button"
+                    theme="outline"
+                    disabled={playniteBusy}
+                    onClick={handlePickPlayniteDb}
+                  >
+                    Browse…
+                  </Button>
+                </div>
+                {playniteResult && (
+                  <p className="onboarding-tool-card__result">{playniteResult}</p>
+                )}
+              </div>
+
+              {/* Card 3: Scan for Games */}
               <div className="onboarding-tool-card">
                 <div className="onboarding-tool-card__header">
                   <SearchIcon size={18} />

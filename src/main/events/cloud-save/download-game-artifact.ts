@@ -35,28 +35,66 @@ export const addWinePrefixToWindowsPath = (
 };
 
 /**
+ * When the same drive exists but the game folder was named differently on the
+ * backup machine (e.g. "Neon Abyss" vs "NeonAbyss"), remap the mismatched
+ * segment to the actual folder name from the current executablePath.
+ */
+const remapGameFolderIfNeeded = (
+  destinationPath: string,
+  executablePath: string
+): string => {
+  const exeDir = path.dirname(executablePath);
+  const exeGameFolder = path.basename(exeDir);
+  const exeGameFolderNorm = exeGameFolder.toLowerCase().replace(/\s+/g, "");
+
+  const destSegments = destinationPath.split(/[\\/]/);
+  const idx = destSegments.findIndex(
+    (s) =>
+      s !== exeGameFolder &&
+      s.toLowerCase().replace(/\s+/g, "") === exeGameFolderNorm
+  );
+  if (idx === -1) return destinationPath;
+
+  const remapped = [...destSegments];
+  remapped[idx] = exeGameFolder;
+  // Re-join preserving original separator style
+  const sep = destinationPath.includes("\\") ? "\\" : "/";
+  return remapped.join(sep);
+};
+
+/**
  * Backups store absolute paths from the machine that created them. If the
  * destination's drive doesn't exist here (e.g. backup says E:\ but the game
  * lives on D:\), remap onto the game's current install dir — or at least onto
- * a drive that exists.
+ * a drive that exists. Also normalizes game folder name differences (e.g.
+ * "Neon Abyss" → "NeonAbyss") when the drive matches but path doesn't exist.
  */
 const remapMissingDrive = (
   destinationPath: string,
   executablePath?: string | null
 ): string => {
   const root = path.parse(destinationPath).root; // e.g. "E:\"
-  if (!root || fs.existsSync(root)) return destinationPath;
+  if (!root || fs.existsSync(root)) {
+    // Drive exists — still try to fix mismatched game folder name (e.g. spacing)
+    if (executablePath) {
+      return remapGameFolderIfNeeded(destinationPath, executablePath);
+    }
+    return destinationPath;
+  }
   if (!executablePath) return destinationPath;
 
   const exeDir = path.dirname(executablePath);
 
-  // If the destination contains the game's current folder name, graft the
-  // remainder onto the local install dir:
-  //   E:\Games\Neon Abyss\SavesDir + D:\Stuff\Neon Abyss\game.exe
-  //   → D:\Stuff\Neon Abyss\SavesDir
-  const gameFolder = path.basename(exeDir).toLowerCase();
+  // If the destination contains the game's current folder name (fuzzy), graft
+  // the remainder onto the local install dir:
+  //   E:\Games\Neon Abyss\SavesDir + D:\Stuff\NeonAbyss\game.exe
+  //   → D:\Stuff\NeonAbyss\SavesDir
+  const exeGameFolder = path.basename(exeDir);
+  const exeGameFolderNorm = exeGameFolder.toLowerCase().replace(/\s+/g, "");
   const destSegments = destinationPath.split(/[\\/]/);
-  const idx = destSegments.findIndex((s) => s.toLowerCase() === gameFolder);
+  const idx = destSegments.findIndex(
+    (s) => s.toLowerCase().replace(/\s+/g, "") === exeGameFolderNorm
+  );
   if (idx !== -1) {
     return path.join(exeDir, ...destSegments.slice(idx + 1));
   }

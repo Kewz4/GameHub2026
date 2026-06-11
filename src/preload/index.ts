@@ -390,6 +390,8 @@ contextBridge.exposeInMainWorld("electron", {
   scanInstalledGames: () => ipcRenderer.invoke("scanInstalledGames"),
   selectiveScanInstalledGames: (scanPaths: string[]) =>
     ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths),
+  importPlaynitePlaytime: (dbPath?: string) =>
+    ipcRenderer.invoke("importPlaynitePlaytime", dbPath),
   getDefaultWinePrefixSelectionPath: () =>
     ipcRenderer.invoke("getDefaultWinePrefixSelectionPath"),
   createSteamShortcut: (
