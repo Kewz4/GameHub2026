@@ -183,6 +183,11 @@ if (process.defaultApp) {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  // Refresh shortcuts FIRST — before setAppUserModelId — so Windows resolves
+  // the correct exe path for the taskbar icon on first paint.
+  const { refreshShortcuts } = await import("./services/installer");
+  refreshShortcuts();
+
   electronApp.setAppUserModelId("io.gamehub.launcher");
 
   protocol.handle("local", (request) => {
@@ -270,8 +275,7 @@ app.whenReady().then(async () => {
   );
   const isRunDeepLink = deepLinkArg?.startsWith("hydralauncher://run");
 
-  const { needsSetup, refreshShortcuts } = await import("./services/installer");
-  refreshShortcuts();
+  const { needsSetup } = await import("./services/installer");
 
   // Ctrl+Shift+L / Cmd+Shift+L toggles the debug console window
   globalShortcut.register("CommandOrControl+Shift+L", () => {

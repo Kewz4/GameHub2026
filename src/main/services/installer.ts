@@ -90,6 +90,9 @@ function createShortcuts(exePath: string) {
   const shortcutBase = {
     filePath: exePath,
     name: "GameHub",
+    // Match the AppUserModelId set in main/index.ts so Windows replaces any
+    // stale shortcut from a previous install rather than creating a duplicate.
+    appUserModelId: "io.gamehub.launcher",
     VBScriptPath: vbsPath,
   };
 
