@@ -37,7 +37,7 @@ export function needsSetup(): boolean {
 export function getInstallerDefaults() {
   return {
     defaultInstallDir: path.join(
-      process.env.LOCALAPPDATA || process.env.APPDATA || "C:\\Users\\Public",
+      process.env.PROGRAMFILES || "C:\\Program Files",
       "GameHub"
     ),
     exeDir: path.dirname(process.execPath),
