@@ -21,6 +21,7 @@ const SCAN_DIRECTORIES = [
 interface FoundGame {
   title: string;
   executablePath: string;
+  key: string;
 }
 
 interface ScanResult {
@@ -62,7 +63,8 @@ async function publishScanNotification(foundCount: number): Promise<void> {
 }
 
 const scanInstalledGames = async (
-  _event: Electron.IpcMainInvokeEvent
+  _event: Electron.IpcMainInvokeEvent,
+  dryRun = false
 ): Promise<ScanResult> => {
   const games = await gamesSublevel
     .iterator()
@@ -92,18 +94,22 @@ const scanInstalledGames = async (
     const foundPath = await searchInDirectories(normalizedNames);
 
     if (foundPath) {
-      await gamesSublevel.put(key, { ...game, executablePath: foundPath });
+      if (!dryRun) {
+        await gamesSublevel.put(key, { ...game, executablePath: foundPath });
+      }
 
       logger.info(
         `[ScanInstalledGames] Found executable for ${game.objectId}: ${foundPath}`
       );
 
-      foundGames.push({ title: game.title, executablePath: foundPath });
+      foundGames.push({ title: game.title, executablePath: foundPath, key });
     }
   }
 
-  WindowManager.sendToAppWindows("on-library-batch-complete");
-  await publishScanNotification(foundGames.length);
+  if (!dryRun) {
+    WindowManager.sendToAppWindows("on-library-batch-complete");
+    await publishScanNotification(foundGames.length);
+  }
 
   return { foundGames, total: gamesToScan.length };
 };

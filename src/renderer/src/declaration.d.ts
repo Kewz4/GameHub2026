@@ -457,18 +457,20 @@ declare global {
       minimized: boolean;
     }) => Promise<void>;
     extractGameDownload: (shop: GameShop, objectId: string) => Promise<boolean>;
-    scanInstalledGames: () => Promise<{
-      foundGames: { title: string; executablePath: string }[];
+    scanInstalledGames: (dryRun?: boolean) => Promise<{
+      foundGames: { title: string; executablePath: string; key: string }[];
       total: number;
     }>;
-    selectiveScanInstalledGames: (scanPaths: string[]) => Promise<{
-      foundGames: { title: string; executablePath: string }[];
+    selectiveScanInstalledGames: (scanPaths: string[], dryRun?: boolean) => Promise<{
+      foundGames: { title: string; executablePath: string; key: string }[];
       total: number;
     }>;
+    confirmScanGames: (approvedGames: Array<{ key: string; executablePath: string }>) => Promise<void>;
     importPlaynitePlaytime: (dbPath?: string) => Promise<{
       matched: number;
       total: number;
       games: Array<{ title: string; addedHours: number }>;
+      unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
       detectedPath: string | null;
     }>;
     onExtractionComplete: (

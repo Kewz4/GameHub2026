@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { ScanApprovalModal, type ScannedGame } from "./scan-approval-modal";
 import { EpicAuthModal } from "@renderer/pages/settings/epic-auth-modal";
 import { GogAuthModal } from "@renderer/pages/settings/gog-auth-modal";
 import { useTranslation } from "react-i18next";
@@ -166,6 +167,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [ludusaviBusy, setLudusaviBusy] = useState(false);
   const [scanResult, setScanResult] = useState<string>("");
   const [scanBusy, setScanBusy] = useState(false);
+  const [scanCandidates, setScanCandidates] = useState<ScannedGame[]>([]);
+  const [showScanApproval, setShowScanApproval] = useState(false);
   const [playniteResult, setPlayniteResult] = useState<string>("");
   const [playniteBusy, setPlayniteBusy] = useState(false);
   const [playniteDetectedPath, setPlayniteDetectedPath] = useState<string | null>(null);
@@ -403,8 +406,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setScanBusy(true);
     setScanResult("");
     try {
-      const result = await window.electron.scanInstalledGames();
-      setScanResult(`Found ${result?.total ?? 0} games.`);
+      const result = await window.electron.scanInstalledGames(true);
+      if (result.foundGames.length === 0) {
+        setScanResult(`Scan complete — no new games found (${result.total} checked).`);
+      } else {
+        setScanCandidates(result.foundGames);
+        setShowScanApproval(true);
+      }
     } catch {
       setScanResult("Scan failed.");
     } finally {
@@ -420,12 +428,31 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setScanBusy(true);
     setScanResult("");
     try {
-      const scanRes = await window.electron.selectiveScanInstalledGames(result.filePaths);
-      setScanResult(`Found ${scanRes?.total ?? 0} games.`);
+      const scanRes = await window.electron.selectiveScanInstalledGames(result.filePaths, true);
+      if (scanRes.foundGames.length === 0) {
+        setScanResult(`Scan complete — no new games found (${scanRes.total} checked).`);
+      } else {
+        setScanCandidates(scanRes.foundGames);
+        setShowScanApproval(true);
+      }
     } catch {
       setScanResult("Scan failed.");
     } finally {
       setScanBusy(false);
+    }
+  };
+
+  const handleScanConfirm = async (approved: ScannedGame[]) => {
+    setShowScanApproval(false);
+    try {
+      await window.electron.confirmScanGames(approved);
+      setScanResult(
+        approved.length === 0
+          ? "No games added."
+          : `Added ${approved.length} game${approved.length !== 1 ? "s" : ""} to library.`
+      );
+    } catch {
+      setScanResult("Failed to save scan results.");
     }
   };
 
@@ -1431,6 +1458,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         visible={gogModalOpen}
         onClose={() => setGogModalOpen(false)}
         onSuccess={handleGogAuthResult}
+      />
+
+      <ScanApprovalModal
+        visible={showScanApproval}
+        foundGames={scanCandidates}
+        onConfirm={handleScanConfirm}
+        onClose={() => setShowScanApproval(false)}
       />
     </div>
   );

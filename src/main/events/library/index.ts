@@ -35,6 +35,7 @@ import "./remove-game";
 import "./reset-game-achievements";
 import "./scan-installed-games";
 import "./selective-scan-installed-games";
+import "./confirm-scan-games";
 import "./import-playnite-playtime";
 import "./select-game-proton-path";
 import "./select-game-wine-prefix";

@@ -86,9 +86,37 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
         );
         if (match) {
           game = match[1];
-          // Use the real shop/objectId from the DB so navigation works correctly
           resolvedShop = game.shop;
-          resolvedObjectId = game.objectId;
+          // If the DB record's own objectId is non-numeric (the old bug that
+          // stored the game title as objectId), repair it via a catalogue lookup
+          // so navigation and future artifact matching use the correct numeric ID.
+          if (game.shop === "steam" && !/^\d+$/.test(game.objectId)) {
+            const cacheKey = `__repair__${(game.title ?? "").toLowerCase()}`;
+            if (!catalogueCache.has(cacheKey)) {
+              catalogueCache.set(cacheKey, await resolveFromCatalogue(game.title ?? ""));
+            }
+            const repaired = catalogueCache.get(cacheKey);
+            if (repaired && repaired.objectId !== game.objectId) {
+              const oldKey = levelKeys.game(game.shop, game.objectId);
+              const newKey = levelKeys.game(repaired.shop, repaired.objectId);
+              const existing = await gamesSublevel.get(newKey).catch(() => null);
+              if (!existing) {
+                await gamesSublevel.put(newKey, {
+                  ...game,
+                  objectId: repaired.objectId,
+                  shop: repaired.shop,
+                });
+              }
+              await gamesSublevel.del(oldKey).catch(() => {});
+              game = { ...game, objectId: repaired.objectId, shop: repaired.shop };
+              resolvedShop = repaired.shop;
+              resolvedObjectId = repaired.objectId;
+            } else {
+              resolvedObjectId = game.objectId;
+            }
+          } else {
+            resolvedObjectId = game.objectId;
+          }
         }
       }
 

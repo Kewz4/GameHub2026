@@ -16,6 +16,7 @@ interface ImportResult {
   matched: number;
   total: number;
   games: Array<{ title: string; addedHours: number }>;
+  unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
 }
 
 /** Read a little-endian int32 safely */
@@ -106,7 +107,7 @@ const importPlaynitePlaytime = async (
   const filePath = dbPath ?? detectedPath;
 
   if (!filePath || !fs.existsSync(filePath)) {
-    return { matched: 0, total: 0, games: [], detectedPath };
+    return { matched: 0, total: 0, games: [], unmatched: [], detectedPath };
   }
 
   let data: Buffer;
@@ -114,7 +115,7 @@ const importPlaynitePlaytime = async (
     data = fs.readFileSync(filePath);
   } catch (err) {
     logger.error("Failed to read Playnite games.db", err);
-    return { matched: 0, total: 0, games: [], detectedPath };
+    return { matched: 0, total: 0, games: [], unmatched: [], detectedPath };
   }
 
   const playniteGames = parseLiteDB(data);
@@ -135,6 +136,7 @@ const importPlaynitePlaytime = async (
     );
 
   const matched: ImportResult["games"] = [];
+  const unmatched: ImportResult["unmatched"] = [];
 
   const searchCatalogue = async (
     title: string,
@@ -208,7 +210,14 @@ const importPlaynitePlaytime = async (
 
     // 2. Not in local library — search HydraAPI catalogue and add the game
     const catalogueMatch = await searchCatalogue(pg.name, steamId);
-    if (!catalogueMatch) continue;
+    if (!catalogueMatch) {
+      unmatched.push({
+        name: pg.name,
+        gameId: pg.gameId,
+        playtimeHours: Math.round((pgPlaytimeMs / 3600000) * 10) / 10,
+      });
+      continue;
+    }
 
     const gameKey = levelKeys.game(catalogueMatch.shop, catalogueMatch.objectId);
     const existingGame = await gamesSublevel.get(gameKey).catch(() => null);
@@ -260,6 +269,7 @@ const importPlaynitePlaytime = async (
     matched: matched.length,
     total: gamesWithPlaytime.length,
     games: matched,
+    unmatched,
     detectedPath,
   };
 };

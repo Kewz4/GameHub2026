@@ -35,9 +35,10 @@ export function getGameOrigin(game: OriginSource): GameOrigin {
   if (exe && PLATFORM_SCHEMES.some((scheme) => exe.startsWith(scheme))) {
     return "sync";
   }
-  // No libraryOrigin stamp and no platform URI → treat as catalog.
-  // Sync functions migrate existing entries on every run, so a legitimately
-  // owned game will have been stamped "sync" the first time the user synced
-  // their platform library.
+  // Any real file-path exe means the game was found installed on disk — treat
+  // as owned/synced. Only games with no exe and no libraryOrigin stamp (i.e.
+  // purely added from the catalogue without ever being installed) fall through
+  // to "catalog".
+  if (exe) return "sync";
   return "catalog";
 }

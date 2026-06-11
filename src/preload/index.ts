@@ -387,9 +387,11 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("changeGamePlayTime", shop, objectId, playtime),
   extractGameDownload: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("extractGameDownload", shop, objectId),
-  scanInstalledGames: () => ipcRenderer.invoke("scanInstalledGames"),
-  selectiveScanInstalledGames: (scanPaths: string[]) =>
-    ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths),
+  scanInstalledGames: (dryRun?: boolean) => ipcRenderer.invoke("scanInstalledGames", dryRun),
+  selectiveScanInstalledGames: (scanPaths: string[], dryRun?: boolean) =>
+    ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths, dryRun),
+  confirmScanGames: (approvedGames: Array<{ key: string; executablePath: string }>) =>
+    ipcRenderer.invoke("confirmScanGames", approvedGames),
   importPlaynitePlaytime: (dbPath?: string) =>
     ipcRenderer.invoke("importPlaynitePlaytime", dbPath),
   getDefaultWinePrefixSelectionPath: () =>

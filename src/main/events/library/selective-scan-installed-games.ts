@@ -5,7 +5,7 @@ import { registerEvent } from "../register-event";
 import { gamesSublevel } from "@main/level";
 import { GameExecutables, LocalNotificationManager, logger, WindowManager } from "@main/services";
 
-interface FoundGame { title: string; executablePath: string; }
+interface FoundGame { title: string; executablePath: string; key: string; }
 interface ScanResult { foundGames: FoundGame[]; total: number; }
 
 async function findExecutableInFolder(folderPath: string, executableNames: Set<string>): Promise<string | null> {
@@ -26,7 +26,8 @@ async function findExecutableInFolder(folderPath: string, executableNames: Set<s
 
 const selectiveScanInstalledGames = async (
   _event: Electron.IpcMainInvokeEvent,
-  scanPaths: string[]
+  scanPaths: string[],
+  dryRun = false
 ): Promise<ScanResult> => {
   const games = await gamesSublevel.iterator().all().then((results) =>
     results.filter(([, game]) => game.isDeleted === false && game.shop !== "custom" && !game.executablePath).map(([key, game]) => ({ key, game }))
@@ -42,22 +43,25 @@ const selectiveScanInstalledGames = async (
     for (const scanPath of scanPaths) {
       const foundPath = await findExecutableInFolder(scanPath, normalizedNames);
       if (foundPath) {
-        await gamesSublevel.put(key, { ...game, executablePath: foundPath });
-        foundGames.push({ title: game.title, executablePath: foundPath });
+        if (!dryRun) {
+          await gamesSublevel.put(key, { ...game, executablePath: foundPath });
+        }
+        foundGames.push({ title: game.title, executablePath: foundPath, key });
         break;
       }
     }
   }
 
-  WindowManager.sendToAppWindows("on-library-batch-complete");
-
-  const hasFoundGames = foundGames.length > 0;
-  await LocalNotificationManager.createNotification(
-    "SCAN_GAMES_COMPLETE",
-    t(hasFoundGames ? "scan_games_complete_title" : "scan_games_no_results_title", { ns: "notifications" }),
-    t(hasFoundGames ? "scan_games_complete_description" : "scan_games_no_results_description", { ns: "notifications", count: foundGames.length }),
-    { url: "/library?openScanModal=true" }
-  );
+  if (!dryRun) {
+    WindowManager.sendToAppWindows("on-library-batch-complete");
+    const hasFoundGames = foundGames.length > 0;
+    await LocalNotificationManager.createNotification(
+      "SCAN_GAMES_COMPLETE",
+      t(hasFoundGames ? "scan_games_complete_title" : "scan_games_no_results_title", { ns: "notifications" }),
+      t(hasFoundGames ? "scan_games_complete_description" : "scan_games_no_results_description", { ns: "notifications", count: foundGames.length }),
+      { url: "/library?openScanModal=true" }
+    );
+  }
 
   return { foundGames, total: games.length };
 };
