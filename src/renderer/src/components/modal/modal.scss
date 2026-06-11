@@ -35,6 +35,8 @@
     flex: 1;
     min-height: 0;
     overflow: auto;
+    display: flex;
+    flex-direction: column;
     padding: calc(globals.$spacing-unit * 3) calc(globals.$spacing-unit * 2);
 
     &--no-padding {

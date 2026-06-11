@@ -113,7 +113,13 @@ const restoreLudusaviBackup = (
       try {
         fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
         if (fs.existsSync(destinationPath)) fs.unlinkSync(destinationPath);
-        fs.renameSync(sourcePath, destinationPath);
+        try {
+          fs.renameSync(sourcePath, destinationPath);
+        } catch {
+          // Cross-filesystem fallback
+          fs.copyFileSync(sourcePath, destinationPath);
+          fs.unlinkSync(sourcePath);
+        }
       } catch (err) {
         // Don't abort the whole restore because one file's destination is
         // unreachable on this machine
@@ -186,6 +192,8 @@ const downloadGameArtifact = async (
     );
 
     fs.unlinkSync(zipLocation);
+
+    try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch {}
 
     WindowManager.mainWindow?.webContents.send(
       `on-backup-download-complete-${objectId}-${shop}`,

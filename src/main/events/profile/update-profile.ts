@@ -5,6 +5,9 @@ import { omit } from "lodash-es";
 import { UploadcareSync } from "@main/services/uploadcare-sync";
 import { db, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
+import { app } from "electron";
+import fs from "node:fs";
+import path from "node:path";
 
 export const patchUserProfile = async (updateProfile: UpdateProfileRequest) => {
   return HydraApi.patch<UserProfile>("/profile", updateProfile);
@@ -52,7 +55,21 @@ const updateProfile = async (
           : { kind: "profile-banner" }
       ).catch(() => undefined);
       payload["backgroundImageUrl"] = uploadcareUrl ?? null;
-      prefUpdates.localBackgroundImageUrl = uploadcareUrl ?? null;
+
+      // Copy source file to a permanent local path so re-entry always loads
+      // from a reliable local file rather than the Uploadcare CDN URL.
+      try {
+        const profileAssetsDir = path.join(
+          app.getPath("userData"),
+          "profile-assets"
+        );
+        fs.mkdirSync(profileAssetsDir, { recursive: true });
+        const localBannerPath = path.join(profileAssetsDir, "banner.webp");
+        fs.copyFileSync(updateProfile.backgroundImageUrl, localBannerPath);
+        prefUpdates.localBackgroundImageUrl = localBannerPath;
+      } catch {
+        prefUpdates.localBackgroundImageUrl = uploadcareUrl ?? null;
+      }
     }
   }
 

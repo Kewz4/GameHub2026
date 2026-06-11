@@ -298,6 +298,16 @@ function onOpenGame(game: Game) {
     })
     .catch(() => {});
 
+  // Cloud sync runs for all shops including custom games
+  if (game.automaticCloudSync) {
+    CloudSync.uploadSaveGame(
+      game.objectId,
+      game.shop,
+      null,
+      CloudSync.getBackupLabel(true)
+    ).catch(() => {});
+  }
+
   if (game.shop === "custom") return;
 
   AchievementWatcherManager.firstSyncWithRemoteIfNeeded(
@@ -331,15 +341,6 @@ function onOpenGame(game: Game) {
           error: error instanceof Error ? error.message : String(error),
         });
       });
-
-    if (game.automaticCloudSync) {
-      CloudSync.uploadSaveGame(
-        game.objectId,
-        game.shop,
-        null,
-        CloudSync.getBackupLabel(true)
-      );
-    }
   } else {
     const payload = { ...game, lastTimePlayed: new Date() };
 
@@ -460,17 +461,19 @@ const onCloseGame = (game: Game) => {
 
   gamesSublevel.put(gameKey, updatedGame);
 
+  // Cloud sync runs for all shops including custom games
+  if (game.automaticCloudSync) {
+    CloudSync.uploadSaveGame(
+      game.objectId,
+      game.shop,
+      null,
+      CloudSync.getBackupLabel(true)
+    ).catch(() => {});
+  }
+
   if (game.shop === "custom") return;
 
   if (game.remoteId) {
-    if (game.automaticCloudSync) {
-      CloudSync.uploadSaveGame(
-        game.objectId,
-        game.shop,
-        null,
-        CloudSync.getBackupLabel(true)
-      );
-    }
 
     const deltaToSync =
       now -

@@ -93,10 +93,6 @@ export function CloudSyncContextProvider({
   );
 
   const getGameArtifacts = useCallback(async () => {
-    if (shop === "custom") {
-      setArtifacts([]);
-      return;
-    }
     const results = await window.electron
       .getGameArtifacts(objectId, shop)
       .catch(() => [] as GameArtifact[]);

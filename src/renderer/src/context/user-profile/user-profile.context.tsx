@@ -101,16 +101,16 @@ export function UserProfileContextProvider({
       });
   }, [userId]);
 
-  // Custom games only exist locally — when viewing your own profile, merge
-  // them in so they show up alongside the server-known library
-  const getLocalCustomGames = useCallback(async (): Promise<{
+  // Local games (including custom, Steam, GOG, Epic synced) only exist locally —
+  // when viewing your own profile, merge them in so they show up alongside the server-known library
+  const getLocalLibraryGames = useCallback(async (): Promise<{
     library: UserGame[];
     pinned: UserGame[];
   }> => {
     try {
       const localLibrary = await window.electron.getLibrary();
       const customGames = localLibrary
-        .filter((g) => g.shop === "custom" && !g.isDeleted)
+        .filter((g) => !g.isDeleted)
         .map(
           (g) =>
             ({
@@ -172,12 +172,22 @@ export function UserProfileContextProvider({
 
         const isOwnProfile = userDetails?.id === userId;
         const localCustom = isOwnProfile
-          ? await getLocalCustomGames()
+          ? await getLocalLibraryGames()
           : { library: [], pinned: [] };
 
         if (response) {
-          setLibraryGames([...localCustom.library, ...response.library]);
-          setPinnedGames([...localCustom.pinned, ...response.pinnedGames]);
+          const serverIds = new Set(response.library.map((g) => g.objectId));
+          const localUnique = localCustom.library.filter(
+            (g) => !serverIds.has(g.objectId)
+          );
+          const serverPinnedIds = new Set(
+            response.pinnedGames.map((g) => g.objectId)
+          );
+          const localPinnedUnique = localCustom.pinned.filter(
+            (g) => !serverPinnedIds.has(g.objectId)
+          );
+          setLibraryGames([...localUnique, ...response.library]);
+          setPinnedGames([...localPinnedUnique, ...response.pinnedGames]);
           setHasMoreLibraryGames(response.library.length === 12);
         } else {
           setLibraryGames(localCustom.library);
@@ -192,7 +202,7 @@ export function UserProfileContextProvider({
         setIsLoadingLibraryGames(false);
       }
     },
-    [userId, userDetails?.id, getLocalCustomGames]
+    [userId, userDetails?.id, getLocalLibraryGames]
   );
 
   const loadMoreLibraryGames = useCallback(
@@ -259,12 +269,15 @@ export function UserProfileContextProvider({
           const prefs = await window.electron
             .getUserPreferences()
             .catch(() => null);
+          const localBg = prefs?.localBackgroundImageUrl;
+          const resolvedBg = localBg
+            ? localBg.startsWith("http") ? localBg : `local:${localBg}`
+            : userProfile.backgroundImageUrl;
           userProfile = {
             ...userProfile,
             profileImageUrl:
               prefs?.localProfileImageUrl ?? userProfile.profileImageUrl,
-            backgroundImageUrl:
-              prefs?.localBackgroundImageUrl ?? userProfile.backgroundImageUrl,
+            backgroundImageUrl: resolvedBg,
           };
         }
 

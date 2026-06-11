@@ -38,14 +38,13 @@ export function GogAuthModal({
     wv.src = GOG_AUTH_URL;
     wv.style.width = "100%";
     wv.style.height = "100%";
-    wv.style.display = "block";
+    wv.style.display = "flex";
+    wv.style.flex = "1";
     // Append only after the modal has fully laid out — a webview attached
     // while an ancestor is mid-animation gets a stale guest viewport size.
-    const raf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        containerRef.current?.appendChild(wv);
-      });
-    });
+    const timer = setTimeout(() => {
+      containerRef.current?.appendChild(wv);
+    }, 0);
 
     const tryExtract = async (url: string) => {
       if (handledRef.current) return;
@@ -77,7 +76,7 @@ export function GogAuthModal({
 
     const container = containerRef.current;
     return () => {
-      cancelAnimationFrame(raf);
+      clearTimeout(timer);
       wv.removeEventListener("will-navigate", onWillNavigate);
       wv.removeEventListener("did-navigate", onDidNavigate);
       if (container.contains(wv)) container.removeChild(wv);
@@ -94,7 +93,7 @@ export function GogAuthModal({
       noContentPadding
       noAnimation
     >
-      <div ref={containerRef} style={{ height: "100%", minHeight: "480px" }} />
+      <div ref={containerRef} style={{ flex: 1, minHeight: "480px", display: "flex", flexDirection: "column" }} />
     </Modal>
   );
 }

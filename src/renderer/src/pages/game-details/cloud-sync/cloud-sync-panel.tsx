@@ -24,6 +24,7 @@ import {
   useUserDetails,
 } from "@renderer/hooks";
 import { useTranslation } from "react-i18next";
+import { useRef } from "react";
 import { AxiosProgressEvent } from "axios";
 import { formatDownloadProgress } from "@renderer/helpers";
 import { CloudSyncRenameArtifactModal } from "../cloud-sync-rename-artifact-modal/cloud-sync-rename-artifact-modal";
@@ -48,6 +49,8 @@ export function CloudSyncPanel({
   const [artifactToRename, setArtifactToRename] = useState<GameArtifact | null>(
     null
   );
+  const [restoredArtifactId, setRestoredArtifactId] = useState<string | null>(null);
+  const pendingRestoreRef = useRef<string | null>(null);
 
   const { t } = useTranslation("game_details");
   const { formatDate, formatDateTime } = useDate();
@@ -112,8 +115,17 @@ export function CloudSyncPanel({
 
   const handleBackupInstallClick = async (artifactId: string) => {
     setBackupDownloadProgress(null);
+    setRestoredArtifactId(null);
+    pendingRestoreRef.current = artifactId;
     downloadGameArtifact(artifactId);
   };
+
+  useEffect(() => {
+    if (!restoringBackup && pendingRestoreRef.current) {
+      setRestoredArtifactId(pendingRestoreRef.current);
+      pendingRestoreRef.current = null;
+    }
+  }, [restoringBackup]);
 
   const handleFreezeArtifactClick = async (
     artifactId: string,
@@ -305,12 +317,14 @@ export function CloudSyncPanel({
                     disabled={disableActions}
                     theme="outline"
                   >
-                    {restoringBackup ? (
+                    {restoredArtifactId === artifact.id ? null : restoringBackup ? (
                       <SyncIcon className="cloud-sync-panel__sync-icon" />
                     ) : (
                       <HistoryIcon />
                     )}
-                    {t("install_backup")}
+                    {restoredArtifactId === artifact.id
+                      ? `${t("backup_restored")} ✓`
+                      : t("install_backup")}
                   </Button>
                   <DropdownMenu
                     align="end"
