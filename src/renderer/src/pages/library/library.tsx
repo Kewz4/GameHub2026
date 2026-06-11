@@ -473,24 +473,41 @@ export default function Library() {
   const storeFilteredLibrary = useMemo(() => {
     if (storeFilter === "all") return filteredLibrary;
 
-    // Platform filters — games owned on (synced from) that platform
+    // Platform filters — ONLY games explicitly stamped as synced from that
+    // platform. Using libraryOrigin directly avoids any heuristic ambiguity:
+    // every platform sync function stamps "sync" on owned games, so a missing
+    // libraryOrigin means the game was NOT added via platform sync.
     if (
       storeFilter === "steam" ||
       storeFilter === "epic" ||
       storeFilter === "gog" ||
-      storeFilter === "xbox"
+      storeFilter === "xbox" ||
+      storeFilter === "battlenet"
     )
       return filteredLibrary.filter(
-        (g) => g.shop === storeFilter && getGameOrigin(g) === "sync"
+        (g) =>
+          g.shop === storeFilter &&
+          (g.libraryOrigin === "sync" ||
+            // Legacy: no libraryOrigin but has a platform URI scheme exe
+            (g.libraryOrigin == null && getGameOrigin(g) === "sync"))
       );
 
-    // Retigga = games added from the Hydra API catalog (not owned anywhere)
+    // Retigga = games added from the Hydra catalogue (not owned on any platform)
     if (storeFilter === "retigga")
-      return filteredLibrary.filter((g) => getGameOrigin(g) === "catalog");
+      return filteredLibrary.filter(
+        (g) =>
+          g.libraryOrigin === "catalog" ||
+          (g.libraryOrigin == null && getGameOrigin(g) === "catalog")
+      );
 
-    // Custom = games added manually via "Add custom game"
+    // Custom = manually added games
     if (storeFilter === "custom")
-      return filteredLibrary.filter((g) => getGameOrigin(g) === "custom");
+      return filteredLibrary.filter(
+        (g) =>
+          g.libraryOrigin === "custom" ||
+          g.shop === "custom" ||
+          (g.libraryOrigin == null && getGameOrigin(g) === "custom")
+      );
 
     return filteredLibrary.filter((g) => g.shop === storeFilter);
   }, [filteredLibrary, storeFilter]);

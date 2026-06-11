@@ -22,9 +22,11 @@ interface OriginSource {
  * - "custom": added manually via "Add custom game"
  * - "catalog": added from the Hydra API catalog (not owned anywhere)
  *
- * Records created before the libraryOrigin field existed fall back to a
- * heuristic: custom shop → custom, platform URL scheme exe → sync,
- * otherwise catalog.
+ * Every platform sync function stamps libraryOrigin: "sync" during its
+ * migration pass, so genuinely synced games always have the field set.
+ * Legacy records without libraryOrigin that also lack a platform URI scheme
+ * in their exe path are treated as catalog games — defaulting to "sync" was
+ * overly permissive and caused catalogue games to leak into platform filters.
  */
 export function getGameOrigin(game: OriginSource): GameOrigin {
   if (game.libraryOrigin) return game.libraryOrigin;
@@ -33,9 +35,9 @@ export function getGameOrigin(game: OriginSource): GameOrigin {
   if (exe && PLATFORM_SCHEMES.some((scheme) => exe.startsWith(scheme))) {
     return "sync";
   }
-  // Legacy records without libraryOrigin: GOG/Xbox/BattleNet don't set
-  // scheme-based paths, and installed Epic games use real file paths.
-  // Default to "sync" — catalog is only reliable for records created after
-  // v2.5 where libraryOrigin is explicitly stamped.
-  return "sync";
+  // No libraryOrigin stamp and no platform URI → treat as catalog.
+  // Sync functions migrate existing entries on every run, so a legitimately
+  // owned game will have been stamped "sync" the first time the user synced
+  // their platform library.
+  return "catalog";
 }

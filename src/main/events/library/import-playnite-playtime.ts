@@ -227,7 +227,11 @@ const importPlaynitePlaytime = async (
         lastTimePlayed: null,
         addedToLibraryAt: new Date(),
         automaticCloudSync: false,
-        libraryOrigin: "catalog" as const,
+        // Games matched by Steam App ID are confirmed as owned on Steam;
+        // title-only matches are unverified so keep them as catalog.
+        libraryOrigin: (steamId && catalogueMatch.objectId === steamId)
+          ? ("sync" as const)
+          : ("catalog" as const),
       });
       matched.push({
         title: catalogueMatch.title,
