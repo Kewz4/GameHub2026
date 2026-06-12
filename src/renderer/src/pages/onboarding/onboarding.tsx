@@ -392,18 +392,50 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const handleLudusaviImport = async () => {
     const result = await window.electron.showOpenDialog({
       properties: ["openDirectory"],
+      title: "Select Ludusavi Backup Folder",
     });
     if (!result || result.canceled || !result.filePaths[0]) return;
     const folderPath = result.filePaths[0];
     setLudusaviBusy(true);
     setLudusaviResult("");
     try {
-      if (typeof (window.electron as unknown as Record<string, unknown>).uploadLudusaviBackup === "function") {
-        await (window.electron as unknown as { uploadLudusaviBackup: (p: string) => Promise<void> }).uploadLudusaviBackup(folderPath);
-        setLudusaviResult("Saves imported successfully.");
-      } else {
-        setLudusaviResult("Feature coming soon.");
+      const entries =
+        await window.electron.scanLudusaviBackupFolder(folderPath);
+      if (entries.length === 0) {
+        setLudusaviResult(
+          "No valid Ludusavi backups found. Pick the root backup directory (the one containing per-game subfolders)."
+        );
+        return;
       }
+
+      let imported = 0;
+      let failed = 0;
+      for (const entry of entries) {
+        setLudusaviResult(
+          `Uploading ${imported + failed + 1}/${entries.length}: ${entry.gameName}…`
+        );
+        try {
+          // Match the backup to a library game so the save lands on the right page
+          const match = await window.electron
+            .findLibraryGameByTitle(entry.gameName)
+            .catch(() => null);
+          await window.electron.importLudusaviBackup(
+            entry.folderPath,
+            entry.gameName,
+            match?.objectId ?? entry.gameName,
+            match?.shop ?? "steam"
+          );
+          imported++;
+        } catch {
+          failed++;
+        }
+      }
+
+      setLudusaviResult(
+        failed === 0
+          ? `Imported ${imported} save backup${imported !== 1 ? "s" : ""} to GameHub Cloud.`
+          : `Imported ${imported} of ${entries.length} backups (${failed} failed).`
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setLudusaviResult(msg || "Import failed.");
@@ -511,9 +543,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     if (!result || result.canceled || !result.filePaths[0]) return;
     handlePlayniteImport(result.filePaths[0]);
   };
-
-  const hasLudusaviUpload =
-    typeof (window.electron as unknown as Record<string, unknown>).uploadLudusaviBackup === "function";
 
   const isWelcome = currentStep === "welcome";
   const isDone = currentStep === "done";
@@ -1266,28 +1295,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       Import Cloud Saves from Ludusavi
                     </span>
                   </div>
-                  {hasLudusaviUpload ? (
-                    <>
-                      <p className="onboarding-tool-card__desc">
-                        Import an existing Ludusavi backup folder and upload
-                        your saves to GameHub Cloud.
-                      </p>
-                      <div className="onboarding-tool-card__actions">
-                        <Button
-                          type="button"
-                          disabled={ludusaviBusy}
-                          onClick={handleLudusaviImport}
-                        >
-                          {ludusaviBusy ? "Importing…" : "Import Saves"}
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="onboarding-tool-card__desc">
-                      Open your game page → Cloud Sync → Create Backup to back
-                      up saves manually.
-                    </p>
-                  )}
+                  <p className="onboarding-tool-card__desc">
+                    Pick your Ludusavi backup folder and GameHub will upload
+                    each game&apos;s saves to GameHub Cloud, matched to your
+                    library automatically.
+                  </p>
+                  <div className="onboarding-tool-card__actions">
+                    <Button
+                      type="button"
+                      disabled={ludusaviBusy}
+                      onClick={handleLudusaviImport}
+                    >
+                      {ludusaviBusy ? "Importing…" : "Pick Backup Folder"}
+                    </Button>
+                  </div>
                   {ludusaviResult && (
                     <p className="onboarding-tool-card__result">
                       {ludusaviResult}

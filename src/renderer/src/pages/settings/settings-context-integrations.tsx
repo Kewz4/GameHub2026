@@ -7,6 +7,7 @@ import { SettingsBattleNet } from "./settings-battlenet";
 import { SettingsXbox } from "./settings-xbox";
 import { SettingsLudusaviImport } from "./settings-ludusavi-import";
 import { SettingsPlayniteImport } from "./settings-playnite-import";
+import { SettingsExclusionList } from "./settings-exclusion-list";
 import { useUserDetails } from "@renderer/hooks";
 
 export function SettingsContextIntegrations() {
@@ -63,6 +64,11 @@ export function SettingsContextIntegrations() {
       <div className="settings-context-panel__group">
         <h3>Import Playnite Playtime</h3>
         <SettingsPlayniteImport />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>Excluded Games</h3>
+        <SettingsExclusionList />
       </div>
     </div>
   );

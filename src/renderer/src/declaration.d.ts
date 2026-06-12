@@ -40,6 +40,7 @@ import type {
   CreateSteamShortcutOptions,
   TorrentFilesResponse,
   DownloadLayoutState,
+  ExcludedGame,
 } from "@types";
 import type { AxiosProgressEvent } from "axios";
 
@@ -481,6 +482,16 @@ declare global {
       unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
       detectedPath: string | null;
     }>;
+    getExclusionList: () => Promise<ExcludedGame[]>;
+    addGameToExclusionList: (
+      shop: GameShop,
+      objectId: string,
+      title: string
+    ) => Promise<ExcludedGame[]>;
+    removeGameFromExclusionList: (
+      shop: GameShop,
+      objectId: string
+    ) => Promise<ExcludedGame[]>;
     onExtractionComplete: (
       cb: (shop: GameShop, objectId: string) => void
     ) => () => Electron.IpcRenderer;

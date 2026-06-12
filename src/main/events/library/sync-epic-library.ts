@@ -16,6 +16,7 @@ import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
+import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
 
 const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   const prefs = await db
@@ -33,9 +34,15 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
     what: string;
   }> = [];
 
+  const excludedGames = await getExcludedGames();
+
   for (const epicGame of games) {
     const objectId = epicGame.app_name;
     const gameKey = levelKeys.game("epic", objectId);
+
+    if (isGameExcluded(excludedGames, "epic", objectId, epicGame.app_title)) {
+      continue;
+    }
 
     const epicPlaytimeMs = (epicGame.playtime ?? 0) * 60 * 1000;
 

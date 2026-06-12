@@ -1,8 +1,47 @@
 import { registerEvent } from "../register-event";
 import { HydraApi, logger } from "@main/services";
-import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
-import type { GameShop, Game } from "@types";
+import {
+  db,
+  gamesSublevel,
+  gamesShopAssetsSublevel,
+  levelKeys,
+} from "@main/level";
+import type { GameShop, Game, UserPreferences } from "@types";
 import fs from "node:fs";
+
+/** Synced games would reappear on the next platform sync, so removal also
+ * adds them to the exclusion list (manageable in settings). */
+const addToExclusionList = async (game: Game): Promise<void> => {
+  const prefs = await db
+    .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+      valueEncoding: "json",
+    })
+    .catch(() => null);
+
+  const existing = prefs?.excludedGames ?? [];
+  if (
+    existing.some((g) => g.shop === game.shop && g.objectId === game.objectId)
+  ) {
+    return;
+  }
+
+  await db.put(
+    levelKeys.userPreferences,
+    {
+      ...(prefs ?? {}),
+      excludedGames: [
+        ...existing,
+        {
+          shop: game.shop,
+          objectId: game.objectId,
+          title: game.title,
+          excludedAt: new Date().toISOString(),
+        },
+      ],
+    },
+    { valueEncoding: "json" }
+  );
+};
 
 const collectAssetPathsToDelete = (game: Game): string[] => {
   const assetPathsToDelete: string[] = [];
@@ -89,6 +128,12 @@ const removeGameFromLibrary = async (
   }
 
   await deleteAssetFiles(assetPathsToDelete);
+
+  if (game.libraryOrigin === "sync") {
+    await addToExclusionList(game).catch((err) =>
+      logger.warn("Failed to add removed game to exclusion list", err)
+    );
+  }
 };
 
 registerEvent("removeGameFromLibrary", removeGameFromLibrary);

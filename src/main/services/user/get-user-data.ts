@@ -29,12 +29,12 @@ const overlayLocalImages = async <
 
   const rawBg = prefs?.localBackgroundImageUrl;
   // Convert local file path to a usable URL for the renderer.
-  // Use the CDN/http URL as-is; convert local paths via file: protocol so
-  // Electron's renderer can load them without the local: custom protocol.
+  // Use the CDN/http URL as-is; convert local paths via the app's local:
+  // protocol — file:// URLs are blocked by the renderer's web security.
   const resolvedBg = rawBg
-    ? rawBg.startsWith("http") || rawBg.startsWith("file:")
+    ? rawBg.startsWith("http") || rawBg.startsWith("local:")
       ? rawBg
-      : `file:///${rawBg.replace(/\\/g, "/")}`
+      : `local:${rawBg.replace(/\\/g, "/")}`
     : user.backgroundImageUrl;
 
   return {
@@ -58,7 +58,8 @@ const restoreAccountBanner = async (userId: string): Promise<void> => {
     const existingBg = prefs?.localBackgroundImageUrl;
     if (existingBg) {
       // If it's an HTTP URL, we already have it
-      if (existingBg.startsWith("http") || existingBg.startsWith("file:")) return;
+      if (existingBg.startsWith("http") || existingBg.startsWith("local:"))
+        return;
       // If it's a local file path, only skip if the file actually exists
       if (fs.existsSync(existingBg)) return;
       // File missing (cleared data, new machine) — fall through to restore from CDN

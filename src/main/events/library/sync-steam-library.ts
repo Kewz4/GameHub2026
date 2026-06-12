@@ -6,6 +6,7 @@ import { logger } from "@main/services";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { generateMissingMetadataInternal } from "./generate-missing-metadata";
+import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
 
 const syncSteamLibrary = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -16,9 +17,15 @@ const syncSteamLibrary = async (
 
   let added = 0;
 
+  const excludedGames = await getExcludedGames();
+
   for (const ownedGame of ownedGames) {
     const objectId = String(ownedGame.appid);
     const gameKey = levelKeys.game("steam", objectId);
+
+    if (isGameExcluded(excludedGames, "steam", objectId, ownedGame.name)) {
+      continue;
+    }
 
     const existing = await gamesSublevel.get(gameKey).catch(() => null);
     if (existing && !existing.isDeleted) {

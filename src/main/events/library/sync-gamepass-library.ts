@@ -9,6 +9,7 @@ import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { generateMissingMetadataInternal } from "./generate-missing-metadata";
+import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
 
 const syncGamePassLibrary = async () => {
   const prefs = await db
@@ -28,8 +29,16 @@ const syncGamePassLibrary = async () => {
 
   let added = 0;
 
+  const excludedGames = await getExcludedGames();
+
   for (const xboxGame of games) {
     const gameKey = levelKeys.game("xbox", xboxGame.productId);
+
+    if (
+      isGameExcluded(excludedGames, "xbox", xboxGame.productId, xboxGame.title)
+    ) {
+      continue;
+    }
     const existing = await gamesSublevel.get(gameKey).catch(() => null);
     if (existing && !existing.isDeleted) {
       // Owned on Xbox — make sure it's classified as synced

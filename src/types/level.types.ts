@@ -190,6 +190,14 @@ export interface UserPreferences {
   onboardingComplete?: boolean;
   localProfileImageUrl?: string | null;
   localBackgroundImageUrl?: string | null;
+  excludedGames?: ExcludedGame[];
+}
+
+export interface ExcludedGame {
+  shop: string;
+  objectId: string;
+  title: string;
+  excludedAt: string;
 }
 
 export interface ScreenState {

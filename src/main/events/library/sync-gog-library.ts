@@ -20,6 +20,7 @@ import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
+import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
 
 const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   try {
@@ -50,6 +51,8 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
       what: string;
     }> = [];
 
+    const excludedGames = await getExcludedGames();
+
     // Process in batches of 20 to avoid hammering the API
     for (let i = 0; i < ownedIds.length; i += 20) {
       const batch = ownedIds.slice(i, i + 20);
@@ -58,6 +61,8 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
         batch.map(async (productId) => {
           const objectId = String(productId);
           const gameKey = levelKeys.game("gog", objectId);
+
+          if (isGameExcluded(excludedGames, "gog", objectId)) return;
 
           const existing = await gamesSublevel.get(gameKey).catch(() => null);
 
@@ -98,6 +103,10 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
           if (!details) return;
 
           if (details.game_type && details.game_type !== "game") return;
+
+          if (isGameExcluded(excludedGames, "gog", objectId, details.title)) {
+            return;
+          }
 
           const titleMatch = await findGameByTitle(details.title);
           if (titleMatch) {

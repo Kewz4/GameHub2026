@@ -414,6 +414,11 @@ contextBridge.exposeInMainWorld("electron", {
   },
   importPlaynitePlaytime: (dbPath?: string) =>
     ipcRenderer.invoke("importPlaynitePlaytime", dbPath),
+  getExclusionList: () => ipcRenderer.invoke("getExclusionList"),
+  addGameToExclusionList: (shop: GameShop, objectId: string, title: string) =>
+    ipcRenderer.invoke("addGameToExclusionList", shop, objectId, title),
+  removeGameFromExclusionList: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("removeGameFromExclusionList", shop, objectId),
   getDefaultWinePrefixSelectionPath: () =>
     ipcRenderer.invoke("getDefaultWinePrefixSelectionPath"),
   createSteamShortcut: (
