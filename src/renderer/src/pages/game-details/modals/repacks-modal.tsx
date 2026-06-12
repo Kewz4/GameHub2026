@@ -21,6 +21,11 @@ import {
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
 import GogLogo from "@renderer/assets/gog-logo.svg?react";
+import XboxLogo from "@renderer/assets/xbox-logo.svg?react";
+import BattleNetLogo from "@renderer/assets/battlenet-logo.svg?react";
+import RiotLogo from "@renderer/assets/riot-logo.svg?react";
+import UbisoftLogo from "@renderer/assets/ubisoft-logo.svg?react";
+import EaLogo from "@renderer/assets/ea-logo.svg?react";
 import type { DownloadSource, Game, GameRepack } from "@types";
 
 import { DownloadSettingsModal } from "./download-settings-modal";
@@ -500,8 +505,53 @@ export function RepacksModal({
               hasSteamConnected &&
               !(game as any)._synthesized &&
               getGameOrigin(game) === "sync";
+            // Client-launcher platforms: the library entry already stores the
+            // correct client URI/exe, so "download officially" just opens it —
+            // the platform's client handles install if the game is missing.
+            const clientPlatforms = [
+              {
+                shop: "xbox" as const,
+                label: "Download with Xbox app",
+                Icon: XboxLogo,
+                modifier: "xbox",
+              },
+              {
+                shop: "battlenet" as const,
+                label: "Download with Battle.net",
+                Icon: BattleNetLogo,
+                modifier: "battlenet",
+              },
+              {
+                shop: "riot" as const,
+                label: "Download with Riot Client",
+                Icon: RiotLogo,
+                modifier: "riot",
+              },
+              {
+                shop: "ubisoft" as const,
+                label: "Download with Ubisoft Connect",
+                Icon: UbisoftLogo,
+                modifier: "ubisoft",
+              },
+              {
+                shop: "ea" as const,
+                label: "Download with EA app",
+                Icon: EaLogo,
+                modifier: "ea",
+              },
+            ].filter(
+              ({ shop }) =>
+                (game.shop === shop &&
+                  getGameOrigin(game) === "sync" &&
+                  game.executablePath) ||
+                altShops.some((s) => s.shop === shop && s.executablePath)
+            );
+
             const hasPlatformOptions =
-              isOwnedOnSteam || isGogGame || isEpicGame;
+              isOwnedOnSteam ||
+              isGogGame ||
+              isEpicGame ||
+              clientPlatforms.length > 0;
 
             if (!hasPlatformOptions) return null;
 
@@ -570,6 +620,37 @@ export function RepacksModal({
                       <span>{"Download with GOG"}</span>
                     </button>
                   )}
+                  {clientPlatforms.map(({ shop, label, Icon, modifier }) => (
+                    <button
+                      key={shop}
+                      type="button"
+                      className={`repacks-modal__platform-button repacks-modal__platform-button--${modifier}`}
+                      onClick={() => {
+                        if (game.shop === shop && game.executablePath) {
+                          window.electron.openGame(
+                            game.shop,
+                            game.objectId,
+                            game.executablePath,
+                            game.launchOptions
+                          );
+                        } else {
+                          const alt = altShops.find((s) => s.shop === shop);
+                          if (alt?.executablePath) {
+                            window.electron.openGame(
+                              alt.shop,
+                              alt.objectId,
+                              alt.executablePath,
+                              null
+                            );
+                          }
+                        }
+                        onClose();
+                      }}
+                    >
+                      <Icon className="repacks-modal__platform-icon" />
+                      <span>{label}</span>
+                    </button>
+                  ))}
                 </div>
                 <div className="repacks-modal__or-divider">
                   <span>— OR —</span>
