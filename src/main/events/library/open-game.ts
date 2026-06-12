@@ -13,6 +13,7 @@ const EXTERNAL_URL_SCHEMES = [
   "goggalaxy://",
   "battlenet://",
   "msxbox://",
+  "uplay://",
 ];
 
 const openGame = async (

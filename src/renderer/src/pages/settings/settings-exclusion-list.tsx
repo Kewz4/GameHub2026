@@ -44,7 +44,7 @@ export function SettingsExclusionList() {
       <p style={{ margin: 0, fontSize: "0.875rem", opacity: 0.7 }}>
         Games on this list are skipped by platform syncs and installed-game
         scans. Removing a synced game from your library adds it here
-        automatically so it doesn't come back.
+        automatically so it doesn&apos;t come back.
       </p>
 
       {loading ? (

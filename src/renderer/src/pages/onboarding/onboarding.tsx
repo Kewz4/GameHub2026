@@ -22,6 +22,8 @@ import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
 import GogLogo from "@renderer/assets/gog-logo.svg?react";
 import XboxLogo from "@renderer/assets/xbox-logo.svg?react";
+import RiotLogo from "@renderer/assets/riot-logo.svg?react";
+import UbisoftLogo from "@renderer/assets/ubisoft-logo.svg?react";
 import LudusaviIcon from "@renderer/assets/ludusavi-icon.svg?react";
 import PlayniteIcon from "@renderer/assets/playnite-icon.svg?react";
 import gamehubIcon from "@renderer/assets/icons/gamehub.png";
@@ -40,6 +42,8 @@ type StepId =
   | "epic"
   | "gog"
   | "xbox"
+  | "riot"
+  | "ubisoft"
   | "tools"
   | "notifications"
   | "startup"
@@ -55,6 +59,8 @@ const ALL_STEPS: StepId[] = [
   "epic",
   "gog",
   "xbox",
+  "riot",
+  "ubisoft",
   "tools",
   "notifications",
   "startup",
@@ -70,6 +76,8 @@ const NAV_STEPS: StepId[] = [
   "epic",
   "gog",
   "xbox",
+  "riot",
+  "ubisoft",
   "tools",
   "notifications",
   "startup",
@@ -85,13 +93,22 @@ const STEP_LABELS: Record<StepId, string> = {
   epic: "Epic Games",
   gog: "GOG",
   xbox: "Xbox",
+  riot: "Riot Games",
+  ubisoft: "Ubisoft Connect",
   tools: "Tools",
   notifications: "Notifications",
   startup: "Startup",
   done: "Done",
 };
 
-const PLATFORM_STEPS: StepId[] = ["steam", "epic", "gog", "xbox"];
+const PLATFORM_STEPS: StepId[] = [
+  "steam",
+  "epic",
+  "gog",
+  "xbox",
+  "riot",
+  "ubisoft",
+];
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -137,7 +154,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [accountWindowOpen, setAccountWindowOpen] = useState(false);
   const [accountLinked, setAccountLinked] = useState(false);
 
-  const [selectedIntegrations, setSelectedIntegrations] = useState<Set<string>>(new Set());
+  const [selectedIntegrations, setSelectedIntegrations] = useState<Set<string>>(
+    new Set()
+  );
 
   const [steamInput, setSteamInput] = useState("");
   const [steamApiKey, setSteamApiKey] = useState("");
@@ -166,6 +185,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     userPreferences?.xboxGamertag ?? null
   );
 
+  const [riotState, setRiotState] = useState<{
+    installed: boolean;
+    detected: Array<{ productId: string; title: string }>;
+  } | null>(null);
+  const [riotBusy, setRiotBusy] = useState(false);
+  const [riotResult, setRiotResult] = useState("");
+
+  const [ubisoftState, setUbisoftState] = useState<{
+    installed: boolean;
+    detected: Array<{ installId: string; title: string }>;
+  } | null>(null);
+  const [ubisoftBusy, setUbisoftBusy] = useState(false);
+  const [ubisoftResult, setUbisoftResult] = useState("");
+
   // Tools step state
   const [ludusaviResult, setLudusaviResult] = useState<string>("");
   const [ludusaviBusy, setLudusaviBusy] = useState(false);
@@ -181,7 +214,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [showScanApproval, setShowScanApproval] = useState(false);
   const [playniteResult, setPlayniteResult] = useState<string>("");
   const [playniteBusy, setPlayniteBusy] = useState(false);
-  const [playniteDetectedPath, setPlayniteDetectedPath] = useState<string | null>(null);
+  const [playniteDetectedPath, setPlayniteDetectedPath] = useState<
+    string | null
+  >(null);
 
   const [downloadNotifs, setDownloadNotifs] = useState(true);
   const [achievementNotifs, setAchievementNotifs] = useState(true);
@@ -389,6 +424,55 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }
   };
 
+  useEffect(() => {
+    if (currentStep === "riot" && !riotState) {
+      window.electron
+        .getRiotGames()
+        .then((res) => setRiotState(res))
+        .catch(() => setRiotState({ installed: false, detected: [] }));
+    }
+    if (currentStep === "ubisoft" && !ubisoftState) {
+      window.electron
+        .getUbisoftGames()
+        .then((res) => setUbisoftState(res))
+        .catch(() => setUbisoftState({ installed: false, detected: [] }));
+    }
+  }, [currentStep, riotState, ubisoftState]);
+
+  const handleAddRiotGames = async () => {
+    if (!riotState) return;
+    setRiotBusy(true);
+    try {
+      const result = await window.electron.addRiotGamesToLibrary(
+        riotState.detected.map((g) => g.productId)
+      );
+      setRiotResult(
+        `Added ${result.added} game${result.added !== 1 ? "s" : ""} to your library.`
+      );
+    } catch {
+      setRiotResult("Failed to add Riot games.");
+    } finally {
+      setRiotBusy(false);
+    }
+  };
+
+  const handleAddUbisoftGames = async () => {
+    if (!ubisoftState) return;
+    setUbisoftBusy(true);
+    try {
+      const result = await window.electron.addUbisoftGamesToLibrary(
+        ubisoftState.detected.map((g) => g.installId)
+      );
+      setUbisoftResult(
+        `Added ${result.added} game${result.added !== 1 ? "s" : ""} to your library.`
+      );
+    } catch {
+      setUbisoftResult("Failed to add Ubisoft games.");
+    } finally {
+      setUbisoftBusy(false);
+    }
+  };
+
   const handleLudusaviImport = async () => {
     const result = await window.electron.showOpenDialog({
       properties: ["openDirectory"],
@@ -458,7 +542,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     try {
       const result = await window.electron.scanInstalledGames(true);
       if (result.foundGames.length === 0) {
-        setScanResult(`Scan complete — no new games found (${result.total} checked).`);
+        setScanResult(
+          `Scan complete — no new games found (${result.total} checked).`
+        );
       } else {
         setScanCandidates(result.foundGames);
         setShowScanApproval(true);
@@ -480,9 +566,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     setScanResult("");
     setScanProgress(null);
     try {
-      const scanRes = await window.electron.selectiveScanInstalledGames(result.filePaths, true);
+      const scanRes = await window.electron.selectiveScanInstalledGames(
+        result.filePaths,
+        true
+      );
       if (scanRes.foundGames.length === 0) {
-        setScanResult(`Scan complete — no new games found (${scanRes.total} checked).`);
+        setScanResult(
+          `Scan complete — no new games found (${scanRes.total} checked).`
+        );
       } else {
         setScanCandidates(scanRes.foundGames);
         setShowScanApproval(true);
@@ -652,12 +743,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   {STEP_LABELS["integrations-select"]}
                 </span>
               </div>
-              {(["steam", "epic", "gog", "xbox"] as StepId[]).map((s) => {
+              {(
+                ["steam", "epic", "gog", "xbox", "riot", "ubisoft"] as StepId[]
+              ).map((s) => {
                 const PlatformIcon = {
                   steam: SteamLogo,
                   epic: EpicLogo,
                   gog: GogLogo,
                   xbox: XboxLogo,
+                  riot: RiotLogo,
+                  ubisoft: UbisoftLogo,
                 }[s];
                 const isSelected = selectedIntegrations.has(s);
                 return (
@@ -895,6 +990,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     { id: "epic", name: "Epic Games", Icon: EpicLogo },
                     { id: "gog", name: "GOG", Icon: GogLogo },
                     { id: "xbox", name: "Xbox", Icon: XboxLogo },
+                    { id: "riot", name: "Riot Games", Icon: RiotLogo },
+                    {
+                      id: "ubisoft",
+                      name: "Ubisoft Connect",
+                      Icon: UbisoftLogo,
+                    },
                   ] as const
                 ).map(({ id, name, Icon }) => {
                   const isSelected = selectedIntegrations.has(id);
@@ -931,9 +1032,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 <button
                   type="button"
                   className="onboarding-skip"
-                  onClick={() =>
-                    setStepIndex(ALL_STEPS.indexOf("tools"))
-                  }
+                  onClick={() => setStepIndex(ALL_STEPS.indexOf("tools"))}
                 >
                   Skip All
                 </button>
@@ -1148,10 +1247,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   >
                     Skip for now
                   </button>
-                  <Button
-                    type="button"
-                    onClick={handleEpicConnect}
-                  >
+                  <Button type="button" onClick={handleEpicConnect}>
                     <PersonIcon size={14} />
                     Connect Epic
                   </Button>
@@ -1273,6 +1369,140 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             </>
           )}
 
+          {/* ── Riot Games ── */}
+          {currentStep === "riot" && (
+            <>
+              <div className="onboarding-step-header">
+                <div className="onboarding-step-header__icon">
+                  <RiotLogo style={{ width: 20, height: 20 }} />
+                </div>
+                <div>
+                  <h2>Riot Games</h2>
+                  <p>League of Legends, VALORANT, Legends of Runeterra</p>
+                </div>
+              </div>
+              <p className="onboarding-step-description">
+                GameHub detects games installed through the Riot Client and adds
+                them to your library. They launch through the Riot Client.
+              </p>
+
+              {riotState === null ? (
+                <p style={{ opacity: 0.6 }}>Detecting Riot Client…</p>
+              ) : !riotState.installed ? (
+                <p style={{ opacity: 0.7 }}>
+                  Riot Client not detected on this machine. You can add Riot
+                  games later from Settings → Integrations.
+                </p>
+              ) : riotState.detected.length === 0 ? (
+                <p style={{ opacity: 0.7 }}>
+                  Riot Client found, but no installed games were detected.
+                </p>
+              ) : (
+                <p style={{ opacity: 0.8 }}>
+                  Detected: {riotState.detected.map((g) => g.title).join(", ")}
+                </p>
+              )}
+
+              {riotResult && (
+                <div className="onboarding-connected-badge">
+                  <CheckCircleFillIcon size={16} />
+                  {riotResult}
+                </div>
+              )}
+
+              <div className="onboarding-actions">
+                <button
+                  type="button"
+                  className="onboarding-skip"
+                  onClick={next}
+                >
+                  {riotResult ? "Continue" : "Skip for now"}
+                </button>
+                {riotState?.installed &&
+                  riotState.detected.length > 0 &&
+                  !riotResult && (
+                    <Button
+                      type="button"
+                      onClick={handleAddRiotGames}
+                      disabled={riotBusy}
+                    >
+                      {riotBusy
+                        ? "Adding…"
+                        : `Add ${riotState.detected.length} game${riotState.detected.length !== 1 ? "s" : ""}`}
+                    </Button>
+                  )}
+              </div>
+            </>
+          )}
+
+          {/* ── Ubisoft Connect ── */}
+          {currentStep === "ubisoft" && (
+            <>
+              <div className="onboarding-step-header">
+                <div className="onboarding-step-header__icon">
+                  <UbisoftLogo style={{ width: 20, height: 20 }} />
+                </div>
+                <div>
+                  <h2>Ubisoft Connect</h2>
+                  <p>Import games installed through Ubisoft Connect</p>
+                </div>
+              </div>
+              <p className="onboarding-step-description">
+                GameHub detects games installed through Ubisoft Connect and adds
+                them to your library. They launch through the Ubisoft Connect
+                client.
+              </p>
+
+              {ubisoftState === null ? (
+                <p style={{ opacity: 0.6 }}>Detecting Ubisoft Connect…</p>
+              ) : !ubisoftState.installed ? (
+                <p style={{ opacity: 0.7 }}>
+                  Ubisoft Connect not detected on this machine. You can add
+                  Ubisoft games later from Settings → Integrations.
+                </p>
+              ) : ubisoftState.detected.length === 0 ? (
+                <p style={{ opacity: 0.7 }}>
+                  Ubisoft Connect found, but no installed games were detected.
+                </p>
+              ) : (
+                <p style={{ opacity: 0.8 }}>
+                  Detected:{" "}
+                  {ubisoftState.detected.map((g) => g.title).join(", ")}
+                </p>
+              )}
+
+              {ubisoftResult && (
+                <div className="onboarding-connected-badge">
+                  <CheckCircleFillIcon size={16} />
+                  {ubisoftResult}
+                </div>
+              )}
+
+              <div className="onboarding-actions">
+                <button
+                  type="button"
+                  className="onboarding-skip"
+                  onClick={next}
+                >
+                  {ubisoftResult ? "Continue" : "Skip for now"}
+                </button>
+                {ubisoftState?.installed &&
+                  ubisoftState.detected.length > 0 &&
+                  !ubisoftResult && (
+                    <Button
+                      type="button"
+                      onClick={handleAddUbisoftGames}
+                      disabled={ubisoftBusy}
+                    >
+                      {ubisoftBusy
+                        ? "Adding…"
+                        : `Add ${ubisoftState.detected.length} game${ubisoftState.detected.length !== 1 ? "s" : ""}`}
+                    </Button>
+                  )}
+              </div>
+            </>
+          )}
+
           {/* ── Tools ── */}
           {currentStep === "tools" && (
             <>
@@ -1326,15 +1556,19 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </span>
                 </div>
                 <p className="onboarding-tool-card__desc">
-                  Sync your playtime hours from Playnite&apos;s library database.
+                  Sync your playtime hours from Playnite&apos;s library
+                  database.
                   {playniteDetectedPath ? (
                     <> GameHub detected your Playnite library automatically.</>
                   ) : (
-                    <> Auto-detects{" "}
+                    <>
+                      {" "}
+                      Auto-detects{" "}
                       <code style={{ fontSize: "0.75rem", opacity: 0.7 }}>
                         %AppData%\Playnite\library\games.db
-                      </code>
-                      {" "}or pick the file manually.</>
+                      </code>{" "}
+                      or pick the file manually.
+                    </>
                   )}
                 </p>
                 <div className="onboarding-tool-card__actions">
@@ -1343,7 +1577,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     disabled={playniteBusy}
                     onClick={() => handlePlayniteImport()}
                   >
-                    {playniteBusy ? "Importing…" : playniteDetectedPath ? "Import Playtime" : "Auto-detect & Import"}
+                    {playniteBusy
+                      ? "Importing…"
+                      : playniteDetectedPath
+                        ? "Import Playtime"
+                        : "Auto-detect & Import"}
                   </Button>
                   <Button
                     type="button"
@@ -1355,7 +1593,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </Button>
                 </div>
                 {playniteResult && (
-                  <p className="onboarding-tool-card__result">{playniteResult}</p>
+                  <p className="onboarding-tool-card__result">
+                    {playniteResult}
+                  </p>
                 )}
               </div>
 
@@ -1389,7 +1629,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </Button>
                 </div>
                 {scanBusy && scanProgress && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
                     <div
                       style={{
                         height: "4px",

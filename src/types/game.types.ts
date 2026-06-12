@@ -4,6 +4,8 @@ export type GameShop =
   | "gog"
   | "battlenet"
   | "xbox"
+  | "riot"
+  | "ubisoft"
   | "custom";
 
 export type ShortcutLocation = "desktop" | "start_menu";

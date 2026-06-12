@@ -284,6 +284,39 @@ declare global {
     addBattleNetGamesToLibrary: (
       productCodes: string[]
     ) => Promise<{ added: number }>;
+    getRiotGames: () => Promise<{
+      installed: boolean;
+      detected: Array<{
+        productId: string;
+        patchline: string;
+        title: string;
+      }>;
+      all: Array<{
+        productId: string;
+        patchline: string;
+        title: string;
+      }>;
+    }>;
+    addRiotGamesToLibrary: (productIds: string[]) => Promise<{ added: number }>;
+    getUbisoftGames: () => Promise<{
+      installed: boolean;
+      detected: Array<{
+        installId: string;
+        title: string;
+        installDir: string;
+        launchUri: string;
+      }>;
+    }>;
+    addUbisoftGamesToLibrary: (
+      installIds: string[]
+    ) => Promise<{ added: number }>;
+    importPlatformAchievements: (
+      platform: "steam" | "epic" | "gog" | "xbox"
+    ) => Promise<{
+      gamesProcessed: number;
+      gamesWithAchievements: number;
+      totalUnlocked: number;
+    }>;
     syncGamePassLibrary: () => Promise<{ added: number; total: number }>;
     openXboxAuthWindow: () => Promise<{
       success: boolean;

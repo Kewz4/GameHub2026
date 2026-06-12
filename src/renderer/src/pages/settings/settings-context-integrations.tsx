@@ -8,6 +8,9 @@ import { SettingsXbox } from "./settings-xbox";
 import { SettingsLudusaviImport } from "./settings-ludusavi-import";
 import { SettingsPlayniteImport } from "./settings-playnite-import";
 import { SettingsExclusionList } from "./settings-exclusion-list";
+import { SettingsRiot } from "./settings-riot";
+import { SettingsUbisoft } from "./settings-ubisoft";
+import { SettingsAchievementImport } from "./settings-achievement-import";
 import { useUserDetails } from "@renderer/hooks";
 
 export function SettingsContextIntegrations() {
@@ -49,6 +52,21 @@ export function SettingsContextIntegrations() {
       <div className="settings-context-panel__group">
         <h3>{t("xbox_game_pass")}</h3>
         <SettingsXbox />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>Riot Games</h3>
+        <SettingsRiot />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>Ubisoft Connect</h3>
+        <SettingsUbisoft />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>Achievement Import</h3>
+        <SettingsAchievementImport />
       </div>
 
       <div className="settings-context-panel__group">

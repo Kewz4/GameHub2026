@@ -69,6 +69,11 @@ import "./get-gog-user-info";
 import "./get-battlenet-games";
 import "./add-battlenet-games-to-library";
 import "./install-battlenet";
+import "./get-riot-games";
+import "./add-riot-games-to-library";
+import "./get-ubisoft-games";
+import "./add-ubisoft-games-to-library";
+import "./import-platform-achievements";
 
 import "./sync-gamepass-library";
 import "./open-xbox-auth-window";

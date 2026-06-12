@@ -239,6 +239,14 @@ contextBridge.exposeInMainWorld("electron", {
   getBattleNetGames: () => ipcRenderer.invoke("getBattleNetGames"),
   addBattleNetGamesToLibrary: (productCodes: string[]) =>
     ipcRenderer.invoke("addBattleNetGamesToLibrary", productCodes),
+  getRiotGames: () => ipcRenderer.invoke("getRiotGames"),
+  addRiotGamesToLibrary: (productIds: string[]) =>
+    ipcRenderer.invoke("addRiotGamesToLibrary", productIds),
+  getUbisoftGames: () => ipcRenderer.invoke("getUbisoftGames"),
+  addUbisoftGamesToLibrary: (installIds: string[]) =>
+    ipcRenderer.invoke("addUbisoftGamesToLibrary", installIds),
+  importPlatformAchievements: (platform: "steam" | "epic" | "gog" | "xbox") =>
+    ipcRenderer.invoke("importPlatformAchievements", platform),
   syncGamePassLibrary: () => ipcRenderer.invoke("syncGamePassLibrary"),
   openXboxAuthWindow: () => ipcRenderer.invoke("openXboxAuthWindow"),
   addCustomGameToLibrary: (

@@ -482,7 +482,9 @@ export default function Library() {
       storeFilter === "epic" ||
       storeFilter === "gog" ||
       storeFilter === "xbox" ||
-      storeFilter === "battlenet"
+      storeFilter === "battlenet" ||
+      storeFilter === "riot" ||
+      storeFilter === "ubisoft"
     )
       return filteredLibrary.filter(
         (g) =>
@@ -575,6 +577,9 @@ export default function Library() {
                 { value: "epic", label: "Epic" },
                 { value: "gog", label: "GOG" },
                 { value: "xbox", label: "Xbox" },
+                { value: "battlenet", label: "Battle.net" },
+                { value: "riot", label: "Riot" },
+                { value: "ubisoft", label: "Ubisoft" },
                 { value: "retigga", label: "Retigga" },
                 { value: "custom", label: "Custom" },
               ] as { value: string; label: string }[]
