@@ -7,6 +7,7 @@ import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
+import { importSteamAchievements } from "@main/services/achievements/platform-achievement-importer";
 
 const syncSteamLibrary = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -112,6 +113,8 @@ const syncSteamLibrary = async (
   logger.log(`Steam library sync complete: ${added} games added`);
 
   void generateMissingMetadataInternal();
+  // Pull unlocked achievements from Steam in the background
+  void importSteamAchievements().catch(() => {});
 
   return { total: ownedGames.length, added };
 };

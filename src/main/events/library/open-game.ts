@@ -14,6 +14,8 @@ const EXTERNAL_URL_SCHEMES = [
   "battlenet://",
   "msxbox://",
   "uplay://",
+  "origin://",
+  "origin2://",
 ];
 
 const openGame = async (

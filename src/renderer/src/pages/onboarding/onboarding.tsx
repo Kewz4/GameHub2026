@@ -24,6 +24,7 @@ import GogLogo from "@renderer/assets/gog-logo.svg?react";
 import XboxLogo from "@renderer/assets/xbox-logo.svg?react";
 import RiotLogo from "@renderer/assets/riot-logo.svg?react";
 import UbisoftLogo from "@renderer/assets/ubisoft-logo.svg?react";
+import EaLogo from "@renderer/assets/ea-logo.svg?react";
 import LudusaviIcon from "@renderer/assets/ludusavi-icon.svg?react";
 import PlayniteIcon from "@renderer/assets/playnite-icon.svg?react";
 import gamehubIcon from "@renderer/assets/icons/gamehub.png";
@@ -44,6 +45,7 @@ type StepId =
   | "xbox"
   | "riot"
   | "ubisoft"
+  | "ea"
   | "tools"
   | "notifications"
   | "startup"
@@ -61,6 +63,7 @@ const ALL_STEPS: StepId[] = [
   "xbox",
   "riot",
   "ubisoft",
+  "ea",
   "tools",
   "notifications",
   "startup",
@@ -78,6 +81,7 @@ const NAV_STEPS: StepId[] = [
   "xbox",
   "riot",
   "ubisoft",
+  "ea",
   "tools",
   "notifications",
   "startup",
@@ -95,6 +99,7 @@ const STEP_LABELS: Record<StepId, string> = {
   xbox: "Xbox",
   riot: "Riot Games",
   ubisoft: "Ubisoft Connect",
+  ea: "EA app",
   tools: "Tools",
   notifications: "Notifications",
   startup: "Startup",
@@ -108,6 +113,7 @@ const PLATFORM_STEPS: StepId[] = [
   "xbox",
   "riot",
   "ubisoft",
+  "ea",
 ];
 
 interface OnboardingProps {
@@ -198,6 +204,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   } | null>(null);
   const [ubisoftBusy, setUbisoftBusy] = useState(false);
   const [ubisoftResult, setUbisoftResult] = useState("");
+
+  const [eaState, setEaState] = useState<{
+    installed: boolean;
+    detected: Array<{ offerId: string | null; title: string }>;
+  } | null>(null);
+  const [eaBusy, setEaBusy] = useState(false);
+  const [eaResult, setEaResult] = useState("");
 
   // Tools step state
   const [ludusaviResult, setLudusaviResult] = useState<string>("");
@@ -437,7 +450,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         .then((res) => setUbisoftState(res))
         .catch(() => setUbisoftState({ installed: false, detected: [] }));
     }
-  }, [currentStep, riotState, ubisoftState]);
+    if (currentStep === "ea" && !eaState) {
+      window.electron
+        .getEaGames()
+        .then((res) => setEaState(res))
+        .catch(() => setEaState({ installed: false, detected: [] }));
+    }
+  }, [currentStep, riotState, ubisoftState, eaState]);
 
   const handleAddRiotGames = async () => {
     if (!riotState) return;
@@ -470,6 +489,23 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setUbisoftResult("Failed to add Ubisoft games.");
     } finally {
       setUbisoftBusy(false);
+    }
+  };
+
+  const handleAddEaGames = async () => {
+    if (!eaState) return;
+    setEaBusy(true);
+    try {
+      const result = await window.electron.addEaGamesToLibrary(
+        eaState.detected.map((g) => g.title)
+      );
+      setEaResult(
+        `Added ${result.added} game${result.added !== 1 ? "s" : ""} to your library.`
+      );
+    } catch {
+      setEaResult("Failed to add EA games.");
+    } finally {
+      setEaBusy(false);
     }
   };
 
@@ -744,7 +780,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </span>
               </div>
               {(
-                ["steam", "epic", "gog", "xbox", "riot", "ubisoft"] as StepId[]
+                [
+                  "steam",
+                  "epic",
+                  "gog",
+                  "xbox",
+                  "riot",
+                  "ubisoft",
+                  "ea",
+                ] as StepId[]
               ).map((s) => {
                 const PlatformIcon = {
                   steam: SteamLogo,
@@ -753,6 +797,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   xbox: XboxLogo,
                   riot: RiotLogo,
                   ubisoft: UbisoftLogo,
+                  ea: EaLogo,
                 }[s];
                 const isSelected = selectedIntegrations.has(s);
                 return (
@@ -996,6 +1041,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       name: "Ubisoft Connect",
                       Icon: UbisoftLogo,
                     },
+                    { id: "ea", name: "EA app", Icon: EaLogo },
                   ] as const
                 ).map(({ id, name, Icon }) => {
                   const isSelected = selectedIntegrations.has(id);
@@ -1497,6 +1543,72 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       {ubisoftBusy
                         ? "Adding…"
                         : `Add ${ubisoftState.detected.length} game${ubisoftState.detected.length !== 1 ? "s" : ""}`}
+                    </Button>
+                  )}
+              </div>
+            </>
+          )}
+
+          {/* ── EA app ── */}
+          {currentStep === "ea" && (
+            <>
+              <div className="onboarding-step-header">
+                <div className="onboarding-step-header__icon">
+                  <EaLogo style={{ width: 20, height: 20 }} />
+                </div>
+                <div>
+                  <h2>EA app</h2>
+                  <p>Import games installed through the EA app or Origin</p>
+                </div>
+              </div>
+              <p className="onboarding-step-description">
+                GameHub detects games installed through the EA app (or Origin)
+                and adds them to your library. They launch through the EA app.
+              </p>
+
+              {eaState === null ? (
+                <p style={{ opacity: 0.6 }}>Detecting EA app…</p>
+              ) : !eaState.installed ? (
+                <p style={{ opacity: 0.7 }}>
+                  EA app not detected on this machine. You can add EA games
+                  later from Settings → Integrations.
+                </p>
+              ) : eaState.detected.length === 0 ? (
+                <p style={{ opacity: 0.7 }}>
+                  EA app found, but no installed games were detected.
+                </p>
+              ) : (
+                <p style={{ opacity: 0.8 }}>
+                  Detected: {eaState.detected.map((g) => g.title).join(", ")}
+                </p>
+              )}
+
+              {eaResult && (
+                <div className="onboarding-connected-badge">
+                  <CheckCircleFillIcon size={16} />
+                  {eaResult}
+                </div>
+              )}
+
+              <div className="onboarding-actions">
+                <button
+                  type="button"
+                  className="onboarding-skip"
+                  onClick={next}
+                >
+                  {eaResult ? "Continue" : "Skip for now"}
+                </button>
+                {eaState?.installed &&
+                  eaState.detected.length > 0 &&
+                  !eaResult && (
+                    <Button
+                      type="button"
+                      onClick={handleAddEaGames}
+                      disabled={eaBusy}
+                    >
+                      {eaBusy
+                        ? "Adding…"
+                        : `Add ${eaState.detected.length} game${eaState.detected.length !== 1 ? "s" : ""}`}
                     </Button>
                   )}
               </div>

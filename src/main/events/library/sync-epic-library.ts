@@ -17,6 +17,7 @@ import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
+import { importEpicAchievements } from "@main/services/achievements/platform-achievement-importer";
 
 const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   const prefs = await db
@@ -151,6 +152,8 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
 
   logger.log(`Epic library sync complete: ${added} games added`);
   void generateMissingMetadataInternal();
+  // Pull unlocked achievements from Epic in the background
+  void importEpicAchievements().catch(() => {});
   return { total: games.length, added, addedGames };
 };
 

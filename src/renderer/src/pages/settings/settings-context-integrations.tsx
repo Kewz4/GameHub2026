@@ -11,6 +11,7 @@ import { SettingsExclusionList } from "./settings-exclusion-list";
 import { SettingsRiot } from "./settings-riot";
 import { SettingsUbisoft } from "./settings-ubisoft";
 import { SettingsAchievementImport } from "./settings-achievement-import";
+import { SettingsEa } from "./settings-ea";
 import { useUserDetails } from "@renderer/hooks";
 
 export function SettingsContextIntegrations() {
@@ -62,6 +63,11 @@ export function SettingsContextIntegrations() {
       <div className="settings-context-panel__group">
         <h3>Ubisoft Connect</h3>
         <SettingsUbisoft />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>EA app</h3>
+        <SettingsEa />
       </div>
 
       <div className="settings-context-panel__group">

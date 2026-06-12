@@ -310,6 +310,15 @@ declare global {
     addUbisoftGamesToLibrary: (
       installIds: string[]
     ) => Promise<{ added: number }>;
+    getEaGames: () => Promise<{
+      installed: boolean;
+      detected: Array<{
+        offerId: string | null;
+        title: string;
+        installDir: string | null;
+      }>;
+    }>;
+    addEaGamesToLibrary: (titles: string[]) => Promise<{ added: number }>;
     importPlatformAchievements: (
       platform: "steam" | "epic" | "gog" | "xbox"
     ) => Promise<{

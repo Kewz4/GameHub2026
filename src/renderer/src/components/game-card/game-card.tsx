@@ -8,6 +8,7 @@ import BattleNetLogo from "@renderer/assets/battlenet-logo.svg?react";
 import XboxLogo from "@renderer/assets/xbox-logo.svg?react";
 import RiotLogo from "@renderer/assets/riot-logo.svg?react";
 import UbisoftLogo from "@renderer/assets/ubisoft-logo.svg?react";
+import EaLogo from "@renderer/assets/ea-logo.svg?react";
 import GameHubLogo from "@renderer/assets/gamehub-logo.svg?react";
 
 import "./game-card.scss";
@@ -35,6 +36,7 @@ const shopIcon: Record<string, JSX.Element> = {
   xbox: <XboxLogo className="game-card__shop-icon" />,
   riot: <RiotLogo className="game-card__shop-icon" />,
   ubisoft: <UbisoftLogo className="game-card__shop-icon" />,
+  ea: <EaLogo className="game-card__shop-icon" />,
 };
 
 export function GameCard({ game, ...props }: GameCardProps) {
