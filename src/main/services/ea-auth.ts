@@ -3,37 +3,25 @@ import { session } from "electron";
 import { logger } from "./logger";
 
 /**
- * EA OAuth is a TWO-STEP flow. The mistake that produced
- * {"error":"invalid_client","code":101102} was pointing the interactive login
- * window straight at the token endpoint with client_id=ORIGIN_JS_SDK /
- * HXC_WEBCLIENT — those clients are only valid for the SILENT token exchange,
- * not for rendering the login page, so EA rejects the client_id outright.
+ * EA OAuth — cookie-based two-step flow.
  *
- * Correct flow (matches the EA App / community EA library plugins):
- *   1. LOGIN: render accounts.ea.com/connect/auth with a login-capable SPA
- *      client (ORIGIN_SPA_ID + display=junoWeb/login) and a real redirect_uri.
- *      The user signs in; EA sets the remid/sid session cookies on .ea.com and
- *      redirects to EA_LOGIN_REDIRECT.
- *   2. TOKEN: once those cookies exist, GET connect/auth with
- *      client_id=ORIGIN_JS_SDK&response_type=token&redirect_uri=nucleus:rest&
- *      prompt=none — EA answers with a JSON body {"access_token": ...} (no
- *      redirect, "REST mode"), which we parse from the page body.
+ * EA's OAuth server rejects many redirect_uri values for ORIGIN_SPA_ID,
+ * so instead of relying on an OAuth redirect we:
+ *   1. LOGIN: render the EA accounts login page directly (no OAuth params that
+ *      require a whitelisted redirect_uri). The user signs in; EA sets the
+ *      `remid` and `sid` session cookies on .ea.com.
+ *   2. TOKEN: once those cookies exist in the session partition, GET
+ *      connect/auth with client_id=ORIGIN_JS_SDK, response_type=token,
+ *      redirect_uri=nucleus:rest, prompt=none — EA replies with a JSON body
+ *      {"access_token": ...} which we parse from the page text.
+ *
+ * No redirect_uri needed for the login step, so no "redirect_uri is invalid"
+ * error. The `remid` cookie is our signal that the user logged in.
  */
 export const EA_AUTH_PARTITION = "persist:ea-auth";
 
-// Where EA sends the browser after a successful interactive login. Detecting a
-// navigation to this URL is our signal to run the silent token exchange.
-export const EA_LOGIN_REDIRECT = "https://www.ea.com/login_check";
-
-// Step 1 — interactive login page (login-capable SPA client).
-export const EA_LOGIN_URL =
-  "https://accounts.ea.com/connect/auth" +
-  "?response_type=code" +
-  "&client_id=ORIGIN_SPA_ID" +
-  "&display=junoWeb/login" +
-  "&locale=en_US" +
-  "&release_type=prod" +
-  `&redirect_uri=${encodeURIComponent(EA_LOGIN_REDIRECT)}`;
+// Step 1 — direct EA login page, no OAuth params needed.
+export const EA_LOGIN_URL = "https://accounts.ea.com/p/web2/login";
 
 // Step 2 — silent token exchange (token-capable client + prompt=none).
 export const EA_TOKEN_URL =

@@ -8,7 +8,6 @@ import { WindowManager } from "@main/services/window-manager";
 import {
   EA_AUTH_PARTITION,
   EA_LOGIN_URL,
-  EA_LOGIN_REDIRECT,
   EA_TOKEN_URL,
   parseEaAuthJson,
 } from "@main/services/ea-auth";
@@ -62,15 +61,24 @@ const openEaAuthWindow = async (
       },
     });
 
-    // Step 1: interactive login. EA redirects to EA_LOGIN_REDIRECT on success.
+    // Step 1: load the EA login page directly — no OAuth redirect_uri needed.
     win.loadURL(EA_LOGIN_URL);
 
     let handled = false;
     let exchanging = false;
+    let cookieCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+    const clearCookieCheck = () => {
+      if (cookieCheckInterval) {
+        clearInterval(cookieCheckInterval);
+        cookieCheckInterval = null;
+      }
+    };
 
     const completeWithToken = async (accessToken: string, expiresIn: number) => {
       if (handled) return;
       handled = true;
+      clearCookieCheck();
       if (!win.isDestroyed()) win.close();
 
       try {
@@ -96,9 +104,8 @@ const openEaAuthWindow = async (
       }
     };
 
-    // Step 2: once logged in, the auth-window session holds the remid/sid
-    // cookies. Navigate to the token endpoint (prompt=none) which renders the
-    // access-token JSON as the page body, then parse it.
+    // Step 2: once logged in, the session holds remid/sid cookies. Navigate
+    // to the token endpoint which renders the access token as JSON page body.
     const runTokenExchange = () => {
       if (handled || exchanging || win.isDestroyed()) return;
       exchanging = true;
@@ -122,21 +129,10 @@ const openEaAuthWindow = async (
             Number(data.expires_in ?? 3600)
           );
         } else if (data?.error) {
-          // prompt=none can fail if the session isn't ready yet; surface it but
-          // don't loop — the user can retry the window.
           logger.error(`EA token exchange returned error: ${bodyText}`);
         }
       } catch {
         // page not JSON yet — ignore
-      }
-    };
-
-    // Detect successful login (navigation to the redirect target) and kick off
-    // the silent token exchange.
-    const onNavigate = (url: string) => {
-      if (handled) return;
-      if (url.startsWith(EA_LOGIN_REDIRECT) || url.startsWith("https://www.ea.com")) {
-        runTokenExchange();
       }
     };
 
@@ -156,18 +152,43 @@ const openEaAuthWindow = async (
       }
     };
 
+    // Cookie-based login detection: poll for the EA `remid` cookie which is set
+    // after successful login. Avoids any OAuth redirect_uri validation issue.
+    const ses = win.webContents.session;
+    const checkForLoginCookie = async () => {
+      if (handled || exchanging || win.isDestroyed()) return;
+      try {
+        const cookies = await ses.cookies.get({
+          domain: ".ea.com",
+          name: "remid",
+        });
+        if (cookies.length > 0) {
+          runTokenExchange();
+        }
+      } catch {
+        // session gone
+      }
+    };
+
+    // Also detect nucleus: redirects and the token page finishing
     win.webContents.on("did-finish-load", () => void checkPageForToken());
-    win.webContents.on("did-navigate", (_e, url) => onNavigate(url));
     win.webContents.on("did-redirect-navigation", (_e, url) => {
       handleNucleusRedirect(url);
-      onNavigate(url);
     });
     win.webContents.on("will-navigate", (_e, url) => {
       handleNucleusRedirect(url);
-      onNavigate(url);
     });
     win.webContents.on("will-redirect", (_e, url) => handleNucleusRedirect(url));
+
+    // Poll for the remid cookie every second after the page loads
+    win.webContents.on("did-finish-load", () => {
+      if (!cookieCheckInterval && !handled) {
+        cookieCheckInterval = setInterval(() => void checkForLoginCookie(), 1000);
+      }
+    });
+
     win.on("closed", () => {
+      clearCookieCheck();
       if (!handled) resolve(null);
     });
   });

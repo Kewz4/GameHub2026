@@ -1,6 +1,6 @@
 import { UploadcareSync } from "@main/services/uploadcare-sync";
 import { registerEvent } from "../register-event";
-import { db, gamesSublevel, levelKeys } from "@main/level";
+import { db, gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import { HydraApi } from "@main/services";
 import {
   compactGameTitle,
@@ -147,6 +147,10 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
         }
       }
 
+      const gameAssets = await gamesShopAssetsSublevel
+        .get(levelKeys.game(resolvedShop, resolvedObjectId))
+        .catch(() => null);
+
       return {
         ...artifact,
         shop: resolvedShop,
@@ -158,7 +162,11 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
           artifact.objectId ??
           `${artifact.shop}:${artifact.objectId}`,
         gameIconUrl:
-          game?.customIconUrl ?? game?.iconUrl ?? resolvedIconUrl ?? null,
+          game?.customIconUrl ??
+          gameAssets?.iconUrl ??
+          game?.iconUrl ??
+          resolvedIconUrl ??
+          null,
       };
     })
   );

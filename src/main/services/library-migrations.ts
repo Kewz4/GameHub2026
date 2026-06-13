@@ -78,6 +78,23 @@ export const runLibraryMigrations = async (): Promise<void> => {
     .all()
     .catch(() => []);
 
+  // LoL dedup: steam:20590 is a defunct catalogue stub for League of Legends.
+  // If riot:league_of_legends exists alongside it, delete the steam stub so it
+  // doesn't appear as a second entry. Reviews from that stub are accessible via
+  // the Riot LoL game-details page which shares the same Hydra API objectId.
+  const riotLolKey = levelKeys.game("riot", "league_of_legends");
+  const steamLolKey = levelKeys.game("steam", "20590");
+  const [riotLol, steamLol] = await Promise.all([
+    gamesSublevel.get(riotLolKey).catch(() => null),
+    gamesSublevel.get(steamLolKey).catch(() => null),
+  ]);
+  if (riotLol && !riotLol.isDeleted && steamLol && !steamLol.isDeleted) {
+    await gamesSublevel
+      .put(steamLolKey, { ...steamLol, isDeleted: true })
+      .catch(() => {});
+    logger.info("[LibraryMigrations] Removed duplicate steam:20590 (LoL stub)");
+  }
+
   const originRepairDone = await db
     .get<string, boolean>(levelKeys.libraryOriginRepairV2, {
       valueEncoding: "json",

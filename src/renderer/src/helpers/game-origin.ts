@@ -74,8 +74,9 @@ export function getGameOrigin(game: OriginSource): GameOrigin {
   // 4. Explicitly added from the catalogue.
   if (game.libraryOrigin === "catalog") return "catalog";
 
-  // 5. Unverified record with no proof of platform ownership → Retigga, never
-  //    a platform tab. A subsequent platform sync promotes genuinely-owned
-  //    titles to "sync" (stamp + URI exe), moving them to their store tab.
-  return "catalog";
+  // 5. Unstamped, no download record, no URI exe — treat as owned on its
+  //    platform shop. Old DB records (pre-stamp era) for genuinely-owned games
+  //    land here. Retigga repacks are caught above by their download record
+  //    (step 3); explicitly-catalogued games by their "catalog" stamp (step 4).
+  return "sync";
 }
