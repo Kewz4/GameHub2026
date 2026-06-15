@@ -3,6 +3,7 @@ import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { getSteamOwnedGames } from "@main/services/steam-account";
 import { createGame } from "@main/services/library-sync";
 import { logger } from "@main/services";
+import { WindowManager } from "@main/services/window-manager";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { generateMissingMetadataInternal } from "./generate-missing-metadata";
@@ -125,6 +126,7 @@ const syncSteamLibrary = async (
   // Achievements are now sourced from Exophase (Settings → Achievements),
   // not pulled per-platform on library sync.
 
+  WindowManager.sendToAppWindows("on-library-batch-complete");
   return { total: ownedGames.length, added };
 };
 
