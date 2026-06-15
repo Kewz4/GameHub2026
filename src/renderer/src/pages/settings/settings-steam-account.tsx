@@ -58,13 +58,53 @@ export function SettingsSteamAccount() {
           userPreferences?.steamApiKey ?? undefined
         )
         .then((summary) => {
-          if (summary) setLinkedAccount(summary);
+          if (summary) {
+            setLinkedAccount(summary);
+            // Cache for instant rendering on the next visit
+            if (
+              summary.personaname !== userPreferences?.steamUsername ||
+              summary.avatarfull !== userPreferences?.steamAvatarUrl
+            ) {
+              updateUserPreferences({
+                steamUsername: summary.personaname,
+                steamAvatarUrl: summary.avatarfull,
+              }).catch(() => {});
+            }
+          }
         })
         .catch(() => {});
     } else {
       setLinkedAccount(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPreferences?.steamId, userPreferences?.steamApiKey]);
+
+  // Kick off a Steam library sync in the background (fire-and-forget) right
+  // after the account is connected, so the user's owned games get stamped
+  // "sync" and locked to the Steam tab without having to click Sync manually.
+  const runBackgroundSync = (id: string, key?: string | null) => {
+    setIsSyncing(true);
+    window.electron
+      .syncSteamLibrary(id, key ?? undefined)
+      .then(async (result) => {
+        if (result.error) {
+          showErrorToast(result.error);
+          return;
+        }
+        setSyncResult(result);
+        await window.electron.mergeDuplicateGames().catch(() => {});
+        if (result.added > 0) {
+          showSuccessToast(
+            t("steam_sync_result", {
+              added: result.added,
+              total: result.total,
+            })
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsSyncing(false));
+  };
 
   const handleSteamOpenIdLogin = async () => {
     setIsOpenIdPending(true);
@@ -86,6 +126,8 @@ export function SettingsSteamAccount() {
       } else {
         showSuccessToast(t("steam_id_detected", { steamId: detectedSteamId }));
       }
+      // Sync owned games in the background.
+      runBackgroundSync(detectedSteamId, apiKey.trim() || undefined);
     } catch {
       showErrorToast(t("steam_openid_failed"));
     } finally {
@@ -115,6 +157,8 @@ export function SettingsSteamAccount() {
       });
       setLinkedAccount(summary);
       showSuccessToast(t("steam_account_linked"));
+      // Sync owned games in the background.
+      runBackgroundSync(steamId.trim(), apiKey.trim() || undefined);
     } catch {
       showErrorToast(t("steam_invalid_credentials"));
     } finally {
@@ -123,7 +167,12 @@ export function SettingsSteamAccount() {
   };
 
   const handleDisconnect = async () => {
-    await updateUserPreferences({ steamId: null, steamApiKey: null });
+    await updateUserPreferences({
+      steamId: null,
+      steamApiKey: null,
+      steamUsername: null,
+      steamAvatarUrl: null,
+    });
     setLinkedAccount(null);
     setSteamId("");
     setApiKey("");
@@ -142,6 +191,10 @@ export function SettingsSteamAccount() {
         savedSteamId,
         userPreferences?.steamApiKey ?? undefined
       );
+      if (result.error) {
+        showErrorToast(result.error);
+        return;
+      }
       setSyncResult(result);
 
       const dedupResult = await window.electron
@@ -163,40 +216,43 @@ export function SettingsSteamAccount() {
     }
   };
 
-  if (linkedAccount) {
+  // Render connected state instantly from the cached profile; the live
+  // lookup refreshes it in the background
+  const displayAccount =
+    linkedAccount ??
+    (userPreferences?.steamId
+      ? {
+          steamid: userPreferences.steamId,
+          personaname: userPreferences.steamUsername ?? "Steam User",
+          avatarfull: userPreferences.steamAvatarUrl ?? "",
+        }
+      : null);
+
+  if (displayAccount) {
     return (
       <>
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "12px",
-              borderRadius: "8px",
-              background: "var(--color-background-2, rgba(255,255,255,0.05))",
-            }}
-          >
+        <div className="settings-account">
+          <div className="settings-account__card">
             <img
-              src={linkedAccount.avatarfull}
-              alt={linkedAccount.personaname}
-              style={{ width: 48, height: 48, borderRadius: "50%" }}
+              src={displayAccount.avatarfull}
+              alt={displayAccount.personaname}
+              className="settings-account__avatar"
             />
-            <div style={{ flex: 1 }}>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "6px" }}
-              >
+            <div className="settings-account__identity">
+              <div className="settings-account__name">
                 <CheckCircleFillIcon size={14} />
-                <strong>{linkedAccount.personaname}</strong>
+                <strong>{displayAccount.personaname}</strong>
               </div>
-              <small style={{ opacity: 0.6 }}>{linkedAccount.steamid}</small>
+              <small className="settings-account__sub">
+                {displayAccount.steamid}
+              </small>
             </div>
             <Button type="button" onClick={handleDisconnect} theme="outline">
               {t("disconnect")}
             </Button>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div className="settings-account__row">
             <Button
               type="button"
               onClick={handleSync}
@@ -217,7 +273,7 @@ export function SettingsSteamAccount() {
             )}
           </div>
 
-          <p style={{ opacity: 0.6, fontSize: "0.85em", margin: 0 }}>
+          <p className="settings-account__hint">
             {t("steam_library_description")}
           </p>
         </div>
@@ -236,11 +292,8 @@ export function SettingsSteamAccount() {
   }
 
   return (
-    <form
-      onSubmit={handleConnect}
-      style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-    >
-      <p style={{ margin: 0, opacity: 0.8 }}>
+    <form onSubmit={handleConnect} className="settings-account">
+      <p className="settings-account__description">
         {t("steam_account_description")}
       </p>
 

@@ -12,7 +12,14 @@ export const uploadGamesBatch = async () => {
     .then((results) => {
       return results.filter(
         (game) =>
-          !game.isDeleted && game.remoteId === null && game.shop !== "custom"
+          !game.isDeleted &&
+          game.remoteId === null &&
+          game.shop !== "custom" &&
+          // Only sync repack/catalogue games — platform-owned games (Steam,
+          // Epic, GOG, etc.) are stamped "sync" and should never be uploaded
+          // to the Hydra cloud. They are re-synced from the platform on each
+          // login, so they don't need cloud backup.
+          game.libraryOrigin !== "sync"
       );
     });
 

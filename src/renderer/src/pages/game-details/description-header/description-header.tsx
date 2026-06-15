@@ -9,18 +9,21 @@ export function DescriptionHeader() {
 
   if (!shopDetails) return null;
 
+  // Games not in the Hydra catalogue have a minimal shopDetails (assets only)
+  // — every field here may be missing
+  const releaseDate = shopDetails.release_date?.date;
+  const publisher = Array.isArray(shopDetails.publishers)
+    ? shopDetails.publishers[0]
+    : null;
+
+  if (!releaseDate && !publisher) return null;
+
   return (
     <div className="description-header">
       <section className="description-header__info">
-        <p>
-          {t("release_date", {
-            date: shopDetails?.release_date.date,
-          })}
-        </p>
+        {releaseDate && <p>{t("release_date", { date: releaseDate })}</p>}
 
-        {Array.isArray(shopDetails.publishers) && (
-          <p>{t("publisher", { publisher: shopDetails.publishers[0] })}</p>
-        )}
+        {publisher && <p>{t("publisher", { publisher })}</p>}
       </section>
     </div>
   );

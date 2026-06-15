@@ -124,9 +124,17 @@ export const getLegendaryStatus = async (
       "--json",
     ]);
     const data = JSON.parse(output);
+    // legendary reports signed-out state with a placeholder string (e.g.
+    // "<not logged in>") rather than null — treat those as not authenticated
+    const rawAccount =
+      typeof data.account === "string" ? data.account.trim() : null;
+    const account =
+      rawAccount && !/not logged|signed out|^<.*>$/i.test(rawAccount)
+        ? rawAccount
+        : null;
     return {
-      account: data.account ?? null,
-      authenticated: Boolean(data.account),
+      account,
+      authenticated: Boolean(account),
     };
   } catch (err) {
     logger.error("legendary status failed", err);

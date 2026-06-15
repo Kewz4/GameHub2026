@@ -152,6 +152,44 @@
   gap: 20px;
 }
 
+// ── Overall progress bar ──────────────────────────────────────────────────────
+
+.onboarding-progress {
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  flex-shrink: 0;
+
+  &__fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--color-accent, #6a5acd);
+    transition: width 0.35s ease;
+  }
+}
+
+// ── Animated step body ────────────────────────────────────────────────────────
+
+@keyframes onboarding-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.onboarding-step-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: onboarding-step-in 0.2s ease-out;
+}
+
 // ── Welcome / Done full-panel splash ─────────────────────────────────────────
 
 .onboarding-splash {
@@ -390,6 +428,11 @@
   justify-content: flex-end;
   margin-top: auto;
   padding-top: 8px;
+
+  // Skip link sits on the left, primary actions on the right
+  .onboarding-skip {
+    margin-right: auto;
+  }
 }
 
 .onboarding-skip {
@@ -463,13 +506,35 @@
   background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
+  position: relative;
   transition:
     border-color 0.15s,
-    background 0.15s;
+    background 0.15s,
+    transform 0.15s;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
 
   &--selected {
     border-color: #6a5acd;
     background: rgba(106, 90, 205, 0.12);
+
+    &::after {
+      content: "✓";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #6a5acd;
+      color: #fff;
+      font-size: 11px;
+      line-height: 18px;
+      text-align: center;
+    }
   }
 
   &__icon {
@@ -525,4 +590,12 @@
     height: 18px;
     flex-shrink: 0;
   }
+}
+
+.onboarding-done-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 16px 0 8px;
 }

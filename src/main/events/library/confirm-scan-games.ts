@@ -2,6 +2,7 @@ import { t } from "i18next";
 import { registerEvent } from "../register-event";
 import { gamesSublevel } from "@main/level";
 import { LocalNotificationManager, logger, WindowManager } from "@main/services";
+import { classifyScannedOrigin } from "@main/helpers/classify-scanned-origin";
 
 interface ApprovedGame {
   key: string;
@@ -18,8 +19,9 @@ const confirmScanGames = async (
     await gamesSublevel.put(key, {
       ...game,
       executablePath,
-      // Found installed on disk = owned, not a catalogue-only entry
-      libraryOrigin: "sync",
+      // Store folder → owned on that platform; anything else keeps its
+      // original origin (catalogue repacks stay in Retigga) or becomes custom
+      libraryOrigin: classifyScannedOrigin(executablePath, game.libraryOrigin),
     });
     logger.info(`[ConfirmScanGames] Confirmed ${key}: ${executablePath}`);
   }

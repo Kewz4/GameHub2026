@@ -56,6 +56,9 @@ export function SettingsGeneral() {
   const [updateCheckResult, setUpdateCheckResult] = useState<string | null>(
     null
   );
+  const [clearingLibrary, setClearingLibrary] = useState(false);
+  const [clearLibraryConfirm, setClearLibraryConfirm] = useState(false);
+
   const [generatingMetadata, setGeneratingMetadata] = useState(false);
   const [metadataProgress, setMetadataProgress] = useState<{
     current: number;
@@ -549,6 +552,53 @@ export function SettingsGeneral() {
               {metadataProgress.title}
             </p>
           )}
+        </div>
+      )}
+
+      <p className="settings-general__common-redist-description" style={{ color: "var(--color-danger, #e05c5c)" }}>
+        Permanently removes all games from your local library. This cannot be undone.
+      </p>
+
+      {!clearLibraryConfirm ? (
+        <Button
+          onClick={() => setClearLibraryConfirm(true)}
+          className="settings-general__common-redist-button"
+          type="button"
+          theme="outline"
+          style={{ borderColor: "var(--color-danger, #e05c5c)", color: "var(--color-danger, #e05c5c)" }}
+        >
+          Delete Entire Library
+        </Button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: "0.9em", opacity: 0.8 }}>Are you sure?</span>
+          <Button
+            onClick={async () => {
+              setClearingLibrary(true);
+              try {
+                const result = await window.electron.clearLibrary();
+                showSuccessToast(`Library cleared — ${result.cleared} game${result.cleared !== 1 ? "s" : ""} removed.`);
+              } catch {
+                showErrorToast("Failed to clear library.");
+              } finally {
+                setClearingLibrary(false);
+                setClearLibraryConfirm(false);
+              }
+            }}
+            type="button"
+            disabled={clearingLibrary}
+            style={{ background: "var(--color-danger, #e05c5c)", color: "#fff" }}
+          >
+            {clearingLibrary ? "Clearing…" : "Yes, delete all"}
+          </Button>
+          <Button
+            onClick={() => setClearLibraryConfirm(false)}
+            type="button"
+            theme="outline"
+            disabled={clearingLibrary}
+          >
+            Cancel
+          </Button>
         </div>
       )}
 

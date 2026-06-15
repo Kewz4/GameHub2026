@@ -3,7 +3,7 @@ import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useToast, useUserDetails } from "@renderer/hooks";
 import { useCallback, useContext, useEffect, useState } from "react";
-import { KeyIcon, MailIcon, XCircleFillIcon } from "@primer/octicons-react";
+import { KeyIcon, MailIcon, XCircleFillIcon, CloudIcon, DownloadIcon } from "@primer/octicons-react";
 import { settingsContext } from "@renderer/context";
 import { AuthPage } from "@shared";
 import "./settings-account.scss";
@@ -16,8 +16,10 @@ export function SettingsAccount() {
   const { t } = useTranslation("settings");
 
   const [isUnblocking, setIsUnblocking] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
-  const { showSuccessToast } = useToast();
+  const { showSuccessToast, showErrorToast } = useToast();
 
   const { blockedUsers, fetchBlockedUsers } = useContext(settingsContext);
 
@@ -143,6 +145,51 @@ export function SettingsAccount() {
           >
             <KeyIcon />
             {t("update_password")}
+          </Button>
+        </div>
+      </section>
+
+      <section className="settings-account__section">
+        <h3>{t("settings_sync_title")}</h3>
+        <p style={{ marginBottom: 8, opacity: 0.7, fontSize: 13 }}>
+          {t("settings_sync_description")}
+        </p>
+        <div className="settings-account__actions">
+          <Button
+            theme="outline"
+            disabled={isBackingUp}
+            onClick={async () => {
+              setIsBackingUp(true);
+              try {
+                const result = await window.electron.backupSettingsToCloud();
+                if (result.ok) showSuccessToast(t("settings_backup_success"));
+                else showErrorToast(t("settings_backup_failed"));
+              } finally {
+                setIsBackingUp(false);
+              }
+            }}
+          >
+            <CloudIcon />
+            {isBackingUp ? t("backing_up") : t("backup_settings")}
+          </Button>
+
+          <Button
+            theme="outline"
+            disabled={isRestoring}
+            onClick={async () => {
+              setIsRestoring(true);
+              try {
+                const result = await window.electron.restoreSettingsFromCloud();
+                if (result.restored)
+                  showSuccessToast(t("settings_restore_success"));
+                else showErrorToast(t("settings_restore_not_found"));
+              } finally {
+                setIsRestoring(false);
+              }
+            }}
+          >
+            <DownloadIcon />
+            {isRestoring ? t("restoring") : t("restore_settings")}
           </Button>
         </div>
       </section>

@@ -58,6 +58,7 @@ export function GameContextMenu({
   const [showConfirmRemoveLibrary, setShowConfirmRemoveLibrary] =
     useState(false);
   const [showConfirmRemoveFiles, setShowConfirmRemoveFiles] = useState(false);
+  const [showConfirmExclude, setShowConfirmExclude] = useState(false);
   const [showCreateCollectionModal, setShowCreateCollectionModal] =
     useState(false);
   const [localCollectionIds, setLocalCollectionIds] = useState<string[]>(() =>
@@ -364,6 +365,14 @@ export function GameContextMenu({
           : []),
 
         {
+          id: "exclude-game",
+          label: t("add_to_exclusion_list"),
+          icon: <TrashIcon size={16} />,
+          onClick: () => setShowConfirmExclude(true),
+          disabled: isDeleting,
+          danger: true,
+        },
+        {
           id: "remove-library",
           label: t("remove_from_library"),
           icon: <XIcon size={16} />,
@@ -436,6 +445,30 @@ export function GameContextMenu({
             }
           })();
         }}
+      />
+
+      <ConfirmationModal
+        visible={showConfirmExclude}
+        title={t("add_to_exclusion_list_title")}
+        descriptionText={t("add_to_exclusion_list_description", {
+          game: game.title,
+        })}
+        onClose={() => {
+          setShowConfirmExclude(false);
+          onClose();
+        }}
+        onConfirm={async () => {
+          setShowConfirmExclude(false);
+          onClose();
+          await window.electron.addGameToExclusionList(
+            game.shop as never,
+            game.objectId,
+            game.title
+          );
+          await handleRemoveFromLibrary();
+        }}
+        cancelButtonLabel={t("cancel")}
+        confirmButtonLabel={t("exclude")}
       />
 
       <ConfirmationModal

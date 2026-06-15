@@ -16,7 +16,8 @@ import type {
 import {
   refreshGogToken,
   getGogUserInfo,
-  getGogGameClientId,
+  getGogGameCredentials,
+  getGogGameToken,
   getGogRemoteAchievements,
 } from "@main/services/gog-account";
 import { getLegendaryConfigPath } from "@main/services/legendary";
@@ -97,9 +98,12 @@ const storeAchievements = async (
 export const importSteamAchievements =
   async (): Promise<AchievementImportResult> => {
     const prefs = await getPrefs();
-    if (!prefs?.steamId || !prefs?.steamApiKey) {
+    if (!prefs?.steamId) {
+      throw new Error("Steam account not connected");
+    }
+    if (!prefs.steamApiKey) {
       throw new Error(
-        "Steam account not connected (Steam ID + API key required)"
+        "Steam API key required for achievement import. Add your Steam API key in Settings → Integrations → Steam Account."
       );
     }
 
@@ -208,13 +212,21 @@ export const importGogAchievements =
     for (const [gameKey, game] of games) {
       result.gamesProcessed++;
       try {
-        const clientId = await getGogGameClientId(game.objectId);
-        if (!clientId) continue;
+        const credentials = await getGogGameCredentials(game.objectId);
+        if (!credentials) continue;
+
+        // gameplay.gog.com only accepts tokens issued for the game's own
+        // OAuth client — the generic embed token is rejected with 401/403
+        const gameToken = await getGogGameToken(
+          tokens.refresh_token,
+          credentials
+        );
+        if (!gameToken) continue;
 
         const remote = await getGogRemoteAchievements(
-          tokens.access_token,
+          gameToken,
           userInfo.userId,
-          clientId
+          credentials.clientId
         );
         if (remote.length === 0) continue;
 
@@ -250,21 +262,125 @@ export const importGogAchievements =
 
 /* ───────────────────────── Epic ───────────────────────── */
 
-const EPIC_GRAPHQL_URL = "https://launcher.store.epicgames.com/graphql";
+const EPIC_ACHIEVEMENTS_BASE = "https://achievements.epicgames.com/v1";
 
-const getLegendaryAuth = (): {
+interface LegendaryAuth {
   accessToken: string;
   accountId: string;
-} | null => {
+  expiresAt?: string;
+  refreshToken?: string;
+}
+
+const getLegendaryAuth = (): LegendaryAuth | null => {
   try {
     const userJson = path.join(getLegendaryConfigPath(), "user.json");
     if (!fs.existsSync(userJson)) return null;
     const parsed = JSON.parse(fs.readFileSync(userJson, "utf8"));
     if (!parsed?.access_token || !parsed?.account_id) return null;
-    return { accessToken: parsed.access_token, accountId: parsed.account_id };
+    return {
+      accessToken: parsed.access_token,
+      accountId: parsed.account_id,
+      expiresAt: parsed.expires_at,
+      refreshToken: parsed.refresh_token,
+    };
   } catch {
     return null;
   }
+};
+
+const refreshLegendaryToken = async (
+  refreshToken: string
+): Promise<LegendaryAuth | null> => {
+  try {
+    const res = await axios.post(
+      "https://account-public-service-prod.ol.epicgames.com/account/api/oauth/token",
+      new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        token_type: "eg1",
+      }),
+      {
+        headers: {
+          Authorization:
+            "basic MzRhMDJjZjhmNDQxNGUyOWIxNTkyMTg3NmRhMzZmOWE6ZGFhZmJjY2M3Mzc3NDUwMzlkZmZlNTNkOTRmYzc0Ng==",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        timeout: 15_000,
+      }
+    );
+    const data = res.data;
+    if (!data?.access_token || !data?.account_id) return null;
+    const updated: LegendaryAuth = {
+      accessToken: data.access_token,
+      accountId: data.account_id,
+      expiresAt: data.expires_at,
+      refreshToken: data.refresh_token ?? refreshToken,
+    };
+    try {
+      const userJson = path.join(getLegendaryConfigPath(), "user.json");
+      const existing = JSON.parse(fs.readFileSync(userJson, "utf8"));
+      fs.writeFileSync(
+        userJson,
+        JSON.stringify(
+          {
+            ...existing,
+            access_token: updated.accessToken,
+            expires_at: updated.expiresAt,
+            refresh_token: updated.refreshToken,
+          },
+          null,
+          2
+        )
+      );
+    } catch {
+      // non-fatal
+    }
+    return updated;
+  } catch {
+    return null;
+  }
+};
+
+const getValidLegendaryAuth = async (): Promise<LegendaryAuth | null> => {
+  const auth = getLegendaryAuth();
+  if (!auth) return null;
+  if (auth.expiresAt && auth.refreshToken) {
+    const expiresAt = new Date(auth.expiresAt).getTime();
+    if (Date.now() > expiresAt - 5 * 60 * 1000) {
+      const refreshed = await refreshLegendaryToken(auth.refreshToken);
+      if (refreshed) return refreshed;
+    }
+  }
+  return auth;
+};
+
+/** Epic doesn't ship playtime in legendary's metadata — it lives in the
+ * library service. Returns a map of app_name (artifactId) → playtime in ms. */
+export const getEpicPlaytimeMap = async (): Promise<Map<string, number>> => {
+  const map = new Map<string, number>();
+  const auth = await getValidLegendaryAuth();
+  if (!auth) return map;
+
+  try {
+    const res = await axios.get(
+      `https://library-service.live.use1a.on.epicgames.com/library/api/public/playtime/account/${auth.accountId}/all`,
+      {
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
+        timeout: 15_000,
+      }
+    );
+    const items: Array<{ artifactId?: string; totalTime?: number }> =
+      Array.isArray(res.data) ? res.data : [];
+    for (const item of items) {
+      if (item.artifactId && typeof item.totalTime === "number") {
+        // totalTime is in seconds
+        map.set(item.artifactId, item.totalTime * 1000);
+      }
+    }
+  } catch (err) {
+    achievementsLogger.warn("getEpicPlaytimeMap failed", err);
+  }
+  return map;
 };
 
 const getEpicSandboxId = (appName: string): string | null => {
@@ -284,7 +400,7 @@ const getEpicSandboxId = (appName: string): string | null => {
 
 export const importEpicAchievements =
   async (): Promise<AchievementImportResult> => {
-    const auth = getLegendaryAuth();
+    const auth = await getValidLegendaryAuth();
     if (!auth) {
       throw new Error(
         "Epic account not connected (sign in via Legendary first)"
@@ -298,10 +414,7 @@ export const importEpicAchievements =
       totalUnlocked: 0,
     };
 
-    const headers = {
-      Authorization: `Bearer ${auth.accessToken}`,
-      "Content-Type": "application/json",
-    };
+    const headers = { Authorization: `Bearer ${auth.accessToken}` };
 
     for (const [gameKey, game] of games) {
       result.gamesProcessed++;
@@ -309,96 +422,57 @@ export const importEpicAchievements =
         const sandboxId = getEpicSandboxId(game.objectId);
         if (!sandboxId) continue;
 
-        const definitionsRes = await axios.post(
-          EPIC_GRAPHQL_URL,
-          {
-            query: `query($sandboxId: String!) {
-              Achievement {
-                productAchievementsRecordBySandbox(sandboxId: $sandboxId) {
-                  records {
-                    achievements {
-                      achievement {
-                        name
-                        unlockedDisplayName
-                        lockedDisplayName
-                        unlockedDescription
-                        lockedDescription
-                        unlockedIconLink
-                        lockedIconLink
-                        hidden
-                      }
-                    }
-                  }
-                }
-              }
-            }`,
-            variables: { sandboxId },
-          },
+        // Fetch achievement definitions (no auth required)
+        const defsRes = await axios.get(
+          `${EPIC_ACHIEVEMENTS_BASE}/clients/${sandboxId}/achievements`,
           { headers, timeout: 15_000 }
         );
+        const defsRaw: Array<{
+          name: string;
+          unlockedDisplayName?: string;
+          lockedDisplayName?: string;
+          unlockedDescription?: string;
+          lockedDescription?: string;
+          unlockedIconLink?: string;
+          lockedIconLink?: string;
+          hidden?: boolean;
+        }> = defsRes.data?.achievements ?? defsRes.data ?? [];
+        if (!Array.isArray(defsRaw) || defsRaw.length === 0) continue;
 
-        const records =
-          definitionsRes.data?.data?.Achievement
-            ?.productAchievementsRecordBySandbox?.records ?? [];
-        const defs: SteamAchievement[] = [];
-        for (const record of records) {
-          for (const entry of record?.achievements ?? []) {
-            const a = entry?.achievement;
-            if (!a?.name) continue;
-            defs.push({
-              name: a.name,
-              displayName:
-                a.unlockedDisplayName ?? a.lockedDisplayName ?? a.name,
-              description: a.unlockedDescription ?? a.lockedDescription ?? "",
-              icon: a.unlockedIconLink ?? "",
-              icongray: a.lockedIconLink ?? a.unlockedIconLink ?? "",
-              hidden: Boolean(a.hidden),
-            });
-          }
-        }
-        if (defs.length === 0) continue;
+        const defs: SteamAchievement[] = defsRaw.map((a) => ({
+          name: a.name,
+          displayName: a.unlockedDisplayName ?? a.lockedDisplayName ?? a.name,
+          description: a.unlockedDescription ?? a.lockedDescription ?? "",
+          icon: a.unlockedIconLink ?? "",
+          icongray: a.lockedIconLink ?? a.unlockedIconLink ?? "",
+          hidden: Boolean(a.hidden),
+        }));
 
-        const playerRes = await axios.post(
-          EPIC_GRAPHQL_URL,
-          {
-            query: `query($epicAccountId: String!, $sandboxId: String!) {
-              PlayerProfile {
-                playerProfile(epicAccountId: $epicAccountId) {
-                  playerAchievementGameRecordsBySandbox(sandboxId: $sandboxId) {
-                    records {
-                      playerAchievements {
-                        playerAchievement {
-                          achievementName
-                          unlocked
-                          unlockDate
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }`,
-            variables: { epicAccountId: auth.accountId, sandboxId },
-          },
+        // Fetch player's unlocked achievements
+        const playerRes = await axios.get(
+          `${EPIC_ACHIEVEMENTS_BASE}/accounts/${auth.accountId}/games/${sandboxId}/achievements`,
           { headers, timeout: 15_000 }
         );
+        const playerRaw: Array<{
+          name: string;
+          unlocked?: boolean;
+          completionTime?: string;
+        }> =
+          playerRes.data?.playerAchievements ??
+          playerRes.data?.achievements ??
+          playerRes.data ??
+          [];
 
-        const playerRecords =
-          playerRes.data?.data?.PlayerProfile?.playerProfile
-            ?.playerAchievementGameRecordsBySandbox?.records ?? [];
-        const unlocked: UnlockedAchievement[] = [];
-        for (const record of playerRecords) {
-          for (const entry of record?.playerAchievements ?? []) {
-            const a = entry?.playerAchievement;
-            if (!a?.achievementName || !a.unlocked) continue;
-            unlocked.push({
-              name: a.achievementName,
-              unlockTime: a.unlockDate
-                ? new Date(a.unlockDate).getTime() / 1000
-                : 0,
-            });
-          }
-        }
+        const unlocked: UnlockedAchievement[] = (
+          Array.isArray(playerRaw) ? playerRaw : []
+        )
+          .filter((a) => a.unlocked)
+          .map((a) => ({
+            name: a.name,
+            unlockTime: a.completionTime
+              ? new Date(a.completionTime).getTime() / 1000
+              : 0,
+          }));
 
         await storeAchievements(gameKey, game, defs, unlocked);
         if (unlocked.length > 0) {
@@ -432,8 +506,7 @@ export const importXboxAchievements =
 
     for (const [gameKey, game] of games) {
       result.gamesProcessed++;
-      const titleId = (game as Game & { xboxTitleId?: string | null })
-        .xboxTitleId;
+      const titleId = game.xboxTitleId;
       if (!titleId) continue;
 
       await syncXboxGameAchievements(game.objectId, titleId).catch(() => {});

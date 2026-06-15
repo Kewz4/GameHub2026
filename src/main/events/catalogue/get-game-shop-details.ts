@@ -15,6 +15,10 @@ import {
   levelKeys,
 } from "@main/level";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import {
+  isCuratedRiotGame,
+  buildRiotShopDetails,
+} from "@main/helpers/riot-metadata";
 
 const getLocalizedSteamAppDetails = async (
   objectId: string,
@@ -45,6 +49,19 @@ const getGameShopDetails = async (
       const gameAssets = await gamesShopAssetsSublevel
         .get(gameKey)
         .catch(() => null);
+
+      // Riot titles (LoL, VALORANT, LoR) have empty/broken Hydra catalogue
+      // entries — bypass the catalogue entirely and serve curated metadata
+      // paired with the SteamGridDB artwork captured at sync time.
+      if (shop === "riot" && isCuratedRiotGame(objectId)) {
+        const riotDetails = buildRiotShopDetails(
+          objectId,
+          gameAssets ?? null,
+          gameEntry?.title
+        );
+        if (riotDetails) return riotDetails;
+      }
+
       const titleToSearch = gameAssets?.title ?? gameEntry?.title ?? objectId;
 
       // Search the Hydra catalogue for a Steam match by title

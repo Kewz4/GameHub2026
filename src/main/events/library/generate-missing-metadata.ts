@@ -9,6 +9,24 @@ export interface MetadataGameResult {
   what: string;
 }
 
+/** Library cards are 3:4 portrait — a cover sourced from a known-landscape
+ * asset (Steam headers/capsules, GOG logos, wide grids) gets stretched and
+ * looks blurry. Treat those as wrong and re-fetch a proper portrait cover. */
+const LANDSCAPE_URL_HINTS = [
+  "header.jpg", // Steam store header (460x215)
+  "capsule_616x353",
+  "capsule_231x87",
+  "460x215", // SteamGridDB wide grid dimensions
+  "logo2x", // GOG logo asset
+  "_glx_logo", // GOG logo asset (alternate naming)
+];
+
+const isLandscapeCoverUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return LANDSCAPE_URL_HINTS.some((hint) => lower.includes(hint));
+};
+
 const generateMissingMetadata = async (
   _event: Electron.IpcMainInvokeEvent
 ): Promise<{
@@ -43,8 +61,14 @@ const generateMissingMetadata = async (
       .get(cacheKey)
       .catch(() => null);
 
+    // A landscape image stored as the portrait cover is as bad as no cover —
+    // re-fetch so the card gets a proper 600x900 grid
+    const coverIsWrongRatio = isLandscapeCoverUrl(assets?.coverImageUrl);
+
     // Only skip if we have an actual cover or hero image — icon alone is not sufficient
-    const hasCover = assets?.coverImageUrl || assets?.libraryHeroImageUrl;
+    const hasCover =
+      (assets?.coverImageUrl && !coverIsWrongRatio) ||
+      (!assets?.coverImageUrl && assets?.libraryHeroImageUrl);
 
     if (hasCover) {
       skipped++;
@@ -54,7 +78,10 @@ const generateMissingMetadata = async (
     try {
       const best = await fetchBestAssets(game.shop, game.objectId, game.title, {
         iconUrl: assets?.iconUrl ?? null,
-        coverImageUrl: assets?.coverImageUrl ?? null,
+        // Never feed the wrong-ratio cover back in as a fallback
+        coverImageUrl: coverIsWrongRatio
+          ? null
+          : (assets?.coverImageUrl ?? null),
         libraryImageUrl: assets?.libraryImageUrl ?? null,
         libraryHeroImageUrl: assets?.libraryHeroImageUrl ?? null,
         logoImageUrl: assets?.logoImageUrl ?? null,

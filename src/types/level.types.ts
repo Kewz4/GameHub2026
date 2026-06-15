@@ -81,6 +81,7 @@ export interface Game {
     objectId: string;
     executablePath: string | null;
   }>;
+  xboxTitleId?: string | null;
 }
 
 export interface Download {
@@ -175,8 +176,14 @@ export interface UserPreferences {
   autoRunGamemode?: boolean;
   steamId?: string | null;
   steamApiKey?: string | null;
+  // Cached profile info so the UI can render connected state instantly
+  // without waiting for network lookups
+  steamUsername?: string | null;
+  steamAvatarUrl?: string | null;
   legendaryBinaryPath?: string | null;
+  epicAccountName?: string | null;
   gogRefreshToken?: string | null;
+  gogUsername?: string | null;
   xboxAccessToken?: string | null;
   xboxUserHash?: string | null;
   xboxXstsToken?: string | null;
@@ -191,6 +198,14 @@ export interface UserPreferences {
   localProfileImageUrl?: string | null;
   localBackgroundImageUrl?: string | null;
   excludedGames?: ExcludedGame[];
+  ubisoftTicket?: string | null;
+  ubisoftUserId?: string | null;
+  ubisoftProfileId?: string | null;
+  ubisoftUsername?: string | null;
+  eaAccessToken?: string | null;
+  eaTokenExpiry?: string | null;
+  eaUsername?: string | null;
+  eaPid?: string | null;
 }
 
 export interface ExcludedGame {

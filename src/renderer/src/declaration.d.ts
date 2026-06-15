@@ -181,7 +181,7 @@ declare global {
     syncSteamLibrary: (
       steamId: string,
       apiKey?: string
-    ) => Promise<{ total: number; added: number }>;
+    ) => Promise<{ total: number; added: number; error?: string }>;
     getLegendaryStatus: () => Promise<{
       binaryFound: boolean;
       binaryPath: string | null;
@@ -319,6 +319,27 @@ declare global {
       }>;
     }>;
     addEaGamesToLibrary: (titles: string[]) => Promise<{ added: number }>;
+    openUbisoftAuthWindow: () => Promise<{
+      ticket: string;
+      userId: string;
+      profileId: string;
+      username: string;
+    } | null>;
+    syncUbisoftLibrary: () => Promise<{
+      total: number;
+      added: number;
+      error?: string;
+    }>;
+    openEaAuthWindow: () => Promise<{
+      accessToken: string;
+      username: string;
+      pid: string;
+    } | null>;
+    syncEaLibrary: () => Promise<{
+      total: number;
+      added: number;
+      error?: string;
+    }>;
     importPlatformAchievements: (
       platform: "steam" | "epic" | "gog" | "xbox"
     ) => Promise<{
@@ -432,6 +453,7 @@ declare global {
       merged: number;
       mergedTitles: string[];
     }>;
+    clearLibrary: () => Promise<{ cleared: number }>;
     findLibraryGameByTitle: (
       title: string
     ) => Promise<import("@types").Game | null>;
@@ -492,6 +514,11 @@ declare global {
     updateUserPreferences: (
       preferences: Partial<UserPreferences>
     ) => Promise<void>;
+    backupSettingsToCloud: () => Promise<{ ok: boolean }>;
+    restoreSettingsFromCloud: () => Promise<{
+      restored: boolean;
+      updatedAt?: string;
+    }>;
     onUserPreferencesUpdated: (
       cb: (preferences: UserPreferences | null) => void
     ) => () => Electron.IpcRenderer;
@@ -780,6 +807,10 @@ declare global {
 
     /* Profile */
     getMe: () => Promise<UserDetails | null>;
+    getProfileImages: (userId: string) => Promise<{
+      profileImageUrl: string | null;
+      backgroundImageUrl: string | null;
+    }>;
     updateProfile: (
       updateProfile: UpdateProfileRequest
     ) => Promise<UserProfile>;

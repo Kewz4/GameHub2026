@@ -56,7 +56,9 @@ export function GameReviews({
     Set<string>
   >(new Set());
   const [totalReviewCount, setTotalReviewCount] = useState(0);
-  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(
+    isGameInLibrary && !hasUserReviewed
+  );
   const [votingReviews, setVotingReviews] = useState<Set<string>>(new Set());
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
@@ -128,16 +130,11 @@ export function GameReviews({
       const hasReviewed = response?.hasReviewed || false;
       onUserReviewedChange(hasReviewed);
 
-      const twoHoursInMilliseconds = 2 * 60 * 60 * 1000;
-      const hasEnoughPlaytime =
-        game && game.playTimeInMilliseconds >= twoHoursInMilliseconds;
-
       if (
         !hasReviewed &&
-        hasEnoughPlaytime &&
+        isGameInLibrary &&
         !sessionStorage.getItem(`reviewPromptDismissed_${objectId}`)
       ) {
-        setShowReviewPrompt(true);
         setShowReviewForm(true);
       }
     } catch (error) {

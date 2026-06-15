@@ -148,6 +148,9 @@ contextBridge.exposeInMainWorld("electron", {
   getUserPreferences: () => ipcRenderer.invoke("getUserPreferences"),
   updateUserPreferences: (preferences: Partial<UserPreferences>) =>
     ipcRenderer.invoke("updateUserPreferences", preferences),
+  backupSettingsToCloud: () => ipcRenderer.invoke("backupSettingsToCloud"),
+  restoreSettingsFromCloud: () =>
+    ipcRenderer.invoke("restoreSettingsFromCloud"),
   onUserPreferencesUpdated: (
     cb: (preferences: UserPreferences | null) => void
   ) => {
@@ -248,6 +251,10 @@ contextBridge.exposeInMainWorld("electron", {
   getEaGames: () => ipcRenderer.invoke("getEaGames"),
   addEaGamesToLibrary: (titles: string[]) =>
     ipcRenderer.invoke("addEaGamesToLibrary", titles),
+  openUbisoftAuthWindow: () => ipcRenderer.invoke("openUbisoftAuthWindow"),
+  syncUbisoftLibrary: () => ipcRenderer.invoke("syncUbisoftLibrary"),
+  openEaAuthWindow: () => ipcRenderer.invoke("openEaAuthWindow"),
+  syncEaLibrary: () => ipcRenderer.invoke("syncEaLibrary"),
   importPlatformAchievements: (platform: "steam" | "epic" | "gog" | "xbox") =>
     ipcRenderer.invoke("importPlatformAchievements", platform),
   syncGamePassLibrary: () => ipcRenderer.invoke("syncGamePassLibrary"),
@@ -352,6 +359,8 @@ contextBridge.exposeInMainWorld("electron", {
   refreshLibraryAssets: () => ipcRenderer.invoke("refreshLibraryAssets"),
   generateMissingMetadata: () => ipcRenderer.invoke("generateMissingMetadata"),
   mergeDuplicateGames: () => ipcRenderer.invoke("mergeDuplicateGames"),
+  clearLibrary: (): Promise<{ cleared: number }> =>
+    ipcRenderer.invoke("clearLibrary"),
   openGameInstaller: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("openGameInstaller", shop, objectId),
   getGameInstallerActionType: (shop: GameShop, objectId: string) =>
@@ -798,6 +807,8 @@ contextBridge.exposeInMainWorld("electron", {
 
   /* Profile */
   getMe: () => ipcRenderer.invoke("getMe"),
+  getProfileImages: (userId: string) =>
+    ipcRenderer.invoke("getProfileImages", userId),
   updateProfile: (updateProfile: UpdateProfileRequest) =>
     ipcRenderer.invoke("updateProfile", updateProfile),
   getProfileImageMetadata: (imagePath: string) =>

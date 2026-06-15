@@ -254,11 +254,30 @@ export function GameDetailsContextProvider({
       }
     });
 
-    if (shop !== "custom") {
-      window.electron.getGameStats(objectId, shop).then((result) => {
-        if (abortController.signal.aborted) return;
-        setStats(result);
-      });
+    if (shop === "steam") {
+      window.electron
+        .getGameStats(objectId, shop)
+        .then((result) => {
+          if (abortController.signal.aborted) return;
+          setStats(result);
+        })
+        .catch(() => {});
+    } else if (shop !== "custom") {
+      // The stats endpoint only knows Steam ids — wait for the canonical
+      // Steam equivalent instead of sending the shop's own id (400s)
+      rawShopDetailsPromise
+        .then((details) => {
+          const steamId = (details as any)?.steam_appid;
+          if (!steamId || abortController.signal.aborted) return;
+          window.electron
+            .getGameStats(String(steamId), "steam")
+            .then((result) => {
+              if (abortController.signal.aborted) return;
+              setStats(result);
+            })
+            .catch(() => {});
+        })
+        .catch(() => {});
     }
 
     const assetsPromise = window.electron.getGameAssets(
@@ -272,7 +291,19 @@ export function GameDetailsContextProvider({
         if (assets) {
           if (abortController.signal.aborted) return;
           setShopDetails((prev) => {
-            if (!prev) return null;
+            if (!prev) {
+              // Game not in Hydra catalogue — create a minimal entry so hero/logo
+              // images from SteamGridDB are still available to the details page.
+              // Every consumer must treat the remaining fields as optional.
+              return {
+                name: gameTitle ?? "",
+                about_the_game: "",
+                short_description: "",
+                detailed_description: "",
+                screenshots: [],
+                assets,
+              } as unknown as ShopDetailsWithAssets;
+            }
             return {
               ...prev,
               assets,

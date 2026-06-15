@@ -150,8 +150,13 @@ export async function exchangeMsaForXboxTokens(
 // Game Pass catalog
 // ──────────────────────────────────────────────────────────
 
-const GAMEPASS_CATALOG_URL =
-  "https://catalog.gamepass.com/sigls/v2?id=fdd9e2a7-0fee-49f6-ad69-4354098401ff&language=en-us&market=US";
+// PC Game Pass catalog sigl IDs — fetching both PC and console ensures the
+// broadest coverage regardless of which Game Pass tier the user has.
+const GAMEPASS_SIGL_IDS = [
+  "fdd9e2a7-0fee-49f6-ad69-4354098401ff", // PC Game Pass
+  "29a81209-df6f-41fd-a528-2ae6b91f719c", // Xbox Game Pass Ultimate (console)
+];
+const GAMEPASS_CATALOG_BASE = "https://catalog.gamepass.com/sigls/v2";
 const DISPLAY_CATALOG_URL =
   "https://displaycatalog.mp.microsoft.com/v7.0/products";
 
@@ -178,14 +183,24 @@ export async function getGamePassCatalog(
   const authHeader =
     uhs && xstsToken ? { Authorization: `XBL3.0 x=${uhs};${xstsToken}` } : {};
 
-  const catalogRes = await axios.get<any[]>(GAMEPASS_CATALOG_URL, {
-    headers: authHeader,
-    timeout: 15000,
-  });
+  // Fetch all sigl catalogs and deduplicate product IDs
+  const allProductIds = new Set<string>();
+  for (const siglId of GAMEPASS_SIGL_IDS) {
+    try {
+      const catalogRes = await axios.get<any[]>(
+        `${GAMEPASS_CATALOG_BASE}?id=${siglId}&language=en-us&market=US`,
+        { headers: authHeader, timeout: 15000 }
+      );
+      const data = Array.isArray(catalogRes.data) ? catalogRes.data : [];
+      for (const entry of data) {
+        if (entry?.id) allProductIds.add(entry.id as string);
+      }
+    } catch (err) {
+      logger.warn(`Xbox Game Pass: failed to fetch sigl ${siglId}`, err);
+    }
+  }
 
-  const productIds: string[] = catalogRes.data
-    .filter((entry: any) => entry.id)
-    .map((entry: any) => entry.id as string);
+  const productIds = Array.from(allProductIds);
 
   const games: XboxGame[] = [];
   const BATCH = 20;

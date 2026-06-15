@@ -13,8 +13,15 @@ const syncSteamLibrary = async (
   _event: Electron.IpcMainInvokeEvent,
   steamId: string,
   apiKey?: string
-) => {
-  const ownedGames = await getSteamOwnedGames(steamId, apiKey);
+): Promise<{ total: number; added: number; error?: string }> => {
+  let ownedGames: Awaited<ReturnType<typeof getSteamOwnedGames>>;
+  try {
+    ownedGames = await getSteamOwnedGames(steamId, apiKey);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn(`[syncSteamLibrary] Failed to fetch owned games: ${message}`);
+    return { total: 0, added: 0, error: message };
+  }
 
   let added = 0;
 
@@ -31,12 +38,15 @@ const syncSteamLibrary = async (
     const existing = await gamesSublevel.get(gameKey).catch(() => null);
     if (existing && !existing.isDeleted) {
       // This game is owned on Steam — make sure it's classified as synced,
-      // even if it was originally added from the catalog.
-      if (existing.libraryOrigin !== "sync") {
-        await gamesSublevel.put(gameKey, {
-          ...existing,
-          libraryOrigin: "sync",
-        });
+      // even if it was originally added from the catalog or merged down from
+      // the cloud profile (which carries no libraryOrigin/executablePath).
+      const updates: Partial<typeof existing> = {};
+      if (existing.libraryOrigin !== "sync") updates.libraryOrigin = "sync";
+      if (!existing.executablePath) {
+        updates.executablePath = `steam://run/${objectId}`;
+      }
+      if (Object.keys(updates).length > 0) {
+        await gamesSublevel.put(gameKey, { ...existing, ...updates });
       }
       // Already have this exact Steam entry — still dedup by title to collapse
       // any custom/other-shop entries with the same name

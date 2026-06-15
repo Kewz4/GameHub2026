@@ -391,11 +391,13 @@ const importPlaynitePlaytime = async (
         lastTimePlayed: null,
         addedToLibraryAt: new Date(),
         automaticCloudSync: false,
-        // Games matched by Steam App ID are confirmed as owned on Steam;
-        // title-only matches are unverified so keep them as catalog.
-        libraryOrigin: (steamId && catalogueMatch.objectId === steamId)
-          ? ("sync" as const)
-          : ("catalog" as const),
+        // A Playnite import only proves the game is in the user's Playnite
+        // library — NOT that they own it on a connected store. Ownership is
+        // established solely by a platform sync (which stamps "sync" and a
+        // platform URI exe). So everything added here is unverified → catalog
+        // (Retigga). If the user actually owns it, the next Steam/Epic/GOG
+        // sync promotes it to "sync" and it moves to its store tab.
+        libraryOrigin: "catalog" as const,
       });
       matched.push({
         title: catalogueMatch.title,

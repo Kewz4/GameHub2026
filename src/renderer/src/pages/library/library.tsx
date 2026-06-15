@@ -473,10 +473,11 @@ export default function Library() {
   const storeFilteredLibrary = useMemo(() => {
     if (storeFilter === "all") return filteredLibrary;
 
-    // Platform filters — ONLY games explicitly stamped as synced from that
-    // platform. Using libraryOrigin directly avoids any heuristic ambiguity:
-    // every platform sync function stamps "sync" on owned games, so a missing
-    // libraryOrigin means the game was NOT added via platform sync.
+    // Platform filters — a game shows under its store tab only when it
+    // resolves to "sync" (owned on that platform). getGameOrigin is
+    // ownership-first and uses the GameHub download record to keep repacks
+    // out, so owned games never leak into Retigga and repacks never leak into
+    // the platform tabs — regardless of whether libraryOrigin was stamped.
     if (
       storeFilter === "steam" ||
       storeFilter === "epic" ||
@@ -488,29 +489,16 @@ export default function Library() {
       storeFilter === "ea"
     )
       return filteredLibrary.filter(
-        (g) =>
-          g.shop === storeFilter &&
-          (g.libraryOrigin === "sync" ||
-            // Legacy: no libraryOrigin but has a platform URI scheme exe
-            (g.libraryOrigin == null && getGameOrigin(g) === "sync"))
+        (g) => g.shop === storeFilter && getGameOrigin(g) === "sync"
       );
 
-    // Retigga = games added from the Hydra catalogue (not owned on any platform)
+    // Retigga = games that came from the Hydra repack catalogue.
     if (storeFilter === "retigga")
-      return filteredLibrary.filter(
-        (g) =>
-          g.libraryOrigin === "catalog" ||
-          (g.libraryOrigin == null && getGameOrigin(g) === "catalog")
-      );
+      return filteredLibrary.filter((g) => getGameOrigin(g) === "catalog");
 
-    // Custom = manually added games
+    // Custom = manually added games.
     if (storeFilter === "custom")
-      return filteredLibrary.filter(
-        (g) =>
-          g.libraryOrigin === "custom" ||
-          g.shop === "custom" ||
-          (g.libraryOrigin == null && getGameOrigin(g) === "custom")
-      );
+      return filteredLibrary.filter((g) => getGameOrigin(g) === "custom");
 
     return filteredLibrary.filter((g) => g.shop === storeFilter);
   }, [filteredLibrary, storeFilter]);

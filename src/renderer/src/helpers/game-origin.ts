@@ -2,43 +2,46 @@ import type { GameShop } from "@types";
 
 export type GameOrigin = "sync" | "catalog" | "custom";
 
-const PLATFORM_SCHEMES = [
-  "steam://",
-  "legendary://",
-  "goggalaxy://",
-  "msxbox://",
-  "battlenet://",
-];
-
 interface OriginSource {
   shop: GameShop;
-  libraryOrigin?: GameOrigin;
+  libraryOrigin?: GameOrigin | null;
   executablePath?: string | null;
+  /** A GameHub repack/torrent download record, when one exists. */
+  download?: unknown | null;
 }
 
 /**
- * Classify how a game entered the library.
- * - "sync": owned on a connected platform (Steam/Epic/GOG/Xbox/Battle.net)
- * - "custom": added manually via "Add custom game"
- * - "catalog": added from the Hydra API catalog (not owned anywhere)
+ * Classify how a game entered the library, for the per-store library tabs.
  *
- * Every platform sync function stamps libraryOrigin: "sync" during its
- * migration pass, so genuinely synced games always have the field set.
- * Legacy records without libraryOrigin that also lack a platform URI scheme
- * in their exe path are treated as catalog games — defaulting to "sync" was
- * overly permissive and caused catalogue games to leak into platform filters.
+ * Locked model: `libraryOrigin: "sync"` is AUTHORITATIVE and wins over
+ * everything else. Only a platform login/OAuth sync handler ever writes it
+ * (sync-steam-library, sync-epic-library, …), so once a game is stamped
+ * "sync" it is locked to its store tab — a later repack download or a stale
+ * Playnite "catalog" stamp can never pull it out. This is what the user asked
+ * for: "lock the category so no games go out of it".
+ *
+ *   1. custom shop / "custom" stamp     → custom
+ *   2. "sync" stamp                     → sync    (LOCKED — owned on platform)
+ *   3. GameHub download record          → catalog (a repack → Retigga)
+ *   4. "catalog" stamp                  → catalog (Playnite / catalogue add)
+ *   5. unstamped / unverified           → catalog (Retigga; sync re-claims it)
  */
 export function getGameOrigin(game: OriginSource): GameOrigin {
-  if (game.libraryOrigin) return game.libraryOrigin;
-  if (game.shop === "custom") return "custom";
-  const exe = game.executablePath;
-  if (exe && PLATFORM_SCHEMES.some((scheme) => exe.startsWith(scheme))) {
-    return "sync";
+  // 1. Manually added games.
+  if (game.shop === "custom" || game.libraryOrigin === "custom") {
+    return "custom";
   }
-  // Any real file-path exe means the game was found installed on disk — treat
-  // as owned/synced. Only games with no exe and no libraryOrigin stamp (i.e.
-  // purely added from the catalogue without ever being installed) fall through
-  // to "catalog".
-  if (exe) return "sync";
+
+  // 2. Owned via a platform login/OAuth sync — locked to its store tab.
+  if (game.libraryOrigin === "sync") return "sync";
+
+  // 3. A GameHub download record means a Retigga repack.
+  if (game.download != null) return "catalog";
+
+  // 4. Explicitly added from the catalogue / imported from Playnite.
+  if (game.libraryOrigin === "catalog") return "catalog";
+
+  // 5. Unstamped / unverified legacy record → Retigga. A real platform sync
+  //    will stamp it "sync" and move it to its store tab on its next run.
   return "catalog";
 }

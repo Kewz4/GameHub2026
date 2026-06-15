@@ -119,12 +119,36 @@ function sgdbToAssets(
  * @param title   Game title (used for catalogue search + SGDB)
  * @param initialFallback  Any artwork the caller already has (e.g. from the store API)
  */
+/** Shops the Hydra API doesn't recognise (it only accepts steam/launchbox
+ * style ids for these flows) AND whose titles are too generic for a reliable
+ * catalogue title-search (e.g. "Legends of Runeterra" matched "Minecraft
+ * Legends"). For these we go straight to SteamGridDB. */
+const SGDB_ONLY_SHOPS: GameShop[] = ["riot"];
+
 export async function fetchBestAssets(
   shop: GameShop,
   objectId: string,
   title: string,
   initialFallback: Partial<BestAssets> = {}
 ): Promise<BestAssets> {
+  if (SGDB_ONLY_SHOPS.includes(shop)) {
+    try {
+      const sgdb = await getSteamGridDbArtwork(title);
+      if (sgdb) return sgdbToAssets(sgdb, initialFallback);
+    } catch (err) {
+      logger.warn(`fetchBestAssets: SGDB failed for "${title}"`, err);
+    }
+    return {
+      iconUrl: initialFallback.iconUrl ?? null,
+      coverImageUrl: initialFallback.coverImageUrl ?? null,
+      libraryImageUrl: initialFallback.libraryImageUrl ?? null,
+      libraryHeroImageUrl: initialFallback.libraryHeroImageUrl ?? null,
+      logoImageUrl: initialFallback.logoImageUrl ?? null,
+      logoPosition: initialFallback.logoPosition ?? null,
+      downloadSources: initialFallback.downloadSources ?? [],
+    };
+  }
+
   // 1. Try Hydra API for this exact shop+objectId
   const hydraAssets = await tryHydraAssets(shop, objectId);
   if (hydraAssets) {

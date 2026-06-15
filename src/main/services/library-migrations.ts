@@ -1,4 +1,10 @@
-import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import {
+  db,
+  downloadsSublevel,
+  gamesShopAssetsSublevel,
+  gamesSublevel,
+  levelKeys,
+} from "@main/level";
 import { HydraApi } from "./hydra-api";
 import { logger } from "./logger";
 import { WindowManager } from "./window-manager";
@@ -50,20 +56,47 @@ const searchCatalogue = async (
  *    "1817070"). These break the game page, cloud saves and achievements.
  *    Repaired via a catalogue lookup and re-keyed in place.
  *
- * 2. libraryOrigin stamping for legacy records, so the per-platform library
- *    filters stop guessing:
- *      - custom-shop games               → "custom"
- *      - any executable (scheme or file) → "sync"   (installed = owned; this
- *        also re-stamps "catalog" games that a scan later found on disk)
- *      - everything else unstamped       → "catalog"
- *    Platform sync loops keep re-stamping owned games with "sync" on every
- *    run, so a stamp here is never the final word for genuinely synced games.
+ * 2. libraryOrigin stamping for legacy records. Under the locked model
+ *    (v4.6.4) we never INFER "sync" — only a platform login/OAuth sync handler
+ *    may stamp it. Here we only stamp the unambiguous repack case
+ *    (download record → "catalog"); all other unstamped records stay unstamped
+ *    and resolve to Retigga at render time until a sync claims them.
+ *
+ * 3. One-time stamp repair (libraryOriginRepairV4): stamps unstamped games and
+ *    corrects mis-stamped ones based on platform URI exe evidence — the only
+ *    exe format that a platform sync handler (not a disk scan) ever writes.
+ *    Also undoes the V3 over-demotion that wrongly marked sync games "custom".
+ *    Rules: download record → "catalog"; platform URI exe → "sync";
+ *    everything else → unchanged (platform sync re-stamps on next run).
  */
 export const runLibraryMigrations = async (): Promise<void> => {
   const entries: Array<[string, Game]> = await gamesSublevel
     .iterator()
     .all()
     .catch(() => []);
+
+  // LoL dedup: steam:20590 is a defunct catalogue stub for League of Legends.
+  // If riot:league_of_legends exists alongside it, delete the steam stub so it
+  // doesn't appear as a second entry. Reviews from that stub are accessible via
+  // the Riot LoL game-details page which shares the same Hydra API objectId.
+  const riotLolKey = levelKeys.game("riot", "league_of_legends");
+  const steamLolKey = levelKeys.game("steam", "20590");
+  const [riotLol, steamLol] = await Promise.all([
+    gamesSublevel.get(riotLolKey).catch(() => null),
+    gamesSublevel.get(steamLolKey).catch(() => null),
+  ]);
+  if (riotLol && !riotLol.isDeleted && steamLol && !steamLol.isDeleted) {
+    await gamesSublevel
+      .put(steamLolKey, { ...steamLol, isDeleted: true })
+      .catch(() => {});
+    logger.info("[LibraryMigrations] Removed duplicate steam:20590 (LoL stub)");
+  }
+
+  const originRepairV4Done = await db
+    .get<string, boolean>(levelKeys.libraryOriginRepairV4, {
+      valueEncoding: "json",
+    })
+    .catch(() => false);
 
   for (const [key, game] of entries) {
     if (!game || game.isDeleted) continue;
@@ -107,19 +140,45 @@ export const runLibraryMigrations = async (): Promise<void> => {
         // Catalogue unavailable or no match — leave for next launch
       }
 
-      // --- Stamp libraryOrigin --------------------------------------------
-      const exe = game.executablePath;
+      // --- Stamp / repair libraryOrigin -----------------------------------
+      // Platform URI exe schemes that ONLY a platform sync handler ever writes.
+      // Real filesystem paths come from disk scans, user manual edits, or
+      // Playnite imports — these are NOT proof of store ownership.
+      const PLATFORM_URI_SCHEMES = [
+        "steam://",
+        "legendary://",
+        "goggalaxy://",
+        "goglauncher://",
+        "msxbox://",
+        "battlenet://",
+        "origin2://",
+        "uplay://",
+        "riot://",
+      ];
+      const exe = game.executablePath?.toLowerCase() ?? "";
+      const hasPlatformUri = PLATFORM_URI_SCHEMES.some((s) => exe.startsWith(s));
       let desired: "sync" | "catalog" | "custom" | null = null;
 
       if (game.shop === "custom") {
         if (game.libraryOrigin !== "custom") desired = "custom";
-      } else if (exe) {
-        // Any executable — a platform URI (steam://run/…) or a real file
-        // found on disk by a scan — means the game is owned/installed,
-        // not a catalogue-only entry.
-        if (game.libraryOrigin !== "sync") desired = "sync";
-      } else if (!game.libraryOrigin) {
-        desired = "catalog";
+      } else if (game.libraryOrigin === "sync") {
+        // LOCKED. A platform sync owns this stamp; never demote it — not even
+        // for a repack download record. Owned-on-platform always wins.
+      } else {
+        const dl = await downloadsSublevel.get(key).catch(() => null);
+        if (dl) {
+          // Repack/torrent download record → Retigga.
+          if (game.libraryOrigin !== "catalog") desired = "catalog";
+        } else if (hasPlatformUri) {
+          // A platform URI exe is 100% written by a platform sync handler
+          // (sync-steam-library, sync-epic-library, etc.). Promote to "sync"
+          // and undo any earlier wrong demotion to "custom".
+          desired = "sync";
+        }
+        // No URI exe, no download record:
+        // - "catalog" → keep (explicit catalogue / Playnite stamp)
+        // - unstamped → leave unstamped; getGameOrigin sends to Retigga; the
+        //   next platform sync run promotes genuine owned games to "sync".
       }
 
       const updates: Partial<typeof game> = {};
@@ -131,6 +190,12 @@ export const runLibraryMigrations = async (): Promise<void> => {
     } catch (err) {
       logger.error(`[LibraryMigrations] Failed migrating ${key}`, err);
     }
+  }
+
+  if (!originRepairV4Done) {
+    await db
+      .put(levelKeys.libraryOriginRepairV4, true, { valueEncoding: "json" })
+      .catch(() => {});
   }
 
   logger.info("[LibraryMigrations] Library migration pass complete");

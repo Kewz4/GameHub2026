@@ -85,8 +85,8 @@ export function SettingsXbox() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      <p style={{ margin: 0, opacity: 0.8 }}>{t("xbox_description")}</p>
+    <div className="settings-account">
+      <p className="settings-account__description">{t("xbox_description")}</p>
 
       {!isSignedIn ? (
         <Button
@@ -105,18 +105,9 @@ export function SettingsXbox() {
         </Button>
       ) : (
         <>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "10px 14px",
-              borderRadius: "8px",
-              background: "var(--color-background-2, rgba(255,255,255,0.05))",
-            }}
-          >
+          <div className="settings-account__card">
             <CheckCircleFillIcon size={16} />
-            <span style={{ flex: 1 }}>
+            <span className="settings-account__identity">
               {t("xbox_signed_in_as", { gamertag })}
             </span>
             <Button type="button" theme="outline" onClick={handleSignOut}>
@@ -144,9 +135,7 @@ export function SettingsXbox() {
 
           {hasGamePass && (
             <>
-              <div
-                style={{ display: "flex", alignItems: "center", gap: "12px" }}
-              >
+              <div className="settings-account__row">
                 <Button
                   type="button"
                   onClick={handleSync}
@@ -165,7 +154,7 @@ export function SettingsXbox() {
                   </small>
                 )}
               </div>
-              <p style={{ margin: 0, fontSize: "0.8em", opacity: 0.6 }}>
+              <p className="settings-account__hint">
                 {t("xbox_launch_hint")}
               </p>
             </>

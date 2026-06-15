@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@renderer/components";
-import { useToast } from "@renderer/hooks";
+import { useCachedDetection, useToast } from "@renderer/hooks";
 import {
   AlertIcon,
   CheckCircleFillIcon,
@@ -16,33 +16,42 @@ interface BattleNetGameDef {
   launchUri: string;
 }
 
+interface BattleNetDetection {
+  installed: boolean;
+  detected: BattleNetGameDef[];
+  all: BattleNetGameDef[];
+}
+
 export function SettingsBattleNet() {
   const { t } = useTranslation("settings");
   const { showSuccessToast, showErrorToast } = useToast();
 
-  const [bnetInstalled, setBnetInstalled] = useState<boolean | null>(null);
-  const [allGames, setAllGames] = useState<BattleNetGameDef[]>([]);
-  const [detected, setDetected] = useState<BattleNetGameDef[]>([]);
+  const { data, refresh } = useCachedDetection<BattleNetDetection>(
+    "battlenet-games",
+    () => window.electron.getBattleNetGames()
+  );
+
+  const bnetInstalled = data?.installed ?? null;
+  const allGames = data?.all ?? [];
+  const detected = data?.detected ?? [];
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
   const [isInstallingBnet, setIsInstallingBnet] = useState(false);
   const [bnetInstallProgress, setBnetInstallProgress] = useState(0);
   const unsubRef = useRef<(() => void) | null>(null);
 
-  const refreshInstalled = () => {
-    window.electron
-      .getBattleNetGames()
-      .then(({ installed, detected: det, all }) => {
-        setBnetInstalled(installed);
-        setDetected(det);
-        setAllGames(all);
-        setSelected(new Set(det.map((g) => g.productCode)));
-      })
-      .catch(() => setBnetInstalled(false));
-  };
+  useEffect(() => {
+    if (data) {
+      setSelected((prev) =>
+        prev.size > 0
+          ? prev
+          : new Set(data.detected.map((g) => g.productCode))
+      );
+    }
+  }, [data]);
 
   useEffect(() => {
-    refreshInstalled();
     const unsub = window.electron.onBattleNetInstallProgress(
       setBnetInstallProgress
     );
@@ -57,7 +66,7 @@ export function SettingsBattleNet() {
       await window.electron.installBattleNet();
       showSuccessToast(t("battlenet_installer_launched"));
       // Re-check after a short delay to pick up the install
-      setTimeout(refreshInstalled, 5000);
+      setTimeout(refresh, 5000);
     } catch (err: any) {
       showErrorToast(err?.message ?? t("battlenet_install_failed"));
     } finally {
@@ -89,22 +98,15 @@ export function SettingsBattleNet() {
     }
   };
 
-  if (bnetInstalled === null) return null;
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      <p style={{ margin: 0, opacity: 0.8 }}>{t("battlenet_description")}</p>
+    <div className="settings-account">
+      <p className="settings-account__description">
+        {t("battlenet_description")}
+      </p>
 
-      {!bnetInstalled && (
+      {bnetInstalled === false && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              opacity: 0.7,
-            }}
-          >
+          <div className="settings-account__warning">
             <AlertIcon size={16} />
             <span>{t("battlenet_not_installed")}</span>
           </div>
@@ -131,17 +133,11 @@ export function SettingsBattleNet() {
 
       {bnetInstalled && (
         <>
-          <p style={{ margin: 0, fontSize: "0.875em", opacity: 0.7 }}>
+          <p className="settings-account__hint">
             {t("battlenet_select_games")}
           </p>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              gap: "8px",
-            }}
-          >
+          <div className="settings-account__game-grid">
             {allGames.map((game) => {
               const isDetected = detected.some(
                 (d) => d.productCode === game.productCode
@@ -153,20 +149,7 @@ export function SettingsBattleNet() {
                   key={game.productCode}
                   type="button"
                   onClick={() => toggleGame(game.productCode)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    border: `1px solid ${isChecked ? "var(--color-accent, #5e81f4)" : "rgba(255,255,255,0.1)"}`,
-                    background: isChecked
-                      ? "rgba(94,129,244,0.15)"
-                      : "rgba(255,255,255,0.03)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    color: "inherit",
-                  }}
+                  className={`settings-account__game-tile${isChecked ? " settings-account__game-tile--selected" : ""}`}
                 >
                   <img
                     src={game.iconUrl}
@@ -182,27 +165,11 @@ export function SettingsBattleNet() {
                     }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: "0.875em",
-                        fontWeight: 500,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <div className="settings-account__game-title">
                       {game.title}
                     </div>
                     {isDetected && (
-                      <div
-                        style={{
-                          fontSize: "0.75em",
-                          opacity: 0.6,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "3px",
-                        }}
-                      >
+                      <div className="settings-account__game-status">
                         <CheckCircleFillIcon size={10} />
                         {t("installed")}
                       </div>

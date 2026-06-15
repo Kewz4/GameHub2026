@@ -6,6 +6,11 @@ export const createGame = async (game: Game) => {
   if (game.shop === "custom") {
     return;
   }
+  // Platform-owned games are re-synced from the platform on each login;
+  // they must not be uploaded to the Hydra cloud library.
+  if (game.libraryOrigin === "sync") {
+    return;
+  }
 
   return HydraApi.post(`/profile/games`, {
     objectId: game.objectId,

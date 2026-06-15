@@ -180,9 +180,13 @@ const downloadGameArtifact = async (
       objectId
     );
 
+    // gameArtifactId is now an R2 object key (e.g. "users/x/saves/steam/1/..tar")
+    // which contains slashes — sanitize before using it as a local filename so
+    // we don't try to write into non-existent nested directories.
+    const safeArtifactName = gameArtifactId.replace(/[^a-zA-Z0-9._-]/g, "_");
     const zipLocation = path.join(
       SystemPath.getPath("userData"),
-      `${gameArtifactId}.tar`
+      `${safeArtifactName}.tar`
     );
     const backupPath = path.join(backupsPath, `${shop}-${objectId}`);
 

@@ -101,7 +101,7 @@ const syncGamePassLibrary = async () => {
       libraryOrigin: "sync" as const,
       executablePath: `msxbox://game/?productId=${xboxGame.productId}`,
       xboxTitleId: xboxGame.titleId ?? null,
-    } as any;
+    };
 
     await gamesSublevel.put(gameKey, game);
     await createGame(game).catch(() => {});

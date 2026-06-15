@@ -4,6 +4,7 @@ import { t } from "i18next";
 import { registerEvent } from "../register-event";
 import { gamesSublevel } from "@main/level";
 import { GameExecutables, LocalNotificationManager, logger, WindowManager } from "@main/services";
+import { classifyScannedOrigin } from "@main/helpers/classify-scanned-origin";
 
 interface FoundGame { title: string; executablePath: string; key: string; }
 interface ScanResult { foundGames: FoundGame[]; total: number; }
@@ -56,8 +57,9 @@ const selectiveScanInstalledGames = async (
           await gamesSublevel.put(key, {
             ...game,
             executablePath: foundPath,
-            // Found installed on disk = owned, not a catalogue-only entry
-            libraryOrigin: "sync",
+            // Store folder → owned on that platform; anything else keeps its
+            // original origin or becomes custom
+            libraryOrigin: classifyScannedOrigin(foundPath, game.libraryOrigin),
           });
         }
         foundGames.push({ title: game.title, executablePath: foundPath, key });

@@ -10,7 +10,8 @@ import {
   refreshGogToken,
   getGogOwnedGameIds,
   getGogGameDetails,
-  getGogGameClientId,
+  getGogGameCredentials,
+  getGogGameToken,
   getGogGamePlaytimeMs,
   getGogUserInfo,
 } from "@main/services/gog-account";
@@ -74,14 +75,17 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
               existing.libraryOrigin = "sync";
               await gamesSublevel.put(gameKey, existing);
             }
-            const clientId = await getGogGameClientId(objectId).catch(
+            const credentials = await getGogGameCredentials(objectId).catch(
               () => null
             );
-            if (clientId) {
+            const gameToken = credentials
+              ? await getGogGameToken(tokens.refresh_token, credentials)
+              : null;
+            if (credentials && gameToken) {
               const gogPlaytimeMs = await getGogGamePlaytimeMs(
-                tokens.access_token,
+                gameToken,
                 userInfo.userId,
-                clientId
+                credentials.clientId
               );
               if (gogPlaytimeMs > (existing.playTimeInMilliseconds ?? 0)) {
                 await gamesSublevel.put(gameKey, {
@@ -134,23 +138,28 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
             ? `https:${details.images.background}`
             : null;
 
+          // gogIconUrl (logo2x) is a LANDSCAPE logo — never use it as the
+          // portrait cover or the library card stretches it blurry. Leave the
+          // cover to the catalogue/SteamGridDB (600x900 portrait grids).
           const assets = await fetchBestAssets("gog", objectId, details.title, {
             iconUrl: gogIconUrl,
-            coverImageUrl: gogIconUrl,
             libraryHeroImageUrl: gogHeroUrl,
           });
 
           // Fetch playtime from GOG for new games
           let gogPlaytimeMs = 0;
           if (userInfo) {
-            const clientId = await getGogGameClientId(objectId).catch(
+            const credentials = await getGogGameCredentials(objectId).catch(
               () => null
             );
-            if (clientId) {
+            const gameToken = credentials
+              ? await getGogGameToken(tokens.refresh_token, credentials)
+              : null;
+            if (credentials && gameToken) {
               gogPlaytimeMs = await getGogGamePlaytimeMs(
-                tokens.access_token,
+                gameToken,
                 userInfo.userId,
-                clientId
+                credentials.clientId
               );
             }
           }

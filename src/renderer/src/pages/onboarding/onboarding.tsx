@@ -47,8 +47,7 @@ type StepId =
   | "ubisoft"
   | "ea"
   | "tools"
-  | "notifications"
-  | "startup"
+  | "preferences"
   | "done";
 
 const ALL_STEPS: StepId[] = [
@@ -65,8 +64,7 @@ const ALL_STEPS: StepId[] = [
   "ubisoft",
   "ea",
   "tools",
-  "notifications",
-  "startup",
+  "preferences",
   "done",
 ];
 
@@ -83,8 +81,7 @@ const NAV_STEPS: StepId[] = [
   "ubisoft",
   "ea",
   "tools",
-  "notifications",
-  "startup",
+  "preferences",
 ];
 
 const STEP_LABELS: Record<StepId, string> = {
@@ -101,8 +98,7 @@ const STEP_LABELS: Record<StepId, string> = {
   ubisoft: "Ubisoft Connect",
   ea: "EA app",
   tools: "Tools",
-  notifications: "Notifications",
-  startup: "Startup",
+  preferences: "Preferences",
   done: "Done",
 };
 
@@ -204,6 +200,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   } | null>(null);
   const [ubisoftBusy, setUbisoftBusy] = useState(false);
   const [ubisoftResult, setUbisoftResult] = useState("");
+  const [ubisoftLinked, setUbisoftLinked] = useState(false);
+  const [ubisoftAccountName, setUbisoftAccountName] = useState<string | null>(null);
+  const [ubisoftConnecting, setUbisoftConnecting] = useState(false);
+  const [ubisoftSyncResult, setUbisoftSyncResult] = useState<string>("");
 
   const [eaState, setEaState] = useState<{
     installed: boolean;
@@ -211,6 +211,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   } | null>(null);
   const [eaBusy, setEaBusy] = useState(false);
   const [eaResult, setEaResult] = useState("");
+  const [eaLinked, setEaLinked] = useState(false);
+  const [eaAccountName, setEaAccountName] = useState<string | null>(null);
+  const [eaConnecting, setEaConnecting] = useState(false);
+  const [eaSyncResult, setEaSyncResult] = useState<string>("");
 
   // Tools step state
   const [ludusaviResult, setLudusaviResult] = useState<string>("");
@@ -272,7 +276,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           return remaining[idx + 1] as StepId;
         return "tools";
       }
-      if (from === "tools") return "notifications";
+      if (from === "tools") return "preferences";
+      if (from === "preferences") return "done";
       // Default linear progression for other steps
       const idx = ALL_STEPS.indexOf(from);
       return ALL_STEPS[idx + 1] as StepId;
@@ -344,9 +349,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       const summary = await window.electron
         .getSteamPlayerSummary(detectedId, undefined)
         .catch(() => null);
-      await window.electron.updateUserPreferences({ steamId: detectedId });
+      await window.electron.updateUserPreferences({
+        steamId: detectedId,
+        steamUsername: summary?.personaname ?? null,
+        steamAvatarUrl: summary?.avatarfull ?? null,
+      });
       if (summary) setSteamProfile(summary);
       setSteamLinked(true);
+      // Sync owned games in the background so they get locked to the Steam tab.
+      window.electron.syncSteamLibrary(detectedId, undefined).catch(() => {});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setSteamError(msg || "Steam login failed.");
@@ -373,9 +384,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       await window.electron.updateUserPreferences({
         steamId,
         steamApiKey: steamApiKey.trim() || undefined,
+        steamUsername: summary?.personaname ?? null,
+        steamAvatarUrl: summary?.avatarfull ?? null,
       });
       if (summary) setSteamProfile(summary);
       setSteamLinked(true);
+      // Sync owned games in the background so they get locked to the Steam tab.
+      window.electron
+        .syncSteamLibrary(steamId, steamApiKey.trim() || undefined)
+        .catch(() => {});
     } catch {
       setSteamError("Could not connect to Steam. Verify your credentials.");
     } finally {
@@ -392,10 +409,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       if (result.success) {
         setEpicLinked(true);
         setEpicAccount(result.account ?? "Epic");
+        window.electron
+          .updateUserPreferences({ epicAccountName: result.account ?? "Epic" })
+          .catch(() => {});
         window.electron.syncEpicLibrary().catch(() => {});
       }
     },
-    []
+    [next]
   );
 
   const handleGogConnect = () => {
@@ -407,9 +427,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       if (!result) return;
       await window.electron.updateUserPreferences({
         gogRefreshToken: result.refresh_token,
+        gogUsername: result.username ?? "GOG User",
       });
       setGogLinked(true);
       setGogUsername(result.username ?? "GOG User");
+      // gogdl is needed to download GOG games — install it in the background
+      // if it isn't present yet
       const gogdlStatus = await window.electron
         .getGogdlStatus()
         .catch(() => ({ binaryFound: false }));
@@ -417,7 +440,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         window.electron.installGogdl().catch(() => {});
       window.electron.syncGogLibrary().catch(() => {});
     },
-    []
+    [next]
   );
 
   const handleXboxConnect = async () => {
@@ -459,12 +482,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   }, [currentStep, riotState, ubisoftState, eaState]);
 
   const handleAddRiotGames = async () => {
-    if (!riotState) return;
     setRiotBusy(true);
     try {
-      const result = await window.electron.addRiotGamesToLibrary(
-        riotState.detected.map((g) => g.productId)
-      );
+      const result = await window.electron.addRiotGamesToLibrary([
+        "league_of_legends",
+        "valorant",
+        "bacon",
+      ]);
       setRiotResult(
         `Added ${result.added} game${result.added !== 1 ? "s" : ""} to your library.`
       );
@@ -489,6 +513,50 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setUbisoftResult("Failed to add Ubisoft games.");
     } finally {
       setUbisoftBusy(false);
+    }
+  };
+
+  const handleUbisoftConnect = async () => {
+    setUbisoftConnecting(true);
+    try {
+      const result = await window.electron.openUbisoftAuthWindow();
+      if (result) {
+        setUbisoftLinked(true);
+        setUbisoftAccountName(result.username);
+        const syncResult = await window.electron.syncUbisoftLibrary().catch(() => null);
+        if (syncResult && !syncResult.error) {
+          setUbisoftSyncResult(
+            `Synced ${syncResult.total} game${syncResult.total !== 1 ? "s" : ""} from your Ubisoft library.`
+          );
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setUbisoftConnecting(false);
+    }
+  };
+
+  const handleEaConnect = async () => {
+    setEaConnecting(true);
+    try {
+      const result = await window.electron.openEaAuthWindow();
+      if (result) {
+        setEaLinked(true);
+        setEaAccountName(result.username);
+        const syncResult = await window.electron
+          .syncEaLibrary()
+          .catch(() => null);
+        if (syncResult && !syncResult.error) {
+          setEaSyncResult(
+            `Synced ${syncResult.total} game${syncResult.total !== 1 ? "s" : ""} from your EA library.`
+          );
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setEaConnecting(false);
     }
   };
 
@@ -702,6 +770,36 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           ) : (
             <>
               <h1>You&apos;re all set!</h1>
+              {(() => {
+                const connected = [
+                  { name: "Steam", linked: steamLinked, Icon: SteamLogo },
+                  { name: "Epic Games", linked: epicLinked, Icon: EpicLogo },
+                  { name: "GOG", linked: gogLinked, Icon: GogLogo },
+                  { name: "Xbox", linked: xboxLinked, Icon: XboxLogo },
+                  {
+                    name: "Ubisoft Connect",
+                    linked: ubisoftLinked,
+                    Icon: UbisoftLogo,
+                  },
+                  { name: "EA app", linked: eaLinked, Icon: EaLogo },
+                ].filter((p) => p.linked);
+                if (connected.length === 0) return null;
+                return (
+                  <div className="onboarding-done-summary">
+                    {connected.map(({ name, Icon }) => (
+                      <div
+                        key={name}
+                        className="onboarding-connected-badge"
+                        style={{ margin: 0 }}
+                      >
+                        <Icon style={{ width: 16, height: 16 }} />
+                        {name}
+                        <CheckCircleFillIcon size={14} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               <p>
                 Your libraries will sync in the background. Connect more
                 services anytime from <strong>Settings → Integrations</strong>.
@@ -789,7 +887,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   "ubisoft",
                   "ea",
                 ] as StepId[]
-              ).map((s) => {
+              )
+                .filter(
+                  (s) =>
+                    stepIndex <= ALL_STEPS.indexOf("integrations-select") ||
+                    selectedIntegrations.has(s)
+                )
+                .map((s) => {
                 const PlatformIcon = {
                   steam: SteamLogo,
                   epic: EpicLogo,
@@ -844,7 +948,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <div className="onboarding-sidebar__section-label">
                 Preferences
               </div>
-              {(["notifications", "startup"] as StepId[]).map((s) => (
+              {(["preferences"] as StepId[]).map((s) => (
                 <div
                   key={s}
                   className={[
@@ -869,6 +973,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
         {/* ── Right content ── */}
         <div className="onboarding-content">
+          {showSidebar && (
+            <div className="onboarding-progress">
+              <div
+                className="onboarding-progress__fill"
+                style={{
+                  width: `${(stepIndex / (ALL_STEPS.length - 1)) * 100}%`,
+                }}
+              />
+            </div>
+          )}
+          <div key={currentStep} className="onboarding-step-body">
           {/* ── Language ── */}
           {currentStep === "language" && (
             <>
@@ -1267,9 +1382,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </div>
               </div>
               <p className="onboarding-step-description">
-                GameHub will install Legendary automatically if needed. Your
-                Epic library will sync and you&apos;ll be able to download
-                games.
+                Connect your Epic Games account to import your owned library into GameHub.
               </p>
 
               {epicLinked ? (
@@ -1428,25 +1541,28 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </div>
               </div>
               <p className="onboarding-step-description">
-                GameHub detects games installed through the Riot Client and adds
-                them to your library. They launch through the Riot Client.
+                Riot games are free to play — add League of Legends, VALORANT,
+                and Legends of Runeterra to your library. They launch through
+                the Riot Client.
               </p>
 
               {riotState === null ? (
                 <p style={{ opacity: 0.6 }}>Detecting Riot Client…</p>
-              ) : !riotState.installed ? (
-                <p style={{ opacity: 0.7 }}>
-                  Riot Client not detected on this machine. You can add Riot
-                  games later from Settings → Integrations.
-                </p>
-              ) : riotState.detected.length === 0 ? (
-                <p style={{ opacity: 0.7 }}>
-                  Riot Client found, but no installed games were detected.
-                </p>
               ) : (
-                <p style={{ opacity: 0.8 }}>
-                  Detected: {riotState.detected.map((g) => g.title).join(", ")}
-                </p>
+                <>
+                  {riotState.detected.length > 0 && (
+                    <p style={{ opacity: 0.8 }}>
+                      Installed:{" "}
+                      {riotState.detected.map((g) => g.title).join(", ")}
+                    </p>
+                  )}
+                  {!riotState.installed && (
+                    <p style={{ opacity: 0.6, fontSize: "0.82rem" }}>
+                      Riot Client not detected — games can&apos;t be launched
+                      until you install it.
+                    </p>
+                  )}
+                </>
               )}
 
               {riotResult && (
@@ -1464,19 +1580,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 >
                   {riotResult ? "Continue" : "Skip for now"}
                 </button>
-                {riotState?.installed &&
-                  riotState.detected.length > 0 &&
-                  !riotResult && (
-                    <Button
-                      type="button"
-                      onClick={handleAddRiotGames}
-                      disabled={riotBusy}
-                    >
-                      {riotBusy
-                        ? "Adding…"
-                        : `Add ${riotState.detected.length} game${riotState.detected.length !== 1 ? "s" : ""}`}
-                    </Button>
-                  )}
+                {!riotResult && (
+                  <Button
+                    type="button"
+                    onClick={handleAddRiotGames}
+                    disabled={riotBusy}
+                  >
+                    {riotBusy ? "Adding…" : "Add Riot games"}
+                  </Button>
+                )}
               </div>
             </>
           )}
@@ -1490,62 +1602,85 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </div>
                 <div>
                   <h2>Ubisoft Connect</h2>
-                  <p>Import games installed through Ubisoft Connect</p>
+                  <p>Import your Ubisoft library</p>
                 </div>
               </div>
               <p className="onboarding-step-description">
-                GameHub detects games installed through Ubisoft Connect and adds
-                them to your library. They launch through the Ubisoft Connect
-                client.
+                Connect your Ubisoft account to import your owned games — no
+                client required. Games launch through Ubisoft Connect when
+                it&apos;s installed.
               </p>
 
-              {ubisoftState === null ? (
-                <p style={{ opacity: 0.6 }}>Detecting Ubisoft Connect…</p>
-              ) : !ubisoftState.installed ? (
-                <p style={{ opacity: 0.7 }}>
-                  Ubisoft Connect not detected on this machine. You can add
-                  Ubisoft games later from Settings → Integrations.
-                </p>
-              ) : ubisoftState.detected.length === 0 ? (
-                <p style={{ opacity: 0.7 }}>
-                  Ubisoft Connect found, but no installed games were detected.
-                </p>
+              {ubisoftLinked ? (
+                <>
+                  <div className="onboarding-connected-badge">
+                    <CheckCircleFillIcon size={16} />
+                    Connected as {ubisoftAccountName}
+                    {ubisoftSyncResult && (
+                      <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
+                        {" "}
+                        — {ubisoftSyncResult}
+                      </span>
+                    )}
+                  </div>
+                  <div className="onboarding-actions">
+                    <Button type="button" onClick={next}>
+                      Continue
+                    </Button>
+                  </div>
+                </>
               ) : (
-                <p style={{ opacity: 0.8 }}>
-                  Detected:{" "}
-                  {ubisoftState.detected.map((g) => g.title).join(", ")}
-                </p>
-              )}
-
-              {ubisoftResult && (
-                <div className="onboarding-connected-badge">
-                  <CheckCircleFillIcon size={16} />
-                  {ubisoftResult}
-                </div>
-              )}
-
-              <div className="onboarding-actions">
-                <button
-                  type="button"
-                  className="onboarding-skip"
-                  onClick={next}
-                >
-                  {ubisoftResult ? "Continue" : "Skip for now"}
-                </button>
-                {ubisoftState?.installed &&
-                  ubisoftState.detected.length > 0 &&
-                  !ubisoftResult && (
+                <>
+                  <div className="onboarding-actions" style={{ marginBottom: 0 }}>
+                    <button
+                      type="button"
+                      className="onboarding-skip"
+                      onClick={next}
+                    >
+                      Skip for now
+                    </button>
                     <Button
                       type="button"
-                      onClick={handleAddUbisoftGames}
-                      disabled={ubisoftBusy}
+                      onClick={handleUbisoftConnect}
+                      disabled={ubisoftConnecting}
                     >
-                      {ubisoftBusy
-                        ? "Adding…"
-                        : `Add ${ubisoftState.detected.length} game${ubisoftState.detected.length !== 1 ? "s" : ""}`}
+                      <PersonIcon size={14} />
+                      {ubisoftConnecting ? "Connecting…" : "Connect Ubisoft"}
                     </Button>
-                  )}
-              </div>
+                  </div>
+
+                  {ubisoftState !== null &&
+                    ubisoftState.installed &&
+                    ubisoftState.detected.length > 0 && (
+                      <>
+                        <div
+                          className="onboarding-divider"
+                          style={{ marginTop: "16px" }}
+                        >
+                          or add installed games
+                        </div>
+                        {ubisoftResult ? (
+                          <div className="onboarding-connected-badge">
+                            <CheckCircleFillIcon size={16} />
+                            {ubisoftResult}
+                          </div>
+                        ) : (
+                          <div className="onboarding-actions">
+                            <Button
+                              type="button"
+                              onClick={handleAddUbisoftGames}
+                              disabled={ubisoftBusy}
+                            >
+                              {ubisoftBusy
+                                ? "Adding…"
+                                : `Add ${ubisoftState.detected.length} installed game${ubisoftState.detected.length !== 1 ? "s" : ""}`}
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                </>
+              )}
             </>
           )}
 
@@ -1558,60 +1693,88 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </div>
                 <div>
                   <h2>EA app</h2>
-                  <p>Import games installed through the EA app or Origin</p>
+                  <p>Import your EA library</p>
                 </div>
               </div>
               <p className="onboarding-step-description">
-                GameHub detects games installed through the EA app (or Origin)
-                and adds them to your library. They launch through the EA app.
+                Connect your EA account to import your owned games — no client
+                required. Games launch through the EA app when it&apos;s
+                installed.
               </p>
 
-              {eaState === null ? (
-                <p style={{ opacity: 0.6 }}>Detecting EA app…</p>
-              ) : !eaState.installed ? (
-                <p style={{ opacity: 0.7 }}>
-                  EA app not detected on this machine. You can add EA games
-                  later from Settings → Integrations.
-                </p>
-              ) : eaState.detected.length === 0 ? (
-                <p style={{ opacity: 0.7 }}>
-                  EA app found, but no installed games were detected.
-                </p>
+              {eaLinked ? (
+                <>
+                  <div className="onboarding-connected-badge">
+                    <CheckCircleFillIcon size={16} />
+                    Connected as {eaAccountName}
+                    {eaSyncResult && (
+                      <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
+                        {" "}
+                        — {eaSyncResult}
+                      </span>
+                    )}
+                  </div>
+                  <div className="onboarding-actions">
+                    <Button type="button" onClick={next}>
+                      Continue
+                    </Button>
+                  </div>
+                </>
               ) : (
-                <p style={{ opacity: 0.8 }}>
-                  Detected: {eaState.detected.map((g) => g.title).join(", ")}
-                </p>
-              )}
-
-              {eaResult && (
-                <div className="onboarding-connected-badge">
-                  <CheckCircleFillIcon size={16} />
-                  {eaResult}
-                </div>
-              )}
-
-              <div className="onboarding-actions">
-                <button
-                  type="button"
-                  className="onboarding-skip"
-                  onClick={next}
-                >
-                  {eaResult ? "Continue" : "Skip for now"}
-                </button>
-                {eaState?.installed &&
-                  eaState.detected.length > 0 &&
-                  !eaResult && (
+                <>
+                  <div
+                    className="onboarding-actions"
+                    style={{ marginBottom: 0 }}
+                  >
+                    <button
+                      type="button"
+                      className="onboarding-skip"
+                      onClick={next}
+                    >
+                      Skip for now
+                    </button>
                     <Button
                       type="button"
-                      onClick={handleAddEaGames}
-                      disabled={eaBusy}
+                      onClick={handleEaConnect}
+                      disabled={eaConnecting}
                     >
-                      {eaBusy
-                        ? "Adding…"
-                        : `Add ${eaState.detected.length} game${eaState.detected.length !== 1 ? "s" : ""}`}
+                      <PersonIcon size={14} />
+                      {eaConnecting ? "Connecting…" : "Connect EA"}
                     </Button>
-                  )}
-              </div>
+                  </div>
+
+                  {eaState !== null &&
+                    eaState.installed &&
+                    eaState.detected.length > 0 && (
+                      <>
+                        <div
+                          className="onboarding-divider"
+                          style={{ marginTop: "16px" }}
+                        >
+                          or add installed games
+                        </div>
+                        {eaResult ? (
+                          <div className="onboarding-connected-badge">
+                            <CheckCircleFillIcon size={16} />
+                            {eaResult}
+                          </div>
+                        ) : (
+                          <div className="onboarding-actions">
+                            <Button
+                              type="button"
+                              onClick={handleAddEaGames}
+                              disabled={eaBusy}
+                            >
+                              {eaBusy
+                                ? "Adding…"
+                                : `Add ${eaState.detected.length} installed game${eaState.detected.length !== 1 ? "s" : ""}`}
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                </>
+              )}
             </>
           )}
 
@@ -1786,17 +1949,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             </>
           )}
 
-          {/* ── Notifications ── */}
-          {currentStep === "notifications" && (
+          {/* ── Preferences ── */}
+          {currentStep === "preferences" && (
             <>
               <div className="onboarding-step-header">
                 <div className="onboarding-step-header__icon">
                   <BellIcon size={20} />
                 </div>
                 <div>
-                  <h2>Notifications</h2>
-                  <p>Choose which alerts GameHub should show</p>
+                  <h2>Preferences</h2>
+                  <p>Notifications and startup behavior</p>
                 </div>
+              </div>
+              <div className="onboarding-sidebar__section-label">
+                Notifications
               </div>
               <div className="onboarding-toggles">
                 <label
@@ -1828,25 +1994,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   />
                 </label>
               </div>
-              <div className="onboarding-actions">
-                <Button type="button" onClick={next}>
-                  Continue
-                </Button>
-              </div>
-            </>
-          )}
-
-          {/* ── Startup ── */}
-          {currentStep === "startup" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <GearIcon size={20} />
-                </div>
-                <div>
-                  <h2>Startup Behavior</h2>
-                  <p>How GameHub behaves when your computer starts</p>
-                </div>
+              <div
+                className="onboarding-sidebar__section-label"
+                style={{ marginTop: "16px" }}
+              >
+                Startup
               </div>
               <div className="onboarding-toggles">
                 <label
@@ -1873,6 +2025,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               </div>
             </>
           )}
+          </div>
         </div>
       </div>
 

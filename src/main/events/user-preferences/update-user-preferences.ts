@@ -67,6 +67,11 @@ const updateUserPreferences = async (
       preferences.maxDownloadSpeedBytesPerSecond ?? null
     );
   }
+
+  // Best-effort cloud backup so settings survive reinstalls
+  import("./backup-settings-to-cloud")
+    .then((m) => m.backupSettingsToCloudInternal())
+    .catch(() => {});
 };
 
 registerEvent("updateUserPreferences", updateUserPreferences);

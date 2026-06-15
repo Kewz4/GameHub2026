@@ -111,3 +111,161 @@
     padding-top: calc(globals.$spacing-unit * 1.5);
   }
 }
+
+.settings-account {
+  display: flex;
+  flex-direction: column;
+  gap: calc(globals.$spacing-unit * 2);
+
+  &__description {
+    margin: 0;
+    opacity: 0.8;
+  }
+
+  &__card {
+    display: flex;
+    align-items: center;
+    gap: calc(globals.$spacing-unit * 1.5);
+    padding: calc(globals.$spacing-unit * 1.5);
+    border-radius: 8px;
+    background: var(--color-background-2, rgba(255, 255, 255, 0.05));
+  }
+
+  &__avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+  }
+
+  &__identity {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+  }
+
+  &__sub {
+    opacity: 0.6;
+    font-size: 0.85em;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: calc(globals.$spacing-unit * 1.5);
+    flex-wrap: wrap;
+  }
+
+  &__hint {
+    opacity: 0.6;
+    font-size: 0.85em;
+    margin: 0;
+  }
+
+  &__warning {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.7;
+  }
+
+  &__game-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: calc(globals.$spacing-unit * 1);
+  }
+
+  &__game-tile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+
+    &--selected {
+      border-color: var(--color-accent, #5e81f4);
+      background: rgba(94, 129, 244, 0.15);
+    }
+  }
+
+  &__game-title {
+    font-size: 0.875em;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__game-status {
+    font-size: 0.75em;
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+}
+
+.settings-integration-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(globals.$spacing-unit * 0.75);
+}
+
+.settings-integration-item {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: calc(globals.$spacing-unit * 1);
+    width: 100%;
+    padding: calc(globals.$spacing-unit * 1.25) calc(globals.$spacing-unit * 1.5);
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.95rem;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+  }
+
+  &__title {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  &__chip {
+    font-size: 0.75rem;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    opacity: 0.7;
+
+    &--connected {
+      background: rgba(74, 222, 128, 0.15);
+      color: #4ade80;
+      opacity: 1;
+    }
+  }
+
+  &__body {
+    padding: calc(globals.$spacing-unit * 1.5);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}

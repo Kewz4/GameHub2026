@@ -235,6 +235,13 @@
     top: 0;
     left: 0;
     z-index: 0;
+    // Force GPU compositing so backdrop-filter on overlays doesn't cause the
+    // image to render blurry. The translate(0) creates an isolated stacking
+    // context that prevents the blur from leaking into the image layer.
+    transform: translateZ(0);
+    will-change: transform;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: high-quality;
   }
 
   &__cover-placeholder {
