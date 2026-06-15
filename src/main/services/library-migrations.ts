@@ -62,12 +62,12 @@ const searchCatalogue = async (
  *    (download record → "catalog"); all other unstamped records stay unstamped
  *    and resolve to Retigga at render time until a sync claims them.
  *
- * 3. One-time lock-down repair (libraryOriginRepairV3): earlier versions
- *    inferred "sync" from any platform-URI exe and from store-folder disk
- *    scans, which dumped repacks, Playnite imports and scanned installs into
- *    the platform tabs. Demote those once — repacks → "catalog", disk scans
- *    (real fs exe) → "custom" — so the platform tabs are left holding only
- *    genuine sync imports. Owned games are re-stamped "sync" by the next sync.
+ * 3. One-time stamp repair (libraryOriginRepairV4): stamps unstamped games and
+ *    corrects mis-stamped ones based on platform URI exe evidence — the only
+ *    exe format that a platform sync handler (not a disk scan) ever writes.
+ *    Also undoes the V3 over-demotion that wrongly marked sync games "custom".
+ *    Rules: download record → "catalog"; platform URI exe → "sync";
+ *    everything else → unchanged (platform sync re-stamps on next run).
  */
 export const runLibraryMigrations = async (): Promise<void> => {
   const entries: Array<[string, Game]> = await gamesSublevel
@@ -92,8 +92,8 @@ export const runLibraryMigrations = async (): Promise<void> => {
     logger.info("[LibraryMigrations] Removed duplicate steam:20590 (LoL stub)");
   }
 
-  const originRepairV3Done = await db
-    .get<string, boolean>(levelKeys.libraryOriginRepairV3, {
+  const originRepairV4Done = await db
+    .get<string, boolean>(levelKeys.libraryOriginRepairV4, {
       valueEncoding: "json",
     })
     .catch(() => false);
@@ -141,37 +141,47 @@ export const runLibraryMigrations = async (): Promise<void> => {
       }
 
       // --- Stamp / repair libraryOrigin -----------------------------------
-      // Locked model (v4.6.4): platform tabs hold ONLY games stamped "sync" by
-      // a platform login/OAuth sync handler. We NEVER infer "sync" here — not
-      // from a URI exe, not from a store folder — because that inference is
-      // exactly what leaked repacks/imports/scans into the platform tabs.
-      const exe = game.executablePath;
-      const isUriExe = Boolean(exe?.includes("://"));
+      // Platform URI exe schemes that ONLY a platform sync handler ever writes.
+      // Real filesystem paths come from disk scans, user manual edits, or
+      // Playnite imports — these are NOT proof of store ownership.
+      const PLATFORM_URI_SCHEMES = [
+        "steam://",
+        "legendary://",
+        "goggalaxy://",
+        "goglauncher://",
+        "msxbox://",
+        "battlenet://",
+        "origin2://",
+        "uplay://",
+        "riot://",
+      ];
+      const exe = game.executablePath?.toLowerCase() ?? "";
+      const hasPlatformUri = PLATFORM_URI_SCHEMES.some((s) => exe.startsWith(s));
       let desired: "sync" | "catalog" | "custom" | null = null;
 
       if (game.shop === "custom") {
         if (game.libraryOrigin !== "custom") desired = "custom";
-      } else if (!game.libraryOrigin) {
-        // Unstamped legacy record. Only the unambiguous repack case is stamped
-        // here (download record → catalog); everything else stays unstamped and
-        // getGameOrigin resolves it to Retigga at render time. A genuine
-        // platform sync will stamp it "sync" on its next run.
+      } else {
         const dl = await downloadsSublevel.get(key).catch(() => null);
-        if (dl) desired = "catalog";
-      } else if (!originRepairV3Done && game.libraryOrigin === "sync") {
-        // One-time lock-down repair: demote wrongly-"sync" games so the
-        // platform tabs end up containing only genuine sync imports.
-        //   • download record         → "catalog" (it's a repack)
-        //   • real filesystem exe path → "custom"  (it was a disk scan, not a
-        //     sync — every genuine sync writes either a platform URI exe, e.g.
-        //     steam://run, legendary://run, or no exe at all, e.g. GOG)
-        // Riot syncs store a real client path, so they're left untouched.
-        const download = await downloadsSublevel.get(key).catch(() => null);
-        if (download) {
-          desired = "catalog";
-        } else if (game.shop !== "riot" && exe && !isUriExe) {
-          desired = "custom";
+        if (dl) {
+          // Repack/torrent download record always wins — it's a Retigga game.
+          if (game.libraryOrigin !== "catalog") desired = "catalog";
+        } else if (hasPlatformUri) {
+          // A platform URI exe is 100% written by a platform sync handler
+          // (sync-steam-library, sync-epic-library, etc.). Infer "sync" for
+          // unstamped records AND undo any wrong V3 demotion to "custom".
+          // We do NOT touch "catalog"-stamped games here: if Playnite stamped a
+          // game "catalog" and the platform sync later set the URI exe but also
+          // already updated the stamp to "sync", the stamp is already correct.
+          // If somehow it's still "catalog" with a URI exe, the platform sync
+          // is the stronger signal — promote it.
+          if (game.libraryOrigin !== "sync") desired = "sync";
         }
+        // Games with no URI exe, no download record:
+        // - If already stamped "sync" → keep (trust the sync that set it)
+        // - If "catalog" → keep (trust the explicit catalog stamp)
+        // - If unstamped → leave unstamped; getGameOrigin sends to Retigga;
+        //   the next platform sync run will promote genuine owned games to "sync"
       }
 
       const updates: Partial<typeof game> = {};
@@ -185,9 +195,9 @@ export const runLibraryMigrations = async (): Promise<void> => {
     }
   }
 
-  if (!originRepairV3Done) {
+  if (!originRepairV4Done) {
     await db
-      .put(levelKeys.libraryOriginRepairV3, true, { valueEncoding: "json" })
+      .put(levelKeys.libraryOriginRepairV4, true, { valueEncoding: "json" })
       .catch(() => {});
   }
 
