@@ -1,4 +1,5 @@
 import axios from "axios";
+import zlib from "node:zlib";
 import { logger } from "./logger";
 
 const CLIENT_ID = "46899977096215655";
@@ -135,7 +136,10 @@ export const getGogGamePlaytimeMs = async (
         `https://gameplay.gog.com/clients/${clientId}/users/${userId}/sessions`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
-          params: { page_size: 200, ...(pageToken ? { page_token: pageToken } : {}) },
+          params: {
+            page_size: 200,
+            ...(pageToken ? { page_token: pageToken } : {}),
+          },
         }
       );
       const items: { time?: number }[] = response.data?.items ?? [];
@@ -152,17 +156,87 @@ export const getGogGamePlaytimeMs = async (
 export const getGogGameClientId = async (
   productId: string
 ): Promise<string | null> => {
+  const credentials = await getGogGameCredentials(productId);
+  return credentials?.clientId ?? null;
+};
+
+export interface GogGameCredentials {
+  clientId: string;
+  clientSecret: string;
+}
+
+const gameCredentialsCache = new Map<string, GogGameCredentials | null>();
+
+/** Each GOG game has its own OAuth client (Galaxy "client_id"/"client_secret"),
+ * stored in the game's v2 build meta JSON (zlib-compressed). The
+ * gameplay.gog.com endpoints (achievements, playtime) only accept tokens
+ * issued for the game's own client — the generic embed-client token is
+ * rejected, which is why achievement fetches silently returned nothing. */
+export const getGogGameCredentials = async (
+  productId: string
+): Promise<GogGameCredentials | null> => {
+  if (gameCredentialsCache.has(productId)) {
+    return gameCredentialsCache.get(productId)!;
+  }
+
   try {
-    const response = await axios.get(
+    const buildsRes = await axios.get(
       `https://content-system.gog.com/products/${productId}/os/windows/builds`,
       { params: { generation: 2 } }
     );
-    return (
-      response.data?.items?.[0]?.client_id_2 ??
-      response.data?.items?.[0]?.client_id ??
-      null
-    );
-  } catch {
+    const items: Array<{ link?: string }> = buildsRes.data?.items ?? [];
+    const metaLink = items.find((i) => i.link)?.link;
+    if (!metaLink) {
+      gameCredentialsCache.set(productId, null);
+      return null;
+    }
+
+    const metaRes = await axios.get<ArrayBuffer>(metaLink, {
+      responseType: "arraybuffer",
+      timeout: 15_000,
+    });
+    const raw = Buffer.from(metaRes.data);
+    let meta: { clientId?: string; clientSecret?: string };
+    try {
+      meta = JSON.parse(zlib.inflateSync(raw).toString("utf8"));
+    } catch {
+      meta = JSON.parse(raw.toString("utf8"));
+    }
+
+    const credentials =
+      meta.clientId && meta.clientSecret
+        ? { clientId: meta.clientId, clientSecret: meta.clientSecret }
+        : null;
+    gameCredentialsCache.set(productId, credentials);
+    return credentials;
+  } catch (err) {
+    logger.warn(`getGogGameCredentials failed for ${productId}`, err);
+    gameCredentialsCache.set(productId, null);
+    return null;
+  }
+};
+
+/** Exchanges the user's refresh token for an access token scoped to a
+ * specific game's OAuth client. `without_new_session=1` keeps the user's
+ * main session/refresh token valid. */
+export const getGogGameToken = async (
+  refreshToken: string,
+  credentials: GogGameCredentials
+): Promise<string | null> => {
+  try {
+    const response = await axios.get("https://auth.gog.com/token", {
+      params: {
+        client_id: credentials.clientId,
+        client_secret: credentials.clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        without_new_session: 1,
+      },
+      timeout: 15_000,
+    });
+    return response.data?.access_token ?? null;
+  } catch (err) {
+    logger.warn("getGogGameToken failed", err);
     return null;
   }
 };
