@@ -1,7 +1,11 @@
 import type { Cracker, DownloadSourceStatus, Downloader } from "@shared";
 import type { SteamAppDetails } from "./steam.types";
 import type { Download, Game, Subscription } from "./level.types";
-import type { GameShop, UnlockedAchievement } from "./game.types";
+import type {
+  GameShop,
+  SteamAchievement,
+  UnlockedAchievement,
+} from "./game.types";
 
 export type FriendRequestAction = "ACCEPTED" | "REFUSED" | "CANCEL";
 export * from "./download-contract";
@@ -364,7 +368,8 @@ export type LocalNotificationType =
   | "DOWNLOAD_COMPLETE"
   | "UPDATE_AVAILABLE"
   | "ACHIEVEMENT_UNLOCKED"
-  | "SCAN_GAMES_COMPLETE";
+  | "SCAN_GAMES_COMPLETE"
+  | "ACHIEVEMENTS_SYNC_COMPLETE";
 
 export interface Notification {
   id: string;
@@ -404,6 +409,44 @@ export interface NotificationsResponse {
 
 export interface NotificationCountResponse {
   count: number;
+}
+
+/**
+ * A single cached Exophase game → its achievement definitions. Definitions are
+ * NOT user-specific, so this cache is shared across friends via R2 (one blob).
+ * Keyed in LevelDB by `${shop}:${normalizedTitle}`.
+ */
+export interface ExophaseCacheEntry {
+  shop: GameShop;
+  normalizedTitle: string;
+  title: string;
+  masterId: number | null;
+  awardsUrl: string | null;
+  definitions: SteamAchievement[];
+  updatedAt: number;
+}
+
+/** One line in the "Achievements Sync finished" report modal. */
+export interface ExophaseSyncReportGame {
+  shop: GameShop;
+  objectId: string;
+  title: string;
+  iconUrl: string | null;
+  newlyUnlocked: number;
+  totalUnlocked: number;
+  totalAchievements: number;
+  /** A PSN entry with earned trophies exists for this PC game. */
+  psnDetected?: boolean;
+}
+
+export interface ExophaseSyncReport {
+  startedAt: string;
+  finishedAt: string;
+  gamesProcessed: number;
+  gamesUpdated: number;
+  totalNewlyUnlocked: number;
+  games: ExophaseSyncReportGame[];
+  psnDetected: ExophaseSyncReportGame[];
 }
 
 export interface ComparedAchievements {

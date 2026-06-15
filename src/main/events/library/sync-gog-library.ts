@@ -218,6 +218,10 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
     logger.log(`GOG library sync complete: ${added} games added`);
     void generateMissingMetadataInternal();
     // Achievements are now sourced from Exophase (Settings → Achievements).
+    void import("@main/services/achievements/exophase")
+      .then((m) => m.applyCacheToLibrary())
+      .catch(() => {});
+
     WindowManager.sendToAppWindows("on-library-batch-complete");
     return { total: ownedIds.length, added, addedGames };
   } catch (err: unknown) {

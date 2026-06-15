@@ -344,6 +344,38 @@ export class R2Sync {
     }
   }
 
+  // ── Shared blobs (community caches, not per-user) ─────────────────────────
+
+  /**
+   * Upload a shared JSON blob under `shared/{name}`. Used for the cross-user
+   * Exophase achievement-definition cache so friends share fetch work.
+   */
+  static async uploadSharedJson(name: string, json: string): Promise<void> {
+    const key = `shared/${name}`;
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: Buffer.from(json, "utf8"),
+        ContentType: "application/json",
+      })
+    );
+    logger.log(`R2: uploaded shared blob ${key} (${json.length} bytes)`);
+  }
+
+  static async downloadSharedJson(name: string): Promise<string | null> {
+    const key = `shared/${name}`;
+    try {
+      const res = await this.client.send(
+        new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
+      );
+      const text = await res.Body?.transformToString();
+      return text ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** No-op kept for API parity with the old Uploadcare grouping. */
   static async createGroup(_uuids: string[]): Promise<string> {
     void _uuids;

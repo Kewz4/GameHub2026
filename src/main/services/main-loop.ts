@@ -88,6 +88,16 @@ export const startMainLoop = async () => {
   wrapInLoop(() => UpdateManager.checkForUpdates(), INTERVALS.updateChecker);
   wrapInLoop(() => syncAllLibraries(), INTERVALS.librarySync);
 
+  // Exophase achievement cache: refresh on startup and every 2 hours. Pulls the
+  // shared R2 cache, credits newly-unlocked achievements, flags PSN games, and
+  // raises the "Achievements Sync finished" notification.
+  wrapInLoop(async () => {
+    const { runExophaseBackgroundSync } = await import(
+      "./achievements/exophase/exophase-background-sync"
+    );
+    await runExophaseBackgroundSync();
+  }, INTERVALS.exophaseSync);
+
   wrapInLoop(() => {
     PowerSaveBlockerManager.syncState({
       downloadActive: DownloadManager.hasActiveDownload(),

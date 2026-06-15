@@ -123,6 +123,9 @@ const scanInstalledGames = async (
   }
 
   if (!dryRun) {
+    void import("@main/services/achievements/exophase")
+      .then((m) => m.applyCacheToLibrary())
+      .catch(() => {});
     WindowManager.sendToAppWindows("on-library-batch-complete");
     await publishScanNotification(foundGames.length);
   }

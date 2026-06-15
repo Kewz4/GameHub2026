@@ -126,6 +126,12 @@ const syncSteamLibrary = async (
   // Achievements are now sourced from Exophase (Settings → Achievements),
   // not pulled per-platform on library sync.
 
+  // Instantly light up achievements for newly-added games from the shared
+  // Exophase cache (network-free); the 2h background sync fills earned state.
+  void import("@main/services/achievements/exophase")
+    .then((m) => m.applyCacheToLibrary())
+    .catch(() => {});
+
   WindowManager.sendToAppWindows("on-library-batch-complete");
   return { total: ownedGames.length, added };
 };

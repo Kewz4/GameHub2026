@@ -80,6 +80,7 @@ export const INTERVALS = {
   updateChecker: 60_000 * 50, // 50 minutes
   powerSaveBlockerSync: 20_000,
   librarySync: 6 * 60 * 60 * 1000, // 6 hours
+  exophaseSync: 2 * 60 * 60 * 1000, // 2 hours — Exophase achievement cache refresh
 };
 
 export const DEFAULT_ACHIEVEMENT_SOUND_VOLUME = 0.15;

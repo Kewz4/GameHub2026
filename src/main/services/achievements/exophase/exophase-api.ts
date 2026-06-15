@@ -41,7 +41,9 @@ export async function searchExophaseGames(
   return list.filter((g) => Boolean(g && g.endpoint_awards));
 }
 
-const normalizeTitle = (s: string): string =>
+/** Normalises a game title for matching/cache-keying: lowercased, edition
+ *  suffixes and trademark glyphs stripped, punctuation collapsed to spaces. */
+export const normalizeExophaseTitle = (s: string): string =>
   s
     .toLowerCase()
     .replace(/[™®©]/g, "")
@@ -51,6 +53,8 @@ const normalizeTitle = (s: string): string =>
     )
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+const normalizeTitle = normalizeExophaseTitle;
 
 /**
  * Picks the best Exophase result for a library game. Ported from the Playnite

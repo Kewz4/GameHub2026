@@ -159,6 +159,10 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   logger.log(`Epic library sync complete: ${added} games added`);
   void generateMissingMetadataInternal();
   // Achievements are now sourced from Exophase (Settings → Achievements).
+  void import("@main/services/achievements/exophase")
+    .then((m) => m.applyCacheToLibrary())
+    .catch(() => {});
+
   WindowManager.sendToAppWindows("on-library-batch-complete");
   return { total: games.length, added, addedGames };
 };

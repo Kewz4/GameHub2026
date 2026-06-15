@@ -66,6 +66,8 @@ export function SettingsExophase() {
           exophaseUserId: state.username,
           exophaseEnabled: true,
         });
+        // Prime the shared achievement cache in the background.
+        window.electron.runExophaseBackgroundSync().catch(() => {});
         showSuccessToast(
           "Exophase connected",
           `Signed in as ${state.username}.`

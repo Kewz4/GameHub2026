@@ -43,4 +43,9 @@ export const prepareGameEntry = async ({
       isDeleted: false,
     });
   }
+
+  // Apply any cached Exophase achievements for this freshly-added repack.
+  void import("@main/services/achievements/exophase")
+    .then((m) => m.applyCacheToLibrary())
+    .catch(() => {});
 };
