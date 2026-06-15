@@ -203,3 +203,10 @@ export function parseAchievements(html: string): ExophaseAchievement[] {
 export function awardsUrlFor(game: ExophaseSearchGame): string {
   return ensureAbsoluteUrl(game.endpoint_awards ?? "");
 }
+
+/** Normalises an achievement/trophy display name for cross-platform matching
+ *  (a PSN trophy ↔ the equivalent PC achievement). Lowercases and strips every
+ *  non-alphanumeric character so "The Journey Begins!" === "the journey begins". */
+export function normalizeAchievementName(name: string): string {
+  return (name || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}

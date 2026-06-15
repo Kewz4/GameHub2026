@@ -7,6 +7,7 @@ import {
   AlertIcon,
   SyncIcon,
   LinkExternalIcon,
+  DownloadIcon,
 } from "@primer/octicons-react";
 import type { GameShop } from "@types";
 
@@ -32,6 +33,7 @@ export function SettingsExophase() {
   const [username, setUsername] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isImportingPsn, setIsImportingPsn] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{
     current: number;
     total: number;
@@ -119,6 +121,31 @@ export function SettingsExophase() {
     } finally {
       unsub();
       setIsSyncing(false);
+      setSyncProgress(null);
+    }
+  };
+
+  const handlePsnImport = async () => {
+    setIsImportingPsn(true);
+    setSyncProgress(null);
+    const unsub = window.electron.onExophaseSyncProgress((p) =>
+      setSyncProgress(p)
+    );
+    try {
+      const result = await window.electron.importPlaystationAchievements();
+      if (result.error) {
+        showErrorToast("PlayStation import failed", result.error);
+      } else {
+        showSuccessToast(
+          "PlayStation achievements imported",
+          `Credited ${result.totalUnlocked} trophies onto ${result.gamesMatched} game${result.gamesMatched !== 1 ? "s" : ""} (${result.gamesProcessed} checked).`
+        );
+      }
+    } catch {
+      showErrorToast("PlayStation import failed.");
+    } finally {
+      unsub();
+      setIsImportingPsn(false);
       setSyncProgress(null);
     }
   };
@@ -217,17 +244,39 @@ export function SettingsExophase() {
         ))}
       </div>
 
-      <Button
-        type="button"
-        onClick={handleSync}
-        disabled={!isAuthenticated || isSyncing || !enabled}
-        style={{ display: "flex", alignItems: "center", gap: 6 }}
-      >
-        <SyncIcon size={14} />
-        {isSyncing ? "Syncing achievements…" : "Sync Achievements Now"}
-      </Button>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Button
+          type="button"
+          onClick={handleSync}
+          disabled={!isAuthenticated || isSyncing || isImportingPsn || !enabled}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <SyncIcon size={14} />
+          {isSyncing ? "Syncing achievements…" : "Sync Achievements Now"}
+        </Button>
 
-      {isSyncing && syncProgress && (
+        <Button
+          type="button"
+          theme="outline"
+          onClick={handlePsnImport}
+          disabled={!isAuthenticated || isSyncing || isImportingPsn || !enabled}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <DownloadIcon size={14} />
+          {isImportingPsn
+            ? "Importing trophies…"
+            : "Import PlayStation Achievements"}
+        </Button>
+      </div>
+
+      <p style={{ margin: "8px 0 0", opacity: 0.6, fontSize: "0.8em" }}>
+        PlayStation import credits trophies you earned on PSN onto the matching
+        PC game in your library — e.g. God of War trophies from PS4 show up
+        unlocked on God of War. Link your PSN account on your Exophase profile
+        first.
+      </p>
+
+      {(isSyncing || isImportingPsn) && syncProgress && (
         <p style={{ margin: "8px 0 0", opacity: 0.7, fontSize: "0.8em" }}>
           {syncProgress.current}/{syncProgress.total} — {syncProgress.title}
         </p>

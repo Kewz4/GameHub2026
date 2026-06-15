@@ -360,6 +360,12 @@ declare global {
       totalUnlocked: number;
       error?: string;
     }>;
+    importPlaystationAchievements: () => Promise<{
+      gamesProcessed: number;
+      gamesMatched: number;
+      totalUnlocked: number;
+      error?: string;
+    }>;
     onExophaseSyncProgress: (
       cb: (progress: { current: number; total: number; title: string }) => void
     ) => () => void;

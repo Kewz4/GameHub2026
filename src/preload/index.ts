@@ -264,6 +264,8 @@ contextBridge.exposeInMainWorld("electron", {
   clearExophaseSession: () => ipcRenderer.invoke("clearExophaseSession"),
   syncExophaseAchievements: () =>
     ipcRenderer.invoke("syncExophaseAchievements"),
+  importPlaystationAchievements: () =>
+    ipcRenderer.invoke("importPlaystationAchievements"),
   onExophaseSyncProgress: (
     cb: (progress: { current: number; total: number; title: string }) => void
   ) => {

@@ -226,6 +226,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   // Achievements (Exophase) step state
   const [exophaseUsername, setExophaseUsername] = useState<string | null>(null);
   const [exophaseConnecting, setExophaseConnecting] = useState(false);
+  const [exophasePsnImporting, setExophasePsnImporting] = useState(false);
+  const [exophasePsnResult, setExophasePsnResult] = useState<string>("");
 
   // Tools step state
   const [ludusaviResult, setLudusaviResult] = useState<string>("");
@@ -585,6 +587,23 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       // ignore
     } finally {
       setExophaseConnecting(false);
+    }
+  };
+
+  const handleExophasePsnImport = async () => {
+    setExophasePsnImporting(true);
+    setExophasePsnResult("");
+    try {
+      const result = await window.electron.importPlaystationAchievements();
+      if (!result.error) {
+        setExophasePsnResult(
+          `Credited ${result.totalUnlocked} trophies onto ${result.gamesMatched} game${result.gamesMatched !== 1 ? "s" : ""}.`
+        );
+      }
+    } catch {
+      // ignore
+    } finally {
+      setExophasePsnImporting(false);
     }
   };
 
@@ -1834,8 +1853,33 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     <div className="onboarding-connected-badge">
                       <CheckCircleFillIcon size={16} />
                       Connected as {exophaseUsername}
+                      {exophasePsnResult && (
+                        <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
+                          {" "}
+                          — {exophasePsnResult}
+                        </span>
+                      )}
                     </div>
+                    <p
+                      className="onboarding-step-description"
+                      style={{ marginTop: 12 }}
+                    >
+                      Played on PlayStation too? Import your PSN trophies and
+                      we&apos;ll credit them onto the matching PC games (e.g.
+                      God of War on PS4 → unlocked on God of War PC). Link your
+                      PSN account on your Exophase profile first.
+                    </p>
                     <div className="onboarding-actions">
+                      <Button
+                        type="button"
+                        theme="outline"
+                        onClick={handleExophasePsnImport}
+                        disabled={exophasePsnImporting}
+                      >
+                        {exophasePsnImporting
+                          ? "Importing trophies…"
+                          : "Import PlayStation Achievements"}
+                      </Button>
                       <Button type="button" onClick={next}>
                         Continue
                       </Button>
