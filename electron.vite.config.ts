@@ -25,7 +25,15 @@ export default defineConfig(({ mode }) => {
           "@shared": resolve("src/shared"),
         },
       },
-      plugins: [externalizeDepsPlugin(), swcPlugin()],
+      plugins: [
+        // Bundle @aws-sdk/* and @smithy/* directly into the main output.
+        // These are pure-JS ESM packages whose nested package.json structure
+        // does not resolve correctly from inside an asar at runtime.
+        externalizeDepsPlugin({
+          exclude: ["@aws-sdk/client-s3", "@smithy"],
+        }),
+        swcPlugin(),
+      ],
     },
     preload: {
       plugins: [externalizeDepsPlugin()],
