@@ -56,21 +56,18 @@ const searchCatalogue = async (
  *    "1817070"). These break the game page, cloud saves and achievements.
  *    Repaired via a catalogue lookup and re-keyed in place.
  *
- * 2. libraryOrigin stamping for legacy records, so the per-platform library
- *    filters stop guessing:
- *      - custom-shop games                  → "custom"
- *      - platform URI exe (steam://run/…)   → "sync" (set by platform syncs)
- *      - real exe inside a store folder     → "sync"
- *      - real exe elsewhere (repack, scan)  → "custom" — installed-on-disk is
- *        NOT proof of store ownership; only platform syncs may claim "sync"
- *      - everything else unstamped          → "catalog"
- *    Platform sync loops keep re-stamping owned games with "sync" on every
- *    run, so a stamp here is never the final word for genuinely synced games.
+ * 2. libraryOrigin stamping for legacy records. Under the locked model
+ *    (v4.6.4) we never INFER "sync" — only a platform login/OAuth sync handler
+ *    may stamp it. Here we only stamp the unambiguous repack case
+ *    (download record → "catalog"); all other unstamped records stay unstamped
+ *    and resolve to Retigga at render time until a sync claims them.
  *
- * 3. One-time repair (libraryOriginRepairV2): earlier versions stamped "sync"
- *    on ANY game with ANY executable, which dumped repack installs and scan
- *    finds into the Steam tab. Demote those wrong stamps once; genuinely
- *    owned games are re-stamped "sync" by the next platform sync.
+ * 3. One-time lock-down repair (libraryOriginRepairV3): earlier versions
+ *    inferred "sync" from any platform-URI exe and from store-folder disk
+ *    scans, which dumped repacks, Playnite imports and scanned installs into
+ *    the platform tabs. Demote those once — repacks → "catalog", disk scans
+ *    (real fs exe) → "custom" — so the platform tabs are left holding only
+ *    genuine sync imports. Owned games are re-stamped "sync" by the next sync.
  */
 export const runLibraryMigrations = async (): Promise<void> => {
   const entries: Array<[string, Game]> = await gamesSublevel
@@ -95,8 +92,8 @@ export const runLibraryMigrations = async (): Promise<void> => {
     logger.info("[LibraryMigrations] Removed duplicate steam:20590 (LoL stub)");
   }
 
-  const originRepairDone = await db
-    .get<string, boolean>(levelKeys.libraryOriginRepairV2, {
+  const originRepairV3Done = await db
+    .get<string, boolean>(levelKeys.libraryOriginRepairV3, {
       valueEncoding: "json",
     })
     .catch(() => false);
@@ -143,7 +140,11 @@ export const runLibraryMigrations = async (): Promise<void> => {
         // Catalogue unavailable or no match — leave for next launch
       }
 
-      // --- Stamp libraryOrigin --------------------------------------------
+      // --- Stamp / repair libraryOrigin -----------------------------------
+      // Locked model (v4.6.4): platform tabs hold ONLY games stamped "sync" by
+      // a platform login/OAuth sync handler. We NEVER infer "sync" here — not
+      // from a URI exe, not from a store folder — because that inference is
+      // exactly what leaked repacks/imports/scans into the platform tabs.
       const exe = game.executablePath;
       const isUriExe = Boolean(exe?.includes("://"));
       let desired: "sync" | "catalog" | "custom" | null = null;
@@ -151,29 +152,26 @@ export const runLibraryMigrations = async (): Promise<void> => {
       if (game.shop === "custom") {
         if (game.libraryOrigin !== "custom") desired = "custom";
       } else if (!game.libraryOrigin) {
-        // Only stamp high-confidence cases; leave genuinely ambiguous records
-        // unstamped so the renderer's ownership-first getGameOrigin decides at
-        // render time. This avoids locking in a wrong "catalog"/"custom" guess
-        // for an owned game whose sync stamp was simply never written.
-        if (isUriExe) {
-          // Platform URI exes are only ever produced by a platform launcher.
-          desired = "sync";
-        } else {
-          const dl = await downloadsSublevel.get(key).catch(() => null);
-          // A GameHub download record is hard proof of a repack.
-          if (dl) desired = "catalog";
-          // Otherwise: no stamp, no URI exe, no repack download — leave it
-          // unstamped; getGameOrigin treats platform-shop records as owned.
-        }
-      } else if (!originRepairDone && game.libraryOrigin === "sync") {
-        // One-time repair of the old any-exe→"sync" stamp. The reliable signal
-        // that a "sync"-stamped game is actually a GameHub repack (not a real
-        // platform-owned title) is the presence of a GameHub download record —
-        // NOT its install folder, since an owned game can be installed
-        // anywhere. Only those are demoted to the catalogue; everything else
-        // keeps "sync" so genuinely owned games never fall out of their tab.
+        // Unstamped legacy record. Only the unambiguous repack case is stamped
+        // here (download record → catalog); everything else stays unstamped and
+        // getGameOrigin resolves it to Retigga at render time. A genuine
+        // platform sync will stamp it "sync" on its next run.
+        const dl = await downloadsSublevel.get(key).catch(() => null);
+        if (dl) desired = "catalog";
+      } else if (!originRepairV3Done && game.libraryOrigin === "sync") {
+        // One-time lock-down repair: demote wrongly-"sync" games so the
+        // platform tabs end up containing only genuine sync imports.
+        //   • download record         → "catalog" (it's a repack)
+        //   • real filesystem exe path → "custom"  (it was a disk scan, not a
+        //     sync — every genuine sync writes either a platform URI exe, e.g.
+        //     steam://run, legendary://run, or no exe at all, e.g. GOG)
+        // Riot syncs store a real client path, so they're left untouched.
         const download = await downloadsSublevel.get(key).catch(() => null);
-        if (download) desired = "catalog";
+        if (download) {
+          desired = "catalog";
+        } else if (game.shop !== "riot" && exe && !isUriExe) {
+          desired = "custom";
+        }
       }
 
       const updates: Partial<typeof game> = {};
@@ -187,9 +185,9 @@ export const runLibraryMigrations = async (): Promise<void> => {
     }
   }
 
-  if (!originRepairDone) {
+  if (!originRepairV3Done) {
     await db
-      .put(levelKeys.libraryOriginRepairV2, true, { valueEncoding: "json" })
+      .put(levelKeys.libraryOriginRepairV3, true, { valueEncoding: "json" })
       .catch(() => {});
   }
 

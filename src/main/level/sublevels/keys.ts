@@ -24,4 +24,5 @@ export const levelKeys = {
   localNotifications: "localNotifications",
   commonRedistPassed: "commonRedistPassed", // Whether common redistributables preflight has passed
   libraryOriginRepairV2: "libraryOriginRepairV2", // One-time demotion of wrongly "sync"-stamped scan/repack games
+  libraryOriginRepairV3: "libraryOriginRepairV3", // Lock-down: demote scan/repack "sync" stamps so platform tabs hold only true syncs
 };

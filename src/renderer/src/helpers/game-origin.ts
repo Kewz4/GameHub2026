@@ -2,24 +2,6 @@ import type { GameShop } from "@types";
 
 export type GameOrigin = "sync" | "catalog" | "custom";
 
-/**
- * Executable URI schemes that only a platform launcher ever produces. Their
- * presence is hard proof the game is owned on (and launched through) that
- * platform — a repack/custom game always has a real filesystem path instead.
- */
-const PLATFORM_SCHEMES = [
-  "steam://",
-  "legendary://",
-  "com.epicgames.launcher://",
-  "goggalaxy://",
-  "goglauncher://",
-  "msxbox://",
-  "battlenet://",
-  "origin2://",
-  "uplay://",
-  "riot://",
-];
-
 interface OriginSource {
   shop: GameShop;
   libraryOrigin?: GameOrigin | null;
@@ -28,35 +10,26 @@ interface OriginSource {
   download?: unknown | null;
 }
 
-const hasPlatformUriExe = (exe?: string | null): boolean => {
-  if (!exe) return false;
-  const normalized = exe.toLowerCase();
-  return PLATFORM_SCHEMES.some((scheme) => normalized.startsWith(scheme));
-};
-
 /**
  * Classify how a game entered the library, for the per-store library tabs.
  *
- * Design goal (hard requirement): a game that is owned on / synced from ANY
- * official store must NEVER appear under the Retigga (catalogue) tab, and a
- * GameHub repack must never leak into a platform tab. Because `libraryOrigin`
- * is a single mutable field that several import paths fail to stamp (Steam
- * free-to-play titles, cloud-profile imports, legacy pre-stamp records), we do
- * NOT trust its absence. Instead we resolve from the strongest signals first:
+ * Hard requirement (locked model — v4.6.4):
+ *   • Steam / Epic / GOG / … platform tabs contain ONLY games that came from
+ *     that platform's login/OAuth SYNC import. Nothing inferred, nothing
+ *     scanned, no catalogue/Playnite match — purely games a platform sync
+ *     handler explicitly stamped `libraryOrigin: "sync"`.
+ *   • Retigga (catalog) = Playnite imports + Hydra catalogue adds + repacks
+ *     (anything with a GameHub download record), plus any legacy/unverified
+ *     record we can't prove is a platform sync.
+ *   • Custom = manually added games + disk-scan auto-detected games.
  *
- *   1. custom shop / explicit "custom" stamp           → "custom"
- *   2. explicit "sync" stamp OR a platform-URI exe     → "sync"   (owned wins)
- *   3. a GameHub download record                       → "catalog" (it's a repack)
- *   4. explicit "catalog" stamp                        → "catalog"
- *   5. anything else                                   → "catalog" (unverified)
- *
- * Step 5 sends UNVERIFIED records to Retigga rather than a platform tab. This
- * is safe for genuinely-owned games because every platform sync stamps BOTH
- * libraryOrigin="sync" AND (for Steam) a steam://run/ URI exe, so owned titles
- * are always caught by steps 1–2 before reaching here. Only records that have
- * never been through a platform sync — e.g. Playnite imports of games you do
- * NOT own on any store — fall through to step 5, which is exactly where they
- * belong: Retigga, not Steam/Epic/GOG.
+ * The decision is therefore made on EXPLICIT signals only — the stored
+ * `libraryOrigin` stamp and the presence of a download record. We deliberately
+ * do NOT infer ownership from a platform-URI executable: repack launchers
+ * (goggalaxy://openGame, legendary://run) also produce URI exes, so inferring
+ * "sync" from the exe is exactly what leaked repacks/imports into the platform
+ * tabs. A genuine platform sync always writes `libraryOrigin: "sync"`, so the
+ * stamp alone is sufficient and authoritative.
  */
 export function getGameOrigin(game: OriginSource): GameOrigin {
   // 1. Manually added games.
@@ -64,19 +37,19 @@ export function getGameOrigin(game: OriginSource): GameOrigin {
     return "custom";
   }
 
-  // 2. Ownership on a connected platform always wins over everything else.
-  if (game.libraryOrigin === "sync") return "sync";
-  if (hasPlatformUriExe(game.executablePath)) return "sync";
-
-  // 3. A GameHub download record is the defining signal of a Retigga repack.
+  // 2. A GameHub download record is the defining signal of a Retigga repack —
+  //    checked before "sync" so a repack can never sit in a platform tab even
+  //    if some legacy stamp wrongly marked it.
   if (game.download != null) return "catalog";
 
-  // 4. Explicitly added from the catalogue.
+  // 3. Explicitly added from the catalogue / imported from Playnite.
   if (game.libraryOrigin === "catalog") return "catalog";
 
-  // 5. Unstamped, no download record, no URI exe — treat as owned on its
-  //    platform shop. Old DB records (pre-stamp era) for genuinely-owned games
-  //    land here. Retigga repacks are caught above by their download record
-  //    (step 3); explicitly-catalogued games by their "catalog" stamp (step 4).
-  return "sync";
+  // 4. Owned via a platform login/OAuth sync — the ONLY way into a store tab.
+  if (game.libraryOrigin === "sync") return "sync";
+
+  // 5. Unstamped / unverified legacy record. Never a platform tab — send it to
+  //    Retigga. A real platform sync will stamp it "sync" and move it to its
+  //    store tab on the next run.
+  return "catalog";
 }
