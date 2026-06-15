@@ -79,6 +79,29 @@ export function SettingsSteamAccount() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userPreferences?.steamId, userPreferences?.steamApiKey]);
 
+  // Kick off a Steam library sync in the background (fire-and-forget) right
+  // after the account is connected, so the user's owned games get stamped
+  // "sync" and locked to the Steam tab without having to click Sync manually.
+  const runBackgroundSync = (id: string, key?: string | null) => {
+    setIsSyncing(true);
+    window.electron
+      .syncSteamLibrary(id, key ?? undefined)
+      .then(async (result) => {
+        setSyncResult(result);
+        await window.electron.mergeDuplicateGames().catch(() => {});
+        if (result.added > 0) {
+          showSuccessToast(
+            t("steam_sync_result", {
+              added: result.added,
+              total: result.total,
+            })
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsSyncing(false));
+  };
+
   const handleSteamOpenIdLogin = async () => {
     setIsOpenIdPending(true);
     try {
@@ -99,6 +122,8 @@ export function SettingsSteamAccount() {
       } else {
         showSuccessToast(t("steam_id_detected", { steamId: detectedSteamId }));
       }
+      // Sync owned games in the background.
+      runBackgroundSync(detectedSteamId, apiKey.trim() || undefined);
     } catch {
       showErrorToast(t("steam_openid_failed"));
     } finally {
@@ -128,6 +153,8 @@ export function SettingsSteamAccount() {
       });
       setLinkedAccount(summary);
       showSuccessToast(t("steam_account_linked"));
+      // Sync owned games in the background.
+      runBackgroundSync(steamId.trim(), apiKey.trim() || undefined);
     } catch {
       showErrorToast(t("steam_invalid_credentials"));
     } finally {

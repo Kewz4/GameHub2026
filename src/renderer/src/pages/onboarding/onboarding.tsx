@@ -356,6 +356,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       });
       if (summary) setSteamProfile(summary);
       setSteamLinked(true);
+      // Sync owned games in the background so they get locked to the Steam tab.
+      window.electron.syncSteamLibrary(detectedId, undefined).catch(() => {});
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setSteamError(msg || "Steam login failed.");
@@ -387,6 +389,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       });
       if (summary) setSteamProfile(summary);
       setSteamLinked(true);
+      // Sync owned games in the background so they get locked to the Steam tab.
+      window.electron
+        .syncSteamLibrary(steamId, steamApiKey.trim() || undefined)
+        .catch(() => {});
     } catch {
       setSteamError("Could not connect to Steam. Verify your credentials.");
     } finally {

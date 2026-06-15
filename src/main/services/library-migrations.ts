@@ -161,27 +161,24 @@ export const runLibraryMigrations = async (): Promise<void> => {
 
       if (game.shop === "custom") {
         if (game.libraryOrigin !== "custom") desired = "custom";
+      } else if (game.libraryOrigin === "sync") {
+        // LOCKED. A platform sync owns this stamp; never demote it — not even
+        // for a repack download record. Owned-on-platform always wins.
       } else {
         const dl = await downloadsSublevel.get(key).catch(() => null);
         if (dl) {
-          // Repack/torrent download record always wins — it's a Retigga game.
+          // Repack/torrent download record → Retigga.
           if (game.libraryOrigin !== "catalog") desired = "catalog";
         } else if (hasPlatformUri) {
           // A platform URI exe is 100% written by a platform sync handler
-          // (sync-steam-library, sync-epic-library, etc.). Infer "sync" for
-          // unstamped records AND undo any wrong V3 demotion to "custom".
-          // We do NOT touch "catalog"-stamped games here: if Playnite stamped a
-          // game "catalog" and the platform sync later set the URI exe but also
-          // already updated the stamp to "sync", the stamp is already correct.
-          // If somehow it's still "catalog" with a URI exe, the platform sync
-          // is the stronger signal — promote it.
-          if (game.libraryOrigin !== "sync") desired = "sync";
+          // (sync-steam-library, sync-epic-library, etc.). Promote to "sync"
+          // and undo any earlier wrong demotion to "custom".
+          desired = "sync";
         }
-        // Games with no URI exe, no download record:
-        // - If already stamped "sync" → keep (trust the sync that set it)
-        // - If "catalog" → keep (trust the explicit catalog stamp)
-        // - If unstamped → leave unstamped; getGameOrigin sends to Retigga;
-        //   the next platform sync run will promote genuine owned games to "sync"
+        // No URI exe, no download record:
+        // - "catalog" → keep (explicit catalogue / Playnite stamp)
+        // - unstamped → leave unstamped; getGameOrigin sends to Retigga; the
+        //   next platform sync run promotes genuine owned games to "sync".
       }
 
       const updates: Partial<typeof game> = {};
