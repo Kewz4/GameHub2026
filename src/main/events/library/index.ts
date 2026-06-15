@@ -5,6 +5,7 @@ import "./add-game-to-library";
 import "./assign-game-to-collection";
 import "./change-game-playtime";
 import "./cleanup-unused-assets";
+import "./clear-library";
 import "./clear-new-download-options";
 import "./close-game";
 import "./copy-custom-game-asset";

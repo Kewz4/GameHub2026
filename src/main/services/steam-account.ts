@@ -52,6 +52,15 @@ async function getSteamOwnedGamesPublic(
     throw new Error(`Steam profile error: ${err}`);
   }
 
+  // When the game list is set to private, Steam returns the profile XML but
+  // without a <games> element at all. Detect this so callers can surface a
+  // meaningful error instead of silently adding 0 games.
+  if (!xml.includes("<games>") && !xml.includes("<game>")) {
+    throw new Error(
+      "Steam game list is private. Set your Steam game details to Public, or provide a Steam Web API key."
+    );
+  }
+
   const gameBlocks = extractAllXmlBlocks(xml, "game");
 
   return gameBlocks
@@ -110,11 +119,16 @@ export const getSteamOwnedGames = async (
     }
   }
 
-  const games = await getSteamOwnedGamesPublic(steamId);
-  logger.log(
-    `Fetched ${games.length} owned Steam games via community XML for ${steamId}`
-  );
-  return games;
+  try {
+    const games = await getSteamOwnedGamesPublic(steamId);
+    logger.log(
+      `Fetched ${games.length} owned Steam games via community XML for ${steamId}`
+    );
+    return games;
+  } catch (err) {
+    logger.warn(`getSteamOwnedGamesPublic failed for ${steamId}:`, err);
+    throw err; // Propagate so the caller can surface a proper error
+  }
 };
 
 /**

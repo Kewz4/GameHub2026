@@ -13,8 +13,15 @@ const syncSteamLibrary = async (
   _event: Electron.IpcMainInvokeEvent,
   steamId: string,
   apiKey?: string
-) => {
-  const ownedGames = await getSteamOwnedGames(steamId, apiKey);
+): Promise<{ total: number; added: number; error?: string }> => {
+  let ownedGames: Awaited<ReturnType<typeof getSteamOwnedGames>>;
+  try {
+    ownedGames = await getSteamOwnedGames(steamId, apiKey);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn(`[syncSteamLibrary] Failed to fetch owned games: ${message}`);
+    return { total: 0, added: 0, error: message };
+  }
 
   let added = 0;
 

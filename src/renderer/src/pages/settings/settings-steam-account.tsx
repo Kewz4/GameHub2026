@@ -87,6 +87,10 @@ export function SettingsSteamAccount() {
     window.electron
       .syncSteamLibrary(id, key ?? undefined)
       .then(async (result) => {
+        if (result.error) {
+          showErrorToast(result.error);
+          return;
+        }
         setSyncResult(result);
         await window.electron.mergeDuplicateGames().catch(() => {});
         if (result.added > 0) {
@@ -187,6 +191,10 @@ export function SettingsSteamAccount() {
         savedSteamId,
         userPreferences?.steamApiKey ?? undefined
       );
+      if (result.error) {
+        showErrorToast(result.error);
+        return;
+      }
       setSyncResult(result);
 
       const dedupResult = await window.electron

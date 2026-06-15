@@ -181,7 +181,7 @@ declare global {
     syncSteamLibrary: (
       steamId: string,
       apiKey?: string
-    ) => Promise<{ total: number; added: number }>;
+    ) => Promise<{ total: number; added: number; error?: string }>;
     getLegendaryStatus: () => Promise<{
       binaryFound: boolean;
       binaryPath: string | null;
@@ -453,6 +453,7 @@ declare global {
       merged: number;
       mergedTitles: string[];
     }>;
+    clearLibrary: () => Promise<{ cleared: number }>;
     findLibraryGameByTitle: (
       title: string
     ) => Promise<import("@types").Game | null>;
