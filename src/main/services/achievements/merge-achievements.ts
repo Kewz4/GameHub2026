@@ -34,6 +34,7 @@ const saveAchievementsOnLocal = async (
     .get(levelKey)
     .then(async (gameAchievement) => {
       await gameAchievementsSublevel.put(levelKey, {
+        ...gameAchievement,
         achievements: gameAchievement?.achievements ?? [],
         unlockedAchievements: unlockedAchievements,
         updatedAt: gameAchievement?.updatedAt,
@@ -71,6 +72,13 @@ export const mergeAchievements = async (
   if (!localGameAchievement) {
     await getGameAchievementData(game.objectId, game.shop, false);
     localGameAchievement = await gameAchievementsSublevel.get(gameKey);
+  }
+
+  // Exophase is the authoritative source for any game it has imported. Its
+  // achievements use Exophase apiNames, so the local-file watcher and remote
+  // sync (Steam apiNames) must not merge into or overwrite this record.
+  if (localGameAchievement?.source === "exophase") {
+    return 0;
   }
 
   const achievementsData = localGameAchievement?.achievements ?? [];

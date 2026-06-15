@@ -72,6 +72,7 @@ async function storeExophaseAchievements(
     unlockedAchievements: unlocked,
     updatedAt: Date.now(),
     language: "en",
+    source: "exophase",
   });
 
   await gamesSublevel.put(gameKey, {

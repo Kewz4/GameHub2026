@@ -118,6 +118,10 @@ export interface GameAchievement {
   unlockedAchievements: UnlockedAchievement[];
   updatedAt: number | undefined;
   language: string | undefined;
+  /** When "exophase", both the definitions and the unlocked list were imported
+   *  from Exophase and share the same apiNames — so they must be used together
+   *  (never mixed with Hydra/Steam definitions, whose names wouldn't match). */
+  source?: "exophase";
 }
 
 export type AchievementCustomNotificationPosition =

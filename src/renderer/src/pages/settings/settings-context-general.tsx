@@ -56,8 +56,10 @@ export function SettingsContextGeneral({
   const [downloadDirectoryReplacement, setDownloadDirectoryReplacement] =
     useState<DownloadDirectoryReplacementState | null>(null);
 
-  const { showSuccessToast: _showSuccessToast, showErrorToast } = useToast();
+  const { showSuccessToast, showErrorToast } = useToast();
   const [generatingMetadata, setGeneratingMetadata] = useState(false);
+  const [clearingLibrary, setClearingLibrary] = useState(false);
+  const [clearLibraryConfirm, setClearLibraryConfirm] = useState(false);
   const [metadataProgress, setMetadataProgress] = useState<{
     current: number;
     total: number;
@@ -494,6 +496,63 @@ export function SettingsContextGeneral({
                 Checking: {dedupProgress.title}
               </p>
             )}
+          </div>
+        )}
+
+        <p
+          style={{
+            margin: "12px 0 0",
+            fontSize: "0.875rem",
+            color: "var(--color-danger, #e05c5c)",
+          }}
+        >
+          Permanently removes every game from your local library. This cannot be
+          undone — useful for starting fresh before re-syncing.
+        </p>
+        {!clearLibraryConfirm ? (
+          <Button
+            theme="outline"
+            onClick={() => setClearLibraryConfirm(true)}
+            style={{
+              borderColor: "var(--color-danger, #e05c5c)",
+              color: "var(--color-danger, #e05c5c)",
+            }}
+          >
+            Delete Entire Library
+          </Button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: "0.9rem", opacity: 0.8 }}>
+              Are you sure?
+            </span>
+            <Button
+              theme="danger"
+              disabled={clearingLibrary}
+              onClick={async () => {
+                setClearingLibrary(true);
+                try {
+                  const result = await window.electron.clearLibrary();
+                  showSuccessToast(
+                    "Library cleared",
+                    `${result.cleared} game${result.cleared !== 1 ? "s" : ""} removed.`
+                  );
+                } catch {
+                  showErrorToast("Failed to clear library.");
+                } finally {
+                  setClearingLibrary(false);
+                  setClearLibraryConfirm(false);
+                }
+              }}
+            >
+              {clearingLibrary ? "Clearing…" : "Yes, delete all"}
+            </Button>
+            <Button
+              theme="outline"
+              disabled={clearingLibrary}
+              onClick={() => setClearLibraryConfirm(false)}
+            >
+              Cancel
+            </Button>
           </div>
         )}
       </div>
