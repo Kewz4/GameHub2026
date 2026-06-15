@@ -17,6 +17,7 @@ import {
   GearIcon,
   FileDirectoryIcon,
   SearchIcon,
+  TrophyIcon,
 } from "@primer/octicons-react";
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
@@ -46,6 +47,7 @@ type StepId =
   | "riot"
   | "ubisoft"
   | "ea"
+  | "achievements"
   | "tools"
   | "preferences"
   | "done";
@@ -63,6 +65,7 @@ const ALL_STEPS: StepId[] = [
   "riot",
   "ubisoft",
   "ea",
+  "achievements",
   "tools",
   "preferences",
   "done",
@@ -80,6 +83,7 @@ const NAV_STEPS: StepId[] = [
   "riot",
   "ubisoft",
   "ea",
+  "achievements",
   "tools",
   "preferences",
 ];
@@ -97,6 +101,7 @@ const STEP_LABELS: Record<StepId, string> = {
   riot: "Riot Games",
   ubisoft: "Ubisoft Connect",
   ea: "EA app",
+  achievements: "Achievements",
   tools: "Tools",
   preferences: "Preferences",
   done: "Done",
@@ -201,7 +206,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [ubisoftBusy, setUbisoftBusy] = useState(false);
   const [ubisoftResult, setUbisoftResult] = useState("");
   const [ubisoftLinked, setUbisoftLinked] = useState(false);
-  const [ubisoftAccountName, setUbisoftAccountName] = useState<string | null>(null);
+  const [ubisoftAccountName, setUbisoftAccountName] = useState<string | null>(
+    null
+  );
   const [ubisoftConnecting, setUbisoftConnecting] = useState(false);
   const [ubisoftSyncResult, setUbisoftSyncResult] = useState<string>("");
 
@@ -215,6 +222,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [eaAccountName, setEaAccountName] = useState<string | null>(null);
   const [eaConnecting, setEaConnecting] = useState(false);
   const [eaSyncResult, setEaSyncResult] = useState<string>("");
+
+  // Achievements (Exophase) step state
+  const [exophaseUsername, setExophaseUsername] = useState<string | null>(null);
+  const [exophaseConnecting, setExophaseConnecting] = useState(false);
 
   // Tools step state
   const [ludusaviResult, setLudusaviResult] = useState<string>("");
@@ -265,7 +276,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         const firstSelected = PLATFORM_STEPS.find((s) =>
           selectedIntegrations.has(s)
         );
-        return (firstSelected as StepId) ?? "tools";
+        return (firstSelected as StepId) ?? "achievements";
       }
       if (PLATFORM_STEPS.includes(from)) {
         const remaining = PLATFORM_STEPS.filter((s) =>
@@ -274,8 +285,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         const idx = remaining.indexOf(from);
         if (idx >= 0 && idx < remaining.length - 1)
           return remaining[idx + 1] as StepId;
-        return "tools";
+        return "achievements";
       }
+      if (from === "achievements") return "tools";
       if (from === "tools") return "preferences";
       if (from === "preferences") return "done";
       // Default linear progression for other steps
@@ -523,7 +535,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       if (result) {
         setUbisoftLinked(true);
         setUbisoftAccountName(result.username);
-        const syncResult = await window.electron.syncUbisoftLibrary().catch(() => null);
+        const syncResult = await window.electron
+          .syncUbisoftLibrary()
+          .catch(() => null);
         if (syncResult && !syncResult.error) {
           setUbisoftSyncResult(
             `Synced ${syncResult.total} game${syncResult.total !== 1 ? "s" : ""} from your Ubisoft library.`
@@ -557,6 +571,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       // ignore
     } finally {
       setEaConnecting(false);
+    }
+  };
+
+  const handleExophaseConnect = async () => {
+    setExophaseConnecting(true);
+    try {
+      const state = await window.electron.openExophaseAuthWindow();
+      if (state.authenticated) {
+        setExophaseUsername(state.username);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setExophaseConnecting(false);
     }
   };
 
@@ -894,38 +922,38 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     selectedIntegrations.has(s)
                 )
                 .map((s) => {
-                const PlatformIcon = {
-                  steam: SteamLogo,
-                  epic: EpicLogo,
-                  gog: GogLogo,
-                  xbox: XboxLogo,
-                  riot: RiotLogo,
-                  ubisoft: UbisoftLogo,
-                  ea: EaLogo,
-                }[s];
-                const isSelected = selectedIntegrations.has(s);
-                return (
-                  <div
-                    key={s}
-                    className={[
-                      "onboarding-nav-item",
-                      navStepIsActive(s) ? "onboarding-nav-item--active" : "",
-                      navStepIsDone(s) ? "onboarding-nav-item--done" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    style={!isSelected ? { opacity: 0.4 } : undefined}
-                  >
-                    <span className="onboarding-nav-item__dot">
-                      {navStepIsDone(s) ? "✓" : ""}
-                    </span>
-                    <span className="onboarding-nav-item__label">
-                      {STEP_LABELS[s]}
-                    </span>
-                    <PlatformIcon className="onboarding-nav-item__platform-icon" />
-                  </div>
-                );
-              })}
+                  const PlatformIcon = {
+                    steam: SteamLogo,
+                    epic: EpicLogo,
+                    gog: GogLogo,
+                    xbox: XboxLogo,
+                    riot: RiotLogo,
+                    ubisoft: UbisoftLogo,
+                    ea: EaLogo,
+                  }[s];
+                  const isSelected = selectedIntegrations.has(s);
+                  return (
+                    <div
+                      key={s}
+                      className={[
+                        "onboarding-nav-item",
+                        navStepIsActive(s) ? "onboarding-nav-item--active" : "",
+                        navStepIsDone(s) ? "onboarding-nav-item--done" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      style={!isSelected ? { opacity: 0.4 } : undefined}
+                    >
+                      <span className="onboarding-nav-item__dot">
+                        {navStepIsDone(s) ? "✓" : ""}
+                      </span>
+                      <span className="onboarding-nav-item__label">
+                        {STEP_LABELS[s]}
+                      </span>
+                      <PlatformIcon className="onboarding-nav-item__platform-icon" />
+                    </div>
+                  );
+                })}
 
               <div className="onboarding-sidebar__section-label">Tools</div>
               <div
@@ -984,371 +1012,658 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             </div>
           )}
           <div key={currentStep} className="onboarding-step-body">
-          {/* ── Language ── */}
-          {currentStep === "language" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <GearIcon size={20} />
+            {/* ── Language ── */}
+            {currentStep === "language" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <GearIcon size={20} />
+                  </div>
+                  <div>
+                    <h2>Language</h2>
+                    <p>Choose the language GameHub should use</p>
+                  </div>
                 </div>
-                <div>
-                  <h2>Language</h2>
-                  <p>Choose the language GameHub should use</p>
+                <div className="onboarding-select-list">
+                  {languageOptions.map(({ option, nativeName }) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={[
+                        "onboarding-select-item",
+                        selectedLanguage === option
+                          ? "onboarding-select-item--active"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => setSelectedLanguage(option)}
+                    >
+                      {selectedLanguage === option && (
+                        <CheckCircleFillIcon size={14} />
+                      )}
+                      {nativeName}
+                    </button>
+                  ))}
                 </div>
-              </div>
-              <div className="onboarding-select-list">
-                {languageOptions.map(({ option, nativeName }) => (
-                  <button
-                    key={option}
+                <div className="onboarding-actions">
+                  <Button type="button" onClick={handleLanguageSave}>
+                    Continue
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {/* ── Install Path ── */}
+            {currentStep === "install-path" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <FileDirectoryIcon size={20} />
+                  </div>
+                  <div>
+                    <h2>Default Install Folder</h2>
+                    <p>Where should GameHub download and install games?</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  You can override this per-download later. Leave blank to use
+                  the default.
+                </p>
+                <div className="onboarding-path-row">
+                  <TextField
+                    value={installPath}
+                    onChange={(e) => setInstallPath(e.target.value)}
+                    placeholder={defaultInstallPath}
+                  />
+                  <Button
                     type="button"
-                    className={[
-                      "onboarding-select-item",
-                      selectedLanguage === option
-                        ? "onboarding-select-item--active"
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onClick={() => setSelectedLanguage(option)}
+                    theme="outline"
+                    onClick={handlePickFolder}
                   >
-                    {selectedLanguage === option && (
-                      <CheckCircleFillIcon size={14} />
-                    )}
-                    {nativeName}
-                  </button>
-                ))}
-              </div>
-              <div className="onboarding-actions">
-                <Button type="button" onClick={handleLanguageSave}>
-                  Continue
-                </Button>
-              </div>
-            </>
-          )}
-
-          {/* ── Install Path ── */}
-          {currentStep === "install-path" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <FileDirectoryIcon size={20} />
+                    Browse…
+                  </Button>
                 </div>
-                <div>
-                  <h2>Default Install Folder</h2>
-                  <p>Where should GameHub download and install games?</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                You can override this per-download later. Leave blank to use the
-                default.
-              </p>
-              <div className="onboarding-path-row">
-                <TextField
-                  value={installPath}
-                  onChange={(e) => setInstallPath(e.target.value)}
-                  placeholder={defaultInstallPath}
-                />
-                <Button
-                  type="button"
-                  theme="outline"
-                  onClick={handlePickFolder}
-                >
-                  Browse…
-                </Button>
-              </div>
-              <div className="onboarding-actions">
-                <button
-                  type="button"
-                  className="onboarding-skip"
-                  onClick={next}
-                >
-                  Use default
-                </button>
-                <Button type="button" onClick={handleInstallPathSave}>
-                  Continue
-                </Button>
-              </div>
-            </>
-          )}
-
-          {/* ── GameHub Account ── */}
-          {currentStep === "account" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <PersonIcon size={20} />
-                </div>
-                <div>
-                  <h2>GameHub Account</h2>
-                  <p>Optional — enables cloud saves and profiles</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Sign in or create a GameHub account to enable cloud saves,
-                profiles, and cross-device sync.
-              </p>
-
-              {accountLinked ? (
-                <>
-                  <div className="onboarding-connected-badge">
-                    <CheckCircleFillIcon size={16} />
-                    Signed in — you&apos;re all set
-                  </div>
-                  <div className="onboarding-actions">
-                    <Button type="button" onClick={next}>
-                      Continue
-                    </Button>
-                  </div>
-                </>
-              ) : accountWindowOpen ? (
-                <div
-                  className="onboarding-actions"
-                  style={{ justifyContent: "center" }}
-                >
-                  <span style={{ opacity: 0.6, fontSize: "0.9rem" }}>
-                    Waiting for sign-in…
-                  </span>
-                </div>
-              ) : (
                 <div className="onboarding-actions">
                   <button
                     type="button"
                     className="onboarding-skip"
                     onClick={next}
                   >
-                    Skip — use without account
+                    Use default
                   </button>
-                  <Button type="button" onClick={handleAccountSignIn}>
-                    <PersonIcon size={14} />
-                    Sign in / Register
+                  <Button type="button" onClick={handleInstallPathSave}>
+                    Continue
                   </Button>
                 </div>
-              )}
-            </>
-          )}
+              </>
+            )}
 
-          {/* ── Integrations Select ── */}
-          {currentStep === "integrations-select" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <GearIcon size={20} />
+            {/* ── GameHub Account ── */}
+            {currentStep === "account" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <PersonIcon size={20} />
+                  </div>
+                  <div>
+                    <h2>GameHub Account</h2>
+                    <p>Optional — enables cloud saves and profiles</p>
+                  </div>
                 </div>
-                <div>
-                  <h2>Connect Platforms</h2>
-                  <p>Select the platforms you want to set up</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Choose which platforms to connect. You can set up each one in
-                the next steps, or skip all to continue.
-              </p>
-              <div className="onboarding-integrations-grid">
-                {(
-                  [
-                    { id: "steam", name: "Steam", Icon: SteamLogo },
-                    { id: "epic", name: "Epic Games", Icon: EpicLogo },
-                    { id: "gog", name: "GOG", Icon: GogLogo },
-                    { id: "xbox", name: "Xbox", Icon: XboxLogo },
-                    { id: "riot", name: "Riot Games", Icon: RiotLogo },
-                    {
-                      id: "ubisoft",
-                      name: "Ubisoft Connect",
-                      Icon: UbisoftLogo,
-                    },
-                    { id: "ea", name: "EA app", Icon: EaLogo },
-                  ] as const
-                ).map(({ id, name, Icon }) => {
-                  const isSelected = selectedIntegrations.has(id);
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      className={[
-                        "onboarding-integration-card",
-                        isSelected
-                          ? "onboarding-integration-card--selected"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => toggleIntegration(id)}
-                    >
-                      <Icon className="onboarding-integration-card__icon" />
-                      <span className="onboarding-integration-card__name">
-                        {name}
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleIntegration(id)}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ pointerEvents: "none" }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="onboarding-actions">
-                <button
-                  type="button"
-                  className="onboarding-skip"
-                  onClick={() => setStepIndex(ALL_STEPS.indexOf("tools"))}
-                >
-                  Skip All
-                </button>
-                <Button type="button" onClick={next}>
-                  {selectedIntegrations.size > 0
-                    ? "Set Up Selected"
-                    : "Continue"}
-                </Button>
-              </div>
-            </>
-          )}
+                <p className="onboarding-step-description">
+                  Sign in or create a GameHub account to enable cloud saves,
+                  profiles, and cross-device sync.
+                </p>
 
-          {/* ── Steam ── */}
-          {currentStep === "steam" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <SteamLogo style={{ width: 20, height: 20 }} />
-                </div>
-                <div>
-                  <h2>Steam</h2>
-                  <p>
-                    Import your Steam library and enable achievement tracking
-                  </p>
-                </div>
-              </div>
-
-              {steamLinked ? (
-                <>
-                  {steamProfile ? (
-                    <div
-                      className="onboarding-connected-badge"
-                      style={{ gap: "10px" }}
-                    >
-                      <img
-                        src={steamProfile.avatarfull}
-                        alt={steamProfile.personaname}
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: "50%",
-                          flexShrink: 0,
-                        }}
-                      />
-                      <div>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "6px",
-                          }}
-                        >
-                          <CheckCircleFillIcon size={14} />
-                          <strong>{steamProfile.personaname}</strong>
-                        </div>
-                        <small style={{ opacity: 0.6 }}>
-                          Steam connected — library will sync
-                        </small>
-                      </div>
-                    </div>
-                  ) : (
+                {accountLinked ? (
+                  <>
                     <div className="onboarding-connected-badge">
                       <CheckCircleFillIcon size={16} />
-                      Steam connected — library will sync
+                      Signed in — you&apos;re all set
                     </div>
-                  )}
-                  <div className="onboarding-actions">
-                    <Button type="button" onClick={next}>
-                      Continue
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
+                    <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : accountWindowOpen ? (
                   <div
                     className="onboarding-actions"
-                    style={{ justifyContent: "flex-start", marginTop: 0 }}
+                    style={{ justifyContent: "center" }}
                   >
-                    <Button
+                    <span style={{ opacity: 0.6, fontSize: "0.9rem" }}>
+                      Waiting for sign-in…
+                    </span>
+                  </div>
+                ) : (
+                  <div className="onboarding-actions">
+                    <button
                       type="button"
-                      onClick={handleSteamOpenIdConnect}
-                      disabled={steamOpenIdBusy}
-                      style={{
-                        background: "#1b2838",
-                        color: "#c7d5e0",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
+                      className="onboarding-skip"
+                      onClick={next}
                     >
-                      <SteamLogo style={{ width: 18, height: 18 }} />
-                      {steamOpenIdBusy
-                        ? "Opening Steam…"
-                        : "Sign in with Steam"}
+                      Skip — use without account
+                    </button>
+                    <Button type="button" onClick={handleAccountSignIn}>
+                      <PersonIcon size={14} />
+                      Sign in / Register
                     </Button>
                   </div>
+                )}
+              </>
+            )}
 
-                  <div className="onboarding-divider">or enter manually</div>
-
-                  <form
-                    className="onboarding-form"
-                    onSubmit={handleSteamConnect}
-                  >
-                    <TextField
-                      label="Steam Profile URL or ID"
-                      value={steamInput}
-                      onChange={(e) => setSteamInput(e.target.value)}
-                      placeholder="https://steamcommunity.com/profiles/76561198…"
-                      hint="Paste your full profile URL — we'll extract the ID automatically"
-                    />
-
-                    <TextField
-                      label="Steam Web API Key (optional)"
-                      value={steamApiKey}
-                      onChange={(e) => setSteamApiKey(e.target.value)}
-                      type="password"
-                      placeholder="32-character API key (optional)"
-                      hint={
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          Only needed for achievement tracking.{" "}
-                          <button
-                            type="button"
-                            className="onboarding-link"
-                            onClick={() =>
-                              window.electron.openExternal(
-                                "https://steamcommunity.com/dev/apikey"
-                              )
-                            }
-                          >
-                            Get key
-                            <LinkExternalIcon size={10} />
-                          </button>
+            {/* ── Integrations Select ── */}
+            {currentStep === "integrations-select" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <GearIcon size={20} />
+                  </div>
+                  <div>
+                    <h2>Connect Platforms</h2>
+                    <p>Select the platforms you want to set up</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  Choose which platforms to connect. You can set up each one in
+                  the next steps, or skip all to continue.
+                </p>
+                <div className="onboarding-integrations-grid">
+                  {(
+                    [
+                      { id: "steam", name: "Steam", Icon: SteamLogo },
+                      { id: "epic", name: "Epic Games", Icon: EpicLogo },
+                      { id: "gog", name: "GOG", Icon: GogLogo },
+                      { id: "xbox", name: "Xbox", Icon: XboxLogo },
+                      { id: "riot", name: "Riot Games", Icon: RiotLogo },
+                      {
+                        id: "ubisoft",
+                        name: "Ubisoft Connect",
+                        Icon: UbisoftLogo,
+                      },
+                      { id: "ea", name: "EA app", Icon: EaLogo },
+                    ] as const
+                  ).map(({ id, name, Icon }) => {
+                    const isSelected = selectedIntegrations.has(id);
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className={[
+                          "onboarding-integration-card",
+                          isSelected
+                            ? "onboarding-integration-card--selected"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => toggleIntegration(id)}
+                      >
+                        <Icon className="onboarding-integration-card__icon" />
+                        <span className="onboarding-integration-card__name">
+                          {name}
                         </span>
-                      }
-                    />
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleIntegration(id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ pointerEvents: "none" }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="onboarding-actions">
+                  <button
+                    type="button"
+                    className="onboarding-skip"
+                    onClick={() => setStepIndex(ALL_STEPS.indexOf("tools"))}
+                  >
+                    Skip All
+                  </button>
+                  <Button type="button" onClick={next}>
+                    {selectedIntegrations.size > 0
+                      ? "Set Up Selected"
+                      : "Continue"}
+                  </Button>
+                </div>
+              </>
+            )}
 
-                    {steamError && (
-                      <p
+            {/* ── Steam ── */}
+            {currentStep === "steam" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <SteamLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>Steam</h2>
+                    <p>
+                      Import your Steam library and enable achievement tracking
+                    </p>
+                  </div>
+                </div>
+
+                {steamLinked ? (
+                  <>
+                    {steamProfile ? (
+                      <div
+                        className="onboarding-connected-badge"
+                        style={{ gap: "10px" }}
+                      >
+                        <img
+                          src={steamProfile.avatarfull}
+                          alt={steamProfile.personaname}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: "50%",
+                            flexShrink: 0,
+                          }}
+                        />
+                        <div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <CheckCircleFillIcon size={14} />
+                            <strong>{steamProfile.personaname}</strong>
+                          </div>
+                          <small style={{ opacity: 0.6 }}>
+                            Steam connected — library will sync
+                          </small>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="onboarding-connected-badge">
+                        <CheckCircleFillIcon size={16} />
+                        Steam connected — library will sync
+                      </div>
+                    )}
+                    <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="onboarding-actions"
+                      style={{ justifyContent: "flex-start", marginTop: 0 }}
+                    >
+                      <Button
+                        type="button"
+                        onClick={handleSteamOpenIdConnect}
+                        disabled={steamOpenIdBusy}
                         style={{
-                          color: "var(--color-danger, #f87171)",
-                          margin: 0,
-                          fontSize: "0.85rem",
+                          background: "#1b2838",
+                          color: "#c7d5e0",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
                         }}
                       >
-                        {steamError}
+                        <SteamLogo style={{ width: 18, height: 18 }} />
+                        {steamOpenIdBusy
+                          ? "Opening Steam…"
+                          : "Sign in with Steam"}
+                      </Button>
+                    </div>
+
+                    <div className="onboarding-divider">or enter manually</div>
+
+                    <form
+                      className="onboarding-form"
+                      onSubmit={handleSteamConnect}
+                    >
+                      <TextField
+                        label="Steam Profile URL or ID"
+                        value={steamInput}
+                        onChange={(e) => setSteamInput(e.target.value)}
+                        placeholder="https://steamcommunity.com/profiles/76561198…"
+                        hint="Paste your full profile URL — we'll extract the ID automatically"
+                      />
+
+                      <TextField
+                        label="Steam Web API Key (optional)"
+                        value={steamApiKey}
+                        onChange={(e) => setSteamApiKey(e.target.value)}
+                        type="password"
+                        placeholder="32-character API key (optional)"
+                        hint={
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            Only needed for achievement tracking.{" "}
+                            <button
+                              type="button"
+                              className="onboarding-link"
+                              onClick={() =>
+                                window.electron.openExternal(
+                                  "https://steamcommunity.com/dev/apikey"
+                                )
+                              }
+                            >
+                              Get key
+                              <LinkExternalIcon size={10} />
+                            </button>
+                          </span>
+                        }
+                      />
+
+                      {steamError && (
+                        <p
+                          style={{
+                            color: "var(--color-danger, #f87171)",
+                            margin: 0,
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          {steamError}
+                        </p>
+                      )}
+
+                      <div className="onboarding-actions">
+                        <button
+                          type="button"
+                          className="onboarding-skip"
+                          onClick={next}
+                        >
+                          Skip for now
+                        </button>
+                        <Button
+                          type="submit"
+                          disabled={!steamInput.trim() || steamBusy}
+                        >
+                          {steamBusy ? "Connecting…" : "Connect Steam"}
+                        </Button>
+                      </div>
+                    </form>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ── Epic ── */}
+            {currentStep === "epic" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <EpicLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>Epic Games</h2>
+                    <p>Connect via Legendary (open-source CLI)</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  Connect your Epic Games account to import your owned library
+                  into GameHub.
+                </p>
+
+                {epicLinked ? (
+                  <>
+                    <div className="onboarding-connected-badge">
+                      <CheckCircleFillIcon size={16} />
+                      Signed in as {epicAccount}
+                    </div>
+                    <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="onboarding-actions">
+                    <button
+                      type="button"
+                      className="onboarding-skip"
+                      onClick={next}
+                    >
+                      Skip for now
+                    </button>
+                    <Button type="button" onClick={handleEpicConnect}>
+                      <PersonIcon size={14} />
+                      Connect Epic
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── GOG ── */}
+            {currentStep === "gog" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <GogLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>GOG</h2>
+                    <p>Import your DRM-free GOG library</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  Connect your GOG account to import your library and enable
+                  downloading GOG games directly through GameHub.
+                </p>
+
+                {gogLinked ? (
+                  <>
+                    <div className="onboarding-connected-badge">
+                      <CheckCircleFillIcon size={16} />
+                      Connected as {gogUsername}
+                    </div>
+                    <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="onboarding-actions">
+                    <button
+                      type="button"
+                      className="onboarding-skip"
+                      onClick={next}
+                      disabled={gogBusy}
+                    >
+                      Skip for now
+                    </button>
+                    <Button
+                      type="button"
+                      onClick={handleGogConnect}
+                      disabled={gogBusy}
+                    >
+                      <PersonIcon size={14} />
+                      {gogBusy ? "Opening…" : "Connect GOG"}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Xbox ── */}
+            {currentStep === "xbox" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <XboxLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>Xbox / Game Pass</h2>
+                    <p>Import your Xbox and Game Pass PC library</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  Sign in with your Microsoft account to import your Xbox and
+                  Game Pass PC library into GameHub.
+                </p>
+
+                {xboxLinked ? (
+                  <>
+                    <div className="onboarding-connected-badge">
+                      <CheckCircleFillIcon size={16} />
+                      Signed in as {xboxGamertag}
+                    </div>
+                    <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : xboxWindowOpen ? (
+                  <div
+                    className="onboarding-actions"
+                    style={{ justifyContent: "center" }}
+                  >
+                    <span style={{ opacity: 0.6, fontSize: "0.9rem" }}>
+                      Waiting for sign-in…
+                    </span>
+                  </div>
+                ) : (
+                  <div className="onboarding-actions">
+                    <button
+                      type="button"
+                      className="onboarding-skip"
+                      onClick={next}
+                      disabled={xboxBusy}
+                    >
+                      Skip for now
+                    </button>
+                    <Button
+                      type="button"
+                      onClick={handleXboxConnect}
+                      disabled={xboxBusy}
+                    >
+                      <PersonIcon size={14} />
+                      {xboxBusy ? "Opening…" : "Connect Xbox"}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Riot Games ── */}
+            {currentStep === "riot" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <RiotLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>Riot Games</h2>
+                    <p>League of Legends, VALORANT, Legends of Runeterra</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  Riot games are free to play — add League of Legends, VALORANT,
+                  and Legends of Runeterra to your library. They launch through
+                  the Riot Client.
+                </p>
+
+                {riotState === null ? (
+                  <p style={{ opacity: 0.6 }}>Detecting Riot Client…</p>
+                ) : (
+                  <>
+                    {riotState.detected.length > 0 && (
+                      <p style={{ opacity: 0.8 }}>
+                        Installed:{" "}
+                        {riotState.detected.map((g) => g.title).join(", ")}
                       </p>
                     )}
+                    {!riotState.installed && (
+                      <p style={{ opacity: 0.6, fontSize: "0.82rem" }}>
+                        Riot Client not detected — games can&apos;t be launched
+                        until you install it.
+                      </p>
+                    )}
+                  </>
+                )}
 
+                {riotResult && (
+                  <div className="onboarding-connected-badge">
+                    <CheckCircleFillIcon size={16} />
+                    {riotResult}
+                  </div>
+                )}
+
+                <div className="onboarding-actions">
+                  <button
+                    type="button"
+                    className="onboarding-skip"
+                    onClick={next}
+                  >
+                    {riotResult ? "Continue" : "Skip for now"}
+                  </button>
+                  {!riotResult && (
+                    <Button
+                      type="button"
+                      onClick={handleAddRiotGames}
+                      disabled={riotBusy}
+                    >
+                      {riotBusy ? "Adding…" : "Add Riot games"}
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── Ubisoft Connect ── */}
+            {currentStep === "ubisoft" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <UbisoftLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>Ubisoft Connect</h2>
+                    <p>Import your Ubisoft library</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  Connect your Ubisoft account to import your owned games — no
+                  client required. Games launch through Ubisoft Connect when
+                  it&apos;s installed.
+                </p>
+
+                {ubisoftLinked ? (
+                  <>
+                    <div className="onboarding-connected-badge">
+                      <CheckCircleFillIcon size={16} />
+                      Connected as {ubisoftAccountName}
+                      {ubisoftSyncResult && (
+                        <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
+                          {" "}
+                          — {ubisoftSyncResult}
+                        </span>
+                      )}
+                    </div>
                     <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="onboarding-actions"
+                      style={{ marginBottom: 0 }}
+                    >
                       <button
                         type="button"
                         className="onboarding-skip"
@@ -1357,371 +1672,176 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         Skip for now
                       </button>
                       <Button
-                        type="submit"
-                        disabled={!steamInput.trim() || steamBusy}
+                        type="button"
+                        onClick={handleUbisoftConnect}
+                        disabled={ubisoftConnecting}
                       >
-                        {steamBusy ? "Connecting…" : "Connect Steam"}
+                        <PersonIcon size={14} />
+                        {ubisoftConnecting ? "Connecting…" : "Connect Ubisoft"}
                       </Button>
                     </div>
-                  </form>
-                </>
-              )}
-            </>
-          )}
 
-          {/* ── Epic ── */}
-          {currentStep === "epic" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <EpicLogo style={{ width: 20, height: 20 }} />
-                </div>
-                <div>
-                  <h2>Epic Games</h2>
-                  <p>Connect via Legendary (open-source CLI)</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Connect your Epic Games account to import your owned library into GameHub.
-              </p>
-
-              {epicLinked ? (
-                <>
-                  <div className="onboarding-connected-badge">
-                    <CheckCircleFillIcon size={16} />
-                    Signed in as {epicAccount}
-                  </div>
-                  <div className="onboarding-actions">
-                    <Button type="button" onClick={next}>
-                      Continue
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="onboarding-actions">
-                  <button
-                    type="button"
-                    className="onboarding-skip"
-                    onClick={next}
-                  >
-                    Skip for now
-                  </button>
-                  <Button type="button" onClick={handleEpicConnect}>
-                    <PersonIcon size={14} />
-                    Connect Epic
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── GOG ── */}
-          {currentStep === "gog" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <GogLogo style={{ width: 20, height: 20 }} />
-                </div>
-                <div>
-                  <h2>GOG</h2>
-                  <p>Import your DRM-free GOG library</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Connect your GOG account to import your library and enable
-                downloading GOG games directly through GameHub.
-              </p>
-
-              {gogLinked ? (
-                <>
-                  <div className="onboarding-connected-badge">
-                    <CheckCircleFillIcon size={16} />
-                    Connected as {gogUsername}
-                  </div>
-                  <div className="onboarding-actions">
-                    <Button type="button" onClick={next}>
-                      Continue
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="onboarding-actions">
-                  <button
-                    type="button"
-                    className="onboarding-skip"
-                    onClick={next}
-                    disabled={gogBusy}
-                  >
-                    Skip for now
-                  </button>
-                  <Button
-                    type="button"
-                    onClick={handleGogConnect}
-                    disabled={gogBusy}
-                  >
-                    <PersonIcon size={14} />
-                    {gogBusy ? "Opening…" : "Connect GOG"}
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── Xbox ── */}
-          {currentStep === "xbox" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <XboxLogo style={{ width: 20, height: 20 }} />
-                </div>
-                <div>
-                  <h2>Xbox / Game Pass</h2>
-                  <p>Import your Xbox and Game Pass PC library</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Sign in with your Microsoft account to import your Xbox and Game
-                Pass PC library into GameHub.
-              </p>
-
-              {xboxLinked ? (
-                <>
-                  <div className="onboarding-connected-badge">
-                    <CheckCircleFillIcon size={16} />
-                    Signed in as {xboxGamertag}
-                  </div>
-                  <div className="onboarding-actions">
-                    <Button type="button" onClick={next}>
-                      Continue
-                    </Button>
-                  </div>
-                </>
-              ) : xboxWindowOpen ? (
-                <div
-                  className="onboarding-actions"
-                  style={{ justifyContent: "center" }}
-                >
-                  <span style={{ opacity: 0.6, fontSize: "0.9rem" }}>
-                    Waiting for sign-in…
-                  </span>
-                </div>
-              ) : (
-                <div className="onboarding-actions">
-                  <button
-                    type="button"
-                    className="onboarding-skip"
-                    onClick={next}
-                    disabled={xboxBusy}
-                  >
-                    Skip for now
-                  </button>
-                  <Button
-                    type="button"
-                    onClick={handleXboxConnect}
-                    disabled={xboxBusy}
-                  >
-                    <PersonIcon size={14} />
-                    {xboxBusy ? "Opening…" : "Connect Xbox"}
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ── Riot Games ── */}
-          {currentStep === "riot" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <RiotLogo style={{ width: 20, height: 20 }} />
-                </div>
-                <div>
-                  <h2>Riot Games</h2>
-                  <p>League of Legends, VALORANT, Legends of Runeterra</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Riot games are free to play — add League of Legends, VALORANT,
-                and Legends of Runeterra to your library. They launch through
-                the Riot Client.
-              </p>
-
-              {riotState === null ? (
-                <p style={{ opacity: 0.6 }}>Detecting Riot Client…</p>
-              ) : (
-                <>
-                  {riotState.detected.length > 0 && (
-                    <p style={{ opacity: 0.8 }}>
-                      Installed:{" "}
-                      {riotState.detected.map((g) => g.title).join(", ")}
-                    </p>
-                  )}
-                  {!riotState.installed && (
-                    <p style={{ opacity: 0.6, fontSize: "0.82rem" }}>
-                      Riot Client not detected — games can&apos;t be launched
-                      until you install it.
-                    </p>
-                  )}
-                </>
-              )}
-
-              {riotResult && (
-                <div className="onboarding-connected-badge">
-                  <CheckCircleFillIcon size={16} />
-                  {riotResult}
-                </div>
-              )}
-
-              <div className="onboarding-actions">
-                <button
-                  type="button"
-                  className="onboarding-skip"
-                  onClick={next}
-                >
-                  {riotResult ? "Continue" : "Skip for now"}
-                </button>
-                {!riotResult && (
-                  <Button
-                    type="button"
-                    onClick={handleAddRiotGames}
-                    disabled={riotBusy}
-                  >
-                    {riotBusy ? "Adding…" : "Add Riot games"}
-                  </Button>
+                    {ubisoftState !== null &&
+                      ubisoftState.installed &&
+                      ubisoftState.detected.length > 0 && (
+                        <>
+                          <div
+                            className="onboarding-divider"
+                            style={{ marginTop: "16px" }}
+                          >
+                            or add installed games
+                          </div>
+                          {ubisoftResult ? (
+                            <div className="onboarding-connected-badge">
+                              <CheckCircleFillIcon size={16} />
+                              {ubisoftResult}
+                            </div>
+                          ) : (
+                            <div className="onboarding-actions">
+                              <Button
+                                type="button"
+                                onClick={handleAddUbisoftGames}
+                                disabled={ubisoftBusy}
+                              >
+                                {ubisoftBusy
+                                  ? "Adding…"
+                                  : `Add ${ubisoftState.detected.length} installed game${ubisoftState.detected.length !== 1 ? "s" : ""}`}
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                  </>
                 )}
-              </div>
-            </>
-          )}
+              </>
+            )}
 
-          {/* ── Ubisoft Connect ── */}
-          {currentStep === "ubisoft" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <UbisoftLogo style={{ width: 20, height: 20 }} />
+            {/* ── EA app ── */}
+            {currentStep === "ea" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <EaLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>EA app</h2>
+                    <p>Import your EA library</p>
+                  </div>
                 </div>
-                <div>
-                  <h2>Ubisoft Connect</h2>
-                  <p>Import your Ubisoft library</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Connect your Ubisoft account to import your owned games — no
-                client required. Games launch through Ubisoft Connect when
-                it&apos;s installed.
-              </p>
+                <p className="onboarding-step-description">
+                  Connect your EA account to import your owned games — no client
+                  required. Games launch through the EA app when it&apos;s
+                  installed.
+                </p>
 
-              {ubisoftLinked ? (
-                <>
-                  <div className="onboarding-connected-badge">
-                    <CheckCircleFillIcon size={16} />
-                    Connected as {ubisoftAccountName}
-                    {ubisoftSyncResult && (
-                      <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
-                        {" "}
-                        — {ubisoftSyncResult}
-                      </span>
-                    )}
-                  </div>
-                  <div className="onboarding-actions">
-                    <Button type="button" onClick={next}>
-                      Continue
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="onboarding-actions" style={{ marginBottom: 0 }}>
-                    <button
-                      type="button"
-                      className="onboarding-skip"
-                      onClick={next}
+                {eaLinked ? (
+                  <>
+                    <div className="onboarding-connected-badge">
+                      <CheckCircleFillIcon size={16} />
+                      Connected as {eaAccountName}
+                      {eaSyncResult && (
+                        <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
+                          {" "}
+                          — {eaSyncResult}
+                        </span>
+                      )}
+                    </div>
+                    <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="onboarding-actions"
+                      style={{ marginBottom: 0 }}
                     >
-                      Skip for now
-                    </button>
-                    <Button
-                      type="button"
-                      onClick={handleUbisoftConnect}
-                      disabled={ubisoftConnecting}
-                    >
-                      <PersonIcon size={14} />
-                      {ubisoftConnecting ? "Connecting…" : "Connect Ubisoft"}
-                    </Button>
-                  </div>
+                      <button
+                        type="button"
+                        className="onboarding-skip"
+                        onClick={next}
+                      >
+                        Skip for now
+                      </button>
+                      <Button
+                        type="button"
+                        onClick={handleEaConnect}
+                        disabled={eaConnecting}
+                      >
+                        <PersonIcon size={14} />
+                        {eaConnecting ? "Connecting…" : "Connect EA"}
+                      </Button>
+                    </div>
 
-                  {ubisoftState !== null &&
-                    ubisoftState.installed &&
-                    ubisoftState.detected.length > 0 && (
-                      <>
-                        <div
-                          className="onboarding-divider"
-                          style={{ marginTop: "16px" }}
-                        >
-                          or add installed games
-                        </div>
-                        {ubisoftResult ? (
-                          <div className="onboarding-connected-badge">
-                            <CheckCircleFillIcon size={16} />
-                            {ubisoftResult}
+                    {eaState !== null &&
+                      eaState.installed &&
+                      eaState.detected.length > 0 && (
+                        <>
+                          <div
+                            className="onboarding-divider"
+                            style={{ marginTop: "16px" }}
+                          >
+                            or add installed games
                           </div>
-                        ) : (
-                          <div className="onboarding-actions">
-                            <Button
-                              type="button"
-                              onClick={handleAddUbisoftGames}
-                              disabled={ubisoftBusy}
-                            >
-                              {ubisoftBusy
-                                ? "Adding…"
-                                : `Add ${ubisoftState.detected.length} installed game${ubisoftState.detected.length !== 1 ? "s" : ""}`}
-                            </Button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                </>
-              )}
-            </>
-          )}
+                          {eaResult ? (
+                            <div className="onboarding-connected-badge">
+                              <CheckCircleFillIcon size={16} />
+                              {eaResult}
+                            </div>
+                          ) : (
+                            <div className="onboarding-actions">
+                              <Button
+                                type="button"
+                                onClick={handleAddEaGames}
+                                disabled={eaBusy}
+                              >
+                                {eaBusy
+                                  ? "Adding…"
+                                  : `Add ${eaState.detected.length} installed game${eaState.detected.length !== 1 ? "s" : ""}`}
+                              </Button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                  </>
+                )}
+              </>
+            )}
 
-          {/* ── EA app ── */}
-          {currentStep === "ea" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <EaLogo style={{ width: 20, height: 20 }} />
+            {/* ── Achievements (Exophase) ── */}
+            {currentStep === "achievements" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <TrophyIcon size={20} />
+                  </div>
+                  <div>
+                    <h2>Achievements</h2>
+                    <p>Track achievements across every store</p>
+                  </div>
                 </div>
-                <div>
-                  <h2>EA app</h2>
-                  <p>Import your EA library</p>
-                </div>
-              </div>
-              <p className="onboarding-step-description">
-                Connect your EA account to import your owned games — no client
-                required. Games launch through the EA app when it&apos;s
-                installed.
-              </p>
+                <p className="onboarding-step-description">
+                  GameHub uses <strong>Exophase</strong> as a single source for
+                  achievements — one account covers Steam, Xbox, GOG, Epic and
+                  more. Sign in with your Exophase account, or create one for
+                  free on the same screen.
+                </p>
 
-              {eaLinked ? (
-                <>
-                  <div className="onboarding-connected-badge">
-                    <CheckCircleFillIcon size={16} />
-                    Connected as {eaAccountName}
-                    {eaSyncResult && (
-                      <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
-                        {" "}
-                        — {eaSyncResult}
-                      </span>
-                    )}
-                  </div>
-                  <div className="onboarding-actions">
-                    <Button type="button" onClick={next}>
-                      Continue
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
+                {exophaseUsername ? (
+                  <>
+                    <div className="onboarding-connected-badge">
+                      <CheckCircleFillIcon size={16} />
+                      Connected as {exophaseUsername}
+                    </div>
+                    <div className="onboarding-actions">
+                      <Button type="button" onClick={next}>
+                        Continue
+                      </Button>
+                    </div>
+                  </>
+                ) : (
                   <div
                     className="onboarding-actions"
                     style={{ marginBottom: 0 }}
@@ -1735,296 +1855,271 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </button>
                     <Button
                       type="button"
-                      onClick={handleEaConnect}
-                      disabled={eaConnecting}
+                      onClick={handleExophaseConnect}
+                      disabled={exophaseConnecting}
                     >
                       <PersonIcon size={14} />
-                      {eaConnecting ? "Connecting…" : "Connect EA"}
+                      {exophaseConnecting
+                        ? "Waiting for sign-in…"
+                        : "Login to Exophase"}
                     </Button>
                   </div>
+                )}
+              </>
+            )}
 
-                  {eaState !== null &&
-                    eaState.installed &&
-                    eaState.detected.length > 0 && (
-                      <>
-                        <div
-                          className="onboarding-divider"
-                          style={{ marginTop: "16px" }}
-                        >
-                          or add installed games
-                        </div>
-                        {eaResult ? (
-                          <div className="onboarding-connected-badge">
-                            <CheckCircleFillIcon size={16} />
-                            {eaResult}
-                          </div>
-                        ) : (
-                          <div className="onboarding-actions">
-                            <Button
-                              type="button"
-                              onClick={handleAddEaGames}
-                              disabled={eaBusy}
-                            >
-                              {eaBusy
-                                ? "Adding…"
-                                : `Add ${eaState.detected.length} installed game${eaState.detected.length !== 1 ? "s" : ""}`}
-                            </Button>
-                          </div>
-                        )}
-                      </>
+            {/* ── Tools ── */}
+            {currentStep === "tools" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <GearIcon size={20} />
+                  </div>
+                  <div>
+                    <h2>Tools</h2>
+                    <p>Import saves and scan for installed games</p>
+                  </div>
+                </div>
+
+                {/* Card 1: Ludusavi — only if signed in */}
+                {accountLinked && (
+                  <div className="onboarding-tool-card">
+                    <div className="onboarding-tool-card__header">
+                      <LudusaviIcon className="onboarding-tool-card__svg-icon" />
+                      <span className="onboarding-tool-card__title">
+                        Import Cloud Saves from Ludusavi
+                      </span>
+                    </div>
+                    <p className="onboarding-tool-card__desc">
+                      Pick your Ludusavi backup folder and GameHub will upload
+                      each game&apos;s saves to GameHub Cloud, matched to your
+                      library automatically.
+                    </p>
+                    <div className="onboarding-tool-card__actions">
+                      <Button
+                        type="button"
+                        disabled={ludusaviBusy}
+                        onClick={handleLudusaviImport}
+                      >
+                        {ludusaviBusy ? "Importing…" : "Pick Backup Folder"}
+                      </Button>
+                    </div>
+                    {ludusaviResult && (
+                      <p className="onboarding-tool-card__result">
+                        {ludusaviResult}
+                      </p>
                     )}
-                </>
-              )}
-            </>
-          )}
+                  </div>
+                )}
 
-          {/* ── Tools ── */}
-          {currentStep === "tools" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <GearIcon size={20} />
-                </div>
-                <div>
-                  <h2>Tools</h2>
-                  <p>Import saves and scan for installed games</p>
-                </div>
-              </div>
-
-              {/* Card 1: Ludusavi — only if signed in */}
-              {accountLinked && (
+                {/* Card 2: Playnite playtime import */}
                 <div className="onboarding-tool-card">
                   <div className="onboarding-tool-card__header">
-                    <LudusaviIcon className="onboarding-tool-card__svg-icon" />
+                    <PlayniteIcon className="onboarding-tool-card__svg-icon" />
                     <span className="onboarding-tool-card__title">
-                      Import Cloud Saves from Ludusavi
+                      Import Playtime from Playnite
                     </span>
                   </div>
                   <p className="onboarding-tool-card__desc">
-                    Pick your Ludusavi backup folder and GameHub will upload
-                    each game&apos;s saves to GameHub Cloud, matched to your
-                    library automatically.
+                    Sync your playtime hours from Playnite&apos;s library
+                    database.
+                    {playniteDetectedPath ? (
+                      <>
+                        {" "}
+                        GameHub detected your Playnite library automatically.
+                      </>
+                    ) : (
+                      <>
+                        {" "}
+                        Auto-detects{" "}
+                        <code style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+                          %AppData%\Playnite\library\games.db
+                        </code>{" "}
+                        or pick the file manually.
+                      </>
+                    )}
                   </p>
                   <div className="onboarding-tool-card__actions">
                     <Button
                       type="button"
-                      disabled={ludusaviBusy}
-                      onClick={handleLudusaviImport}
+                      disabled={playniteBusy}
+                      onClick={() => handlePlayniteImport()}
                     >
-                      {ludusaviBusy ? "Importing…" : "Pick Backup Folder"}
+                      {playniteBusy
+                        ? "Importing…"
+                        : playniteDetectedPath
+                          ? "Import Playtime"
+                          : "Auto-detect & Import"}
+                    </Button>
+                    <Button
+                      type="button"
+                      theme="outline"
+                      disabled={playniteBusy}
+                      onClick={handlePickPlayniteDb}
+                    >
+                      Browse…
                     </Button>
                   </div>
-                  {ludusaviResult && (
+                  {playniteResult && (
                     <p className="onboarding-tool-card__result">
-                      {ludusaviResult}
+                      {playniteResult}
                     </p>
                   )}
                 </div>
-              )}
 
-              {/* Card 2: Playnite playtime import */}
-              <div className="onboarding-tool-card">
-                <div className="onboarding-tool-card__header">
-                  <PlayniteIcon className="onboarding-tool-card__svg-icon" />
-                  <span className="onboarding-tool-card__title">
-                    Import Playtime from Playnite
-                  </span>
-                </div>
-                <p className="onboarding-tool-card__desc">
-                  Sync your playtime hours from Playnite&apos;s library
-                  database.
-                  {playniteDetectedPath ? (
-                    <> GameHub detected your Playnite library automatically.</>
-                  ) : (
-                    <>
-                      {" "}
-                      Auto-detects{" "}
-                      <code style={{ fontSize: "0.75rem", opacity: 0.7 }}>
-                        %AppData%\Playnite\library\games.db
-                      </code>{" "}
-                      or pick the file manually.
-                    </>
-                  )}
-                </p>
-                <div className="onboarding-tool-card__actions">
-                  <Button
-                    type="button"
-                    disabled={playniteBusy}
-                    onClick={() => handlePlayniteImport()}
-                  >
-                    {playniteBusy
-                      ? "Importing…"
-                      : playniteDetectedPath
-                        ? "Import Playtime"
-                        : "Auto-detect & Import"}
-                  </Button>
-                  <Button
-                    type="button"
-                    theme="outline"
-                    disabled={playniteBusy}
-                    onClick={handlePickPlayniteDb}
-                  >
-                    Browse…
-                  </Button>
-                </div>
-                {playniteResult && (
-                  <p className="onboarding-tool-card__result">
-                    {playniteResult}
+                {/* Card 3: Scan for Games */}
+                <div className="onboarding-tool-card">
+                  <div className="onboarding-tool-card__header">
+                    <SearchIcon size={18} />
+                    <span className="onboarding-tool-card__title">
+                      Scan for Installed Games
+                    </span>
+                  </div>
+                  <p className="onboarding-tool-card__desc">
+                    Let GameHub automatically detect your installed games and
+                    set up their paths.
                   </p>
-                )}
-              </div>
-
-              {/* Card 3: Scan for Games */}
-              <div className="onboarding-tool-card">
-                <div className="onboarding-tool-card__header">
-                  <SearchIcon size={18} />
-                  <span className="onboarding-tool-card__title">
-                    Scan for Installed Games
-                  </span>
-                </div>
-                <p className="onboarding-tool-card__desc">
-                  Let GameHub automatically detect your installed games and set
-                  up their paths.
-                </p>
-                <div className="onboarding-tool-card__actions">
-                  <Button
-                    type="button"
-                    disabled={scanBusy}
-                    onClick={handleDeepScan}
-                  >
-                    {scanBusy ? "Scanning…" : "Deep Scan"}
-                  </Button>
-                  <Button
-                    type="button"
-                    theme="outline"
-                    disabled={scanBusy}
-                    onClick={handleSelectiveScan}
-                  >
-                    Selective Scan
-                  </Button>
-                </div>
-                {scanBusy && scanProgress && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "6px",
-                    }}
-                  >
+                  <div className="onboarding-tool-card__actions">
+                    <Button
+                      type="button"
+                      disabled={scanBusy}
+                      onClick={handleDeepScan}
+                    >
+                      {scanBusy ? "Scanning…" : "Deep Scan"}
+                    </Button>
+                    <Button
+                      type="button"
+                      theme="outline"
+                      disabled={scanBusy}
+                      onClick={handleSelectiveScan}
+                    >
+                      Selective Scan
+                    </Button>
+                  </div>
+                  {scanBusy && scanProgress && (
                     <div
                       style={{
-                        height: "4px",
-                        background: "rgba(255,255,255,0.12)",
-                        borderRadius: "2px",
-                        overflow: "hidden",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
                       }}
                     >
                       <div
                         style={{
-                          height: "100%",
-                          width: `${scanProgress.total > 0 ? Math.round((scanProgress.scanned / scanProgress.total) * 100) : 0}%`,
-                          background: "var(--color-primary, #8c67ef)",
+                          height: "4px",
+                          background: "rgba(255,255,255,0.12)",
                           borderRadius: "2px",
-                          transition: "width 0.2s ease",
+                          overflow: "hidden",
                         }}
-                      />
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${scanProgress.total > 0 ? Math.round((scanProgress.scanned / scanProgress.total) * 100) : 0}%`,
+                            background: "var(--color-primary, #8c67ef)",
+                            borderRadius: "2px",
+                            transition: "width 0.2s ease",
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>
+                        {scanProgress.scanned}/{scanProgress.total} —{" "}
+                        {scanProgress.currentTitle} ({scanProgress.foundCount}{" "}
+                        found)
+                      </span>
                     </div>
-                    <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>
-                      {scanProgress.scanned}/{scanProgress.total} —{" "}
-                      {scanProgress.currentTitle} ({scanProgress.foundCount}{" "}
-                      found)
-                    </span>
-                  </div>
-                )}
-                {scanResult && (
-                  <p className="onboarding-tool-card__result">{scanResult}</p>
-                )}
-              </div>
-
-              <div className="onboarding-actions">
-                <Button type="button" onClick={next}>
-                  Continue
-                </Button>
-              </div>
-            </>
-          )}
-
-          {/* ── Preferences ── */}
-          {currentStep === "preferences" && (
-            <>
-              <div className="onboarding-step-header">
-                <div className="onboarding-step-header__icon">
-                  <BellIcon size={20} />
+                  )}
+                  {scanResult && (
+                    <p className="onboarding-tool-card__result">{scanResult}</p>
+                  )}
                 </div>
-                <div>
-                  <h2>Preferences</h2>
-                  <p>Notifications and startup behavior</p>
+
+                <div className="onboarding-actions">
+                  <Button type="button" onClick={next}>
+                    Continue
+                  </Button>
                 </div>
-              </div>
-              <div className="onboarding-sidebar__section-label">
-                Notifications
-              </div>
-              <div className="onboarding-toggles">
-                <label
-                  className="onboarding-toggle"
-                  aria-label="Download completed"
-                >
-                  <div className="onboarding-toggle__text">
-                    <span>Download completed</span>
-                    <small>Notify when a download finishes</small>
+              </>
+            )}
+
+            {/* ── Preferences ── */}
+            {currentStep === "preferences" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <BellIcon size={20} />
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={downloadNotifs}
-                    onChange={(e) => setDownloadNotifs(e.target.checked)}
-                  />
-                </label>
-                <label
-                  className="onboarding-toggle"
-                  aria-label="Achievement unlocked"
-                >
-                  <div className="onboarding-toggle__text">
-                    <span>Achievement unlocked</span>
-                    <small>Show a pop-up when you unlock an achievement</small>
+                  <div>
+                    <h2>Preferences</h2>
+                    <p>Notifications and startup behavior</p>
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={achievementNotifs}
-                    onChange={(e) => setAchievementNotifs(e.target.checked)}
-                  />
-                </label>
-              </div>
-              <div
-                className="onboarding-sidebar__section-label"
-                style={{ marginTop: "16px" }}
-              >
-                Startup
-              </div>
-              <div className="onboarding-toggles">
-                <label
-                  className="onboarding-toggle"
-                  aria-label="Start minimized to tray"
+                </div>
+                <div className="onboarding-sidebar__section-label">
+                  Notifications
+                </div>
+                <div className="onboarding-toggles">
+                  <label
+                    className="onboarding-toggle"
+                    aria-label="Download completed"
+                  >
+                    <div className="onboarding-toggle__text">
+                      <span>Download completed</span>
+                      <small>Notify when a download finishes</small>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={downloadNotifs}
+                      onChange={(e) => setDownloadNotifs(e.target.checked)}
+                    />
+                  </label>
+                  <label
+                    className="onboarding-toggle"
+                    aria-label="Achievement unlocked"
+                  >
+                    <div className="onboarding-toggle__text">
+                      <span>Achievement unlocked</span>
+                      <small>
+                        Show a pop-up when you unlock an achievement
+                      </small>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={achievementNotifs}
+                      onChange={(e) => setAchievementNotifs(e.target.checked)}
+                    />
+                  </label>
+                </div>
+                <div
+                  className="onboarding-sidebar__section-label"
+                  style={{ marginTop: "16px" }}
                 >
-                  <div className="onboarding-toggle__text">
-                    <span>Start minimized to tray</span>
-                    <small>
-                      Launch in background without opening the window
-                    </small>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={startMinimized}
-                    onChange={(e) => setStartMinimized(e.target.checked)}
-                  />
-                </label>
-              </div>
-              <div className="onboarding-actions">
-                <Button type="button" onClick={next}>
-                  Continue
-                </Button>
-              </div>
-            </>
-          )}
+                  Startup
+                </div>
+                <div className="onboarding-toggles">
+                  <label
+                    className="onboarding-toggle"
+                    aria-label="Start minimized to tray"
+                  >
+                    <div className="onboarding-toggle__text">
+                      <span>Start minimized to tray</span>
+                      <small>
+                        Launch in background without opening the window
+                      </small>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={startMinimized}
+                      onChange={(e) => setStartMinimized(e.target.checked)}
+                    />
+                  </label>
+                </div>
+                <div className="onboarding-actions">
+                  <Button type="button" onClick={next}>
+                    Continue
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

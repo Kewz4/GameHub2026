@@ -12,7 +12,6 @@ import { SettingsPlayniteImport } from "./settings-playnite-import";
 import { SettingsExclusionList } from "./settings-exclusion-list";
 import { SettingsRiot } from "./settings-riot";
 import { SettingsUbisoft } from "./settings-ubisoft";
-import { SettingsAchievementImport } from "./settings-achievement-import";
 import { SettingsEa } from "./settings-ea";
 import { useAppSelector, useUserDetails } from "@renderer/hooks";
 
@@ -176,14 +175,6 @@ export function SettingsContextIntegrations() {
               {content}
             </IntegrationItem>
           ))}
-          <IntegrationItem
-            id="achievement-import"
-            title="Achievement Import"
-            expanded={expanded.has("achievement-import")}
-            onToggle={toggle}
-          >
-            <SettingsAchievementImport />
-          </IntegrationItem>
           <IntegrationItem
             id="exclusion-list"
             title="Excluded Games"

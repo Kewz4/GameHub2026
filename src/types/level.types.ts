@@ -206,6 +206,11 @@ export interface UserPreferences {
   eaTokenExpiry?: string | null;
   eaUsername?: string | null;
   eaPid?: string | null;
+  // Exophase — the unified achievement source. `exophaseUserId` holds the
+  // logged-in username (the auth cookies live in the persist:exophase session).
+  exophaseEnabled?: boolean;
+  exophaseUserId?: string | null;
+  exophaseManagedPlatforms?: GameShop[] | null;
 }
 
 export interface ExcludedGame {
