@@ -35,6 +35,17 @@ export const getGameAchievementData = async (
 
   const cachedAchievements = await gameAchievementsSublevel.get(gameKey);
 
+  // Exophase is the unified achievement source. When it has imported this game,
+  // its definitions and unlocked list share the same apiNames, so we must use
+  // the local Exophase data for every shop — including Steam — instead of the
+  // Hydra API (whose Steam apiNames would never match the unlocked list).
+  if (
+    cachedAchievements?.source === "exophase" &&
+    cachedAchievements.achievements?.length
+  ) {
+    return cachedAchievements.achievements;
+  }
+
   // Non-Steam shops store achievements locally during integration sync.
   // Always return local data for these — the Hydra API doesn't know their achievements.
   if (shop !== "steam" && cachedAchievements?.achievements) {

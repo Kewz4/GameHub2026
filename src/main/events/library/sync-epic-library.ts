@@ -17,7 +17,7 @@ import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
-import { importEpicAchievements } from "@main/services/achievements/platform-achievement-importer";
+import { getEpicPlaytimeMap } from "@main/services/achievements/platform-achievement-importer";
 
 const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   const prefs = await db
@@ -37,6 +37,10 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
 
   const excludedGames = await getExcludedGames();
 
+  // Legendary's list output doesn't include playtime — Epic exposes it via
+  // the library service. One request covers the whole account.
+  const playtimeMap = await getEpicPlaytimeMap();
+
   for (const epicGame of games) {
     const objectId = epicGame.app_name;
     const gameKey = levelKeys.game("epic", objectId);
@@ -45,7 +49,8 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
       continue;
     }
 
-    const epicPlaytimeMs = (epicGame.playtime ?? 0) * 60 * 1000;
+    const epicPlaytimeMs =
+      playtimeMap.get(objectId) ?? (epicGame.playtime ?? 0) * 60 * 1000;
 
     const existing = await gamesSublevel.get(gameKey).catch(() => null);
     if (existing && !existing.isDeleted) {
@@ -152,8 +157,7 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
 
   logger.log(`Epic library sync complete: ${added} games added`);
   void generateMissingMetadataInternal();
-  // Pull unlocked achievements from Epic in the background
-  void importEpicAchievements().catch(() => {});
+  // Achievements are now sourced from Exophase (Settings → Achievements).
   return { total: games.length, added, addedGames };
 };
 

@@ -214,8 +214,7 @@ declare global {
       mfaToken: string,
       challengeType: string
     ) => Promise<
-      | { success: true; account: string }
-      | { success: false; error: string }
+      { success: true; account: string } | { success: false; error: string }
     >;
     openEpicSocialAuthWindow: (
       provider: "google" | "facebook" | "apple"
@@ -347,6 +346,29 @@ declare global {
       gamesWithAchievements: number;
       totalUnlocked: number;
     }>;
+    openExophaseAuthWindow: () => Promise<{
+      authenticated: boolean;
+      username: string | null;
+    }>;
+    getExophaseAuthState: (
+      revalidate?: boolean
+    ) => Promise<{ authenticated: boolean; username: string | null }>;
+    clearExophaseSession: () => Promise<{ ok: boolean }>;
+    syncExophaseAchievements: () => Promise<{
+      gamesProcessed: number;
+      gamesWithAchievements: number;
+      totalUnlocked: number;
+      error?: string;
+    }>;
+    importPlaystationAchievements: () => Promise<{
+      gamesProcessed: number;
+      gamesMatched: number;
+      totalUnlocked: number;
+      error?: string;
+    }>;
+    onExophaseSyncProgress: (
+      cb: (progress: { current: number; total: number; title: string }) => void
+    ) => () => void;
     syncGamePassLibrary: () => Promise<{ added: number; total: number }>;
     openXboxAuthWindow: () => Promise<{
       success: boolean;
@@ -531,11 +553,16 @@ declare global {
       foundGames: { title: string; executablePath: string; key: string }[];
       total: number;
     }>;
-    selectiveScanInstalledGames: (scanPaths: string[], dryRun?: boolean) => Promise<{
+    selectiveScanInstalledGames: (
+      scanPaths: string[],
+      dryRun?: boolean
+    ) => Promise<{
       foundGames: { title: string; executablePath: string; key: string }[];
       total: number;
     }>;
-    confirmScanGames: (approvedGames: Array<{ key: string; executablePath: string }>) => Promise<void>;
+    confirmScanGames: (
+      approvedGames: Array<{ key: string; executablePath: string }>
+    ) => Promise<void>;
     onScanProgress: (
       cb: (progress: {
         scanned: number;

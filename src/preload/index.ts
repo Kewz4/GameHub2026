@@ -257,6 +257,27 @@ contextBridge.exposeInMainWorld("electron", {
   syncEaLibrary: () => ipcRenderer.invoke("syncEaLibrary"),
   importPlatformAchievements: (platform: "steam" | "epic" | "gog" | "xbox") =>
     ipcRenderer.invoke("importPlatformAchievements", platform),
+  // Exophase — unified achievement source
+  openExophaseAuthWindow: () => ipcRenderer.invoke("openExophaseAuthWindow"),
+  getExophaseAuthState: (revalidate?: boolean) =>
+    ipcRenderer.invoke("getExophaseAuthState", revalidate),
+  clearExophaseSession: () => ipcRenderer.invoke("clearExophaseSession"),
+  syncExophaseAchievements: () =>
+    ipcRenderer.invoke("syncExophaseAchievements"),
+  importPlaystationAchievements: () =>
+    ipcRenderer.invoke("importPlaystationAchievements"),
+  onExophaseSyncProgress: (
+    cb: (progress: { current: number; total: number; title: string }) => void
+  ) => {
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      progress: { current: number; total: number; title: string }
+    ) => cb(progress);
+    ipcRenderer.on("on-exophase-sync-progress", listener);
+    return () => {
+      ipcRenderer.removeListener("on-exophase-sync-progress", listener);
+    };
+  },
   syncGamePassLibrary: () => ipcRenderer.invoke("syncGamePassLibrary"),
   openXboxAuthWindow: () => ipcRenderer.invoke("openXboxAuthWindow"),
   addCustomGameToLibrary: (
@@ -407,11 +428,13 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("changeGamePlayTime", shop, objectId, playtime),
   extractGameDownload: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("extractGameDownload", shop, objectId),
-  scanInstalledGames: (dryRun?: boolean) => ipcRenderer.invoke("scanInstalledGames", dryRun),
+  scanInstalledGames: (dryRun?: boolean) =>
+    ipcRenderer.invoke("scanInstalledGames", dryRun),
   selectiveScanInstalledGames: (scanPaths: string[], dryRun?: boolean) =>
     ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths, dryRun),
-  confirmScanGames: (approvedGames: Array<{ key: string; executablePath: string }>) =>
-    ipcRenderer.invoke("confirmScanGames", approvedGames),
+  confirmScanGames: (
+    approvedGames: Array<{ key: string; executablePath: string }>
+  ) => ipcRenderer.invoke("confirmScanGames", approvedGames),
   onScanProgress: (
     cb: (progress: {
       scanned: number;
@@ -589,7 +612,8 @@ contextBridge.exposeInMainWorld("electron", {
     shop: GameShop,
     cb: (success: boolean) => void
   ) => {
-    const listener = (_event: Electron.IpcRendererEvent, success: boolean) => cb(success);
+    const listener = (_event: Electron.IpcRendererEvent, success: boolean) =>
+      cb(success);
     ipcRenderer.on(`on-backup-download-complete-${objectId}-${shop}`, listener);
     return () =>
       ipcRenderer.removeListener(

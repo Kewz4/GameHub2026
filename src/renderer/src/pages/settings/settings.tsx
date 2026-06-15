@@ -15,12 +15,13 @@ import {
   PlayIcon,
   ShieldCheckIcon,
 } from "@primer/octicons-react";
-import { Wrench } from "lucide-react";
+import { Wrench, Trophy } from "lucide-react";
 import { SettingsContextGeneral } from "./settings-context-general";
 import { SettingsContextDownloads } from "./settings-context-downloads";
 import { SettingsContextNotifications } from "./settings-context-notifications";
 import { SettingsContextContentGameplay } from "./settings-context-content-gameplay";
 import { SettingsContextIntegrations } from "./settings-context-integrations";
+import { SettingsContextAchievements } from "./settings-context-achievements";
 import { SettingsContextCompatibility } from "./settings-context-compatibility";
 
 export default function Settings() {
@@ -59,6 +60,11 @@ export default function Settings() {
             },
           ]
         : []),
+      {
+        id: "achievements" as const,
+        label: t("achievements"),
+        icon: <Trophy size={16} />,
+      },
       {
         id: "compatibility" as const,
         label: t("compatibility"),
@@ -105,6 +111,10 @@ export default function Settings() {
 
             if (selectedCategoryId === "integrations") {
               return <SettingsContextIntegrations />;
+            }
+
+            if (selectedCategoryId === "achievements") {
+              return <SettingsContextAchievements />;
             }
 
             if (selectedCategoryId === "compatibility") {

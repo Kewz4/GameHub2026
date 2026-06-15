@@ -118,6 +118,10 @@ export interface GameAchievement {
   unlockedAchievements: UnlockedAchievement[];
   updatedAt: number | undefined;
   language: string | undefined;
+  /** When "exophase", both the definitions and the unlocked list were imported
+   *  from Exophase and share the same apiNames — so they must be used together
+   *  (never mixed with Hydra/Steam definitions, whose names wouldn't match). */
+  source?: "exophase";
 }
 
 export type AchievementCustomNotificationPosition =
@@ -206,6 +210,11 @@ export interface UserPreferences {
   eaTokenExpiry?: string | null;
   eaUsername?: string | null;
   eaPid?: string | null;
+  // Exophase — the unified achievement source. `exophaseUserId` holds the
+  // logged-in username (the auth cookies live in the persist:exophase session).
+  exophaseEnabled?: boolean;
+  exophaseUserId?: string | null;
+  exophaseManagedPlatforms?: GameShop[] | null;
 }
 
 export interface ExcludedGame {
