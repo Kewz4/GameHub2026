@@ -16,6 +16,7 @@ import { generateMissingMetadataInternal } from "./generate-missing-metadata";
 import { findGameByTitle } from "@main/helpers/find-game-by-title";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
+import { WindowManager } from "@main/services/window-manager";
 import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
 import { getEpicPlaytimeMap } from "@main/services/achievements/platform-achievement-importer";
 
@@ -158,6 +159,7 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   logger.log(`Epic library sync complete: ${added} games added`);
   void generateMissingMetadataInternal();
   // Achievements are now sourced from Exophase (Settings → Achievements).
+  WindowManager.sendToAppWindows("on-library-batch-complete");
   return { total: games.length, added, addedGames };
 };
 
