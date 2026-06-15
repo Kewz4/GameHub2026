@@ -582,6 +582,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       const state = await window.electron.openExophaseAuthWindow();
       if (state.authenticated) {
         setExophaseUsername(state.username);
+        await window.electron.updateUserPreferences({
+          exophaseUserId: state.username,
+          exophaseEnabled: true,
+        });
+        // Kick the first cache build in the background — this primes the shared
+        // achievement cache so games added later light up instantly.
+        window.electron.runExophaseBackgroundSync().catch(() => {});
       }
     } catch {
       // ignore

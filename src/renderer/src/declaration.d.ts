@@ -366,6 +366,8 @@ declare global {
       totalUnlocked: number;
       error?: string;
     }>;
+    getExophaseSyncReport: () => Promise<import("@types").ExophaseSyncReport | null>;
+    runExophaseBackgroundSync: () => Promise<{ ok: boolean }>;
     onExophaseSyncProgress: (
       cb: (progress: { current: number; total: number; title: string }) => void
     ) => () => void;

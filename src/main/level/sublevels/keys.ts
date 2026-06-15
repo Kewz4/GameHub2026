@@ -22,6 +22,9 @@ export const levelKeys = {
   downloadSourcesCheckBaseline: "downloadSourcesCheckBaseline", // When we last started the app
   downloadSourcesSinceValue: "downloadSourcesSinceValue", // The 'since' value API used (for modal comparison)
   localNotifications: "localNotifications",
+  exophaseCache: "exophaseCache", // Shared Exophase achievement-definition cache (R2-synced)
+  exophaseSyncReport: "exophaseSyncReport", // Last background sync report (for the notification modal)
+  exophaseCacheSyncedAt: "exophaseCacheSyncedAt", // Last time the shared cache blob was pulled from R2
   commonRedistPassed: "commonRedistPassed", // Whether common redistributables preflight has passed
   libraryOriginRepairV2: "libraryOriginRepairV2", // One-time demotion of wrongly "sync"-stamped scan/repack games
   libraryOriginRepairV3: "libraryOriginRepairV3", // Lock-down attempt (v4.6.4) — superseded by V4

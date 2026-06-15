@@ -3,3 +3,5 @@ import "./get-exophase-auth-state";
 import "./clear-exophase-session";
 import "./sync-exophase-achievements";
 import "./import-playstation-achievements";
+import "./get-exophase-sync-report";
+import "./run-exophase-background-sync";
