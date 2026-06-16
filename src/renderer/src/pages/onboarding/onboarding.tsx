@@ -17,6 +17,7 @@ import {
   FileDirectoryIcon,
   SearchIcon,
   TrophyIcon,
+  SyncIcon,
 } from "@primer/octicons-react";
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
@@ -579,7 +580,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         // it keeps going in the background if the user advances to the next step.
         setImportActive(true);
         setImportProgress(null);
-        window.electron.runExophaseBackgroundSync().catch(() => {});
+        // Small delay so the persist:exophase session cookies flush to disk
+        // before the background sync opens its own window on the same partition.
+        setTimeout(
+          () => window.electron.runExophaseBackgroundSync().catch(() => {}),
+          800
+        );
       }
     } catch {
       // ignore
@@ -1835,6 +1841,37 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         </span>
                       )}
                     </div>
+
+                    {/* Live import progress banner — shown while sync is running */}
+                    {importActive && (
+                      <div className="onboarding__import-banner">
+                        <div className="onboarding__import-banner-text">
+                          <SyncIcon size={12} className="onboarding__spin" />
+                          {importProgress
+                            ? `Importing achievements… ${importProgress.current}/${importProgress.total} — ${importProgress.title}`
+                            : "Importing achievements…"}
+                        </div>
+                        <div className="onboarding__import-bar">
+                          <div
+                            className="onboarding__import-fill"
+                            style={{
+                              width: importProgress
+                                ? `${Math.round(
+                                    (importProgress.current /
+                                      Math.max(importProgress.total, 1)) *
+                                      100
+                                  )}%`
+                                : "4%",
+                            }}
+                          />
+                        </div>
+                        <p className="onboarding__import-hint">
+                          Continues in the background — you can keep going.
+                          Check the Sync report after setup.
+                        </p>
+                      </div>
+                    )}
+
                     <p
                       className="onboarding-step-description"
                       style={{ marginTop: 12 }}
@@ -1849,7 +1886,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         type="button"
                         theme="outline"
                         onClick={handleExophasePsnImport}
-                        disabled={exophasePsnImporting}
+                        disabled={exophasePsnImporting || importActive}
                       >
                         {exophasePsnImporting
                           ? "Importing trophies…"
@@ -2161,36 +2198,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         onClose={() => setShowScanApproval(false)}
       />
 
-      {importActive && (
-        <div className="onboarding__import-overlay">
-          <div className="onboarding__import-modal">
-            <h3>Importing achievements…</h3>
-            <p className="onboarding__import-sub">
-              {importProgress
-                ? `${importProgress.current}/${importProgress.total} — ${importProgress.title}`
-                : "Reading your Exophase account…"}
-            </p>
-            <div className="onboarding__import-bar">
-              <div
-                className="onboarding__import-fill"
-                style={{
-                  width: importProgress
-                    ? `${Math.round(
-                        (importProgress.current /
-                          Math.max(importProgress.total, 1)) *
-                          100
-                      )}%`
-                    : "8%",
-                }}
-              />
-            </div>
-            <p className="onboarding__import-hint">
-              You can keep setting things up — this continues in the background.
-              Watch the rest under Achievements → Sync report.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -96,7 +96,11 @@ async function resolveAwards(
     // state. Without this hash, all achievements appear un-earned (data-earned="0").
     if (playerId) url = `${url}#${playerId}`;
 
-    const achievements = parseAchievements(await fetcher.fetchHtml(url));
+    // The #playerId hash tells Exophase to load this user's earned state via
+    // XHR AFTER page load. Without a settle delay the data-earned attributes
+    // are still all "0" when we scrape. 3 s is enough for the XHR to complete.
+    const settleMs = playerId ? 3_000 : 0;
+    const achievements = parseAchievements(await fetcher.fetchHtml(url, settleMs));
     if (achievements.length === 0) continue;
 
     return { achievements, awardsUrl: url, masterId: match.master_id ?? null };
@@ -113,7 +117,8 @@ const buildReportGame = (
   definitions: SteamAchievement[],
   unlocked: UnlockedAchievement[],
   newlyUnlocked: number,
-  verification?: ExophaseSyncReportGame["verificationChecks"]
+  verification?: ExophaseSyncReportGame["verificationChecks"],
+  debug?: ExophaseSyncReportGame["debug"]
 ): ExophaseSyncReportGame => ({
   shop,
   objectId,
@@ -128,6 +133,7 @@ const buildReportGame = (
       verification.noOrphanUnlocks
     : undefined,
   verificationChecks: verification,
+  debug,
 });
 
 /**
@@ -170,7 +176,11 @@ async function verifyGameAchievements(
 async function processAccountGame(
   fetcher: ExophaseFetcher,
   accountGame: ExophaseAccountGame
-): Promise<{ report: ExophaseSyncReportGame; unlocked: number } | null> {
+): Promise<{
+  report: ExophaseSyncReportGame;
+  unlocked: number;
+  resolved: boolean;
+} | null> {
   const resolved = await resolveAwards(
     fetcher,
     accountGame.title,
@@ -181,7 +191,33 @@ async function processAccountGame(
     achievementsLogger.log(
       `[Exophase account] "${accountGame.title}": no awards resolved — skipping`
     );
-    return null;
+    // Still surface a report line (with debug) so the user can see the title
+    // was attempted but produced nothing to match.
+    return {
+      resolved: false,
+      unlocked: 0,
+      report: buildReportGame(
+        "custom",
+        "",
+        accountGame.title,
+        null,
+        [],
+        [],
+        0,
+        undefined,
+        {
+          accountTitle: accountGame.title,
+          platformSlug: accountGame.platformSlug,
+          awardsUrl: null,
+          exophaseDefs: 0,
+          exophaseUnlocked: 0,
+          catalogueMatched: false,
+          defSource: "none",
+          inLibrary: false,
+          note: "No Exophase awards page resolved for this title.",
+        }
+      ),
+    };
   }
 
   const definitions = toDefinitions(resolved.achievements);
@@ -227,20 +263,23 @@ async function processAccountGame(
   // Default to Exophase definition count; overridden below if HydraAPI data exists.
   let reportTotalAchievements = definitions.length;
   let verification: ExophaseSyncReportGame["verificationChecks"] = undefined;
+  let defSource: "hydraapi" | "exophase" | "none" = "exophase";
+  let inLibrary = false;
 
   if (catalogueMatch && objectId) {
     const gameKey = levelKeys.game(shop, objectId);
     const game = await gamesSublevel.get(gameKey).catch(() => null);
     if (game && !game.isDeleted) {
+      inLibrary = true;
       const existingAchData = await gameAchievementsSublevel
         .get(gameKey)
         .catch(() => null);
 
-      const prevUnlocked = new Set(
-        (existingAchData?.unlockedAchievements ?? []).map((u) =>
-          (u.name ?? "").toUpperCase()
-        )
-      );
+      // Snapshot the unlocked COUNT before applying — not the names, because
+      // HydraAPI remapping changes apiNames and a name-set diff would falsely
+      // show everything as "new" on every subsequent run.
+      const prevUnlockedCount =
+        existingAchData?.unlockedAchievements?.length ?? 0;
 
       // If HydraAPI definitions exist, the report should reflect their count.
       if (
@@ -248,18 +287,18 @@ async function processAccountGame(
         existingAchData?.achievements?.length
       ) {
         reportTotalAchievements = existingAchData.achievements.length;
+        defSource = "hydraapi";
       }
 
       iconUrl = game.iconUrl ?? null;
       await applyCachedAchievements(gameKey, game);
 
-      // Re-read after apply to count truly newly unlocked against the post-apply state.
+      // Re-read after apply and count how many unlocks were added.
       const afterAchData = await gameAchievementsSublevel
         .get(gameKey)
         .catch(() => null);
-      newlyUnlocked = (afterAchData?.unlockedAchievements ?? []).filter(
-        (u) => !prevUnlocked.has((u.name ?? "").toUpperCase())
-      ).length;
+      const afterUnlockedCount = afterAchData?.unlockedAchievements?.length ?? 0;
+      newlyUnlocked = Math.max(0, afterUnlockedCount - prevUnlockedCount);
 
       if (afterAchData?.achievements?.length) {
         reportTotalAchievements = afterAchData.achievements.length;
@@ -280,7 +319,25 @@ async function processAccountGame(
     }
   }
 
+  const debugInfo: ExophaseSyncReportGame["debug"] = {
+    accountTitle: accountGame.title,
+    platformSlug: accountGame.platformSlug,
+    awardsUrl: resolved.awardsUrl,
+    exophaseDefs: definitions.length,
+    exophaseUnlocked: unlocked.length,
+    catalogueMatched: Boolean(catalogueMatch),
+    catalogueTitle: catalogueMatch?.title,
+    defSource,
+    inLibrary,
+    note: !catalogueMatch
+      ? "No Hydra catalogue entry matched — achievements cached by title only."
+      : !inLibrary
+        ? "Game matched catalogue but is not in your library."
+        : undefined,
+  };
+
   return {
+    resolved: true,
     report: buildReportGame(
       shop,
       reportObjectId,
@@ -290,7 +347,8 @@ async function processAccountGame(
       { length: reportTotalAchievements } as SteamAchievement[],
       unlocked,
       newlyUnlocked,
-      verification
+      verification,
+      debugInfo
     ),
     unlocked: unlocked.length,
   };
@@ -390,8 +448,11 @@ export async function syncExophaseAccount(
       try {
         const outcome = await processAccountGame(fetcher, accountGame);
         if (outcome) {
-          result.gamesWithAchievements++;
-          result.totalUnlocked += outcome.unlocked;
+          if (outcome.resolved) {
+            result.gamesWithAchievements++;
+            result.totalUnlocked += outcome.unlocked;
+          }
+          // Always push report (includes unresolved titles for debug view).
           reportGames.push(outcome.report);
         }
       } catch (err) {
@@ -421,15 +482,28 @@ export async function syncExophaseAccount(
     0
   );
 
+  // Deduplicate by shop+objectId — a game can appear multiple times if the
+  // user has it on both a PC store and PSN, or if duplicate account entries
+  // exist. Keep the entry with the highest unlocked count.
+  const dedupedGames = [
+    ...reportGames
+      .filter((g) => g.objectId)
+      .reduce((map, g) => {
+        const key = `${g.shop}:${g.objectId}`;
+        const prev = map.get(key);
+        if (!prev || g.totalUnlocked > prev.totalUnlocked) map.set(key, g);
+        return map;
+      }, new Map<string, ExophaseSyncReportGame>())
+      .values(),
+  ];
+
   result.report = {
     startedAt,
     finishedAt: new Date().toISOString(),
     gamesProcessed: result.gamesProcessed,
     gamesUpdated,
     totalNewlyUnlocked,
-    // Include all library-matched games in the report, not just newly-unlocked,
-    // so the sync report page always has useful data to show.
-    games: reportGames.filter((g) => g.objectId),
+    games: dedupedGames,
     psnDetected: [],
   };
 

@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, session } from "electron";
 import { EXOPHASE_PARTITION } from "./constants";
 
 /**
@@ -18,6 +18,16 @@ export class ExophaseFetcher {
 
   private ensureWindow(): BrowserWindow {
     if (this.win && !this.win.isDestroyed()) return this.win;
+    // Force English so Exophase serves English achievement/trophy names rather
+    // than localising to the system locale (which produced Chinese names for
+    // regional PSN titles like "...-psn-2"). Applied to the shared partition
+    // session before any request is made.
+    try {
+      const ses = session.fromPartition(EXOPHASE_PARTITION);
+      ses.setUserAgent(ses.getUserAgent(), "en-US,en;q=0.9");
+    } catch {
+      // non-fatal
+    }
     this.win = new BrowserWindow({
       show: false,
       webPreferences: {

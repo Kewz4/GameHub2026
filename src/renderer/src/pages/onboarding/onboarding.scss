@@ -591,57 +591,58 @@
     flex-shrink: 0;
   }
 
-  &__import-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
+  &__import-banner {
+    margin: 12px 0 0;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+  }
+
+  &__import-banner-text {
+    font-size: 0.82rem;
+    opacity: 0.85;
     display: flex;
     align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(2px);
-  }
-
-  &__import-modal {
-    width: min(440px, 90vw);
-    background: #1a1a1f;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-
-    h3 {
-      margin: 0 0 8px;
-    }
-  }
-
-  &__import-sub {
-    margin: 0 0 14px;
-    font-size: 0.85rem;
-    opacity: 0.8;
+    gap: 6px;
+    margin-bottom: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   &__import-bar {
-    height: 6px;
+    height: 4px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+    border-radius: 2px;
     overflow: hidden;
   }
 
   &__import-fill {
     height: 100%;
     background: #fff;
-    border-radius: 3px;
-    transition: width 0.3s ease;
+    border-radius: 2px;
+    transition: width 0.4s ease;
   }
 
   &__import-hint {
-    margin: 14px 0 0;
-    font-size: 0.78rem;
-    opacity: 0.6;
+    margin: 8px 0 0;
+    font-size: 0.76rem;
+    opacity: 0.55;
+  }
+
+  &__spin {
+    animation: spin 1.2s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 }
 

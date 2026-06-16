@@ -184,20 +184,32 @@ export async function fetchExophaseAccountGames(
   username: string
 ): Promise<ExophaseAccountGame[]> {
   let accounts: ExophasePlatformAccount[] = [];
-  try {
-    // 3 s settle so JS-rendered platform integration links are in the DOM.
-    const html = await fetcher.fetchHtml(exophaseProfileUrl(username), 3_000);
-    achievementsLogger.log(
-      `[Exophase account] profile HTML length: ${html.length}, has /user/ links: ${/\/user\//.test(html)}`
-    );
-    accounts = parsePlatformAccounts(html);
-  } catch (err) {
-    achievementsLogger.warn(
-      "[Exophase account] failed loading main profile",
-      err
-    );
-    return [];
+  // Retry the profile read: right after the onboarding login the persist:exophase
+  // session cookies may not yet be flushed, so the first render can come back
+  // logged-out (0 linked accounts). Re-fetch a few times before giving up.
+  const MAX_PROFILE_ATTEMPTS = 4;
+  for (let attempt = 1; attempt <= MAX_PROFILE_ATTEMPTS; attempt++) {
+    try {
+      // 3 s settle so JS-rendered platform integration links are in the DOM.
+      const html = await fetcher.fetchHtml(exophaseProfileUrl(username), 3_000);
+      achievementsLogger.log(
+        `[Exophase account] profile attempt ${attempt}: HTML length ${html.length}, has /user/ links: ${/\/user\//.test(html)}`
+      );
+      accounts = parsePlatformAccounts(html);
+    } catch (err) {
+      achievementsLogger.warn(
+        `[Exophase account] failed loading main profile (attempt ${attempt})`,
+        err
+      );
+    }
+
+    if (accounts.length > 0) break;
+    if (attempt < MAX_PROFILE_ATTEMPTS) {
+      await new Promise((r) => setTimeout(r, 2_000 * attempt));
+    }
   }
+
+  if (accounts.length === 0) return [];
 
   achievementsLogger.log(
     `[Exophase account] profile "${username}" → ${accounts.length} linked accounts: ${accounts

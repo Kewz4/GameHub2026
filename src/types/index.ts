@@ -455,6 +455,31 @@ export interface ExophaseSyncReportGame {
     /** 3. Every unlocked apiName exists in the definition set (no orphans). */
     noOrphanUnlocks: boolean;
   };
+  /** In-depth match trace, surfaced in the sync report's per-game debug view so
+   *  the user can see exactly how a title was resolved and matched. */
+  debug?: ExophaseSyncReportDebug;
+}
+
+export interface ExophaseSyncReportDebug {
+  /** The raw title enumerated from the Exophase account profile. */
+  accountTitle: string;
+  /** Exophase platform slug the title came from (steam/psn/xbox/…). */
+  platformSlug: string;
+  /** The awards page URL we scraped for earned state (with #playerId hash). */
+  awardsUrl: string | null;
+  /** How many achievement definitions Exophase returned. */
+  exophaseDefs: number;
+  /** How many of those Exophase marked as earned by the user. */
+  exophaseUnlocked: number;
+  /** Whether a Hydra catalogue entry matched (and what it was). */
+  catalogueMatched: boolean;
+  catalogueTitle?: string;
+  /** Definition source applied to the library record. */
+  defSource: "hydraapi" | "exophase" | "none";
+  /** Whether the matched game existed in the user's library. */
+  inLibrary: boolean;
+  /** Free-text note when the title was skipped or only partially resolved. */
+  note?: string;
 }
 
 export interface ExophaseSyncReport {

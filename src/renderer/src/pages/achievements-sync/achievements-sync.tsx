@@ -5,13 +5,119 @@ import {
   SyncIcon,
   CheckCircleFillIcon,
   AlertIcon,
+  XIcon,
+  QuestionIcon,
 } from "@primer/octicons-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@renderer/components";
 import { useAppDispatch, useToast } from "@renderer/hooks";
 import { setHeaderTitle } from "@renderer/features";
-import type { ExophaseSyncReport } from "@types";
+import type { ExophaseSyncReport, ExophaseSyncReportGame } from "@types";
 import "./achievements-sync.scss";
+
+function DebugModal({
+  game,
+  onClose,
+}: {
+  game: ExophaseSyncReportGame;
+  onClose: () => void;
+}) {
+  const d = game.debug;
+  return (
+    <div className="achievements-sync__debug-backdrop" onClick={onClose}>
+      <div
+        className="achievements-sync__debug-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="achievements-sync__debug-header">
+          <strong>{game.title}</strong>
+          <button
+            onClick={onClose}
+            className="achievements-sync__debug-close"
+            type="button"
+          >
+            <XIcon size={16} />
+          </button>
+        </div>
+
+        <table className="achievements-sync__debug-table">
+          <tbody>
+            <tr>
+              <td>Account title</td>
+              <td>{d?.accountTitle ?? game.title}</td>
+            </tr>
+            <tr>
+              <td>Platform</td>
+              <td>{d?.platformSlug ?? "—"}</td>
+            </tr>
+            <tr>
+              <td>Awards URL</td>
+              <td className="achievements-sync__debug-url">
+                {d?.awardsUrl ?? "Not resolved"}
+              </td>
+            </tr>
+            <tr>
+              <td>Exophase defs</td>
+              <td>{d?.exophaseDefs ?? "—"}</td>
+            </tr>
+            <tr>
+              <td>Exophase unlocked</td>
+              <td>{d?.exophaseUnlocked ?? "—"}</td>
+            </tr>
+            <tr>
+              <td>Catalogue match</td>
+              <td>
+                {d?.catalogueMatched
+                  ? `Yes — "${d.catalogueTitle}" (${game.shop}:${game.objectId})`
+                  : "No match"}
+              </td>
+            </tr>
+            <tr>
+              <td>In library</td>
+              <td>{d?.inLibrary ? "Yes" : "No"}</td>
+            </tr>
+            <tr>
+              <td>Definition source</td>
+              <td>{d?.defSource ?? "—"}</td>
+            </tr>
+            {game.verificationChecks && (
+              <>
+                <tr>
+                  <td>Persisted</td>
+                  <td>{game.verificationChecks.persisted ? "✓" : "✗"}</td>
+                </tr>
+                <tr>
+                  <td>Unlock count consistent</td>
+                  <td>
+                    {game.verificationChecks.unlockCountConsistent ? "✓" : "✗"}
+                  </td>
+                </tr>
+                <tr>
+                  <td>No orphan unlocks</td>
+                  <td>
+                    {game.verificationChecks.noOrphanUnlocks ? "✓" : "✗"}
+                  </td>
+                </tr>
+              </>
+            )}
+            <tr>
+              <td>Applied unlocked</td>
+              <td>
+                {game.totalUnlocked}/{game.totalAchievements}
+              </td>
+            </tr>
+            {d?.note && (
+              <tr>
+                <td>Note</td>
+                <td>{d.note}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 export default function AchievementsSync() {
   const dispatch = useAppDispatch();
@@ -28,6 +134,9 @@ export default function AchievementsSync() {
     title: string;
     phase?: string;
   } | null>(null);
+  const [debugGame, setDebugGame] = useState<ExophaseSyncReportGame | null>(
+    null
+  );
 
   const load = useCallback(() => {
     setLoading(true);
@@ -43,8 +152,6 @@ export default function AchievementsSync() {
     load();
   }, [dispatch, load]);
 
-  // Always-on subscription: reflect a sync running ANYWHERE (onboarding,
-  // settings, background) in real time, even when this page didn't start it.
   useEffect(() => {
     const offProgress = window.electron.onExophaseSyncProgress((p) => {
       setSyncing(true);
@@ -55,7 +162,6 @@ export default function AchievementsSync() {
       if (!active) {
         setProgress(null);
         setImportingPsn(false);
-        // A run just finished elsewhere — refresh the persisted report.
         load();
       }
     });
@@ -65,8 +171,6 @@ export default function AchievementsSync() {
     };
   }, [load]);
 
-  // Progress + completion are handled by the always-on subscription above; the
-  // handlers just kick off the run and surface the final toast.
   const handleRunSync = async () => {
     setSyncing(true);
     setProgress(null);
@@ -101,6 +205,78 @@ export default function AchievementsSync() {
   };
 
   const busy = syncing || importingPsn;
+
+  const renderGameRow = (g: ExophaseSyncReportGame, keyPrefix: string) => {
+    const hasNoAwards =
+      g.debug?.awardsUrl === null || g.debug?.exophaseDefs === 0;
+    const notInLibrary = g.debug && !g.debug.inLibrary;
+
+    return (
+      <li
+        key={`${keyPrefix}-${g.shop}-${g.objectId || g.title}`}
+        className={`achievements-sync__row${hasNoAwards || notInLibrary ? " achievements-sync__row--dim" : ""}`}
+      >
+        <div
+          className="achievements-sync__row-main"
+          onClick={() =>
+            g.objectId
+              ? navigate(`/game/${g.shop}/${g.objectId}`)
+              : undefined
+          }
+          style={{ cursor: g.objectId ? "pointer" : "default" }}
+        >
+          {g.iconUrl ? (
+            <img src={g.iconUrl} alt="" width={32} height={32} />
+          ) : (
+            <div className="achievements-sync__row-icon-placeholder">
+              <TrophyIcon size={16} />
+            </div>
+          )}
+          <span className="achievements-sync__row-title">{g.title}</span>
+
+          {g.verified !== undefined && (
+            <span
+              title={
+                g.verificationChecks
+                  ? `Persisted: ${g.verificationChecks.persisted ? "✓" : "✗"} · Unlock count: ${g.verificationChecks.unlockCountConsistent ? "✓" : "✗"} · No orphans: ${g.verificationChecks.noOrphanUnlocks ? "✓" : "✗"}`
+                  : undefined
+              }
+              style={{
+                display: "inline-flex",
+                color: g.verified ? "#3fb950" : "#e3b341",
+              }}
+            >
+              {g.verified ? (
+                <CheckCircleFillIcon size={14} />
+              ) : (
+                <AlertIcon size={14} />
+              )}
+            </span>
+          )}
+
+          {g.newlyUnlocked > 0 && (
+            <span className="achievements-sync__badge">+{g.newlyUnlocked} new</span>
+          )}
+
+          <span className="achievements-sync__muted">
+            {g.totalUnlocked}/{g.totalAchievements}
+          </span>
+        </div>
+
+        <button
+          className="achievements-sync__debug-btn"
+          type="button"
+          title="Show match details"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDebugGame(g);
+          }}
+        >
+          <QuestionIcon size={14} />
+        </button>
+      </li>
+    );
+  };
 
   return (
     <div className="achievements-sync">
@@ -185,87 +361,34 @@ export default function AchievementsSync() {
           {report.psnDetected.length > 0 && (
             <section className="achievements-sync__section">
               <h2>PlayStation games detected</h2>
-              <p className="achievements-sync__muted">
-                These library games have matching PSN trophies. Import to credit
-                them on PC.
-              </p>
               <ul className="achievements-sync__list">
-                {report.psnDetected.map((g) => (
-                  <li
-                    key={`psn-${g.shop}-${g.objectId}`}
-                    className="achievements-sync__row"
-                    onClick={() => navigate(`/game/${g.shop}/${g.objectId}`)}
-                  >
-                    {g.iconUrl && (
-                      <img src={g.iconUrl} alt="" width={32} height={32} />
-                    )}
-                    <span className="achievements-sync__row-title">
-                      {g.title}
-                    </span>
-                    <span className="achievements-sync__badge achievements-sync__badge--psn">
-                      PSN Game Detected
-                    </span>
-                  </li>
-                ))}
+                {report.psnDetected.map((g) => renderGameRow(g, "psn"))}
               </ul>
             </section>
           )}
 
           <section className="achievements-sync__section">
             <h2>
-              <SyncIcon size={16} /> Updated games
+              <SyncIcon size={16} /> All synced games
             </h2>
+            <p className="achievements-sync__muted" style={{ marginBottom: 8, fontSize: "0.85em" }}>
+              Click the <QuestionIcon size={12} /> on any row to see exactly how
+              the match was made. Dimmed rows had no awards or are not in your
+              library.
+            </p>
             {report.games.length === 0 ? (
-              <p className="achievements-sync__muted">
-                No new achievements this run.
-              </p>
+              <p className="achievements-sync__muted">No games processed.</p>
             ) : (
               <ul className="achievements-sync__list">
-                {report.games.map((g) => (
-                  <li
-                    key={`${g.shop}-${g.objectId}`}
-                    className="achievements-sync__row"
-                    onClick={() => navigate(`/game/${g.shop}/${g.objectId}`)}
-                  >
-                    {g.iconUrl && (
-                      <img src={g.iconUrl} alt="" width={32} height={32} />
-                    )}
-                    <span className="achievements-sync__row-title">
-                      {g.title}
-                    </span>
-                    {g.verified !== undefined && (
-                      <span
-                        title={
-                          g.verificationChecks
-                            ? `Persisted: ${g.verificationChecks.persisted ? "✓" : "✗"} · Unlock count: ${g.verificationChecks.unlockCountConsistent ? "✓" : "✗"} · No orphans: ${g.verificationChecks.noOrphanUnlocks ? "✓" : "✗"}`
-                            : undefined
-                        }
-                        style={{
-                          display: "inline-flex",
-                          color: g.verified ? "#3fb950" : "#e3b341",
-                        }}
-                      >
-                        {g.verified ? (
-                          <CheckCircleFillIcon size={14} />
-                        ) : (
-                          <AlertIcon size={14} />
-                        )}
-                      </span>
-                    )}
-                    {g.newlyUnlocked > 0 && (
-                      <span className="achievements-sync__badge">
-                        +{g.newlyUnlocked} new
-                      </span>
-                    )}
-                    <span className="achievements-sync__muted">
-                      {g.totalUnlocked}/{g.totalAchievements}
-                    </span>
-                  </li>
-                ))}
+                {report.games.map((g) => renderGameRow(g, "game"))}
               </ul>
             )}
           </section>
         </>
+      )}
+
+      {debugGame && (
+        <DebugModal game={debugGame} onClose={() => setDebugGame(null)} />
       )}
     </div>
   );
