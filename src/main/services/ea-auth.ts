@@ -20,8 +20,22 @@ import { logger } from "./logger";
  */
 export const EA_AUTH_PARTITION = "persist:ea-auth";
 
-// Step 1 — direct EA login page, no OAuth params needed.
-export const EA_LOGIN_URL = "https://accounts.ea.com/p/web2/login";
+// Step 1 — EA login. The old direct page (accounts.ea.com/p/web2/login) now
+// returns HTTP 400. The working entry point is the OAuth connect/auth endpoint
+// with the ORIGIN_JS_SDK client and display=junoWeb/login, which renders the
+// real "Sign in to your EA Account" form. Because response_type=token +
+// redirect_uri=nucleus:rest, a successful login redirects straight to
+// nucleus:rest#access_token=… (caught by handleNucleusRedirect), and also sets
+// the remid/sid cookies on .ea.com that drive the silent token exchange.
+export const EA_LOGIN_URL =
+  "https://accounts.ea.com/connect/auth" +
+  "?response_type=token" +
+  "&client_id=ORIGIN_JS_SDK" +
+  "&redirect_uri=nucleus:rest" +
+  "&prompt=login" +
+  "&display=junoWeb/login" +
+  "&release_type=prod" +
+  "&locale=en_US";
 
 // Step 2 — silent token exchange (token-capable client + prompt=none).
 export const EA_TOKEN_URL =
