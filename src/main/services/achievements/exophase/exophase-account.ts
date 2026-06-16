@@ -21,9 +21,9 @@ export interface ExophasePlatformAccount {
  *  up. The loop stops early as soon as a page yields no new titles. */
 const MAX_GAMES_PAGES = 30;
 
-/** Matches `/<platform>/user/<account>` links on the main profile page. */
+/** Matches `/<platform>/user/<account>` in data-endpoint attributes on the profile page. */
 const PLATFORM_ACCOUNT_RE =
-  /\/(steam|psn|xbox|origin|gog|epic|ubisoft|uplay|blizzard|battlenet)\/user\/([^/?#"']+)/i;
+  /\/(steam|psn|xbox|origin|gog|epic|ubisoft|uplay|blizzard|battlenet|android)\/user\/([^/?#"']+)/i;
 
 /** Normalises Exophase URL platform tokens onto the `environment_slug` values
  *  our search/award pipeline understands. */
@@ -35,8 +35,10 @@ const normalizePlatform = (p: string): string => {
 };
 
 /**
- * Parses the main profile page into the user's linked platform accounts. The
- * profile lists each integration as a `/<platform>/user/<account>/` link.
+ * Parses the main profile page into the user's linked platform accounts.
+ * Exophase renders each platform integration as:
+ *   <li data-endpoint="/<platform>/user/<account>/" data-environment="<platform>" ...>
+ * We read `data-endpoint` (preferred) and fall back to scanning all attributes.
  */
 export function parsePlatformAccounts(html: string): ExophasePlatformAccount[] {
   const dom = new JSDOM(html);
@@ -45,12 +47,17 @@ export function parsePlatformAccounts(html: string): ExophasePlatformAccount[] {
   const out: ExophasePlatformAccount[] = [];
   const seen = new Set<string>();
 
-  doc.querySelectorAll("a[href]").forEach((a) => {
-    const href = a.getAttribute("href") ?? "";
-    const m = href.match(PLATFORM_ACCOUNT_RE);
+  const tryAdd = (raw: string) => {
+    const m = raw.match(PLATFORM_ACCOUNT_RE);
     if (!m) return;
 
+    // Skip template placeholders like {{endpoint}}
+    if (raw.includes("{{")) return;
+
     const platformSlug = normalizePlatform(m[1]);
+    // Android has no achievement support — skip it
+    if (platformSlug === "android") return;
+
     let accountName: string;
     try {
       accountName = decodeURIComponent(m[2]);
@@ -62,7 +69,19 @@ export function parsePlatformAccounts(html: string): ExophasePlatformAccount[] {
     if (seen.has(key)) return;
     seen.add(key);
     out.push({ platformSlug, accountName });
+  };
+
+  // Primary: data-endpoint attributes (the real Exophase structure)
+  doc.querySelectorAll("[data-endpoint]").forEach((el) => {
+    tryAdd(el.getAttribute("data-endpoint") ?? "");
   });
+
+  // Fallback: scan all href attributes (catches any future restructuring)
+  if (out.length === 0) {
+    doc.querySelectorAll("a[href]").forEach((a) => {
+      tryAdd(a.getAttribute("href") ?? "");
+    });
+  }
 
   return out;
 }
