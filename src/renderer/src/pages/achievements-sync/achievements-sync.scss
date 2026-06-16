@@ -93,4 +93,28 @@
       color: #4a9eff;
     }
   }
+
+  &__progress {
+    margin-top: 8px;
+  }
+
+  &__progress-label {
+    font-size: 0.85em;
+    opacity: 0.75;
+    margin: 0 0 6px;
+  }
+
+  &__progress-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  &__progress-fill {
+    height: 100%;
+    background: #3fb950;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
 }
