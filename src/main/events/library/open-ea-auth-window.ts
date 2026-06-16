@@ -1,4 +1,3 @@
-import axios from "axios";
 import { BrowserWindow } from "electron";
 import { registerEvent } from "../register-event";
 import { db, levelKeys } from "@main/level";
@@ -7,10 +6,12 @@ import { logger } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
 import {
   EA_AUTH_PARTITION,
-  EA_LOGIN_URL,
-  EA_TOKEN_URL,
-  parseEaAuthJson,
+  buildEaLoginUrl,
+  exchangeEaAuthCode,
+  extractEaAuthCode,
+  isEaLoginRedirect,
 } from "@main/services/ea-auth";
+import { fetchEaIdentity } from "@main/services/ea-juno";
 
 export interface EaAuthResult {
   accessToken: string;
@@ -20,6 +21,7 @@ export interface EaAuthResult {
 
 const persistEaAuth = async (
   accessToken: string,
+  refreshToken: string,
   expiresInSeconds: number,
   username: string,
   pid: string
@@ -35,6 +37,7 @@ const persistEaAuth = async (
     {
       ...(prefs ?? {}),
       eaAccessToken: accessToken,
+      eaRefreshToken: refreshToken,
       eaTokenExpiry: expiry,
       eaUsername: username,
       eaPid: pid,
@@ -43,13 +46,19 @@ const persistEaAuth = async (
   );
 };
 
+/**
+ * Opens the EA App login flow (JUNO_PC_CLIENT + pc_sign). After the user signs
+ * in, EA redirects to qrc:///html/login_successful.html?code=<authCode>; we
+ * intercept that navigation, swap the code for tokens at connect/token, and
+ * confirm the token by reading the user's Juno identity.
+ */
 const openEaAuthWindow = async (
   _event: Electron.IpcMainInvokeEvent
 ): Promise<EaAuthResult | null> => {
   return new Promise((resolve) => {
     const win = new BrowserWindow({
       width: 520,
-      height: 720,
+      height: 760,
       title: "Sign in to EA",
       ...(WindowManager.mainWindow
         ? { parent: WindowManager.mainWindow, modal: true }
@@ -61,134 +70,69 @@ const openEaAuthWindow = async (
       },
     });
 
-    // Step 1: load the EA login page directly — no OAuth redirect_uri needed.
-    win.loadURL(EA_LOGIN_URL);
+    win.loadURL(buildEaLoginUrl());
 
     let handled = false;
-    let exchanging = false;
-    let cookieCheckInterval: ReturnType<typeof setInterval> | null = null;
 
-    const clearCookieCheck = () => {
-      if (cookieCheckInterval) {
-        clearInterval(cookieCheckInterval);
-        cookieCheckInterval = null;
-      }
-    };
-
-    const completeWithToken = async (accessToken: string, expiresIn: number) => {
+    const completeWithCode = async (code: string) => {
       if (handled) return;
       handled = true;
-      clearCookieCheck();
-      if (!win.isDestroyed()) win.close();
 
       try {
-        const infoRes = await axios.get(
-          "https://gateway.ea.com/proxy/identity/pids/me",
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            timeout: 10_000,
-          }
+        const tokens = await exchangeEaAuthCode(code);
+
+        let username = "EA Account";
+        let pid = "";
+        try {
+          const identity = await fetchEaIdentity(tokens.accessToken);
+          username = identity.displayName || "EA Account";
+          pid = identity.pid;
+        } catch (err) {
+          logger.warn("EA auth: identity fetch failed (continuing)", err);
+        }
+
+        await persistEaAuth(
+          tokens.accessToken,
+          tokens.refreshToken,
+          tokens.expiresIn,
+          username,
+          pid
         );
-        const pidData = infoRes.data?.pid ?? {};
-        const username =
-          pidData.displayName ?? pidData.email ?? pidData.pidId ?? "EA Account";
-        const pid = String(pidData.pidId ?? "");
-        await persistEaAuth(accessToken, expiresIn, username, pid);
-        resolve({ accessToken, username, pid });
+        if (!win.isDestroyed()) win.close();
+        resolve({ accessToken: tokens.accessToken, username, pid });
       } catch (err) {
-        logger.error("EA auth: identity fetch failed", err);
-        await persistEaAuth(accessToken, expiresIn, "EA Account", "").catch(
-          () => {}
-        );
-        resolve({ accessToken, username: "EA Account", pid: "" });
+        logger.error("EA auth: token exchange failed", err);
+        if (!win.isDestroyed()) win.close();
+        resolve(null);
       }
     };
 
-    // Step 2: once logged in, the session holds remid/sid cookies. Navigate
-    // to the token endpoint which renders the access token as JSON page body.
-    const runTokenExchange = () => {
-      if (handled || exchanging || win.isDestroyed()) return;
-      exchanging = true;
-      win.loadURL(EA_TOKEN_URL);
-    };
-
-    const checkPageForToken = async () => {
-      if (handled || win.isDestroyed()) return;
-      const url = win.webContents.getURL();
-      if (!url.startsWith("https://accounts.ea.com/connect/auth")) return;
-
-      try {
-        const bodyText: string = await win.webContents.executeJavaScript(
-          "document.body ? document.body.innerText : ''",
-          true
-        );
-        const data = parseEaAuthJson(bodyText);
-        if (data?.access_token) {
-          await completeWithToken(
-            data.access_token,
-            Number(data.expires_in ?? 3600)
-          );
-        } else if (data?.error) {
-          logger.error(`EA token exchange returned error: ${bodyText}`);
-        }
-      } catch {
-        // page not JSON yet — ignore
+    // Intercept the post-login redirect to qrc:///html/login_successful.html.
+    // The qrc:// scheme can't actually load, so we catch it before navigation.
+    const handleRedirect = (event: Electron.Event, url: string) => {
+      if (handled) return;
+      if (!isEaLoginRedirect(url)) return;
+      event.preventDefault();
+      const code = extractEaAuthCode(url);
+      if (code) {
+        void completeWithCode(code);
+      } else {
+        logger.error(`EA auth: login redirect had no code: ${url.slice(0, 160)}`);
       }
     };
 
-    // Fallback: some EA stacks redirect straight to nucleus:rest#access_token=
-    const handleNucleusRedirect = (url: string) => {
-      if (handled || !url.startsWith("nucleus:")) return;
-      const hashIdx = url.indexOf("#");
-      const queryStr =
-        hashIdx >= 0 ? url.slice(hashIdx + 1) : (url.split("?")[1] ?? "");
-      const params = new URLSearchParams(queryStr);
-      const accessToken = params.get("access_token");
-      if (accessToken) {
-        void completeWithToken(
-          accessToken,
-          Number(params.get("expires_in") ?? 3600)
-        );
-      }
-    };
-
-    // Cookie-based login detection: poll for the EA `remid` cookie which is set
-    // after successful login. Avoids any OAuth redirect_uri validation issue.
-    const ses = win.webContents.session;
-    const checkForLoginCookie = async () => {
-      if (handled || exchanging || win.isDestroyed()) return;
-      try {
-        const cookies = await ses.cookies.get({
-          domain: ".ea.com",
-          name: "remid",
-        });
-        if (cookies.length > 0) {
-          runTokenExchange();
-        }
-      } catch {
-        // session gone
-      }
-    };
-
-    // Also detect nucleus: redirects and the token page finishing
-    win.webContents.on("did-finish-load", () => void checkPageForToken());
-    win.webContents.on("did-redirect-navigation", (_e, url) => {
-      handleNucleusRedirect(url);
-    });
-    win.webContents.on("will-navigate", (_e, url) => {
-      handleNucleusRedirect(url);
-    });
-    win.webContents.on("will-redirect", (_e, url) => handleNucleusRedirect(url));
-
-    // Poll for the remid cookie every second after the page loads
-    win.webContents.on("did-finish-load", () => {
-      if (!cookieCheckInterval && !handled) {
-        cookieCheckInterval = setInterval(() => void checkForLoginCookie(), 1000);
+    win.webContents.on("will-redirect", handleRedirect);
+    win.webContents.on("will-navigate", handleRedirect);
+    // did-fail-load fires when the qrc:// navigation is rejected by Chromium —
+    // recover the code from the attempted URL.
+    win.webContents.on("did-fail-load", (_e, _code, _desc, validatedURL) => {
+      if (validatedURL && isEaLoginRedirect(validatedURL)) {
+        const code = extractEaAuthCode(validatedURL);
+        if (code) void completeWithCode(code);
       }
     });
 
     win.on("closed", () => {
-      clearCookieCheck();
       if (!handled) resolve(null);
     });
   });

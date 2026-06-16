@@ -208,6 +208,7 @@ export interface UserPreferences {
   ubisoftProfileId?: string | null;
   ubisoftUsername?: string | null;
   eaAccessToken?: string | null;
+  eaRefreshToken?: string | null;
   eaTokenExpiry?: string | null;
   eaUsername?: string | null;
   eaPid?: string | null;

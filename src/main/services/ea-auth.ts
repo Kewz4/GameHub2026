@@ -1,101 +1,166 @@
 import axios from "axios";
-import { session } from "electron";
 import { logger } from "./logger";
+import { generateEaPcSign } from "./ea-pcsign";
 
 /**
- * EA OAuth — cookie-based two-step flow.
+ * EA OAuth — JUNO_PC_CLIENT (EA App) flow.
  *
- * EA's OAuth server rejects many redirect_uri values for ORIGIN_SPA_ID,
- * so instead of relying on an OAuth redirect we:
- *   1. LOGIN: render the EA accounts login page directly (no OAuth params that
- *      require a whitelisted redirect_uri). The user signs in; EA sets the
- *      `remid` and `sid` session cookies on .ea.com.
- *   2. TOKEN: once those cookies exist in the session partition, GET
- *      connect/auth with client_id=ORIGIN_JS_SDK, response_type=token,
- *      redirect_uri=nucleus:rest, prompt=none — EA replies with a JSON body
- *      {"access_token": ...} which we parse from the page text.
+ * The legacy ORIGIN_JS_SDK web token is rejected by EA's modern "Juno" backend
+ * (service-aggregation-layer.juno.ea.com) with error 10007, and Origin's
+ * ecommerce hosts were retired in 2025. The EA App itself authenticates with
+ * the JUNO_PC_CLIENT client, which requires a `pc_sign` machine signature
+ * (see ea-pcsign.ts) and uses the standard OAuth authorization-code grant:
  *
- * No redirect_uri needed for the login step, so no "redirect_uri is invalid"
- * error. The `remid` cookie is our signal that the user logged in.
+ *   1. LOGIN: open connect/auth?response_type=code&client_id=JUNO_PC_CLIENT
+ *      &display=junoClient/login&redirect_uri=qrc:///html/login_successful.html
+ *      &pc_sign=<sign>. After the user signs in, EA redirects to
+ *      qrc:///html/login_successful.html?code=<authCode>.
+ *   2. TOKEN: POST connect/token (authorization_code grant) with the client id,
+ *      client secret, code_verifier and code → access_token + refresh_token.
+ *
+ * The resulting access token IS accepted by Juno, so owned-games queries work.
  */
 export const EA_AUTH_PARTITION = "persist:ea-auth";
 
-// Step 1 — EA login. The old direct page (accounts.ea.com/p/web2/login) now
-// returns HTTP 400. The working entry point is the OAuth connect/auth endpoint
-// with the ORIGIN_JS_SDK client and display=junoWeb/login, which renders the
-// real "Sign in to your EA Account" form. Because response_type=token +
-// redirect_uri=nucleus:rest, a successful login redirects straight to
-// nucleus:rest#access_token=… (caught by handleNucleusRedirect), and also sets
-// the remid/sid cookies on .ea.com that drive the silent token exchange.
-export const EA_LOGIN_URL =
-  "https://accounts.ea.com/connect/auth" +
-  "?response_type=token" +
-  "&client_id=ORIGIN_JS_SDK" +
-  "&redirect_uri=nucleus:rest" +
-  "&prompt=login" +
-  "&display=junoWeb/login" +
-  "&release_type=prod" +
-  "&locale=en_US";
+const JUNO_CLIENT_ID = "JUNO_PC_CLIENT";
+// Client secret shared by the EA App (not user-specific). Required by the
+// connect/token authorization-code + refresh_token grants for JUNO_PC_CLIENT.
+const JUNO_CLIENT_SECRET =
+  "4mRLtYMb6vq9qglomWEaT4ChxsXWcyqbQpuBNfMPOYOiDmYYQmjuaBsF2Zp0RyVeWkfqhE9TuGgAw7te";
+const JUNO_REDIRECT_URI = "qrc:///html/login_successful.html";
+const EA_TOKEN_ENDPOINT = "https://accounts.ea.com/connect/token";
 
-// Step 2 — silent token exchange (token-capable client + prompt=none).
-export const EA_TOKEN_URL =
-  "https://accounts.ea.com/connect/auth" +
-  "?response_type=token" +
-  "&client_id=ORIGIN_JS_SDK" +
-  "&redirect_uri=nucleus:rest" +
-  "&release_type=prod" +
-  "&prompt=none" +
-  "&locale=en_US";
+/** The login URL the auth window navigates to. A fresh pc_sign is generated per
+ *  call so the timestamp inside it is current. */
+export const buildEaLoginUrl = (): string => {
+  const pcSign = generateEaPcSign("v1");
+  return (
+    "https://accounts.ea.com/connect/auth" +
+    "?response_type=code" +
+    `&client_id=${JUNO_CLIENT_ID}` +
+    "&display=junoClient/login" +
+    `&redirect_uri=${encodeURIComponent(JUNO_REDIRECT_URI)}` +
+    "&release_type=prod" +
+    "&locale=en_US" +
+    `&pc_sign=${encodeURIComponent(pcSign)}`
+  );
+};
 
-export interface EaTokenResponse {
-  access_token?: string;
-  token_type?: string;
-  expires_in?: string | number;
-  error?: string;
-  error_description?: string;
+/** True when a URL is the post-login redirect carrying the authorization code. */
+export const isEaLoginRedirect = (url: string): boolean =>
+  url.startsWith("qrc:") && url.includes("login_successful");
+
+/** Extracts the `code` query param from the qrc:// login redirect (or null). */
+export const extractEaAuthCode = (url: string): string | null => {
+  const queryIdx = url.indexOf("?");
+  if (queryIdx < 0) return null;
+  const params = new URLSearchParams(url.slice(queryIdx + 1));
+  return params.get("code");
+};
+
+export interface EaTokenResult {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
 }
 
-export const parseEaAuthJson = (text: string): EaTokenResponse | null => {
+/** A random PKCE-style code_verifier (EA accepts any URL-safe value here). */
+const randomCodeVerifier = (): string => {
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let raw = "";
+  for (let i = 0; i < 32; i++) {
+    raw += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return Buffer.from(raw).toString("base64").replace(/=+$/, "");
+};
+
+/** Exchanges the authorization code from the login redirect for tokens. */
+export const exchangeEaAuthCode = async (
+  code: string
+): Promise<EaTokenResult> => {
+  const body = new URLSearchParams({
+    token_format: "JWS",
+    client_id: JUNO_CLIENT_ID,
+    client_secret: JUNO_CLIENT_SECRET,
+    code_verifier: randomCodeVerifier(),
+    grant_type: "authorization_code",
+    redirect_uri: JUNO_REDIRECT_URI,
+    code,
+  });
+
+  const res = await axios.post(EA_TOKEN_ENDPOINT, body.toString(), {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    timeout: 15_000,
+  });
+
+  const data = res.data ?? {};
+  if (!data.access_token || !data.refresh_token) {
+    throw new Error(
+      `EA token exchange returned no token: ${JSON.stringify(data).slice(0, 200)}`
+    );
+  }
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresIn: Number(data.expires_in ?? 3600),
+  };
+};
+
+/**
+ * Refreshes the access token using a stored refresh token. Access tokens live
+ * ~1h; this lets library syncs keep working without re-prompting the user.
+ */
+export const refreshEaAccessToken = async (
+  refreshToken: string
+): Promise<EaTokenResult | null> => {
   try {
-    const parsed = JSON.parse(text.trim());
-    return parsed && typeof parsed === "object"
-      ? (parsed as EaTokenResponse)
-      : null;
-  } catch {
+    const body = new URLSearchParams({
+      client_id: JUNO_CLIENT_ID,
+      client_secret: JUNO_CLIENT_SECRET,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    });
+    const res = await axios.post(EA_TOKEN_ENDPOINT, body.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      timeout: 15_000,
+    });
+    const data = res.data ?? {};
+    if (!data.access_token) return null;
+    return {
+      accessToken: data.access_token,
+      // EA may or may not rotate the refresh token; keep the old one if absent.
+      refreshToken: data.refresh_token ?? refreshToken,
+      expiresIn: Number(data.expires_in ?? 3600),
+    };
+  } catch (err) {
+    logger.warn("EA token refresh failed", err);
     return null;
   }
 };
 
 /**
- * Re-acquire an access token using the remid/sid cookies persisted in the
- * auth window's session partition — lets library syncs keep working after
- * the short-lived (1h) access token expires, without prompting the user.
+ * Back-compat shim for existing callers (sync-ea-library) that import
+ * `refreshEaTokenSilently`. Reads the persisted refresh token and refreshes.
  */
 export const refreshEaTokenSilently = async (): Promise<{
   accessToken: string;
   expiresIn: number;
+  refreshToken: string;
 } | null> => {
-  try {
-    const ses = session.fromPartition(EA_AUTH_PARTITION);
-    const cookies = await ses.cookies.get({ domain: ".ea.com" });
-    if (cookies.length === 0) return null;
-
-    const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-    const res = await axios.get<EaTokenResponse>(EA_TOKEN_URL, {
-      headers: { Cookie: cookieHeader },
-      timeout: 15_000,
-    });
-
-    const data = res.data;
-    if (data?.access_token) {
-      return {
-        accessToken: data.access_token,
-        expiresIn: Number(data.expires_in ?? 3600),
-      };
-    }
-    return null;
-  } catch (err) {
-    logger.warn("EA silent token refresh failed", err);
-    return null;
-  }
+  const { db, levelKeys } = await import("@main/level");
+  const prefs = await db
+    .get<string, { eaRefreshToken?: string } | null>(
+      levelKeys.userPreferences,
+      { valueEncoding: "json" }
+    )
+    .catch(() => null);
+  if (!prefs?.eaRefreshToken) return null;
+  const refreshed = await refreshEaAccessToken(prefs.eaRefreshToken);
+  if (!refreshed) return null;
+  return {
+    accessToken: refreshed.accessToken,
+    expiresIn: refreshed.expiresIn,
+    refreshToken: refreshed.refreshToken,
+  };
 };

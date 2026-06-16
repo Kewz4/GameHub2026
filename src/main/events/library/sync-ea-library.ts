@@ -38,8 +38,8 @@ const syncEaLibrary = async (
 
     let accessToken = prefs.eaAccessToken;
 
-    // Access tokens only live ~1h — silently re-acquire from the persisted
-    // browser session cookies instead of failing the sync.
+    // Access tokens only live ~1h — silently re-acquire using the persisted
+    // refresh token instead of failing the sync.
     const expired = prefs.eaTokenExpiry
       ? Date.parse(prefs.eaTokenExpiry) < Date.now()
       : false;
@@ -55,6 +55,7 @@ const syncEaLibrary = async (
           {
             ...prefs,
             eaAccessToken: refreshed.accessToken,
+            eaRefreshToken: refreshed.refreshToken,
             eaTokenExpiry: new Date(
               Date.now() + refreshed.expiresIn * 1000
             ).toISOString(),
@@ -64,9 +65,8 @@ const syncEaLibrary = async (
       }
     }
 
-    // Fetch owned games from EA's Juno GraphQL endpoint (the API the EA app
-    // uses). The old gateway.ea.com/proxy hosts now return "service
-    // limitations apply" for third-party tokens. On a 401 the token is stale —
+    // Fetch owned games from EA's Juno GraphQL endpoint using the JUNO_PC_CLIENT
+    // token (the only client Juno accepts). On a 401 the token is stale —
     // refresh once and retry before giving up.
     let ownedGames;
     try {
@@ -85,6 +85,7 @@ const syncEaLibrary = async (
             {
               ...prefs,
               eaAccessToken: refreshed.accessToken,
+              eaRefreshToken: refreshed.refreshToken,
               eaTokenExpiry: new Date(
                 Date.now() + refreshed.expiresIn * 1000
               ).toISOString(),
