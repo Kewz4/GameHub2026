@@ -1,8 +1,4 @@
-import {
-  gameAchievementsSublevel,
-  gamesSublevel,
-  levelKeys,
-} from "@main/level";
+import { gameAchievementsSublevel, gamesSublevel } from "@main/level";
 import type {
   Game,
   GameShop,
@@ -335,123 +331,142 @@ export async function importPlaystationAchievements(
           earnedTrophies.map((t) => normalizeAchievementName(t.displayName))
         );
 
-        // 3. Determine the PC game to credit. Try the library game's shop slug.
-        // If the shop doesn't map to Exophase (e.g. custom), search catalogue.
-        let pcGameKey = key;
-        let pcGame: Game = game;
-        let pcSlug = SHOP_TO_EXOPHASE_SLUG[game.shop];
+        // 3. Resolve the canonical PC game via the Hydra catalogue.
+        //
+        // We deliberately do NOT trust game.shop here. Playnite imports PS4
+        // titles under a fake "steam"/"gog" shop, so the library shop is an
+        // unreliable signal for the real PC platform (e.g. Immortals Fenyx
+        // Rising is Epic/Ubisoft on PC, never Steam). The Hydra catalogue is the
+        // authoritative source for the PC platform. We always credit trophies
+        // onto the library game the user actually sees (`key`/`game`).
+        const pcGameKey = key;
+        const pcGame: Game = game;
 
-        if (!pcSlug) {
+        achievementsLogger.log(
+          `[Exophase] PSN "${game.title}": searching Hydra catalogue for PC match…`
+        );
+        const catalogueMatch = await searchCatalogueForAchievements(game.title);
+
+        // Candidate Exophase PC slugs, in priority order: the catalogue's real
+        // platform first, then the library shop as a fallback.
+        const pcSlugCandidates: string[] = [];
+        if (catalogueMatch) {
+          const cslug = SHOP_TO_EXOPHASE_SLUG[catalogueMatch.shop];
           achievementsLogger.log(
-            `[Exophase] PSN "${game.title}": shop "${game.shop}" has no Exophase slug, searching catalogue`
+            `[Exophase] PSN "${game.title}": catalogue → ${catalogueMatch.shop}:${catalogueMatch.objectId} "${catalogueMatch.title}" (slug=${cslug ?? "none"})`
           );
-          const catalogueMatch = await searchCatalogueForAchievements(
-            game.title
+          if (cslug) pcSlugCandidates.push(cslug);
+        } else {
+          achievementsLogger.log(
+            `[Exophase] PSN "${game.title}": no Hydra catalogue match`
           );
-          if (!catalogueMatch) {
+        }
+        const librarySlug = SHOP_TO_EXOPHASE_SLUG[game.shop];
+        if (librarySlug && !pcSlugCandidates.includes(librarySlug)) {
+          pcSlugCandidates.push(librarySlug);
+        }
+
+        const pcTitle = catalogueMatch?.title ?? game.title;
+
+        // 4. Try each candidate PC platform on Exophase until one yields
+        // achievement definitions.
+        let pcAchievements: ExophaseAchievement[] = [];
+        let pcSlugUsed: string | null = null;
+        for (const slug of pcSlugCandidates) {
+          const pcCandidates = await searchExophaseGames(fetcher, pcTitle, slug);
+          const pcMatch = findBestMatch(pcTitle, pcCandidates, slug);
+          achievementsLogger.log(
+            `[Exophase] PSN "${pcTitle}" PC try slug="${slug}": ${pcCandidates.length} candidates, match=${pcMatch?.title ?? "none"}`
+          );
+          if (!pcMatch) continue;
+          const pcUrl = awardsUrlFor(pcMatch);
+          const parsed = parseAchievements(await fetcher.fetchHtml(pcUrl));
+          if (parsed.length > 0) {
             achievementsLogger.log(
-              `[Exophase] PSN "${game.title}": no catalogue PC match — skipping`
+              `[Exophase] PSN "${pcTitle}": ${parsed.length} PC achievements from slug="${slug}"`
             );
-            continue;
-          }
-          const catalogueKey = levelKeys.game(
-            catalogueMatch.shop,
-            catalogueMatch.objectId
-          );
-          const catalogueGame = await gamesSublevel
-            .get(catalogueKey)
-            .catch(() => null);
-          if (catalogueGame && !catalogueGame.isDeleted) {
-            pcGameKey = catalogueKey;
-            pcGame = catalogueGame;
-            pcSlug = SHOP_TO_EXOPHASE_SLUG[catalogueMatch.shop];
-            achievementsLogger.log(
-              `[Exophase] PSN "${game.title}": PC game → ${catalogueMatch.shop}:${catalogueMatch.objectId} "${catalogueMatch.title}"`
-            );
+            pcAchievements = parsed;
+            pcSlugUsed = slug;
+            break;
           }
         }
 
-        if (!pcSlug) {
-          achievementsLogger.log(
-            `[Exophase] PSN "${game.title}": cannot determine PC Exophase slug — skipping`
-          );
-          continue;
-        }
-
-        // 4. Fetch PC achievement definitions.
-        const pcCandidates = await searchExophaseGames(
-          fetcher,
-          pcGame.title,
-          pcSlug
-        );
-        achievementsLogger.log(
-          `[Exophase] PSN "${pcGame.title}": ${pcCandidates.length} PC (${pcSlug}) candidates`
-        );
-
-        const pcMatch = findBestMatch(pcGame.title, pcCandidates, pcSlug);
-        if (!pcMatch) {
-          achievementsLogger.log(
-            `[Exophase] PSN "${pcGame.title}": no PC match for slug "${pcSlug}" — skipping`
-          );
-          continue;
-        }
-
-        const pcUrl = awardsUrlFor(pcMatch);
-        achievementsLogger.log(`[Exophase] PSN PC url: "${pcUrl}"`);
-
-        const pcAchievements = parseAchievements(
-          await fetcher.fetchHtml(pcUrl)
-        );
-        achievementsLogger.log(
-          `[Exophase] PSN "${pcGame.title}": ${pcAchievements.length} PC achievements parsed`
-        );
-        if (pcAchievements.length === 0) continue;
-
-        // 5. Credit PC achievements whose name matches an earned PSN trophy.
-        const psnCredited: UnlockedAchievement[] = pcAchievements
-          .filter((a) =>
-            earnedNames.has(normalizeAchievementName(a.displayName))
-          )
-          .map((a) => {
-            const matching = earnedTrophies.find(
-              (t) =>
-                normalizeAchievementName(t.displayName) ===
-                normalizeAchievementName(a.displayName)
-            );
-            return {
-              name: a.apiName,
-              unlockTime: matching?.unlockTime ?? Date.now(),
-            };
-          });
-
-        achievementsLogger.log(
-          `[Exophase] PSN "${pcGame.title}": ${psnCredited.length}/${pcAchievements.length} PC achievements credited from ${earnedTrophies.length} PSN trophies`
-        );
-
-        if (psnCredited.length === 0) {
-          achievementsLogger.log(
-            `[Exophase] PSN "${pcGame.title}": no name matches between PSN trophies and PC achievements — skipping`
-          );
-          continue;
-        }
-
+        // 5. Decide what to persist.
+        //   a) PC definitions found → credit PC achievements matching earned
+        //      PSN trophy names (cross-platform carry-over), preserving any the
+        //      user already unlocked on PC.
+        //   b) No PC definitions (PS4-only title, or no PC Exophase page) →
+        //      credit the PSN trophy set DIRECTLY so the trophies still show up.
+        //      This is the key fix: these games were previously silently
+        //      skipped (e.g. Immortals Fenyx Rising, Fall Guys).
         const existing = await gameAchievementsSublevel
           .get(pcGameKey)
           .catch(() => null);
-        const merged = mergeUnlocked(
-          existing?.unlockedAchievements ?? [],
-          toUnlockedList(pcAchievements),
-          psnCredited
-        );
 
-        await persistGameAchievements(
-          pcGameKey,
-          pcGame,
-          toDefinitions(pcAchievements),
-          merged
-        );
+        let definitions: SteamAchievement[];
+        let credited: UnlockedAchievement[];
 
-        // 6. Infer playtime from PSN trophy unlock span when PC game has none.
+        if (pcAchievements.length > 0) {
+          const psnCredited: UnlockedAchievement[] = pcAchievements
+            .filter((a) =>
+              earnedNames.has(normalizeAchievementName(a.displayName))
+            )
+            .map((a) => {
+              const matching = earnedTrophies.find(
+                (t) =>
+                  normalizeAchievementName(t.displayName) ===
+                  normalizeAchievementName(a.displayName)
+              );
+              return {
+                name: a.apiName,
+                unlockTime: matching?.unlockTime ?? Date.now(),
+              };
+            });
+
+          // If the PC page exists but NONE of its names match the earned PSN
+          // trophies, the PC definitions are useless for showing the user's PS4
+          // progress — fall back to the PSN trophy set instead.
+          if (psnCredited.length === 0) {
+            achievementsLogger.log(
+              `[Exophase] PSN "${pcTitle}": PC page (slug=${pcSlugUsed}) had no name matches — falling back to PSN trophies`
+            );
+            definitions = toDefinitions(psnTrophies);
+            credited = mergeUnlocked(
+              existing?.unlockedAchievements ?? [],
+              toUnlockedList(psnTrophies)
+            );
+          } else {
+            achievementsLogger.log(
+              `[Exophase] PSN "${pcTitle}": ${psnCredited.length}/${pcAchievements.length} PC achievements credited from ${earnedTrophies.length} PSN trophies`
+            );
+            definitions = toDefinitions(pcAchievements);
+            credited = mergeUnlocked(
+              existing?.unlockedAchievements ?? [],
+              toUnlockedList(pcAchievements),
+              psnCredited
+            );
+          }
+        } else {
+          achievementsLogger.log(
+            `[Exophase] PSN "${game.title}": no PC achievements found — crediting ${psnTrophies.length} PSN trophy definitions directly`
+          );
+          definitions = toDefinitions(psnTrophies);
+          credited = mergeUnlocked(
+            existing?.unlockedAchievements ?? [],
+            toUnlockedList(psnTrophies)
+          );
+        }
+
+        if (credited.length === 0) {
+          achievementsLogger.log(
+            `[Exophase] PSN "${game.title}": nothing to credit — skipping`
+          );
+          continue;
+        }
+
+        await persistGameAchievements(pcGameKey, pcGame, definitions, credited);
+
+        // 6. Infer playtime from PSN trophy unlock span when the game has none.
         const currentPlaytime = pcGame.playTimeInMilliseconds ?? 0;
         if (currentPlaytime === 0 && earnedTrophies.length >= 2) {
           const timestamps = earnedTrophies
@@ -467,14 +482,14 @@ export async function importPlaystationAchievements(
             await gamesSublevel.put(pcGameKey, {
               ...pcGame,
               playTimeInMilliseconds: inferredMs,
-              achievementCount: toDefinitions(pcAchievements).length,
-              unlockedAchievementCount: merged.length,
+              achievementCount: definitions.length,
+              unlockedAchievementCount: credited.length,
             });
           }
         }
 
         result.gamesMatched++;
-        result.totalUnlocked += psnCredited.length;
+        result.totalUnlocked += credited.length;
       } catch (err) {
         achievementsLogger.warn(
           `[Exophase] PSN import failed for "${game.title}"`,
