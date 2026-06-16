@@ -936,6 +936,8 @@ contextBridge.exposeInMainWorld("electron", {
   },
   startSteamOpenIdLogin: (): Promise<string> =>
     ipcRenderer.invoke("startSteamOpenIdLogin"),
+  openSteamLoginWindow: (): Promise<{ steamId: string } | null> =>
+    ipcRenderer.invoke("openSteamLoginWindow"),
   downloadViaLegendary: (objectId: string, downloadPath?: string) =>
     ipcRenderer.invoke("downloadViaLegendary", objectId, downloadPath),
   cancelLegendaryDownload: (objectId: string) =>

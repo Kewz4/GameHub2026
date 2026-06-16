@@ -1,6 +1,7 @@
 import { registerEvent } from "../register-event";
 import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { getSteamOwnedGames } from "@main/services/steam-account";
+import { getAuthenticatedSteamOwnedGames } from "@main/services/steam-auth";
 import { createGame } from "@main/services/library-sync";
 import { logger } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
@@ -15,12 +16,24 @@ const syncSteamLibrary = async (
   apiKey?: string
 ): Promise<{ total: number; added: number; error?: string }> => {
   let ownedGames: Awaited<ReturnType<typeof getSteamOwnedGames>>;
-  try {
-    ownedGames = await getSteamOwnedGames(steamId, apiKey);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.warn(`[syncSteamLibrary] Failed to fetch owned games: ${message}`);
-    return { total: 0, added: 0, error: message };
+
+  // Prefer the authenticated in-app session: it returns the user's OWN games
+  // even when their profile game details are private (which the public XML and
+  // OpenID flows can't do). Fall back to the public XML / Web API key path.
+  const authSession = await getAuthenticatedSteamOwnedGames().catch(() => null);
+  if (authSession && authSession.games.length > 0) {
+    logger.log(
+      `[syncSteamLibrary] using authenticated session: ${authSession.games.length} games`
+    );
+    ownedGames = authSession.games;
+  } else {
+    try {
+      ownedGames = await getSteamOwnedGames(steamId, apiKey);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`[syncSteamLibrary] Failed to fetch owned games: ${message}`);
+      return { total: 0, added: 0, error: message };
+    }
   }
 
   let added = 0;

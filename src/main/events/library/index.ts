@@ -91,6 +91,8 @@ import "./install-gogdl";
 
 import "./start-steam-openid-login";
 
+import "./open-steam-login-window";
+
 import "./epic-direct-login";
 import "./open-epic-social-auth-window";
 
