@@ -1,58 +1,86 @@
 import { JSDOM } from "jsdom";
 import { achievementsLogger } from "@main/services/logger";
-import { exophaseUserGamesUrl } from "./constants";
+import { exophasePlatformGamesUrl, exophaseProfileUrl } from "./constants";
 import type { ExophaseFetcher } from "./exophase-web";
 
-/** One game read off the authenticated user's Exophase "Games" page. */
+/** One game read off the authenticated user's Exophase profile. */
 export interface ExophaseAccountGame {
   title: string;
-  /** Best-effort Exophase `environment_slug` (steam/psn/xbox/…) inferred from
-   *  the link, when the profile markup exposes it. May be undefined — the
-   *  resolver then searches across platforms. */
-  platformSlug?: string;
+  /** Exophase `environment_slug` (steam/psn/xbox/…) — known because we read it
+   *  off that platform's profile page. */
+  platformSlug: string;
 }
 
-/** How many "?page=N" pages of the games list to walk before giving up. The
- *  loop stops early as soon as a page yields no new titles. */
-const MAX_GAMES_PAGES = 20;
+/** A linked platform account discovered on the main Exophase profile. */
+export interface ExophasePlatformAccount {
+  platformSlug: string;
+  accountName: string;
+}
 
-/** Maps platform tokens that can appear in an Exophase game href onto the
- *  `environment_slug` values our search/award pipeline understands. */
-const HREF_SLUG_TOKENS: Array<[RegExp, string]> = [
-  [/\bsteam\b/, "steam"],
-  [/\bepic\b/, "epic"],
-  [/\bgog\b/, "gog"],
-  [/\b(origin|ea)\b/, "origin"],
-  [/\b(ubisoft|uplay)\b/, "ubisoft"],
-  [/\b(blizzard|battlenet|battle-net)\b/, "blizzard"],
-  [/\bxbox\b/, "xbox"],
-  [/\b(psn|playstation)\b/, "psn"],
-];
+/** How many "?page=N" pages of a platform's games list to walk before giving
+ *  up. The loop stops early as soon as a page yields no new titles. */
+const MAX_GAMES_PAGES = 30;
 
-const detectSlugFromHref = (href: string): string | undefined => {
-  const h = (href || "").toLowerCase();
-  for (const [re, slug] of HREF_SLUG_TOKENS) {
-    if (re.test(h)) return slug;
-  }
-  return undefined;
+/** Matches `/<platform>/user/<account>` links on the main profile page. */
+const PLATFORM_ACCOUNT_RE =
+  /\/(steam|psn|xbox|origin|gog|epic|ubisoft|uplay|blizzard|battlenet)\/user\/([^/?#"']+)/i;
+
+/** Normalises Exophase URL platform tokens onto the `environment_slug` values
+ *  our search/award pipeline understands. */
+const normalizePlatform = (p: string): string => {
+  const s = p.toLowerCase();
+  if (s === "uplay") return "ubisoft";
+  if (s === "battlenet") return "blizzard";
+  return s;
 };
 
 /**
- * Parses one rendered "Games" page into account games. Deliberately LOOSE: it
- * over-collects every game-link title on the page. False positives are cheap —
- * the downstream Exophase search + Hydra-catalogue match discard anything that
- * doesn't resolve — whereas a missed game means lost achievements. Exact profile
- * markup is therefore not load-bearing here.
+ * Parses the main profile page into the user's linked platform accounts. The
+ * profile lists each integration as a `/<platform>/user/<account>/` link.
  */
-export function parseAccountGamesPage(html: string): ExophaseAccountGame[] {
+export function parsePlatformAccounts(html: string): ExophasePlatformAccount[] {
   const dom = new JSDOM(html);
   const doc = dom.window.document;
 
-  const out: ExophaseAccountGame[] = [];
+  const out: ExophasePlatformAccount[] = [];
+  const seen = new Set<string>();
+
+  doc.querySelectorAll("a[href]").forEach((a) => {
+    const href = a.getAttribute("href") ?? "";
+    const m = href.match(PLATFORM_ACCOUNT_RE);
+    if (!m) return;
+
+    const platformSlug = normalizePlatform(m[1]);
+    let accountName: string;
+    try {
+      accountName = decodeURIComponent(m[2]);
+    } catch {
+      accountName = m[2];
+    }
+
+    const key = `${platformSlug}:${accountName.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ platformSlug, accountName });
+  });
+
+  return out;
+}
+
+/**
+ * Parses one rendered platform games page into game titles. Deliberately LOOSE:
+ * it over-collects every game-link title on the page. False positives are cheap
+ * — the downstream Exophase search + Hydra-catalogue match discard anything that
+ * doesn't resolve — whereas a missed game means lost achievements.
+ */
+export function parsePlatformGamesPage(html: string): string[] {
+  const dom = new JSDOM(html);
+  const doc = dom.window.document;
+
+  const out: string[] = [];
   const seen = new Set<string>();
 
   doc.querySelectorAll('a[href*="/game/"]').forEach((a) => {
-    const href = a.getAttribute("href") ?? "";
     const title = (a.getAttribute("title") || a.textContent || "")
       .replace(/\s+/g, " ")
       .trim();
@@ -61,55 +89,93 @@ export function parseAccountGamesPage(html: string): ExophaseAccountGame[] {
     const key = title.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-
-    out.push({ title, platformSlug: detectSlugFromHref(href) });
+    out.push(title);
   });
 
   return out;
 }
 
-/**
- * Enumerates every game on the authenticated user's Exophase account by walking
- * their public "Games" list (which the WebView fetcher can reach through
- * Cloudflare with the logged-in cookies). Pages are walked until one returns no
- * new titles. Returns a de-duplicated list across all pages.
- */
-export async function fetchExophaseAccountGames(
+/** Walks one platform account's paginated games list. */
+async function fetchPlatformGames(
   fetcher: ExophaseFetcher,
-  username: string
+  account: ExophasePlatformAccount
 ): Promise<ExophaseAccountGame[]> {
   const byTitle = new Map<string, ExophaseAccountGame>();
 
   for (let page = 1; page <= MAX_GAMES_PAGES; page++) {
-    const url = exophaseUserGamesUrl(username, page);
-    let games: ExophaseAccountGame[] = [];
+    const url = exophasePlatformGamesUrl(
+      account.platformSlug,
+      account.accountName,
+      page
+    );
+
+    let titles: string[] = [];
     try {
-      const html = await fetcher.fetchHtml(url);
-      games = parseAccountGamesPage(html);
+      titles = parsePlatformGamesPage(await fetcher.fetchHtml(url));
     } catch (err) {
       achievementsLogger.warn(
-        `[Exophase account] failed loading games page ${page}`,
+        `[Exophase account] failed loading ${account.platformSlug} page ${page}`,
         err
       );
       break;
     }
 
     let added = 0;
-    for (const g of games) {
-      const key = g.title.toLowerCase();
+    for (const title of titles) {
+      const key = title.toLowerCase();
       if (byTitle.has(key)) continue;
-      byTitle.set(key, g);
+      byTitle.set(key, { title, platformSlug: account.platformSlug });
       added++;
     }
 
     achievementsLogger.log(
-      `[Exophase account] page ${page}: ${games.length} links, ${added} new (total ${byTitle.size})`
+      `[Exophase account] ${account.platformSlug}/${account.accountName} page ${page}: ${titles.length} links, ${added} new`
     );
 
-    // No new games on this page → we've reached the end (or there's no
-    // pagination and every page is identical).
     if (added === 0) break;
   }
 
   return [...byTitle.values()];
+}
+
+/**
+ * Enumerates every game on the authenticated user's Exophase account.
+ *
+ * Reads the main profile to discover each LINKED platform account, then walks
+ * every platform's games list. Each game carries its real `platformSlug` (the
+ * page it came from), so PSN/Xbox/EA titles resolve against the correct award
+ * pages downstream. Returns one entry per (title, platform).
+ */
+export async function fetchExophaseAccountGames(
+  fetcher: ExophaseFetcher,
+  username: string
+): Promise<ExophaseAccountGame[]> {
+  let accounts: ExophasePlatformAccount[] = [];
+  try {
+    const html = await fetcher.fetchHtml(exophaseProfileUrl(username));
+    accounts = parsePlatformAccounts(html);
+  } catch (err) {
+    achievementsLogger.warn(
+      "[Exophase account] failed loading main profile",
+      err
+    );
+    return [];
+  }
+
+  achievementsLogger.log(
+    `[Exophase account] profile "${username}" → ${accounts.length} linked accounts: ${accounts
+      .map((a) => `${a.platformSlug}/${a.accountName}`)
+      .join(", ")}`
+  );
+
+  const games: ExophaseAccountGame[] = [];
+  for (const account of accounts) {
+    const platformGames = await fetchPlatformGames(fetcher, account);
+    achievementsLogger.log(
+      `[Exophase account] ${account.platformSlug}/${account.accountName}: ${platformGames.length} games`
+    );
+    games.push(...platformGames);
+  }
+
+  return games;
 }

@@ -9,12 +9,22 @@ export const EXOPHASE_ACCOUNT_URL = "https://www.exophase.com/account";
 export const EXOPHASE_SEARCH_URL =
   "https://api.exophase.com/public/archive/games";
 
-/** The authenticated user's "Games" list page. This is the SOURCE OF TRUTH for
- *  the account-driven sync: every game the user owns/played across every linked
- *  platform (Steam, Epic, GOG, EA, Ubisoft, Blizzard, Xbox, PSN, …) appears
- *  here. We enumerate it and match each entry to the Hydra catalogue. */
-export const exophaseUserGamesUrl = (username: string, page = 1): string =>
-  `https://www.exophase.com/user/${encodeURIComponent(username)}/games/${
+/** The user's main Exophase profile. Lists every LINKED platform account
+ *  (e.g. `/psn/user/Kewz999/`, `/xbox/user/Kewz8504/`, …) which we then walk to
+ *  enumerate that platform's games. */
+export const exophaseProfileUrl = (username: string): string =>
+  `https://www.exophase.com/user/${encodeURIComponent(username)}/`;
+
+/** A single linked platform account's games page. Exophase paths put the
+ *  platform slug first: `https://www.exophase.com/<platform>/user/<account>/`.
+ *  This is the SOURCE OF TRUTH for the account-driven sync — every game the
+ *  user owns/played on that platform appears here. */
+export const exophasePlatformGamesUrl = (
+  platform: string,
+  account: string,
+  page = 1
+): string =>
+  `https://www.exophase.com/${platform}/user/${encodeURIComponent(account)}/${
     page > 1 ? `?page=${page}` : ""
   }`;
 
