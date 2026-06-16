@@ -1,4 +1,4 @@
-import { net, session } from "electron";
+import { session } from "electron";
 import { logger } from "./logger";
 import {
   extractSteamId64FromXml,
@@ -21,31 +21,30 @@ const STEAM_MY_GAMES_XML =
 
 
 /**
- * Reads the owned-games XML from the main process using Electron's `net.fetch`,
- * which uses Chromium's network stack (not Node's http). We manually extract
- * cookies from the `persist:steam` session partition (the main process CAN read
- * httpOnly cookies via `session.cookies.get`) and attach them as a Cookie header
- * — bypassing both the BrowserWindow XML-viewer problem (Chromium wraps XML in
- * its viewer DOM so `innerText` gives HTML, not raw XML) and the renderer-context
- * CORS/CSP issues that blocked in-page `fetch()` calls.
+ * Reads the owned-games XML using the `persist:steam` session's OWN `fetch`.
+ *
+ * `Session.fetch` (Electron ≥22) issues the request through Chromium's network
+ * stack *bound to that session's cookie jar* — so it automatically sends the
+ * httpOnly `steamLoginSecure` login cookie and follows Steam's in-session
+ * redirects. This is what makes it work where the alternatives failed:
+ *   • A BrowserWindow navigated to the XML URL wraps the document in Chromium's
+ *     XML viewer, so `innerText` returns HTML, not the raw XML.
+ *   • A renderer-context `fetch()` is blocked by CORS/CSP.
+ *   • `net.fetch` (default session) and a hand-built Cookie header don't carry
+ *     the partition's httpOnly cookies, so Steam 302-redirects to /login.
+ *
+ * Verified live (2026-06): the games XML now requires an authenticated session
+ * for ALL profiles — an unauthenticated request 302-redirects to /login, which
+ * we detect below (no <gamesList>/<steamID64>) and treat as "logged out".
  */
 async function fetchMyGamesXml(): Promise<string> {
   const ses = session.fromPartition(STEAM_AUTH_PARTITION);
 
-  // Read ALL cookies for steamcommunity.com — includes httpOnly ones because
-  // the main process is trusted and isn't subject to the JS httpOnly restriction.
-  const cookies = await ses.cookies.get({ url: "https://steamcommunity.com" });
-  if (cookies.length === 0) {
-    throw new Error("No Steam session cookies found — user is not logged in");
-  }
-
-  const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-
-  const response = await net.fetch(STEAM_MY_GAMES_XML, {
+  const response = await ses.fetch(STEAM_MY_GAMES_XML, {
+    // Follow the /my/ → /profiles/<id>/games redirect within the session so the
+    // login cookie is re-sent to the resolved URL.
+    redirect: "follow",
     headers: {
-      Cookie: cookieHeader,
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       Accept: "text/xml,application/xml,*/*;q=0.9",
       Referer: "https://steamcommunity.com/",
     },
