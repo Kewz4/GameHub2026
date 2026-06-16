@@ -56,10 +56,33 @@ export const normalizeExophaseTitle = (s: string): string =>
 
 const normalizeTitle = normalizeExophaseTitle;
 
+/** Returns true if a search result belongs to the given platform slug. */
+const matchesPlatform = (g: ExophaseSearchGame, slug: string): boolean => {
+  const env = (g.environment_slug ?? "").toLowerCase();
+  const endpoint = (g.endpoint_awards ?? "").toLowerCase();
+  return (
+    env === slug ||
+    endpoint.includes(`-${slug}`) ||
+    endpoint.includes(`/${slug}/`)
+  );
+};
+
+const titleScore = (title: string, target: string): number => {
+  if (title === target) return 100;
+  if (title.startsWith(target)) return 80;
+  if (title.includes(target)) return 60;
+  if (target.includes(title) && title.length > 4) return 50;
+  return -100;
+};
+
 /**
- * Picks the best Exophase result for a library game. Ported from the Playnite
- * extension's FindBestMatch: exact/prefix/substring title scoring plus a bonus
- * when the awards URL carries the right `-{platform}` marker.
+ * Picks the best Exophase result for a library game.
+ *
+ * When platformSlug is provided, we FIRST try to find a match among candidates
+ * that actually belong to that platform. Only if there are zero platform-
+ * specific positive-score candidates do we fall back to cross-platform results.
+ * This prevents Epic games from resolving to PSN/Xbox/Android entries, which
+ * was causing wrong awards URLs in the cache.
  */
 export function findBestMatch(
   gameName: string,
@@ -67,33 +90,29 @@ export function findBestMatch(
   platformSlug?: string
 ): ExophaseSearchGame | null {
   const target = normalizeTitle(gameName);
-  let best: ExophaseSearchGame | null = null;
-  let bestScore = 0;
 
-  for (const g of games) {
-    const title = normalizeTitle(g.title ?? "");
-    if (!title) continue;
+  type Scored = { g: ExophaseSearchGame; score: number };
+  const scored: Scored[] = games
+    .map((g) => {
+      const t = normalizeTitle(g.title ?? "");
+      return { g, score: t ? titleScore(t, target) : -Infinity };
+    })
+    .filter((s) => s.score > 0);
 
-    let score: number;
-    if (title === target) score = 100;
-    else if (title.startsWith(target)) score = 80;
-    else if (title.includes(target)) score = 60;
-    else if (target.includes(title)) score = 50;
-    else score = -100;
+  if (scored.length === 0) return null;
 
-    const endpoint = (g.endpoint_awards ?? "").toLowerCase();
-    if (platformSlug) {
-      if (g.environment_slug === platformSlug) score += 20;
-      else if (endpoint.includes(`-${platformSlug}`)) score += 20;
+  // Prefer platform-specific results when a slug is given.
+  if (platformSlug) {
+    const platformPool = scored.filter((s) => matchesPlatform(s.g, platformSlug));
+    if (platformPool.length > 0) {
+      platformPool.sort((a, b) => b.score - a.score);
+      return platformPool[0].g;
     }
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = g;
-    }
+    // No platform-specific match found — fall through to cross-platform.
   }
 
-  return bestScore > 0 ? best : null;
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].g;
 }
 
 const ensureAbsoluteUrl = (raw: string): string => {

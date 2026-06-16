@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button, CheckboxField } from "@renderer/components";
 import { useAppSelector, useToast } from "@renderer/hooks";
 import { settingsContext } from "@renderer/context";
@@ -30,6 +31,7 @@ export function SettingsExophase() {
     (state) => state.userPreferences.value
   );
 
+  const navigate = useNavigate();
   const [username, setUsername] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -268,6 +270,16 @@ export function SettingsExophase() {
           {isImportingPsn
             ? "Importing trophies…"
             : "Import PlayStation Achievements"}
+        </Button>
+
+        <Button
+          type="button"
+          theme="outline"
+          onClick={() => navigate("/achievements-sync")}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <LinkExternalIcon size={14} />
+          View Sync Report
         </Button>
       </div>
 
