@@ -31,7 +31,6 @@ import {
   type CatalogueEntry,
 } from "./exophase-catalogue";
 import {
-  applyCacheToLibrary,
   applyCachedAchievements,
   getPrefs,
   putCacheEntry,
@@ -301,9 +300,13 @@ export async function syncExophaseAccount(
       }
     }
 
-    // Light up any library/custom games that matched cache by title but weren't
-    // directly applied above (e.g. catalogue had no objectId, or custom games).
-    await applyCacheToLibrary().catch(() => 0);
+    // NOTE: We intentionally do NOT call applyCacheToLibrary() here.
+    // That function is triggered by the library sync events (Steam/GOG/Epic/scan)
+    // after they actually add games. Calling it here would apply achievements to
+    // every game that exists in the library, including ones the user considers
+    // "ghost" entries added silently by mergeWithRemoteGames. All Exophase
+    // account games that matched a library entry were already handled above
+    // via applyCachedAchievements in processAccountGame.
   } finally {
     fetcher.close();
   }

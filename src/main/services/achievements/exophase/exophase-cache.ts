@@ -123,6 +123,11 @@ export const applyCachedAchievements = async (
   gameKey: string,
   game: Game
 ): Promise<boolean> => {
+  // Safety guard: never create a new library entry. If the game somehow isn't
+  // in gamesSublevel at this key, bail out rather than silently inserting it.
+  const existingGame = await gamesSublevel.get(gameKey).catch(() => null);
+  if (!existingGame || existingGame.isDeleted) return false;
+
   const entry = await lookupCacheEntry(game);
   if (!entry || entry.definitions.length === 0) return false;
 
