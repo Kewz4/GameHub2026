@@ -1,12 +1,13 @@
 import { registerEvent } from "../register-event";
 import { runExophaseBackgroundSync } from "@main/services/achievements/exophase";
+import { WindowManager } from "@main/services/window-manager";
 
-/** Manual trigger for the background cache/earned-state sync (Settings button,
- *  onboarding "set up achievements"). Resolves when the pass finishes. */
 const runExophaseBackgroundSyncEvent = async (
   _event: Electron.IpcMainInvokeEvent
 ): Promise<{ ok: boolean }> => {
-  await runExophaseBackgroundSync();
+  await runExophaseBackgroundSync((progress) => {
+    WindowManager.sendToAppWindows("on-exophase-sync-progress", progress);
+  });
   return { ok: true };
 };
 

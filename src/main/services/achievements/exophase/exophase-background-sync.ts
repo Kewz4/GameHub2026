@@ -60,7 +60,7 @@ const collectEligibleGames = async (
  *
  * No-ops cleanly when Exophase isn't connected/enabled.
  */
-export const runExophaseBackgroundSync = async (): Promise<void> => {
+export const runExophaseBackgroundSync = async (onProgress?: (p: { current: number; total: number; title: string }) => void): Promise<void> => {
   if (running) return;
 
   const prefs = await getPrefs();
@@ -83,8 +83,11 @@ export const runExophaseBackgroundSync = async (): Promise<void> => {
     const eligible = await collectEligibleGames(prefs);
     const fetcher = new ExophaseFetcher();
 
+    let gameIndex = 0;
     try {
       for (const [key, game] of eligible) {
+        gameIndex++;
+        onProgress?.({ current: gameIndex, total: eligible.length, title: game.title });
         try {
           const slug = SHOP_TO_EXOPHASE_SLUG[game.shop]!;
           const candidates = await searchExophaseGames(
