@@ -36,7 +36,8 @@ export class ExophaseFetcher {
   private navigateAndExtract(
     url: string,
     extractor: string,
-    timeoutMs = 25_000
+    timeoutMs = 25_000,
+    settleMs = 0
   ): Promise<string> {
     const win = this.ensureWindow();
     return new Promise<string>((resolve, reject) => {
@@ -53,6 +54,9 @@ export class ExophaseFetcher {
         settled = true;
         cleanup();
         try {
+          if (settleMs > 0) {
+            await new Promise((r) => setTimeout(r, settleMs));
+          }
           const text: string = await win.webContents.executeJavaScript(
             extractor,
             true
@@ -93,9 +97,15 @@ export class ExophaseFetcher {
     });
   }
 
-  /** Returns the fully rendered page HTML. */
-  fetchHtml(url: string): Promise<string> {
-    return this.navigateAndExtract(url, "document.documentElement.outerHTML");
+  /** Returns the fully rendered page HTML.
+   *  Pass settleMs > 0 for pages that load content via XHR/JS after DOMContentLoaded. */
+  fetchHtml(url: string, settleMs = 0): Promise<string> {
+    return this.navigateAndExtract(
+      url,
+      "document.documentElement.outerHTML",
+      25_000,
+      settleMs
+    );
   }
 
   /** Loads a JSON endpoint and parses the rendered body text. */

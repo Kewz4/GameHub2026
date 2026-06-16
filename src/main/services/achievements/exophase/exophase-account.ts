@@ -152,7 +152,11 @@ export async function fetchExophaseAccountGames(
 ): Promise<ExophaseAccountGame[]> {
   let accounts: ExophasePlatformAccount[] = [];
   try {
-    const html = await fetcher.fetchHtml(exophaseProfileUrl(username));
+    // 3 s settle so JS-rendered platform integration links are in the DOM.
+    const html = await fetcher.fetchHtml(exophaseProfileUrl(username), 3_000);
+    achievementsLogger.log(
+      `[Exophase account] profile HTML length: ${html.length}, has /user/ links: ${/\/user\//.test(html)}`
+    );
     accounts = parsePlatformAccounts(html);
   } catch (err) {
     achievementsLogger.warn(
