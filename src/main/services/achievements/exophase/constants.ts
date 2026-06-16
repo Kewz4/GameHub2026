@@ -9,6 +9,14 @@ export const EXOPHASE_ACCOUNT_URL = "https://www.exophase.com/account";
 export const EXOPHASE_SEARCH_URL =
   "https://api.exophase.com/public/archive/games";
 
+/** Per-user PlayStation trophy profile, e.g.
+ *  https://www.exophase.com/psn/user/{username}/ — lists every PSN game the
+ *  user has trophies for, each linking to a per-user game trophy page. */
+export const exophasePsnProfileUrl = (username: string, page = 1): string => {
+  const base = `https://www.exophase.com/psn/user/${encodeURIComponent(username)}/`;
+  return page > 1 ? `${base}?page=${page}` : base;
+};
+
 /**
  * Maps a GameHub store (our `GameShop`) to Exophase's `environment_slug`.
  * Only stores Exophase actually tracks are listed; the rest are skipped.
