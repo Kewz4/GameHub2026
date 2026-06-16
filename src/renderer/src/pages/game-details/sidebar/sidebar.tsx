@@ -294,17 +294,15 @@ export function Sidebar({
               lookupUnsubRef.current?.();
               lookupUnsubRef.current = window.electron.onExophaseLookupProgress(
                 (info) => {
-                  if (info.objectId === objectId && info.shop === shop) {
-                    setLookupStatus(info.message);
-                  }
+                  setLookupStatus(info.message);
                 }
               );
               window.electron
-                .lookupGameAchievements(objectId, shop)
+                .lookupGameAchievements(shop, objectId)
                 .then((result) => {
                   if (result.found) {
                     setLookupStatus(
-                      `✓ ${result.achievementsCount} achievements loaded`
+                      `✓ ${result.achievementCount} achievements (${result.unlockedCount} unlocked)`
                     );
                   } else {
                     setLookupStatus(result.error ?? "No achievements found.");

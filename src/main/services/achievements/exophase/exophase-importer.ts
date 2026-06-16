@@ -47,7 +47,7 @@ export interface ExophaseSyncProgress {
 }
 
 
-const toUnlockedList = (
+export const toUnlockedList = (
   achievements: ExophaseAchievement[]
 ): UnlockedAchievement[] =>
   achievements
