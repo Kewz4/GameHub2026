@@ -171,6 +171,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [steamBusy, setSteamBusy] = useState(false);
   const [steamError, setSteamError] = useState("");
   const [steamOpenIdBusy, setSteamOpenIdBusy] = useState(false);
+  const [steamInAppBusy, setSteamInAppBusy] = useState(false);
   const [steamProfile, setSteamProfile] = useState<{
     personaname: string;
     avatarfull: string;
@@ -353,6 +354,40 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       }
       return next;
     });
+  };
+
+  // In-app Steam login: reads the user's OWN games via the authenticated
+  // session — works even when their Steam profile games are private (which the
+  // OpenID + public-XML path cannot do).
+  const handleSteamInAppConnect = async () => {
+    setSteamInAppBusy(true);
+    setSteamError("");
+    try {
+      const result = await window.electron.openSteamLoginWindow();
+      if (!result?.steamId) {
+        setSteamError("Steam login failed.");
+        return;
+      }
+      const summary = await window.electron
+        .getSteamPlayerSummary(result.steamId, undefined)
+        .catch(() => null);
+      await window.electron.updateUserPreferences({
+        steamId: result.steamId,
+        steamUsername: summary?.personaname ?? null,
+        steamAvatarUrl: summary?.avatarfull ?? null,
+      });
+      if (summary) setSteamProfile(summary);
+      setSteamLinked(true);
+      // Authenticated session is established; sync owned games in background.
+      window.electron
+        .syncSteamLibrary(result.steamId, undefined)
+        .catch(() => {});
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSteamError(msg || "Steam login failed.");
+    } finally {
+      setSteamInAppBusy(false);
+    }
   };
 
   const handleSteamOpenIdConnect = async () => {
@@ -1328,8 +1363,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     >
                       <Button
                         type="button"
-                        onClick={handleSteamOpenIdConnect}
-                        disabled={steamOpenIdBusy}
+                        onClick={handleSteamInAppConnect}
+                        disabled={steamInAppBusy}
                         style={{
                           background: "#1b2838",
                           color: "#c7d5e0",
@@ -1339,9 +1374,23 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         }}
                       >
                         <SteamLogo style={{ width: 18, height: 18 }} />
-                        {steamOpenIdBusy
+                        {steamInAppBusy
                           ? "Opening Steam…"
                           : "Sign in with Steam"}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleSteamOpenIdConnect}
+                        disabled={steamOpenIdBusy}
+                        theme="outline"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <SteamLogo style={{ width: 18, height: 18 }} />
+                        {steamOpenIdBusy ? "Opening Steam…" : "Use OpenID"}
                       </Button>
                     </div>
 
