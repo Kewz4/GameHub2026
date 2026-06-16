@@ -120,7 +120,8 @@ export interface GameAchievement {
   language: string | undefined;
   /** When "exophase", both the definitions and the unlocked list were imported
    *  from Exophase and share the same apiNames — so they must be used together
-   *  (never mixed with Hydra/Steam definitions, whose names wouldn't match). */
+   *  (never mixed with Hydra/Steam definitions, whose names wouldn't match).
+   *  When absent/undefined, definitions came from HydraAPI/Steam (with images). */
   source?: "exophase";
 }
 

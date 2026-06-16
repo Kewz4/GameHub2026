@@ -154,12 +154,14 @@ export const applyCachedAchievements = async (
 
   let finalDefinitions: SteamAchievement[];
   let finalUnlocked: UnlockedAchievement[];
-  let finalSource: string;
+  let finalSource: "exophase" | undefined;
 
   if (hydraDefinitions) {
     // ── HydraAPI definitions exist: match Exophase unlocks by display name ──
+    // Leave source undefined so the game-data fetcher knows these are HydraAPI
+    // definitions (with images) and doesn't short-circuit back to Exophase data.
     finalDefinitions = hydraDefinitions;
-    finalSource = existing!.source ?? "hydra";
+    finalSource = undefined;
 
     // Build a map: normalized displayName → HydraAPI apiName
     const hydraByDisplay = new Map<string, string>(

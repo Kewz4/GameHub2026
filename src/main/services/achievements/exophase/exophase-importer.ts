@@ -137,9 +137,11 @@ const buildReportGame = (
  *   2. unlockCountConsistent — game.unlockedAchievementCount === stored unlocks
  *   3. noOrphanUnlocks    — every unlocked apiName exists in the definition set
  */
+type VerificationChecks = NonNullable<ExophaseSyncReportGame["verificationChecks"]>;
+
 async function verifyGameAchievements(
   gameKey: string
-): Promise<ExophaseSyncReportGame["verificationChecks"]> {
+): Promise<VerificationChecks> {
   const ach = await gameAchievementsSublevel.get(gameKey).catch(() => null);
   const game = await gamesSublevel.get(gameKey).catch(() => null);
 
@@ -224,7 +226,7 @@ async function processAccountGame(
   let iconUrl: string | null = null;
   // Default to Exophase definition count; overridden below if HydraAPI data exists.
   let reportTotalAchievements = definitions.length;
-  let verification: ExophaseSyncReportGame["verificationChecks"];
+  let verification: ExophaseSyncReportGame["verificationChecks"] = undefined;
 
   if (catalogueMatch && objectId) {
     const gameKey = levelKeys.game(shop, objectId);
@@ -264,15 +266,16 @@ async function processAccountGame(
       }
 
       // Three post-match verification checks proving the unlock truly landed.
-      verification = await verifyGameAchievements(gameKey);
+      const checks = await verifyGameAchievements(gameKey);
+      verification = checks;
       const allPassed =
-        verification.persisted &&
-        verification.unlockCountConsistent &&
-        verification.noOrphanUnlocks;
+        checks.persisted &&
+        checks.unlockCountConsistent &&
+        checks.noOrphanUnlocks;
       achievementsLogger.log(
         `[Exophase verify] "${title}" ${shop}:${objectId} → ${
           allPassed ? "OK" : "FAILED"
-        } (persisted=${verification.persisted}, unlockCount=${verification.unlockCountConsistent}, noOrphans=${verification.noOrphanUnlocks})`
+        } (persisted=${checks.persisted}, unlockCount=${checks.unlockCountConsistent}, noOrphans=${checks.noOrphanUnlocks})`
       );
     }
   }
