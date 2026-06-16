@@ -50,6 +50,9 @@ export interface ExophasePsnImportResult {
   gamesMatched: number;
   totalUnlocked: number;
   error?: string;
+  /** Full sync report for the PSN run so the event can merge it into the
+   *  persisted Achievements Sync report (PSN games were previously invisible). */
+  report?: ExophaseSyncReport;
 }
 
 export interface ExophaseSyncProgress {
@@ -535,5 +538,6 @@ export async function importPlaystationAchievements(
     gamesMatched: r.gamesWithAchievements,
     totalUnlocked: r.totalUnlocked,
     error: r.error,
+    report: r.report,
   };
 }

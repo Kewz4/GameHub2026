@@ -1,4 +1,4 @@
-import { BrowserWindow, session } from "electron";
+import { BrowserWindow } from "electron";
 import { logger } from "./logger";
 import {
   extractSteamId64FromXml,
@@ -16,40 +16,28 @@ export const STEAM_LOGIN_URL =
   "https://steamcommunity.com/login/home/?goto=my/games?xml=1";
 
 /** The authenticated owned-games XML. `/my/` resolves to the logged-in user,
- *  and an authenticated user sees their OWN games even when the list is private
- *  to the public — which is exactly why this beats the public XML endpoint. */
-const STEAM_MY_GAMES_XML = "https://steamcommunity.com/my/games?xml=1";
+ *  `tab=all` returns the FULL owned list (without it Steam returns only the
+ *  recently-played subset), and an authenticated user sees their OWN games even
+ *  when the list is private — which is exactly why this beats the public XML. */
+const STEAM_MY_GAMES_XML =
+  "https://steamcommunity.com/my/games?tab=all&xml=1";
+
+/** A lightweight steamcommunity.com page used as the navigation origin before
+ *  we issue the same-origin XHR for the games XML. */
+const STEAM_ORIGIN_PAGE = "https://steamcommunity.com/my/";
 
 /**
- * Fetches the owned-games XML using `session.fetch()` from the persist:steam
- * session. This carries the session's httpOnly cookies (including
- * steamLoginSecure) without needing a BrowserWindow, and returns the raw XML
- * text rather than a serialized DOM — which avoids HTML-entity escaping issues
- * that could occur with executeJavaScript/outerHTML on an XML document.
+ * Reads the owned-games XML by:
+ *   1. navigating a hidden BrowserWindow to a steamcommunity.com page so the
+ *      document origin IS steamcommunity.com, and
+ *   2. running an in-page `fetch()` for the games XML.
  *
- * Falls back to a BrowserWindow if the session fetch fails (e.g. Cloudflare
- * challenge not yet solved on this session).
+ * Because the fetch runs from a steamcommunity.com document it is SAME-ORIGIN,
+ * so it carries the session's httpOnly login cookies and is not blocked by
+ * CORS (the previous about:blank approach failed CORS), and it returns the RAW
+ * XML text rather than Chromium's XML-viewer DOM serialization.
  */
-async function fetchMyGamesXmlViaSession(): Promise<string> {
-  const ses = session.fromPartition(STEAM_AUTH_PARTITION);
-  const response = await ses.fetch(STEAM_MY_GAMES_XML, {
-    headers: {
-      Accept: "text/xml,application/xml,*/*",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Steam games XML returned HTTP ${response.status}`);
-  }
-  return response.text();
-}
-
-/**
- * Fallback: navigates a hidden BrowserWindow to the XML URL and reads the
- * raw response via XMLHttpRequest (not outerHTML) so we get the actual XML
- * bytes rather than Chromium's XML-viewer DOM serialization.
- */
-function fetchMyGamesXmlViaBrowserWindow(): Promise<string> {
+function fetchMyGamesXml(): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const win = new BrowserWindow({
       show: false,
@@ -62,40 +50,79 @@ function fetchMyGamesXmlViaBrowserWindow(): Promise<string> {
       },
     });
 
+    let settled = false;
     const destroy = () => {
       if (!win.isDestroyed()) win.destroy();
     };
-
-    const timer = setTimeout(() => {
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       destroy();
-      reject(new Error("Steam BrowserWindow fetch timed out"));
-    }, 25_000);
+      reject(err);
+    };
+    const done = (text: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      destroy();
+      resolve(text ?? "");
+    };
 
-    // Navigate to a blank page first, then XHR the XML URL from there so we
-    // get the raw text rather than the browser's XML-viewer DOM.
-    win.loadURL("about:blank")
-      .then(() =>
-        win.webContents.executeJavaScript(
+    const timer = setTimeout(
+      () => fail(new Error("Steam games XML fetch timed out")),
+      30_000
+    );
+
+    win.webContents.on(
+      "did-fail-load",
+      (_e, errorCode, errorDescription, validatedURL) => {
+        // -3 (ERR_ABORTED) fires for client-side redirects — ignore.
+        if (errorCode === -3) return;
+        fail(
+          new Error(
+            `Steam origin page load failed (${errorCode} ${errorDescription}) for ${validatedURL}`
+          )
+        );
+      }
+    );
+
+    win.webContents.on("did-finish-load", () => {
+      if (settled) return;
+      // Now on a steamcommunity.com document → same-origin XHR for the XML.
+      win.webContents
+        .executeJavaScript(
           `(async () => {
-            const r = await fetch(${JSON.stringify(STEAM_MY_GAMES_XML)}, {
-              credentials: 'include',
-              headers: { Accept: 'text/xml,application/xml,*/*' }
-            });
-            return r.text();
+            try {
+              const r = await fetch(${JSON.stringify(STEAM_MY_GAMES_XML)}, {
+                credentials: 'include',
+                headers: { 'Accept': 'text/xml,application/xml,*/*' }
+              });
+              return await r.text();
+            } catch (e) {
+              return 'FETCH_ERROR:' + (e && e.message ? e.message : String(e));
+            }
           })()`,
           true
         )
-      )
-      .then((text: string) => {
-        clearTimeout(timer);
-        destroy();
-        resolve(text ?? "");
-      })
-      .catch((err) => {
-        clearTimeout(timer);
-        destroy();
-        reject(err);
-      });
+        .then((text: string) => {
+          if (typeof text === "string" && text.startsWith("FETCH_ERROR:")) {
+            fail(new Error(`Steam in-page fetch failed: ${text.slice(12)}`));
+            return;
+          }
+          done(text);
+        })
+        .catch((err) =>
+          fail(err instanceof Error ? err : new Error(String(err)))
+        );
+    });
+
+    win.loadURL(STEAM_ORIGIN_PAGE).catch((err) => {
+      // ERR_ABORTED from the /my/ → /profiles/<id>/ redirect is expected; the
+      // did-finish-load handler will still fire for the final page.
+      if (String(err).includes("ERR_ABORTED")) return;
+      fail(err instanceof Error ? err : new Error(String(err)));
+    });
   });
 }
 
@@ -112,29 +139,27 @@ export interface SteamAuthSession {
 export const getAuthenticatedSteamOwnedGames =
   async (): Promise<SteamAuthSession | null> => {
     try {
-      // Prefer the lightweight session.fetch() path; fall back to BrowserWindow.
-      let xml: string;
-      try {
-        xml = await fetchMyGamesXmlViaSession();
-      } catch (sessionErr) {
-        logger.warn(
-          "[SteamAuth] session.fetch failed, falling back to BrowserWindow",
-          sessionErr
-        );
-        xml = await fetchMyGamesXmlViaBrowserWindow();
-      }
+      const xml = await fetchMyGamesXml();
 
       logger.log(
-        `[SteamAuth] games XML (first 300): ${xml.slice(0, 300).replace(/\s+/g, " ")}`
+        `[SteamAuth] games XML received (${xml.length} chars, first 200: ${xml
+          .slice(0, 200)
+          .replace(/\s+/g, " ")})`
       );
 
       // Not logged in → Steam serves the login page HTML, not the games XML.
       if (!xml.includes("<gamesList>") && !xml.includes("<steamID64>")) {
+        logger.warn(
+          "[SteamAuth] response is not a games XML document (likely logged out / redirected to login)"
+        );
         return null;
       }
 
       const steamId = extractSteamId64FromXml(xml);
-      if (!steamId) return null;
+      if (!steamId) {
+        logger.warn("[SteamAuth] could not extract steamID64 from XML");
+        return null;
+      }
 
       const games = parseSteamGamesXml(xml);
       logger.log(
@@ -142,7 +167,10 @@ export const getAuthenticatedSteamOwnedGames =
       );
       return { steamId, games };
     } catch (err) {
-      logger.warn("[SteamAuth] authenticated owned-games fetch failed", err);
+      logger.warn(
+        "[SteamAuth] authenticated owned-games fetch failed:",
+        err instanceof Error ? err.message : String(err)
+      );
       return null;
     }
   };

@@ -1,4 +1,3 @@
-import axios from "axios";
 import { registerEvent } from "../register-event";
 import {
   db,
@@ -12,6 +11,7 @@ import { logger } from "@main/services";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { detectInstalledEaGames, getEaLaunchUri } from "@main/services/ea";
+import { fetchEaOwnedGames } from "@main/services/ea-juno";
 import {
   getExcludedGames,
   isGameExcluded,
@@ -21,15 +21,6 @@ import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 /** EA offer ids contain characters unsafe for level keys — sanitize them. */
 const toObjectId = (offerId: string): string =>
   offerId.replace(/[^a-zA-Z0-9._-]+/g, "-").toLowerCase();
-
-interface EaEntitlement {
-  offerId?: string;
-  masterTitleId?: string;
-  displayProductName?: string;
-  productName?: string;
-  offerType?: string;
-  status?: string;
-}
 
 const syncEaLibrary = async (
   _event: Electron.IpcMainInvokeEvent
@@ -73,78 +64,43 @@ const syncEaLibrary = async (
       }
     }
 
-    const headers = {
-      Authorization: `Bearer ${accessToken}`,
-      "X-AuthToken": accessToken,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
-
-    // The entitlements endpoint requires the NUMERIC persona id — calling it
-    // with the literal "me" returns 404 "no mediator found" (which surfaces to
-    // the user as "service limitations apply"). So first resolve the pid via
-    // the identity endpoint, then fetch entitlements for that pid.
-    // (The legacy api*.origin.com hosts are gone — "Origin has shut down".)
-    let identityRes;
+    // Fetch owned games from EA's Juno GraphQL endpoint (the API the EA app
+    // uses). The old gateway.ea.com/proxy hosts now return "service
+    // limitations apply" for third-party tokens. On a 401 the token is stale —
+    // refresh once and retry before giving up.
+    let ownedGames;
     try {
-      identityRes = await axios.get(
-        "https://gateway.ea.com/proxy/identity/pids/me",
-        { headers, timeout: 20_000 }
-      );
-      logger.log("[EA] identity response:", JSON.stringify(identityRes.data).slice(0, 500));
-    } catch (identityErr: unknown) {
-      const ae = identityErr as { response?: { status?: number; data?: unknown } };
-      logger.error(
-        "[EA] identity endpoint failed:",
-        ae?.response?.status,
-        JSON.stringify(ae?.response?.data).slice(0, 500)
-      );
-      throw identityErr;
+      ownedGames = await fetchEaOwnedGames(accessToken);
+    } catch (err) {
+      const is401 = String(err).includes("HTTP 401");
+      if (is401) {
+        const { refreshEaTokenSilently } = await import(
+          "@main/services/ea-auth"
+        );
+        const refreshed = await refreshEaTokenSilently();
+        if (refreshed) {
+          accessToken = refreshed.accessToken;
+          await db.put<string, UserPreferences>(
+            levelKeys.userPreferences,
+            {
+              ...prefs,
+              eaAccessToken: refreshed.accessToken,
+              eaTokenExpiry: new Date(
+                Date.now() + refreshed.expiresIn * 1000
+              ).toISOString(),
+            },
+            { valueEncoding: "json" }
+          );
+          ownedGames = await fetchEaOwnedGames(accessToken);
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
     }
 
-    const pid =
-      identityRes.data?.pid?.pidId ??
-      identityRes.data?.pid?.externalRefValue ??
-      identityRes.data?.pidId;
-
-    logger.log(`[EA] resolved pid: ${pid}`);
-
-    if (!pid) {
-      throw new Error("Could not resolve EA persona id");
-    }
-
-    let res;
-    try {
-      res = await axios.get(
-        `https://gateway.ea.com/proxy/entitlements/pids/${pid}/entitlements?status=ACTIVE`,
-        { headers, timeout: 20_000 }
-      );
-    } catch (entErr: unknown) {
-      const ae = entErr as { response?: { status?: number; data?: unknown } };
-      logger.error(
-        `[EA] entitlements endpoint failed for pid=${pid}:`,
-        ae?.response?.status,
-        JSON.stringify(ae?.response?.data).slice(0, 500)
-      );
-      throw entErr;
-    }
-
-    const raw =
-      res.data?.entitlements?.entitlement ?? res.data?.entitlements ?? [];
-    const entitlements: EaEntitlement[] = Array.isArray(raw) ? raw : [raw];
-
-    // Keep only actual game entitlements
-    const gameEntitlements = entitlements.filter(
-      (e) =>
-        e.status === "ACTIVE" &&
-        e.offerId &&
-        (!e.offerType ||
-          ["DEFAULT", "ONLINE_SERVICE", "ONLINE_OFFLINE_SERVICE"].includes(
-            e.offerType
-          ))
-    );
-
-    if (gameEntitlements.length === 0) {
+    if (ownedGames.length === 0) {
       return { total: 0, added: 0 };
     }
 
@@ -152,12 +108,11 @@ const syncEaLibrary = async (
     const excludedGames = await getExcludedGames();
     let added = 0;
 
-    for (const ent of gameEntitlements) {
-      const rawTitle =
-        ent.displayProductName ?? ent.productName ?? ent.offerId ?? "";
+    for (const owned of ownedGames) {
+      const rawTitle = owned.title;
       if (!rawTitle) continue;
 
-      const objectId = toObjectId(ent.offerId!);
+      const objectId = toObjectId(owned.offerId);
 
       if (isGameExcluded(excludedGames, "ea", objectId, rawTitle)) continue;
 
@@ -169,7 +124,7 @@ const syncEaLibrary = async (
       const localMatch =
         installedGames.find(
           (g) =>
-            g.offerId === ent.offerId ||
+            g.offerId === owned.offerId ||
             normalizeGameTitle(g.title) === titleNorm
         ) ?? null;
 
@@ -177,9 +132,7 @@ const syncEaLibrary = async (
       // the EA app will handle download/launch if the game isn't installed.
       const executablePath = localMatch
         ? getEaLaunchUri(localMatch)
-        : ent.offerId
-          ? `origin2://game/launch?offerIds=${encodeURIComponent(ent.offerId)}&autoDownload=1`
-          : null;
+        : `origin2://game/launch?offerIds=${encodeURIComponent(owned.offerId)}&autoDownload=1`;
 
       if (existing && !existing.isDeleted) {
         const updates: Partial<typeof existing> = {};
@@ -234,12 +187,12 @@ const syncEaLibrary = async (
     }
 
     logger.log(
-      `EA library sync: ${added} added from ${gameEntitlements.length} entitlements`
+      `EA library sync: ${added} added from ${ownedGames.length} owned games`
     );
-    return { total: gameEntitlements.length, added };
+    return { total: ownedGames.length, added };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error("EA library sync failed", err);
+    logger.error("EA library sync failed:", message);
     return { total: 0, added: 0, error: message };
   }
 };
