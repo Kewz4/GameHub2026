@@ -512,52 +512,40 @@ export function RepacksModal({
               {
                 shop: "xbox" as const,
                 label: "Download with Xbox app",
-                clientName: "Xbox app",
                 Icon: XboxLogo,
                 modifier: "xbox",
               },
               {
                 shop: "battlenet" as const,
                 label: "Download with Battle.net",
-                clientName: "Battle.net",
                 Icon: BattleNetLogo,
                 modifier: "battlenet",
               },
               {
                 shop: "riot" as const,
                 label: "Download with Riot Client",
-                clientName: "Riot Client",
                 Icon: RiotLogo,
                 modifier: "riot",
               },
               {
                 shop: "ubisoft" as const,
                 label: "Download with Ubisoft Connect",
-                clientName: "Ubisoft Connect",
                 Icon: UbisoftLogo,
                 modifier: "ubisoft",
               },
               {
                 shop: "ea" as const,
                 label: "Download with EA app",
-                clientName: "EA app",
                 Icon: EaLogo,
                 modifier: "ea",
               },
-            ]
-              .filter(
-                ({ shop }) =>
-                  (game.shop === shop && getGameOrigin(game) === "sync") ||
-                  altShops.some((s) => s.shop === shop)
-              )
-              .map((entry) => {
-                const hasExe =
-                  (game.shop === entry.shop && Boolean(game.executablePath)) ||
-                  altShops.some(
-                    (s) => s.shop === entry.shop && Boolean(s.executablePath)
-                  );
-                return { ...entry, hasClient: hasExe };
-              });
+            ].filter(
+              ({ shop }) =>
+                (game.shop === shop &&
+                  getGameOrigin(game) === "sync" &&
+                  game.executablePath) ||
+                altShops.some((s) => s.shop === shop && s.executablePath)
+            );
 
             const hasPlatformOptions =
               isOwnedOnSteam ||
@@ -632,47 +620,37 @@ export function RepacksModal({
                       <span>{"Download with GOG"}</span>
                     </button>
                   )}
-                  {clientPlatforms.map(
-                    ({ shop, label, clientName, Icon, modifier, hasClient }) => (
-                      <button
-                        key={shop}
-                        type="button"
-                        className={`repacks-modal__platform-button repacks-modal__platform-button--${modifier}`}
-                        disabled={!hasClient}
-                        title={
-                          !hasClient
-                            ? `Install ${clientName} to use this button`
-                            : undefined
-                        }
-                        style={!hasClient ? { opacity: 0.5 } : undefined}
-                        onClick={() => {
-                          if (!hasClient) return;
-                          if (game.shop === shop && game.executablePath) {
+                  {clientPlatforms.map(({ shop, label, Icon, modifier }) => (
+                    <button
+                      key={shop}
+                      type="button"
+                      className={`repacks-modal__platform-button repacks-modal__platform-button--${modifier}`}
+                      onClick={() => {
+                        if (game.shop === shop && game.executablePath) {
+                          window.electron.openGame(
+                            game.shop,
+                            game.objectId,
+                            game.executablePath,
+                            game.launchOptions
+                          );
+                        } else {
+                          const alt = altShops.find((s) => s.shop === shop);
+                          if (alt?.executablePath) {
                             window.electron.openGame(
-                              game.shop,
-                              game.objectId,
-                              game.executablePath,
-                              game.launchOptions
+                              alt.shop,
+                              alt.objectId,
+                              alt.executablePath,
+                              null
                             );
-                          } else {
-                            const alt = altShops.find((s) => s.shop === shop);
-                            if (alt?.executablePath) {
-                              window.electron.openGame(
-                                alt.shop,
-                                alt.objectId,
-                                alt.executablePath,
-                                null
-                              );
-                            }
                           }
-                          onClose();
-                        }}
-                      >
-                        <Icon className="repacks-modal__platform-icon" />
-                        <span>{label}</span>
-                      </button>
-                    )
-                  )}
+                        }
+                        onClose();
+                      }}
+                    >
+                      <Icon className="repacks-modal__platform-icon" />
+                      <span>{label}</span>
+                    </button>
+                  ))}
                 </div>
                 <div className="repacks-modal__or-divider">
                   <span>— OR —</span>

@@ -9,7 +9,6 @@ import {
   logger,
   WindowManager,
 } from "@main/services";
-import { classifyScannedOrigin } from "@main/helpers/classify-scanned-origin";
 
 const SCAN_DIRECTORIES = [
   String.raw`C:\Games`,
@@ -108,9 +107,8 @@ const scanInstalledGames = async (
         await gamesSublevel.put(key, {
           ...game,
           executablePath: foundPath,
-          // Store folder → owned on that platform; anything else keeps its
-          // original origin or becomes custom
-          libraryOrigin: classifyScannedOrigin(foundPath, game.libraryOrigin),
+          // Found installed on disk = owned, not a catalogue-only entry
+          libraryOrigin: "sync",
         });
       }
 

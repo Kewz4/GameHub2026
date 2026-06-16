@@ -3,7 +3,6 @@ import { HydraApi } from "@main/services";
 import type { UpdateProfileRequest, UserProfile } from "@types";
 import { omit } from "lodash-es";
 import { UploadcareSync } from "@main/services/uploadcare-sync";
-import { invalidateProfileImagesCache } from "./get-profile-images";
 import { db, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
 import { app } from "electron";
@@ -25,46 +24,18 @@ const updateProfile = async (
 
   const prefUpdates: Partial<UserPreferences> = {};
 
-  const me = await HydraApi.get<UserProfile>("/profile/me").catch(() => null);
-
-  // Persist a permanent local copy so the profile renders instantly and
-  // offline; falls back to the Uploadcare CDN URL if the copy fails.
-  const copyToProfileAssets = (
-    sourcePath: string,
-    fileName: string
-  ): string | null => {
-    try {
-      const profileAssetsDir = path.join(
-        app.getPath("userData"),
-        "profile-assets"
-      );
-      fs.mkdirSync(profileAssetsDir, { recursive: true });
-      const destPath = path.join(profileAssetsDir, fileName);
-      fs.copyFileSync(sourcePath, destPath);
-      return destPath;
-    } catch {
-      return null;
-    }
-  };
-
   if (updateProfile.profileImageUrl !== undefined) {
     if (updateProfile.profileImageUrl === null) {
       payload["profileImageUrl"] = null;
       prefUpdates.localProfileImageUrl = null;
     } else {
-      // Upload to Uploadcare tagged with the account id so any GameHub
-      // client (including other users viewing this profile) can find it.
+      // Upload to Uploadcare; store locally so the app always shows the image
+      // even if HydraAPI rejects the ucarecdn.com domain.
       const uploadcareUrl = await UploadcareSync.uploadImage(
-        updateProfile.profileImageUrl,
-        me?.id
-          ? { kind: "profile-avatar", hydraUserId: me.id }
-          : { kind: "profile-avatar" }
+        updateProfile.profileImageUrl
       ).catch(() => undefined);
       payload["profileImageUrl"] = uploadcareUrl ?? null;
-      prefUpdates.localProfileImageUrl =
-        copyToProfileAssets(updateProfile.profileImageUrl, "avatar.webp") ??
-        uploadcareUrl ??
-        null;
+      prefUpdates.localProfileImageUrl = uploadcareUrl ?? null;
     }
   }
 
@@ -74,6 +45,9 @@ const updateProfile = async (
       prefUpdates.localBackgroundImageUrl = null;
     } else {
       // Tag with the Hydra account id so any install can restore the banner
+      const me = await HydraApi.get<UserProfile>("/profile/me").catch(
+        () => null
+      );
       const uploadcareUrl = await UploadcareSync.uploadImage(
         updateProfile.backgroundImageUrl,
         me?.id
@@ -81,17 +55,23 @@ const updateProfile = async (
           : { kind: "profile-banner" }
       ).catch(() => undefined);
       payload["backgroundImageUrl"] = uploadcareUrl ?? null;
-      prefUpdates.localBackgroundImageUrl =
-        copyToProfileAssets(
-          updateProfile.backgroundImageUrl,
-          "banner.webp"
-        ) ??
-        uploadcareUrl ??
-        null;
+
+      // Copy source file to a permanent local path so re-entry always loads
+      // from a reliable local file rather than the Uploadcare CDN URL.
+      try {
+        const profileAssetsDir = path.join(
+          app.getPath("userData"),
+          "profile-assets"
+        );
+        fs.mkdirSync(profileAssetsDir, { recursive: true });
+        const localBannerPath = path.join(profileAssetsDir, "banner.webp");
+        fs.copyFileSync(updateProfile.backgroundImageUrl, localBannerPath);
+        prefUpdates.localBackgroundImageUrl = localBannerPath;
+      } catch {
+        prefUpdates.localBackgroundImageUrl = uploadcareUrl ?? null;
+      }
     }
   }
-
-  if (me?.id) invalidateProfileImagesCache(me.id);
 
   // Persist URLs locally so they survive even if HydraAPI rejects them.
   if (Object.keys(prefUpdates).length > 0) {

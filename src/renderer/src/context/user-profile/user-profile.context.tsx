@@ -302,20 +302,28 @@ export function UserProfileContextProvider({
     return window.electron.hydraApi
       .get<UserProfile>(`/users/${userId}`)
       .then(async (userProfile) => {
-        // HydraAPI rejects ucarecdn.com image URLs, so profile images are
-        // resolved by the main process instead: own profile from the local
-        // copies, other GameHub users from the shared Uploadcare project
-        // (tagged by hydraUserId). Falls back to whatever the API returned.
-        const resolved = await window.electron
-          .getProfileImages(userProfile.id)
-          .catch(() => null);
-        userProfile = {
-          ...userProfile,
-          profileImageUrl:
-            resolved?.profileImageUrl ?? userProfile.profileImageUrl,
-          backgroundImageUrl:
-            resolved?.backgroundImageUrl ?? userProfile.backgroundImageUrl,
-        };
+        // HydraAPI rejects ucarecdn.com image URLs, so the user's own images
+        // live in userPreferences — overlay them when viewing own profile.
+        if (userDetails?.id === userProfile.id) {
+          const prefs = await window.electron
+            .getUserPreferences()
+            .catch(() => null);
+          const localBg = prefs?.localBackgroundImageUrl;
+          // Normalize Windows backslashes to forward slashes so the local:
+          // protocol handler receives a valid URL on all platforms.
+          const localBgNorm = localBg?.replace(/\\/g, "/");
+          const resolvedBg = localBg
+            ? localBgNorm!.startsWith("http") || localBgNorm!.startsWith("file:")
+              ? localBgNorm!
+              : `local:${localBgNorm!}`
+            : userProfile.backgroundImageUrl;
+          userProfile = {
+            ...userProfile,
+            profileImageUrl:
+              prefs?.localProfileImageUrl ?? userProfile.profileImageUrl,
+            backgroundImageUrl: resolvedBg,
+          };
+        }
 
         setUserProfile(userProfile);
 

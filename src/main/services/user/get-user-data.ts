@@ -11,20 +11,6 @@ import { db } from "@main/level";
 import { levelKeys } from "@main/level/sublevels";
 import fs from "node:fs";
 
-/** Convert a stored image reference (http URL, local:-prefixed URL, or raw
- * filesystem path) into something the renderer can actually load. Raw paths
- * become local: URLs; missing files return null so the caller can fall back —
- * a raw path or dead file as <img src> is what renders the broken-image icon. */
-const toRendererImageUrl = (value: string | null | undefined): string | null => {
-  if (!value) return null;
-  if (value.startsWith("http")) return value;
-  const rawPath = value.startsWith("local:")
-    ? value.slice("local:".length)
-    : value;
-  if (!fs.existsSync(rawPath)) return null;
-  return `local:${rawPath.replace(/\\/g, "/")}`;
-};
-
 /** HydraAPI rejects ucarecdn.com image URLs, so uploads are stored locally in
  * userPreferences. Overlay them so the user's own images always show. */
 const overlayLocalImages = async <
@@ -41,13 +27,20 @@ const overlayLocalImages = async <
     })
     .catch(() => null);
 
+  const rawBg = prefs?.localBackgroundImageUrl;
+  // Convert local file path to a usable URL for the renderer.
+  // Use the CDN/http URL as-is; convert local paths via the app's local:
+  // protocol — file:// URLs are blocked by the renderer's web security.
+  const resolvedBg = rawBg
+    ? rawBg.startsWith("http") || rawBg.startsWith("local:")
+      ? rawBg
+      : `local:${rawBg.replace(/\\/g, "/")}`
+    : user.backgroundImageUrl;
+
   return {
     ...user,
-    profileImageUrl:
-      toRendererImageUrl(prefs?.localProfileImageUrl) ?? user.profileImageUrl,
-    backgroundImageUrl:
-      toRendererImageUrl(prefs?.localBackgroundImageUrl) ??
-      user.backgroundImageUrl,
+    profileImageUrl: prefs?.localProfileImageUrl ?? user.profileImageUrl,
+    backgroundImageUrl: resolvedBg,
   };
 };
 
@@ -65,13 +58,11 @@ const restoreAccountBanner = async (userId: string): Promise<void> => {
     const existingBg = prefs?.localBackgroundImageUrl;
     if (existingBg) {
       // If it's an HTTP URL, we already have it
-      if (existingBg.startsWith("http")) return;
-      // Local reference (raw path or local:-prefixed) — only skip if the
-      // file actually exists; otherwise restore from the CDN below
-      const rawPath = existingBg.startsWith("local:")
-        ? existingBg.slice("local:".length)
-        : existingBg;
-      if (fs.existsSync(rawPath)) return;
+      if (existingBg.startsWith("http") || existingBg.startsWith("local:"))
+        return;
+      // If it's a local file path, only skip if the file actually exists
+      if (fs.existsSync(existingBg)) return;
+      // File missing (cleared data, new machine) — fall through to restore from CDN
     }
 
     const { UploadcareSync } = await import("../uploadcare-sync");
