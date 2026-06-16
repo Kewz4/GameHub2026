@@ -371,6 +371,13 @@ declare global {
     onExophaseSyncProgress: (
       cb: (progress: { current: number; total: number; title: string }) => void
     ) => () => void;
+    lookupGameAchievements: (
+      objectId: string,
+      shop: string
+    ) => Promise<{ found: boolean; achievementsCount: number; error?: string }>;
+    onExophaseLookupProgress: (
+      cb: (info: { objectId: string; shop: string; message: string }) => void
+    ) => () => void;
     syncGamePassLibrary: () => Promise<{ added: number; total: number }>;
     openXboxAuthWindow: () => Promise<{
       success: boolean;

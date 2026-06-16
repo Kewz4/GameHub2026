@@ -5,3 +5,4 @@ import "./sync-exophase-achievements";
 import "./import-playstation-achievements";
 import "./get-exophase-sync-report";
 import "./run-exophase-background-sync";
+import "./lookup-game-achievements";

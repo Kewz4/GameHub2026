@@ -4,44 +4,51 @@ export type GameOrigin = "sync" | "catalog" | "custom";
 
 interface OriginSource {
   shop: GameShop;
-  libraryOrigin?: GameOrigin | null;
+  libraryOrigin?: "sync" | "catalog" | "custom" | null;
   executablePath?: string | null;
-  /** A GameHub repack/torrent download record, when one exists. */
   download?: unknown | null;
 }
 
 /**
- * Classify how a game entered the library, for the per-store library tabs.
+ * Classify how a game entered the library, for per-store library tabs.
  *
- * Locked model: `libraryOrigin: "sync"` is AUTHORITATIVE and wins over
- * everything else. Only a platform login/OAuth sync handler ever writes it
- * (sync-steam-library, sync-epic-library, …), so once a game is stamped
- * "sync" it is locked to its store tab — a later repack download or a stale
- * Playnite "catalog" stamp can never pull it out. This is what the user asked
- * for: "lock the category so no games go out of it".
+ * Rules (highest priority first):
+ *   1. custom shop / "custom" stamp  → custom
+ *   2. "sync" stamp                  → sync  (LOCKED — owned on platform)
+ *   3. "catalog" stamp               → catalog (Playnite / catalogue / repack)
+ *   4. platform URI executable       → sync  (legacy: sync handler should stamp next boot)
+ *   5. download record present       → catalog (repack download)
+ *   6. unstamped                     → catalog (Retigga; platform sync re-claims it)
  *
- *   1. custom shop / "custom" stamp     → custom
- *   2. "sync" stamp                     → sync    (LOCKED — owned on platform)
- *   3. GameHub download record          → catalog (a repack → Retigga)
- *   4. "catalog" stamp                  → catalog (Playnite / catalogue add)
- *   5. unstamped / unverified           → catalog (Retigga; sync re-claims it)
+ * The `libraryOrigin` field is the single source of truth — set exclusively by
+ * platform OAuth sync handlers (syncSteamLibrary, syncEpicLibrary, …). All
+ * inference below is a legacy fallback for records created before the stamp
+ * system existed.
  */
 export function getGameOrigin(game: OriginSource): GameOrigin {
-  // 1. Manually added games.
-  if (game.shop === "custom" || game.libraryOrigin === "custom") {
-    return "custom";
-  }
-
-  // 2. Owned via a platform login/OAuth sync — locked to its store tab.
+  if (game.shop === "custom" || game.libraryOrigin === "custom") return "custom";
   if (game.libraryOrigin === "sync") return "sync";
-
-  // 3. A GameHub download record means a Retigga repack.
-  if (game.download != null) return "catalog";
-
-  // 4. Explicitly added from the catalogue / imported from Playnite.
   if (game.libraryOrigin === "catalog") return "catalog";
 
-  // 5. Unstamped / unverified legacy record → Retigga. A real platform sync
-  //    will stamp it "sync" and move it to its store tab on its next run.
+  // Legacy fallback: platform URI schemes are written exclusively by platform
+  // sync handlers, so any record with one can be treated as owned-on-platform.
+  const exe = (game.executablePath ?? "").toLowerCase();
+  const PLATFORM_URIS = [
+    "steam://",
+    "legendary://",
+    "goggalaxy://",
+    "goglauncher://",
+    "msxbox://",
+    "battlenet://",
+    "origin2://",
+    "uplay://",
+    "riot://",
+  ];
+  if (PLATFORM_URIS.some((u) => exe.startsWith(u))) return "sync";
+
+  // Repack/torrent download record → Retigga.
+  if (game.download != null) return "catalog";
+
+  // Unstamped legacy record → Retigga until next platform sync re-claims it.
   return "catalog";
 }
