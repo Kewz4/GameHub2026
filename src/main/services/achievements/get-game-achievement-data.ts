@@ -52,15 +52,23 @@ export const getGameAchievementData = async (
     return cachedAchievements.achievements;
   }
 
-  if (cachedAchievements?.achievements && useCachedData) {
-    return cachedAchievements.achievements;
-  }
-
   const language = await db
     .get<string, string>(levelKeys.language, {
       valueEncoding: "utf8",
     })
     .then((language) => language || "en");
+
+  // Only trust the cache when it was fetched in the user's CURRENT language.
+  // Otherwise definitions can be stuck in a stale locale (e.g. a game whose
+  // HydraAPI achievements were cached in Chinese) and we must refetch so the
+  // names come back in the right language.
+  if (
+    cachedAchievements?.achievements &&
+    useCachedData &&
+    cachedAchievements.language === language
+  ) {
+    return cachedAchievements.achievements;
+  }
 
   return HydraApi.get<SteamAchievement[]>(
     `/games/${shop}/${objectId}/achievements`,
