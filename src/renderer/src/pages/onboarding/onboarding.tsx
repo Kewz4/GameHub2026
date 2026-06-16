@@ -216,6 +216,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [exophaseConnecting, setExophaseConnecting] = useState(false);
   const [exophasePsnImporting, setExophasePsnImporting] = useState(false);
   const [exophasePsnResult, setExophasePsnResult] = useState<string>("");
+  // Live achievement-import progress (drives the onboarding progress modal).
+  const [importActive, setImportActive] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    title: string;
+    phase?: string;
+  } | null>(null);
 
   // Tools step state
   const [ludusaviResult, setLudusaviResult] = useState<string>("");
@@ -539,6 +547,24 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     }
   };
 
+  // Subscribe to the SAME live sync signals the report page uses, so the
+  // onboarding progress modal reflects the import as it happens — and so the
+  // user can continue into the app and watch the rest on the Sync report.
+  useEffect(() => {
+    const offProgress = window.electron.onExophaseSyncProgress((p) => {
+      setImportActive(true);
+      setImportProgress(p);
+    });
+    const offActive = window.electron.onExophaseSyncActive((active) => {
+      setImportActive(active);
+      if (!active) setImportProgress(null);
+    });
+    return () => {
+      offProgress();
+      offActive();
+    };
+  }, []);
+
   const handleExophaseConnect = async () => {
     setExophaseConnecting(true);
     try {
@@ -549,8 +575,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           exophaseUserId: state.username,
           exophaseEnabled: true,
         });
-        // Kick the first cache build in the background — this primes the shared
-        // achievement cache so games added later light up instantly.
+        // Kick the first import — the live progress modal shows it running, and
+        // it keeps going in the background if the user advances to the next step.
+        setImportActive(true);
+        setImportProgress(null);
         window.electron.runExophaseBackgroundSync().catch(() => {});
       }
     } catch {
@@ -2132,6 +2160,37 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         onConfirm={handleScanConfirm}
         onClose={() => setShowScanApproval(false)}
       />
+
+      {importActive && (
+        <div className="onboarding__import-overlay">
+          <div className="onboarding__import-modal">
+            <h3>Importing achievements…</h3>
+            <p className="onboarding__import-sub">
+              {importProgress
+                ? `${importProgress.current}/${importProgress.total} — ${importProgress.title}`
+                : "Reading your Exophase account…"}
+            </p>
+            <div className="onboarding__import-bar">
+              <div
+                className="onboarding__import-fill"
+                style={{
+                  width: importProgress
+                    ? `${Math.round(
+                        (importProgress.current /
+                          Math.max(importProgress.total, 1)) *
+                          100
+                      )}%`
+                    : "8%",
+                }}
+              />
+            </div>
+            <p className="onboarding__import-hint">
+              You can keep setting things up — this continues in the background.
+              Watch the rest under Achievements → Sync report.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -369,8 +369,14 @@ declare global {
     getExophaseSyncReport: () => Promise<import("@types").ExophaseSyncReport | null>;
     runExophaseBackgroundSync: () => Promise<{ ok: boolean }>;
     onExophaseSyncProgress: (
-      cb: (progress: { current: number; total: number; title: string }) => void
+      cb: (progress: {
+        current: number;
+        total: number;
+        title: string;
+        phase?: string;
+      }) => void
     ) => () => void;
+    onExophaseSyncActive: (cb: (active: boolean) => void) => () => void;
     lookupGameAchievements: (
       shop: string,
       objectId: string

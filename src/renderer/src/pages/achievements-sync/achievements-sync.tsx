@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   TrophyIcon,
   DownloadIcon,
   SyncIcon,
+  CheckCircleFillIcon,
+  AlertIcon,
 } from "@primer/octicons-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@renderer/components";
@@ -20,9 +22,12 @@ export default function AchievementsSync() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [importingPsn, setImportingPsn] = useState(false);
-  const [progress, setProgress] = useState<{ current: number; total: number; title: string; phase?: string } | null>(null);
-
-  const unsubRef = useRef<(() => void) | null>(null);
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+    title: string;
+    phase?: string;
+  } | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -38,28 +43,45 @@ export default function AchievementsSync() {
     load();
   }, [dispatch, load]);
 
+  // Always-on subscription: reflect a sync running ANYWHERE (onboarding,
+  // settings, background) in real time, even when this page didn't start it.
+  useEffect(() => {
+    const offProgress = window.electron.onExophaseSyncProgress((p) => {
+      setSyncing(true);
+      setProgress(p);
+    });
+    const offActive = window.electron.onExophaseSyncActive((active) => {
+      setSyncing(active);
+      if (!active) {
+        setProgress(null);
+        setImportingPsn(false);
+        // A run just finished elsewhere — refresh the persisted report.
+        load();
+      }
+    });
+    return () => {
+      offProgress();
+      offActive();
+    };
+  }, [load]);
+
+  // Progress + completion are handled by the always-on subscription above; the
+  // handlers just kick off the run and surface the final toast.
   const handleRunSync = async () => {
     setSyncing(true);
     setProgress(null);
-    unsubRef.current = window.electron.onExophaseSyncProgress((p) => setProgress(p));
     try {
       await window.electron.runExophaseBackgroundSync();
       showSuccessToast("Achievements sync finished");
       load();
     } catch {
       showErrorToast("Sync failed.");
-    } finally {
-      unsubRef.current?.();
-      unsubRef.current = null;
-      setSyncing(false);
-      setProgress(null);
     }
   };
 
   const handlePsnImport = async () => {
     setImportingPsn(true);
     setProgress(null);
-    unsubRef.current = window.electron.onExophaseSyncProgress((p) => setProgress(p));
     try {
       const result = await window.electron.importPlaystationAchievements();
       if (result.error) {
@@ -74,10 +96,7 @@ export default function AchievementsSync() {
     } catch {
       showErrorToast("PlayStation import failed.");
     } finally {
-      unsubRef.current?.();
-      unsubRef.current = null;
       setImportingPsn(false);
-      setProgress(null);
     }
   };
 
@@ -86,8 +105,12 @@ export default function AchievementsSync() {
   return (
     <div className="achievements-sync">
       <header className="achievements-sync__header">
-        <h1><TrophyIcon size={22} /> Achievements Sync</h1>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <h1>
+          <TrophyIcon size={22} /> Achievements Sync
+        </h1>
+        <div
+          style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}
+        >
           <Button
             type="button"
             onClick={handleRunSync}
@@ -105,7 +128,9 @@ export default function AchievementsSync() {
             style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
             <DownloadIcon size={14} />
-            {importingPsn ? "Importing trophies…" : "Import PlayStation Achievements"}
+            {importingPsn
+              ? "Importing trophies…"
+              : "Import PlayStation Achievements"}
           </Button>
         </div>
       </header>
@@ -113,13 +138,15 @@ export default function AchievementsSync() {
       {busy && progress && (
         <div className="achievements-sync__progress">
           <p className="achievements-sync__progress-label">
-            {progress.phase && <strong>{progress.phase}</strong>}
-            {" "}— {progress.current}/{progress.total} — {progress.title}
+            {progress.phase && <strong>{progress.phase}</strong>} —{" "}
+            {progress.current}/{progress.total} — {progress.title}
           </p>
           <div className="achievements-sync__progress-bar">
             <div
               className="achievements-sync__progress-fill"
-              style={{ width: `${Math.round((progress.current / Math.max(progress.total, 1)) * 100)}%` }}
+              style={{
+                width: `${Math.round((progress.current / Math.max(progress.total, 1)) * 100)}%`,
+              }}
             />
           </div>
         </div>
@@ -140,7 +167,8 @@ export default function AchievementsSync() {
           <TrophyIcon size={32} />
           <h2>No sync yet</h2>
           <p className="achievements-sync__muted">
-            Connect Exophase in Settings → Achievements and click "Sync now" above.
+            Connect Exophase in Settings → Achievements and click "Sync now"
+            above.
           </p>
         </div>
       )}
@@ -148,8 +176,9 @@ export default function AchievementsSync() {
       {report && !busy && (
         <>
           <p className="achievements-sync__muted">
-            Last run {new Date(report.finishedAt).toLocaleString()} — {report.gamesProcessed} games checked,{" "}
-            {report.totalNewlyUnlocked} new achievement{report.totalNewlyUnlocked !== 1 ? "s" : ""} across{" "}
+            Last run {new Date(report.finishedAt).toLocaleString()} —{" "}
+            {report.gamesProcessed} games checked, {report.totalNewlyUnlocked}{" "}
+            new achievement{report.totalNewlyUnlocked !== 1 ? "s" : ""} across{" "}
             {report.gamesUpdated} game{report.gamesUpdated !== 1 ? "s" : ""}.
           </p>
 
@@ -157,7 +186,8 @@ export default function AchievementsSync() {
             <section className="achievements-sync__section">
               <h2>PlayStation games detected</h2>
               <p className="achievements-sync__muted">
-                These library games have matching PSN trophies. Import to credit them on PC.
+                These library games have matching PSN trophies. Import to credit
+                them on PC.
               </p>
               <ul className="achievements-sync__list">
                 {report.psnDetected.map((g) => (
@@ -166,8 +196,12 @@ export default function AchievementsSync() {
                     className="achievements-sync__row"
                     onClick={() => navigate(`/game/${g.shop}/${g.objectId}`)}
                   >
-                    {g.iconUrl && <img src={g.iconUrl} alt="" width={32} height={32} />}
-                    <span className="achievements-sync__row-title">{g.title}</span>
+                    {g.iconUrl && (
+                      <img src={g.iconUrl} alt="" width={32} height={32} />
+                    )}
+                    <span className="achievements-sync__row-title">
+                      {g.title}
+                    </span>
                     <span className="achievements-sync__badge achievements-sync__badge--psn">
                       PSN Game Detected
                     </span>
@@ -178,9 +212,13 @@ export default function AchievementsSync() {
           )}
 
           <section className="achievements-sync__section">
-            <h2><SyncIcon size={16} /> Updated games</h2>
+            <h2>
+              <SyncIcon size={16} /> Updated games
+            </h2>
             {report.games.length === 0 ? (
-              <p className="achievements-sync__muted">No new achievements this run.</p>
+              <p className="achievements-sync__muted">
+                No new achievements this run.
+              </p>
             ) : (
               <ul className="achievements-sync__list">
                 {report.games.map((g) => (
@@ -189,9 +227,36 @@ export default function AchievementsSync() {
                     className="achievements-sync__row"
                     onClick={() => navigate(`/game/${g.shop}/${g.objectId}`)}
                   >
-                    {g.iconUrl && <img src={g.iconUrl} alt="" width={32} height={32} />}
-                    <span className="achievements-sync__row-title">{g.title}</span>
-                    <span className="achievements-sync__badge">+{g.newlyUnlocked} new</span>
+                    {g.iconUrl && (
+                      <img src={g.iconUrl} alt="" width={32} height={32} />
+                    )}
+                    <span className="achievements-sync__row-title">
+                      {g.title}
+                    </span>
+                    {g.verified !== undefined && (
+                      <span
+                        title={
+                          g.verificationChecks
+                            ? `Persisted: ${g.verificationChecks.persisted ? "✓" : "✗"} · Unlock count: ${g.verificationChecks.unlockCountConsistent ? "✓" : "✗"} · No orphans: ${g.verificationChecks.noOrphanUnlocks ? "✓" : "✗"}`
+                            : undefined
+                        }
+                        style={{
+                          display: "inline-flex",
+                          color: g.verified ? "#3fb950" : "#e3b341",
+                        }}
+                      >
+                        {g.verified ? (
+                          <CheckCircleFillIcon size={14} />
+                        ) : (
+                          <AlertIcon size={14} />
+                        )}
+                      </span>
+                    )}
+                    {g.newlyUnlocked > 0 && (
+                      <span className="achievements-sync__badge">
+                        +{g.newlyUnlocked} new
+                      </span>
+                    )}
                     <span className="achievements-sync__muted">
                       {g.totalUnlocked}/{g.totalAchievements}
                     </span>

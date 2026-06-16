@@ -171,7 +171,10 @@ export const applyCachedAchievements = async (
 
     // Build a map: Exophase apiName → display name (from entry.definitions)
     const exophaseDisplay = new Map<string, string>(
-      entry.definitions.map((d) => [d.name ?? "", d.displayName ?? d.name ?? ""])
+      entry.definitions.map((d) => [
+        d.name ?? "",
+        d.displayName ?? d.name ?? "",
+      ])
     );
 
     // Convert Exophase unlocked list to HydraAPI apiNames via display name.

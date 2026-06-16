@@ -112,7 +112,8 @@ const buildReportGame = (
   iconUrl: string | null,
   definitions: SteamAchievement[],
   unlocked: UnlockedAchievement[],
-  newlyUnlocked: number
+  newlyUnlocked: number,
+  verification?: ExophaseSyncReportGame["verificationChecks"]
 ): ExophaseSyncReportGame => ({
   shop,
   objectId,
@@ -121,7 +122,42 @@ const buildReportGame = (
   newlyUnlocked,
   totalUnlocked: unlocked.length,
   totalAchievements: definitions.length,
+  verified: verification
+    ? verification.persisted &&
+      verification.unlockCountConsistent &&
+      verification.noOrphanUnlocks
+    : undefined,
+  verificationChecks: verification,
 });
+
+/**
+ * Runs 3 post-match integrity checks against what was actually written to the
+ * DB for a game, so the sync report can prove the unlock truly landed:
+ *   1. persisted          — the achievements entry exists with definitions
+ *   2. unlockCountConsistent — game.unlockedAchievementCount === stored unlocks
+ *   3. noOrphanUnlocks    — every unlocked apiName exists in the definition set
+ */
+async function verifyGameAchievements(
+  gameKey: string
+): Promise<ExophaseSyncReportGame["verificationChecks"]> {
+  const ach = await gameAchievementsSublevel.get(gameKey).catch(() => null);
+  const game = await gamesSublevel.get(gameKey).catch(() => null);
+
+  const persisted = Boolean(ach && (ach.achievements?.length ?? 0) > 0);
+
+  const storedUnlocks = ach?.unlockedAchievements ?? [];
+  const unlockCountConsistent =
+    persisted && (game?.unlockedAchievementCount ?? 0) === storedUnlocks.length;
+
+  const defNames = new Set(
+    (ach?.achievements ?? []).map((d) => (d.name ?? "").toUpperCase())
+  );
+  const noOrphanUnlocks =
+    persisted &&
+    storedUnlocks.every((u) => defNames.has((u.name ?? "").toUpperCase()));
+
+  return { persisted, unlockCountConsistent, noOrphanUnlocks };
+}
 
 /**
  * Handles ONE account game: resolves its awards, matches it to the Hydra
@@ -188,6 +224,7 @@ async function processAccountGame(
   let iconUrl: string | null = null;
   // Default to Exophase definition count; overridden below if HydraAPI data exists.
   let reportTotalAchievements = definitions.length;
+  let verification: ExophaseSyncReportGame["verificationChecks"];
 
   if (catalogueMatch && objectId) {
     const gameKey = levelKeys.game(shop, objectId);
@@ -221,6 +258,22 @@ async function processAccountGame(
       newlyUnlocked = (afterAchData?.unlockedAchievements ?? []).filter(
         (u) => !prevUnlocked.has((u.name ?? "").toUpperCase())
       ).length;
+
+      if (afterAchData?.achievements?.length) {
+        reportTotalAchievements = afterAchData.achievements.length;
+      }
+
+      // Three post-match verification checks proving the unlock truly landed.
+      verification = await verifyGameAchievements(gameKey);
+      const allPassed =
+        verification.persisted &&
+        verification.unlockCountConsistent &&
+        verification.noOrphanUnlocks;
+      achievementsLogger.log(
+        `[Exophase verify] "${title}" ${shop}:${objectId} → ${
+          allPassed ? "OK" : "FAILED"
+        } (persisted=${verification.persisted}, unlockCount=${verification.unlockCountConsistent}, noOrphans=${verification.noOrphanUnlocks})`
+      );
     }
   }
 
@@ -233,7 +286,8 @@ async function processAccountGame(
       // Use HydraAPI-aware total for the report definition count.
       { length: reportTotalAchievements } as SteamAchievement[],
       unlocked,
-      newlyUnlocked
+      newlyUnlocked,
+      verification
     ),
     unlocked: unlocked.length,
   };

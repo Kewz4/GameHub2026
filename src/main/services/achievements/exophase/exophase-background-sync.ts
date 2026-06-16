@@ -32,9 +32,10 @@ export const runExophaseBackgroundSync = async (
     // 1. Merge the community cache (also lights up matching library games).
     await pullSharedCache().catch(() => 0);
 
-    // 2. Account-driven sync.
-    const result = await syncExophaseAccount((p) =>
-      onProgress?.({ current: p.current, total: p.total, title: p.title })
+    // 2. Account-driven sync — PC storefronts only (PSN is a separate import).
+    const result = await syncExophaseAccount(
+      (p) => onProgress?.({ current: p.current, total: p.total, title: p.title }),
+      "pc"
     );
 
     // 3. Share the refreshed cache.

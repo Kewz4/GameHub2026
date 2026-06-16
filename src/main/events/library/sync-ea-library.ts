@@ -77,28 +77,36 @@ const syncEaLibrary = async (
       Authorization: `Bearer ${accessToken}`,
       "X-AuthToken": accessToken,
       "Content-Type": "application/json",
-      "Accept": "application/json",
+      Accept: "application/json",
     };
 
-    // gateway.ea.com/proxy/entitlements returns "service limitations" for many
-    // accounts. The older api2.origin.com endpoint is more permissive and
-    // supports ORIGIN_JS_SDK tokens.
-    let raw: unknown;
-    try {
-      const res = await axios.get(
-        "https://api2.origin.com/ecommerce2/consolidatedentitlements/me?fullgames=true&machine_hash=1",
-        { headers, timeout: 20_000 }
-      );
-      raw = res.data?.entitlements?.entitlement ?? res.data?.entitlements ?? [];
-    } catch {
-      // Fall back to gateway endpoint if Origin API fails.
-      const res2 = await axios.get(
-        "https://gateway.ea.com/proxy/entitlements/pids/me/entitlements?status=ACTIVE",
-        { headers, timeout: 20_000 }
-      );
-      raw = res2.data?.entitlements?.entitlement ?? res2.data?.entitlements ?? [];
+    // The entitlements endpoint requires the NUMERIC persona id — calling it
+    // with the literal "me" returns 404 "no mediator found" (which surfaces to
+    // the user as "service limitations apply"). So first resolve the pid via
+    // the identity endpoint, then fetch entitlements for that pid.
+    // (The legacy api*.origin.com hosts are gone — "Origin has shut down".)
+    const identityRes = await axios.get(
+      "https://gateway.ea.com/proxy/identity/pids/me",
+      { headers, timeout: 20_000 }
+    );
+
+    const pid =
+      identityRes.data?.pid?.pidId ??
+      identityRes.data?.pid?.externalRefValue ??
+      identityRes.data?.pidId;
+
+    if (!pid) {
+      throw new Error("Could not resolve EA persona id");
     }
-    const entitlements: EaEntitlement[] = Array.isArray(raw) ? raw as EaEntitlement[] : [raw as EaEntitlement];
+
+    const res = await axios.get(
+      `https://gateway.ea.com/proxy/entitlements/pids/${pid}/entitlements?status=ACTIVE`,
+      { headers, timeout: 20_000 }
+    );
+
+    const raw =
+      res.data?.entitlements?.entitlement ?? res.data?.entitlements ?? [];
+    const entitlements: EaEntitlement[] = Array.isArray(raw) ? raw : [raw];
 
     // Keep only actual game entitlements
     const gameEntitlements = entitlements.filter(
