@@ -16,6 +16,7 @@ import type {
 import { achievementsLogger } from "@main/services/logger";
 import { WindowManager } from "@main/services/window-manager";
 import { R2Sync } from "@main/services/r2-sync";
+import { HydraApi } from "@main/services/hydra-api";
 import { DEFAULT_MANAGED_SHOPS, SHOP_TO_EXOPHASE_SLUG } from "./constants";
 import {
   normalizeExophaseTitle,
@@ -116,6 +117,44 @@ const mergeUnlocked = (
 /** Normalises a display name for fuzzy matching across Exophase/HydraAPI. */
 const normalizeDisplayName = (s: string): string =>
   s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Pushes the unlocked achievements for a game up to the user's HydraAPI cloud
+ * profile so Exophase-imported unlocks are wired into the Hydra account
+ * achievement system (visible on other devices / the web profile).
+ *
+ * Only safe to call when the unlocked apiNames are HydraAPI names (i.e. the
+ * game has HydraAPI definitions and we matched Exophase unlocks onto them) —
+ * raw Exophase apiNames would be rejected/ignored by the cloud which keys by
+ * the canonical (Steam) apiName. Best-effort: silently no-ops when the user is
+ * logged out, lacks a subscription, or the game has no remoteId.
+ */
+export const syncUnlockedToHydraApi = async (
+  game: Game,
+  unlockedAchievements: UnlockedAchievement[]
+): Promise<void> => {
+  if (!game.remoteId) return;
+  if (!HydraApi.isLoggedIn()) return;
+  if (unlockedAchievements.length === 0) return;
+
+  try {
+    await HydraApi.put(
+      "/profile/games/achievements",
+      { id: game.remoteId, achievements: unlockedAchievements },
+      {}
+    );
+    achievementsLogger.log(
+      `[Exophase→HydraAPI] synced ${unlockedAchievements.length} unlocks for ${game.shop}:${game.objectId}`
+    );
+  } catch (err) {
+    // Subscription-required / network errors are non-fatal — the unlocks are
+    // already persisted locally and will retry on the next sync.
+    achievementsLogger.log(
+      `[Exophase→HydraAPI] cloud sync skipped for ${game.shop}:${game.objectId}`,
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+};
 
 /**
  * Applies cached achievement definitions onto a single library game WITHOUT any
@@ -228,6 +267,14 @@ export const applyCachedAchievements = async (
     `on-update-achievements-${game.objectId}-${game.shop}`,
     finalUnlocked
   );
+
+  // Wire the unlocks into the Hydra cloud account. Only when finalSource is
+  // undefined do the unlocked apiNames belong to the HydraAPI definition set
+  // (canonical names the cloud accepts); Exophase-fallback names are local-only.
+  if (finalSource === undefined) {
+    await syncUnlockedToHydraApi(existingGame, finalUnlocked);
+  }
+
   return true;
 };
 
