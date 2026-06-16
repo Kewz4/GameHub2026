@@ -76,7 +76,8 @@ export const toUnlockedList = (
 async function resolveAwards(
   fetcher: ExophaseFetcher,
   title: string,
-  platformSlug?: string
+  platformSlug?: string,
+  playerId?: string
 ): Promise<{
   achievements: ExophaseAchievement[];
   awardsUrl: string;
@@ -89,8 +90,12 @@ async function resolveAwards(
     const match = findBestMatch(title, candidates, slug);
     if (!match) continue;
 
-    const url = awardsUrlFor(match);
+    let url = awardsUrlFor(match);
     if (!url) continue;
+
+    // Append the Exophase player ID so the page returns the user's earned
+    // state. Without this hash, all achievements appear un-earned (data-earned="0").
+    if (playerId) url = `${url}#${playerId}`;
 
     const achievements = parseAchievements(await fetcher.fetchHtml(url));
     if (achievements.length === 0) continue;
@@ -132,7 +137,8 @@ async function processAccountGame(
   const resolved = await resolveAwards(
     fetcher,
     accountGame.title,
-    accountGame.platformSlug
+    accountGame.platformSlug,
+    accountGame.playerId
   );
   if (!resolved) {
     achievementsLogger.log(
@@ -176,7 +182,9 @@ async function processAccountGame(
   );
 
   // Apply directly to the matching library record (catalogue id) if present.
-  let newlyUnlocked = unlocked.length;
+  // Games NOT in the library are intentionally skipped — we cache by title so
+  // they light up if the user adds them later, but we never auto-add to library.
+  let newlyUnlocked = 0;
   const reportObjectId = objectId ?? "";
   let iconUrl: string | null = null;
 
@@ -302,13 +310,21 @@ export async function syncExophaseAccount(
 
   WindowManager.sendToAppWindows("on-library-batch-complete");
 
+  const gamesUpdated = reportGames.filter((g) => g.newlyUnlocked > 0).length;
+  const totalNewlyUnlocked = reportGames.reduce(
+    (n, g) => n + g.newlyUnlocked,
+    0
+  );
+
   result.report = {
     startedAt,
     finishedAt: new Date().toISOString(),
     gamesProcessed: result.gamesProcessed,
-    gamesUpdated: reportGames.filter((g) => g.newlyUnlocked > 0).length,
-    totalNewlyUnlocked: reportGames.reduce((n, g) => n + g.newlyUnlocked, 0),
-    games: reportGames.filter((g) => g.newlyUnlocked > 0),
+    gamesUpdated,
+    totalNewlyUnlocked,
+    // Include all library-matched games in the report, not just newly-unlocked,
+    // so the sync report page always has useful data to show.
+    games: reportGames.filter((g) => g.objectId),
     psnDetected: [],
   };
 

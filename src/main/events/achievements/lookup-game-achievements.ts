@@ -10,6 +10,8 @@ import {
   parseAchievements,
   toDefinitions,
   toUnlockedList,
+  lookupCacheEntry,
+  applyCachedAchievements,
 } from "@main/services/achievements/exophase";
 import { WindowManager } from "@main/services/window-manager";
 import type { GameShop } from "@types";
@@ -36,6 +38,34 @@ const lookupGameAchievements = async (
     return { found: false, achievementCount: 0, unlockedCount: 0, error: "Game not found in library." };
   }
 
+  WindowManager.sendToAppWindows("on-exophase-lookup-progress", {
+    status: "searching",
+    message: `Looking up achievements for "${game.title}"…`,
+  });
+
+  // Cache-first: if the account sync already resolved this game, apply it directly.
+  const cached = await lookupCacheEntry(game);
+  if (cached && cached.definitions.length > 0) {
+    achievementsLogger.log(
+      `[Exophase lookup] cache hit for "${game.title}": ${cached.definitions.length} defs, ${cached.unlocked?.length ?? 0} unlocked`
+    );
+    await applyCachedAchievements(gameKey, game);
+    WindowManager.sendToAppWindows("on-library-batch-complete");
+
+    const unlockedCount = cached.unlocked?.length ?? 0;
+    WindowManager.sendToAppWindows("on-exophase-lookup-progress", {
+      status: "done",
+      message: `Found ${cached.definitions.length} achievements (${unlockedCount} unlocked) from cache.`,
+    });
+    return {
+      found: true,
+      achievementCount: cached.definitions.length,
+      unlockedCount,
+      awardsUrl: cached.awardsUrl ?? undefined,
+    };
+  }
+
+  // Cache miss — do a live Exophase search for this game's platform.
   const slug = SHOP_TO_EXOPHASE_SLUG[shop];
   if (!slug) {
     achievementsLogger.warn(`[Exophase lookup] no Exophase slug for shop "${shop}"`);
@@ -68,7 +98,7 @@ const lookupGameAchievements = async (
 
     WindowManager.sendToAppWindows("on-exophase-lookup-progress", {
       status: "fetching",
-      message: `Fetching achievements from ${url}…`,
+      message: `Fetching achievements from Exophase…`,
     });
 
     const html = await fetcher.fetchHtml(url);

@@ -9,12 +9,18 @@ export interface ExophaseAccountGame {
   /** Exophase `environment_slug` (steam/psn/xbox/…) — known because we read it
    *  off that platform's profile page. */
   platformSlug: string;
+  /** Exophase internal player ID for this account (data-playerid on the
+   *  profile page). Must be appended as `#<playerId>` to awards URLs so
+   *  Exophase returns the user's earned state instead of the generic view. */
+  playerId: string;
 }
 
 /** A linked platform account discovered on the main Exophase profile. */
 export interface ExophasePlatformAccount {
   platformSlug: string;
   accountName: string;
+  /** Exophase internal numeric player ID (`data-playerid` on the <li>). */
+  playerId: string;
 }
 
 /** How many "?page=N" pages of a platform's games list to walk before giving
@@ -47,7 +53,7 @@ export function parsePlatformAccounts(html: string): ExophasePlatformAccount[] {
   const out: ExophasePlatformAccount[] = [];
   const seen = new Set<string>();
 
-  const tryAdd = (raw: string) => {
+  const tryAdd = (raw: string, playerId: string) => {
     const m = raw.match(PLATFORM_ACCOUNT_RE);
     if (!m) return;
 
@@ -68,18 +74,22 @@ export function parsePlatformAccounts(html: string): ExophasePlatformAccount[] {
     const key = `${platformSlug}:${accountName.toLowerCase()}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ platformSlug, accountName });
+    out.push({ platformSlug, accountName, playerId });
   };
 
-  // Primary: data-endpoint attributes (the real Exophase structure)
+  // Primary: data-endpoint attributes (the real Exophase structure).
+  // Each <li data-endpoint="/psn/user/Kewz999/" data-playerid="2434969"> gives
+  // us both the account path and the player ID needed for earned-state URLs.
   doc.querySelectorAll("[data-endpoint]").forEach((el) => {
-    tryAdd(el.getAttribute("data-endpoint") ?? "");
+    const endpoint = el.getAttribute("data-endpoint") ?? "";
+    const playerId = el.getAttribute("data-playerid") ?? "";
+    tryAdd(endpoint, playerId);
   });
 
   // Fallback: scan all href attributes (catches any future restructuring)
   if (out.length === 0) {
     doc.querySelectorAll("a[href]").forEach((a) => {
-      tryAdd(a.getAttribute("href") ?? "");
+      tryAdd(a.getAttribute("href") ?? "", "");
     });
   }
 
@@ -143,7 +153,11 @@ async function fetchPlatformGames(
     for (const title of titles) {
       const key = title.toLowerCase();
       if (byTitle.has(key)) continue;
-      byTitle.set(key, { title, platformSlug: account.platformSlug });
+      byTitle.set(key, {
+        title,
+        platformSlug: account.platformSlug,
+        playerId: account.playerId,
+      });
       added++;
     }
 
