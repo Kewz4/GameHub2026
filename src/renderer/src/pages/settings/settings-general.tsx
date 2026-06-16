@@ -531,7 +531,7 @@ export function SettingsGeneral() {
                 style={{
                   height: "100%",
                   width: `${metadataProgress.total > 0 ? Math.round((metadataProgress.current / metadataProgress.total) * 100) : 0}%`,
-                  background: "var(--color-muted-purple, #7b68ee)",
+                  background: "#fff",
                   transition: "width 0.2s",
                 }}
               />

@@ -110,7 +110,7 @@ export function LibrarySyncModal({
                   fontSize: "0.7rem",
                   padding: "2px 7px",
                   borderRadius: 999,
-                  background: "var(--color-muted-purple, #7b68ee)",
+                  background: "#fff",
                   whiteSpace: "nowrap",
                   flexShrink: 0,
                 }}

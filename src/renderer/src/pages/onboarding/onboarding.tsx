@@ -12,7 +12,6 @@ import { useAppSelector } from "@renderer/hooks";
 import {
   CheckCircleFillIcon,
   PersonIcon,
-  LinkExternalIcon,
   BellIcon,
   GearIcon,
   FileDirectoryIcon,
@@ -121,14 +120,6 @@ interface OnboardingProps {
   onComplete: () => void;
 }
 
-function parseSteamId(input: string): string {
-  const trimmed = input.trim();
-  const profileMatch = trimmed.match(/steamcommunity\.com\/profiles\/(\d{17})/);
-  if (profileMatch) return profileMatch[1];
-  if (/^\d{15,18}$/.test(trimmed)) return trimmed;
-  return trimmed;
-}
-
 export function Onboarding({ onComplete }: OnboardingProps) {
   const { t: _t, i18n } = useTranslation("settings");
   const userPreferences = useAppSelector(
@@ -165,12 +156,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     new Set()
   );
 
-  const [steamInput, setSteamInput] = useState("");
-  const [steamApiKey, setSteamApiKey] = useState("");
   const [steamLinked, setSteamLinked] = useState(false);
-  const [steamBusy, setSteamBusy] = useState(false);
   const [steamError, setSteamError] = useState("");
-  const [steamOpenIdBusy, setSteamOpenIdBusy] = useState(false);
   const [steamInAppBusy, setSteamInAppBusy] = useState(false);
   const [steamProfile, setSteamProfile] = useState<{
     personaname: string;
@@ -387,65 +374,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       setSteamError(msg || "Steam login failed.");
     } finally {
       setSteamInAppBusy(false);
-    }
-  };
-
-  const handleSteamOpenIdConnect = async () => {
-    setSteamOpenIdBusy(true);
-    setSteamError("");
-    try {
-      const detectedId = await window.electron.startSteamOpenIdLogin();
-      const summary = await window.electron
-        .getSteamPlayerSummary(detectedId, undefined)
-        .catch(() => null);
-      await window.electron.updateUserPreferences({
-        steamId: detectedId,
-        steamUsername: summary?.personaname ?? null,
-        steamAvatarUrl: summary?.avatarfull ?? null,
-      });
-      if (summary) setSteamProfile(summary);
-      setSteamLinked(true);
-      // Sync owned games in the background so they get locked to the Steam tab.
-      window.electron.syncSteamLibrary(detectedId, undefined).catch(() => {});
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setSteamError(msg || "Steam login failed.");
-    } finally {
-      setSteamOpenIdBusy(false);
-    }
-  };
-
-  const handleSteamConnect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSteamError("");
-    const steamId = parseSteamId(steamInput);
-    if (!steamId) return;
-    setSteamBusy(true);
-    try {
-      const summary = await window.electron.getSteamPlayerSummary(
-        steamId,
-        steamApiKey.trim() || undefined
-      );
-      if (!summary) {
-        setSteamError("Steam account not found. Check your Steam ID.");
-        return;
-      }
-      await window.electron.updateUserPreferences({
-        steamId,
-        steamApiKey: steamApiKey.trim() || undefined,
-        steamUsername: summary?.personaname ?? null,
-        steamAvatarUrl: summary?.avatarfull ?? null,
-      });
-      if (summary) setSteamProfile(summary);
-      setSteamLinked(true);
-      // Sync owned games in the background so they get locked to the Steam tab.
-      window.electron
-        .syncSteamLibrary(steamId, steamApiKey.trim() || undefined)
-        .catch(() => {});
-    } catch {
-      setSteamError("Could not connect to Steam. Verify your credentials.");
-    } finally {
-      setSteamBusy(false);
     }
   };
 
@@ -1016,6 +944,30 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   );
                 })}
 
+              <div className="onboarding-sidebar__section-label">
+                Achievements
+              </div>
+              <div
+                className={[
+                  "onboarding-nav-item",
+                  navStepIsActive("achievements")
+                    ? "onboarding-nav-item--active"
+                    : "",
+                  navStepIsDone("achievements")
+                    ? "onboarding-nav-item--done"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <span className="onboarding-nav-item__dot">
+                  {navStepIsDone("achievements") ? "✓" : ""}
+                </span>
+                <span className="onboarding-nav-item__label">
+                  {STEP_LABELS["achievements"]}
+                </span>
+              </div>
+
               <div className="onboarding-sidebar__section-label">Tools</div>
               <div
                 className={[
@@ -1378,95 +1330,34 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                           ? "Opening Steam…"
                           : "Sign in with Steam"}
                       </Button>
-                      <Button
-                        type="button"
-                        onClick={handleSteamOpenIdConnect}
-                        disabled={steamOpenIdBusy}
-                        theme="outline"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <SteamLogo style={{ width: 18, height: 18 }} />
-                        {steamOpenIdBusy ? "Opening Steam…" : "Use OpenID"}
-                      </Button>
                     </div>
 
-                    <div className="onboarding-divider">or enter manually</div>
+                    <p className="onboarding-step-description">
+                      Sign in inside the app — we read your owned games
+                      directly, even if your Steam profile is private.
+                    </p>
 
-                    <form
-                      className="onboarding-form"
-                      onSubmit={handleSteamConnect}
-                    >
-                      <TextField
-                        label="Steam Profile URL or ID"
-                        value={steamInput}
-                        onChange={(e) => setSteamInput(e.target.value)}
-                        placeholder="https://steamcommunity.com/profiles/76561198…"
-                        hint="Paste your full profile URL — we'll extract the ID automatically"
-                      />
+                    {steamError && (
+                      <p
+                        style={{
+                          color: "var(--color-danger, #f87171)",
+                          margin: 0,
+                          fontSize: "0.85rem",
+                        }}
+                      >
+                        {steamError}
+                      </p>
+                    )}
 
-                      <TextField
-                        label="Steam Web API Key (optional)"
-                        value={steamApiKey}
-                        onChange={(e) => setSteamApiKey(e.target.value)}
-                        type="password"
-                        placeholder="32-character API key (optional)"
-                        hint={
-                          <span
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            Only needed for achievement tracking.{" "}
-                            <button
-                              type="button"
-                              className="onboarding-link"
-                              onClick={() =>
-                                window.electron.openExternal(
-                                  "https://steamcommunity.com/dev/apikey"
-                                )
-                              }
-                            >
-                              Get key
-                              <LinkExternalIcon size={10} />
-                            </button>
-                          </span>
-                        }
-                      />
-
-                      {steamError && (
-                        <p
-                          style={{
-                            color: "var(--color-danger, #f87171)",
-                            margin: 0,
-                            fontSize: "0.85rem",
-                          }}
-                        >
-                          {steamError}
-                        </p>
-                      )}
-
-                      <div className="onboarding-actions">
-                        <button
-                          type="button"
-                          className="onboarding-skip"
-                          onClick={next}
-                        >
-                          Skip for now
-                        </button>
-                        <Button
-                          type="submit"
-                          disabled={!steamInput.trim() || steamBusy}
-                        >
-                          {steamBusy ? "Connecting…" : "Connect Steam"}
-                        </Button>
-                      </div>
-                    </form>
+                    <div className="onboarding-actions">
+                      <button
+                        type="button"
+                        className="onboarding-skip"
+                        onClick={next}
+                      >
+                        Skip for now
+                      </button>
+                    </div>
                   </>
                 )}
               </>

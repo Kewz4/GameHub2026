@@ -290,10 +290,34 @@ export function SettingsExophase() {
         first.
       </p>
 
-      {(isSyncing || isImportingPsn) && syncProgress && (
-        <p style={{ margin: "8px 0 0", opacity: 0.7, fontSize: "0.8em" }}>
-          {syncProgress.current}/{syncProgress.total} — {syncProgress.title}
-        </p>
+      {(isSyncing || isImportingPsn) && (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ margin: "0 0 6px", opacity: 0.75, fontSize: "0.8em" }}>
+            {syncProgress
+              ? `${syncProgress.current}/${syncProgress.total} — ${syncProgress.title}`
+              : "Starting…"}
+          </p>
+          <div
+            style={{
+              height: 4,
+              background: "rgba(255,255,255,0.1)",
+              borderRadius: 2,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                background: "#fff",
+                borderRadius: 2,
+                transition: "width 0.3s ease",
+                width: syncProgress
+                  ? `${Math.round((syncProgress.current / Math.max(syncProgress.total, 1)) * 100)}%`
+                  : "0%",
+              }}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
