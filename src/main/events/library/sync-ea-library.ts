@@ -85,24 +85,49 @@ const syncEaLibrary = async (
     // the user as "service limitations apply"). So first resolve the pid via
     // the identity endpoint, then fetch entitlements for that pid.
     // (The legacy api*.origin.com hosts are gone — "Origin has shut down".)
-    const identityRes = await axios.get(
-      "https://gateway.ea.com/proxy/identity/pids/me",
-      { headers, timeout: 20_000 }
-    );
+    let identityRes;
+    try {
+      identityRes = await axios.get(
+        "https://gateway.ea.com/proxy/identity/pids/me",
+        { headers, timeout: 20_000 }
+      );
+      logger.log("[EA] identity response:", JSON.stringify(identityRes.data).slice(0, 500));
+    } catch (identityErr: unknown) {
+      const ae = identityErr as { response?: { status?: number; data?: unknown } };
+      logger.error(
+        "[EA] identity endpoint failed:",
+        ae?.response?.status,
+        JSON.stringify(ae?.response?.data).slice(0, 500)
+      );
+      throw identityErr;
+    }
 
     const pid =
       identityRes.data?.pid?.pidId ??
       identityRes.data?.pid?.externalRefValue ??
       identityRes.data?.pidId;
 
+    logger.log(`[EA] resolved pid: ${pid}`);
+
     if (!pid) {
       throw new Error("Could not resolve EA persona id");
     }
 
-    const res = await axios.get(
-      `https://gateway.ea.com/proxy/entitlements/pids/${pid}/entitlements?status=ACTIVE`,
-      { headers, timeout: 20_000 }
-    );
+    let res;
+    try {
+      res = await axios.get(
+        `https://gateway.ea.com/proxy/entitlements/pids/${pid}/entitlements?status=ACTIVE`,
+        { headers, timeout: 20_000 }
+      );
+    } catch (entErr: unknown) {
+      const ae = entErr as { response?: { status?: number; data?: unknown } };
+      logger.error(
+        `[EA] entitlements endpoint failed for pid=${pid}:`,
+        ae?.response?.status,
+        JSON.stringify(ae?.response?.data).slice(0, 500)
+      );
+      throw entErr;
+    }
 
     const raw =
       res.data?.entitlements?.entitlement ?? res.data?.entitlements ?? [];

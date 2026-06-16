@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, session } from "electron";
 import { logger } from "./logger";
 import {
   extractSteamId64FromXml,
@@ -21,16 +21,37 @@ export const STEAM_LOGIN_URL =
 const STEAM_MY_GAMES_XML = "https://steamcommunity.com/my/games?xml=1";
 
 /**
- * Fetches Steam pages through a hidden BrowserWindow bound to the
- * `persist:steam` session. Reused for the background re-sync so we never need
- * to pop the login window again once the session is established.
+ * Fetches the owned-games XML using `session.fetch()` from the persist:steam
+ * session. This carries the session's httpOnly cookies (including
+ * steamLoginSecure) without needing a BrowserWindow, and returns the raw XML
+ * text rather than a serialized DOM — which avoids HTML-entity escaping issues
+ * that could occur with executeJavaScript/outerHTML on an XML document.
+ *
+ * Falls back to a BrowserWindow if the session fetch fails (e.g. Cloudflare
+ * challenge not yet solved on this session).
  */
-export class SteamFetcher {
-  private win: BrowserWindow | null = null;
+async function fetchMyGamesXmlViaSession(): Promise<string> {
+  const ses = session.fromPartition(STEAM_AUTH_PARTITION);
+  const response = await ses.fetch(STEAM_MY_GAMES_XML, {
+    headers: {
+      Accept: "text/xml,application/xml,*/*",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Steam games XML returned HTTP ${response.status}`);
+  }
+  return response.text();
+}
 
-  private ensureWindow(): BrowserWindow {
-    if (this.win && !this.win.isDestroyed()) return this.win;
-    this.win = new BrowserWindow({
+/**
+ * Fallback: navigates a hidden BrowserWindow to the XML URL and reads the
+ * raw response via XMLHttpRequest (not outerHTML) so we get the actual XML
+ * bytes rather than Chromium's XML-viewer DOM serialization.
+ */
+function fetchMyGamesXmlViaBrowserWindow(): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const win = new BrowserWindow({
       show: false,
       webPreferences: {
         partition: STEAM_AUTH_PARTITION,
@@ -40,62 +61,42 @@ export class SteamFetcher {
         backgroundThrottling: false,
       },
     });
-    return this.win;
-  }
 
-  /**
-   * Navigates a hidden window DIRECTLY to `url` and returns the page's full
-   * HTML/text via `document.documentElement.outerHTML`. This mirrors the
-   * ExophaseFetcher pattern and reliably carries the partition's cookies
-   * (unlike doing `fetch()` from JS inside a different page where httpOnly
-   * cookies may not be visible to the JS context).
-   */
-  private navigateFetch(url: string, timeoutMs = 20_000): Promise<string> {
-    const win = this.ensureWindow();
-    return new Promise<string>((resolve, reject) => {
-      let settled = false;
-      const finish = async () => {
-        if (settled) return;
-        settled = true;
-        win.webContents.off("did-finish-load", onLoad);
-        clearTimeout(timer);
-        try {
-          const html: string = await win.webContents.executeJavaScript(
-            "document.documentElement.outerHTML",
-            true
-          );
-          resolve(html ?? "");
-        } catch (err) {
-          reject(err);
-        }
-      };
-      const onLoad = () => void finish();
-      const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        win.webContents.off("did-finish-load", onLoad);
-        reject(new Error("Steam request timed out"));
-      }, timeoutMs);
+    const destroy = () => {
+      if (!win.isDestroyed()) win.destroy();
+    };
 
-      win.webContents.on("did-finish-load", onLoad);
-      win.loadURL(url).catch((err) => {
-        if (settled) return;
-        settled = true;
+    const timer = setTimeout(() => {
+      destroy();
+      reject(new Error("Steam BrowserWindow fetch timed out"));
+    }, 25_000);
+
+    // Navigate to a blank page first, then XHR the XML URL from there so we
+    // get the raw text rather than the browser's XML-viewer DOM.
+    win.loadURL("about:blank")
+      .then(() =>
+        win.webContents.executeJavaScript(
+          `(async () => {
+            const r = await fetch(${JSON.stringify(STEAM_MY_GAMES_XML)}, {
+              credentials: 'include',
+              headers: { Accept: 'text/xml,application/xml,*/*' }
+            });
+            return r.text();
+          })()`,
+          true
+        )
+      )
+      .then((text: string) => {
         clearTimeout(timer);
+        destroy();
+        resolve(text ?? "");
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        destroy();
         reject(err);
       });
-    });
-  }
-
-  /** Fetches the authenticated user's owned-games XML by navigating directly. */
-  fetchMyGamesXml(): Promise<string> {
-    return this.navigateFetch(STEAM_MY_GAMES_XML);
-  }
-
-  close(): void {
-    if (this.win && !this.win.isDestroyed()) this.win.close();
-    this.win = null;
-  }
+  });
 }
 
 export interface SteamAuthSession {
@@ -110,9 +111,22 @@ export interface SteamAuthSession {
  */
 export const getAuthenticatedSteamOwnedGames =
   async (): Promise<SteamAuthSession | null> => {
-    const fetcher = new SteamFetcher();
     try {
-      const xml = await fetcher.fetchMyGamesXml();
+      // Prefer the lightweight session.fetch() path; fall back to BrowserWindow.
+      let xml: string;
+      try {
+        xml = await fetchMyGamesXmlViaSession();
+      } catch (sessionErr) {
+        logger.warn(
+          "[SteamAuth] session.fetch failed, falling back to BrowserWindow",
+          sessionErr
+        );
+        xml = await fetchMyGamesXmlViaBrowserWindow();
+      }
+
+      logger.log(
+        `[SteamAuth] games XML (first 300): ${xml.slice(0, 300).replace(/\s+/g, " ")}`
+      );
 
       // Not logged in → Steam serves the login page HTML, not the games XML.
       if (!xml.includes("<gamesList>") && !xml.includes("<steamID64>")) {
@@ -130,8 +144,6 @@ export const getAuthenticatedSteamOwnedGames =
     } catch (err) {
       logger.warn("[SteamAuth] authenticated owned-games fetch failed", err);
       return null;
-    } finally {
-      fetcher.close();
     }
   };
 
