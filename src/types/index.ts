@@ -418,11 +418,18 @@ export interface NotificationCountResponse {
  */
 export interface ExophaseCacheEntry {
   shop: GameShop;
+  /** Hydra catalogue objectId, set when this Exophase game matched a catalogue
+   *  entry. Absent for "custom" games that exist only on Exophase — those are
+   *  keyed by title so a later-added custom game lights up from this cache. */
+  objectId?: string | null;
   normalizedTitle: string;
   title: string;
   masterId: number | null;
   awardsUrl: string | null;
   definitions: SteamAchievement[];
+  /** Earned state harvested from the owner's Exophase account. Shared via R2 so
+   *  a friend (or a freshly-added custom game) inherits the unlocks. */
+  unlocked?: UnlockedAchievement[];
   updatedAt: number;
 }
 

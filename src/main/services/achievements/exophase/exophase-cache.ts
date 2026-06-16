@@ -10,19 +10,40 @@ import type {
   Game,
   GameShop,
   SteamAchievement,
+  UnlockedAchievement,
   UserPreferences,
 } from "@types";
 import { achievementsLogger } from "@main/services/logger";
 import { WindowManager } from "@main/services/window-manager";
 import { R2Sync } from "@main/services/r2-sync";
 import { DEFAULT_MANAGED_SHOPS, SHOP_TO_EXOPHASE_SLUG } from "./constants";
-import { normalizeExophaseTitle, type ExophaseAchievement } from "./exophase-api";
+import {
+  normalizeExophaseTitle,
+  type ExophaseAchievement,
+} from "./exophase-api";
 
 const SHARED_CACHE_BLOB = "exophase-cache.json";
 
-/** Cache key: shop + normalised title (definitions are user-independent). */
-export const cacheKey = (shop: GameShop, title: string): string =>
-  `${shop}:${normalizeExophaseTitle(title)}`;
+/**
+ * Cache keys. A game matched to the Hydra catalogue is keyed by its canonical
+ * `id:<shop>:<objectId>` so it applies to the exact library record. EVERY entry
+ * is ALSO keyed by `title:<normalizedTitle>` so a custom game added later (e.g.
+ * a PS4-only title not in the catalogue) inherits the cached achievements by
+ * name. Definitions + the owner's unlocks live in the entry and are shared via
+ * R2.
+ */
+export const idCacheKey = (shop: GameShop, objectId: string): string =>
+  `id:${shop}:${objectId}`;
+
+export const titleCacheKey = (title: string): string =>
+  `title:${normalizeExophaseTitle(title)}`;
+
+/** The full set of LevelDB keys an entry should be written under. */
+export const entryKeys = (entry: ExophaseCacheEntry): string[] => {
+  const keys = [titleCacheKey(entry.normalizedTitle || entry.title)];
+  if (entry.objectId) keys.unshift(idCacheKey(entry.shop, entry.objectId));
+  return keys;
+};
 
 export const toDefinitions = (
   achievements: ExophaseAchievement[]
@@ -53,21 +74,43 @@ export const isManagedShop = (
   return managed.includes(shop);
 };
 
+/** Looks up the cache for a library game: by canonical id first (when the game
+ *  is a real catalogue entry), then by title (covers custom games). */
 export const lookupCacheEntry = async (
-  shop: GameShop,
-  title: string
-): Promise<ExophaseCacheEntry | null> =>
-  exophaseCacheSublevel
-    .get(cacheKey(shop, title))
+  game: Game
+): Promise<ExophaseCacheEntry | null> => {
+  if (game.shop && game.objectId) {
+    const byId = await exophaseCacheSublevel
+      .get(idCacheKey(game.shop, game.objectId))
+      .catch(() => null);
+    if (byId) return byId;
+  }
+  return exophaseCacheSublevel
+    .get(titleCacheKey(game.title))
     .then((v) => v ?? null)
     .catch(() => null);
+};
 
 export const putCacheEntry = async (
   entry: ExophaseCacheEntry
 ): Promise<void> => {
-  await exophaseCacheSublevel
-    .put(cacheKey(entry.shop, entry.normalizedTitle || entry.title), entry)
-    .catch(() => {});
+  for (const key of entryKeys(entry)) {
+    await exophaseCacheSublevel.put(key, entry).catch(() => {});
+  }
+};
+
+const mergeUnlocked = (
+  ...lists: UnlockedAchievement[][]
+): UnlockedAchievement[] => {
+  const byName = new Map<string, UnlockedAchievement>();
+  for (const list of lists) {
+    for (const a of list) {
+      const key = (a.name ?? "").toUpperCase();
+      const existing = byName.get(key);
+      if (!existing || a.unlockTime < existing.unlockTime) byName.set(key, a);
+    }
+  }
+  return [...byName.values()];
 };
 
 /**
@@ -80,11 +123,22 @@ export const applyCachedAchievements = async (
   gameKey: string,
   game: Game
 ): Promise<boolean> => {
-  const entry = await lookupCacheEntry(game.shop, game.title);
+  const entry = await lookupCacheEntry(game);
   if (!entry || entry.definitions.length === 0) return false;
 
-  const existing = await gameAchievementsSublevel.get(gameKey).catch(() => null);
-  const unlocked = existing?.unlockedAchievements ?? [];
+  const existing = await gameAchievementsSublevel
+    .get(gameKey)
+    .catch(() => null);
+
+  // Merge any locally-recorded unlocks with the owner's cached unlocks, keeping
+  // only names that exist in the definition set.
+  const validNames = new Set(
+    entry.definitions.map((d) => (d.name ?? "").toUpperCase())
+  );
+  const unlocked = mergeUnlocked(
+    existing?.unlockedAchievements ?? [],
+    entry.unlocked ?? []
+  ).filter((u) => validNames.has((u.name ?? "").toUpperCase()));
 
   await gameAchievementsSublevel.put(gameKey, {
     achievements: entry.definitions,
@@ -94,12 +148,7 @@ export const applyCachedAchievements = async (
     source: "exophase",
   });
 
-  const validNames = new Set(
-    entry.definitions.map((d) => (d.name ?? "").toUpperCase())
-  );
-  const unlockedCount = unlocked.filter((u) =>
-    validNames.has((u.name ?? "").toUpperCase())
-  ).length;
+  const unlockedCount = unlocked.length;
 
   await gamesSublevel.put(gameKey, {
     ...game,
@@ -175,12 +224,15 @@ export const pullSharedCache = async (): Promise<number> => {
   let merged = 0;
   for (const entry of entries) {
     if (!entry?.shop || !entry.definitions) continue;
-    const key = cacheKey(entry.shop, entry.normalizedTitle || entry.title);
-    const local = await exophaseCacheSublevel.get(key).catch(() => null);
-    if (!local || (entry.updatedAt ?? 0) > (local.updatedAt ?? 0)) {
-      await exophaseCacheSublevel.put(key, entry).catch(() => {});
-      merged++;
+    let wrote = false;
+    for (const key of entryKeys(entry)) {
+      const local = await exophaseCacheSublevel.get(key).catch(() => null);
+      if (!local || (entry.updatedAt ?? 0) > (local.updatedAt ?? 0)) {
+        await exophaseCacheSublevel.put(key, entry).catch(() => {});
+        wrote = true;
+      }
     }
+    if (wrote) merged++;
   }
 
   await db
@@ -194,10 +246,20 @@ export const pullSharedCache = async (): Promise<number> => {
 
 /** Upload the full local cache as the shared blob (last writer extends it). */
 export const pushSharedCache = async (): Promise<void> => {
-  const entries: ExophaseCacheEntry[] = [];
+  // Each logical entry is stored under both an id key and a title key; dedupe
+  // by logical identity so the shared blob doesn't accumulate duplicates.
+  const byLogical = new Map<string, ExophaseCacheEntry>();
   for await (const [, entry] of exophaseCacheSublevel.iterator()) {
-    entries.push(entry);
+    if (!entry) continue;
+    const logical = entry.objectId
+      ? idCacheKey(entry.shop, entry.objectId)
+      : titleCacheKey(entry.normalizedTitle || entry.title);
+    const existing = byLogical.get(logical);
+    if (!existing || (entry.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) {
+      byLogical.set(logical, entry);
+    }
   }
+  const entries = [...byLogical.values()];
   if (entries.length === 0) return;
   await R2Sync.uploadSharedJson(
     SHARED_CACHE_BLOB,
