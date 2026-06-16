@@ -184,9 +184,16 @@ async function processAccountGame(
   unlocked: number;
   resolved: boolean;
 } | null> {
+  // Look up the English catalogue title FIRST so we search Exophase with the
+  // canonical English name, not a localized one (e.g. Chinese PSN title). This
+  // prevents matching the wrong locale slug (du-shen-ji-… vs immortals-fenyx-…).
+  const earlyMatch: CatalogueEntry | null =
+    await searchCatalogueForAchievements(accountGame.title);
+  const searchTitle = earlyMatch?.title ?? accountGame.title;
+
   const resolved = await resolveAwards(
     fetcher,
-    accountGame.title,
+    searchTitle,
     accountGame.platformSlug,
     accountGame.playerId
   );
@@ -226,11 +233,8 @@ async function processAccountGame(
   const definitions = toDefinitions(resolved.achievements);
   const unlocked = toUnlockedList(resolved.achievements);
 
-  // Match to the Hydra catalogue (PC-only). PSN/Xbox games resolve to their PC
-  // counterpart; titles with no catalogue entry are cached by title only so a
-  // later custom game inherits them.
-  const catalogueMatch: CatalogueEntry | null =
-    await searchCatalogueForAchievements(accountGame.title);
+  // Use the catalogue match we found before the Exophase search (earlyMatch).
+  const catalogueMatch: CatalogueEntry | null = earlyMatch;
 
   const shop: GameShop = catalogueMatch?.shop ?? "custom";
   const objectId = catalogueMatch?.objectId;
@@ -272,17 +276,13 @@ async function processAccountGame(
   if (catalogueMatch && objectId) {
     const gameKey = levelKeys.game(shop, objectId);
     const game = await gamesSublevel.get(gameKey).catch(() => null);
+    const existingAchData = await gameAchievementsSublevel
+      .get(gameKey)
+      .catch(() => null);
+    const prevUnlockedCount = existingAchData?.unlockedAchievements?.length ?? 0;
+
     if (game && !game.isDeleted) {
       inLibrary = true;
-      const existingAchData = await gameAchievementsSublevel
-        .get(gameKey)
-        .catch(() => null);
-
-      // Snapshot the unlocked COUNT before applying — not the names, because
-      // HydraAPI remapping changes apiNames and a name-set diff would falsely
-      // show everything as "new" on every subsequent run.
-      const prevUnlockedCount =
-        existingAchData?.unlockedAchievements?.length ?? 0;
 
       // If HydraAPI definitions exist, the report should reflect their count.
       if (
@@ -318,6 +318,25 @@ async function processAccountGame(
         `[Exophase verify] "${title}" ${shop}:${objectId} → ${
           allPassed ? "OK" : "FAILED"
         } (persisted=${checks.persisted}, unlockCount=${checks.unlockCountConsistent}, noOrphans=${checks.noOrphanUnlocks})`
+      );
+    } else {
+      // Game is not in the library, but we still write achievements to the
+      // achievements sublevel so they're tracked for the sync report and
+      // available as soon as the user adds the game later.
+      if (existingAchData?.source !== "exophase" && existingAchData?.achievements?.length) {
+        reportTotalAchievements = existingAchData.achievements.length;
+        defSource = "hydraapi";
+      }
+      await gameAchievementsSublevel.put(gameKey, {
+        achievements: definitions,
+        unlockedAchievements: unlocked,
+        updatedAt: Date.now(),
+        language: "en",
+        source: "exophase" as const,
+      }).catch(() => {});
+      newlyUnlocked = Math.max(0, unlocked.length - prevUnlockedCount);
+      achievementsLogger.log(
+        `[Exophase] "${title}" not in library — wrote ${unlocked.length} unlocks to gameAchievementsSublevel`
       );
     }
   }

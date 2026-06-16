@@ -22,20 +22,14 @@ export const STEAM_LOGIN_URL =
 const STEAM_MY_GAMES_XML =
   "https://steamcommunity.com/my/games?tab=all&xml=1";
 
-/** A lightweight steamcommunity.com page used as the navigation origin before
- *  we issue the same-origin XHR for the games XML. */
-const STEAM_ORIGIN_PAGE = "https://steamcommunity.com/my/";
 
 /**
- * Reads the owned-games XML by:
- *   1. navigating a hidden BrowserWindow to a steamcommunity.com page so the
- *      document origin IS steamcommunity.com, and
- *   2. running an in-page `fetch()` for the games XML.
- *
- * Because the fetch runs from a steamcommunity.com document it is SAME-ORIGIN,
- * so it carries the session's httpOnly login cookies and is not blocked by
- * CORS (the previous about:blank approach failed CORS), and it returns the RAW
- * XML text rather than Chromium's XML-viewer DOM serialization.
+ * Reads the owned-games XML by navigating a hidden BrowserWindow directly to
+ * the games XML URL. Because we navigate to the URL itself (not a page that
+ * then fetches it), Chromium carries the session cookies automatically and
+ * renders the raw XML. We read `document.body.innerText` which returns the
+ * plain XML text — this avoids both CORS issues (no cross-origin fetch needed)
+ * and Chromium's XML-viewer DOM serialization artifacts.
  */
 function fetchMyGamesXml(): Promise<string> {
   return new Promise<string>((resolve, reject) => {
@@ -77,11 +71,12 @@ function fetchMyGamesXml(): Promise<string> {
     win.webContents.on(
       "did-fail-load",
       (_e, errorCode, errorDescription, validatedURL) => {
-        // -3 (ERR_ABORTED) fires for client-side redirects — ignore.
+        // -3 (ERR_ABORTED) fires for redirects — ignore (Steam redirects /my/ to
+        // /profiles/<id>/ and we still get did-finish-load for the final URL).
         if (errorCode === -3) return;
         fail(
           new Error(
-            `Steam origin page load failed (${errorCode} ${errorDescription}) for ${validatedURL}`
+            `Steam XML page load failed (${errorCode} ${errorDescription}) for ${validatedURL}`
           )
         );
       }
@@ -89,37 +84,19 @@ function fetchMyGamesXml(): Promise<string> {
 
     win.webContents.on("did-finish-load", () => {
       if (settled) return;
-      // Now on a steamcommunity.com document → same-origin XHR for the XML.
+      // The page is the XML document (or the login page if not authenticated).
+      // document.body.innerText gives us the raw text of what the browser loaded.
       win.webContents
-        .executeJavaScript(
-          `(async () => {
-            try {
-              const r = await fetch(${JSON.stringify(STEAM_MY_GAMES_XML)}, {
-                credentials: 'include',
-                headers: { 'Accept': 'text/xml,application/xml,*/*' }
-              });
-              return await r.text();
-            } catch (e) {
-              return 'FETCH_ERROR:' + (e && e.message ? e.message : String(e));
-            }
-          })()`,
-          true
-        )
-        .then((text: string) => {
-          if (typeof text === "string" && text.startsWith("FETCH_ERROR:")) {
-            fail(new Error(`Steam in-page fetch failed: ${text.slice(12)}`));
-            return;
-          }
-          done(text);
-        })
+        .executeJavaScript(`document.body ? document.body.innerText : document.documentElement.innerText`, true)
+        .then((text: string) => done(typeof text === "string" ? text : ""))
         .catch((err) =>
           fail(err instanceof Error ? err : new Error(String(err)))
         );
     });
 
-    win.loadURL(STEAM_ORIGIN_PAGE).catch((err) => {
-      // ERR_ABORTED from the /my/ → /profiles/<id>/ redirect is expected; the
-      // did-finish-load handler will still fire for the final page.
+    // Navigate directly to the XML URL. Chromium sends the session cookies
+    // automatically and parses the XML — no fetch() call needed.
+    win.loadURL(STEAM_MY_GAMES_XML).catch((err) => {
       if (String(err).includes("ERR_ABORTED")) return;
       fail(err instanceof Error ? err : new Error(String(err)));
     });
