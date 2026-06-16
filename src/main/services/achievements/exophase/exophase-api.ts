@@ -103,7 +103,9 @@ export function findBestMatch(
 
   // Prefer platform-specific results when a slug is given.
   if (platformSlug) {
-    const platformPool = scored.filter((s) => matchesPlatform(s.g, platformSlug));
+    const platformPool = scored.filter((s) =>
+      matchesPlatform(s.g, platformSlug)
+    );
     if (platformPool.length > 0) {
       platformPool.sort((a, b) => b.score - a.score);
       return platformPool[0].g;

@@ -120,6 +120,39 @@ export function GameOptionsModal({
   const [showSteamShortcutModal, setShowSteamShortcutModal] = useState(false);
   const [steamShortcutExists, setSteamShortcutExists] = useState(false);
 
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupStatus, setLookupStatus] = useState<string | null>(null);
+  const lookupUnsubRef = useRef<(() => void) | null>(null);
+
+  const handleLookupAchievements = () => {
+    setLookupLoading(true);
+    setLookupStatus("Searching Exophase…");
+    lookupUnsubRef.current?.();
+    lookupUnsubRef.current = window.electron.onExophaseLookupProgress((info) =>
+      setLookupStatus(info.message)
+    );
+    window.electron
+      .lookupGameAchievements(game.shop, game.objectId)
+      .then((result) => {
+        setLookupStatus(
+          result.found
+            ? `✓ ${result.achievementCount} achievements (${result.unlockedCount} unlocked)`
+            : (result.error ?? "No achievements found on Exophase.")
+        );
+        if (result.found) updateGame();
+      })
+      .catch((err: unknown) =>
+        setLookupStatus(err instanceof Error ? err.message : String(err))
+      )
+      .finally(() => {
+        setLookupLoading(false);
+        lookupUnsubRef.current?.();
+        lookupUnsubRef.current = null;
+      });
+  };
+
+  useEffect(() => () => lookupUnsubRef.current?.(), []);
+
   const {
     removeGameInstaller,
     removeGameFromLibrary,
@@ -796,6 +829,30 @@ export function GameOptionsModal({
                 showExecutableSection={false}
                 showTransferSection={false}
               />
+            )}
+            {selectedCategory === "general" && (
+              <div className="game-options-modal__lookup">
+                <h3>Achievements</h3>
+                <p>
+                  Search Exophase for this game and load its achievement
+                  definitions and your unlocks.
+                </p>
+                <button
+                  type="button"
+                  className="game-options-modal__lookup-button"
+                  disabled={lookupLoading}
+                  onClick={handleLookupAchievements}
+                >
+                  {lookupLoading
+                    ? "Looking up…"
+                    : "Look up achievements on Exophase"}
+                </button>
+                {lookupStatus && (
+                  <p className="game-options-modal__lookup-status">
+                    {lookupStatus}
+                  </p>
+                )}
+              </div>
             )}
             {selectedCategory === "locations" && (
               <GeneralSettingsSection

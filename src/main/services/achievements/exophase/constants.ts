@@ -9,6 +9,15 @@ export const EXOPHASE_ACCOUNT_URL = "https://www.exophase.com/account";
 export const EXOPHASE_SEARCH_URL =
   "https://api.exophase.com/public/archive/games";
 
+/** The authenticated user's "Games" list page. This is the SOURCE OF TRUTH for
+ *  the account-driven sync: every game the user owns/played across every linked
+ *  platform (Steam, Epic, GOG, EA, Ubisoft, Blizzard, Xbox, PSN, …) appears
+ *  here. We enumerate it and match each entry to the Hydra catalogue. */
+export const exophaseUserGamesUrl = (username: string, page = 1): string =>
+  `https://www.exophase.com/user/${encodeURIComponent(username)}/games/${
+    page > 1 ? `?page=${page}` : ""
+  }`;
+
 /**
  * Maps a GameHub store (our `GameShop`) to Exophase's `environment_slug`.
  * Only stores Exophase actually tracks are listed; the rest are skipped.
@@ -22,6 +31,21 @@ export const SHOP_TO_EXOPHASE_SLUG: Partial<Record<GameShop, string>> = {
   ea: "origin",
   ubisoft: "ubisoft",
 };
+
+/** Every Exophase `environment_slug` we know how to resolve, in priority order.
+ *  PC platforms come first (the launcher is PC-only, so a PC page is preferred
+ *  when a profile entry's platform is ambiguous); console trophy sources follow.
+ *  Used when an account game's platform can't be read off the profile page. */
+export const EXOPHASE_ALL_SLUGS = [
+  "steam",
+  "epic",
+  "gog",
+  "origin",
+  "ubisoft",
+  "blizzard",
+  "xbox",
+  "psn",
+] as const;
 
 /** The platforms surfaced in the "Managed Platforms" settings list. Each maps
  *  1:1 to one of our library shops so the toggle is always meaningful. */
