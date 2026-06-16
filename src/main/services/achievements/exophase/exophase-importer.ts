@@ -7,15 +7,12 @@ import type {
   ExophaseCacheEntry,
   ExophaseSyncReport,
   ExophaseSyncReportGame,
-  Game,
   GameShop,
   SteamAchievement,
   UnlockedAchievement,
-  UserPreferences,
 } from "@types";
 import { achievementsLogger } from "@main/services/logger";
 import { WindowManager } from "@main/services/window-manager";
-import { DEFAULT_MANAGED_SHOPS, SHOP_TO_EXOPHASE_SLUG } from "./constants";
 import { ExophaseFetcher } from "./exophase-web";
 import {
   awardsUrlFor,
@@ -69,11 +66,6 @@ export const toUnlockedList = (
   achievements
     .filter((a) => a.unlocked)
     .map((a) => ({ name: a.apiName, unlockTime: a.unlockTime ?? Date.now() }));
-
-const isManaged = (shop: GameShop, prefs: UserPreferences | null): boolean => {
-  const managed = prefs?.exophaseManagedPlatforms ?? DEFAULT_MANAGED_SHOPS;
-  return managed.includes(shop);
-};
 
 /**
  * Resolves an Exophase awards page (reflecting the logged-in user's earned
@@ -270,10 +262,9 @@ export async function syncExophaseAccount(
 
     if (accountGames.length === 0) {
       achievementsLogger.warn(
-        "[Exophase account] no account games found — falling back to library scan"
+        "[Exophase account] no account games enumerated — check the profile is public and the username is correct"
       );
-      const fallback = await syncLibraryFallback(fetcher, prefs, onProgress);
-      return fallback;
+      return { ...result, error: "No games found on your Exophase account." };
     }
 
     let index = 0;
@@ -324,74 +315,6 @@ export async function syncExophaseAccount(
   achievementsLogger.log(
     `[Exophase account] done: ${result.gamesWithAchievements}/${result.gamesProcessed} resolved, ${result.totalUnlocked} unlocked`
   );
-  return result;
-}
-
-/**
- * Legacy library-driven scan, retained ONLY as a fallback for when account
- * enumeration returns nothing. Iterates managed library games and resolves each
- * against Exophase directly.
- */
-async function syncLibraryFallback(
-  fetcher: ExophaseFetcher,
-  prefs: UserPreferences | null,
-  onProgress?: (p: ExophaseSyncProgress) => void
-): Promise<ExophaseSyncResult> {
-  const result: ExophaseSyncResult = {
-    gamesProcessed: 0,
-    gamesWithAchievements: 0,
-    totalUnlocked: 0,
-  };
-
-  const eligible: Array<[string, Game]> = [];
-  for await (const [key, game] of gamesSublevel.iterator()) {
-    if (!game || game.isDeleted) continue;
-    if (!SHOP_TO_EXOPHASE_SLUG[game.shop]) continue;
-    if (!isManaged(game.shop, prefs)) continue;
-    eligible.push([key, game]);
-  }
-
-  for (const [key, game] of eligible) {
-    result.gamesProcessed++;
-    onProgress?.({
-      current: result.gamesProcessed,
-      total: eligible.length,
-      title: game.title,
-      phase: "Syncing achievements",
-    });
-
-    try {
-      const slug = SHOP_TO_EXOPHASE_SLUG[game.shop]!;
-      const resolved = await resolveAwards(fetcher, game.title, slug);
-      if (!resolved) continue;
-
-      const definitions = toDefinitions(resolved.achievements);
-      const unlocked = toUnlockedList(resolved.achievements);
-
-      await putCacheEntry({
-        shop: game.shop,
-        objectId: game.objectId,
-        normalizedTitle: normalizeExophaseTitle(game.title),
-        title: game.title,
-        masterId: resolved.masterId,
-        awardsUrl: resolved.awardsUrl,
-        definitions,
-        unlocked,
-        updatedAt: Date.now(),
-      });
-
-      await applyCachedAchievements(key, game);
-      result.gamesWithAchievements++;
-      result.totalUnlocked += unlocked.length;
-    } catch (err) {
-      achievementsLogger.warn(
-        `[Exophase account] fallback failed for "${game.title}"`,
-        err
-      );
-    }
-  }
-
-  WindowManager.sendToAppWindows("on-library-batch-complete");
   return result;
 }
 
