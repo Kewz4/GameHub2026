@@ -1,13 +1,13 @@
 import { registerEvent } from "../register-event";
 import { runExophaseBackgroundSync } from "@main/services/achievements/exophase";
-import { WindowManager } from "@main/services/window-manager";
+import { withSyncBroadcast } from "./exophase-sync-broadcast";
 
 const runExophaseBackgroundSyncEvent = async (
   _event: Electron.IpcMainInvokeEvent
 ): Promise<{ ok: boolean }> => {
-  await runExophaseBackgroundSync((progress) => {
-    WindowManager.sendToAppWindows("on-exophase-sync-progress", progress);
-  });
+  await withSyncBroadcast((onProgress) =>
+    runExophaseBackgroundSync(onProgress)
+  );
   return { ok: true };
 };
 

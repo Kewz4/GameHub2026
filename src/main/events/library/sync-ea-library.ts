@@ -77,10 +77,30 @@ const syncEaLibrary = async (
       Authorization: `Bearer ${accessToken}`,
       "X-AuthToken": accessToken,
       "Content-Type": "application/json",
+      Accept: "application/json",
     };
 
+    // The entitlements endpoint requires the NUMERIC persona id — calling it
+    // with the literal "me" returns 404 "no mediator found" (which surfaces to
+    // the user as "service limitations apply"). So first resolve the pid via
+    // the identity endpoint, then fetch entitlements for that pid.
+    // (The legacy api*.origin.com hosts are gone — "Origin has shut down".)
+    const identityRes = await axios.get(
+      "https://gateway.ea.com/proxy/identity/pids/me",
+      { headers, timeout: 20_000 }
+    );
+
+    const pid =
+      identityRes.data?.pid?.pidId ??
+      identityRes.data?.pid?.externalRefValue ??
+      identityRes.data?.pidId;
+
+    if (!pid) {
+      throw new Error("Could not resolve EA persona id");
+    }
+
     const res = await axios.get(
-      "https://gateway.ea.com/proxy/entitlements/pids/me/entitlements?status=ACTIVE",
+      `https://gateway.ea.com/proxy/entitlements/pids/${pid}/entitlements?status=ACTIVE`,
       { headers, timeout: 20_000 }
     );
 

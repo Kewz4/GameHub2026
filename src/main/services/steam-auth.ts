@@ -15,10 +15,6 @@ export const STEAM_AUTH_PARTITION = "persist:steam";
 export const STEAM_LOGIN_URL =
   "https://steamcommunity.com/login/home/?goto=my/games?xml=1";
 
-/** Origin we load before doing an in-page fetch so the request carries the
- *  authenticated session cookies. */
-const STEAM_COMMUNITY_ORIGIN = "https://steamcommunity.com/";
-
 /** The authenticated owned-games XML. `/my/` resolves to the logged-in user,
  *  and an authenticated user sees their OWN games even when the list is private
  *  to the public — which is exactly why this beats the public XML endpoint. */
@@ -47,9 +43,14 @@ export class SteamFetcher {
     return this.win;
   }
 
-  /** Loads the community origin then does an in-page fetch of a URL so cookies
-   *  ride along. Returns the raw response text (XML for `?xml=1` endpoints). */
-  private fetchText(url: string, timeoutMs = 20_000): Promise<string> {
+  /**
+   * Navigates a hidden window DIRECTLY to `url` and returns the page's full
+   * HTML/text via `document.documentElement.outerHTML`. This mirrors the
+   * ExophaseFetcher pattern and reliably carries the partition's cookies
+   * (unlike doing `fetch()` from JS inside a different page where httpOnly
+   * cookies may not be visible to the JS context).
+   */
+  private navigateFetch(url: string, timeoutMs = 20_000): Promise<string> {
     const win = this.ensureWindow();
     return new Promise<string>((resolve, reject) => {
       let settled = false;
@@ -59,11 +60,11 @@ export class SteamFetcher {
         win.webContents.off("did-finish-load", onLoad);
         clearTimeout(timer);
         try {
-          const text: string = await win.webContents.executeJavaScript(
-            `fetch(${JSON.stringify(url)}, { credentials: "include" }).then((r) => r.text())`,
+          const html: string = await win.webContents.executeJavaScript(
+            "document.documentElement.outerHTML",
             true
           );
-          resolve(text ?? "");
+          resolve(html ?? "");
         } catch (err) {
           reject(err);
         }
@@ -77,7 +78,7 @@ export class SteamFetcher {
       }, timeoutMs);
 
       win.webContents.on("did-finish-load", onLoad);
-      win.loadURL(STEAM_COMMUNITY_ORIGIN).catch((err) => {
+      win.loadURL(url).catch((err) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
@@ -86,9 +87,9 @@ export class SteamFetcher {
     });
   }
 
-  /** Fetches the authenticated user's owned-games XML. */
+  /** Fetches the authenticated user's owned-games XML by navigating directly. */
   fetchMyGamesXml(): Promise<string> {
-    return this.fetchText(STEAM_MY_GAMES_XML);
+    return this.navigateFetch(STEAM_MY_GAMES_XML);
   }
 
   close(): void {

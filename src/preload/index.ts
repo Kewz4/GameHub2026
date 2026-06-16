@@ -281,6 +281,16 @@ contextBridge.exposeInMainWorld("electron", {
       ipcRenderer.removeListener("on-exophase-sync-progress", listener);
     };
   },
+  onExophaseSyncActive: (cb: (active: boolean) => void) => {
+    const listener = (
+      _e: Electron.IpcRendererEvent,
+      payload: { active: boolean }
+    ) => cb(payload.active);
+    ipcRenderer.on("on-exophase-sync-active", listener);
+    return () => {
+      ipcRenderer.removeListener("on-exophase-sync-active", listener);
+    };
+  },
   lookupGameAchievements: (shop: string, objectId: string) =>
     ipcRenderer.invoke("lookupGameAchievements", shop, objectId),
   onExophaseLookupProgress: (

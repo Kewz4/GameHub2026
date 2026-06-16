@@ -444,6 +444,17 @@ export interface ExophaseSyncReportGame {
   totalAchievements: number;
   /** A PSN entry with earned trophies exists for this PC game. */
   psnDetected?: boolean;
+  /** Post-match verification: results of the 3 integrity checks run after the
+   *  game's achievements were written. True only when all 3 passed. */
+  verified?: boolean;
+  verificationChecks?: {
+    /** 1. The achievements entry persisted with a non-empty definition list. */
+    persisted: boolean;
+    /** 2. The game record's unlocked count matches the stored unlocked list. */
+    unlockCountConsistent: boolean;
+    /** 3. Every unlocked apiName exists in the definition set (no orphans). */
+    noOrphanUnlocks: boolean;
+  };
 }
 
 export interface ExophaseSyncReport {
