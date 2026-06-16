@@ -13,6 +13,11 @@ export interface ExophaseAccountGame {
    *  profile page). Must be appended as `#<playerId>` to awards URLs so
    *  Exophase returns the user's earned state instead of the generic view. */
   playerId: string;
+  /** Direct awards URL scraped from the account game-list link
+   *  (e.g. https://www.exophase.com/game/immortals-fenyx-rising-psn-2/trophies/).
+   *  When present, skip the Exophase title-search step and go straight to this
+   *  URL — avoids wrong-locale slug matching (e.g. Chinese slug vs English slug). */
+  awardsUrl?: string;
 }
 
 /** A linked platform account discovered on the main Exophase profile. */
@@ -96,17 +101,27 @@ export function parsePlatformAccounts(html: string): ExophasePlatformAccount[] {
   return out;
 }
 
+/** Parsed entry from a platform games page — title plus the direct game URL. */
+export interface PlatformGameEntry {
+  title: string;
+  /** Absolute URL to the Exophase game page (e.g. /game/immortals-fenyx-rising-psn-2/).
+   *  Derived from the href on the account page — the slug here is always the
+   *  correct locale variant the user actually owns, avoiding wrong-locale matches
+   *  that a title-search would produce for localized (e.g. Chinese) PSN titles. */
+  gamePageUrl: string;
+}
+
 /**
- * Parses one rendered platform games page into game titles. Deliberately LOOSE:
- * it over-collects every game-link title on the page. False positives are cheap
- * — the downstream Exophase search + Hydra-catalogue match discard anything that
- * doesn't resolve — whereas a missed game means lost achievements.
+ * Parses one rendered platform games page into (title, gamePageUrl) pairs.
+ * The href on each game link is the authoritative Exophase slug for the user's
+ * specific copy — even when the displayed title is localized (e.g. Chinese),
+ * the href uses the locale-specific slug we should go to directly.
  */
-export function parsePlatformGamesPage(html: string): string[] {
+export function parsePlatformGamesPage(html: string): PlatformGameEntry[] {
   const dom = new JSDOM(html);
   const doc = dom.window.document;
 
-  const out: string[] = [];
+  const out: PlatformGameEntry[] = [];
   const seen = new Set<string>();
 
   doc.querySelectorAll('a[href*="/game/"]').forEach((a) => {
@@ -115,21 +130,39 @@ export function parsePlatformGamesPage(html: string): string[] {
       .trim();
     if (!title || title.length < 2) return;
 
-    const key = title.toLowerCase();
+    const href = (a.getAttribute("href") || "").trim();
+    if (!href) return;
+
+    const key = href.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
-    out.push(title);
+
+    const gamePageUrl = href.startsWith("http")
+      ? href
+      : `https://www.exophase.com${href.startsWith("/") ? "" : "/"}${href}`;
+    out.push({ title, gamePageUrl });
   });
 
   return out;
 }
+
+/** Returns the awards-page suffix for a platform (trophies for PSN, achievements for PC). */
+const awardsSegment = (platformSlug: string): string =>
+  platformSlug === "psn" ? "trophies" : "achievements";
+
+/** Builds the awards URL from a game-page URL: appends the awards segment. */
+const gamePageToAwardsUrl = (gamePageUrl: string, platformSlug: string): string => {
+  const base = gamePageUrl.replace(/\/?$/, "/");
+  return `${base}${awardsSegment(platformSlug)}/`;
+};
 
 /** Walks one platform account's paginated games list. */
 async function fetchPlatformGames(
   fetcher: ExophaseFetcher,
   account: ExophasePlatformAccount
 ): Promise<ExophaseAccountGame[]> {
-  const byTitle = new Map<string, ExophaseAccountGame>();
+  // Key by gamePageUrl (not title) so localized duplicate titles don't collide.
+  const byUrl = new Map<string, ExophaseAccountGame>();
 
   for (let page = 1; page <= MAX_GAMES_PAGES; page++) {
     const url = exophasePlatformGamesUrl(
@@ -138,9 +171,9 @@ async function fetchPlatformGames(
       page
     );
 
-    let titles: string[] = [];
+    let entries: PlatformGameEntry[] = [];
     try {
-      titles = parsePlatformGamesPage(await fetcher.fetchHtml(url));
+      entries = parsePlatformGamesPage(await fetcher.fetchHtml(url));
     } catch (err) {
       achievementsLogger.warn(
         `[Exophase account] failed loading ${account.platformSlug} page ${page}`,
@@ -150,25 +183,26 @@ async function fetchPlatformGames(
     }
 
     let added = 0;
-    for (const title of titles) {
-      const key = title.toLowerCase();
-      if (byTitle.has(key)) continue;
-      byTitle.set(key, {
+    for (const { title, gamePageUrl } of entries) {
+      const key = gamePageUrl.toLowerCase();
+      if (byUrl.has(key)) continue;
+      byUrl.set(key, {
         title,
         platformSlug: account.platformSlug,
         playerId: account.playerId,
+        awardsUrl: gamePageToAwardsUrl(gamePageUrl, account.platformSlug),
       });
       added++;
     }
 
     achievementsLogger.log(
-      `[Exophase account] ${account.platformSlug}/${account.accountName} page ${page}: ${titles.length} links, ${added} new`
+      `[Exophase account] ${account.platformSlug}/${account.accountName} page ${page}: ${entries.length} links, ${added} new`
     );
 
     if (added === 0) break;
   }
 
-  return [...byTitle.values()];
+  return [...byUrl.values()];
 }
 
 /**

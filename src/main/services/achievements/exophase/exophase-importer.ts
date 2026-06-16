@@ -71,20 +71,36 @@ export const toUnlockedList = (
 
 /**
  * Resolves an Exophase awards page (reflecting the logged-in user's earned
- * state) for a title. When the platform is known from the profile we constrain
- * the search to it; otherwise we search across platforms and take the best
- * title match. Returns the parsed achievements plus provenance, or null.
+ * state) for a title. When a direct `knownAwardsUrl` is provided (scraped from
+ * the account game-list page), we skip the search entirely — this avoids the
+ * wrong-locale slug problem where e.g. a Chinese PSN title would match the
+ * Chinese Exophase slug instead of the English one. Otherwise we fall back to
+ * the title-search path.
  */
 async function resolveAwards(
   fetcher: ExophaseFetcher,
   title: string,
   platformSlug?: string,
-  playerId?: string
+  playerId?: string,
+  knownAwardsUrl?: string
 ): Promise<{
   achievements: ExophaseAchievement[];
   awardsUrl: string;
   masterId: number | null;
 } | null> {
+  // Fast path: we already know the URL from the account page — skip search.
+  if (knownAwardsUrl) {
+    let url = knownAwardsUrl;
+    if (playerId) url = `${url}#${playerId}`;
+    const settleMs = playerId ? 3_000 : 0;
+    const achievements = parseAchievements(await fetcher.fetchHtml(url, settleMs));
+    if (achievements.length > 0) {
+      return { achievements, awardsUrl: url, masterId: null };
+    }
+    // If the direct URL produced nothing (e.g. platform mismatch), fall through
+    // to title-search so we don't silently drop the game.
+  }
+
   const slugsToTry = platformSlug ? [platformSlug] : [undefined];
 
   for (const slug of slugsToTry) {
@@ -195,7 +211,8 @@ async function processAccountGame(
     fetcher,
     searchTitle,
     accountGame.platformSlug,
-    accountGame.playerId
+    accountGame.playerId,
+    accountGame.awardsUrl
   );
   if (!resolved) {
     achievementsLogger.log(

@@ -52,11 +52,17 @@ export async function searchCatalogueForAchievements(
       return exact;
     }
 
-    const partial = edges.find(
-      (r) =>
-        normalizeExophaseTitle(r.title).includes(norm) ||
-        norm.includes(normalizeExophaseTitle(r.title))
-    );
+    // Partial match: only accept when the shorter normalized title is at least
+    // 85% the length of the longer one. This prevents "god of war" (11 chars)
+    // matching "god of war iii" (14 chars) — ratio 11/14 ≈ 0.79 < 0.85.
+    const partial = edges.find((r) => {
+      const rNorm = normalizeExophaseTitle(r.title);
+      if (!rNorm || !norm) return false;
+      const longer = Math.max(rNorm.length, norm.length);
+      const shorter = Math.min(rNorm.length, norm.length);
+      if (shorter / longer < 0.85) return false;
+      return rNorm.includes(norm) || norm.includes(rNorm);
+    });
     if (partial) {
       achievementsLogger.log(
         `[Catalogue] partial match: "${title}" → ${partial.shop}:${partial.objectId} ("${partial.title}")`

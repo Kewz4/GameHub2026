@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { net, session } from "electron";
 import { logger } from "./logger";
 import {
   extractSteamId64FromXml,
@@ -15,92 +15,47 @@ export const STEAM_AUTH_PARTITION = "persist:steam";
 export const STEAM_LOGIN_URL =
   "https://steamcommunity.com/login/home/?goto=my/games?xml=1";
 
-/** The authenticated owned-games XML. `/my/` resolves to the logged-in user,
- *  `tab=all` returns the FULL owned list (without it Steam returns only the
- *  recently-played subset), and an authenticated user sees their OWN games even
- *  when the list is private — which is exactly why this beats the public XML. */
+/** The authenticated owned-games XML. `tab=all` returns the FULL owned list. */
 const STEAM_MY_GAMES_XML =
   "https://steamcommunity.com/my/games?tab=all&xml=1";
 
 
 /**
- * Reads the owned-games XML by navigating a hidden BrowserWindow directly to
- * the games XML URL. Because we navigate to the URL itself (not a page that
- * then fetches it), Chromium carries the session cookies automatically and
- * renders the raw XML. We read `document.body.innerText` which returns the
- * plain XML text — this avoids both CORS issues (no cross-origin fetch needed)
- * and Chromium's XML-viewer DOM serialization artifacts.
+ * Reads the owned-games XML from the main process using Electron's `net.fetch`,
+ * which uses Chromium's network stack (not Node's http). We manually extract
+ * cookies from the `persist:steam` session partition (the main process CAN read
+ * httpOnly cookies via `session.cookies.get`) and attach them as a Cookie header
+ * — bypassing both the BrowserWindow XML-viewer problem (Chromium wraps XML in
+ * its viewer DOM so `innerText` gives HTML, not raw XML) and the renderer-context
+ * CORS/CSP issues that blocked in-page `fetch()` calls.
  */
-function fetchMyGamesXml(): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const win = new BrowserWindow({
-      show: false,
-      webPreferences: {
-        partition: STEAM_AUTH_PARTITION,
-        nodeIntegration: false,
-        contextIsolation: true,
-        offscreen: false,
-        backgroundThrottling: false,
-      },
-    });
+async function fetchMyGamesXml(): Promise<string> {
+  const ses = session.fromPartition(STEAM_AUTH_PARTITION);
 
-    let settled = false;
-    const destroy = () => {
-      if (!win.isDestroyed()) win.destroy();
-    };
-    const fail = (err: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      destroy();
-      reject(err);
-    };
-    const done = (text: string) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      destroy();
-      resolve(text ?? "");
-    };
+  // Read ALL cookies for steamcommunity.com — includes httpOnly ones because
+  // the main process is trusted and isn't subject to the JS httpOnly restriction.
+  const cookies = await ses.cookies.get({ url: "https://steamcommunity.com" });
+  if (cookies.length === 0) {
+    throw new Error("No Steam session cookies found — user is not logged in");
+  }
 
-    const timer = setTimeout(
-      () => fail(new Error("Steam games XML fetch timed out")),
-      30_000
-    );
+  const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
 
-    win.webContents.on(
-      "did-fail-load",
-      (_e, errorCode, errorDescription, validatedURL) => {
-        // -3 (ERR_ABORTED) fires for redirects — ignore (Steam redirects /my/ to
-        // /profiles/<id>/ and we still get did-finish-load for the final URL).
-        if (errorCode === -3) return;
-        fail(
-          new Error(
-            `Steam XML page load failed (${errorCode} ${errorDescription}) for ${validatedURL}`
-          )
-        );
-      }
-    );
-
-    win.webContents.on("did-finish-load", () => {
-      if (settled) return;
-      // The page is the XML document (or the login page if not authenticated).
-      // document.body.innerText gives us the raw text of what the browser loaded.
-      win.webContents
-        .executeJavaScript(`document.body ? document.body.innerText : document.documentElement.innerText`, true)
-        .then((text: string) => done(typeof text === "string" ? text : ""))
-        .catch((err) =>
-          fail(err instanceof Error ? err : new Error(String(err)))
-        );
-    });
-
-    // Navigate directly to the XML URL. Chromium sends the session cookies
-    // automatically and parses the XML — no fetch() call needed.
-    win.loadURL(STEAM_MY_GAMES_XML).catch((err) => {
-      if (String(err).includes("ERR_ABORTED")) return;
-      fail(err instanceof Error ? err : new Error(String(err)));
-    });
+  const response = await net.fetch(STEAM_MY_GAMES_XML, {
+    headers: {
+      Cookie: cookieHeader,
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Accept: "text/xml,application/xml,*/*;q=0.9",
+      Referer: "https://steamcommunity.com/",
+    },
   });
+
+  if (!response.ok) {
+    throw new Error(`Steam XML fetch returned HTTP ${response.status}`);
+  }
+
+  return response.text();
 }
 
 export interface SteamAuthSession {
