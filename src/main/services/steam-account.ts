@@ -34,6 +34,33 @@ function extractAllXmlBlocks(xml: string, tag: string): string[] {
 }
 
 /**
+ * Parses the Steam community games XML (`/games?xml=1`) into owned games.
+ * Shared by the public-profile path and the authenticated in-app session path
+ * (which returns the SAME XML shape even for private profiles).
+ */
+export function parseSteamGamesXml(xml: string): SteamOwnedGame[] {
+  const gameBlocks = extractAllXmlBlocks(xml, "game");
+
+  return gameBlocks
+    .map((block): SteamOwnedGame => {
+      const appid = parseInt(extractXmlTag(block, "appID"), 10);
+      const name = extractXmlTag(block, "name");
+      // hoursOnRecord is a formatted string like "1,234" — convert to minutes
+      const hoursStr = extractXmlTag(block, "hoursOnRecord").replace(/,/g, "");
+      const playtime_forever = hoursStr
+        ? Math.round(parseFloat(hoursStr) * 60)
+        : 0;
+      return { appid, name, img_icon_url: "", playtime_forever };
+    })
+    .filter((g) => g.appid > 0 && g.name);
+}
+
+/** Reads the SteamID64 out of a community profile/games XML document. */
+export function extractSteamId64FromXml(xml: string): string {
+  return extractXmlTag(xml, "steamID64");
+}
+
+/**
  * Fetch owned games from the public Steam community XML endpoint.
  * Requires the profile's game list to be set to public.
  */
@@ -57,24 +84,11 @@ async function getSteamOwnedGamesPublic(
   // meaningful error instead of silently adding 0 games.
   if (!xml.includes("<games>") && !xml.includes("<game>")) {
     throw new Error(
-      "Steam game list is private. Set your Steam game details to Public, or provide a Steam Web API key."
+      "Steam game list is private. Set your Steam game details to Public, or sign in with Steam in-app."
     );
   }
 
-  const gameBlocks = extractAllXmlBlocks(xml, "game");
-
-  return gameBlocks
-    .map((block): SteamOwnedGame => {
-      const appid = parseInt(extractXmlTag(block, "appID"), 10);
-      const name = extractXmlTag(block, "name");
-      // hoursOnRecord is a formatted string like "1,234" — convert to minutes
-      const hoursStr = extractXmlTag(block, "hoursOnRecord").replace(/,/g, "");
-      const playtime_forever = hoursStr
-        ? Math.round(parseFloat(hoursStr) * 60)
-        : 0;
-      return { appid, name, img_icon_url: "", playtime_forever };
-    })
-    .filter((g) => g.appid > 0 && g.name);
+  return parseSteamGamesXml(xml);
 }
 
 /**

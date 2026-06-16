@@ -1003,6 +1003,7 @@ declare global {
     cancelGameTransfer: (shop: GameShop, objectId: string) => Promise<void>;
 
     startSteamOpenIdLogin: () => Promise<string>;
+    openSteamLoginWindow: () => Promise<{ steamId: string } | null>;
     downloadViaLegendary: (
       objectId: string,
       downloadPath?: string

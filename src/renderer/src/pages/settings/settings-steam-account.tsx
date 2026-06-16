@@ -30,6 +30,7 @@ export function SettingsSteamAccount() {
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isOpenIdPending, setIsOpenIdPending] = useState(false);
+  const [isInAppPending, setIsInAppPending] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{
     total: number;
@@ -104,6 +105,32 @@ export function SettingsSteamAccount() {
       })
       .catch(() => {})
       .finally(() => setIsSyncing(false));
+  };
+
+  // In-app Steam login (like Epic/GOG). Reads the user's OWN games via the
+  // authenticated session — works even when their profile games are private.
+  const handleSteamInAppLogin = async () => {
+    setIsInAppPending(true);
+    try {
+      const result = await window.electron.openSteamLoginWindow();
+      if (!result?.steamId) {
+        showErrorToast(t("steam_openid_failed"));
+        return;
+      }
+      await updateUserPreferences({ steamId: result.steamId });
+      setSteamId(result.steamId);
+      const summary = await window.electron
+        .getSteamPlayerSummary(result.steamId, apiKey.trim() || undefined)
+        .catch(() => null);
+      if (summary) setLinkedAccount(summary);
+      showSuccessToast(t("steam_account_linked"));
+      // Authenticated session is established; sync owned games in background.
+      runBackgroundSync(result.steamId, apiKey.trim() || undefined);
+    } catch {
+      showErrorToast(t("steam_openid_failed"));
+    } finally {
+      setIsInAppPending(false);
+    }
   };
 
   const handleSteamOpenIdLogin = async () => {
@@ -300,8 +327,8 @@ export function SettingsSteamAccount() {
       <div>
         <Button
           type="button"
-          onClick={handleSteamOpenIdLogin}
-          disabled={isOpenIdPending}
+          onClick={handleSteamInAppLogin}
+          disabled={isInAppPending}
           style={{
             display: "flex",
             alignItems: "center",
@@ -309,6 +336,26 @@ export function SettingsSteamAccount() {
             background: "#1b2838",
             color: "#c7d5e0",
           }}
+        >
+          <MarkGithubIcon size={16} />
+          {isInAppPending
+            ? t("waiting_for_steam")
+            : t("login_with_steam_in_app")}
+        </Button>
+        <p style={{ margin: "8px 0 0", opacity: 0.55, fontSize: "0.8em" }}>
+          {t("login_with_steam_in_app_hint")}
+        </p>
+      </div>
+
+      <p style={{ margin: 0, opacity: 0.5, textAlign: "center" }}>{t("or")}</p>
+
+      <div>
+        <Button
+          type="button"
+          onClick={handleSteamOpenIdLogin}
+          disabled={isOpenIdPending}
+          theme="outline"
+          style={{ display: "flex", alignItems: "center", gap: "8px" }}
         >
           <MarkGithubIcon size={16} />
           {isOpenIdPending ? t("waiting_for_steam") : t("login_with_steam")}

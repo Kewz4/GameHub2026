@@ -79,6 +79,7 @@ import "./scan-installed-games";
 import "./select-game-proton-path";
 import "./select-game-wine-prefix";
 import "./selective-scan-installed-games";
+import "./open-steam-login-window";
 import "./start-steam-openid-login";
 import "./sync-ea-library";
 import "./sync-epic-library";
