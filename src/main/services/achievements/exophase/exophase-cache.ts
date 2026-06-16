@@ -113,18 +113,27 @@ const mergeUnlocked = (
   return [...byName.values()];
 };
 
+/** Normalises a display name for fuzzy matching across Exophase/HydraAPI. */
+const normalizeDisplayName = (s: string): string =>
+  s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 /**
  * Applies cached achievement definitions onto a single library game WITHOUT any
- * network call. Existing unlocked progress (from a prior background sync) is
- * preserved; we only fill in the definition list so the game page shows its
- * achievements immediately. Returns true when the cache had an entry.
+ * network call. When HydraAPI definitions already exist for the game they are
+ * PRESERVED — Exophase unlocked achievements are matched to them by display
+ * name and the unlocked list is updated. This means the game page always shows
+ * the full HydraAPI achievement set (with images) as the total and the correct
+ * fraction unlocked (e.g. 43/117 not 43/43).
+ *
+ * When no HydraAPI definitions exist yet, Exophase definitions are used as a
+ * fallback so the game page still shows something. Returns true when the cache
+ * had an entry and an update was written.
  */
 export const applyCachedAchievements = async (
   gameKey: string,
   game: Game
 ): Promise<boolean> => {
-  // Safety guard: never create a new library entry. If the game somehow isn't
-  // in gamesSublevel at this key, bail out rather than silently inserting it.
+  // Safety guard: never create a new library entry.
   const existingGame = await gamesSublevel.get(gameKey).catch(() => null);
   if (!existingGame || existingGame.isDeleted) return false;
 
@@ -135,35 +144,84 @@ export const applyCachedAchievements = async (
     .get(gameKey)
     .catch(() => null);
 
-  // Merge any locally-recorded unlocks with the owner's cached unlocks, keeping
-  // only names that exist in the definition set.
-  const validNames = new Set(
-    entry.definitions.map((d) => (d.name ?? "").toUpperCase())
-  );
-  const unlocked = mergeUnlocked(
-    existing?.unlockedAchievements ?? [],
-    entry.unlocked ?? []
-  ).filter((u) => validNames.has((u.name ?? "").toUpperCase()));
+  // Determine whether we have HydraAPI definitions to preserve. We consider
+  // data "from HydraAPI" when its source is absent or not "exophase" and it
+  // has a non-empty achievement list.
+  const hydraDefinitions =
+    existing?.source !== "exophase" && existing?.achievements?.length
+      ? existing.achievements
+      : null;
+
+  let finalDefinitions: SteamAchievement[];
+  let finalUnlocked: UnlockedAchievement[];
+  let finalSource: string;
+
+  if (hydraDefinitions) {
+    // ── HydraAPI definitions exist: match Exophase unlocks by display name ──
+    finalDefinitions = hydraDefinitions;
+    finalSource = existing!.source ?? "hydra";
+
+    // Build a map: normalized displayName → HydraAPI apiName
+    const hydraByDisplay = new Map<string, string>(
+      hydraDefinitions.map((a) => [
+        normalizeDisplayName(a.displayName ?? a.name ?? ""),
+        a.name ?? "",
+      ])
+    );
+
+    // Build a map: Exophase apiName → display name (from entry.definitions)
+    const exophaseDisplay = new Map<string, string>(
+      entry.definitions.map((d) => [d.name ?? "", d.displayName ?? d.name ?? ""])
+    );
+
+    // Convert Exophase unlocked list to HydraAPI apiNames via display name.
+    const exophaseUnlocked: UnlockedAchievement[] = [];
+    for (const u of entry.unlocked ?? []) {
+      const display = exophaseDisplay.get(u.name ?? "") ?? u.name ?? "";
+      const hydraName = hydraByDisplay.get(normalizeDisplayName(display));
+      if (hydraName) {
+        exophaseUnlocked.push({ name: hydraName, unlockTime: u.unlockTime });
+      }
+    }
+
+    const validNames = new Set(
+      hydraDefinitions.map((d) => (d.name ?? "").toUpperCase())
+    );
+    finalUnlocked = mergeUnlocked(
+      existing?.unlockedAchievements ?? [],
+      exophaseUnlocked
+    ).filter((u) => validNames.has((u.name ?? "").toUpperCase()));
+  } else {
+    // ── No HydraAPI data yet: use Exophase definitions as fallback ──
+    finalDefinitions = entry.definitions;
+    finalSource = "exophase";
+
+    const validNames = new Set(
+      entry.definitions.map((d) => (d.name ?? "").toUpperCase())
+    );
+    finalUnlocked = mergeUnlocked(
+      existing?.unlockedAchievements ?? [],
+      entry.unlocked ?? []
+    ).filter((u) => validNames.has((u.name ?? "").toUpperCase()));
+  }
 
   await gameAchievementsSublevel.put(gameKey, {
-    achievements: entry.definitions,
-    unlockedAchievements: unlocked,
+    achievements: finalDefinitions,
+    unlockedAchievements: finalUnlocked,
     updatedAt: existing?.updatedAt ?? Date.now(),
     language: existing?.language ?? "en",
-    source: "exophase",
+    source: finalSource,
   });
-
-  const unlockedCount = unlocked.length;
 
   await gamesSublevel.put(gameKey, {
     ...game,
-    achievementCount: entry.definitions.length,
-    unlockedAchievementCount: unlockedCount,
+    achievementCount: finalDefinitions.length,
+    unlockedAchievementCount: finalUnlocked.length,
   });
 
   WindowManager.mainWindow?.webContents.send(
     `on-update-achievements-${game.objectId}-${game.shop}`,
-    unlocked
+    finalUnlocked
   );
   return true;
 };

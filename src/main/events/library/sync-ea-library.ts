@@ -77,16 +77,28 @@ const syncEaLibrary = async (
       Authorization: `Bearer ${accessToken}`,
       "X-AuthToken": accessToken,
       "Content-Type": "application/json",
+      "Accept": "application/json",
     };
 
-    const res = await axios.get(
-      "https://gateway.ea.com/proxy/entitlements/pids/me/entitlements?status=ACTIVE",
-      { headers, timeout: 20_000 }
-    );
-
-    const raw =
-      res.data?.entitlements?.entitlement ?? res.data?.entitlements ?? [];
-    const entitlements: EaEntitlement[] = Array.isArray(raw) ? raw : [raw];
+    // gateway.ea.com/proxy/entitlements returns "service limitations" for many
+    // accounts. The older api2.origin.com endpoint is more permissive and
+    // supports ORIGIN_JS_SDK tokens.
+    let raw: unknown;
+    try {
+      const res = await axios.get(
+        "https://api2.origin.com/ecommerce2/consolidatedentitlements/me?fullgames=true&machine_hash=1",
+        { headers, timeout: 20_000 }
+      );
+      raw = res.data?.entitlements?.entitlement ?? res.data?.entitlements ?? [];
+    } catch {
+      // Fall back to gateway endpoint if Origin API fails.
+      const res2 = await axios.get(
+        "https://gateway.ea.com/proxy/entitlements/pids/me/entitlements?status=ACTIVE",
+        { headers, timeout: 20_000 }
+      );
+      raw = res2.data?.entitlements?.entitlement ?? res2.data?.entitlements ?? [];
+    }
+    const entitlements: EaEntitlement[] = Array.isArray(raw) ? raw as EaEntitlement[] : [raw as EaEntitlement];
 
     // Keep only actual game entitlements
     const gameEntitlements = entitlements.filter(

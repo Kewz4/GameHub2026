@@ -186,24 +186,41 @@ async function processAccountGame(
   let newlyUnlocked = 0;
   const reportObjectId = objectId ?? "";
   let iconUrl: string | null = null;
+  // Default to Exophase definition count; overridden below if HydraAPI data exists.
+  let reportTotalAchievements = definitions.length;
 
   if (catalogueMatch && objectId) {
     const gameKey = levelKeys.game(shop, objectId);
     const game = await gamesSublevel.get(gameKey).catch(() => null);
     if (game && !game.isDeleted) {
+      const existingAchData = await gameAchievementsSublevel
+        .get(gameKey)
+        .catch(() => null);
+
       const prevUnlocked = new Set(
-        (
-          await gameAchievementsSublevel
-            .get(gameKey)
-            .then((v) => v?.unlockedAchievements ?? [])
-            .catch(() => [])
-        ).map((u) => (u.name ?? "").toUpperCase())
+        (existingAchData?.unlockedAchievements ?? []).map((u) =>
+          (u.name ?? "").toUpperCase()
+        )
       );
-      newlyUnlocked = unlocked.filter(
-        (u) => !prevUnlocked.has((u.name ?? "").toUpperCase())
-      ).length;
+
+      // If HydraAPI definitions exist, the report should reflect their count.
+      if (
+        existingAchData?.source !== "exophase" &&
+        existingAchData?.achievements?.length
+      ) {
+        reportTotalAchievements = existingAchData.achievements.length;
+      }
+
       iconUrl = game.iconUrl ?? null;
       await applyCachedAchievements(gameKey, game);
+
+      // Re-read after apply to count truly newly unlocked against the post-apply state.
+      const afterAchData = await gameAchievementsSublevel
+        .get(gameKey)
+        .catch(() => null);
+      newlyUnlocked = (afterAchData?.unlockedAchievements ?? []).filter(
+        (u) => !prevUnlocked.has((u.name ?? "").toUpperCase())
+      ).length;
     }
   }
 
@@ -213,7 +230,8 @@ async function processAccountGame(
       reportObjectId,
       title,
       iconUrl,
-      definitions,
+      // Use HydraAPI-aware total for the report definition count.
+      { length: reportTotalAchievements } as SteamAchievement[],
       unlocked,
       newlyUnlocked
     ),
@@ -221,20 +239,35 @@ async function processAccountGame(
   };
 }
 
+/** Exophase platform slugs considered "PC" (excludes PSN/console-only). */
+const PC_PLATFORM_SLUGS = new Set([
+  "steam",
+  "epic",
+  "gog",
+  "origin",
+  "ubisoft",
+  "blizzard",
+  "xbox",
+]);
+
+/** Exophase platform slugs considered "PlayStation" (PSN only). */
+const PSN_PLATFORM_SLUGS = new Set(["psn"]);
+
 /**
  * ACCOUNT-DRIVEN sync — the primary path.
  *
- * Enumerates every game on the user's Exophase account (all platforms), and for
- * each one matches it to the Hydra catalogue and applies/caches its
- * achievements. Games with no catalogue match are cached by title so a custom
- * game added later lights up from the shared R2 cache.
+ * Enumerates every game on the user's Exophase account filtered by the `mode`:
+ *   "pc"  — PC storefronts only (Steam, Epic, GOG, Xbox, EA, Ubisoft, Blizzard)
+ *   "psn" — PlayStation Network trophies only
+ *   "all" — every platform (legacy; not exposed in UI)
  *
- * Falls back to the legacy library-driven scan only when account enumeration
- * yields nothing (e.g. the profile couldn't be read), so behaviour never
- * regresses.
+ * Matches each game to the Hydra catalogue and applies/caches achievements.
+ * Games with no catalogue match are cached by title for later custom-game use.
+ * Games NOT in the library are intentionally skipped (never auto-added).
  */
 export async function syncExophaseAccount(
-  onProgress?: (p: ExophaseSyncProgress) => void
+  onProgress?: (p: ExophaseSyncProgress) => void,
+  mode: "pc" | "psn" | "all" = "all"
 ): Promise<ExophaseSyncResult> {
   const result: ExophaseSyncResult = {
     gamesProcessed: 0,
@@ -274,13 +307,25 @@ export async function syncExophaseAccount(
       return { ...result, error: "No games found on your Exophase account." };
     }
 
+    // Filter by mode so PC sync never touches PSN trophies and vice versa.
+    const filteredGames =
+      mode === "pc"
+        ? accountGames.filter((g) => PC_PLATFORM_SLUGS.has(g.platformSlug))
+        : mode === "psn"
+          ? accountGames.filter((g) => PSN_PLATFORM_SLUGS.has(g.platformSlug))
+          : accountGames;
+
+    achievementsLogger.log(
+      `[Exophase account] mode="${mode}" → ${filteredGames.length}/${accountGames.length} games after platform filter`
+    );
+
     let index = 0;
-    for (const accountGame of accountGames) {
+    for (const accountGame of filteredGames) {
       index++;
       result.gamesProcessed++;
       onProgress?.({
         current: index,
-        total: accountGames.length,
+        total: filteredGames.length,
         title: accountGame.title,
         phase: "Matching Exophase games",
       });
@@ -337,19 +382,23 @@ export async function syncExophaseAccount(
   return result;
 }
 
-/** Backwards-compatible export: the manual "Sync achievements" button. */
-export const syncExophaseAchievements = syncExophaseAccount;
+/**
+ * "Sync Achievements Now" — PC storefronts only (Steam, Epic, GOG, Xbox,
+ * EA/Origin, Ubisoft, Blizzard). PSN trophies are intentionally excluded so
+ * they don't bleed into the PC library sync.
+ */
+export const syncExophaseAchievements = (
+  onProgress?: (p: ExophaseSyncProgress) => void
+) => syncExophaseAccount(onProgress, "pc");
 
 /**
- * Backwards-compatible export for the "Import PlayStation trophies" button. PSN
- * games are now handled by the unified account sync (their trophies come back
- * as part of the account game list), so this simply runs it and reshapes the
- * result.
+ * "Import PlayStation Achievements" — PSN trophies only. Matches PS trophies
+ * to their PC counterparts in the Hydra catalogue and unlocks them there.
  */
 export async function importPlaystationAchievements(
   onProgress?: (p: ExophaseSyncProgress) => void
 ): Promise<ExophasePsnImportResult> {
-  const r = await syncExophaseAccount(onProgress);
+  const r = await syncExophaseAccount(onProgress, "psn");
   return {
     gamesProcessed: r.gamesProcessed,
     gamesMatched: r.gamesWithAchievements,
