@@ -1,17 +1,14 @@
 import { useContext, useEffect, useState } from "react";
-import { Trans, useTranslation } from "react-i18next";
-import { Button, Link, TextField } from "@renderer/components";
+import { useTranslation } from "react-i18next";
+import { Button } from "@renderer/components";
 import { useAppSelector, useToast } from "@renderer/hooks";
 import { settingsContext } from "@renderer/context";
 import {
-  LinkExternalIcon,
   SyncIcon,
   CheckCircleFillIcon,
   MarkGithubIcon,
 } from "@primer/octicons-react";
 import { LibrarySyncModal, type LibrarySyncResult } from "./library-sync-modal";
-
-const STEAM_API_KEY_URL = "https://steamcommunity.com/dev/apikey";
 
 export function SettingsSteamAccount() {
   const { t } = useTranslation("settings");
@@ -21,15 +18,11 @@ export function SettingsSteamAccount() {
   const { updateUserPreferences } = useContext(settingsContext);
   const { showSuccessToast, showErrorToast } = useToast();
 
-  const [steamId, setSteamId] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [linkedAccount, setLinkedAccount] = useState<{
     steamid: string;
     personaname: string;
     avatarfull: string;
   } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isOpenIdPending, setIsOpenIdPending] = useState(false);
   const [isInAppPending, setIsInAppPending] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{
@@ -41,13 +34,6 @@ export function SettingsSteamAccount() {
     summary: string;
     results: LibrarySyncResult[];
   } | null>(null);
-
-  useEffect(() => {
-    if (userPreferences) {
-      setSteamId(userPreferences.steamId ?? "");
-      setApiKey(userPreferences.steamApiKey ?? "");
-    }
-  }, [userPreferences]);
 
   useEffect(() => {
     const savedSteamId = userPreferences?.steamId;
@@ -118,78 +104,17 @@ export function SettingsSteamAccount() {
         return;
       }
       await updateUserPreferences({ steamId: result.steamId });
-      setSteamId(result.steamId);
       const summary = await window.electron
-        .getSteamPlayerSummary(result.steamId, apiKey.trim() || undefined)
+        .getSteamPlayerSummary(result.steamId, undefined)
         .catch(() => null);
       if (summary) setLinkedAccount(summary);
       showSuccessToast(t("steam_account_linked"));
       // Authenticated session is established; sync owned games in background.
-      runBackgroundSync(result.steamId, apiKey.trim() || undefined);
+      runBackgroundSync(result.steamId);
     } catch {
       showErrorToast(t("steam_openid_failed"));
     } finally {
       setIsInAppPending(false);
-    }
-  };
-
-  const handleSteamOpenIdLogin = async () => {
-    setIsOpenIdPending(true);
-    try {
-      const detectedSteamId = await window.electron.startSteamOpenIdLogin();
-      // Save immediately so the linked-account panel renders
-      await updateUserPreferences({
-        steamId: detectedSteamId,
-        steamApiKey: apiKey.trim() || null,
-      });
-      setSteamId(detectedSteamId);
-      // Fetch and display profile
-      const summary = await window.electron
-        .getSteamPlayerSummary(detectedSteamId, apiKey.trim() || undefined)
-        .catch(() => null);
-      if (summary) {
-        setLinkedAccount(summary);
-        showSuccessToast(t("steam_account_linked"));
-      } else {
-        showSuccessToast(t("steam_id_detected", { steamId: detectedSteamId }));
-      }
-      // Sync owned games in the background.
-      runBackgroundSync(detectedSteamId, apiKey.trim() || undefined);
-    } catch {
-      showErrorToast(t("steam_openid_failed"));
-    } finally {
-      setIsOpenIdPending(false);
-    }
-  };
-
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!steamId.trim()) return;
-
-    setIsSaving(true);
-    try {
-      const summary = await window.electron.getSteamPlayerSummary(
-        steamId.trim(),
-        apiKey.trim() || undefined
-      );
-
-      if (!summary) {
-        showErrorToast(t("steam_account_not_found"));
-        return;
-      }
-
-      await updateUserPreferences({
-        steamId: steamId.trim(),
-        steamApiKey: apiKey.trim() || null,
-      });
-      setLinkedAccount(summary);
-      showSuccessToast(t("steam_account_linked"));
-      // Sync owned games in the background.
-      runBackgroundSync(steamId.trim(), apiKey.trim() || undefined);
-    } catch {
-      showErrorToast(t("steam_invalid_credentials"));
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -201,8 +126,6 @@ export function SettingsSteamAccount() {
       steamAvatarUrl: null,
     });
     setLinkedAccount(null);
-    setSteamId("");
-    setApiKey("");
     setSyncResult(null);
     showSuccessToast(t("steam_account_disconnected"));
   };
@@ -319,7 +242,7 @@ export function SettingsSteamAccount() {
   }
 
   return (
-    <form onSubmit={handleConnect} className="settings-account">
+    <div className="settings-account">
       <p className="settings-account__description">
         {t("steam_account_description")}
       </p>
@@ -346,55 +269,6 @@ export function SettingsSteamAccount() {
           {t("login_with_steam_in_app_hint")}
         </p>
       </div>
-
-      <p style={{ margin: 0, opacity: 0.5, textAlign: "center" }}>{t("or")}</p>
-
-      <div>
-        <Button
-          type="button"
-          onClick={handleSteamOpenIdLogin}
-          disabled={isOpenIdPending}
-          theme="outline"
-          style={{ display: "flex", alignItems: "center", gap: "8px" }}
-        >
-          <MarkGithubIcon size={16} />
-          {isOpenIdPending ? t("waiting_for_steam") : t("login_with_steam")}
-        </Button>
-        <p style={{ margin: "8px 0 0", opacity: 0.55, fontSize: "0.8em" }}>
-          {t("login_with_steam_hint")}
-        </p>
-      </div>
-
-      <p style={{ margin: 0, opacity: 0.5, textAlign: "center" }}>{t("or")}</p>
-
-      <TextField
-        label={t("steam_id")}
-        value={steamId}
-        onChange={(e) => setSteamId(e.target.value)}
-        placeholder="76561198..."
-        hint={t("steam_id_hint")}
-      />
-
-      <TextField
-        label={t("steam_api_key")}
-        value={apiKey}
-        onChange={(e) => setApiKey(e.target.value)}
-        type="password"
-        placeholder={t("steam_api_key_placeholder")}
-        hint={
-          <Trans i18nKey="steam_api_key_hint" ns="settings">
-            <Link to={STEAM_API_KEY_URL}>
-              <LinkExternalIcon size={12} />
-            </Link>
-          </Trans>
-        }
-      />
-
-      <div>
-        <Button type="submit" disabled={!steamId.trim() || isSaving}>
-          {isSaving ? t("connecting") : t("connect_steam_account")}
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }

@@ -398,7 +398,7 @@ export function SettingsContextGeneral({
                   style={{
                     height: "100%",
                     width: `${metadataProgress.total > 0 ? Math.round((metadataProgress.current / metadataProgress.total) * 100) : 0}%`,
-                    background: "var(--color-muted-purple, #7b68ee)",
+                    background: "#fff",
                     transition: "width 0.2s",
                   }}
                 />
@@ -475,7 +475,7 @@ export function SettingsContextGeneral({
                   style={{
                     height: "100%",
                     width: `${dedupProgress.total > 0 ? Math.round((dedupProgress.current / dedupProgress.total) * 100) : 0}%`,
-                    background: "var(--color-muted-purple, #7b68ee)",
+                    background: "#fff",
                     transition: "width 0.2s",
                   }}
                 />

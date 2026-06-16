@@ -3,6 +3,9 @@
 .button {
   padding: globals.$spacing-unit globals.$spacing-unit * 2;
   background-color: globals.$muted-color;
+  // Default (primary) button is white background with near-black text for
+  // maximum contrast. Variants below override this colour explicitly.
+  color: globals.$dark-background-color;
   border-radius: 8px;
   border: solid 1px transparent;
   transition: all ease 0.2s;
