@@ -196,14 +196,14 @@ async function processAccountGame(
   fetcher: ExophaseFetcher,
   accountGame: ExophaseAccountGame,
   /**
-   * When true (PSN import), skip writing to gameAchievementsSublevel for
-   * games that are NOT in the local library. We still cache by title in
-   * exophaseCacheSublevel so achievements apply if the user adds the game
-   * later — but we never pre-populate a key that mergeWithRemoteGames could
-   * pull down from HydraAPI, which would make it look like Exophase added
-   * the game to the library.
+   * Never write to gameAchievementsSublevel for games not already in the
+   * local library. The Exophase title cache (exophaseCacheSublevel) already
+   * holds everything and will apply automatically when the user adds the game.
+   * Writing directly creates orphaned keys that mergeWithRemoteGames matches
+   * when pulling from HydraAPI, making the game appear in the library as if
+   * Exophase added it. Always true — parameter kept for clarity.
    */
-  skipNonLibraryWrite = false
+  skipNonLibraryWrite = true
 ): Promise<{
   report: ExophaseSyncReportGame;
   unlocked: number;
@@ -370,7 +370,7 @@ async function processAccountGame(
         );
       } else {
         achievementsLogger.log(
-          `[Exophase] "${title}" not in library — skipped gameAchievementsSublevel write (PSN import)`
+          `[Exophase] "${title}" not in library — skipped gameAchievementsSublevel write (cached by title only)`
         );
       }
     }
@@ -503,7 +503,7 @@ export async function syncExophaseAccount(
       });
 
       try {
-        const outcome = await processAccountGame(fetcher, accountGame, mode === "psn");
+        const outcome = await processAccountGame(fetcher, accountGame, true);
         if (outcome) {
           if (outcome.resolved) {
             result.gamesWithAchievements++;
