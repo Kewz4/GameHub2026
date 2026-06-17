@@ -194,16 +194,7 @@ async function verifyGameAchievements(
  */
 async function processAccountGame(
   fetcher: ExophaseFetcher,
-  accountGame: ExophaseAccountGame,
-  /**
-   * Never write to gameAchievementsSublevel for games not already in the
-   * local library. The Exophase title cache (exophaseCacheSublevel) already
-   * holds everything and will apply automatically when the user adds the game.
-   * Writing directly creates orphaned keys that mergeWithRemoteGames matches
-   * when pulling from HydraAPI, making the game appear in the library as if
-   * Exophase added it. Always true — parameter kept for clarity.
-   */
-  skipNonLibraryWrite = true
+  accountGame: ExophaseAccountGame
 ): Promise<{
   report: ExophaseSyncReportGame;
   unlocked: number;
@@ -346,33 +337,24 @@ async function processAccountGame(
         } (persisted=${checks.persisted}, unlockCount=${checks.unlockCountConsistent}, noOrphans=${checks.noOrphanUnlocks})`
       );
     } else {
-      // Game is not in the library. When skipNonLibraryWrite is true (PSN
-      // import) we intentionally skip writing to gameAchievementsSublevel —
-      // the Exophase title cache already holds the data and will apply it if
-      // the user explicitly adds the game. Writing directly would pre-populate
-      // a key that mergeWithRemoteGames could match when pulling from HydraAPI,
-      // making it appear as though Exophase added the game to the library.
-      if (!skipNonLibraryWrite) {
-        if (existingAchData?.source !== "exophase" && existingAchData?.achievements?.length) {
-          reportTotalAchievements = existingAchData.achievements.length;
-          defSource = "hydraapi";
-        }
-        await gameAchievementsSublevel.put(gameKey, {
-          achievements: definitions,
-          unlockedAchievements: unlocked,
-          updatedAt: Date.now(),
-          language: "en",
-          source: "exophase" as const,
-        }).catch(() => {});
-        newlyUnlocked = Math.max(0, unlocked.length - prevUnlockedCount);
-        achievementsLogger.log(
-          `[Exophase] "${title}" not in library — wrote ${unlocked.length} unlocks to gameAchievementsSublevel`
-        );
-      } else {
-        achievementsLogger.log(
-          `[Exophase] "${title}" not in library — skipped gameAchievementsSublevel write (cached by title only)`
-        );
+      // Game is not in the library — write achievements to the sublevel so the
+      // catalogue game page can display the user's unlocked state, and so they
+      // apply immediately if the user adds the game to their library later.
+      if (existingAchData?.source !== "exophase" && existingAchData?.achievements?.length) {
+        reportTotalAchievements = existingAchData.achievements.length;
+        defSource = "hydraapi";
       }
+      await gameAchievementsSublevel.put(gameKey, {
+        achievements: definitions,
+        unlockedAchievements: unlocked,
+        updatedAt: Date.now(),
+        language: "en",
+        source: "exophase" as const,
+      }).catch(() => {});
+      newlyUnlocked = Math.max(0, unlocked.length - prevUnlockedCount);
+      achievementsLogger.log(
+        `[Exophase] "${title}" not in library — wrote ${unlocked.length} unlocks to gameAchievementsSublevel`
+      );
     }
   }
 
@@ -503,7 +485,7 @@ export async function syncExophaseAccount(
       });
 
       try {
-        const outcome = await processAccountGame(fetcher, accountGame, true);
+        const outcome = await processAccountGame(fetcher, accountGame);
         if (outcome) {
           if (outcome.resolved) {
             result.gamesWithAchievements++;

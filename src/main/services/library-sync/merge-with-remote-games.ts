@@ -41,12 +41,32 @@ const getLocalCollectionIds = (
   return legacyCollectionId ? [legacyCollectionId] : [];
 };
 
-export const mergeWithRemoteGames = async () => {
+/**
+ * Pulls the user's Hydra cloud profile games and reconciles them with the
+ * local library.
+ *
+ * `createMissing` controls whether cloud games that don't yet exist locally
+ * are CREATED as new library entries:
+ *   • true  (default) — full sync. Used at sign-in / explicit library sync, the
+ *     moments a user genuinely expects their cross-device library to come down.
+ *   • false — update-only. Used by the routine library-page refresh that fires
+ *     on every navigation (and right after an Exophase achievement import).
+ *     In this mode we never silently materialize cloud games the user didn't
+ *     deliberately add on THIS install — we only refresh data for games that
+ *     are already present locally.
+ */
+export const mergeWithRemoteGames = async (
+  { createMissing = true }: { createMissing?: boolean } = {}
+) => {
   return HydraApi.get<ProfileGame[]>("/profile/games")
     .then(async (response) => {
       for (const game of response) {
         const gameKey = levelKeys.game(game.shop, game.objectId);
         const localGame = await gamesSublevel.get(gameKey);
+
+        // Update-only mode: skip games not already in the local library so a
+        // routine refresh never adds games the user didn't add here.
+        if (!localGame && !createMissing) continue;
 
         const localCollectionIds = getLocalCollectionIds(localGame);
 
