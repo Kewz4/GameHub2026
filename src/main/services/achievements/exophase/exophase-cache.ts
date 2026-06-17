@@ -133,14 +133,46 @@ export const syncUnlockedToHydraApi = async (
   game: Game,
   unlockedAchievements: UnlockedAchievement[]
 ): Promise<void> => {
-  if (!game.remoteId) return;
-  if (!HydraApi.isLoggedIn()) return;
+  if (!HydraApi.isLoggedIn()) {
+    achievementsLogger.log(
+      `[Exophase→HydraAPI] skipped ${game.shop}:${game.objectId} — not logged in to Hydra`
+    );
+    return;
+  }
   if (unlockedAchievements.length === 0) return;
+
+  // Platform-synced games (Steam, GOG, etc.) are not uploaded to the Hydra
+  // cloud library — so they have no remoteId. Attempt to find the remoteId by
+  // fetching the user's remote game list; if the game is there, we get its id.
+  let remoteId = game.remoteId;
+  if (!remoteId) {
+    achievementsLogger.log(
+      `[Exophase→HydraAPI] ${game.shop}:${game.objectId} has no remoteId — fetching from remote`
+    );
+    try {
+      const remoteGames = await HydraApi.get<
+        Array<{ id: string; shop: string; objectId: string }>
+      >("/profile/games");
+      const match = remoteGames.find(
+        (g) => g.shop === game.shop && g.objectId === game.objectId
+      );
+      remoteId = match?.id ?? null;
+    } catch {
+      // Not fatal — just skip sync if we can't resolve the id.
+    }
+  }
+
+  if (!remoteId) {
+    achievementsLogger.log(
+      `[Exophase→HydraAPI] ${game.shop}:${game.objectId} not found in remote library — skipping`
+    );
+    return;
+  }
 
   try {
     await HydraApi.put(
       "/profile/games/achievements",
-      { id: game.remoteId, achievements: unlockedAchievements },
+      { id: remoteId, achievements: unlockedAchievements },
       {}
     );
     achievementsLogger.log(
@@ -150,7 +182,7 @@ export const syncUnlockedToHydraApi = async (
     // Subscription-required / network errors are non-fatal — the unlocks are
     // already persisted locally and will retry on the next sync.
     achievementsLogger.log(
-      `[Exophase→HydraAPI] cloud sync skipped for ${game.shop}:${game.objectId}`,
+      `[Exophase→HydraAPI] cloud sync failed for ${game.shop}:${game.objectId}`,
       err instanceof Error ? err.message : String(err)
     );
   }

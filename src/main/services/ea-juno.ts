@@ -73,30 +73,54 @@ interface JunoOwnedItem {
 
 const junoGet = async <T>(accessToken: string, query: string): Promise<T> => {
   let res;
-  try {
-    res = await axios.get(JUNO_GRAPHQL_HOST, {
-      params: { query },
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-      timeout: 25_000,
-    });
-  } catch (err: unknown) {
-    const ae = err as {
-      response?: { status?: number; data?: unknown };
-      message?: string;
-    };
-    const body =
-      typeof ae?.response?.data === "string"
-        ? ae.response.data.slice(0, 400)
-        : JSON.stringify(ae?.response?.data ?? ae?.message ?? err).slice(0, 400);
-    if (ae?.response?.status === 401) throw new Error(`HTTP 401: ${body}`);
-    logger.error(`[EA] Juno request failed: HTTP ${ae?.response?.status} ${body}`);
-    throw new Error(
-      `EA Juno request failed (HTTP ${ae?.response?.status}): ${body}`
-    );
+  // Retry once on timeout/network error (Juno is occasionally slow to respond).
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      res = await axios.get(JUNO_GRAPHQL_HOST, {
+        params: { query },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+          // Identify as the EA Desktop app so Juno doesn't reject or throttle us.
+          "User-Agent":
+            "EADesktop/13.304.0.5765 CEF/126.2.4 (Windows NT 10.0; Win64; x64)",
+          "X-ClientPlatform": "pc",
+        },
+        timeout: 30_000,
+      });
+      break; // success
+    } catch (err: unknown) {
+      const ae = err as {
+        response?: { status?: number; data?: unknown };
+        message?: string;
+        code?: string;
+      };
+      // On 401 there's no point retrying — the token is stale.
+      if (ae?.response?.status === 401) {
+        const body =
+          typeof ae.response!.data === "string"
+            ? ae.response!.data.slice(0, 400)
+            : JSON.stringify(ae.response!.data ?? ae.message ?? err).slice(0, 400);
+        throw new Error(`HTTP 401: ${body}`);
+      }
+      // On the first attempt retry network/timeout errors.
+      if (attempt === 1 && (ae.code === "ECONNABORTED" || !ae.response)) {
+        logger.warn(`[EA] Juno attempt 1 failed (${ae.message}), retrying…`);
+        await new Promise((r) => setTimeout(r, 3_000));
+        continue;
+      }
+      const body =
+        typeof ae?.response?.data === "string"
+          ? ae.response.data.slice(0, 400)
+          : JSON.stringify(ae?.response?.data ?? ae?.message ?? err).slice(0, 400);
+      logger.error(`[EA] Juno request failed: HTTP ${ae?.response?.status} ${body}`);
+      throw new Error(
+        `EA Juno request failed (HTTP ${ae?.response?.status}): ${body}`
+      );
+    }
   }
+
+  if (!res) throw new Error("EA Juno request failed: no response after retries");
 
   if (res.data?.errors) {
     const msg = JSON.stringify(res.data.errors).slice(0, 400);

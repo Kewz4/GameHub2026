@@ -5,6 +5,8 @@ import {
   parseSteamGamesXml,
   type SteamOwnedGame,
 } from "./steam-account";
+import { db, levelKeys } from "@main/level";
+import type { UserPreferences } from "@types";
 
 /** Dedicated persistent session so the Steam login cookies live independently
  *  from the rest of the app and survive restarts (mirrors persist:exophase). */
@@ -15,34 +17,26 @@ export const STEAM_AUTH_PARTITION = "persist:steam";
 export const STEAM_LOGIN_URL =
   "https://steamcommunity.com/login/home/?goto=my/games?xml=1";
 
-/** The authenticated owned-games XML. `tab=all` returns the FULL owned list. */
-const STEAM_MY_GAMES_XML =
-  "https://steamcommunity.com/my/games?tab=all&xml=1";
-
-
 /**
  * Reads the owned-games XML using the `persist:steam` session's OWN `fetch`.
  *
- * `Session.fetch` (Electron ≥22) issues the request through Chromium's network
- * stack *bound to that session's cookie jar* — so it automatically sends the
- * httpOnly `steamLoginSecure` login cookie and follows Steam's in-session
- * redirects. This is what makes it work where the alternatives failed:
- *   • A BrowserWindow navigated to the XML URL wraps the document in Chromium's
- *     XML viewer, so `innerText` returns HTML, not the raw XML.
- *   • A renderer-context `fetch()` is blocked by CORS/CSP.
- *   • `net.fetch` (default session) and a hand-built Cookie header don't carry
- *     the partition's httpOnly cookies, so Steam 302-redirects to /login.
- *
- * Verified live (2026-06): the games XML now requires an authenticated session
- * for ALL profiles — an unauthenticated request 302-redirects to /login, which
- * we detect below (no <gamesList>/<steamID64>) and treat as "logged out".
+ * We use the profile-specific URL (`/profiles/<steamId>/games`) instead of
+ * `/my/games` to avoid ERR_TOO_MANY_REDIRECTS: `/my/` triggers a redirect
+ * chain that Chromium sometimes detects as a loop when the session cookie
+ * isn't re-sent to the redirect target. The profile URL skips that chain
+ * entirely. When the steamId isn't known yet (first sync), we fall back to
+ * `/my/` — the user will have the ID in prefs after a successful sync.
  */
-async function fetchMyGamesXml(): Promise<string> {
+async function fetchMyGamesXml(steamId?: string | null): Promise<string> {
   const ses = session.fromPartition(STEAM_AUTH_PARTITION);
 
-  const response = await ses.fetch(STEAM_MY_GAMES_XML, {
-    // Follow the /my/ → /profiles/<id>/games redirect within the session so the
-    // login cookie is re-sent to the resolved URL.
+  const url = steamId
+    ? `https://steamcommunity.com/profiles/${steamId}/games?tab=all&xml=1`
+    : "https://steamcommunity.com/my/games?tab=all&xml=1";
+
+  logger.log(`[SteamAuth] fetching games XML from ${url}`);
+
+  const response = await ses.fetch(url, {
     redirect: "follow",
     headers: {
       Accept: "text/xml,application/xml,*/*;q=0.9",
@@ -70,7 +64,14 @@ export interface SteamAuthSession {
 export const getAuthenticatedSteamOwnedGames =
   async (): Promise<SteamAuthSession | null> => {
     try {
-      const xml = await fetchMyGamesXml();
+      // Read persisted steamId so we can use the profile-specific URL and
+      // avoid the /my/ → /profiles/<id>/ redirect loop (ERR_TOO_MANY_REDIRECTS).
+      const prefs = await db
+        .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+          valueEncoding: "json",
+        })
+        .catch(() => null);
+      const xml = await fetchMyGamesXml(prefs?.steamId);
 
       logger.log(
         `[SteamAuth] games XML received (${xml.length} chars, first 200: ${xml

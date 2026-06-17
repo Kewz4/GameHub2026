@@ -81,6 +81,10 @@ const openEaAuthWindow = async (
       try {
         const tokens = await exchangeEaAuthCode(code);
 
+        // Close the window immediately — identity fetch can take up to 25 s
+        // and there's no reason to keep the popup open while we wait for it.
+        if (!win.isDestroyed()) win.close();
+
         let username = "EA Account";
         let pid = "";
         try {
@@ -98,7 +102,6 @@ const openEaAuthWindow = async (
           username,
           pid
         );
-        if (!win.isDestroyed()) win.close();
         resolve({ accessToken: tokens.accessToken, username, pid });
       } catch (err) {
         logger.error("EA auth: token exchange failed", err);
