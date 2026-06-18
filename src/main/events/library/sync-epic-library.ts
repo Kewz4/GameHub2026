@@ -122,6 +122,7 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
       automaticCloudSync: true,
       libraryOrigin: "sync" as const,
       executablePath,
+      isInstalledLocally: epicGame.is_installed,
     };
 
     await gamesSublevel.put(gameKey, game);

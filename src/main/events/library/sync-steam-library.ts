@@ -2,6 +2,7 @@ import { registerEvent } from "../register-event";
 import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { getSteamOwnedGames } from "@main/services/steam-account";
 import { getAuthenticatedSteamOwnedGames } from "@main/services/steam-auth";
+import { getInstalledSteamAppIds } from "@main/services/steam-installed";
 import { createGame } from "@main/services/library-sync";
 import { logger } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
@@ -40,9 +41,17 @@ const syncSteamLibrary = async (
 
   const excludedGames = await getExcludedGames();
 
+  // Confirm which owned games are actually installed on disk (via Steam's
+  // appmanifest files) so the UI can show "Play" only for installed titles and
+  // "You own this game — install via Steam" for the rest.
+  const installedAppIds = await getInstalledSteamAppIds().catch(
+    () => new Set<string>()
+  );
+
   for (const ownedGame of ownedGames) {
     const objectId = String(ownedGame.appid);
     const gameKey = levelKeys.game("steam", objectId);
+    const isInstalledLocally = installedAppIds.has(objectId);
 
     if (isGameExcluded(excludedGames, "steam", objectId, ownedGame.name)) {
       continue;
@@ -57,6 +66,9 @@ const syncSteamLibrary = async (
       if (existing.libraryOrigin !== "sync") updates.libraryOrigin = "sync";
       if (!existing.executablePath) {
         updates.executablePath = `steam://run/${objectId}`;
+      }
+      if (existing.isInstalledLocally !== isInstalledLocally) {
+        updates.isInstalledLocally = isInstalledLocally;
       }
       if (Object.keys(updates).length > 0) {
         await gamesSublevel.put(gameKey, { ...existing, ...updates });
@@ -122,6 +134,7 @@ const syncSteamLibrary = async (
       automaticCloudSync: true,
       libraryOrigin: "sync" as const,
       executablePath,
+      isInstalledLocally,
     };
 
     await gamesSublevel.put(gameKey, game);

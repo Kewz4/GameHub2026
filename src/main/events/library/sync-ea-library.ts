@@ -141,6 +141,9 @@ const syncEaLibrary = async (
         if (!existing.executablePath && executablePath) {
           updates.executablePath = executablePath;
         }
+        if (localMatch && !existing.isInstalledLocally) {
+          updates.isInstalledLocally = true;
+        }
         if (Object.keys(updates).length > 0) {
           await gamesSublevel.put(gameKey, { ...existing, ...updates });
         }
@@ -164,6 +167,7 @@ const syncEaLibrary = async (
         automaticCloudSync: true,
         libraryOrigin: "sync" as const,
         executablePath,
+        isInstalledLocally: Boolean(localMatch),
       };
 
       await gamesSublevel.put(gameKey, game);

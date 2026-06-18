@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { EpicAuthModal } from "@renderer/pages/settings/epic-auth-modal";
 import { GogAuthModal } from "@renderer/pages/settings/gog-auth-modal";
+import { SettingsBattleNet } from "@renderer/pages/settings/settings-battlenet";
 import { useTranslation } from "react-i18next";
 import {
   Button,
@@ -22,6 +23,7 @@ import {
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
 import GogLogo from "@renderer/assets/gog-logo.svg?react";
+import BattlenetLogo from "@renderer/assets/battlenet-logo.svg?react";
 import XboxLogo from "@renderer/assets/xbox-logo.svg?react";
 import RiotLogo from "@renderer/assets/riot-logo.svg?react";
 import UbisoftLogo from "@renderer/assets/ubisoft-logo.svg?react";
@@ -43,6 +45,7 @@ type StepId =
   | "steam"
   | "epic"
   | "gog"
+  | "battlenet"
   | "xbox"
   | "riot"
   | "ubisoft"
@@ -61,6 +64,7 @@ const ALL_STEPS: StepId[] = [
   "steam",
   "epic",
   "gog",
+  "battlenet",
   "xbox",
   "riot",
   "ubisoft",
@@ -79,6 +83,7 @@ const NAV_STEPS: StepId[] = [
   "steam",
   "epic",
   "gog",
+  "battlenet",
   "xbox",
   "riot",
   "ubisoft",
@@ -97,6 +102,7 @@ const STEP_LABELS: Record<StepId, string> = {
   steam: "Steam",
   epic: "Epic Games",
   gog: "GOG",
+  battlenet: "Battle.net",
   xbox: "Xbox",
   riot: "Riot Games",
   ubisoft: "Ubisoft Connect",
@@ -111,6 +117,7 @@ const PLATFORM_STEPS: StepId[] = [
   "steam",
   "epic",
   "gog",
+  "battlenet",
   "xbox",
   "riot",
   "ubisoft",
@@ -933,6 +940,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   "steam",
                   "epic",
                   "gog",
+                  "battlenet",
                   "xbox",
                   "riot",
                   "ubisoft",
@@ -949,6 +957,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     steam: SteamLogo,
                     epic: EpicLogo,
                     gog: GogLogo,
+                    battlenet: BattlenetLogo,
                     xbox: XboxLogo,
                     riot: RiotLogo,
                     ubisoft: UbisoftLogo,
@@ -1224,6 +1233,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       { id: "steam", name: "Steam", Icon: SteamLogo },
                       { id: "epic", name: "Epic Games", Icon: EpicLogo },
                       { id: "gog", name: "GOG", Icon: GogLogo },
+                      {
+                        id: "battlenet",
+                        name: "Battle.net",
+                        Icon: BattlenetLogo,
+                      },
                       { id: "xbox", name: "Xbox", Icon: XboxLogo },
                       { id: "riot", name: "Riot Games", Icon: RiotLogo },
                       {
@@ -1716,6 +1730,41 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               </>
             )}
 
+            {/* ── Battle.net ── */}
+            {currentStep === "battlenet" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <BattlenetLogo style={{ width: 20, height: 20 }} />
+                  </div>
+                  <div>
+                    <h2>Battle.net</h2>
+                    <p>Import your Blizzard games</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  Detect installed Blizzard games (WoW, Diablo, Overwatch,
+                  StarCraft, Hearthstone…) and add them to your library. They
+                  launch through Battle.net.
+                </p>
+
+                <SettingsBattleNet />
+
+                <div className="onboarding-actions" style={{ marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="onboarding-skip"
+                    onClick={next}
+                  >
+                    Skip for now
+                  </button>
+                  <Button type="button" onClick={next}>
+                    Continue
+                  </Button>
+                </div>
+              </>
+            )}
+
             {/* ── EA app ── */}
             {currentStep === "ea" && (
               <>
@@ -2197,7 +2246,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         onConfirm={handleScanConfirm}
         onClose={() => setShowScanApproval(false)}
       />
-
     </div>
   );
 }

@@ -57,6 +57,12 @@ export interface Game {
   winePrefixPath?: string | null;
   protonPath?: string | null;
   executablePath?: string | null;
+  /** True when the game is confirmed installed on this machine (Steam appmanifest
+   * found, Epic/EA reported installed, or located by the disk scan). Drives the
+   * "Play" vs "You own this game — install via …" button. A protocol-URI
+   * executablePath alone (e.g. steam://run) does NOT imply installed, because
+   * Steam/Xbox sync stamp it for every owned game regardless of install state. */
+  isInstalledLocally?: boolean;
   nativeExecutablePath?: string | null;
   launchOptions?: string | null;
   autoRunMangohud?: boolean | null;

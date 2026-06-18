@@ -109,6 +109,7 @@ const scanInstalledGames = async (
           executablePath: foundPath,
           // Found installed on disk = owned, not a catalogue-only entry
           libraryOrigin: "sync",
+          isInstalledLocally: true,
         });
       }
 

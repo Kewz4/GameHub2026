@@ -238,6 +238,51 @@ export function HeroPanelActions() {
     </Button>
   );
 
+  // Platform launcher URI schemes. A protocol-URI executablePath is stamped for
+  // EVERY owned game by Steam/Xbox sync, so on its own it does NOT mean the game
+  // is installed — only `isInstalledLocally` (or a real local file path) does.
+  const PLATFORM_URI_RE =
+    /^(steam|legendary|goggalaxy|goglauncher|msxbox|battlenet|origin2|uplay|riot):\/\//i;
+
+  const shopDisplayName: Record<string, string> = {
+    steam: "Steam",
+    epic: "Epic Games",
+    gog: "GOG",
+    xbox: "Xbox",
+    ea: "the EA app",
+    ubisoft: "Ubisoft Connect",
+    riot: "Riot Client",
+    battlenet: "Battle.net",
+  };
+
+  const execIsProtocolUri =
+    game?.executablePath != null && PLATFORM_URI_RE.test(game.executablePath);
+
+  // "Sure it's installed": an explicit local-install confirmation, or a real
+  // local-file executablePath (not a launcher protocol URI).
+  const isConfirmedInstalled =
+    game?.isInstalledLocally === true ||
+    (game?.executablePath != null && !execIsProtocolUri);
+
+  // A URI we can hand to the platform to install/launch an owned-but-not-yet-
+  // installed game (Steam/Xbox/EA installs on demand when this fires).
+  const ownedInstallUri = execIsProtocolUri
+    ? game!.executablePath!
+    : game?.shop === "steam"
+      ? `steam://install/${game.objectId}`
+      : null;
+
+  const launchOwnedViaPlatform = () => {
+    if (game && ownedInstallUri) {
+      window.electron.openGame(
+        game.shop,
+        game.objectId,
+        ownedInstallUri,
+        game.launchOptions
+      );
+    }
+  };
+
   const gameActionButton = () => {
     if (isTransferring) {
       const percent = Math.round(transferProgress * 100);
@@ -269,13 +314,8 @@ export function HeroPanelActions() {
       );
     }
 
-    if (game?.executablePath) {
-      // Protocol-scheme URLs (legendary://, goggalaxy://, msxbox://) launch via
-      // external platform. Show "Launch" for these to distinguish from local installs.
-      const isExternalLaunch =
-        /^(legendary|goggalaxy|battlenet|msxbox|steam):\/\//.test(
-          game.executablePath
-        );
+    // Confirmed installed → Play (local exe) or Launch (installed launcher game).
+    if (game?.executablePath && isConfirmedInstalled) {
       return (
         <Button
           onClick={openGame}
@@ -284,9 +324,32 @@ export function HeroPanelActions() {
           className="hero-panel-actions__action"
         >
           <PlayIcon />
-          {isExternalLaunch
+          {execIsProtocolUri
             ? t("launch", { defaultValue: "Launch" })
             : t("play")}
+        </Button>
+      );
+    }
+
+    // Owned on a platform but NOT confirmed installed → don't pretend it's
+    // launchable. Offer to install/launch it through the platform instead.
+    if (ownedInstallUri) {
+      const platform = shopDisplayName[game!.shop] ?? game!.shop;
+      return (
+        <Button
+          onClick={launchOwnedViaPlatform}
+          theme="outline"
+          disabled={deleting || isGameRunning}
+          className="hero-panel-actions__action hero-panel-actions__action--owned"
+          title={t("you_own_this_game", {
+            defaultValue: "You own this game",
+          })}
+        >
+          <DownloadIcon />
+          {t("install_via", {
+            defaultValue: `Install via ${platform}`,
+            platform,
+          })}
         </Button>
       );
     }

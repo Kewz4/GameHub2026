@@ -15,6 +15,7 @@ import {
   LinkIcon,
   TrashIcon,
   XIcon,
+  BugIcon,
 } from "@primer/octicons-react";
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import { LibraryGame } from "@types";
@@ -24,9 +25,11 @@ import {
   ContextMenuProps,
   ConfirmationModal,
   CreateCollectionModal,
+  Modal,
   useGameActions,
 } from "..";
 import { useGameCollections, useToast, useUserDetails } from "@renderer/hooks";
+import { getGameOrigin } from "@renderer/helpers/game-origin";
 
 interface GameContextMenuProps extends Omit<ContextMenuProps, "items"> {
   game: LibraryGame;
@@ -59,6 +62,7 @@ export function GameContextMenu({
     useState(false);
   const [showConfirmRemoveFiles, setShowConfirmRemoveFiles] = useState(false);
   const [showConfirmExclude, setShowConfirmExclude] = useState(false);
+  const [showDebugModal, setShowDebugModal] = useState(false);
   const [showCreateCollectionModal, setShowCreateCollectionModal] =
     useState(false);
   const [localCollectionIds, setLocalCollectionIds] = useState<string[]>(() =>
@@ -402,7 +406,42 @@ export function GameContextMenu({
       onClick: () => handleOpenGameOptions(),
       disabled: isDeleting,
     },
+    {
+      id: "debug",
+      label: "DEBUG: where did this come from?",
+      separator: true,
+      icon: <BugIcon size={16} />,
+      onClick: () => setShowDebugModal(true),
+    },
   ];
+
+  const debugOrigin = getGameOrigin(game);
+  const debugOriginExplained =
+    debugOrigin === "custom"
+      ? "Manually added (custom game)"
+      : debugOrigin === "sync"
+        ? `Synced from your ${game.shop} account (owned on platform)`
+        : "Catalogue / repack — shows under the Retigga tab";
+  const debugInfo = {
+    title: game.title,
+    shop: game.shop,
+    objectId: game.objectId,
+    remoteId: game.remoteId ?? null,
+    "→ classified as": debugOrigin,
+    "→ meaning": debugOriginExplained,
+    libraryOrigin: game.libraryOrigin ?? "(unstamped)",
+    isInstalledLocally: game.isInstalledLocally ?? false,
+    executablePath: game.executablePath ?? null,
+    hasRepackDownload: game.download != null,
+    downloadPath: game.download?.downloadPath ?? null,
+    automaticCloudSync: game.automaticCloudSync ?? false,
+    favorite: Boolean(game.favorite),
+    addedToLibraryAt: game.addedToLibraryAt
+      ? new Date(game.addedToLibraryAt).toISOString()
+      : null,
+    achievementCount: game.achievementCount ?? 0,
+    unlockedAchievementCount: game.unlockedAchievementCount ?? 0,
+  };
 
   return (
     <>
@@ -506,6 +545,28 @@ export function GameContextMenu({
         cancelButtonLabel={t("cancel")}
         confirmButtonLabel={t("remove")}
       />
+
+      <Modal
+        visible={showDebugModal}
+        title="Game source — debug"
+        description="Where this entry came from and how it's classified, so we can track down games that slip into the wrong tab."
+        onClose={() => setShowDebugModal(false)}
+      >
+        <pre
+          style={{
+            fontSize: 12,
+            lineHeight: 1.5,
+            overflow: "auto",
+            maxHeight: 420,
+            margin: 0,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            userSelect: "text",
+          }}
+        >
+          {JSON.stringify(debugInfo, null, 2)}
+        </pre>
+      </Modal>
     </>
   );
 }
