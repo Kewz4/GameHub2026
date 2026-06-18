@@ -130,7 +130,7 @@ async function fetchMyGamesXml(): Promise<{
     return { xml: null, loggedOut: true };
   }
 
-  const url = `https://steamcommunity.com/profiles/${steamId}/games?tab=all&xml=1`;
+  const url = `https://steamcommunity.com/profiles/${steamId}/games?xml=1`;
   logger.log(`[SteamAuth] fetching games XML for ${steamId}`);
 
   const { status, body, redirectedToLogin } = await sessionGet(ses, url);
