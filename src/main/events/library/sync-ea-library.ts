@@ -141,8 +141,8 @@ const syncEaLibrary = async (
         if (!existing.executablePath && executablePath) {
           updates.executablePath = executablePath;
         }
-        if (localMatch && !existing.isInstalledLocally) {
-          updates.isInstalledLocally = true;
+        if (existing.isInstalledLocally !== Boolean(localMatch)) {
+          updates.isInstalledLocally = Boolean(localMatch);
         }
         if (Object.keys(updates).length > 0) {
           await gamesSublevel.put(gameKey, { ...existing, ...updates });

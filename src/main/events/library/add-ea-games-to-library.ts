@@ -50,6 +50,9 @@ const addEaGamesToLibrary = async (
       automaticCloudSync: true,
       libraryOrigin: "sync" as const,
       executablePath: getEaLaunchUri(def),
+      // detectInstalledEaGames() only returns games whose install dir/manifest
+      // path exists on disk, so anything added here is confirmed installed.
+      isInstalledLocally: true,
     };
 
     await gamesSublevel.put(gameKey, game);
