@@ -276,7 +276,30 @@ export function UserProfileContextProvider({
             const newGames = response.library.filter(
               (game) => !existingIds.has(game.objectId)
             );
-            return [...prev, ...newGames];
+            const combined = [...prev, ...newGames];
+            if (!sortBy) return combined;
+            return [...combined].sort((a, b) => {
+              switch (sortBy) {
+                case "playtime":
+                  return b.playTimeInSeconds - a.playTimeInSeconds;
+                case "achievementCount":
+                  return (
+                    (b.unlockedAchievementCount ?? 0) -
+                    (a.unlockedAchievementCount ?? 0)
+                  );
+                case "playedRecently": {
+                  const aT = a.lastTimePlayed
+                    ? new Date(a.lastTimePlayed).getTime()
+                    : 0;
+                  const bT = b.lastTimePlayed
+                    ? new Date(b.lastTimePlayed).getTime()
+                    : 0;
+                  return bT - aT;
+                }
+                default:
+                  return 0;
+              }
+            });
           });
           setLibraryPage(nextPage);
           setHasMoreLibraryGames(response.library.length === 12);

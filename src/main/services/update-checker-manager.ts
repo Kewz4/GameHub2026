@@ -122,7 +122,10 @@ export class UpdateCheckerManager {
 
   static applyNsisUpdate(): void {
     this.sendEvent({ type: "applying" });
-    autoUpdater.quitAndInstall(true, true);
+    // Delay before quitting to let the renderer flush — avoids ERROR 32.
+    setTimeout(() => {
+      autoUpdater.quitAndInstall(false, true);
+    }, 1500);
   }
 
   private static async downloadPortableUpdate(version: string): Promise<void> {
@@ -155,20 +158,33 @@ export class UpdateCheckerManager {
     const reader = zipRes.body!.getReader();
     const chunks: Buffer[] = [];
     let downloaded = 0;
+    let startTime = Date.now();
+    let lastBytes = 0;
+    let lastTime = startTime;
 
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(Buffer.from(value));
       downloaded += value.length;
+      const now = Date.now();
+      const elapsedSinceLast = (now - lastTime) / 1000;
+      // Recalculate speed at most every 500 ms to smooth the display
+      let bytesPerSecond = 0;
+      if (elapsedSinceLast >= 0.5) {
+        bytesPerSecond = (downloaded - lastBytes) / elapsedSinceLast;
+        lastBytes = downloaded;
+        lastTime = now;
+      }
       this.sendEvent({
         type: "downloading",
         percent: total ? (downloaded / total) * 80 : 0,
-        bytesPerSecond: 0,
+        bytesPerSecond,
         transferred: downloaded,
         total,
       });
     }
+    void startTime;
 
     fs.writeFileSync(zipPath, Buffer.concat(chunks));
 
@@ -184,7 +200,7 @@ export class UpdateCheckerManager {
         this.sendEvent({
           type: "downloading",
           percent: 80 + p.percent * 0.2,
-          bytesPerSecond: 0,
+          bytesPerSecond: 0, // extraction phase — no meaningful speed
           transferred: 0,
           total: 0,
         });
@@ -218,7 +234,7 @@ export class UpdateCheckerManager {
 
     const bat = [
       "@echo off",
-      "timeout /t 3 /nobreak >nul",
+      "timeout /t 6 /nobreak >nul",
       `robocopy "${realSrc}" "${exeDir}" /E /IS /IT /NFL /NDL /NJH /NJS /NC /NS >nul`,
       `start "" "${path.join(exeDir, exeName)}"`,
       `rd /s /q "${srcDir}" >nul 2>&1`,
