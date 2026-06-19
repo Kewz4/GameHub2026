@@ -120,14 +120,19 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
             const alreadyLinked = matchGame.alternativeShops?.some(
               (s) => s.shop === "gog" && s.objectId === objectId
             );
+            const updates: Partial<typeof matchGame> = {};
             if (!alreadyLinked) {
-              await gamesSublevel.put(matchKey, {
-                ...matchGame,
-                alternativeShops: [
-                  ...(matchGame.alternativeShops ?? []),
-                  { shop: "gog", objectId, executablePath: null },
-                ],
-              });
+              updates.alternativeShops = [
+                ...(matchGame.alternativeShops ?? []),
+                { shop: "gog", objectId, executablePath: null },
+              ];
+            }
+            // Promote catalog stubs to sync — the user owns this on GOG.
+            if (matchGame.libraryOrigin !== "sync") {
+              updates.libraryOrigin = "sync";
+            }
+            if (Object.keys(updates).length > 0) {
+              await gamesSublevel.put(matchKey, { ...matchGame, ...updates });
             }
             return;
           }

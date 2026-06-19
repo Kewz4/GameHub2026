@@ -71,27 +71,34 @@ const syncEpicLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
       continue;
     }
 
-    // Check for same game from another shop — attach as alternativeShop instead of duplicating
+    // Check for same game from another shop — attach as alternativeShop instead of duplicating.
+    // If the existing entry is a Playnite/catalog stub, also promote it to "sync"
+    // so it moves out of the Retigga tab now that we know the user owns it on Epic.
     const titleMatch = await findGameByTitle(epicGame.app_title);
     if (titleMatch) {
       const [matchKey, matchGame] = titleMatch;
       const alreadyLinked = matchGame.alternativeShops?.some(
         (s) => s.shop === "epic" && s.objectId === objectId
       );
+      const updates: Partial<typeof matchGame> = {};
       if (!alreadyLinked) {
-        await gamesSublevel.put(matchKey, {
-          ...matchGame,
-          alternativeShops: [
-            ...(matchGame.alternativeShops ?? []),
-            {
-              shop: "epic",
-              objectId,
-              executablePath: epicGame.is_installed
-                ? `legendary://run/${objectId}`
-                : null,
-            },
-          ],
-        });
+        updates.alternativeShops = [
+          ...(matchGame.alternativeShops ?? []),
+          {
+            shop: "epic",
+            objectId,
+            executablePath: epicGame.is_installed
+              ? `legendary://run/${objectId}`
+              : null,
+          },
+        ];
+      }
+      // Promote catalog stubs to sync — the user owns this on Epic.
+      if (matchGame.libraryOrigin !== "sync") {
+        updates.libraryOrigin = "sync";
+      }
+      if (Object.keys(updates).length > 0) {
+        await gamesSublevel.put(matchKey, { ...matchGame, ...updates });
       }
       continue; // Don't create a duplicate entry
     }

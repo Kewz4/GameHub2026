@@ -375,7 +375,54 @@ const importPlaynitePlaytime = async (
     }
 
     const gameKey = levelKeys.game(catalogueMatch.shop, catalogueMatch.objectId);
-    const existingGame = await gamesSublevel.get(gameKey).catch(() => null);
+    const existingAtKey = await gamesSublevel.get(gameKey).catch(() => null);
+
+    // Before creating a new catalog entry, check if this game already exists
+    // locally under a DIFFERENT shop (e.g. the catalogue says steam:1097150 for
+    // Fall Guys, but the user owns it on Epic: epic:<id>). The catalogue key
+    // won't be in the DB, so without this check we'd create a duplicate
+    // steam:1097150 entry stamped "catalog" that permanently shows in Retigga
+    // even though the owned epic:<id> entry is already present as "sync".
+    //
+    // Strategy (in priority order):
+    //   1. Exact canonical objectId match across any shop (handles cross-shop)
+    //   2. Compact title match (same as the local-library pass above)
+    // In both cases just update playtime on the existing owned entry.
+    const crossShopMatch =
+      (!existingAtKey || existingAtKey.isDeleted)
+        ? (localGames.find(
+            ({ game }) =>
+              !game.isDeleted &&
+              game.objectId === catalogueMatch.objectId &&
+              game.shop !== catalogueMatch.shop
+          ) ??
+          localGames.find(
+            ({ game }) =>
+              !game.isDeleted &&
+              compactGameTitle(game.title ?? "") === compactGameTitle(catalogueMatch.title)
+          ))
+        : null;
+
+    if (crossShopMatch) {
+      const existing = crossShopMatch.game.playTimeInMilliseconds ?? 0;
+      if (pgPlaytimeMs > existing) {
+        const addedMs = pgPlaytimeMs - existing;
+        await gamesSublevel.put(crossShopMatch.key, {
+          ...crossShopMatch.game,
+          playTimeInMilliseconds: pgPlaytimeMs,
+        });
+        matched.push({
+          title: crossShopMatch.game.title ?? catalogueMatch.title,
+          addedHours: Math.round((addedMs / 3600000) * 10) / 10,
+        });
+        logger.info(
+          `[Playnite] Merged playtime into cross-shop match for "${crossShopMatch.game.title}" (${crossShopMatch.game.shop})`
+        );
+      }
+      continue;
+    }
+
+    const existingGame = existingAtKey;
 
     if (!existingGame || existingGame.isDeleted) {
       await gamesSublevel.put(gameKey, {
@@ -395,8 +442,8 @@ const importPlaynitePlaytime = async (
         // library — NOT that they own it on a connected store. Ownership is
         // established solely by a platform sync (which stamps "sync" and a
         // platform URI exe). So everything added here is unverified → catalog
-        // (Retigga). If the user actually owns it, the next Steam/Epic/GOG
-        // sync promotes it to "sync" and it moves to its store tab.
+        // (Retigga). If the user actually owns it on a platform NOT yet synced,
+        // the next Steam/Epic/GOG sync promotes it to "sync".
         libraryOrigin: "catalog" as const,
       });
       matched.push({
