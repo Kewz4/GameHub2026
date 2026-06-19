@@ -454,6 +454,128 @@ export const pullSharedCache = async (): Promise<number> => {
   return merged;
 };
 
+/**
+ * For a game that is NOT in the user's library, attempts to fetch HydraAPI
+ * achievement definitions and match the unlocked Exophase display names against
+ * them, then syncs any matched unlocks to the HydraAPI cloud profile.
+ *
+ * This is the non-library equivalent of the HydraAPI matching done inside
+ * `applyCachedAchievements` — it lets Exophase-imported unlocks reach the
+ * cloud even when the game hasn't been added to the local library.
+ *
+ * Returns a `HydraApiSyncStatus` describing the outcome.
+ */
+export const matchAndSyncToHydraApiForNonLibraryGame = async (
+  gameKey: string,
+  shop: string,
+  objectId: string,
+  unlockedExophaseNames: string[],
+  exophaseDefinitions: SteamAchievement[]
+): Promise<HydraApiSyncStatus> => {
+  if (!HydraApi.isLoggedIn()) return "logged-out";
+  if (shop !== "steam") return "not-eligible";
+  if (unlockedExophaseNames.length === 0) return "no-match";
+
+  const normalizeDisplayName = (s: string): string =>
+    s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  let hydraDefinitions: SteamAchievement[] | null = null;
+  try {
+    const language =
+      (await db
+        .get<string, string>(levelKeys.language, { valueEncoding: "utf8" })
+        .catch(() => "en")) ?? "en";
+    const fetched = await HydraApi.get<SteamAchievement[]>(
+      `/games/steam/${objectId}/achievements`,
+      { language }
+    ).catch(() => null);
+    if (fetched && fetched.length > 0) {
+      hydraDefinitions = fetched;
+      // Persist the definitions into the achievements sublevel so the catalogue
+      // game page can display them and future syncs don't need to re-fetch.
+      const existing = await gameAchievementsSublevel
+        .get(gameKey)
+        .catch(() => null);
+      await gameAchievementsSublevel
+        .put(gameKey, {
+          achievements: fetched,
+          unlockedAchievements: existing?.unlockedAchievements ?? [],
+          updatedAt: Date.now(),
+          language,
+        })
+        .catch(() => {});
+    }
+  } catch {
+    // Non-fatal — fall through to "no-match".
+  }
+
+  if (!hydraDefinitions) return "no-match";
+
+  // normalized displayName → HydraAPI apiName
+  const hydraByDisplay = new Map<string, string>(
+    hydraDefinitions.map((a) => [
+      normalizeDisplayName(a.displayName ?? a.name ?? ""),
+      a.name ?? "",
+    ])
+  );
+
+  // Exophase apiName → display name (from the entry definitions)
+  const exophaseDisplay = new Map<string, string>(
+    exophaseDefinitions.map((d) => [
+      d.name ?? "",
+      d.displayName ?? d.name ?? "",
+    ])
+  );
+
+  // Match unlocked Exophase names to HydraAPI canonical names.
+  const matched: UnlockedAchievement[] = [];
+  for (const exoName of unlockedExophaseNames) {
+    const display = exophaseDisplay.get(exoName) ?? exoName;
+    const hydraName = hydraByDisplay.get(normalizeDisplayName(display));
+    if (hydraName) {
+      matched.push({ name: hydraName, unlockTime: Date.now() });
+    }
+  }
+
+  if (matched.length === 0) return "no-match";
+
+  // Update the persisted unlocked list with the matched HydraAPI names.
+  const existing = await gameAchievementsSublevel.get(gameKey).catch(() => null);
+  const existingUnlocked = existing?.unlockedAchievements ?? [];
+  const existingNames = new Set(
+    existingUnlocked.map((u) => (u.name ?? "").toUpperCase())
+  );
+  const merged = [
+    ...existingUnlocked,
+    ...matched.filter((u) => !existingNames.has((u.name ?? "").toUpperCase())),
+  ];
+  await gameAchievementsSublevel
+    .put(gameKey, {
+      achievements: hydraDefinitions,
+      unlockedAchievements: merged,
+      updatedAt: Date.now(),
+      language: existing?.language ?? "en",
+    })
+    .catch(() => {});
+
+  // Attempt cloud sync via HydraAPI — requires the game to be in the remote
+  // library. remoteId lookup is handled inside syncUnlockedToHydraApi via a
+  // synthetic minimal Game object.
+  const syntheticGame = {
+    shop: shop as GameShop,
+    objectId,
+    remoteId: null,
+    title: "",
+    iconUrl: null,
+    coverImageUrl: null,
+    isDeleted: false,
+    achievementCount: hydraDefinitions.length,
+    unlockedAchievementCount: merged.length,
+  } as unknown as Game;
+
+  return syncUnlockedToHydraApi(syntheticGame, merged);
+};
+
 /** Upload the full local cache as the shared blob (last writer extends it). */
 export const pushSharedCache = async (): Promise<void> => {
   // Each logical entry is stored under both an id key and a title key; dedupe

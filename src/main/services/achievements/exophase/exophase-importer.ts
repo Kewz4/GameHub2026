@@ -33,6 +33,7 @@ import {
 import {
   applyCachedAchievements,
   getPrefs,
+  matchAndSyncToHydraApiForNonLibraryGame,
   putCacheEntry,
   toDefinitions,
 } from "./exophase-cache";
@@ -373,6 +374,25 @@ async function processAccountGame(
       newlyUnlocked = Math.max(0, unlocked.length - prevUnlockedCount);
       achievementsLogger.log(
         `[Exophase] "${title}" not in library — wrote ${unlocked.length} unlocks to gameAchievementsSublevel`
+      );
+
+      // Attempt HydraAPI matching even for non-library games so unlocks reach
+      // the cloud profile. Uses the Exophase display names to match against
+      // HydraAPI canonical apiNames (Steam games only).
+      const unlockedExophaseNames = unlocked.map((u) => u.name ?? "");
+      const nonLibraryHydraSync =
+        await matchAndSyncToHydraApiForNonLibraryGame(
+          gameKey,
+          shop,
+          objectId,
+          unlockedExophaseNames,
+          definitions
+        );
+      hydraApiSync = nonLibraryHydraSync;
+      hydraApiSyncedCount =
+        nonLibraryHydraSync === "synced" ? unlocked.length : 0;
+      achievementsLogger.log(
+        `[Exophase→HydraAPI] non-library "${title}" ${shop}:${objectId} → ${nonLibraryHydraSync}`
       );
     }
   }

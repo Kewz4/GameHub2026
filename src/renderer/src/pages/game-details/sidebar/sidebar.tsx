@@ -1,4 +1,4 @@
-import { lazy, Suspense, useContext, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useContext, useEffect, useState } from "react";
 import type {
   HowLongToBeatCategory,
   ProtonDBData,
@@ -125,10 +125,6 @@ export function Sidebar({
 
   const { gameTitle, shopDetails, objectId, shop, stats, achievements } =
     useContext(gameDetailsContext);
-
-  const [lookupStatus, setLookupStatus] = useState<string | null>(null);
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const lookupUnsubRef = useRef<(() => void) | null>(null);
 
   // Use canonical (Steam) IDs for HLTB and ProtonDB when available
   const effectiveShop = (canonicalShop ?? shop) as string;
@@ -276,57 +272,6 @@ export function Sidebar({
               {t("see_all_achievements")}
             </Link>
           </ul>
-        </SidebarSection>
-      )}
-
-      {objectId && (
-        <SidebarSection title="Find Achievements">
-          <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: 8 }}>
-            Search Exophase to load achievement definitions for this game.
-          </p>
-          <Button
-            type="button"
-            disabled={lookupLoading}
-            onClick={() => {
-              if (!objectId || !shop) return;
-              setLookupLoading(true);
-              setLookupStatus("Starting lookup…");
-              lookupUnsubRef.current?.();
-              lookupUnsubRef.current = window.electron.onExophaseLookupProgress(
-                (info) => {
-                  setLookupStatus(info.message);
-                }
-              );
-              window.electron
-                .lookupGameAchievements(shop, objectId)
-                .then((result) => {
-                  if (result.found) {
-                    setLookupStatus(
-                      `✓ ${result.achievementCount} achievements (${result.unlockedCount} unlocked)`
-                    );
-                  } else {
-                    setLookupStatus(result.error ?? "No achievements found.");
-                  }
-                })
-                .catch((err: unknown) => {
-                  setLookupStatus(
-                    `Error: ${err instanceof Error ? err.message : String(err)}`
-                  );
-                })
-                .finally(() => {
-                  setLookupLoading(false);
-                  lookupUnsubRef.current?.();
-                  lookupUnsubRef.current = null;
-                });
-            }}
-          >
-            {lookupLoading ? "Looking up…" : "Look up achievements"}
-          </Button>
-          {lookupStatus && (
-            <p style={{ fontSize: "11px", marginTop: 6, color: "var(--muted)" }}>
-              {lookupStatus}
-            </p>
-          )}
         </SidebarSection>
       )}
 
