@@ -1,6 +1,12 @@
-import { ShopAssets } from "@types";
+import { ShopAssets, UnlockedAchievement } from "@types";
 import { HydraApi } from "../hydra-api";
-import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import {
+  db,
+  gameAchievementsSublevel,
+  gamesShopAssetsSublevel,
+  gamesSublevel,
+  levelKeys,
+} from "@main/level";
 
 type ProfileGame = {
   id: string;
@@ -15,6 +21,73 @@ type ProfileGame = {
   achievementCount: number;
   unlockedAchievementCount: number;
 } & ShopAssets;
+
+/**
+ * For a given cloud game that has unlocks on the server, fetch the individual
+ * achievement unlocks via the compare endpoint and merge them into the local
+ * gameAchievementsSublevel. This is what makes "logged in with Hydra →
+ * achievements appear locally" work, since /profile/games only returns counts,
+ * not the actual unlock names.
+ *
+ * Only runs when the cloud has MORE unlocks than we have locally, so it never
+ * overwrites a richer local state.
+ */
+const syncCloudAchievementsToLocal = async (
+  shop: string,
+  objectId: string,
+  gameKey: string,
+  cloudUnlockedCount: number,
+  selfId: string
+): Promise<void> => {
+  const local = await gameAchievementsSublevel.get(gameKey).catch(() => null);
+  const localUnlockedCount = local?.unlockedAchievements?.length ?? 0;
+
+  // Skip if local already has at least as many unlocks as the cloud.
+  if (localUnlockedCount >= cloudUnlockedCount) return;
+
+  const compareResult = await HydraApi.get<{
+    achievements: Array<{
+      name?: string;
+      displayName?: string;
+      targetStat: { unlocked: boolean; unlockTime?: number | null };
+    }>;
+  }>(
+    `/users/${selfId}/games/achievements/compare`,
+    { shop, objectId, language: "en" }
+  ).catch(() => null);
+
+  if (!compareResult) return;
+
+  const cloudUnlocked: UnlockedAchievement[] = compareResult.achievements
+    .filter((a) => a.targetStat.unlocked && a.name)
+    .map((a) => ({
+      name: a.name!,
+      unlockTime: a.targetStat.unlockTime ?? Date.now(),
+    }));
+
+  if (cloudUnlocked.length === 0) return;
+
+  // Merge: keep existing local unlocks, add cloud ones not already present.
+  const existingNames = new Set(
+    (local?.unlockedAchievements ?? []).map((u) => u.name.toUpperCase())
+  );
+  const merged = [
+    ...(local?.unlockedAchievements ?? []),
+    ...cloudUnlocked.filter(
+      (u) => !existingNames.has(u.name.toUpperCase())
+    ),
+  ];
+
+  await gameAchievementsSublevel
+    .put(gameKey, {
+      ...local,
+      achievements: local?.achievements ?? [],
+      unlockedAchievements: merged,
+      updatedAt: local?.updatedAt ?? Date.now(),
+      language: local?.language ?? "en",
+    })
+    .catch(() => {});
+};
 
 const getLocalCollectionIds = (
   localGame:
@@ -58,6 +131,13 @@ const getLocalCollectionIds = (
 export const mergeWithRemoteGames = async (
   { createMissing = true }: { createMissing?: boolean } = {}
 ) => {
+  // Resolve the logged-in user's own ID once so we can pull cloud achievement
+  // unlocks for any game that has more on the server than we have locally.
+  const selfId = await db
+    .get<string, { id: string }>(levelKeys.user, { valueEncoding: "json" })
+    .then((u) => u?.id ?? null)
+    .catch(() => null);
+
   return HydraApi.get<ProfileGame[]>("/profile/games")
     .then(async (response) => {
       for (const game of response) {
@@ -159,6 +239,19 @@ export const mergeWithRemoteGames = async (
           logoPosition: game.logoPosition,
           downloadSources: game.downloadSources,
         });
+
+        // Pull individual achievement unlocks from HydraCloud when the server
+        // has more than we have locally. This is what makes Hydra login restore
+        // achievements that were previously synced up via Exophase/local files.
+        if (selfId && game.unlockedAchievementCount > 0) {
+          await syncCloudAchievementsToLocal(
+            game.shop,
+            game.objectId,
+            gameKey,
+            game.unlockedAchievementCount,
+            selfId
+          );
+        }
       }
     })
     .catch(() => {});
