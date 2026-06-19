@@ -21,6 +21,7 @@ import { Cracker } from "@shared";
 import { publishCombinedNewAchievementNotification } from "../notifications";
 import { db, gameAchievementsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { HydraApi } from "../hydra-api";
+import { getGameAchievementData } from "./get-game-achievement-data";
 import { WindowManager } from "../window-manager";
 import { setTimeout } from "node:timers/promises";
 import { Wine } from "../wine";
@@ -243,53 +244,94 @@ interface HydraCloudAchievement {
  * Pull achievements already stored on the Hydra cloud for this game and seed
  * the local cache with any that are marked as unlocked via Hydra.  This is the
  * only path that brings remote unlocks (e.g. from an Exophase/PSN import done
- * on another session) into the desktop client's local LevelDB.
+ * on another session, or from another device) into the desktop client's local
+ * LevelDB.
+ *
+ * IMPORTANT: this must work for platform-synced games (Steam/GOG/Epic) which do
+ * NOT have a `remoteId` — the read endpoint keys off the user id + shop +
+ * objectId, not the cloud-library record id. Only the write/PUT path needs a
+ * remoteId, so we must NOT gate the pull on it.
  *
  * We only run this when the local cache currently has zero unlocks so we never
- * overwrite a richer local record.
+ * overwrite a richer local record. Returns the number of unlocks seeded.
  */
 const pullHydraCloudAchievementsIfEmpty = async (
   game: Game
-): Promise<void> => {
-  if (!game.remoteId || !HydraApi.isLoggedIn()) return;
+): Promise<number> => {
+  if (game.shop === "custom" || !HydraApi.isLoggedIn()) return 0;
 
   const gameKey = levelKeys.game(game.shop, game.objectId);
   const cached = await gameAchievementsSublevel.get(gameKey).catch(() => null);
 
-  if (cached?.source === "exophase") return;
-  if (cached?.unlockedAchievements && cached.unlockedAchievements.length > 0) return;
+  // Exophase owns its games (its apiNames differ from the cloud's), so never
+  // overwrite. And never clobber a local record that already has unlocks.
+  if (cached?.source === "exophase") return 0;
+  if (cached?.unlockedAchievements && cached.unlockedAchievements.length > 0) {
+    return 0;
+  }
 
   const user = await db
     .get<string, { id: string }>(levelKeys.user, { valueEncoding: "json" })
     .catch(() => null);
-  if (!user?.id) return;
+  if (!user?.id) return 0;
 
   const remoteAchievements = await HydraApi.get<HydraCloudAchievement[]>(
     `/users/${user.id}/games/achievements`,
     { shop: game.shop, objectId: game.objectId }
   ).catch(() => null);
 
-  if (!remoteAchievements) return;
+  if (!remoteAchievements?.length) return 0;
 
   const hydraUnlocked: UnlockedAchievement[] = remoteAchievements
     .filter((a) => a.unlockedOn?.hydra)
     .map((a) => ({ name: a.name, unlockTime: a.unlockTime }));
 
-  if (!hydraUnlocked.length) return;
+  if (!hydraUnlocked.length) return 0;
+
+  // Ensure the achievement DEFINITIONS (schema) are present locally. The
+  // library count + game detail page only credit an unlock whose apiName exists
+  // in the definition set, so seeding unlocks without definitions would still
+  // show 0. getGameAchievementData fetches + persists the schema when missing.
+  let definitions = cached?.achievements ?? [];
+  if (!definitions.length) {
+    definitions = await getGameAchievementData(
+      game.objectId,
+      game.shop,
+      true
+    ).catch(() => [] as typeof definitions);
+  }
+
+  // Re-read in case getGameAchievementData wrote a fresh record.
+  const latest = await gameAchievementsSublevel.get(gameKey).catch(() => null);
 
   achievementsLogger.log(
     "Seeding local cache from Hydra cloud",
+    game.shop,
     game.objectId,
     `(${hydraUnlocked.length} unlocked)`
   );
 
   await gameAchievementsSublevel.put(gameKey, {
-    ...cached,
-    achievements: cached?.achievements ?? [],
+    ...latest,
+    achievements: latest?.achievements?.length
+      ? latest.achievements
+      : definitions,
     unlockedAchievements: hydraUnlocked,
-    updatedAt: cached?.updatedAt,
-    language: cached?.language,
+    updatedAt: latest?.updatedAt ?? Date.now(),
+    language: latest?.language,
   });
+
+  // Keep the games record's denormalised count in sync so the library grid and
+  // profile overlay reflect the unlock immediately.
+  const gameRecord = await gamesSublevel.get(gameKey).catch(() => null);
+  if (gameRecord) {
+    await gamesSublevel.put(gameKey, {
+      ...gameRecord,
+      unlockedAchievementCount: hydraUnlocked.length,
+    });
+  }
+
+  return hydraUnlocked.length;
 };
 
 export class AchievementWatcherManager {
@@ -546,10 +588,36 @@ export class AchievementWatcherManager {
       for (const gogGame of gogGames) {
         await syncGogAchievements(gogGame).catch(() => {});
       }
+
+      // Pull any cloud-stored unlocks (Exophase/PSN imports, other devices) into
+      // the local cache for the whole library. This is the only path that brings
+      // remote unlocks down to platform-synced games (Steam/GOG/Epic) which have
+      // no remoteId, so it must run for every game — not just on game-open.
+      await this.pullCloudAchievementsForLibrary();
     } catch (err) {
       achievementsLogger.error("Error on preSearchAchievements", err);
     }
 
     this._hasFinishedPreSearch = true;
+  }
+
+  public static async pullCloudAchievementsForLibrary() {
+    if (!HydraApi.isLoggedIn()) return;
+
+    const games = (await gamesSublevel.values().all()).filter(
+      (g) => !g.isDeleted && g.shop !== "custom"
+    );
+
+    let seeded = 0;
+    for (const game of games) {
+      seeded += await pullHydraCloudAchievementsIfEmpty(game).catch(() => 0);
+    }
+
+    if (seeded > 0) {
+      achievementsLogger.log(
+        `Seeded ${seeded} cloud unlock(s) into local cache; refreshing library`
+      );
+      WindowManager.sendToAppWindows("on-library-batch-complete");
+    }
   }
 }
