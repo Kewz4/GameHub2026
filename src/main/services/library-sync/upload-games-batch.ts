@@ -41,7 +41,15 @@ export const uploadGamesBatch = async () => {
     ).catch(() => {});
   }
 
-  await mergeWithRemoteGames();
+  // Upload local catalogue/import games to the cloud so their achievements can
+  // sync to the Hydra profile — but DO NOT auto-materialize cloud games back
+  // into the local library on login. Catalogue/Playnite/Exophase imports live
+  // in the cloud purely for achievement sync; they should only appear in the
+  // local library when the user explicitly adds them (or, for owned games, when
+  // the platform sync re-adds them). This prevents deleted/excluded imports from
+  // being restored on every login. Owned games (libraryOrigin "sync") are never
+  // uploaded here and are re-synced from their platform on each login.
+  await mergeWithRemoteGames({ createMissing: false });
 
   AchievementWatcherManager.preSearchAchievements();
 
