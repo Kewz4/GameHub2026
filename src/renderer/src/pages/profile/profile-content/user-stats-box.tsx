@@ -1,17 +1,16 @@
-import { useCallback, useContext } from "react";
+import { useCallback, useContext, useMemo } from "react";
 import { userProfileContext } from "@renderer/context";
 import { useTranslation } from "react-i18next";
 import { useFormat, useUserDetails } from "@renderer/hooks";
 import { MAX_MINUTES_TO_SHOW_IN_PLAYTIME } from "@renderer/constants";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
-import { useSubscription } from "@renderer/hooks/use-subscription";
 import { ClockIcon, TrophyIcon } from "@primer/octicons-react";
 import { Award } from "lucide-react";
 import "./user-stats-box.scss";
 
 export function UserStatsBox() {
-  const { showHydraCloudModal } = useSubscription();
-  const { userStats, isMe, userProfile } = useContext(userProfileContext);
+  const { userStats, isMe, userProfile, libraryGames, pinnedGames } =
+    useContext(userProfileContext);
   const { userDetails } = useUserDetails();
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
@@ -33,69 +32,76 @@ export function UserStatsBox() {
     [numberFormatter, t]
   );
 
+  // When the server withholds subscription-gated fields, compute them locally
+  // from the library games we already fetched (available to all GameHub users).
+  const allGames = useMemo(
+    () => [...libraryGames, ...pinnedGames],
+    [libraryGames, pinnedGames]
+  );
+
+  const localUnlockedSum = useMemo(
+    () => allGames.reduce((acc, g) => acc + (g.unlockedAchievementCount ?? 0), 0),
+    [allGames]
+  );
+
+  const localPointsSum = useMemo(
+    () => allGames.reduce((acc, g) => acc + (g.achievementsPointsEarnedSum ?? 0), 0),
+    [allGames]
+  );
+
   if (!userStats) return null;
 
   const karma = isMe ? userDetails?.karma : userProfile?.karma;
   const hasKarma = karma !== undefined && karma !== null;
 
+  // Use server value when available; fall back to local sum for own profile.
+  const achievementSum =
+    userStats.unlockedAchievementSum !== undefined
+      ? userStats.unlockedAchievementSum
+      : isMe
+        ? localUnlockedSum
+        : undefined;
+
+  const pointsSum =
+    userStats.achievementsPointsEarnedSum !== undefined
+      ? userStats.achievementsPointsEarnedSum
+      : isMe && localPointsSum > 0
+        ? ({ value: localPointsSum, topPercentile: null } as any)
+        : undefined;
+
   return (
     <div className="user-stats__box">
       <ul className="user-stats__list">
-        {(isMe || userStats.unlockedAchievementSum !== undefined) && (
+        {(isMe || achievementSum !== undefined) && (
           <li className="user-stats__list-item">
             <h3 className="user-stats__list-title">
               {t("achievements_unlocked")}
             </h3>
-            {userStats.unlockedAchievementSum !== undefined ? (
-              <div className="user-stats__stats-row">
-                <p className="user-stats__list-description">
-                  <TrophyIcon /> {userStats.unlockedAchievementSum}{" "}
-                  {t("achievements")}
-                </p>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => showHydraCloudModal("achievements")}
-                className="user-stats__link"
-              >
-                <small style={{ color: "var(--color-warning)" }}>
-                  {t("show_achievements_on_profile")}
-                </small>
-              </button>
-            )}
+            <div className="user-stats__stats-row">
+              <p className="user-stats__list-description">
+                <TrophyIcon /> {achievementSum ?? 0}{" "}
+                {t("achievements")}
+              </p>
+            </div>
           </li>
         )}
 
-        {(isMe || userStats.achievementsPointsEarnedSum !== undefined) && (
+        {(isMe || pointsSum !== undefined) && pointsSum !== undefined && (
           <li className="user-stats__list-item">
             <h3 className="user-stats__list-title">{t("earned_points")}</h3>
-            {userStats.achievementsPointsEarnedSum !== undefined ? (
-              <div className="user-stats__stats-row">
-                <p className="user-stats__list-description">
-                  <GameHubIcon width={20} height={20} />
-                  {numberFormatter.format(
-                    userStats.achievementsPointsEarnedSum.value
-                  )}
-                </p>
+            <div className="user-stats__stats-row">
+              <p className="user-stats__list-description">
+                <GameHubIcon width={20} height={20} />
+                {numberFormatter.format(pointsSum.value)}
+              </p>
+              {pointsSum.topPercentile !== null && (
                 <p title={t("ranking_updated_weekly")}>
                   {t("top_percentile", {
-                    percentile:
-                      userStats.achievementsPointsEarnedSum.topPercentile,
+                    percentile: pointsSum.topPercentile,
                   })}
                 </p>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => showHydraCloudModal("achievements-points")}
-                className="user-stats__link"
-              >
-                <small className="user-stats__link--warning">
-                  {t("show_points_on_profile")}
-                </small>
-              </button>
-            )}
+              )}
+            </div>
           </li>
         )}
 

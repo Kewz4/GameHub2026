@@ -30,16 +30,21 @@ const saveAchievementsOnLocal = async (
 ) => {
   const levelKey = levelKeys.game(shop, objectId);
 
-  return gameAchievementsSublevel
+  // Use null fallback so a missing key doesn't cause the entire save to silently
+  // fail (LevelDB throws NotFound which would reject the promise chain).
+  const gameAchievement = await gameAchievementsSublevel
     .get(levelKey)
-    .then(async (gameAchievement) => {
-      await gameAchievementsSublevel.put(levelKey, {
-        ...gameAchievement,
-        achievements: gameAchievement?.achievements ?? [],
-        unlockedAchievements: unlockedAchievements,
-        updatedAt: gameAchievement?.updatedAt,
-        language: gameAchievement?.language,
-      });
+    .catch(() => null);
+
+  return gameAchievementsSublevel
+    .put(levelKey, {
+      ...gameAchievement,
+      achievements: gameAchievement?.achievements ?? [],
+      unlockedAchievements: unlockedAchievements,
+      updatedAt: gameAchievement?.updatedAt,
+      language: gameAchievement?.language,
+    })
+    .then(async () => {
 
       if (!sendUpdateEvent) return;
 
@@ -61,7 +66,9 @@ export const mergeAchievements = async (
 ) => {
   const gameKey = levelKeys.game(game.shop, game.objectId);
 
-  let localGameAchievement = await gameAchievementsSublevel.get(gameKey);
+  let localGameAchievement = await gameAchievementsSublevel
+    .get(gameKey)
+    .catch(() => null);
   const userPreferences = await db.get<string, UserPreferences>(
     levelKeys.userPreferences,
     {
