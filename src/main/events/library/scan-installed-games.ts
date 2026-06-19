@@ -1,5 +1,3 @@
-import path from "node:path";
-import fs from "node:fs";
 import { t } from "i18next";
 import { registerEvent } from "../register-event";
 import { gamesSublevel } from "@main/level";
@@ -9,14 +7,10 @@ import {
   logger,
   WindowManager,
 } from "@main/services";
-
-const SCAN_DIRECTORIES = [
-  String.raw`C:\Games`,
-  String.raw`D:\Games`,
-  String.raw`C:\Program Files (x86)\Steam\steamapps\common`,
-  String.raw`C:\Program Files\Steam\steamapps\common`,
-  String.raw`C:\Program Files (x86)\DODI-Repacks`,
-];
+import {
+  discoverScanDirectories,
+  indexExecutables,
+} from "@main/helpers/scan-executables";
 
 interface FoundGame {
   title: string;
@@ -27,18 +21,6 @@ interface FoundGame {
 interface ScanResult {
   foundGames: FoundGame[];
   total: number;
-}
-
-async function searchInDirectories(
-  executableNames: Set<string>
-): Promise<string | null> {
-  for (const scanDir of SCAN_DIRECTORIES) {
-    if (!fs.existsSync(scanDir)) continue;
-
-    const foundPath = await findExecutableInFolder(scanDir, executableNames);
-    if (foundPath) return foundPath;
-  }
-  return null;
 }
 
 async function publishScanNotification(foundCount: number): Promise<void> {
@@ -83,29 +65,48 @@ const scanInstalledGames = async (
     (g) => g.game.isDeleted || !g.game.executablePath
   );
 
-  let scanned = 0;
+  // Build the wanted executable-name set across ALL games up front, then walk
+  // each scan directory ONCE to resolve them (a single O(tree) pass instead of
+  // re-walking the whole tree per game). Map each lower-cased exe name back to
+  // the games that want it so a single found file can satisfy multiple games.
+  const namesToGames = new Map<string, Array<{ key: string; game: typeof games[number]["game"] }>>();
   for (const { key, game } of gamesToScan) {
-    scanned++;
-    WindowManager.sendToAppWindows("on-scan-progress", {
-      scanned,
-      total: gamesToScan.length,
-      foundCount: foundGames.length,
-      currentTitle: game.title,
-    });
-
-    const executableNames = GameExecutables.getExecutablesForGame(
-      game.objectId
-    );
-
+    const executableNames = GameExecutables.getExecutablesForGame(game.objectId);
     if (!executableNames || executableNames.length === 0) continue;
+    for (const name of executableNames) {
+      const lower = name.toLowerCase();
+      const list = namesToGames.get(lower) ?? [];
+      list.push({ key, game });
+      namesToGames.set(lower, list);
+    }
+  }
 
-    const normalizedNames = new Set(
-      executableNames.map((name) => name.toLowerCase())
-    );
+  const wantedNames = new Set(namesToGames.keys());
 
-    const foundPath = await searchInDirectories(normalizedNames);
+  WindowManager.sendToAppWindows("on-scan-progress", {
+    scanned: 0,
+    total: gamesToScan.length,
+    foundCount: 0,
+    currentTitle: "Indexing installed games…",
+  });
 
-    if (foundPath) {
+  const directories = discoverScanDirectories();
+  logger.info(
+    `[ScanInstalledGames] Scanning ${directories.length} director${directories.length === 1 ? "y" : "ies"} for ${wantedNames.size} executable name(s)`
+  );
+
+  const foundByName = await indexExecutables(directories, wantedNames);
+
+  // Assign resolved paths back to games. Track seen keys so a game referenced by
+  // several exe names is only written/reported once.
+  const seenKeys = new Set<string>();
+  let scanned = 0;
+  for (const [name, foundPath] of foundByName) {
+    for (const { key, game } of namesToGames.get(name) ?? []) {
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      scanned++;
+
       if (!dryRun) {
         await gamesSublevel.put(key, {
           ...game,
@@ -123,6 +124,12 @@ const scanInstalledGames = async (
       );
 
       foundGames.push({ title: game.title, executablePath: foundPath, key });
+      WindowManager.sendToAppWindows("on-scan-progress", {
+        scanned,
+        total: gamesToScan.length,
+        foundCount: foundGames.length,
+        currentTitle: game.title,
+      });
     }
   }
 
@@ -136,37 +143,5 @@ const scanInstalledGames = async (
 
   return { foundGames, total: gamesToScan.length };
 };
-
-async function findExecutableInFolder(
-  folderPath: string,
-  executableNames: Set<string>
-): Promise<string | null> {
-  try {
-    const entries = await fs.promises.readdir(folderPath, {
-      withFileTypes: true,
-      recursive: true,
-    });
-
-    for (const entry of entries) {
-      if (!entry.isFile()) continue;
-
-      const fileName = entry.name.toLowerCase();
-
-      if (executableNames.has(fileName)) {
-        const parentPath =
-          "parentPath" in entry ? entry.parentPath : folderPath;
-
-        return path.join(parentPath, entry.name);
-      }
-    }
-  } catch (err) {
-    logger.error(
-      `[ScanInstalledGames] Error reading folder ${folderPath}:`,
-      err
-    );
-  }
-
-  return null;
-}
 
 registerEvent("scanInstalledGames", scanInstalledGames);
