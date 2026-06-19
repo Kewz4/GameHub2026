@@ -60,6 +60,9 @@ export function SettingsContextGeneral({
   const [generatingMetadata, setGeneratingMetadata] = useState(false);
   const [clearingLibrary, setClearingLibrary] = useState(false);
   const [clearLibraryConfirm, setClearLibraryConfirm] = useState(false);
+  const [deletingCloudLibrary, setDeletingCloudLibrary] = useState(false);
+  const [deleteCloudLibraryConfirm, setDeleteCloudLibraryConfirm] =
+    useState(false);
   const [metadataProgress, setMetadataProgress] = useState<{
     current: number;
     total: number;
@@ -550,6 +553,69 @@ export function SettingsContextGeneral({
               theme="outline"
               disabled={clearingLibrary}
               onClick={() => setClearLibraryConfirm(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
+
+        <p
+          style={{
+            margin: "20px 0 0",
+            fontSize: "0.875rem",
+            color: "var(--color-danger, #e05c5c)",
+          }}
+        >
+          Permanently deletes every game from your Hydra cloud library (the
+          server-side list synced to your account). Use this to stop old
+          Playnite/Exophase imports and ghost games from being restored on every
+          login. This does not remove games from this device.
+        </p>
+        {!deleteCloudLibraryConfirm ? (
+          <Button
+            theme="outline"
+            onClick={() => setDeleteCloudLibraryConfirm(true)}
+            style={{
+              borderColor: "var(--color-danger, #e05c5c)",
+              color: "var(--color-danger, #e05c5c)",
+            }}
+          >
+            Delete Entire Cloud Library
+          </Button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: "0.9rem", opacity: 0.8 }}>
+              Are you sure?
+            </span>
+            <Button
+              theme="danger"
+              disabled={deletingCloudLibrary}
+              onClick={async () => {
+                setDeletingCloudLibrary(true);
+                try {
+                  const result = await window.electron.deleteCloudLibrary();
+                  if (result.error === "not-logged-in") {
+                    showErrorToast("You must be logged in to Hydra.");
+                  } else {
+                    showSuccessToast(
+                      "Cloud library cleared",
+                      `${result.deleted} game${result.deleted !== 1 ? "s" : ""} removed from your Hydra account.`
+                    );
+                  }
+                } catch {
+                  showErrorToast("Failed to clear cloud library.");
+                } finally {
+                  setDeletingCloudLibrary(false);
+                  setDeleteCloudLibraryConfirm(false);
+                }
+              }}
+            >
+              {deletingCloudLibrary ? "Deleting…" : "Yes, delete cloud library"}
+            </Button>
+            <Button
+              theme="outline"
+              disabled={deletingCloudLibrary}
+              onClick={() => setDeleteCloudLibraryConfirm(false)}
             >
               Cancel
             </Button>

@@ -412,6 +412,11 @@ contextBridge.exposeInMainWorld("electron", {
   mergeDuplicateGames: () => ipcRenderer.invoke("mergeDuplicateGames"),
   clearLibrary: (): Promise<{ cleared: number }> =>
     ipcRenderer.invoke("clearLibrary"),
+  deleteCloudLibrary: (): Promise<{
+    deleted: number;
+    total?: number;
+    error?: string;
+  }> => ipcRenderer.invoke("deleteCloudLibrary"),
   openGameInstaller: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("openGameInstaller", shop, objectId),
   getGameInstallerActionType: (shop: GameShop, objectId: string) =>

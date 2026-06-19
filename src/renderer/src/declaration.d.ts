@@ -518,6 +518,11 @@ declare global {
       mergedTitles: string[];
     }>;
     clearLibrary: () => Promise<{ cleared: number }>;
+    deleteCloudLibrary: () => Promise<{
+      deleted: number;
+      total?: number;
+      error?: string;
+    }>;
     findLibraryGameByTitle: (
       title: string
     ) => Promise<import("@types").Game | null>;

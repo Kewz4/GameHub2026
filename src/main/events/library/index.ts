@@ -13,6 +13,7 @@ import "./check-steam-shortcut";
 import "./cleanup-unused-assets";
 import "./clear-library";
 import "./clear-new-download-options";
+import "./delete-cloud-library";
 import "./close-game";
 import "./complete-epic-auth";
 import "./complete-gog-auth";
