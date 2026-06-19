@@ -129,17 +129,25 @@ const normalizeDisplayName = (s: string): string =>
  * the canonical (Steam) apiName. Best-effort: silently no-ops when the user is
  * logged out, lacks a subscription, or the game has no remoteId.
  */
+export type HydraApiSyncStatus =
+  | "synced"
+  | "no-match"
+  | "not-eligible"
+  | "logged-out"
+  | "no-remote-id"
+  | "failed";
+
 export const syncUnlockedToHydraApi = async (
   game: Game,
   unlockedAchievements: UnlockedAchievement[]
-): Promise<void> => {
+): Promise<HydraApiSyncStatus> => {
   if (!HydraApi.isLoggedIn()) {
     achievementsLogger.log(
       `[Exophase→HydraAPI] skipped ${game.shop}:${game.objectId} — not logged in to Hydra`
     );
-    return;
+    return "logged-out";
   }
-  if (unlockedAchievements.length === 0) return;
+  if (unlockedAchievements.length === 0) return "no-match";
 
   // Platform-synced games (Steam, GOG, etc.) are not uploaded to the Hydra
   // cloud library — so they have no remoteId. Attempt to find the remoteId by
@@ -150,9 +158,10 @@ export const syncUnlockedToHydraApi = async (
       `[Exophase→HydraAPI] ${game.shop}:${game.objectId} has no remoteId — fetching from remote`
     );
     try {
-      const remoteGames = await HydraApi.get<
-        Array<{ id: string; shop: string; objectId: string }>
-      >("/profile/games");
+      const remoteGames =
+        await HydraApi.get<
+          Array<{ id: string; shop: string; objectId: string }>
+        >("/profile/games");
       const match = remoteGames.find(
         (g) => g.shop === game.shop && g.objectId === game.objectId
       );
@@ -166,7 +175,7 @@ export const syncUnlockedToHydraApi = async (
     achievementsLogger.log(
       `[Exophase→HydraAPI] ${game.shop}:${game.objectId} not found in remote library — skipping`
     );
-    return;
+    return "no-remote-id";
   }
 
   try {
@@ -178,6 +187,7 @@ export const syncUnlockedToHydraApi = async (
     achievementsLogger.log(
       `[Exophase→HydraAPI] synced ${unlockedAchievements.length} unlocks for ${game.shop}:${game.objectId}`
     );
+    return "synced";
   } catch (err) {
     // Subscription-required / network errors are non-fatal — the unlocks are
     // already persisted locally and will retry on the next sync.
@@ -185,6 +195,7 @@ export const syncUnlockedToHydraApi = async (
       `[Exophase→HydraAPI] cloud sync failed for ${game.shop}:${game.objectId}`,
       err instanceof Error ? err.message : String(err)
     );
+    return "failed";
   }
 };
 
@@ -197,19 +208,26 @@ export const syncUnlockedToHydraApi = async (
  * fraction unlocked (e.g. 43/117 not 43/43).
  *
  * When no HydraAPI definitions exist yet, Exophase definitions are used as a
- * fallback so the game page still shows something. Returns true when the cache
- * had an entry and an update was written.
+ * fallback so the game page still shows something. Returns `applied: true` when
+ * the cache had an entry and an update was written, plus the outcome of the
+ * HydraAPI cloud upload (for the sync report's per-game debug view).
  */
+export interface ApplyCachedResult {
+  applied: boolean;
+  hydraApiSync?: HydraApiSyncStatus;
+  hydraApiSyncedCount?: number;
+}
+
 export const applyCachedAchievements = async (
   gameKey: string,
   game: Game
-): Promise<boolean> => {
+): Promise<ApplyCachedResult> => {
   // Safety guard: never create a new library entry.
   const existingGame = await gamesSublevel.get(gameKey).catch(() => null);
-  if (!existingGame || existingGame.isDeleted) return false;
+  if (!existingGame || existingGame.isDeleted) return { applied: false };
 
   const entry = await lookupCacheEntry(game);
-  if (!entry || entry.definitions.length === 0) return false;
+  if (!entry || entry.definitions.length === 0) return { applied: false };
 
   const existing = await gameAchievementsSublevel
     .get(gameKey)
@@ -304,10 +322,20 @@ export const applyCachedAchievements = async (
   // undefined do the unlocked apiNames belong to the HydraAPI definition set
   // (canonical names the cloud accepts); Exophase-fallback names are local-only.
   if (finalSource === undefined) {
-    await syncUnlockedToHydraApi(existingGame, finalUnlocked);
+    const hydraApiSync = await syncUnlockedToHydraApi(
+      existingGame,
+      finalUnlocked
+    );
+    return {
+      applied: true,
+      hydraApiSync,
+      hydraApiSyncedCount: hydraApiSync === "synced" ? finalUnlocked.length : 0,
+    };
   }
 
-  return true;
+  // Exophase-fallback definitions (no HydraAPI/Steam definitions for this game,
+  // e.g. EA/PSN-only) are never uploaded — they stay local.
+  return { applied: true, hydraApiSync: "not-eligible" };
 };
 
 /**
@@ -338,7 +366,7 @@ export const applyCacheToLibrary = async (): Promise<number> => {
         continue;
       }
 
-      if (await applyCachedAchievements(key, game)) applied++;
+      if ((await applyCachedAchievements(key, game)).applied) applied++;
     }
 
     if (applied > 0) {

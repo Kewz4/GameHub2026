@@ -4,5 +4,6 @@ import "./clear-exophase-session";
 import "./sync-exophase-achievements";
 import "./import-playstation-achievements";
 import "./get-exophase-sync-report";
+import "./get-exophase-sync-state";
 import "./run-exophase-background-sync";
 import "./lookup-game-achievements";

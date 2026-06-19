@@ -478,6 +478,23 @@ export interface ExophaseSyncReportDebug {
   defSource: "hydraapi" | "exophase" | "none";
   /** Whether the matched game existed in the user's library. */
   inLibrary: boolean;
+  /** Outcome of pushing the matched unlocks up to the user's HydraAPI cloud
+   *  profile (only attempted for games with HydraAPI/Steam definitions):
+   *   - "synced"      — unlocks were uploaded to HydraAPI
+   *   - "no-match"    — no Exophase unlock matched a HydraAPI achievement key
+   *   - "not-eligible"— no HydraAPI definitions (e.g. EA/PSN-only) → local only
+   *   - "logged-out"  — user isn't logged into Hydra
+   *   - "no-remote-id"— game isn't in the user's remote library
+   *   - "failed"      — upload attempted but errored (subscription/network) */
+  hydraApiSync?:
+    | "synced"
+    | "no-match"
+    | "not-eligible"
+    | "logged-out"
+    | "no-remote-id"
+    | "failed";
+  /** How many unlocks were matched onto HydraAPI keys and uploaded. */
+  hydraApiSyncedCount?: number;
   /** Free-text note when the title was skipped or only partially resolved. */
   note?: string;
 }

@@ -11,11 +11,28 @@ import type { ExophaseSyncProgress } from "@main/services/achievements/exophase"
  *   - `on-exophase-sync-active`   { active: boolean }  — start/stop signal
  *   - `on-exophase-sync-progress` { current, total, … } — per-game progress
  */
+/**
+ * Live snapshot of the current sync so a window opened mid-sync can render the
+ * progress immediately (via `getExophaseSyncState`) instead of waiting up to a
+ * few seconds for the next streamed event.
+ */
+let currentActive = false;
+let lastProgress: ExophaseSyncProgress | null = null;
+
+export const getSyncSnapshot = (): {
+  active: boolean;
+  progress: ExophaseSyncProgress | null;
+} => ({ active: currentActive, progress: lastProgress });
+
 export const broadcastSyncActive = (active: boolean): void => {
+  currentActive = active;
+  if (!active) lastProgress = null;
   WindowManager.sendToAppWindows("on-exophase-sync-active", { active });
 };
 
 export const broadcastSyncProgress = (progress: ExophaseSyncProgress): void => {
+  currentActive = true;
+  lastProgress = progress;
   WindowManager.sendToAppWindows("on-exophase-sync-progress", progress);
 };
 

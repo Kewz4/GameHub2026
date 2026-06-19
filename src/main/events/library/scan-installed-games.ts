@@ -71,14 +71,17 @@ const scanInstalledGames = async (
     .all()
     .then((results) =>
       results
-        .filter(
-          ([_key, game]) => game.isDeleted === false && game.shop !== "custom"
-        )
+        .filter(([_key, game]) => game.shop !== "custom")
         .map(([key, game]) => ({ key, game }))
     );
 
   const foundGames: FoundGame[] = [];
-  const gamesToScan = games.filter((g) => !g.game.executablePath);
+  // Scan a game when it has no resolved executable yet, OR when it has been
+  // deleted from the library — deleted games are re-discovered and resurrected
+  // when their executable is still on disk (e.g. after clearing the library).
+  const gamesToScan = games.filter(
+    (g) => g.game.isDeleted || !g.game.executablePath
+  );
 
   let scanned = 0;
   for (const { key, game } of gamesToScan) {
@@ -106,6 +109,8 @@ const scanInstalledGames = async (
       if (!dryRun) {
         await gamesSublevel.put(key, {
           ...game,
+          // Resurrect a previously-deleted entry when it's found on disk again.
+          isDeleted: false,
           executablePath: foundPath,
           // Found installed on disk = owned, not a catalogue-only entry
           libraryOrigin: "sync",

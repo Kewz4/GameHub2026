@@ -366,7 +366,18 @@ declare global {
       totalUnlocked: number;
       error?: string;
     }>;
-    getExophaseSyncReport: () => Promise<import("@types").ExophaseSyncReport | null>;
+    getExophaseSyncReport: () => Promise<
+      import("@types").ExophaseSyncReport | null
+    >;
+    getExophaseSyncState: () => Promise<{
+      active: boolean;
+      progress: {
+        current: number;
+        total: number;
+        title: string;
+        phase?: string;
+      } | null;
+    }>;
     runExophaseBackgroundSync: () => Promise<{ ok: boolean }>;
     onExophaseSyncProgress: (
       cb: (progress: {
@@ -380,7 +391,13 @@ declare global {
     lookupGameAchievements: (
       shop: string,
       objectId: string
-    ) => Promise<{ found: boolean; achievementCount: number; unlockedCount: number; awardsUrl?: string; error?: string }>;
+    ) => Promise<{
+      found: boolean;
+      achievementCount: number;
+      unlockedCount: number;
+      awardsUrl?: string;
+      error?: string;
+    }>;
     onExophaseLookupProgress: (
       cb: (info: { status: string; message: string }) => void
     ) => () => void;

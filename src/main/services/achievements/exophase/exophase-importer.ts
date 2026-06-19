@@ -93,7 +93,9 @@ async function resolveAwards(
     let url = knownAwardsUrl;
     if (playerId) url = `${url}#${playerId}`;
     const settleMs = playerId ? 3_000 : 0;
-    const achievements = parseAchievements(await fetcher.fetchHtml(url, settleMs));
+    const achievements = parseAchievements(
+      await fetcher.fetchHtml(url, settleMs)
+    );
     if (achievements.length > 0) {
       return { achievements, awardsUrl: url, masterId: null };
     }
@@ -119,7 +121,9 @@ async function resolveAwards(
     // XHR AFTER page load. Without a settle delay the data-earned attributes
     // are still all "0" when we scrape. 3 s is enough for the XHR to complete.
     const settleMs = playerId ? 3_000 : 0;
-    const achievements = parseAchievements(await fetcher.fetchHtml(url, settleMs));
+    const achievements = parseAchievements(
+      await fetcher.fetchHtml(url, settleMs)
+    );
     if (achievements.length === 0) continue;
 
     return { achievements, awardsUrl: url, masterId: match.master_id ?? null };
@@ -162,7 +166,9 @@ const buildReportGame = (
  *   2. unlockCountConsistent — game.unlockedAchievementCount === stored unlocks
  *   3. noOrphanUnlocks    — every unlocked apiName exists in the definition set
  */
-type VerificationChecks = NonNullable<ExophaseSyncReportGame["verificationChecks"]>;
+type VerificationChecks = NonNullable<
+  ExophaseSyncReportGame["verificationChecks"]
+>;
 
 async function verifyGameAchievements(
   gameKey: string
@@ -289,6 +295,10 @@ async function processAccountGame(
   let verification: ExophaseSyncReportGame["verificationChecks"] = undefined;
   let defSource: "hydraapi" | "exophase" | "none" = "exophase";
   let inLibrary = false;
+  let hydraApiSync: NonNullable<
+    ExophaseSyncReportGame["debug"]
+  >["hydraApiSync"];
+  let hydraApiSyncedCount: number | undefined;
 
   if (catalogueMatch && objectId) {
     const gameKey = levelKeys.game(shop, objectId);
@@ -296,7 +306,8 @@ async function processAccountGame(
     const existingAchData = await gameAchievementsSublevel
       .get(gameKey)
       .catch(() => null);
-    const prevUnlockedCount = existingAchData?.unlockedAchievements?.length ?? 0;
+    const prevUnlockedCount =
+      existingAchData?.unlockedAchievements?.length ?? 0;
 
     if (game && !game.isDeleted) {
       inLibrary = true;
@@ -311,13 +322,16 @@ async function processAccountGame(
       }
 
       iconUrl = game.iconUrl ?? null;
-      await applyCachedAchievements(gameKey, game);
+      const applyResult = await applyCachedAchievements(gameKey, game);
+      hydraApiSync = applyResult.hydraApiSync;
+      hydraApiSyncedCount = applyResult.hydraApiSyncedCount;
 
       // Re-read after apply and count how many unlocks were added.
       const afterAchData = await gameAchievementsSublevel
         .get(gameKey)
         .catch(() => null);
-      const afterUnlockedCount = afterAchData?.unlockedAchievements?.length ?? 0;
+      const afterUnlockedCount =
+        afterAchData?.unlockedAchievements?.length ?? 0;
       newlyUnlocked = Math.max(0, afterUnlockedCount - prevUnlockedCount);
 
       if (afterAchData?.achievements?.length) {
@@ -340,17 +354,22 @@ async function processAccountGame(
       // Game is not in the library — write achievements to the sublevel so the
       // catalogue game page can display the user's unlocked state, and so they
       // apply immediately if the user adds the game to their library later.
-      if (existingAchData?.source !== "exophase" && existingAchData?.achievements?.length) {
+      if (
+        existingAchData?.source !== "exophase" &&
+        existingAchData?.achievements?.length
+      ) {
         reportTotalAchievements = existingAchData.achievements.length;
         defSource = "hydraapi";
       }
-      await gameAchievementsSublevel.put(gameKey, {
-        achievements: definitions,
-        unlockedAchievements: unlocked,
-        updatedAt: Date.now(),
-        language: "en",
-        source: "exophase" as const,
-      }).catch(() => {});
+      await gameAchievementsSublevel
+        .put(gameKey, {
+          achievements: definitions,
+          unlockedAchievements: unlocked,
+          updatedAt: Date.now(),
+          language: "en",
+          source: "exophase" as const,
+        })
+        .catch(() => {});
       newlyUnlocked = Math.max(0, unlocked.length - prevUnlockedCount);
       achievementsLogger.log(
         `[Exophase] "${title}" not in library — wrote ${unlocked.length} unlocks to gameAchievementsSublevel`
@@ -368,6 +387,8 @@ async function processAccountGame(
     catalogueTitle: catalogueMatch?.title,
     defSource,
     inLibrary,
+    hydraApiSync,
+    hydraApiSyncedCount,
     note: !catalogueMatch
       ? "No Hydra catalogue entry matched — achievements cached by title only."
       : !inLibrary

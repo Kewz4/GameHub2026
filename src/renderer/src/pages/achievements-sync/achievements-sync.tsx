@@ -80,6 +80,24 @@ function DebugModal({
               <td>Definition source</td>
               <td>{d?.defSource ?? "—"}</td>
             </tr>
+            <tr>
+              <td>HydraAPI achievements synced</td>
+              <td>
+                {d?.hydraApiSync === "synced"
+                  ? `✓ Synced${d.hydraApiSyncedCount ? ` (${d.hydraApiSyncedCount})` : ""}`
+                  : d?.hydraApiSync === "no-match"
+                    ? "No Exophase unlock matched a HydraAPI achievement"
+                    : d?.hydraApiSync === "not-eligible"
+                      ? "Not eligible — no HydraAPI/Steam definitions (local only)"
+                      : d?.hydraApiSync === "logged-out"
+                        ? "Skipped — not logged in to Hydra"
+                        : d?.hydraApiSync === "no-remote-id"
+                          ? "Skipped — game not in your Hydra cloud library"
+                          : d?.hydraApiSync === "failed"
+                            ? "✗ Upload failed (subscription/network)"
+                            : "—"}
+              </td>
+            </tr>
             {game.verificationChecks && (
               <>
                 <tr>
@@ -94,9 +112,7 @@ function DebugModal({
                 </tr>
                 <tr>
                   <td>No orphan unlocks</td>
-                  <td>
-                    {game.verificationChecks.noOrphanUnlocks ? "✓" : "✗"}
-                  </td>
+                  <td>{game.verificationChecks.noOrphanUnlocks ? "✓" : "✗"}</td>
                 </tr>
               </>
             )}
@@ -150,6 +166,17 @@ export default function AchievementsSync() {
   useEffect(() => {
     dispatch(setHeaderTitle("Achievements Sync"));
     load();
+    // If a sync is already running when this page opens, reflect it immediately
+    // instead of waiting for the next streamed progress event (~seconds).
+    window.electron
+      .getExophaseSyncState()
+      .then((state) => {
+        if (state?.active) {
+          setSyncing(true);
+          if (state.progress) setProgress(state.progress);
+        }
+      })
+      .catch(() => {});
   }, [dispatch, load]);
 
   useEffect(() => {
@@ -219,9 +246,7 @@ export default function AchievementsSync() {
         <div
           className="achievements-sync__row-main"
           onClick={() =>
-            g.objectId
-              ? navigate(`/game/${g.shop}/${g.objectId}`)
-              : undefined
+            g.objectId ? navigate(`/game/${g.shop}/${g.objectId}`) : undefined
           }
           style={{ cursor: g.objectId ? "pointer" : "default" }}
         >
@@ -255,7 +280,9 @@ export default function AchievementsSync() {
           )}
 
           {g.newlyUnlocked > 0 && (
-            <span className="achievements-sync__badge">+{g.newlyUnlocked} new</span>
+            <span className="achievements-sync__badge">
+              +{g.newlyUnlocked} new
+            </span>
           )}
 
           <span className="achievements-sync__muted">
@@ -371,7 +398,10 @@ export default function AchievementsSync() {
             <h2>
               <SyncIcon size={16} /> All synced games
             </h2>
-            <p className="achievements-sync__muted" style={{ marginBottom: 8, fontSize: "0.85em" }}>
+            <p
+              className="achievements-sync__muted"
+              style={{ marginBottom: 8, fontSize: "0.85em" }}
+            >
               Click the <QuestionIcon size={12} /> on any row to see exactly how
               the match was made. Dimmed rows had no awards or are not in your
               library.

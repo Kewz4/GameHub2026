@@ -20,6 +20,7 @@ import {
 import { useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { gameDetailsContext } from "@renderer/context";
+import { getGameOrigin } from "@renderer/helpers/game-origin";
 
 import "./hero-panel-actions.scss";
 import { useEffect } from "react";
@@ -244,17 +245,6 @@ export function HeroPanelActions() {
   const PLATFORM_URI_RE =
     /^(steam|legendary|goggalaxy|goglauncher|msxbox|battlenet|origin2|uplay|riot):\/\//i;
 
-  const shopDisplayName: Record<string, string> = {
-    steam: "Steam",
-    epic: "Epic Games",
-    gog: "GOG",
-    xbox: "Xbox",
-    ea: "the EA app",
-    ubisoft: "Ubisoft Connect",
-    riot: "Riot Client",
-    battlenet: "Battle.net",
-  };
-
   const execIsProtocolUri =
     game?.executablePath != null && PLATFORM_URI_RE.test(game.executablePath);
 
@@ -264,24 +254,16 @@ export function HeroPanelActions() {
     game?.isInstalledLocally === true ||
     (game?.executablePath != null && !execIsProtocolUri);
 
-  // A URI we can hand to the platform to install/launch an owned-but-not-yet-
-  // installed game (Steam/Xbox/EA installs on demand when this fires).
-  const ownedInstallUri = execIsProtocolUri
-    ? game!.executablePath!
-    : game?.shop === "steam"
-      ? `steam://install/${game.objectId}`
-      : null;
+  // Launchable right now: installed AND we have a path to launch with.
+  const isLaunchable = Boolean(game?.executablePath) && isConfirmedInstalled;
 
-  const launchOwnedViaPlatform = () => {
-    if (game && ownedInstallUri) {
-      window.electron.openGame(
-        game.shop,
-        game.objectId,
-        ownedInstallUri,
-        game.launchOptions
-      );
-    }
-  };
+  // Owned on a platform (synced from the platform account) — NOT a catalogue /
+  // repack entry that merely reuses the steam shop for assets (Retigga).
+  const isOwnedOnPlatform = game != null && getGameOrigin(game) === "sync";
+
+  // Whether the download-options modal has anything to show: catalogue repacks
+  // and/or the official "you own this game — download via <platform>" link.
+  const hasDownloadOptions = repacks.length > 0 || isOwnedOnPlatform;
 
   const gameActionButton = () => {
     if (isTransferring) {
@@ -315,7 +297,7 @@ export function HeroPanelActions() {
     }
 
     // Confirmed installed → Play (local exe) or Launch (installed launcher game).
-    if (game?.executablePath && isConfirmedInstalled) {
+    if (isLaunchable) {
       return (
         <Button
           onClick={openGame}
@@ -331,38 +313,20 @@ export function HeroPanelActions() {
       );
     }
 
-    // Owned on a platform but NOT confirmed installed → don't pretend it's
-    // launchable. Offer to install/launch it through the platform instead.
-    if (ownedInstallUri) {
-      const platform = shopDisplayName[game!.shop] ?? game!.shop;
-      return (
-        <Button
-          onClick={launchOwnedViaPlatform}
-          theme="outline"
-          disabled={deleting || isGameRunning}
-          className="hero-panel-actions__action hero-panel-actions__action--owned"
-          title={t("you_own_this_game", {
-            defaultValue: "You own this game",
-          })}
-        >
-          <DownloadIcon />
-          {t("install_via", {
-            defaultValue: `Install via ${platform}`,
-            platform,
-          })}
-        </Button>
-      );
-    }
-
+    // Not installed — whether the game is owned-on-platform (Steam/EA/Xbox/…) or
+    // a catalogue repack (Retigga), the single entry point is the download
+    // options modal. It lists the official "you own this game — download via
+    // <platform>" link AND every available repack, so a separate "Install via
+    // <platform>" button would be redundant.
     return (
       <Button
         onClick={() => setShowRepacksModal(true)}
         theme="outline"
-        disabled={isGameDownloading}
-        className={`hero-panel-actions__action ${repacks.length === 0 ? "hero-panel-actions__action--disabled" : ""}`}
+        disabled={isGameDownloading || deleting}
+        className={`hero-panel-actions__action ${!hasDownloadOptions ? "hero-panel-actions__action--disabled" : ""}`}
       >
         <DownloadIcon />
-        {t("download")}
+        {hasDownloadOptions ? t("open_download_options") : t("download")}
       </Button>
     );
   };
@@ -408,17 +372,11 @@ export function HeroPanelActions() {
     });
 
   if (game) {
-    // Show "Download options" for library games that launch via a platform protocol
-    // (steam://, legendary://, etc.) so users can still access catalogue repacks
-    const isProtocolLaunch =
-      game.executablePath != null &&
-      /^(steam|legendary|goggalaxy|msxbox|battlenet):\/\//.test(
-        game.executablePath
-      );
-    const isSteamProtocol =
-      game.executablePath?.startsWith("steam://") ?? false;
-    const showRepackDownloadForLibraryGame =
-      isProtocolLaunch && (repacks.length > 0 || isSteamProtocol);
+    // The secondary "Open download options" button is only useful once the game
+    // is launchable (the primary button is Play/Launch). When the game isn't
+    // installed the primary button is ALREADY the download-options entry, so we
+    // must not duplicate it here.
+    const showRepackDownloadForLibraryGame = isLaunchable && hasDownloadOptions;
 
     return (
       <div className="hero-panel-actions__container">
