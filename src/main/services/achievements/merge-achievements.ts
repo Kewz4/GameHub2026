@@ -10,7 +10,6 @@ import { WindowManager } from "../window-manager";
 import { HydraApi } from "../hydra-api";
 import { getUnlockedAchievements } from "@main/events/user/get-unlocked-achievements";
 import { publishNewAchievementNotification } from "../notifications";
-import { SubscriptionRequiredError } from "@shared";
 import { achievementsLogger } from "../logger";
 import { db, gameAchievementsSublevel, levelKeys } from "@main/level";
 import { getGameAchievementData } from "./get-game-achievement-data";
@@ -231,13 +230,12 @@ export const mergeAchievements = async (
         );
       })
       .catch((err) => {
-        if (err instanceof SubscriptionRequiredError) {
-          achievementsLogger.log(
-            "Achievements not synchronized on API due to lack of subscription",
-            game.objectId,
-            game.title
-          );
-        }
+        achievementsLogger.log(
+          "Achievements cloud sync failed",
+          game.objectId,
+          game.title,
+          err instanceof Error ? err.message : String(err)
+        );
 
         return saveAchievementsOnLocal(
           game.objectId,

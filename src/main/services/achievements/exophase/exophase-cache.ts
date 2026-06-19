@@ -558,13 +558,41 @@ export const matchAndSyncToHydraApiForNonLibraryGame = async (
     })
     .catch(() => {});
 
-  // Attempt cloud sync via HydraAPI — requires the game to be in the remote
-  // library. remoteId lookup is handled inside syncUnlockedToHydraApi via a
-  // synthetic minimal Game object.
+  // Ensure the game exists in the HydraCloud library so it has a remoteId for
+  // achievement sync. Non-library games are never in /profile/games, so we
+  // register them now (with zero playtime) purely for achievement tracking.
+  // This does NOT add the game to the local library — it only creates a cloud
+  // record so the PUT /profile/games/achievements endpoint accepts the request.
+  let remoteId: string | null = null;
+  try {
+    const remoteGames = await HydraApi.get<
+      Array<{ id: string; shop: string; objectId: string }>
+    >("/profile/games");
+    const existing = remoteGames.find(
+      (g) => g.shop === shop && g.objectId === objectId
+    );
+    if (existing) {
+      remoteId = existing.id;
+    } else {
+      const created = await HydraApi.post<{ id: string }>(
+        "/profile/games",
+        {
+          objectId,
+          playTimeInMilliseconds: 0,
+          shop,
+          lastTimePlayed: null,
+        }
+      ).catch(() => null);
+      remoteId = created?.id ?? null;
+    }
+  } catch {
+    // Non-fatal — fall through to no-remote-id.
+  }
+
   const syntheticGame = {
     shop: shop as GameShop,
     objectId,
-    remoteId: null,
+    remoteId,
     title: "",
     iconUrl: null,
     coverImageUrl: null,
