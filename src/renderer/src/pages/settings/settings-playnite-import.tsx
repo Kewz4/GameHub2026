@@ -8,6 +8,7 @@ type ImportResult = {
   total: number;
   games: Array<{ title: string; addedHours: number }>;
   unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
+  cached: Array<{ title: string; playtimeHours: number }>;
 };
 
 export function SettingsPlayniteImport() {
@@ -34,11 +35,17 @@ export function SettingsPlayniteImport() {
         );
       } else {
         setModalResult(res);
-        if (res.matched > 0) {
-          showSuccessToast(
-            "Playnite Import",
-            `Updated playtime for ${res.matched} game${res.matched !== 1 ? "s" : ""}.`
-          );
+        if (res.matched > 0 || res.cached.length > 0) {
+          const parts: string[] = [];
+          if (res.matched > 0) {
+            parts.push(
+              `updated ${res.matched} game${res.matched !== 1 ? "s" : ""}`
+            );
+          }
+          if (res.cached.length > 0) {
+            parts.push(`saved ${res.cached.length} for later`);
+          }
+          showSuccessToast("Playnite Import", `Playtime ${parts.join(", ")}.`);
         }
       }
     } catch {

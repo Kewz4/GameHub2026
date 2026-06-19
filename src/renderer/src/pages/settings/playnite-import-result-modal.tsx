@@ -7,6 +7,7 @@ interface PlayniteImportResult {
   total: number;
   games: Array<{ title: string; addedHours: number }>;
   unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
+  cached: Array<{ title: string; playtimeHours: number }>;
 }
 
 interface Props {
@@ -37,15 +38,15 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "2rem", fontWeight: 700, opacity: 0.5 }}>
-              {result.unmatched.length}
+              {result.cached.length}
             </div>
-            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>unmatched</div>
+            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>saved for later</div>
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "2rem", fontWeight: 700, opacity: 0.5 }}>
-              {result.total}
+              {result.unmatched.length}
             </div>
-            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>total with playtime</div>
+            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>unmatched</div>
           </div>
         </div>
 
@@ -75,6 +76,45 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
                 >
                   <span>{g.title}</span>
                   <span style={{ opacity: 0.7 }}>+{g.addedHours}h</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {result.cached.length > 0 && (
+          <div>
+            <h4 style={{ margin: "0 0 4px", fontSize: "0.9rem" }}>
+              Saved for later
+            </h4>
+            <p style={{ margin: "0 0 8px", fontSize: "0.78rem", opacity: 0.6 }}>
+              These games aren&apos;t in your library, so they weren&apos;t
+              added. Their playtime is saved and will apply automatically if you
+              add them later.
+            </p>
+            <div
+              style={{
+                maxHeight: "200px",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+              }}
+            >
+              {result.cached.map((g, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "0.85rem",
+                    padding: "4px 8px",
+                    background: "rgba(255,255,255,0.05)",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <span>{g.title}</span>
+                  <span style={{ opacity: 0.7 }}>{g.playtimeHours}h</span>
                 </div>
               ))}
             </div>

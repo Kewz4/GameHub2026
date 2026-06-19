@@ -23,6 +23,8 @@ export const levelKeys = {
   downloadSourcesSinceValue: "downloadSourcesSinceValue", // The 'since' value API used (for modal comparison)
   localNotifications: "localNotifications",
   exophaseCache: "exophaseCache", // Shared Exophase achievement-definition cache (R2-synced)
+  playnitePlaytimeCache: "playnitePlaytimeCache", // Playtime for Playnite games not yet in the library
+
   exophaseSyncReport: "exophaseSyncReport", // Last background sync report (for the notification modal)
   exophaseCacheSyncedAt: "exophaseCacheSyncedAt", // Last time the shared cache blob was pulled from R2
   commonRedistPassed: "commonRedistPassed", // Whether common redistributables preflight has passed

@@ -6,6 +6,7 @@ import {
   gamesShopAssetsSublevel,
   gamesSublevel,
   levelKeys,
+  playnitePlaytimeCacheSublevel,
 } from "@main/level";
 import { AchievementWatcherManager } from "@main/services/achievements/achievement-watcher-manager";
 
@@ -20,12 +21,25 @@ const addGameToLibrary = async (
 
   const gameAssets = await gamesShopAssetsSublevel.get(gameKey);
 
+  // Apply any Playnite-imported playtime cached for this game (cached when the
+  // user ran a Playnite import while the game was NOT yet in their library).
+  const cachedPlaytime = await playnitePlaytimeCacheSublevel
+    .get(gameKey)
+    .catch(() => null);
+
   if (game) {
     await downloadsSublevel.del(gameKey);
 
     game.isDeleted = false;
     game.addedToLibraryAt ??= new Date();
     game.libraryOrigin ??= "catalog";
+
+    if (
+      cachedPlaytime &&
+      cachedPlaytime.playTimeInMilliseconds > (game.playTimeInMilliseconds ?? 0)
+    ) {
+      game.playTimeInMilliseconds = cachedPlaytime.playTimeInMilliseconds;
+    }
 
     await gamesSublevel.put(gameKey, game);
   } else {
@@ -38,7 +52,7 @@ const addGameToLibrary = async (
       shop,
       remoteId: null,
       isDeleted: false,
-      playTimeInMilliseconds: 0,
+      playTimeInMilliseconds: cachedPlaytime?.playTimeInMilliseconds ?? 0,
       lastTimePlayed: null,
       addedToLibraryAt: new Date(),
       automaticCloudSync: true,
@@ -46,6 +60,11 @@ const addGameToLibrary = async (
     };
 
     await gamesSublevel.put(gameKey, game);
+  }
+
+  // The cached playtime has now been applied to the real library record.
+  if (cachedPlaytime) {
+    await playnitePlaytimeCacheSublevel.del(gameKey).catch(() => {});
   }
 
   if (game) {

@@ -623,6 +623,7 @@ declare global {
       total: number;
       games: Array<{ title: string; addedHours: number }>;
       unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
+      cached: Array<{ title: string; playtimeHours: number }>;
       detectedPath: string | null;
     }>;
     getExclusionList: () => Promise<ExcludedGame[]>;

@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { registerEvent } from "../register-event";
-import { gamesSublevel, levelKeys } from "@main/level";
+import {
+  gamesSublevel,
+  levelKeys,
+  playnitePlaytimeCacheSublevel,
+} from "@main/level";
 import { HydraApi, logger } from "@main/services";
 import {
   compactGameTitle,
@@ -20,6 +24,12 @@ interface ImportResult {
   total: number;
   games: Array<{ title: string; addedHours: number }>;
   unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
+  /**
+   * Games found in the Hydra catalogue but NOT in the user's library. Their
+   * playtime is cached and applied automatically if/when the user adds them —
+   * they are deliberately NOT added to the library (no Retigga clutter).
+   */
+  cached: Array<{ title: string; playtimeHours: number }>;
 }
 
 /**
@@ -241,7 +251,7 @@ const importPlaynitePlaytime = async (
   const filePath = dbPath ?? detectedPath;
 
   if (!filePath || !fs.existsSync(filePath)) {
-    return { matched: 0, total: 0, games: [], unmatched: [], detectedPath };
+    return { matched: 0, total: 0, games: [], unmatched: [], cached: [], detectedPath };
   }
 
   let data: Buffer;
@@ -249,7 +259,7 @@ const importPlaynitePlaytime = async (
     data = fs.readFileSync(filePath);
   } catch (err) {
     logger.error("Failed to read Playnite games.db", err);
-    return { matched: 0, total: 0, games: [], unmatched: [], detectedPath };
+    return { matched: 0, total: 0, games: [], unmatched: [], cached: [], detectedPath };
   }
 
   const playniteGames = parsePlayniteDb(data);
@@ -293,6 +303,7 @@ const importPlaynitePlaytime = async (
 
   const matched: ImportResult["games"] = [];
   const unmatched: ImportResult["unmatched"] = [];
+  const cached: ImportResult["cached"] = [];
 
   const searchCatalogue = async (
     title: string,
@@ -377,19 +388,12 @@ const importPlaynitePlaytime = async (
     const gameKey = levelKeys.game(catalogueMatch.shop, catalogueMatch.objectId);
     const existingAtKey = await gamesSublevel.get(gameKey).catch(() => null);
 
-    // Before creating a new catalog entry, check if this game already exists
-    // locally under a DIFFERENT shop (e.g. the catalogue says steam:1097150 for
-    // Fall Guys, but the user owns it on Epic: epic:<id>). The catalogue key
-    // won't be in the DB, so without this check we'd create a duplicate
-    // steam:1097150 entry stamped "catalog" that permanently shows in Retigga
-    // even though the owned epic:<id> entry is already present as "sync".
-    //
-    // Strategy (in priority order):
-    //   1. Exact canonical objectId match across any shop (handles cross-shop)
-    //   2. Compact title match (same as the local-library pass above)
-    // In both cases just update playtime on the existing owned entry.
+    // The catalogue resolves to a canonical shop+objectId (e.g. steam:1097150).
+    // The user may already own this game under a DIFFERENT shop (e.g. Epic).
+    // Check the local library for a cross-shop match by canonical objectId then
+    // by compact title, and merge playtime into the owned entry if found.
     const crossShopMatch =
-      (!existingAtKey || existingAtKey.isDeleted)
+      !existingAtKey || existingAtKey.isDeleted
         ? (localGames.find(
             ({ game }) =>
               !game.isDeleted &&
@@ -399,7 +403,8 @@ const importPlaynitePlaytime = async (
           localGames.find(
             ({ game }) =>
               !game.isDeleted &&
-              compactGameTitle(game.title ?? "") === compactGameTitle(catalogueMatch.title)
+              compactGameTitle(game.title ?? "") ===
+                compactGameTitle(catalogueMatch.title)
           ))
         : null;
 
@@ -424,49 +429,47 @@ const importPlaynitePlaytime = async (
 
     const existingGame = existingAtKey;
 
-    if (!existingGame || existingGame.isDeleted) {
-      await gamesSublevel.put(gameKey, {
-        title: catalogueMatch.title,
-        objectId: catalogueMatch.objectId,
-        shop: catalogueMatch.shop,
-        iconUrl: catalogueMatch.libraryImageUrl ?? null,
-        libraryHeroImageUrl: null,
-        logoImageUrl: null,
-        remoteId: null,
-        isDeleted: false,
-        playTimeInMilliseconds: pgPlaytimeMs,
-        lastTimePlayed: null,
-        addedToLibraryAt: new Date(),
-        automaticCloudSync: false,
-        // A Playnite import only proves the game is in the user's Playnite
-        // library — NOT that they own it on a connected store. Ownership is
-        // established solely by a platform sync (which stamps "sync" and a
-        // platform URI exe). So everything added here is unverified → catalog
-        // (Retigga). If the user actually owns it on a platform NOT yet synced,
-        // the next Steam/Epic/GOG sync promotes it to "sync".
-        libraryOrigin: "catalog" as const,
-      });
-      matched.push({
-        title: catalogueMatch.title,
-        addedHours: Math.round((pgPlaytimeMs / 3600000) * 10) / 10,
-      });
-      logger.info(
-        `[Playnite] Added ${catalogueMatch.title} to library with ${(pgPlaytimeMs / 3600000).toFixed(1)}h playtime`
-      );
-    } else if (pgPlaytimeMs > (existingGame.playTimeInMilliseconds ?? 0)) {
-      const addedMs = pgPlaytimeMs - (existingGame.playTimeInMilliseconds ?? 0);
-      await gamesSublevel.put(gameKey, {
-        ...existingGame,
-        playTimeInMilliseconds: pgPlaytimeMs,
-      });
-      matched.push({
-        title: catalogueMatch.title,
-        addedHours: Math.round((addedMs / 3600000) * 10) / 10,
-      });
-      logger.info(
-        `[Playnite] Updated playtime for ${catalogueMatch.title}: +${(addedMs / 3600000).toFixed(1)}h`
-      );
+    if (existingGame && !existingGame.isDeleted) {
+      // Game IS in the library — update its playtime directly.
+      if (pgPlaytimeMs > (existingGame.playTimeInMilliseconds ?? 0)) {
+        const addedMs =
+          pgPlaytimeMs - (existingGame.playTimeInMilliseconds ?? 0);
+        await gamesSublevel.put(gameKey, {
+          ...existingGame,
+          playTimeInMilliseconds: pgPlaytimeMs,
+        });
+        matched.push({
+          title: catalogueMatch.title,
+          addedHours: Math.round((addedMs / 3600000) * 10) / 10,
+        });
+        logger.info(
+          `[Playnite] Updated playtime for ${catalogueMatch.title}: +${(addedMs / 3600000).toFixed(1)}h`
+        );
+      }
+      continue;
     }
+
+    // Game is NOT in the library. Do NOT add it (that's what cluttered the
+    // Retigga tab). Instead cache the playtime against the canonical catalogue
+    // id, so when the user later adds this game to their library it shows the
+    // correct Playnite playtime. The game is still surfaced as "unmatched" in
+    // the result modal so the user knows it wasn't imported into the library.
+    await playnitePlaytimeCacheSublevel
+      .put(gameKey, {
+        shop: catalogueMatch.shop,
+        objectId: catalogueMatch.objectId,
+        title: catalogueMatch.title,
+        playTimeInMilliseconds: pgPlaytimeMs,
+        updatedAt: Date.now(),
+      })
+      .catch(() => {});
+    cached.push({
+      title: catalogueMatch.title,
+      playtimeHours: Math.round((pgPlaytimeMs / 3600000) * 10) / 10,
+    });
+    logger.info(
+      `[Playnite] Cached ${(pgPlaytimeMs / 3600000).toFixed(1)}h for "${catalogueMatch.title}" (${catalogueMatch.shop}:${catalogueMatch.objectId}) — not in library, will apply on add`
+    );
   }
 
   return {
@@ -474,6 +477,7 @@ const importPlaynitePlaytime = async (
     total: gamesWithPlaytime.length,
     games: matched,
     unmatched,
+    cached,
     detectedPath,
   };
 };
