@@ -45,24 +45,24 @@ const syncCloudAchievementsToLocal = async (
   // Skip if local already has at least as many unlocks as the cloud.
   if (localUnlockedCount >= cloudUnlockedCount) return;
 
-  const compareResult = await HydraApi.get<{
-    achievements: Array<{
-      name?: string;
-      displayName?: string;
-      targetStat: { unlocked: boolean; unlockTime?: number | null };
-    }>;
-  }>(
-    `/users/${selfId}/games/achievements/compare`,
-    { shop, objectId, language: "en" }
-  ).catch(() => null);
+  // The compare endpoint rejects comparing against your OWN account
+  // ("cant-compare-own-achievements"), so use the direct read endpoint which
+  // returns a flat array of the user's unlocked achievements for this game.
+  const cloudAchievements = await HydraApi.get<
+    Array<{ name?: string; unlockTime?: number | null }>
+  >(`/users/${selfId}/games/achievements`, {
+    shop,
+    objectId,
+    language: "en",
+  }).catch(() => null);
 
-  if (!compareResult) return;
+  if (!cloudAchievements || cloudAchievements.length === 0) return;
 
-  const cloudUnlocked: UnlockedAchievement[] = compareResult.achievements
-    .filter((a) => a.targetStat.unlocked && a.name)
+  const cloudUnlocked: UnlockedAchievement[] = cloudAchievements
+    .filter((a) => a.name)
     .map((a) => ({
       name: a.name!,
-      unlockTime: a.targetStat.unlockTime ?? Date.now(),
+      unlockTime: a.unlockTime ?? Date.now(),
     }));
 
   if (cloudUnlocked.length === 0) return;
