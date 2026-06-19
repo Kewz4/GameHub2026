@@ -2,7 +2,7 @@ import { shell } from "electron";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { GameShop, type UserPreferences } from "@types";
-import { db, gamesSublevel, levelKeys } from "@main/level";
+import { db, downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import {
   WindowManager,
   logger,
@@ -217,24 +217,36 @@ export const launchGame = async (options: LaunchGameOptions): Promise<void> => {
     const updatedGame = { ...game, executablePath: parsedPath, launchOptions };
     await gamesSublevel.put(gameKey, updatedGame);
 
-    // Option A: First-launch achievement emulator detection (Steam only)
-    if (shop === "steam" && !game.achievementEmulatorChecked) {
-      const hasExistingSupport =
-        findAchievementFiles(updatedGame).length > 0 ||
-        hasAchievementEmulatorSignature(updatedGame);
+    // Option A: First-launch achievement emulator detection for REPACK games only.
+    // A repack is a game that was downloaded through Hydra (so it has a download
+    // record keyed by gameKey). We deliberately skip games launched from a
+    // legitimate platform install (e.g. an owned Steam copy), since those already
+    // get achievements through the platform and shouldn't be prompted to inject
+    // experimental tracking.
+    if (!game.achievementEmulatorChecked) {
+      const isRepack = await downloadsSublevel
+        .get(gameKey)
+        .then((download) => !!download)
+        .catch(() => false);
 
-      if (!hasExistingSupport) {
-        WindowManager.sendToAppWindows("on-achievement-support-missing", {
-          objectId,
-          shop,
-          title: game.title,
+      if (isRepack) {
+        const hasExistingSupport =
+          findAchievementFiles(updatedGame).length > 0 ||
+          hasAchievementEmulatorSignature(updatedGame);
+
+        if (!hasExistingSupport) {
+          WindowManager.sendToAppWindows("on-achievement-support-missing", {
+            objectId,
+            shop,
+            title: game.title,
+          });
+        }
+
+        await gamesSublevel.put(gameKey, {
+          ...updatedGame,
+          achievementEmulatorChecked: true,
         });
       }
-
-      await gamesSublevel.put(gameKey, {
-        ...updatedGame,
-        achievementEmulatorChecked: true,
-      });
     }
   }
 
