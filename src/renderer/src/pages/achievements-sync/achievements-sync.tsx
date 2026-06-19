@@ -7,6 +7,7 @@ import {
   AlertIcon,
   XIcon,
   QuestionIcon,
+  CloudIcon,
 } from "@primer/octicons-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@renderer/components";
@@ -153,6 +154,17 @@ export default function AchievementsSync() {
   const [debugGame, setDebugGame] = useState<ExophaseSyncReportGame | null>(
     null
   );
+  const [cloudGames, setCloudGames] = useState<
+    Array<{
+      shop: string;
+      objectId: string;
+      title: string;
+      iconUrl: string | null;
+      totalAchievements: number;
+      unlockedAchievements: number;
+    }>
+  >([]);
+  const [showCloudTab, setShowCloudTab] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -161,6 +173,10 @@ export default function AchievementsSync() {
       .then(setReport)
       .catch(() => setReport(null))
       .finally(() => setLoading(false));
+    window.electron
+      .getHydraCloudAchievements()
+      .then(setCloudGames)
+      .catch(() => setCloudGames([]));
   }, []);
 
   useEffect(() => {
@@ -335,8 +351,73 @@ export default function AchievementsSync() {
               ? "Importing trophies…"
               : "Import PlayStation Achievements"}
           </Button>
+          <Button
+            type="button"
+            theme={showCloudTab ? "primary" : "outline"}
+            onClick={() => setShowCloudTab((v) => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <CloudIcon size={14} />
+            Hydra Cloud ({cloudGames.length})
+          </Button>
         </div>
       </header>
+
+      {showCloudTab && (
+        <section className="achievements-sync__section">
+          <h2>
+            <CloudIcon size={16} /> HydraAPI Cloud Achievements
+          </h2>
+          <p
+            className="achievements-sync__muted"
+            style={{ marginBottom: 8, fontSize: "0.85em" }}
+          >
+            Games whose unlocked achievements have been matched to HydraAPI
+            Steam definitions and uploaded to your Hydra cloud account.
+          </p>
+          {cloudGames.length === 0 ? (
+            <p className="achievements-sync__muted">
+              No cloud-synced achievements yet. Run an Exophase sync to match
+              Steam unlocks to your Hydra account.
+            </p>
+          ) : (
+            <ul className="achievements-sync__list">
+              {cloudGames.map((g) => (
+                <li
+                  key={`cloud-${g.shop}-${g.objectId}`}
+                  className="achievements-sync__row"
+                  onClick={() => navigate(`/game/${g.shop}/${g.objectId}`)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div className="achievements-sync__row-main">
+                    {g.iconUrl ? (
+                      <img src={g.iconUrl} alt="" width={32} height={32} />
+                    ) : (
+                      <div className="achievements-sync__row-icon-placeholder">
+                        <TrophyIcon size={16} />
+                      </div>
+                    )}
+                    <span className="achievements-sync__row-title">
+                      {g.title}
+                    </span>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        color: "#3fb950",
+                      }}
+                    >
+                      <CheckCircleFillIcon size={14} />
+                    </span>
+                    <span className="achievements-sync__muted">
+                      {g.unlockedAchievements}/{g.totalAchievements}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {busy && progress && (
         <div className="achievements-sync__progress">

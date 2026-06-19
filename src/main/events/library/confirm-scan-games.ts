@@ -18,6 +18,10 @@ const confirmScanGames = async (
     if (!game) continue;
     await gamesSublevel.put(key, {
       ...game,
+      // Resurrect previously-deleted records — the user just confirmed the game
+      // was found on disk and wants it back in the library.
+      isDeleted: false,
+      isInstalledLocally: true,
       executablePath,
       // Store folder → owned on that platform; anything else keeps its
       // original origin (catalogue repacks stay in Retigga) or becomes custom

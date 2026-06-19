@@ -268,6 +268,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("importPlaystationAchievements"),
   getExophaseSyncReport: () => ipcRenderer.invoke("getExophaseSyncReport"),
   getExophaseSyncState: () => ipcRenderer.invoke("getExophaseSyncState"),
+  getHydraCloudAchievements: () =>
+    ipcRenderer.invoke("getHydraCloudAchievements"),
   runExophaseBackgroundSync: () =>
     ipcRenderer.invoke("runExophaseBackgroundSync"),
   onExophaseSyncProgress: (

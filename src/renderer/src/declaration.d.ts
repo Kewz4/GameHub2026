@@ -369,6 +369,16 @@ declare global {
     getExophaseSyncReport: () => Promise<
       import("@types").ExophaseSyncReport | null
     >;
+    getHydraCloudAchievements: () => Promise<
+      Array<{
+        shop: string;
+        objectId: string;
+        title: string;
+        iconUrl: string | null;
+        totalAchievements: number;
+        unlockedAchievements: number;
+      }>
+    >;
     getExophaseSyncState: () => Promise<{
       active: boolean;
       progress: {

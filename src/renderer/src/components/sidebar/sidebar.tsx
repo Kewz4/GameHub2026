@@ -55,7 +55,13 @@ const FAVORITES_COLLECTION_ID = "__favorites__";
 
 const initialSidebarWidth = window.localStorage.getItem("sidebarWidth");
 
-const isGamePlayable = (game: LibraryGame) => Boolean(game.executablePath);
+const PROTOCOL_URI_RE =
+  /^(steam|legendary|goggalaxy|goglauncher|msxbox|battlenet|origin2|uplay|riot):\/\//i;
+
+const isGamePlayable = (game: LibraryGame) =>
+  game.isInstalledLocally === true ||
+  (Boolean(game.executablePath) &&
+    !PROTOCOL_URI_RE.test(game.executablePath ?? ""));
 
 export function Sidebar() {
   const filterRef = useRef<HTMLInputElement>(null);

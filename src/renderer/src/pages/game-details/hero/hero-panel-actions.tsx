@@ -341,7 +341,15 @@ export function HeroPanelActions() {
   }
 
   const alternativeShopLaunchButtons = game?.alternativeShops
-    ?.filter((alt) => alt.executablePath)
+    ?.filter(
+      (alt) =>
+        alt.executablePath &&
+        // Only show a launch button when the alt-shop executable is a real
+        // local path OR when the platform confirms it's installed. Protocol
+        // URIs (origin2://, msxbox://, …) are stamped for every OWNED game
+        // regardless of install state — don't show "Launch via X" for those.
+        !PLATFORM_URI_RE.test(alt.executablePath)
+    )
     .map((alt) => {
       const shopLabel: Record<string, string> = {
         epic: "Epic",

@@ -241,20 +241,55 @@ export const applyCachedAchievements = async (
       ? existing.achievements
       : null;
 
-  let finalDefinitions: SteamAchievement[];
+  // ── HydraAPI definitions not yet cached locally ──
+  // For Steam games, proactively fetch from HydraAPI now so the matching can
+  // work even before the user has opened the game details page. This breaks the
+  // chicken-and-egg where Exophase runs before the first on-demand fetch.
+  let liveHydraDefinitions: SteamAchievement[] | null = null;
+  if (!hydraDefinitions && game.shop === "steam" && game.objectId) {
+    try {
+      if (HydraApi.isLoggedIn()) {
+        const language =
+          existing?.language ??
+          (await db
+            .get<string, string>(levelKeys.language, { valueEncoding: "utf8" })
+            .catch(() => "en")) ??
+          "en";
+        const fetched = await HydraApi.get<SteamAchievement[]>(
+          `/games/steam/${game.objectId}/achievements`,
+          { language }
+        ).catch(() => null);
+        if (fetched && fetched.length > 0) {
+          liveHydraDefinitions = fetched;
+          // Persist so next run uses cache and we don't re-fetch every sync.
+          await gameAchievementsSublevel.put(gameKey, {
+            unlockedAchievements: existing?.unlockedAchievements ?? [],
+            achievements: fetched,
+            updatedAt: Date.now(),
+            language,
+          });
+        }
+      }
+    } catch {
+      // Non-fatal: fall back to Exophase definitions below.
+    }
+  }
+
+  const resolvedHydraDefinitions = liveHydraDefinitions ?? hydraDefinitions;
   let finalUnlocked: UnlockedAchievement[];
+  let finalDefinitions: SteamAchievement[];
   let finalSource: "exophase" | undefined;
 
-  if (hydraDefinitions) {
+  if (resolvedHydraDefinitions) {
     // ── HydraAPI definitions exist: match Exophase unlocks by display name ──
     // Leave source undefined so the game-data fetcher knows these are HydraAPI
     // definitions (with images) and doesn't short-circuit back to Exophase data.
-    finalDefinitions = hydraDefinitions;
+    finalDefinitions = resolvedHydraDefinitions;
     finalSource = undefined;
 
     // Build a map: normalized displayName → HydraAPI apiName
     const hydraByDisplay = new Map<string, string>(
-      hydraDefinitions.map((a) => [
+      resolvedHydraDefinitions.map((a) => [
         normalizeDisplayName(a.displayName ?? a.name ?? ""),
         a.name ?? "",
       ])
@@ -279,7 +314,7 @@ export const applyCachedAchievements = async (
     }
 
     const validNames = new Set(
-      hydraDefinitions.map((d) => (d.name ?? "").toUpperCase())
+      resolvedHydraDefinitions.map((d) => (d.name ?? "").toUpperCase())
     );
     finalUnlocked = mergeUnlocked(
       existing?.unlockedAchievements ?? [],
