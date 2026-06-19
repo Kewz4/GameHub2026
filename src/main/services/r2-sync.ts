@@ -162,17 +162,36 @@ export class R2Sync {
     userId: string,
     shop: GameShop,
     objectId: string,
-    _gameTitle?: string | null
+    gameTitle?: string | null
   ): Promise<GameArtifact[]> {
-    void _gameTitle;
-    const prefix = `users/${userId}/saves/${shop}/${objectId}/`;
-    const list = await this.client
-      .send(
-        new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix })
-      )
-      .catch(() => null);
+    // Backups are normally keyed by objectId, but legacy Ludusavi imports stored
+    // the game title as the objectId segment (e.g. "Neon Abyss" instead of
+    // "788100"). Query both prefixes so the per-game view matches the sidebar.
+    const segments = new Set<string>([objectId]);
+    if (gameTitle && gameTitle !== objectId) segments.add(gameTitle);
 
-    const objects = (list?.Contents ?? []).filter((o) => o.Key);
+    const lists = await Promise.all(
+      Array.from(segments).map((segment) =>
+        this.client
+          .send(
+            new ListObjectsV2Command({
+              Bucket: R2_BUCKET,
+              Prefix: `users/${userId}/saves/${shop}/${segment}/`,
+            })
+          )
+          .catch(() => null)
+      )
+    );
+
+    const seen = new Set<string>();
+    const objects = lists
+      .flatMap((list) => list?.Contents ?? [])
+      .filter((o) => {
+        if (!o.Key || seen.has(o.Key)) return false;
+        seen.add(o.Key);
+        return true;
+      });
+
     const artifacts = await Promise.all(
       objects.map(async (o) => {
         const head = await this.headArtifact(o.Key!);
