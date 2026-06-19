@@ -570,6 +570,19 @@ contextBridge.exposeInMainWorld("electron", {
   },
   deleteArchive: (filePath: string) =>
     ipcRenderer.invoke("deleteArchive", filePath),
+  enableExperimentalAchievements: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("enableExperimentalAchievements", shop, objectId),
+  onAchievementSupportMissing: (
+    callback: (data: { objectId: string; shop: GameShop; title: string }) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { objectId: string; shop: GameShop; title: string }
+    ) => callback(data);
+    ipcRenderer.on("on-achievement-support-missing", listener);
+    return () =>
+      ipcRenderer.removeListener("on-achievement-support-missing", listener);
+  },
 
   /* Hardware */
   getDiskFreeSpace: (path: string) =>

@@ -348,7 +348,153 @@ export const findAchievementFileInExecutableDirectory = (
         "achievements.ini"
       ),
     },
+    // SmartSteamEmu local install
+    {
+      type: Cracker.smartSteamEmu,
+      filePath: path.join(
+        effectiveWinePrefixPath,
+        game.executablePath,
+        "..",
+        "SmartSteamEmu",
+        "User",
+        "Achievements.ini"
+      ),
+    },
+    // CreamAPI local stats directory
+    {
+      type: Cracker.creamAPI,
+      filePath: path.join(
+        effectiveWinePrefixPath,
+        game.executablePath,
+        "..",
+        "stats",
+        "CreamAPI.Achievements.cfg"
+      ),
+    },
+    // Goldberg local - steam_settings variant
+    {
+      type: Cracker.goldberg,
+      filePath: path.join(
+        effectiveWinePrefixPath,
+        game.executablePath,
+        "..",
+        "steam_settings",
+        "achievements.json"
+      ),
+    },
+    // Goldberg local - stats directory variant
+    {
+      type: Cracker.goldberg,
+      filePath: path.join(
+        effectiveWinePrefixPath,
+        game.executablePath,
+        "..",
+        "stats",
+        "achievements.json"
+      ),
+    },
   ].filter((file) => fs.existsSync(file.filePath)) as AchievementFile[];
+};
+
+const HEURISTIC_PATTERNS: Array<{ name: string; type: Cracker }> = [
+  { name: "achievements.json", type: Cracker.goldberg },
+  { name: "achievements.ini", type: Cracker.codex },
+  { name: "achiev.ini", type: Cracker.skidrow },
+  { name: "user_stats.ini", type: Cracker.userstats },
+  { name: "CreamAPI.Achievements.cfg", type: Cracker.creamAPI },
+  { name: "Achievements.ini", type: Cracker.smartSteamEmu },
+];
+
+const looksLikeAchievementData = (filePath: string, type: Cracker): boolean => {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    if (type === Cracker.goldberg) {
+      return content.includes('"earned"') || content.includes('"achieved"');
+    }
+    const lower = content.toLowerCase();
+    return (
+      lower.includes("achieved") ||
+      lower.includes("unlocked") ||
+      lower.includes("earned")
+    );
+  } catch {
+    return false;
+  }
+};
+
+export const heuristicScanAchievementFiles = (
+  game: Game,
+  maxDepth = 3
+): AchievementFile[] => {
+  if (!game.executablePath) return [];
+
+  const effectiveWinePrefixPath =
+    Wine.getEffectivePrefixPath(game.winePrefixPath, game.objectId) ?? "";
+
+  const installDir = path.resolve(
+    path.join(effectiveWinePrefixPath, path.dirname(game.executablePath))
+  );
+
+  const results: AchievementFile[] = [];
+  const seen = new Set<string>();
+
+  const scan = (dir: string, depth: number) => {
+    if (depth === 0) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scan(fullPath, depth - 1);
+      } else if (entry.isFile()) {
+        const match = HEURISTIC_PATTERNS.find(
+          (p) => entry.name.toLowerCase() === p.name.toLowerCase()
+        );
+        if (match && !seen.has(fullPath)) {
+          seen.add(fullPath);
+          if (looksLikeAchievementData(fullPath, match.type)) {
+            results.push({ type: match.type, filePath: fullPath });
+          }
+        }
+      }
+    }
+  };
+
+  scan(installDir, maxDepth);
+  return results;
+};
+
+const EMULATOR_SIGNATURES = [
+  "steam_emu.ini",
+  "SmartSteamEmu.ini",
+  "SmartSteamEmu64.ini",
+  "cream_api.ini",
+  "CreamAPI.ini",
+  "goldberg_steam_emu.ini",
+  "steam_settings",
+  "SteamData",
+  "3DMGAME",
+  "SmartSteamEmu",
+];
+
+export const hasAchievementEmulatorSignature = (game: Game): boolean => {
+  if (!game.executablePath) return false;
+
+  const effectiveWinePrefixPath =
+    Wine.getEffectivePrefixPath(game.winePrefixPath, game.objectId) ?? "";
+
+  const installDir = path.resolve(
+    path.join(effectiveWinePrefixPath, path.dirname(game.executablePath))
+  );
+
+  return EMULATOR_SIGNATURES.some((sig) =>
+    fs.existsSync(path.join(installDir, sig))
+  );
 };
 
 const mapFileLocationWithObjectId = (

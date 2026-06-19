@@ -88,6 +88,8 @@ export interface Game {
     executablePath: string | null;
   }>;
   xboxTitleId?: string | null;
+  experimentalAchievementsEnabled?: boolean;
+  achievementEmulatorChecked?: boolean;
 }
 
 export interface Download {

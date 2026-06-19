@@ -24,9 +24,10 @@ import {
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ArchiveDeletionModal } from "./pages/downloads/archive-deletion-error-modal";
+import { AchievementSupportModal } from "./pages/downloads/achievement-support-modal";
 import { Onboarding } from "./pages/onboarding/onboarding";
 
-import type { UserPreferences } from "@types";
+import type { GameShop, UserPreferences } from "@types";
 import "./app.scss";
 import {
   getAchievementSoundUrl,
@@ -76,6 +77,7 @@ export function App() {
   const [showArchiveDeletionModal, setShowArchiveDeletionModal] =
     useState(false);
   const [archivePaths, setArchivePaths] = useState<string[]>([]);
+  const [achievementSupportGame, setAchievementSupportGame] = useState<{ objectId: string; shop: GameShop; title: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -297,6 +299,9 @@ export function App() {
         setArchivePaths(paths);
         setShowArchiveDeletionModal(true);
       }),
+      window.electron.onAchievementSupportMissing((data) => {
+        setAchievementSupportGame(data);
+      }),
     ];
 
     return () => {
@@ -397,6 +402,14 @@ export function App() {
         visible={showArchiveDeletionModal}
         archivePaths={archivePaths}
         onClose={() => setShowArchiveDeletionModal(false)}
+      />
+
+      <AchievementSupportModal
+        visible={achievementSupportGame !== null}
+        gameTitle={achievementSupportGame?.title ?? ""}
+        shop={achievementSupportGame?.shop ?? "steam"}
+        objectId={achievementSupportGame?.objectId ?? ""}
+        onClose={() => setAchievementSupportGame(null)}
       />
 
       <main>

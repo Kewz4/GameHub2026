@@ -7,6 +7,7 @@ import {
   findAchievementFiles,
   findAllAchievementFiles,
   getAlternativeObjectIds,
+  heuristicScanAchievementFiles,
 } from "./find-achivement-files";
 import type {
   AchievementFile,
@@ -66,6 +67,10 @@ const watchAchievementsWindows = async () => {
       }
     }
 
+    if (game.experimentalAchievementsEnabled) {
+      gameAchievementFiles.push(...heuristicScanAchievementFiles(game));
+    }
+
     for (const file of gameAchievementFiles) {
       await compareFile(game, file);
     }
@@ -100,6 +105,10 @@ const watchAchievementsWithWine = async () => {
 
     if (enableSteamAchievements) {
       gameAchievementFiles.push(...findAchievementFileInSteamPath(game));
+    }
+
+    if (game.experimentalAchievementsEnabled) {
+      gameAchievementFiles.push(...heuristicScanAchievementFiles(game));
     }
 
     for (const file of gameAchievementFiles) {
@@ -257,6 +266,10 @@ export class AchievementWatcherManager {
 
     if (userPreferences?.enableSteamAchievements) {
       gameAchievementFiles.push(...findAchievementFileInSteamPath(game));
+    }
+
+    if (game.experimentalAchievementsEnabled) {
+      gameAchievementFiles.push(...heuristicScanAchievementFiles(game));
     }
 
     const unlockedAchievements: UnlockedAchievement[] = [];

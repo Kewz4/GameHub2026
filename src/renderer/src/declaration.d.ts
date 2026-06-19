@@ -648,6 +648,13 @@ declare global {
       cb: (archivePaths: string[]) => void
     ) => () => Electron.IpcRenderer;
     deleteArchive: (filePath: string) => Promise<boolean>;
+    enableExperimentalAchievements: (
+      shop: GameShop,
+      objectId: string
+    ) => Promise<{ success: boolean }>;
+    onAchievementSupportMissing: (
+      callback: (data: { objectId: string; shop: GameShop; title: string }) => void
+    ) => () => void;
     getDefaultWinePrefixSelectionPath: () => Promise<string | null>;
     createSteamShortcut: (
       shop: GameShop,

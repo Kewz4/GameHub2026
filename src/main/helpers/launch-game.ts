@@ -16,6 +16,10 @@ import { parseExecutablePath } from "../events/helpers/parse-executable-path";
 import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
 import { resolveLaunchCommand } from "./resolve-launch-command";
+import {
+  findAchievementFiles,
+  hasAchievementEmulatorSignature,
+} from "@main/services/achievements/find-achivement-files";
 
 export interface LaunchGameOptions {
   shop: GameShop;
@@ -210,11 +214,28 @@ export const launchGame = async (options: LaunchGameOptions): Promise<void> => {
     isGamemodeAvailable();
 
   if (game) {
-    await gamesSublevel.put(gameKey, {
-      ...game,
-      executablePath: parsedPath,
-      launchOptions,
-    });
+    const updatedGame = { ...game, executablePath: parsedPath, launchOptions };
+    await gamesSublevel.put(gameKey, updatedGame);
+
+    // Option A: First-launch achievement emulator detection (Steam only)
+    if (shop === "steam" && !game.achievementEmulatorChecked) {
+      const hasExistingSupport =
+        findAchievementFiles(updatedGame).length > 0 ||
+        hasAchievementEmulatorSignature(updatedGame);
+
+      if (!hasExistingSupport) {
+        WindowManager.sendToAppWindows("on-achievement-support-missing", {
+          objectId,
+          shop,
+          title: game.title,
+        });
+      }
+
+      await gamesSublevel.put(gameKey, {
+        ...updatedGame,
+        achievementEmulatorChecked: true,
+      });
+    }
   }
 
   await WindowManager.createGameLauncherWindow(shop, objectId);
