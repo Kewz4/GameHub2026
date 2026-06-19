@@ -181,10 +181,46 @@ export function UserProfileContextProvider({
           ? await getLocalLibraryGames()
           : { library: [], pinned: [] };
 
+        // For the logged-in user, the server's per-game achievement counts only
+        // reflect linked-platform (Steam/PSN/Xbox) unlocks and ignore unlocks
+        // sourced through Hydra/Exophase. The local cache is the source of truth
+        // for those, so overlay the local counts (when higher) onto the
+        // server-driven profile cards. Keyed by `${shop}:${objectId}`.
+        const localAchievementCounts = new Map<
+          string,
+          { unlockedAchievementCount: number; achievementsPointsEarnedSum: number }
+        >();
         if (isOwnProfile) {
           const allLocal = await window.electron.getLibrary().catch(() => []);
           setLocalLibraryCount(allLocal.filter((g) => !g.isDeleted).length);
+          for (const localGame of allLocal) {
+            localAchievementCounts.set(
+              `${localGame.shop}:${localGame.objectId}`,
+              {
+                unlockedAchievementCount: localGame.unlockedAchievementCount ?? 0,
+                achievementsPointsEarnedSum:
+                  localGame.achievementsPointsEarnedSum ?? 0,
+              }
+            );
+          }
         }
+
+        const overlayLocalAchievements = (game: UserGame): UserGame => {
+          const local = localAchievementCounts.get(
+            `${game.shop}:${game.objectId}`
+          );
+          if (!local) return game;
+          if (
+            local.unlockedAchievementCount <= (game.unlockedAchievementCount ?? 0)
+          ) {
+            return game;
+          }
+          return {
+            ...game,
+            unlockedAchievementCount: local.unlockedAchievementCount,
+            achievementsPointsEarnedSum: local.achievementsPointsEarnedSum,
+          };
+        };
 
         const sortGames = (games: UserGame[]): UserGame[] => {
           if (!sortBy) return games;
@@ -213,20 +249,20 @@ export function UserProfileContextProvider({
         };
 
         if (response) {
-          const serverIds = new Set(response.library.map((g) => g.objectId));
+          const serverLibrary = response.library.map(overlayLocalAchievements);
+          const serverPinned = response.pinnedGames.map(
+            overlayLocalAchievements
+          );
+          const serverIds = new Set(serverLibrary.map((g) => g.objectId));
           const localUnique = localCustom.library.filter(
             (g) => !serverIds.has(g.objectId)
           );
-          const serverPinnedIds = new Set(
-            response.pinnedGames.map((g) => g.objectId)
-          );
+          const serverPinnedIds = new Set(serverPinned.map((g) => g.objectId));
           const localPinnedUnique = localCustom.pinned.filter(
             (g) => !serverPinnedIds.has(g.objectId)
           );
-          setLibraryGames(
-            sortGames([...localUnique, ...response.library])
-          );
-          setPinnedGames([...localPinnedUnique, ...response.pinnedGames]);
+          setLibraryGames(sortGames([...localUnique, ...serverLibrary]));
+          setPinnedGames([...localPinnedUnique, ...serverPinned]);
           setHasMoreLibraryGames(response.library.length === 12);
         } else {
           setLibraryGames(sortGames(localCustom.library));

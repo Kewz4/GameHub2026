@@ -31,15 +31,36 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
               ) || []
             );
 
-            const unlockedAchievementCount =
+            // Map of achievement apiName -> points, used to compute the locally
+            // earned points sum from the unlocked list.
+            const achievementPoints = new Map(
+              achievements?.achievements?.map((a) => [
+                (a.name ?? "").toUpperCase(),
+                a.points ?? 0,
+              ]) || []
+            );
+
+            const validUnlockedAchievements =
               achievements?.unlockedAchievements?.filter(
                 (unlocked) =>
                   validAchievementNames.has(
                     (unlocked.name ?? "").toUpperCase()
                   ) && unlocked.unlockTime > 0
-              ).length ??
+              ) ?? null;
+
+            const unlockedAchievementCount =
+              validUnlockedAchievements?.length ??
               game.unlockedAchievementCount ??
               0;
+
+            const achievementsPointsEarnedSum =
+              validUnlockedAchievements?.reduce(
+                (acc, unlocked) =>
+                  acc +
+                  (achievementPoints.get((unlocked.name ?? "").toUpperCase()) ??
+                    0),
+                0
+              ) ?? 0;
 
             // Verify installer still exists, clear if deleted externally
             let installerSizeInBytes = game.installerSizeInBytes;
@@ -84,6 +105,7 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
               installedSizeInBytes,
               download: download ?? null,
               unlockedAchievementCount,
+              achievementsPointsEarnedSum,
               achievementCount: game.achievementCount ?? 0,
               // Image URLs: prefer custom overrides, then fresh assets, then game record
               iconUrl:

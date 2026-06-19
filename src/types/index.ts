@@ -594,6 +594,7 @@ export type LibraryGame = Game &
     id: string;
     download: Download | null;
     unlockedAchievementCount?: number;
+    achievementsPointsEarnedSum?: number;
     achievementCount?: number;
   };
 
