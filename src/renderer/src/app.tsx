@@ -349,6 +349,15 @@ export function App() {
     return () => unsubscribe();
   }, [loadAndApplyTheme]);
 
+  // Apply the built-in colour scheme. The CSS handles dark (default) and the
+  // system-light media query; we just stamp the chosen mode on <html>.
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      "data-theme-mode",
+      userPreferences?.themeMode ?? "dark"
+    );
+  }, [userPreferences?.themeMode]);
+
   const playAudio = useCallback(async () => {
     const soundUrl = await getAchievementSoundUrl();
     const volume = await getAchievementSoundVolume();

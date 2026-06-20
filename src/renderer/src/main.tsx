@@ -88,7 +88,14 @@ const userPreferences = (await levelDBService.get(
   "userPreferences",
   null,
   "json"
-)) as { language?: string } | null;
+)) as { language?: string; themeMode?: string } | null;
+
+// Stamp the colour scheme before first paint so light-mode users don't see a
+// dark flash on cold start (the CSS keys off this attribute on <html>).
+document.documentElement.setAttribute(
+  "data-theme-mode",
+  userPreferences?.themeMode ?? "dark"
+);
 
 if (userPreferences?.language) {
   await i18n.changeLanguage(userPreferences.language);

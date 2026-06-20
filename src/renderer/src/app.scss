@@ -45,6 +45,32 @@
   --radius-lg: 10px;
 }
 
+// ── Light colour scheme ───────────────────────────────────────────────────────
+// Flips the fg/bg channels (so every rgba(var(--fg-rgb), x) surface, border and
+// muted-text value inverts) and overrides the solid base + text tokens. Applied
+// when the user explicitly picks Light, or picks System and the OS is light.
+@mixin light-tokens {
+  --fg-rgb: 17, 17, 19;
+  --bg-rgb: 245, 245, 247;
+
+  --color-background: #f5f5f7;
+  --color-dark-background: #ececef;
+  --color-text: #1c1c1e;
+  --color-text-bright: #000000;
+  // Slightly deepen the destructive red so it stays legible on light surfaces.
+  --color-danger: #c0392b;
+}
+
+:root[data-theme-mode="light"] {
+  @include light-tokens;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme-mode="system"] {
+    @include light-tokens;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -85,7 +111,8 @@ body {
     Noto Sans,
     sans-serif;
   font-size: globals.$body-font-size;
-  color: globals.$body-color;
+  background-color: var(--color-background);
+  color: var(--color-text);
   margin: 0;
 }
 

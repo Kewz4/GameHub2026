@@ -258,6 +258,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [downloadNotifs, setDownloadNotifs] = useState(true);
   const [achievementNotifs, setAchievementNotifs] = useState(true);
   const [startMinimized, setStartMinimized] = useState(false);
+  const [themeMode, setThemeMode] = useState<"dark" | "light" | "system">(
+    userPreferences?.themeMode ?? "dark"
+  );
+
+  const handleThemeModeChange = (mode: "dark" | "light" | "system") => {
+    setThemeMode(mode);
+    // Apply live so the user sees the change while still onboarding.
+    document.documentElement.setAttribute("data-theme-mode", mode);
+  };
 
   const currentStep = ALL_STEPS[stepIndex];
 
@@ -354,9 +363,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       downloadNotificationsEnabled: downloadNotifs,
       achievementNotificationsEnabled: achievementNotifs,
       startMinimized,
+      themeMode,
     });
     onComplete();
-  }, [onComplete, downloadNotifs, achievementNotifs, startMinimized]);
+  }, [onComplete, downloadNotifs, achievementNotifs, startMinimized, themeMode]);
 
   const handleLanguageSave = async () => {
     await window.electron.updateUserPreferences({ language: selectedLanguage });
@@ -2223,9 +2233,36 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </div>
                   <div>
                     <h2>Preferences</h2>
-                    <p>Notifications and startup behavior</p>
+                    <p>Appearance, notifications and startup behavior</p>
                   </div>
                 </div>
+
+                <div className="onboarding-field-label">Appearance</div>
+                <div className="onboarding-theme-choices">
+                  {(
+                    [
+                      { id: "dark", label: "Dark" },
+                      { id: "light", label: "Light" },
+                      { id: "system", label: "Follow system" },
+                    ] as const
+                  ).map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={[
+                        "onboarding-theme-choice",
+                        themeMode === id ? "onboarding-theme-choice--active" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={() => handleThemeModeChange(id)}
+                    >
+                      {themeMode === id && <CheckCircleFillIcon size={14} />}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="onboarding-field-label">Notifications</div>
                 <div className="onboarding-toggles">
                   <label

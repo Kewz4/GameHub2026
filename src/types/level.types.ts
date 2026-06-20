@@ -153,6 +153,8 @@ export interface UserPreferences {
   optionalDownloadsPaths?: string[];
   ggDealsApiKey?: string | null;
   language?: string;
+  /** Built-in colour scheme. Defaults to "dark" when unset. */
+  themeMode?: "dark" | "light" | "system";
   realDebridApiToken?: string | null;
   premiumizeApiToken?: string | null;
   allDebridApiToken?: string | null;

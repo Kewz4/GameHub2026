@@ -340,6 +340,25 @@ export function SettingsContextGeneral({
 
       <div className="settings-context-panel__group">
         <h3>{t("appearance")}</h3>
+        <SelectField
+          label={t("theme_mode", { defaultValue: "Theme" })}
+          value={userPreferences?.themeMode ?? "dark"}
+          onChange={(event) => {
+            const themeMode = event.target
+              .value as NonNullable<typeof userPreferences>["themeMode"];
+            // Apply instantly, then persist.
+            document.documentElement.setAttribute(
+              "data-theme-mode",
+              themeMode ?? "dark"
+            );
+            updateUserPreferences({ themeMode });
+          }}
+          options={[
+            { key: "dark", value: "dark", label: t("theme_dark", { defaultValue: "Dark" }) },
+            { key: "light", value: "light", label: t("theme_light", { defaultValue: "Light" }) },
+            { key: "system", value: "system", label: t("theme_system", { defaultValue: "Follow system" }) },
+          ]}
+        />
         <SettingsAppearance appearance={appearance} />
       </div>
 
