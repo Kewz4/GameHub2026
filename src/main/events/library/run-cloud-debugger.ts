@@ -54,24 +54,26 @@ const runCloudDebugger = async (
     };
   }
 
-  // --- 1. Load local library ---
+  // --- 1. Load local library (all non-deleted, non-custom games) ---
   const localGames = await gamesSublevel
     .values()
     .all()
     .then((all) => all.filter((g) => !g.isDeleted && g.shop !== "custom"));
 
   // --- 2. Load cloud library ---
-  const cloudGames = await HydraApi.get<ProfileGame[]>("/profile/games").catch(
+  let cloudGames = await HydraApi.get<ProfileGame[]>("/profile/games").catch(
     () => [] as ProfileGame[]
   );
 
   const issues: DebugIssue[] = [];
 
-  // Build lookup maps
-  const cloudByKey = new Map<string, ProfileGame>();
-  for (const cg of cloudGames) {
-    cloudByKey.set(`${cg.shop}:${cg.objectId}`, cg);
-  }
+  const buildCloudMap = (games: ProfileGame[]) => {
+    const m = new Map<string, ProfileGame>();
+    for (const cg of games) m.set(`${cg.shop}:${cg.objectId}`, cg);
+    return m;
+  };
+
+  let cloudByKey = buildCloudMap(cloudGames);
 
   const localByKey = new Map<string, (typeof localGames)[number]>();
   for (const lg of localGames) {
@@ -79,40 +81,33 @@ const runCloudDebugger = async (
   }
 
   // --- 3. Find local games missing from cloud ---
-  const uploadable = localGames.filter(
-    (g) =>
-      g.remoteId === null &&
-      g.libraryOrigin !== "sync" &&
-      !cloudByKey.has(`${g.shop}:${g.objectId}`)
+  // Include ALL games (including libraryOrigin="sync" platform games) so that
+  // achievements from Steam/Epic/GOG can be pushed to the cloud profile.
+  const missingFromCloud = localGames.filter(
+    (g) => !cloudByKey.has(`${g.shop}:${g.objectId}`)
   );
 
-  const toUpload = uploadable.map((g) => ({
-    objectId: g.objectId,
-    shop: g.shop,
-    title: g.title,
-  }));
-
-  for (const g of uploadable) {
+  for (const g of missingFromCloud) {
     issues.push({
       kind: "missing-from-cloud",
       gameTitle: g.title,
       shop: g.shop,
       objectId: g.objectId,
-      detail: `Local game not found in cloud (remoteId = null, libraryOrigin = ${g.libraryOrigin ?? "?"})`,
+      detail: `Local game not in cloud (libraryOrigin=${g.libraryOrigin ?? "?"}, remoteId=${g.remoteId ?? "null"})`,
       fixed: false,
     });
   }
 
-  // Attempt to upload missing games in batches of 30
-  if (toUpload.length) {
-    const chunks = chunk(uploadable, 30);
+  // Attempt batch upload for all missing games
+  if (missingFromCloud.length) {
+    const chunks = chunk(missingFromCloud, 30);
     for (const ch of chunks) {
       const payload = ch.map((g) => ({
         objectId: g.objectId,
         playTimeInMilliseconds: Math.trunc(g.playTimeInMilliseconds),
         shop: g.shop,
         lastTimePlayed: g.lastTimePlayed,
-        isFavorite: g.favorite ?? false,
+        isFavorite: (g as any).favorite ?? false,
         isPinned: g.isPinned ?? false,
       }));
 
@@ -127,13 +122,36 @@ const runCloudDebugger = async (
             i.shop === g.shop &&
             i.objectId === g.objectId
         );
-        if (issue) issue.fixed = ok;
-        if (!ok && issue) issue.fixError = "Batch upload failed";
+        if (issue) {
+          issue.fixed = ok;
+          if (!ok) issue.fixError = "Batch upload failed";
+        }
+      }
+    }
+
+    // Re-fetch cloud after upload so we get the new remoteIds and can push achievements
+    const refreshed = await HydraApi.get<ProfileGame[]>("/profile/games").catch(
+      () => cloudGames
+    );
+    cloudGames = refreshed;
+    cloudByKey = buildCloudMap(cloudGames);
+
+    // Stamp remoteId on local games that now exist in cloud
+    for (const g of missingFromCloud) {
+      const cloudGame = cloudByKey.get(`${g.shop}:${g.objectId}`);
+      if (cloudGame) {
+        const key = `${g.shop}:${g.objectId}`;
+        const current = await gamesSublevel.get(key).catch(() => null);
+        if (current && !current.remoteId) {
+          await gamesSublevel
+            .put(key, { ...current, remoteId: cloudGame.id })
+            .catch(() => {});
+        }
       }
     }
   }
 
-  // --- 4. Find cloud games missing from local ---
+  // --- 4. Cloud games not in local (informational only) ---
   for (const cg of cloudGames) {
     if (!localByKey.has(`${cg.shop}:${cg.objectId}`)) {
       issues.push({
@@ -143,70 +161,80 @@ const runCloudDebugger = async (
         objectId: cg.objectId,
         detail: `Cloud game not in local library (cloud id: ${cg.id})`,
         fixed: false,
-        fixError: "Cannot auto-fix: manual re-add required",
+        fixError: "Informational — add the game locally to sync achievements",
       });
     }
   }
 
-  // --- 5. Check achievement discrepancies ---
-  for (const cg of cloudGames) {
-    const localGame = localByKey.get(`${cg.shop}:${cg.objectId}`);
-    if (!localGame) continue;
+  // --- 5. Achievement discrepancies: push local → cloud ---
+  for (const localGame of localGames) {
+    const key = `${localGame.shop}:${localGame.objectId}`;
+    const cloudGame = cloudByKey.get(key);
+    if (!cloudGame) continue;
 
-    const achKey = `${cg.shop}:${cg.objectId}`;
-    const localAch = await gameAchievementsSublevel
-      .get(achKey)
-      .catch(() => null);
-
+    const localAch = await gameAchievementsSublevel.get(key).catch(() => null);
     const localUnlocked: UnlockedAchievement[] =
       localAch?.unlockedAchievements ?? [];
-    const cloudUnlockedCount = cg.unlockedAchievementCount ?? 0;
+    const cloudUnlockedCount = cloudGame.unlockedAchievementCount ?? 0;
+
+    if (localUnlocked.length === 0) continue;
 
     if (localUnlocked.length > cloudUnlockedCount) {
       const issue: DebugIssue = {
         kind: "achievement-count-mismatch",
-        gameTitle: cg.title,
-        shop: cg.shop,
-        objectId: cg.objectId,
-        detail: `Local has ${localUnlocked.length} unlocked achievements, cloud has ${cloudUnlockedCount}`,
+        gameTitle: localGame.title,
+        shop: localGame.shop,
+        objectId: localGame.objectId,
+        detail: `Local: ${localUnlocked.length} unlocked, Cloud: ${cloudUnlockedCount}`,
         fixed: false,
       };
 
-      // Attempt to push local achievements to cloud
-      if (localGame.remoteId) {
+      // Get the current remoteId (may have been stamped above)
+      const freshGame = await gamesSublevel.get(key).catch(() => localGame);
+      const remoteId = freshGame.remoteId ?? cloudGame.id;
+
+      if (remoteId) {
         const ok = await HydraApi.put("/profile/games/achievements", {
-          id: localGame.remoteId,
+          id: remoteId,
           achievements: localUnlocked,
         })
           .then(() => true)
           .catch(() => false);
 
         issue.fixed = ok;
-        if (!ok) issue.fixError = "Achievement upload failed";
+        if (!ok) issue.fixError = "Achievement push failed";
       } else {
-        issue.fixError =
-          "Game has no remoteId — upload games to cloud first, then re-run debugger";
+        issue.fixError = "No remoteId — game not linked to cloud";
       }
 
       issues.push(issue);
     }
+  }
 
-    // Playtime discrepancies
+  // --- 6. Playtime discrepancies ---
+  for (const localGame of localGames) {
+    const key = `${localGame.shop}:${localGame.objectId}`;
+    const cloudGame = cloudByKey.get(key);
+    if (!cloudGame) continue;
+
     const localMs = Math.trunc(localGame.playTimeInMilliseconds);
-    const cloudMs = Math.trunc(cg.playTimeInMilliseconds ?? 0);
-    const diffMs = Math.abs(localMs - cloudMs);
-    if (diffMs > 60_000 && localMs > cloudMs) {
+    const cloudMs = Math.trunc(cloudGame.playTimeInMilliseconds ?? 0);
+
+    if (localMs > cloudMs && localMs - cloudMs > 60_000) {
       const issue: DebugIssue = {
         kind: "playtime-mismatch",
-        gameTitle: cg.title,
-        shop: cg.shop,
-        objectId: cg.objectId,
-        detail: `Local playtime ${Math.round(localMs / 60000)} min, cloud ${Math.round(cloudMs / 60000)} min`,
+        gameTitle: localGame.title,
+        shop: localGame.shop,
+        objectId: localGame.objectId,
+        detail: `Local: ${Math.round(localMs / 60000)} min, Cloud: ${Math.round(cloudMs / 60000)} min`,
         fixed: false,
       };
 
-      if (localGame.remoteId) {
-        const ok = await HydraApi.put(`/profile/games/${localGame.remoteId}`, {
+      const freshGame = await gamesSublevel.get(key).catch(() => localGame);
+      const remoteId = freshGame.remoteId ?? cloudGame.id;
+
+      if (remoteId) {
+        const ok = await HydraApi.put(`/profile/games/${remoteId}`, {
           playTimeInMilliseconds: localMs,
           lastTimePlayed: localGame.lastTimePlayed,
         })
@@ -216,7 +244,7 @@ const runCloudDebugger = async (
         issue.fixed = ok;
         if (!ok) issue.fixError = "Playtime update failed";
       } else {
-        issue.fixError = "Game has no remoteId — upload games to cloud first";
+        issue.fixError = "No remoteId";
       }
 
       issues.push(issue);
@@ -227,7 +255,7 @@ const runCloudDebugger = async (
   const unfixedCount = issues.filter((i) => !i.fixed).length;
 
   logger.info(
-    `[CloudDebugger] ${issues.length} issues found, ${fixedCount} fixed, ${unfixedCount} unfixed`
+    `[CloudDebugger] local=${localGames.length} cloud=${cloudGames.length} issues=${issues.length} fixed=${fixedCount} unfixed=${unfixedCount}`
   );
 
   return {

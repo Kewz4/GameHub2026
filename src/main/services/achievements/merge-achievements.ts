@@ -188,6 +188,7 @@ export const mergeAchievements = async (
         customEnabled && !!WindowManager.notificationWindow;
 
       if (shouldUseCustomNotification) {
+        WindowManager.notificationWindow?.show();
         WindowManager.notificationWindow?.webContents.send(
           "on-achievement-unlocked",
           position,

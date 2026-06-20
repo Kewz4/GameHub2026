@@ -615,6 +615,7 @@ export class WindowManager {
       focusable: false,
       skipTaskbar: true,
       frame: false,
+      show: false,
       width: this.NOTIFICATION_WINDOW_WIDTH,
       height: this.NOTIFICATION_WINDOW_HEIGHT,
       x,
@@ -629,9 +630,9 @@ export class WindowManager {
     this.notificationWindow.setAlwaysOnTop(true, "screen-saver", 1);
     this.loadWindowURL(this.notificationWindow, "achievement-notification");
 
-    if (!app.isPackaged || isStaging) {
-      this.notificationWindow.webContents.openDevTools();
-    }
+    this.notificationWindow.once("ready-to-show", () => {
+      // Window stays hidden until a notification is actually sent.
+    });
   }
 
   public static async showAchievementTestNotification() {
@@ -661,6 +662,7 @@ export class WindowManager {
       return;
     }
 
+    this.notificationWindow?.show();
     this.notificationWindow?.webContents.send(
       "on-achievement-unlocked",
       position,
