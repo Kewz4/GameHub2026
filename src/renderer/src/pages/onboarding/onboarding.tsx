@@ -176,7 +176,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [epicLinked, setEpicLinked] = useState(false);
   const [epicAccount, setEpicAccount] = useState<string | null>(null);
 
-  const [gogBusy, _setGogBusy] = useState(false);
+  const [gogBusy, setGogBusy] = useState(false);
   const [gogModalOpen, setGogModalOpen] = useState(false);
   const [gogLinked, setGogLinked] = useState(false);
   const [gogUsername, setGogUsername] = useState<string | null>(null);
@@ -419,20 +419,25 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const handleGogAuthResult = useCallback(
     async (result: { refresh_token: string; username: string } | null) => {
       if (!result) return;
-      await window.electron.updateUserPreferences({
-        gogRefreshToken: result.refresh_token,
-        gogUsername: result.username ?? "GOG User",
-      });
-      setGogLinked(true);
-      setGogUsername(result.username ?? "GOG User");
-      // gogdl is needed to download GOG games — install it in the background
-      // if it isn't present yet
-      const gogdlStatus = await window.electron
-        .getGogdlStatus()
-        .catch(() => ({ binaryFound: false }));
-      if (!gogdlStatus.binaryFound)
-        window.electron.installGogdl().catch(() => {});
-      window.electron.syncGogLibrary().catch(() => {});
+      setGogBusy(true);
+      try {
+        await window.electron.updateUserPreferences({
+          gogRefreshToken: result.refresh_token,
+          gogUsername: result.username ?? "GOG User",
+        });
+        setGogLinked(true);
+        setGogUsername(result.username ?? "GOG User");
+        // gogdl is needed to download GOG games — install it in the background
+        // if it isn't present yet
+        const gogdlStatus = await window.electron
+          .getGogdlStatus()
+          .catch(() => ({ binaryFound: false }));
+        if (!gogdlStatus.binaryFound)
+          window.electron.installGogdl().catch(() => {});
+        window.electron.syncGogLibrary().catch(() => {});
+      } finally {
+        setGogBusy(false);
+      }
     },
     [next]
   );
@@ -774,16 +779,20 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       if (result.detectedPath && !playniteDetectedPath) {
         setPlayniteDetectedPath(result.detectedPath);
       }
-      if (result.matched === 0) {
+      const cached = result.cached?.length ?? 0;
+      if (result.matched === 0 && cached === 0) {
         setPlayniteResult(
           result.total === 0
             ? "No Playnite games with playtime found."
             : `No matching games found (${result.total} Playnite games scanned).`
         );
       } else {
-        setPlayniteResult(
-          `Imported playtime for ${result.matched} game${result.matched !== 1 ? "s" : ""}.`
-        );
+        const parts: string[] = [];
+        if (result.matched > 0)
+          parts.push(`Updated ${result.matched} game${result.matched !== 1 ? "s" : ""}`);
+        if (cached > 0)
+          parts.push(`saved playtime for ${cached} more — will apply when you add them`);
+        setPlayniteResult(parts.join(", ") + ".");
       }
     } catch {
       setPlayniteResult("Import failed.");
@@ -1286,7 +1295,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   <button
                     type="button"
                     className="onboarding-skip"
-                    onClick={() => setStepIndex(ALL_STEPS.indexOf("tools"))}
+                    onClick={() => setStepIndex(ALL_STEPS.indexOf("achievements"))}
                   >
                     Skip All
                   </button>
@@ -1755,13 +1764,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 <SettingsBattleNet />
 
                 <div className="onboarding-actions" style={{ marginTop: 16 }}>
-                  <button
-                    type="button"
-                    className="onboarding-skip"
-                    onClick={next}
-                  >
-                    Skip for now
-                  </button>
                   <Button type="button" onClick={next}>
                     Continue
                   </Button>
