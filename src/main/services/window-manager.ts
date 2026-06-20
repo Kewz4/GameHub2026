@@ -25,6 +25,7 @@ import { t } from "i18next";
 import { orderBy, slice } from "lodash-es";
 import path from "node:path";
 import UserAgent from "user-agents";
+import { AUTH_REBRAND_CSS, AUTH_REBRAND_JS } from "./auth-rebrand";
 import { HydraApi } from "./hydra-api";
 import { logger, setConsoleWindowSender, type ConsoleLogEntry } from "./logger";
 
@@ -471,66 +472,13 @@ export class WindowManager {
       });
 
       authWindow.webContents.on("did-finish-load", () => {
-        // Inject GameHub branding over Hydra auth page
+        // Re-skin the upstream Hydra auth page as GameHub: swap the logo,
+        // recolour the primary button onto the GameHub gradient, and rewrite
+        // "Hydra" copy. Runs on every load so sign-in → sign-up navigations
+        // stay branded.
+        authWindow.webContents.insertCSS(AUTH_REBRAND_CSS).catch(() => {});
         authWindow.webContents
-          .insertCSS(
-            `
-            /* Hide Hydra logos and brand elements */
-            img[src*="hydra" i],
-            img[alt*="hydra" i],
-            [class*="hydra-logo" i],
-            [class*="HydraLogo" i],
-            [id*="hydra-logo" i] {
-              display: none !important;
-            }
-            /* GameHub color overrides */
-            :root {
-              --primary: #c084fc !important;
-              --accent: #a855f7 !important;
-              --color-primary: #c084fc !important;
-            }
-            a, button {
-              color: inherit;
-            }
-          `
-          )
-          .catch(() => {});
-
-        authWindow.webContents
-          .executeJavaScript(
-            `
-            (function() {
-              function patchText(root) {
-                const walker = document.createTreeWalker(
-                  root,
-                  NodeFilter.SHOW_TEXT,
-                  null
-                );
-                let node;
-                while ((node = walker.nextNode())) {
-                  if (/\\bhydra\\b/i.test(node.textContent || "")) {
-                    node.textContent = (node.textContent || "").replace(/\\bHydra Launcher\\b/gi, "GameHub").replace(/\\bHydra\\b/gi, "GameHub");
-                  }
-                }
-                // Also patch title
-                if (document.title) {
-                  document.title = document.title.replace(/Hydra/gi, "GameHub");
-                }
-              }
-              patchText(document.body);
-              const obs = new MutationObserver((mutations) => {
-                mutations.forEach((m) => {
-                  m.addedNodes.forEach((n) => {
-                    if (n.nodeType === Node.ELEMENT_NODE || n.nodeType === Node.TEXT_NODE) {
-                      patchText(n.nodeType === Node.TEXT_NODE ? n.parentElement || document.body : n as Element);
-                    }
-                  });
-                });
-              });
-              obs.observe(document.body, { childList: true, subtree: true });
-            })();
-          `
-          )
+          .executeJavaScript(AUTH_REBRAND_JS)
           .catch(() => {});
       });
 
