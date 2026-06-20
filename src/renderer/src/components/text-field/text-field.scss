@@ -19,15 +19,15 @@
     min-width: 0;
 
     &:hover {
-      border-color: rgba(255, 255, 255, 0.5);
+      border-color: rgba(var(--fg-rgb), 0.5);
     }
 
     &--primary {
-      background-color: globals.$dark-background-color;
+      background-color: var(--color-dark-background);
     }
 
     &--dark {
-      background-color: globals.$background-color;
+      background-color: var(--color-background);
     }
 
     &--has-error {
@@ -35,7 +35,7 @@
     }
 
     &--focused {
-      border-color: #dadbe1;
+      border-color: var(--color-text-bright);
     }
   }
 
@@ -45,7 +45,7 @@
     width: 100%;
     height: 100%;
     outline: none;
-    color: #dadbe1;
+    color: var(--color-text-bright);
     cursor: default;
     font-family: inherit;
     text-overflow: ellipsis;
@@ -62,7 +62,7 @@
 
   &__toggle-password-button {
     cursor: pointer;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     padding: globals.$spacing-unit;
   }
 

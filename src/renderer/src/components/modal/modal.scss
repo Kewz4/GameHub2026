@@ -3,11 +3,11 @@
 .modal {
   animation: scale-fade-in 0.2s cubic-bezier(0.33, 1, 0.68, 1) 0s 1 normal none
     running;
-  background-color: globals.$background-color;
+  background-color: var(--color-background);
   border-radius: 4px;
   min-width: 400px;
   max-width: 600px;
-  color: globals.$body-color;
+  color: var(--color-text);
   max-height: 100%;
   border: solid 1px globals.$border-color;
   overflow: hidden;
@@ -71,7 +71,7 @@
   }
 
   &__close-button-icon {
-    color: globals.$body-color;
+    color: var(--color-text);
   }
 }
 

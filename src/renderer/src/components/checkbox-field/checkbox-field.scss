@@ -18,7 +18,7 @@
     min-width: 20px;
     min-height: 20px;
     border-radius: 4px;
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -28,16 +28,16 @@
       background-color 0.2s ease,
       color 0.2s ease;
     border: solid 1px globals.$border-color;
-    color: globals.$body-color;
+    color: var(--color-text);
 
     &:hover:not(:has(input:disabled)) {
-      border-color: rgba(255, 255, 255, 0.5);
+      border-color: rgba(var(--fg-rgb), 0.5);
     }
 
     &.checked {
-      background-color: #ffffff;
-      border-color: #ffffff;
-      color: globals.$dark-background-color;
+      background-color: rgb(var(--fg-rgb));
+      border-color: rgb(var(--fg-rgb));
+      color: var(--color-dark-background);
     }
 
     &:has(.checkbox-field__input:focus-visible) {

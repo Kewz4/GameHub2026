@@ -2,10 +2,10 @@
 
 .button {
   padding: globals.$spacing-unit globals.$spacing-unit * 2;
-  background-color: globals.$muted-color;
+  background-color: var(--color-text-bright);
   // Default (primary) button is white background with near-black text for
   // maximum contrast. Variants below override this colour explicitly.
-  color: globals.$dark-background-color;
+  color: var(--color-dark-background);
   border-radius: 8px;
   border: solid 1px transparent;
   transition: all ease 0.2s;
@@ -27,21 +27,25 @@
 
   &--primary {
     &:hover {
-      background-color: #dadbe1;
+      background-color: color-mix(
+        in srgb,
+        var(--color-text-bright) 88%,
+        var(--color-background)
+      );
     }
 
     &:disabled {
-      background-color: globals.$muted-color;
+      background-color: var(--color-text-bright);
     }
   }
 
   &--outline {
     background-color: transparent;
     border: solid 1px globals.$border-color;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
 
     &:disabled {
@@ -50,14 +54,16 @@
   }
 
   &--dark {
-    background-color: globals.$dark-background-color;
-    color: globals.$muted-color;
+    background-color: var(--color-dark-background);
+    color: var(--color-text-bright);
   }
 
   &--danger {
     border-color: transparent;
+    // The danger button keeps a fixed dark-maroon fill in both schemes, so its
+    // label must stay fixed-light (not flip to dark via --color-text-bright).
     background-color: globals.$danger-color;
-    color: globals.$muted-color;
+    color: #f0f1f7;
 
     &:hover {
       background-color: #b3203f;

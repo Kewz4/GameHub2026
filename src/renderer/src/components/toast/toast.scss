@@ -4,7 +4,7 @@
   animation-duration: 0.2s;
   animation-timing-function: ease-in-out;
   position: absolute;
-  background-color: globals.$dark-background-color;
+  background-color: var(--color-dark-background);
   border-radius: 4px;
   border: solid 1px globals.$border-color;
   right: calc(globals.$spacing-unit * 2);
@@ -47,23 +47,23 @@
     height: 5px;
 
     &::-webkit-progress-bar {
-      background-color: globals.$dark-background-color;
+      background-color: var(--color-dark-background);
     }
 
     &::-webkit-progress-value {
-      background-color: globals.$muted-color;
+      background-color: var(--color-text-bright);
     }
   }
 
   &__close-button {
-    color: globals.$body-color;
+    color: var(--color-text);
     cursor: pointer;
     padding: 0;
     margin: 0;
     transition: color 0.2s ease-in-out;
 
     &:hover {
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
     }
   }
 
