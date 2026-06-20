@@ -1020,10 +1020,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         "onboarding-nav-item",
                         navStepIsActive(s) ? "onboarding-nav-item--active" : "",
                         navStepIsDone(s) ? "onboarding-nav-item--done" : "",
+                        !isSelected ? "onboarding-nav-item--disabled" : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
-                      style={!isSelected ? { opacity: 0.4 } : undefined}
                     >
                       <span className="onboarding-nav-item__dot">
                         {navStepIsDone(s) ? "✓" : ""}

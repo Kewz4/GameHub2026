@@ -41,22 +41,35 @@
     text-align: left;
     padding: calc(globals.$spacing-unit * 1.25)
       calc(globals.$spacing-unit * 1.5);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: globals.$body-font-size;
     line-height: 1.2;
     white-space: nowrap;
     transition:
       color 0.2s ease,
-      background-color 0.1s ease;
+      background-color 0.1s ease,
+      box-shadow 0.1s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.15);
+      background: var(--color-surface-hover);
     }
 
+    &:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: -2px;
+    }
+
+    // Selected category must read stronger than a hovered one: accent-tinted
+    // fill plus an inset accent bar on the leading edge.
     &--active {
-      background: rgba(255, 255, 255, 0.1);
-      color: globals.$muted-color;
+      background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+      color: var(--color-text-bright);
+      box-shadow: inset 3px 0 0 var(--color-accent);
+
+      &:hover {
+        background: color-mix(in srgb, var(--color-accent) 26%, transparent);
+      }
     }
 
     &-icon {
@@ -192,9 +205,14 @@
     text-align: left;
     color: inherit;
 
+    &:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+
     &--selected {
-      border-color: var(--color-accent, #5e81f4);
-      background: rgba(94, 129, 244, 0.15);
+      border-color: var(--color-accent);
+      background: color-mix(in srgb, var(--color-accent) 18%, transparent);
     }
   }
 
@@ -243,6 +261,11 @@
     &:hover {
       background: rgba(255, 255, 255, 0.04);
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: -2px;
+    }
   }
 
   &__title {
@@ -258,8 +281,8 @@
     opacity: 0.7;
 
     &--connected {
-      background: rgba(74, 222, 128, 0.15);
-      color: #4ade80;
+      background: color-mix(in srgb, var(--color-success) 20%, transparent);
+      color: var(--color-success);
       opacity: 1;
     }
   }
