@@ -58,7 +58,7 @@
 
     &:focus-visible {
       outline: none;
-      border-color: globals.$brand-teal;
+      border-color: var(--color-primary);
       box-shadow:
         0 12px 32px rgba(0, 0, 0, 0.45),
         0 0 0 3px rgba(globals.$brand-teal, 0.35),
@@ -192,7 +192,7 @@
 
     &--active {
       background-color: rgba(globals.$brand-teal, 0.18);
-      color: globals.$brand-teal;
+      color: var(--color-primary);
 
       &:hover:not(:disabled) {
         background-color: rgba(globals.$brand-teal, 0.26);

@@ -67,6 +67,11 @@
       background: rgba(var(--fg-rgb), 0.08);
     }
 
+    &:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: -2px;
+    }
+
     &--dim {
       opacity: 0.5;
     }

@@ -25,7 +25,7 @@ function DebugModal({
 }) {
   const d = game.debug;
   return (
-    <div className="achievements-sync__debug-backdrop" onClick={onClose}>
+    <div className="achievements-sync__debug-backdrop" onClick={onClose} role="presentation">
       <div
         className="achievements-sync__debug-modal"
         onClick={(e) => e.stopPropagation()}
@@ -264,6 +264,12 @@ export default function AchievementsSync() {
           onClick={() =>
             g.objectId ? navigate(`/game/${g.shop}/${g.objectId}`) : undefined
           }
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && g.objectId)
+              navigate(`/game/${g.shop}/${g.objectId}`);
+          }}
+          role={g.objectId ? "button" : undefined}
+          tabIndex={g.objectId ? 0 : undefined}
           style={{ cursor: g.objectId ? "pointer" : "default" }}
         >
           {g.iconUrl ? (
@@ -387,6 +393,12 @@ export default function AchievementsSync() {
                   key={`cloud-${g.shop}-${g.objectId}`}
                   className="achievements-sync__row"
                   onClick={() => navigate(`/game/${g.shop}/${g.objectId}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ")
+                      navigate(`/game/${g.shop}/${g.objectId}`);
+                  }}
+                  role="button"
+                  tabIndex={0}
                   style={{ cursor: "pointer" }}
                 >
                   <div className="achievements-sync__row-main">
