@@ -1224,6 +1224,9 @@ contextBridge.exposeInMainWorld("electron", {
     return () => ipcRenderer.off("installer:progress", listener);
   },
 
+  // Cloud debugger
+  runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),
+
   // Debug console window
   openConsoleWindow: () => ipcRenderer.invoke("openConsoleWindow"),
   onConsoleLog: (

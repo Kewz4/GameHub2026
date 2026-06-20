@@ -22,6 +22,8 @@ import {
 import { SettingsAppearance } from "./appearance/settings-appearance";
 import { DownloadDirectoryReplacementModal } from "./download-directory-replacement-modal";
 import { LibrarySyncModal, type LibrarySyncResult } from "./library-sync-modal";
+import { CloudDebuggerModal } from "./cloud-debugger-modal";
+import type { CloudDebugReport } from "@main/events/library/run-cloud-debugger";
 
 interface LanguageOption {
   option: string;
@@ -87,6 +89,9 @@ export function SettingsContextGeneral({
     summary: string;
     results: LibrarySyncResult[];
   } | null>(null);
+
+  const [debuggingCloud, setDebuggingCloud] = useState(false);
+  const [cloudDebugReport, setCloudDebugReport] = useState<CloudDebugReport | null>(null);
 
   const [form, setForm] = useState({
     downloadsPath: "",
@@ -465,6 +470,40 @@ export function SettingsContextGeneral({
         )}
       </div>
 
+      <div className="settings-context-panel__group">
+        <SectionHeading
+          title="Cloud Sync"
+          hint="Diagnose and repair discrepancies between your local library and GameHub cloud."
+        />
+
+        <div className="settings-general-action-row">
+          <div className="settings-general-action-row__info">
+            <span>GameHub API Debugger</span>
+            <small>
+              Compare local library vs cloud — finds missing games, missing
+              achievements, playtime gaps, and attempts to auto-fix them.
+            </small>
+          </div>
+          <Button
+            theme="outline"
+            disabled={debuggingCloud}
+            onClick={async () => {
+              setDebuggingCloud(true);
+              try {
+                const report = await window.electron.runCloudDebugger();
+                setCloudDebugReport(report);
+              } catch {
+                showErrorToast("Debugger failed — check your connection.");
+              } finally {
+                setDebuggingCloud(false);
+              }
+            }}
+          >
+            {debuggingCloud ? "Running…" : "Run"}
+          </Button>
+        </div>
+      </div>
+
       <div className="settings-context-panel__group settings-context-panel__group--danger">
         <SectionHeading
           title="Danger Zone"
@@ -631,6 +670,13 @@ export function SettingsContextGeneral({
         onClose={() => setDownloadDirectoryReplacement(null)}
         onConfirm={handleConfirmDownloadDirectoryReplacement}
       />
+
+      {cloudDebugReport && (
+        <CloudDebuggerModal
+          report={cloudDebugReport}
+          onClose={() => setCloudDebugReport(null)}
+        />
+      )}
 
       {syncModal && (
         <LibrarySyncModal

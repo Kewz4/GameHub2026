@@ -19,6 +19,7 @@ import "./torrenting";
 import "./user";
 import "./user-preferences";
 import "./library/transfer-game-files";
+import "./library/run-cloud-debugger";
 import "./installer";
 
 import { isPortableVersion } from "@main/helpers";
