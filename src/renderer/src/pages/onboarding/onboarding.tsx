@@ -7,6 +7,7 @@ import {
   Button,
   TextField,
   ScanApprovalModal,
+  ProgressBar,
   type ScannedGame,
 } from "@renderer/components";
 import { useAppSelector } from "@renderer/hooks";
@@ -1979,16 +1980,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                               : "Sync complete."}
                         </div>
                         {(importActive || importProgress) && (
-                          <div className="onboarding-tool-card__import-bar" style={{ marginTop: 8 }}>
-                            <div
-                              className="onboarding-tool-card__import-fill"
-                              style={{
-                                width: importProgress
-                                  ? `${Math.round((importProgress.current / Math.max(importProgress.total, 1)) * 100)}%`
-                                  : "4%",
-                              }}
-                            />
-                          </div>
+                          <ProgressBar
+                            current={importProgress?.current ?? 1}
+                            total={importProgress?.total ?? 25}
+                            className="onboarding-tool-card__progress"
+                          />
                         )}
                         <p className="onboarding-tool-card__import-hint">
                           Continues in the background — keep going with setup.
@@ -2207,37 +2203,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </Button>
                   </div>
                   {scanBusy && scanProgress && (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: "4px",
-                          background: "rgba(255,255,255,0.12)",
-                          borderRadius: "2px",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: "100%",
-                            width: `${scanProgress.total > 0 ? Math.round((scanProgress.scanned / scanProgress.total) * 100) : 0}%`,
-                            background: "#fff",
-                            borderRadius: "2px",
-                            transition: "width 0.2s ease",
-                          }}
-                        />
-                      </div>
-                      <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>
-                        {scanProgress.scanned}/{scanProgress.total} —{" "}
-                        {scanProgress.currentTitle} ({scanProgress.foundCount}{" "}
-                        found)
-                      </span>
-                    </div>
+                    <ProgressBar
+                      current={scanProgress.scanned}
+                      total={scanProgress.total}
+                      label={`${scanProgress.scanned}/${scanProgress.total} — ${scanProgress.currentTitle} (${scanProgress.foundCount} found)`}
+                    />
                   )}
                   {scanResult && (
                     <p className="onboarding-tool-card__result">{scanResult}</p>

@@ -165,7 +165,7 @@
   &__fill {
     height: 100%;
     border-radius: 3px;
-    background: #fff;
+    background: var(--color-text-bright);
     transition: width 0.35s ease;
   }
 }
@@ -269,18 +269,12 @@
 
 .onboarding-step-description {
   margin: 0;
-  opacity: 0.65;
+  color: var(--color-text-muted);
   font-size: 0.875rem;
   line-height: 1.6;
 }
 
 // ── Form elements ─────────────────────────────────────────────────────────────
-
-.onboarding-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 
 .onboarding-path-row {
   display: flex;
@@ -371,41 +365,6 @@
   }
 }
 
-// ── Platform connect card ─────────────────────────────────────────────────────
-
-.onboarding-platform-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  &__logo {
-    width: 40px;
-    height: 40px;
-    color: #ffffff;
-    flex-shrink: 0;
-  }
-
-  &__info {
-    flex: 1;
-
-    h3 {
-      margin: 0 0 3px;
-      font-size: 0.9rem;
-      font-weight: 600;
-    }
-
-    p {
-      margin: 0;
-      font-size: 0.78rem;
-      color: rgba(255, 255, 255, 0.45);
-    }
-  }
-}
-
 // ── Connected badge ───────────────────────────────────────────────────────────
 
 .onboarding-connected-badge {
@@ -468,24 +427,6 @@
 
   &:hover {
     color: rgba(255, 255, 255, 0.65);
-  }
-}
-
-.onboarding-link {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: inherit;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-
-  &:hover {
-    opacity: 0.8;
   }
 }
 
@@ -612,12 +553,8 @@
     flex-shrink: 0;
   }
 
-  &__import-banner {
-    margin: 12px 0 0;
-    padding: 12px 14px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+  &__progress {
+    margin-top: 8px;
   }
 
   &__import-banner-text {
@@ -630,20 +567,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  &__import-bar {
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  &__import-fill {
-    height: 100%;
-    background: #fff;
-    border-radius: 2px;
-    transition: width 0.4s ease;
   }
 
   &__import-hint {
