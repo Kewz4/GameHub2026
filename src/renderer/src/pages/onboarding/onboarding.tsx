@@ -1360,7 +1360,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <SteamLogo style={{ width: 20, height: 20 }} />
+                    <SteamLogo />
                   </div>
                   <div>
                     <h2>Steam</h2>
@@ -1417,10 +1417,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </>
                 ) : (
                   <>
-                    <div
-                      className="onboarding-actions"
-                      style={{ justifyContent: "flex-start", marginTop: 0 }}
-                    >
+                    <div className="onboarding-actions onboarding-actions--start">
                       <Button
                         type="button"
                         onClick={handleSteamInAppConnect}
@@ -1476,7 +1473,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <EpicLogo style={{ width: 20, height: 20 }} />
+                    <EpicLogo />
                   </div>
                   <div>
                     <h2>Epic Games</h2>
@@ -1523,7 +1520,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <GogLogo style={{ width: 20, height: 20 }} />
+                    <GogLogo />
                   </div>
                   <div>
                     <h2>GOG</h2>
@@ -1575,7 +1572,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <XboxLogo style={{ width: 20, height: 20 }} />
+                    <XboxLogo />
                   </div>
                   <div>
                     <h2>Xbox / Game Pass</h2>
@@ -1636,7 +1633,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <RiotLogo style={{ width: 20, height: 20 }} />
+                    <RiotLogo />
                   </div>
                   <div>
                     <h2>Riot Games</h2>
@@ -1701,7 +1698,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <UbisoftLogo style={{ width: 20, height: 20 }} />
+                    <UbisoftLogo />
                   </div>
                   <div>
                     <h2>Ubisoft Connect</h2>
@@ -1736,7 +1733,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   <>
                     <div
                       className="onboarding-actions"
-                      style={{ marginBottom: 0 }}
                     >
                       <button
                         type="button"
@@ -1760,8 +1756,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       ubisoftState.detected.length > 0 && (
                         <>
                           <div
-                            className="onboarding-divider"
-                            style={{ marginTop: "16px" }}
+                            className="onboarding-divider onboarding-divider--spaced"
                           >
                             or add installed games
                           </div>
@@ -1795,7 +1790,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <BattlenetLogo style={{ width: 20, height: 20 }} />
+                    <BattlenetLogo />
                   </div>
                   <div>
                     <h2>Battle.net</h2>
@@ -1810,7 +1805,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
                 <SettingsBattleNet />
 
-                <div className="onboarding-actions" style={{ marginTop: 16 }}>
+                <div className="onboarding-actions onboarding-actions--spaced">
                   <Button type="button" onClick={next}>
                     Continue
                   </Button>
@@ -1823,7 +1818,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <>
                 <div className="onboarding-step-header">
                   <div className="onboarding-step-header__icon">
-                    <EaLogo style={{ width: 20, height: 20 }} />
+                    <EaLogo />
                   </div>
                   <div>
                     <h2>EA app</h2>
@@ -1858,7 +1853,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   <>
                     <div
                       className="onboarding-actions"
-                      style={{ marginBottom: 0 }}
                     >
                       <button
                         type="button"
@@ -1882,8 +1876,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       eaState.detected.length > 0 && (
                         <>
                           <div
-                            className="onboarding-divider"
-                            style={{ marginTop: "16px" }}
+                            className="onboarding-divider onboarding-divider--spaced"
                           >
                             or add installed games
                           </div>
@@ -2050,7 +2043,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 ) : (
                   <div
                     className="onboarding-actions"
-                    style={{ marginBottom: 0 }}
                   >
                     <button
                       type="button"
@@ -2234,9 +2226,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     <p>Notifications and startup behavior</p>
                   </div>
                 </div>
-                <div className="onboarding-sidebar__section-label">
-                  Notifications
-                </div>
+                <div className="onboarding-field-label">Notifications</div>
                 <div className="onboarding-toggles">
                   <label
                     className="onboarding-toggle"
@@ -2269,10 +2259,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     />
                   </label>
                 </div>
-                <div
-                  className="onboarding-sidebar__section-label"
-                  style={{ marginTop: "16px" }}
-                >
+                <div className="onboarding-field-label onboarding-field-label--spaced">
                   Startup
                 </div>
                 <div className="onboarding-toggles">

@@ -13,7 +13,7 @@
     height: 100%;
     border: solid 1px globals.$border-color;
     box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.7);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     display: flex;
     overflow: hidden;
   }
@@ -140,7 +140,7 @@
     align-items: center;
     gap: calc(globals.$spacing-unit * 1.5);
     padding: calc(globals.$spacing-unit * 1.5);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     background: var(--color-background-2, rgba(255, 255, 255, 0.05));
   }
 
@@ -198,7 +198,7 @@
     align-items: center;
     gap: 10px;
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.03);
     cursor: pointer;
@@ -241,7 +241,7 @@
 
 .settings-integration-item {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: rgba(255, 255, 255, 0.02);
 

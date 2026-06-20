@@ -87,7 +87,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.55);
   cursor: default;
@@ -241,7 +241,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 4px;
+  padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 
   &__icon {
@@ -251,9 +251,16 @@
     align-items: center;
     justify-content: center;
     background: rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     color: rgba(255, 255, 255, 0.7);
     flex-shrink: 0;
+
+    // Platform brand logos and octicons share the icon box at a single size,
+    // so call-sites no longer need inline width/height.
+    svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 
   h2 {
@@ -267,6 +274,20 @@
     margin: 4px 0 0;
     font-size: 0.82rem;
     color: rgba(255, 255, 255, 0.45);
+  }
+}
+
+// ── Content field label (de-scoped from the sidebar section label) ────────────
+
+.onboarding-field-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+
+  &--spaced {
+    margin-top: globals.$spacing-unit * 2;
   }
 }
 
@@ -305,7 +326,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.04);
   color: rgba(255, 255, 255, 0.7);
@@ -345,7 +366,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
@@ -382,7 +403,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
   font-size: 0.875rem;
@@ -403,6 +424,17 @@
   .onboarding-skip {
     margin-right: auto;
   }
+
+  // Left-aligned actions (e.g. a lone primary button under a header).
+  &--start {
+    justify-content: flex-start;
+    margin-top: 0;
+  }
+
+  // Extra separation from the block above.
+  &--spaced {
+    margin-top: globals.$spacing-unit * 2;
+  }
 }
 
 .onboarding-back {
@@ -415,7 +447,7 @@
   color: rgba(255, 255, 255, 0.55);
   font-size: 0.8rem;
   padding: 4px 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: color 0.15s;
   align-self: flex-start;
   margin-bottom: 16px;
@@ -437,7 +469,7 @@
   color: rgba(255, 255, 255, 0.55);
   font-size: 0.85rem;
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition: color 0.15s;
 
   &:hover {
@@ -466,6 +498,10 @@
     height: 1px;
     background: rgba(255, 255, 255, 0.1);
   }
+
+  &--spaced {
+    margin-top: globals.$spacing-unit * 2;
+  }
 }
 
 // ── Integrations selection grid ───────────────────────────────────────────────
@@ -484,7 +520,7 @@
   gap: 10px;
   padding: 20px;
   border: 2px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.03);
   color: rgba(255, 255, 255, 0.9);
   cursor: pointer;
@@ -545,7 +581,7 @@
 .onboarding-tool-card {
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-bottom: 12px;
 
   &__header {
