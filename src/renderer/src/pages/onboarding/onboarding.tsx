@@ -19,6 +19,7 @@ import {
   SearchIcon,
   TrophyIcon,
   SyncIcon,
+  ArrowLeftIcon,
 } from "@primer/octicons-react";
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
@@ -304,6 +305,32 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     [selectedIntegrations]
   );
 
+  const getPrevStep = useCallback(
+    (from: StepId): StepId => {
+      if (from === "install-path") return "language";
+      if (from === "account") return "install-path";
+      if (from === "integrations-select") return "account";
+      if (PLATFORM_STEPS.includes(from)) {
+        const selected = PLATFORM_STEPS.filter((s) =>
+          selectedIntegrations.has(s)
+        );
+        const idx = selected.indexOf(from);
+        if (idx > 0) return selected[idx - 1] as StepId;
+        return "integrations-select";
+      }
+      if (from === "achievements") {
+        const lastSelected = [...PLATFORM_STEPS]
+          .reverse()
+          .find((s) => selectedIntegrations.has(s));
+        return (lastSelected as StepId) ?? "integrations-select";
+      }
+      if (from === "tools") return "achievements";
+      if (from === "preferences") return "tools";
+      return "language";
+    },
+    [selectedIntegrations]
+  );
+
   const next = useCallback(() => {
     setStepIndex((i) => {
       const current = ALL_STEPS[i];
@@ -311,6 +338,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       return ALL_STEPS.indexOf(nextStep);
     });
   }, [getNextStep]);
+
+  const back = useCallback(() => {
+    setStepIndex((i) => {
+      const current = ALL_STEPS[i];
+      const prevStep = getPrevStep(current);
+      return ALL_STEPS.indexOf(prevStep);
+    });
+  }, [getPrevStep]);
 
   const finish = useCallback(async () => {
     await window.electron.updateUserPreferences({
@@ -1079,6 +1114,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 }}
               />
             </div>
+          )}
+          {showSidebar && currentStep !== "language" && (
+            <button
+              type="button"
+              className="onboarding-back"
+              onClick={back}
+              aria-label="Go back"
+            >
+              <ArrowLeftIcon size={14} />
+              Back
+            </button>
           )}
           <div key={currentStep} className="onboarding-step-body">
             {/* ── Language ── */}

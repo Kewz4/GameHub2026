@@ -435,6 +435,25 @@
   }
 }
 
+.onboarding-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.8rem;
+  padding: 4px 2px;
+  border-radius: 4px;
+  transition: color 0.15s;
+  align-self: flex-start;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.6);
+  }
+}
+
 .onboarding-skip {
   background: none;
   border: none;
