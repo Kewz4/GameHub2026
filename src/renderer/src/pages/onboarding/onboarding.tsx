@@ -444,7 +444,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         window.electron.syncEpicLibrary().catch(() => {});
       }
     },
-    [next]
+    []
   );
 
   const handleGogConnect = () => {
@@ -474,7 +474,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         setGogBusy(false);
       }
     },
-    [next]
+    []
   );
 
   const handleXboxConnect = async () => {

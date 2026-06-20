@@ -87,12 +87,7 @@
   flex-direction: column;
   gap: globals.$spacing-unit * 2;
 
-  &__section-title {
-    margin-top: calc(globals.$spacing-unit * 2);
-    margin-bottom: globals.$spacing-unit;
-  }
-
-  &__common-redist-button {
+&__common-redist-button {
     align-self: flex-start;
   }
 
