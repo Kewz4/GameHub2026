@@ -5,11 +5,11 @@
 .settings-general-action-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: globals.$spacing-unit * 2;
   padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
 
   &__info {
     flex: 1;
@@ -21,65 +21,34 @@
     span {
       font-size: 0.875rem;
       font-weight: 500;
-      color: rgba(255, 255, 255, 0.9);
+      color: var(--color-text-bright);
     }
 
     small {
       font-size: 0.78rem;
-      color: rgba(255, 255, 255, 0.4);
+      color: var(--color-text-faint);
       line-height: 1.4;
     }
   }
 
+  &__confirm {
+    display: flex;
+    gap: globals.$spacing-unit;
+  }
+
   &--danger {
-    border-color: rgba(224, 92, 92, 0.2);
-    background: rgba(224, 92, 92, 0.04);
-  }
-}
-
-// ── Inline progress bar for library operations ────────────────────────────────
-
-.settings-general-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 2px;
-
-  &__bar {
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  &__fill {
-    height: 100%;
-    background: #fff;
-    border-radius: 2px;
-    transition: width 0.25s ease;
-  }
-
-  &__label {
-    font-size: 0.76rem;
-    opacity: 0.55;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    border-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
+    background: color-mix(in srgb, var(--color-danger) 5%, transparent);
   }
 }
 
 // ── Danger zone group variant ─────────────────────────────────────────────────
 
-.settings-context-panel__group--danger {
-  border: 1px solid rgba(224, 92, 92, 0.2);
-  border-radius: 8px;
-  padding: 16px !important;
-  background: rgba(224, 92, 92, 0.04);
-
-  h3 {
-    color: rgba(224, 92, 92, 0.9);
-    margin: 0;
-  }
+.settings-context-panel__group.settings-context-panel__group--danger {
+  border: 1px solid color-mix(in srgb, var(--color-danger) 25%, transparent);
+  border-radius: var(--radius-md);
+  padding: globals.$spacing-unit * 2;
+  background: color-mix(in srgb, var(--color-danger) 5%, transparent);
 }
 
 .settings-general {

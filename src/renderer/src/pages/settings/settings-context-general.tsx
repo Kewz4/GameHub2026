@@ -6,6 +6,8 @@ import { orderBy } from "lodash-es";
 import {
   Button,
   CheckboxField,
+  ProgressBar,
+  SectionHeading,
   SelectField,
   TextField,
 } from "@renderer/components";
@@ -342,10 +344,10 @@ export function SettingsContextGeneral({
       </div>
 
       <div className="settings-context-panel__group">
-        <h3>Library</h3>
-        <p style={{ margin: 0, opacity: 0.55, fontSize: "0.82rem" }}>
-          Maintenance tools for your local game library.
-        </p>
+        <SectionHeading
+          title="Library"
+          hint="Maintenance tools for your local game library."
+        />
 
         <div className="settings-general-action-row">
           <div className="settings-general-action-row__info">
@@ -388,20 +390,11 @@ export function SettingsContextGeneral({
           </Button>
         </div>
         {generatingMetadata && metadataProgress && (
-          <div className="settings-general-progress">
-            <div className="settings-general-progress__bar">
-              <div
-                className="settings-general-progress__fill"
-                style={{
-                  width: `${metadataProgress.total > 0 ? Math.round((metadataProgress.current / metadataProgress.total) * 100) : 0}%`,
-                }}
-              />
-            </div>
-            <span className="settings-general-progress__label">
-              {metadataProgress.current}/{metadataProgress.total}
-              {metadataProgress.title ? ` — ${metadataProgress.title}` : ""}
-            </span>
-          </div>
+          <ProgressBar
+            current={metadataProgress.current}
+            total={metadataProgress.total}
+            label={`${metadataProgress.current}/${metadataProgress.total}${metadataProgress.title ? ` — ${metadataProgress.title}` : ""}`}
+          />
         )}
 
         <div className="settings-general-action-row">
@@ -445,28 +438,20 @@ export function SettingsContextGeneral({
           </Button>
         </div>
         {deduping && dedupProgress && (
-          <div className="settings-general-progress">
-            <div className="settings-general-progress__bar">
-              <div
-                className="settings-general-progress__fill"
-                style={{
-                  width: `${dedupProgress.total > 0 ? Math.round((dedupProgress.current / dedupProgress.total) * 100) : 0}%`,
-                }}
-              />
-            </div>
-            <span className="settings-general-progress__label">
-              {dedupProgress.current}/{dedupProgress.total}
-              {dedupProgress.title ? ` — ${dedupProgress.title}` : ""}
-            </span>
-          </div>
+          <ProgressBar
+            current={dedupProgress.current}
+            total={dedupProgress.total}
+            label={`${dedupProgress.current}/${dedupProgress.total}${dedupProgress.title ? ` — ${dedupProgress.title}` : ""}`}
+          />
         )}
       </div>
 
       <div className="settings-context-panel__group settings-context-panel__group--danger">
-        <h3>Danger Zone</h3>
-        <p style={{ margin: 0, opacity: 0.55, fontSize: "0.82rem" }}>
-          These actions are permanent and cannot be undone.
-        </p>
+        <SectionHeading
+          title="Danger Zone"
+          hint="These actions are permanent and cannot be undone."
+          danger
+        />
 
         <div className="settings-general-action-row settings-general-action-row--danger">
           <div className="settings-general-action-row__info">
@@ -478,7 +463,7 @@ export function SettingsContextGeneral({
               Delete
             </Button>
           ) : (
-            <div style={{ display: "flex", gap: 6 }}>
+            <div className="settings-general-action-row__confirm">
               <Button
                 theme="danger"
                 disabled={clearingLibrary}
@@ -524,7 +509,7 @@ export function SettingsContextGeneral({
               Delete
             </Button>
           ) : (
-            <div style={{ display: "flex", gap: 6 }}>
+            <div className="settings-general-action-row__confirm">
               <Button
                 theme="danger"
                 disabled={deletingCloudLibrary}
@@ -563,12 +548,12 @@ export function SettingsContextGeneral({
       </div>
 
       <div className="settings-context-panel__group">
-        <h3>{t("updates", { defaultValue: "Updates" })}</h3>
+        <SectionHeading title={t("updates", { defaultValue: "Updates" })} />
         <div className="settings-general-action-row">
           <div className="settings-general-action-row__info">
             <span>Check for updates</span>
             <small>
-              {updateCheckResult ?? "Look for a newer version of GameHub"}
+              {updateCheckResult ?? "Look for a newer version of Hydra"}
             </small>
           </div>
           <Button

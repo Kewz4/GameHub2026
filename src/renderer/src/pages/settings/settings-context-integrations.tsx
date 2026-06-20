@@ -14,6 +14,7 @@ import { SettingsRiot } from "./settings-riot";
 import { SettingsUbisoft } from "./settings-ubisoft";
 import { SettingsEa } from "./settings-ea";
 import { useAppSelector, useUserDetails } from "@renderer/hooks";
+import { HelperText, SectionHeading } from "@renderer/components";
 
 interface IntegrationItemProps {
   id: string;
@@ -83,7 +84,7 @@ export function SettingsContextIntegrations() {
     return (
       <div className="settings-context-panel">
         <div className="settings-context-panel__group">
-          <p style={{ opacity: 0.7 }}>{t("integrations_sign_in_required")}</p>
+          <HelperText>{t("integrations_sign_in_required")}</HelperText>
         </div>
       </div>
     );
@@ -95,7 +96,7 @@ export function SettingsContextIntegrations() {
     return (
       <div className="settings-context-panel">
         <div className="settings-context-panel__group">
-          <p style={{ opacity: 0.5 }}>Loading…</p>
+          <HelperText tone="faint">Loading…</HelperText>
         </div>
       </div>
     );
@@ -158,10 +159,10 @@ export function SettingsContextIntegrations() {
   return (
     <div className="settings-context-panel">
       <div className="settings-context-panel__group">
-        <h3>Libraries</h3>
-        <p style={{ margin: 0, opacity: 0.6, fontSize: "0.875em" }}>
-          Connect your store accounts to import and sync your game libraries.
-        </p>
+        <SectionHeading
+          title="Libraries"
+          hint="Connect your store accounts to import and sync your game libraries."
+        />
         <div className="settings-integration-list">
           {libraries.map(({ id, title, connected, content }) => (
             <IntegrationItem
@@ -187,10 +188,10 @@ export function SettingsContextIntegrations() {
       </div>
 
       <div className="settings-context-panel__group">
-        <h3>Backups &amp; Imports</h3>
-        <p style={{ margin: 0, opacity: 0.6, fontSize: "0.875em" }}>
-          Bring saves and playtime over from other tools.
-        </p>
+        <SectionHeading
+          title="Backups &amp; Imports"
+          hint="Bring saves and playtime over from other tools."
+        />
         <div className="settings-integration-list">
           <IntegrationItem
             id="ludusavi"
@@ -212,10 +213,10 @@ export function SettingsContextIntegrations() {
       </div>
 
       <div className="settings-context-panel__group">
-        <h3>Premium Clients</h3>
-        <p style={{ margin: 0, opacity: 0.6, fontSize: "0.875em" }}>
-          Debrid and download services.
-        </p>
+        <SectionHeading
+          title="Premium Clients"
+          hint="Debrid and download services."
+        />
         <div className="settings-integration-list">
           <IntegrationItem
             id="debrid"
