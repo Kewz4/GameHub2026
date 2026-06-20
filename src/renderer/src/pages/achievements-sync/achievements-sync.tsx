@@ -91,9 +91,9 @@ function DebugModal({
                     : d?.hydraApiSync === "not-eligible"
                       ? "Not eligible — no HydraAPI/Steam definitions (local only)"
                       : d?.hydraApiSync === "logged-out"
-                        ? "Skipped — not logged in to Hydra"
+                        ? "Skipped — not logged in to GameHub"
                         : d?.hydraApiSync === "no-remote-id"
-                          ? "Skipped — game not in your Hydra cloud library"
+                          ? "Skipped — game not in your GameHub cloud library"
                           : d?.hydraApiSync === "failed"
                             ? "✗ Upload failed (subscription/network)"
                             : "—"}
@@ -358,7 +358,7 @@ export default function AchievementsSync() {
             style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
             <CloudIcon size={14} />
-            Hydra Cloud ({cloudGames.length})
+            GameHub Cloud ({cloudGames.length})
           </Button>
         </div>
       </header>
@@ -373,12 +373,12 @@ export default function AchievementsSync() {
             style={{ marginBottom: 8, fontSize: "0.85em" }}
           >
             Games whose unlocked achievements have been matched to HydraAPI
-            Steam definitions and uploaded to your Hydra cloud account.
+            Steam definitions and uploaded to your GameHub cloud account.
           </p>
           {cloudGames.length === 0 ? (
             <p className="achievements-sync__muted">
               No cloud-synced achievements yet. Run an Exophase sync to match
-              Steam unlocks to your Hydra account.
+              Steam unlocks to your GameHub account.
             </p>
           ) : (
             <ul className="achievements-sync__list">
