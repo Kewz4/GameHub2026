@@ -222,6 +222,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   // Achievements (Exophase) step state
   const [exophaseUsername, setExophaseUsername] = useState<string | null>(null);
   const [exophaseConnecting, setExophaseConnecting] = useState(false);
+  const [exophaseSyncChoice, setExophaseSyncChoice] = useState<"pending" | "running" | "skipped" | null>(null);
   const [exophasePsnImporting, setExophasePsnImporting] = useState(false);
   const [exophasePsnResult, setExophasePsnResult] = useState<string>("");
   // Live achievement-import progress (drives the onboarding progress modal).
@@ -583,22 +584,25 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           exophaseUserId: state.username,
           exophaseEnabled: true,
         });
-        // Kick the first import — the live progress modal shows it running, and
-        // it keeps going in the background if the user advances to the next step.
-        setImportActive(true);
-        setImportProgress(null);
-        // Small delay so the persist:exophase session cookies flush to disk
-        // before the background sync opens its own window on the same partition.
-        setTimeout(
-          () => window.electron.runExophaseBackgroundSync().catch(() => {}),
-          800
-        );
+        // Show the "run sync now?" prompt instead of auto-starting.
+        setExophaseSyncChoice("pending");
       }
     } catch {
       // ignore
     } finally {
       setExophaseConnecting(false);
     }
+  };
+
+  const handleExophaseSyncNow = () => {
+    setExophaseSyncChoice("running");
+    setImportActive(true);
+    setImportProgress(null);
+    // Small delay so session cookies flush before the background sync window opens.
+    setTimeout(
+      () => window.electron.runExophaseBackgroundSync().catch(() => {}),
+      800
+    );
   };
 
   const handleExophasePsnImport = async () => {
@@ -1883,64 +1887,117 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     <div className="onboarding-connected-badge">
                       <CheckCircleFillIcon size={16} />
                       Connected as {exophaseUsername}
-                      {exophasePsnResult && (
-                        <span style={{ opacity: 0.7, fontSize: "0.85em" }}>
-                          {" "}
-                          — {exophasePsnResult}
-                        </span>
-                      )}
                     </div>
 
-                    {/* Live import progress banner — shown while sync is running */}
-                    {importActive && (
-                      <div className="onboarding__import-banner">
-                        <div className="onboarding__import-banner-text">
-                          <SyncIcon size={12} className="onboarding__spin" />
+                    {/* Background sync decision prompt */}
+                    {exophaseSyncChoice === "pending" && (
+                      <div className="onboarding-tool-card">
+                        <div className="onboarding-tool-card__header">
+                          <SyncIcon size={16} />
+                          <span className="onboarding-tool-card__title">
+                            Run Achievement Sync?
+                          </span>
+                        </div>
+                        <p className="onboarding-tool-card__desc">
+                          Sync your Exophase achievements now. It runs fully in
+                          the background — you can continue setup while it works.
+                          Check progress anytime on the Sync Report page.
+                        </p>
+                        <div className="onboarding-tool-card__actions">
+                          <button
+                            type="button"
+                            className="onboarding-skip"
+                            onClick={() => setExophaseSyncChoice("skipped")}
+                          >
+                            Later
+                          </button>
+                          <Button type="button" onClick={handleExophaseSyncNow}>
+                            <SyncIcon size={14} />
+                            Run Now
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Live progress banner — shown while sync is running */}
+                    {exophaseSyncChoice === "running" && (
+                      <div className="onboarding-tool-card">
+                        <div className="onboarding-tool-card__import-banner-text">
+                          <SyncIcon size={12} className="onboarding-tool-card__spin" />
                           {importProgress
-                            ? `Importing achievements… ${importProgress.current}/${importProgress.total} — ${importProgress.title}`
-                            : "Importing achievements…"}
+                            ? `Syncing… ${importProgress.current}/${importProgress.total} — ${importProgress.title}`
+                            : importActive
+                              ? "Syncing achievements…"
+                              : "Sync complete."}
                         </div>
-                        <div className="onboarding__import-bar">
-                          <div
-                            className="onboarding__import-fill"
-                            style={{
-                              width: importProgress
-                                ? `${Math.round(
-                                    (importProgress.current /
-                                      Math.max(importProgress.total, 1)) *
-                                      100
-                                  )}%`
-                                : "4%",
-                            }}
-                          />
-                        </div>
-                        <p className="onboarding__import-hint">
-                          Continues in the background — you can keep going.
-                          Check the Sync report after setup.
+                        {(importActive || importProgress) && (
+                          <div className="onboarding-tool-card__import-bar" style={{ marginTop: 8 }}>
+                            <div
+                              className="onboarding-tool-card__import-fill"
+                              style={{
+                                width: importProgress
+                                  ? `${Math.round((importProgress.current / Math.max(importProgress.total, 1)) * 100)}%`
+                                  : "4%",
+                              }}
+                            />
+                          </div>
+                        )}
+                        <p className="onboarding-tool-card__import-hint">
+                          Continues in the background — keep going with setup.
                         </p>
                       </div>
                     )}
 
-                    <p
-                      className="onboarding-step-description"
-                      style={{ marginTop: 12 }}
-                    >
-                      Played on PlayStation too? Import your PSN trophies and
-                      we&apos;ll credit them onto the matching PC games (e.g.
-                      God of War on PS4 → unlocked on God of War PC). Link your
-                      PSN account on your Exophase profile first.
-                    </p>
+                    {exophaseSyncChoice === "skipped" && (
+                      <p style={{ fontSize: "0.82rem", opacity: 0.55, margin: 0 }}>
+                        Sync skipped — you can run it anytime from{" "}
+                        <strong>Settings → Achievements</strong>.
+                      </p>
+                    )}
+
+                    {/* PSN import — always available, never blocked by bg sync */}
+                    <div className="onboarding-tool-card">
+                      <div className="onboarding-tool-card__header">
+                        <TrophyIcon size={16} />
+                        <span className="onboarding-tool-card__title">
+                          Import PlayStation Trophies
+                        </span>
+                      </div>
+                      <p className="onboarding-tool-card__desc">
+                        Played on PlayStation? We&apos;ll credit your PSN
+                        trophies onto the matching PC games (e.g. God of War
+                        PS4 → God of War PC). Link your PSN account on your
+                        Exophase profile first.
+                      </p>
+                      {exophasePsnResult ? (
+                        <div className="onboarding-connected-badge" style={{ fontSize: "0.82rem" }}>
+                          <CheckCircleFillIcon size={14} />
+                          {exophasePsnResult}
+                        </div>
+                      ) : (
+                        <div className="onboarding-tool-card__actions">
+                          <button
+                            type="button"
+                            className="onboarding-skip"
+                            onClick={next}
+                          >
+                            Skip
+                          </button>
+                          <Button
+                            type="button"
+                            theme="outline"
+                            onClick={handleExophasePsnImport}
+                            disabled={exophasePsnImporting}
+                          >
+                            {exophasePsnImporting
+                              ? "Importing trophies…"
+                              : "Import PlayStation Achievements"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="onboarding-actions">
-                      <Button
-                        type="button"
-                        theme="outline"
-                        onClick={handleExophasePsnImport}
-                        disabled={exophasePsnImporting || importActive}
-                      >
-                        {exophasePsnImporting
-                          ? "Importing trophies…"
-                          : "Import PlayStation Achievements"}
-                      </Button>
                       <Button type="button" onClick={next}>
                         Continue
                       </Button>
@@ -2121,7 +2178,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                           style={{
                             height: "100%",
                             width: `${scanProgress.total > 0 ? Math.round((scanProgress.scanned / scanProgress.total) * 100) : 0}%`,
-                            background: "var(--color-primary, #8c67ef)",
+                            background: "#fff",
                             borderRadius: "2px",
                             transition: "width 0.2s ease",
                           }}

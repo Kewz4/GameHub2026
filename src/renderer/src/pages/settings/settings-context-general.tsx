@@ -343,331 +343,269 @@ export function SettingsContextGeneral({
 
       <div className="settings-context-panel__group">
         <h3>Library</h3>
-        <p style={{ margin: 0, opacity: 0.7, fontSize: "0.875rem" }}>
-          Fetch artwork and metadata from SteamGridDB for all library games
-          missing cover images.
+        <p style={{ margin: 0, opacity: 0.55, fontSize: "0.82rem" }}>
+          Maintenance tools for your local game library.
         </p>
-        <Button
-          onClick={async () => {
-            setGeneratingMetadata(true);
-            setMetadataProgress(null);
-            const unsub = window.electron.onMetadataProgress((p) => {
-              setMetadataProgress({
-                current: p.current,
-                total: p.total,
-                title: p.title,
-              });
-            });
-            try {
-              const result = await window.electron.generateMissingMetadata();
-              setSyncModal({
-                heading: "Metadata Generation Complete",
-                summary:
-                  result.updated > 0
-                    ? `Updated ${result.updated} game${result.updated !== 1 ? "s" : ""}, skipped ${result.skipped} (already had artwork).`
-                    : `No new metadata found. All ${result.skipped} games already have artwork.`,
-                results: result.results.map((r) => ({
-                  title: r.title,
-                  coverUrl: r.coverUrl,
-                  what: r.what,
-                  isNew: true,
-                })),
-              });
-            } catch {
-              showErrorToast("Failed to generate metadata.");
-            } finally {
-              unsub();
-              setGeneratingMetadata(false);
+
+        <div className="settings-general-action-row">
+          <div className="settings-general-action-row__info">
+            <span>Generate missing artwork</span>
+            <small>Fetch covers from SteamGridDB for games without images</small>
+          </div>
+          <Button
+            onClick={async () => {
+              setGeneratingMetadata(true);
               setMetadataProgress(null);
-            }
-          }}
-          disabled={generatingMetadata}
-        >
-          {generatingMetadata ? "Generating…" : "Generate missing metadata"}
-        </Button>
+              const unsub = window.electron.onMetadataProgress((p) => {
+                setMetadataProgress({ current: p.current, total: p.total, title: p.title });
+              });
+              try {
+                const result = await window.electron.generateMissingMetadata();
+                setSyncModal({
+                  heading: "Metadata Generation Complete",
+                  summary:
+                    result.updated > 0
+                      ? `Updated ${result.updated} game${result.updated !== 1 ? "s" : ""}, skipped ${result.skipped} (already had artwork).`
+                      : `No new metadata found. All ${result.skipped} games already have artwork.`,
+                  results: result.results.map((r) => ({
+                    title: r.title,
+                    coverUrl: r.coverUrl,
+                    what: r.what,
+                    isNew: true,
+                  })),
+                });
+              } catch {
+                showErrorToast("Failed to generate metadata.");
+              } finally {
+                unsub();
+                setGeneratingMetadata(false);
+                setMetadataProgress(null);
+              }
+            }}
+            disabled={generatingMetadata}
+          >
+            {generatingMetadata ? "Generating…" : "Generate"}
+          </Button>
+        </div>
         {generatingMetadata && metadataProgress && (
-          <div style={{ fontSize: "0.8rem", opacity: 0.7, marginTop: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="settings-general-progress">
+            <div className="settings-general-progress__bar">
               <div
+                className="settings-general-progress__fill"
                 style={{
-                  flex: 1,
-                  height: 4,
-                  background: "rgba(255,255,255,0.1)",
-                  borderRadius: 2,
-                  overflow: "hidden",
+                  width: `${metadataProgress.total > 0 ? Math.round((metadataProgress.current / metadataProgress.total) * 100) : 0}%`,
                 }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${metadataProgress.total > 0 ? Math.round((metadataProgress.current / metadataProgress.total) * 100) : 0}%`,
-                    background: "#fff",
-                    transition: "width 0.2s",
-                  }}
-                />
-              </div>
-              <span style={{ whiteSpace: "nowrap" }}>
-                {metadataProgress.current}/{metadataProgress.total}
-              </span>
+              />
             </div>
-            {metadataProgress.title && (
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {metadataProgress.title}
-              </p>
-            )}
+            <span className="settings-general-progress__label">
+              {metadataProgress.current}/{metadataProgress.total}
+              {metadataProgress.title ? ` — ${metadataProgress.title}` : ""}
+            </span>
           </div>
         )}
-        <Button
-          theme="outline"
-          onClick={async () => {
-            setDeduping(true);
-            setDedupProgress(null);
-            const unsub = window.electron.onDedupProgress((p) => {
-              setDedupProgress({
-                current: p.current,
-                total: p.total,
-                title: p.title,
-              });
-            });
-            try {
-              const result = await window.electron.mergeDuplicateGames();
-              setSyncModal({
-                heading: "Duplicate Check Complete",
-                summary:
-                  result.merged > 0
-                    ? `Merged ${result.merged} duplicate game${result.merged !== 1 ? "s" : ""}.`
-                    : "No duplicates found.",
-                results: result.mergedTitles.map((title) => ({
-                  title,
-                  coverUrl: null,
-                  what: "Duplicate entries merged — download options preserved",
-                })),
-              });
-            } catch {
-              showErrorToast("Failed to merge duplicates.");
-            } finally {
-              unsub();
-              setDeduping(false);
+
+        <div className="settings-general-action-row">
+          <div className="settings-general-action-row__info">
+            <span>Check for duplicates</span>
+            <small>Merge duplicate library entries, preserving download links</small>
+          </div>
+          <Button
+            theme="outline"
+            onClick={async () => {
+              setDeduping(true);
               setDedupProgress(null);
-            }
-          }}
-          disabled={deduping}
-        >
-          {deduping ? "Checking…" : "Check for duplicates"}
-        </Button>
+              const unsub = window.electron.onDedupProgress((p) => {
+                setDedupProgress({ current: p.current, total: p.total, title: p.title });
+              });
+              try {
+                const result = await window.electron.mergeDuplicateGames();
+                setSyncModal({
+                  heading: "Duplicate Check Complete",
+                  summary:
+                    result.merged > 0
+                      ? `Merged ${result.merged} duplicate game${result.merged !== 1 ? "s" : ""}.`
+                      : "No duplicates found.",
+                  results: result.mergedTitles.map((title) => ({
+                    title,
+                    coverUrl: null,
+                    what: "Duplicate entries merged — download options preserved",
+                  })),
+                });
+              } catch {
+                showErrorToast("Failed to merge duplicates.");
+              } finally {
+                unsub();
+                setDeduping(false);
+                setDedupProgress(null);
+              }
+            }}
+            disabled={deduping}
+          >
+            {deduping ? "Checking…" : "Check"}
+          </Button>
+        </div>
         {deduping && dedupProgress && (
-          <div style={{ fontSize: "0.8rem", opacity: 0.7, marginTop: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="settings-general-progress">
+            <div className="settings-general-progress__bar">
               <div
+                className="settings-general-progress__fill"
                 style={{
-                  flex: 1,
-                  height: 4,
-                  background: "rgba(255,255,255,0.1)",
-                  borderRadius: 2,
-                  overflow: "hidden",
+                  width: `${dedupProgress.total > 0 ? Math.round((dedupProgress.current / dedupProgress.total) * 100) : 0}%`,
                 }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${dedupProgress.total > 0 ? Math.round((dedupProgress.current / dedupProgress.total) * 100) : 0}%`,
-                    background: "#fff",
-                    transition: "width 0.2s",
-                  }}
-                />
-              </div>
-              <span style={{ whiteSpace: "nowrap" }}>
-                {dedupProgress.current}/{dedupProgress.total}
-              </span>
+              />
             </div>
-            {dedupProgress.title && (
-              <p
-                style={{
-                  margin: "4px 0 0",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Checking: {dedupProgress.title}
-              </p>
-            )}
-          </div>
-        )}
-
-        <p
-          style={{
-            margin: "12px 0 0",
-            fontSize: "0.875rem",
-            color: "var(--color-danger, #e05c5c)",
-          }}
-        >
-          Permanently removes every game from your local library. This cannot be
-          undone — useful for starting fresh before re-syncing.
-        </p>
-        {!clearLibraryConfirm ? (
-          <Button
-            theme="outline"
-            onClick={() => setClearLibraryConfirm(true)}
-            style={{
-              borderColor: "var(--color-danger, #e05c5c)",
-              color: "var(--color-danger, #e05c5c)",
-            }}
-          >
-            Delete Entire Library
-          </Button>
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: "0.9rem", opacity: 0.8 }}>
-              Are you sure?
+            <span className="settings-general-progress__label">
+              {dedupProgress.current}/{dedupProgress.total}
+              {dedupProgress.title ? ` — ${dedupProgress.title}` : ""}
             </span>
-            <Button
-              theme="danger"
-              disabled={clearingLibrary}
-              onClick={async () => {
-                setClearingLibrary(true);
-                try {
-                  const result = await window.electron.clearLibrary();
-                  showSuccessToast(
-                    "Library cleared",
-                    `${result.cleared} game${result.cleared !== 1 ? "s" : ""} removed.`
-                  );
-                } catch {
-                  showErrorToast("Failed to clear library.");
-                } finally {
-                  setClearingLibrary(false);
-                  setClearLibraryConfirm(false);
-                }
-              }}
-            >
-              {clearingLibrary ? "Clearing…" : "Yes, delete all"}
-            </Button>
-            <Button
-              theme="outline"
-              disabled={clearingLibrary}
-              onClick={() => setClearLibraryConfirm(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        )}
-
-        <p
-          style={{
-            margin: "20px 0 0",
-            fontSize: "0.875rem",
-            color: "var(--color-danger, #e05c5c)",
-          }}
-        >
-          Permanently deletes every game from your Hydra cloud library (the
-          server-side list synced to your account). Use this to stop old
-          Playnite/Exophase imports and ghost games from being restored on every
-          login. This does not remove games from this device.
-        </p>
-        {!deleteCloudLibraryConfirm ? (
-          <Button
-            theme="outline"
-            onClick={() => setDeleteCloudLibraryConfirm(true)}
-            style={{
-              borderColor: "var(--color-danger, #e05c5c)",
-              color: "var(--color-danger, #e05c5c)",
-            }}
-          >
-            Delete Entire Cloud Library
-          </Button>
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: "0.9rem", opacity: 0.8 }}>
-              Are you sure?
-            </span>
-            <Button
-              theme="danger"
-              disabled={deletingCloudLibrary}
-              onClick={async () => {
-                setDeletingCloudLibrary(true);
-                try {
-                  const result = await window.electron.deleteCloudLibrary();
-                  if (result.error === "not-logged-in") {
-                    showErrorToast("You must be logged in to Hydra.");
-                  } else {
-                    showSuccessToast(
-                      "Cloud library cleared",
-                      `${result.deleted} game${result.deleted !== 1 ? "s" : ""} removed from your Hydra account.`
-                    );
-                  }
-                } catch {
-                  showErrorToast("Failed to clear cloud library.");
-                } finally {
-                  setDeletingCloudLibrary(false);
-                  setDeleteCloudLibraryConfirm(false);
-                }
-              }}
-            >
-              {deletingCloudLibrary ? "Deleting…" : "Yes, delete cloud library"}
-            </Button>
-            <Button
-              theme="outline"
-              disabled={deletingCloudLibrary}
-              onClick={() => setDeleteCloudLibraryConfirm(false)}
-            >
-              Cancel
-            </Button>
           </div>
         )}
       </div>
 
-      <h2 className="settings-general__section-title">
-        {t("updates", { defaultValue: "Updates" })}
-      </h2>
-      <Button
-        theme="outline"
-        onClick={async () => {
-          updateUnsubRef.current?.();
-          setCheckingForUpdates(true);
-          setUpdateCheckResult(null);
-          try {
-            const isAutoInstall = await window.electron.checkForUpdates();
-            updateUnsubRef.current = window.electron.onAutoUpdaterEvent(
-              (event) => {
-                if (event.type === "update-available") {
-                  setUpdateCheckResult(
-                    `Update available: v${event.info.version}`
-                  );
-                } else if (event.type === "update-downloaded") {
-                  setUpdateCheckResult(
-                    "Update downloaded — restart to install."
-                  );
-                }
-                updateUnsubRef.current?.();
-              }
-            );
-            if (!isAutoInstall) {
-              setTimeout(() => {
-                setUpdateCheckResult((prev) => prev ?? "No new update found.");
-              }, 8000);
-            }
-          } finally {
-            setCheckingForUpdates(false);
-          }
-        }}
-        disabled={checkingForUpdates}
-      >
-        {checkingForUpdates
-          ? t("checking_for_updates", { defaultValue: "Checking…" })
-          : t("check_for_updates", { defaultValue: "Check for Updates" })}
-      </Button>
-      {updateCheckResult && (
-        <p style={{ marginTop: 8, opacity: 0.8, fontSize: "0.85rem" }}>
-          {updateCheckResult}
+      <div className="settings-context-panel__group settings-context-panel__group--danger">
+        <h3>Danger Zone</h3>
+        <p style={{ margin: 0, opacity: 0.55, fontSize: "0.82rem" }}>
+          These actions are permanent and cannot be undone.
         </p>
-      )}
+
+        <div className="settings-general-action-row settings-general-action-row--danger">
+          <div className="settings-general-action-row__info">
+            <span>Delete local library</span>
+            <small>Removes every game from this device. Useful for a fresh start before re-syncing.</small>
+          </div>
+          {!clearLibraryConfirm ? (
+            <Button theme="danger" onClick={() => setClearLibraryConfirm(true)}>
+              Delete
+            </Button>
+          ) : (
+            <div style={{ display: "flex", gap: 6 }}>
+              <Button
+                theme="danger"
+                disabled={clearingLibrary}
+                onClick={async () => {
+                  setClearingLibrary(true);
+                  try {
+                    const result = await window.electron.clearLibrary();
+                    showSuccessToast(
+                      "Library cleared",
+                      `${result.cleared} game${result.cleared !== 1 ? "s" : ""} removed.`
+                    );
+                  } catch {
+                    showErrorToast("Failed to clear library.");
+                  } finally {
+                    setClearingLibrary(false);
+                    setClearLibraryConfirm(false);
+                  }
+                }}
+              >
+                {clearingLibrary ? "Clearing…" : "Confirm"}
+              </Button>
+              <Button
+                theme="outline"
+                disabled={clearingLibrary}
+                onClick={() => setClearLibraryConfirm(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="settings-general-action-row settings-general-action-row--danger">
+          <div className="settings-general-action-row__info">
+            <span>Delete cloud library</span>
+            <small>
+              Removes all games from your Hydra account server-side. Stops
+              old imports from restoring on login. Does not affect this device.
+            </small>
+          </div>
+          {!deleteCloudLibraryConfirm ? (
+            <Button theme="danger" onClick={() => setDeleteCloudLibraryConfirm(true)}>
+              Delete
+            </Button>
+          ) : (
+            <div style={{ display: "flex", gap: 6 }}>
+              <Button
+                theme="danger"
+                disabled={deletingCloudLibrary}
+                onClick={async () => {
+                  setDeletingCloudLibrary(true);
+                  try {
+                    const result = await window.electron.deleteCloudLibrary();
+                    if (result.error === "not-logged-in") {
+                      showErrorToast("You must be logged in to Hydra.");
+                    } else {
+                      showSuccessToast(
+                        "Cloud library cleared",
+                        `${result.deleted} game${result.deleted !== 1 ? "s" : ""} removed from your Hydra account.`
+                      );
+                    }
+                  } catch {
+                    showErrorToast("Failed to clear cloud library.");
+                  } finally {
+                    setDeletingCloudLibrary(false);
+                    setDeleteCloudLibraryConfirm(false);
+                  }
+                }}
+              >
+                {deletingCloudLibrary ? "Deleting…" : "Confirm"}
+              </Button>
+              <Button
+                theme="outline"
+                disabled={deletingCloudLibrary}
+                onClick={() => setDeleteCloudLibraryConfirm(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>{t("updates", { defaultValue: "Updates" })}</h3>
+        <div className="settings-general-action-row">
+          <div className="settings-general-action-row__info">
+            <span>Check for updates</span>
+            <small>
+              {updateCheckResult ?? "Look for a newer version of GameHub"}
+            </small>
+          </div>
+          <Button
+            theme="outline"
+            onClick={async () => {
+              updateUnsubRef.current?.();
+              setCheckingForUpdates(true);
+              setUpdateCheckResult(null);
+              try {
+                const isAutoInstall = await window.electron.checkForUpdates();
+                updateUnsubRef.current = window.electron.onAutoUpdaterEvent(
+                  (event) => {
+                    if (event.type === "update-available") {
+                      setUpdateCheckResult(`Update available: v${event.info.version}`);
+                    } else if (event.type === "update-downloaded") {
+                      setUpdateCheckResult("Update downloaded — restart to install.");
+                    }
+                    updateUnsubRef.current?.();
+                  }
+                );
+                if (!isAutoInstall) {
+                  setTimeout(() => {
+                    setUpdateCheckResult((prev) => prev ?? "No new update found.");
+                  }, 8000);
+                }
+              } finally {
+                setCheckingForUpdates(false);
+              }
+            }}
+            disabled={checkingForUpdates}
+          >
+            {checkingForUpdates
+              ? t("checking_for_updates", { defaultValue: "Checking…" })
+              : t("check_for_updates", { defaultValue: "Check" })}
+          </Button>
+        </div>
+      </div>
 
       <DownloadDirectoryReplacementModal
         visible={downloadDirectoryReplacement !== null}

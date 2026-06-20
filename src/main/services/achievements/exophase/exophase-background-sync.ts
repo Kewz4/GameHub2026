@@ -3,7 +3,7 @@ import type { ExophaseSyncReport } from "@types";
 import { achievementsLogger } from "@main/services/logger";
 import { WindowManager } from "@main/services/window-manager";
 import { LocalNotificationManager } from "@main/services/notifications/local-notifications";
-import { getPrefs, pullSharedCache, pushSharedCache } from "./exophase-cache";
+import { getPrefs } from "./exophase-cache";
 import { syncExophaseAccount } from "./exophase-importer";
 
 let running = false;
@@ -29,17 +29,11 @@ export const runExophaseBackgroundSync = async (
 
   running = true;
   try {
-    // 1. Merge the community cache (also lights up matching library games).
-    await pullSharedCache().catch(() => 0);
-
-    // 2. Account-driven sync — PC storefronts only (PSN is a separate import).
+    // Account-driven sync — PC storefronts only (PSN is a separate import).
     const result = await syncExophaseAccount(
       (p) => onProgress?.({ current: p.current, total: p.total, title: p.title }),
       "pc"
     );
-
-    // 3. Share the refreshed cache.
-    await pushSharedCache().catch(() => {});
 
     const report: ExophaseSyncReport = result.report ?? {
       startedAt: new Date().toISOString(),
