@@ -14,7 +14,7 @@
   }
 
   &__empty-text {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$small-font-size;
     margin: 0;
     text-align: center;
@@ -23,7 +23,7 @@
   &__add-friend-button {
     background: none;
     border: none;
-    color: globals.$body-color;
+    color: var(--color-text);
     font-size: globals.$small-font-size;
     cursor: pointer;
     text-decoration: underline;
@@ -34,7 +34,7 @@
     gap: calc(globals.$spacing-unit / 2);
 
     &:hover {
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
     }
   }
 
@@ -58,7 +58,7 @@
     display: flex;
     cursor: pointer;
     transition: all ease 0.1s;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     width: 100%;
     overflow: hidden;
     border-radius: 4px;
@@ -67,13 +67,13 @@
     align-items: center;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.15);
+      background-color: rgba(var(--fg-rgb), 0.15);
       text-decoration: none;
     }
   }
 
   &__friend-name {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: 0.8rem;
     font-weight: 600;
   }
@@ -98,7 +98,7 @@
   &__view-all {
     background: none;
     border: none;
-    color: globals.$body-color;
+    color: var(--color-text);
     font-size: globals.$small-font-size;
     cursor: pointer;
     text-decoration: underline;
@@ -106,7 +106,7 @@
     transition: color ease 0.2s;
 
     &:hover {
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
     }
   }
 }

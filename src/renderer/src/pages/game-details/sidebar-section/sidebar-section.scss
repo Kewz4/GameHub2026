@@ -1,9 +1,9 @@
 @use "../../../scss/globals.scss";
 
 .sidebar-section {
-  background-color: globals.$background-color;
+  background-color: var(--color-background);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg-rgb), 0.05);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 
@@ -12,11 +12,11 @@
     flex-direction: column;
     padding: calc(globals.$spacing-unit * 2.5) calc(globals.$spacing-unit * 2);
     gap: calc(globals.$spacing-unit / 2);
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     transition: background-color 0.2s ease;
 
     &:has(.sidebar-section__button:hover) {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 
@@ -25,7 +25,7 @@
     display: flex;
     align-items: center;
     background-color: transparent;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     width: 100%;
     cursor: pointer;
     transition: all ease 0.2s;
@@ -39,7 +39,7 @@
   }
 
   &__subtitle {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$small-font-size;
     display: inline-flex;
     align-items: center;
@@ -64,7 +64,7 @@
   &__content {
     overflow: hidden;
     transition: max-height 0.4s cubic-bezier(0, 1, 0, 1);
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     position: relative;
   }
 }

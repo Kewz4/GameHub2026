@@ -4,12 +4,12 @@
   &__download-details {
     gap: globals.$spacing-unit;
     display: flex;
-    color: globals.$body-color;
+    color: var(--color-text);
     align-items: center;
   }
 
   &__downloads-link {
-    color: globals.$body-color;
+    color: var(--color-text);
     text-decoration: underline;
   }
 

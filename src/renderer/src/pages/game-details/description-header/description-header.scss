@@ -6,10 +6,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: globals.$background-color;
+  background-color: var(--color-background);
   height: 72px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg-rgb), 0.05);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 
   &__info {
@@ -19,7 +19,7 @@
 
     p {
       font-size: globals.$small-font-size;
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
       font-weight: 400;
 
       &:first-child {

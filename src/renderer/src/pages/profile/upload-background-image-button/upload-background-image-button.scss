@@ -7,7 +7,7 @@
     right: 16px;
   }
 
-  border-color: globals.$body-color;
+  border-color: var(--color-text);
   box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.8);
   background-color: rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(20px);
@@ -15,7 +15,7 @@
   &__menu {
     background-color: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(var(--fg-rgb), 0.08);
     border-radius: 6px;
     min-width: 180px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -44,11 +44,11 @@
     font-size: 14px;
     background: none;
     border: none;
-    color: globals.$body-color;
+    color: var(--color-text);
     text-align: left;
 
     &:hover:not(:disabled) {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
 
     &:disabled {
@@ -57,7 +57,7 @@
     }
 
     &:focus {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
       outline: none;
     }
   }

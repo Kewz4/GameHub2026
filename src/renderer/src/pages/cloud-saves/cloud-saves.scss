@@ -13,13 +13,13 @@
     display: flex;
     align-items: center;
     gap: calc(globals.$spacing-unit * 1.5);
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
 
     h2 {
       margin: 0;
       font-size: 1.25rem;
       font-weight: 600;
-      color: #fff;
+      color: var(--color-text-bright);
     }
   }
 
@@ -33,29 +33,29 @@
     background: none;
     border: 1px solid globals.$border-color;
     border-radius: 4px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: 0.8rem;
     padding: 3px 10px;
     cursor: pointer;
 
     &:hover {
-      border-color: rgba(255, 255, 255, 0.3);
-      color: #fff;
+      border-color: rgba(var(--fg-rgb), 0.3);
+      color: var(--color-text-bright);
     }
   }
 
   &__explainer {
-    background: globals.$dark-background-color;
+    background: var(--color-dark-background);
     border: 1px solid globals.$border-color;
     border-radius: 8px;
     padding: 20px 24px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
 
     h3 {
       margin: 0 0 12px;
       font-size: 0.9rem;
       font-weight: 600;
-      color: rgba(255, 255, 255, 0.75);
+      color: rgba(var(--fg-rgb), 0.75);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
@@ -84,13 +84,13 @@
       }
 
       strong {
-        color: rgba(255, 255, 255, 0.9);
+        color: rgba(var(--fg-rgb), 0.9);
         font-weight: 600;
       }
 
       em {
         font-style: normal;
-        color: rgba(255, 255, 255, 0.75);
+        color: rgba(var(--fg-rgb), 0.75);
       }
     }
   }
@@ -102,7 +102,7 @@
     justify-content: center;
     gap: globals.$spacing-unit;
     padding: 64px 24px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     text-align: center;
     opacity: 0.6;
   }
@@ -114,7 +114,7 @@
   }
 
   &__game-group {
-    background: globals.$background-color;
+    background: var(--color-background);
     border: 1px solid globals.$border-color;
     border-radius: 8px;
     overflow: hidden;
@@ -123,7 +123,7 @@
   &__game-header {
     display: flex;
     align-items: center;
-    background: globals.$dark-background-color;
+    background: var(--color-dark-background);
     border-bottom: 1px solid globals.$border-color;
   }
 
@@ -135,13 +135,13 @@
     padding: 14px 16px;
     background: none;
     border: none;
-    color: #fff;
+    color: var(--color-text-bright);
     cursor: pointer;
     text-align: left;
     transition: background-color 0.1s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(var(--fg-rgb), 0.05);
     }
   }
 
@@ -152,7 +152,7 @@
 
   &__chevron {
     flex-shrink: 0;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     transition: transform 0.2s ease;
 
     &--expanded {
@@ -171,8 +171,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.08);
-      color: globals.$muted-color;
+      background: rgba(var(--fg-rgb), 0.08);
+      color: var(--color-text-bright);
     }
   }
 
@@ -190,8 +190,8 @@
     font-weight: 600;
     padding: 3px 8px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
-    color: globals.$muted-color;
+    background: rgba(var(--fg-rgb), 0.1);
+    color: var(--color-text-bright);
     flex-shrink: 0;
   }
 
@@ -217,7 +217,7 @@
     }
 
     &:hover {
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(var(--fg-rgb), 0.03);
     }
   }
 
@@ -232,7 +232,7 @@
 
   &__entry-label {
     font-size: 0.875rem;
-    color: #fff;
+    color: var(--color-text-bright);
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -242,7 +242,7 @@
 
   &__entry-detail {
     font-size: 0.78rem;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     white-space: nowrap;
     opacity: 0.7;
   }
@@ -268,10 +268,10 @@
     display: flex;
     align-items: center;
     transition: background-color 0.1s ease;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(var(--fg-rgb), 0.1);
     }
 
     &--danger {
@@ -313,14 +313,14 @@
   &__cancel-btn {
     background: none;
     border: 1px solid globals.$border-color;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     border-radius: 4px;
     padding: 3px 8px;
     font-size: 0.8rem;
     cursor: pointer;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(var(--fg-rgb), 0.08);
     }
   }
 

@@ -15,7 +15,7 @@
     gap: globals.$spacing-unit;
     padding: calc(globals.$spacing-unit * 2) calc(globals.$spacing-unit * 1.75);
     border-right: 1px solid globals.$border-color;
-    background: globals.$dark-background-color;
+    background: var(--color-dark-background);
   }
 
   &__sidebar-button {
@@ -25,7 +25,7 @@
     gap: globals.$spacing-unit;
     border: 0;
     background: transparent;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     text-align: left;
     padding: calc(globals.$spacing-unit * 1.25)
       calc(globals.$spacing-unit * 1.5);
@@ -38,11 +38,11 @@
       background-color 0.1s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(var(--fg-rgb), 0.15);
     }
 
     &--active {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(var(--fg-rgb), 0.1);
     }
 
     &-icon {
@@ -219,7 +219,7 @@
 
   &__category-note {
     font-size: globals.$small-font-size;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   @media (max-width: 860px) {
@@ -268,7 +268,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
+      background: rgba(var(--fg-rgb), 0.15);
       border-radius: 3px;
     }
   }
@@ -315,7 +315,7 @@
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  background: globals.$dark-background-color;
+  background: var(--color-dark-background);
   border: 1px solid globals.$border-color;
   border-radius: 8px;
   cursor: pointer;
@@ -324,13 +324,13 @@
   transition: all 0.15s;
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(var(--fg-rgb), 0.08);
+    border-color: rgba(var(--fg-rgb), 0.15);
   }
 
   &--selected {
-    border-color: rgba(255, 255, 255, 0.35) !important;
-    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(var(--fg-rgb), 0.35) !important;
+    background: rgba(var(--fg-rgb), 0.08) !important;
   }
 
   &--nospace {
@@ -341,7 +341,7 @@
   &__icon {
     flex-shrink: 0;
     opacity: 0.7;
-    color: #fff;
+    color: var(--color-text-bright);
   }
 
   &__body {
@@ -362,7 +362,7 @@
   &__label {
     font-size: 14px;
     font-weight: 600;
-    color: #fff;
+    color: var(--color-text-bright);
     opacity: 0.9;
     white-space: nowrap;
     overflow: hidden;
@@ -373,7 +373,7 @@
     font-size: 12px;
     white-space: nowrap;
     flex-shrink: 0;
-    color: #fff;
+    color: var(--color-text-bright);
     opacity: 0.8;
   }
 
@@ -386,7 +386,7 @@
     position: relative;
     width: 100%;
     height: 3px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(var(--fg-rgb), 0.08);
     border-radius: 2px;
     overflow: hidden;
   }
@@ -447,13 +447,13 @@
   &__pct {
     font-size: 18px;
     font-weight: 700;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__track {
     width: 100%;
     height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--fg-rgb), 0.1);
     border-radius: 3px;
     overflow: hidden;
     margin-bottom: 6px;
@@ -461,7 +461,7 @@
 
   &__fill {
     height: 100%;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(var(--fg-rgb), 0.9);
     border-radius: 3px;
     transition: width 0.3s ease;
   }
@@ -499,7 +499,7 @@
   border-radius: 16px;
   padding: 24px 32px;
   min-width: 420px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--fg-rgb), 0.12);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 
   h4 {
@@ -530,7 +530,7 @@
 
 .game-options-modal__lookup {
   padding: 16px 0 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(var(--fg-rgb), 0.08);
   margin-top: 8px;
 
   h3 {
@@ -553,7 +553,7 @@
     border-radius: 6px;
     cursor: pointer;
     background: var(--color-primary, #1a9fff);
-    color: #fff;
+    color: var(--color-text-bright);
     border: none;
 
     &:disabled {

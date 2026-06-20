@@ -2,7 +2,7 @@
 
 .dropdown-menu {
   &__content {
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     border: 1px solid globals.$border-color;
     border-radius: 6px;
     min-width: 200px;
@@ -22,7 +22,7 @@
     padding: 4px 12px;
     font-size: 14px;
     font-weight: 500;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__separator {
@@ -51,12 +51,12 @@
   }
 
   &:not(&__item--disabled) &__item:hover {
-    background-color: globals.$background-color;
-    color: globals.$muted-color;
+    background-color: var(--color-background);
+    color: var(--color-text-bright);
   }
 
   &__item:focus {
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     outline: none;
   }
 

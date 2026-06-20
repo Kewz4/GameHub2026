@@ -2,7 +2,7 @@
 
 .search-dropdown {
   position: fixed;
-  background-color: globals.$dark-background-color;
+  background-color: var(--color-dark-background);
   border: 1px solid globals.$border-color;
   border-radius: 8px;
   max-height: 350px;
@@ -29,7 +29,7 @@
   }
 
   &__section-title {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: 12px;
     font-weight: 500;
     text-transform: uppercase;
@@ -37,7 +37,7 @@
   }
 
   &__clear-text-button {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     cursor: pointer;
     padding: 0;
     font-size: 11px;
@@ -48,7 +48,7 @@
     border: none;
 
     &:hover {
-      color: #ffffff;
+      color: var(--color-text-bright);
     }
   }
 
@@ -73,7 +73,7 @@
     right: 8px;
     top: 50%;
     transform: translateY(-50%);
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     padding: 4px;
     opacity: 0;
     transition: opacity ease 0.15s;
@@ -103,7 +103,7 @@
 
     &:hover,
     &--active {
-      background-color: globals.$background-color;
+      background-color: var(--color-background);
     }
 
     &:focus {
@@ -115,7 +115,7 @@
     flex-shrink: 0;
     width: 16px;
     height: 16px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
 
     &--image {
       border-radius: 2px;
@@ -135,7 +135,7 @@
   &__empty {
     padding: 16px 12px;
     text-align: center;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: 14px;
   }
 

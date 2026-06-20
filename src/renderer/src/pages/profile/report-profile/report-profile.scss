@@ -3,7 +3,7 @@
 .report-profile {
   &__button {
     align-self: flex-end;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     gap: globals.$spacing-unit;
     display: flex;
     cursor: pointer;

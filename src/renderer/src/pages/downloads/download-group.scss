@@ -30,13 +30,13 @@
         margin: 0;
         font-size: 20px;
         font-weight: 700;
-        color: rgba(255, 255, 255, 0.95);
+        color: rgba(var(--fg-rgb), 0.95);
       }
     }
 
     &-count {
-      background-color: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.7);
+      background-color: rgba(var(--fg-rgb), 0.1);
+      color: rgba(var(--fg-rgb), 0.7);
       padding: 4px 8px;
       border-radius: 6px;
       font-size: 12px;
@@ -128,7 +128,7 @@
       }
 
       &:focus {
-        outline: 2px solid rgba(255, 255, 255, 0.5);
+        outline: 2px solid rgba(var(--fg-rgb), 0.5);
         outline-offset: 4px;
         border-radius: 4px;
       }
@@ -157,7 +157,7 @@
     h1 {
       font-size: 20px;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--color-text-bright);
       text-shadow: 2px 2px 12px rgba(0, 0, 0, 0.9);
       margin: 0;
       cursor: pointer;
@@ -168,7 +168,7 @@
       }
 
       &:focus {
-        outline: 2px solid rgba(255, 255, 255, 0.5);
+        outline: 2px solid rgba(var(--fg-rgb), 0.5);
         outline-offset: 4px;
         border-radius: 4px;
       }
@@ -213,20 +213,20 @@
     gap: 8px;
     padding: 10px 16px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--fg-rgb), 0.1);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(var(--fg-rgb), 0.2);
     box-shadow:
       0 10px 15px -3px rgba(0, 0, 0, 0.1),
       0 4px 6px -4px rgba(0, 0, 0, 0.1);
-    color: #fff;
+    color: var(--color-text-bright);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.2s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.2);
+      background: rgba(var(--fg-rgb), 0.2);
     }
   }
 
@@ -255,7 +255,7 @@
   &__progress-status {
     font-size: 13px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--fg-rgb), 0.9);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -263,7 +263,7 @@
   &__progress-percentage {
     font-size: 14px;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-text-bright);
     align-self: flex-end;
     display: inline-block;
     overflow: hidden;
@@ -280,13 +280,13 @@
     gap: calc(globals.$spacing-unit);
     font-size: 13px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--fg-rgb), 0.9);
   }
 
   &__progress-status {
     font-size: 13px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--fg-rgb), 0.9);
   }
 
   &__progress-time {
@@ -294,7 +294,7 @@
     align-items: center;
     gap: calc(globals.$spacing-unit);
     font-size: 13px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__hero-stats {
@@ -302,7 +302,7 @@
     gap: calc(globals.$spacing-unit * 4);
     padding: calc(globals.$spacing-unit * 2);
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--fg-rgb), 0.1);
     background: rgba(26, 26, 26, 0.1);
     backdrop-filter: blur(8px);
     margin-top: calc(globals.$spacing-unit * 2);
@@ -314,7 +314,7 @@
     gap: calc(globals.$spacing-unit * 2);
     min-width: 200px;
     padding-right: calc(globals.$spacing-unit * 2);
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 1px solid rgba(var(--fg-rgb), 0.1);
     align-self: flex-start;
   }
 
@@ -355,11 +355,11 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(var(--fg-rgb), 0.6);
   }
 
   &__stat-value {
-    color: #ffffff;
+    color: var(--color-text-bright);
     font-weight: 700;
     font-size: 11px;
     line-height: 1.2;
@@ -402,7 +402,7 @@
 
     &:focus,
     &:focus-visible {
-      outline: 2px solid rgba(255, 255, 255, 0.5);
+      outline: 2px solid rgba(var(--fg-rgb), 0.5);
       outline-offset: 2px;
     }
 
@@ -439,7 +439,7 @@
   &__simple-title {
     font-size: 16px;
     font-weight: 600;
-    color: #ffffff;
+    color: var(--color-text-bright);
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -457,7 +457,7 @@
     align-items: center;
     gap: calc(globals.$spacing-unit * 2);
     font-size: 13px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__simple-size {
@@ -472,7 +472,7 @@
     align-items: center;
     gap: calc(globals.$spacing-unit / 2);
     font-weight: 500;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__simple-seeding {
@@ -494,7 +494,7 @@
   &__simple-progress-text {
     font-size: 12px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(var(--fg-rgb), 0.8);
     text-align: right;
   }
 
@@ -530,7 +530,7 @@
   &__progress-bar {
     width: 100%;
     height: 8px;
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(var(--fg-rgb), 0.08);
     border-radius: 4px;
     overflow: hidden;
     margin-top: calc(globals.$spacing-unit / 2);
@@ -542,12 +542,12 @@
 
   &__progress-fill {
     height: 100%;
-    background-color: #fff;
+    background-color: var(--color-text-bright);
     transition: width 0.3s ease;
     border-radius: 4px;
 
     &--extraction {
-      background-color: #fff;
+      background-color: var(--color-text-bright);
     }
   }
 }

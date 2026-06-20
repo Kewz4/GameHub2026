@@ -66,7 +66,7 @@ $logo-max-width: 200px;
 
   &__table-header {
     width: 100%;
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     transition: all ease 0.2s;
     border-bottom: solid 1px globals.$border-color;
     position: sticky;
@@ -86,13 +86,13 @@ $logo-max-width: 200px;
     gap: globals.$spacing-unit * 2;
     padding: globals.$spacing-unit * 2;
     width: 100%;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
   }
 
   &__item {
     display: flex;
     transition: all ease 0.1s;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     width: 100%;
     overflow: hidden;
     border-radius: 4px;
@@ -224,7 +224,7 @@ $logo-max-width: 200px;
     }
 
     &::-webkit-progress-value {
-      background-color: globals.$muted-color;
+      background-color: var(--color-text-bright);
       border-radius: 4px;
     }
   }
@@ -236,7 +236,7 @@ $logo-max-width: 200px;
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     position: relative;
     object-fit: cover;
 
@@ -252,7 +252,7 @@ $logo-max-width: 200px;
     justify-content: center;
     width: 100%;
     gap: math.div(globals.$spacing-unit, 2);
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     cursor: pointer;
 
     &:hover {

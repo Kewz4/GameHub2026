@@ -14,8 +14,8 @@
   }
 
   &__count {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(var(--fg-rgb), 0.1);
+    color: rgba(var(--fg-rgb), 0.7);
     padding: 4px 8px;
     border-radius: 6px;
     font-size: 12px;
@@ -37,12 +37,12 @@
     align-items: center;
     gap: calc(globals.$spacing-unit * 2);
     padding: calc(globals.$spacing-unit * 1.5);
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(var(--fg-rgb), 0.05);
     border-radius: 8px;
     transition: background-color ease 0.2s;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 
@@ -55,7 +55,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
 
     img {
       width: 32px;
@@ -75,13 +75,13 @@
   &__item-title {
     font-size: globals.$body-font-size;
     font-weight: 600;
-    color: globals.$body-color;
+    color: var(--color-text);
     margin: 0;
   }
 
   &__item-description {
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(var(--fg-rgb), 0.6);
     margin: 0;
   }
 }

@@ -58,7 +58,7 @@
 
   &__description {
     max-width: 700px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     text-align: left;
     line-height: 20px;
     margin-top: calc(globals.$spacing-unit * 2);

@@ -44,7 +44,7 @@
     width: 60px;
     height: 60px;
     border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(var(--fg-rgb), 0.06);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -66,8 +66,8 @@
   }
 
   &__section-badge {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(var(--fg-rgb), 0.1);
+    color: rgba(var(--fg-rgb), 0.7);
     padding: 4px 8px;
     border-radius: 6px;
     font-size: 12px;
@@ -80,7 +80,7 @@
   &__collapse-button {
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(var(--fg-rgb), 0.7);
     cursor: pointer;
     padding: 4px;
     border-radius: 4px;
@@ -91,8 +91,8 @@
     flex-shrink: 0;
 
     &:hover {
-      color: rgba(255, 255, 255, 0.9);
-      background-color: rgba(255, 255, 255, 0.1);
+      color: rgba(var(--fg-rgb), 0.9);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 
@@ -100,7 +100,7 @@
     display: flex;
     gap: calc(globals.$spacing-unit);
     margin-bottom: calc(globals.$spacing-unit * 2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.1);
     position: relative;
   }
 
@@ -111,7 +111,7 @@
   &__tab {
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(var(--fg-rgb), 0.6);
     padding: calc(globals.$spacing-unit) calc(globals.$spacing-unit * 2);
     cursor: pointer;
     font-size: 14px;
@@ -133,11 +133,11 @@
     min-width: 18px;
     height: 18px;
     padding: 0 6px;
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: rgba(var(--fg-rgb), 0.15);
     border-radius: 9px;
     font-size: 11px;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--fg-rgb), 0.9);
     line-height: 1;
   }
 
@@ -179,8 +179,8 @@
     }
 
     &--drag-over {
-      background: rgba(255, 255, 255, 0.05);
-      border: 2px dashed rgba(255, 255, 255, 0.3);
+      background: rgba(var(--fg-rgb), 0.05);
+      border: 2px dashed rgba(var(--fg-rgb), 0.3);
       position: relative;
       transition: all ease 0.2s;
 
@@ -190,7 +190,7 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        color: globals.$muted-color;
+        color: var(--color-text-bright);
         font-size: 14px;
         font-weight: 500;
         z-index: 10;
@@ -211,7 +211,7 @@
 // Reviews minimal styles
 .user-reviews__loading {
   padding: calc(globals.$spacing-unit * 2);
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(var(--fg-rgb), 0.8);
   text-align: center;
   display: flex;
   justify-content: center;
@@ -221,7 +221,7 @@
 .user-reviews__empty {
   text-align: center;
   padding: calc(globals.$spacing-unit * 4) calc(globals.$spacing-unit * 2);
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(var(--fg-rgb), 0.6);
 }
 
 .user-reviews__list {
@@ -292,7 +292,7 @@
 .user-reviews__game-title {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(var(--fg-rgb), 0.9);
   font-weight: 600;
   cursor: pointer;
   text-align: left;
@@ -306,7 +306,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(var(--fg-rgb), 0.6);
   font-size: globals.$small-font-size;
 }
 
@@ -314,20 +314,20 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg-rgb), 0.05);
   border-radius: 8px;
   padding: 2px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--fg-rgb), 0.1);
   font-size: 11px;
   font-weight: 500;
 }
 
 .user-reviews__review-star {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(var(--fg-rgb), 0.7);
   transition: color 0.2s ease;
 
   &--filled {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(var(--fg-rgb), 0.7);
 
     svg {
       fill: currentColor;
@@ -343,17 +343,17 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(var(--fg-rgb), 0.7);
   font-size: 11px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--fg-rgb), 0.05);
   border-radius: 8px;
   padding: 2px 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--fg-rgb), 0.1);
 }
 
 .user-reviews__review-content {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(var(--fg-rgb), 0.85);
   line-height: 1.5;
   word-wrap: break-word;
   word-break: break-word;
@@ -370,7 +370,7 @@
   padding: 0;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(var(--fg-rgb), 0.6);
   font-size: 0.875rem;
   cursor: pointer;
   text-decoration: none;
@@ -378,14 +378,14 @@
 
   &:hover {
     text-decoration: underline;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--fg-rgb), 0.9);
   }
 }
 
 .user-reviews__review-actions {
   margin-top: calc(globals.$spacing-unit * 2);
   padding-top: calc(globals.$spacing-unit);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(var(--fg-rgb), 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -400,8 +400,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--fg-rgb), 0.05);
+  border: 1px solid rgba(var(--fg-rgb), 0.1);
   border-radius: 6px;
   padding: 6px 12px;
   color: #ccc;
@@ -410,14 +410,14 @@
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: #ffffff;
+    background: rgba(var(--fg-rgb), 0.1);
+    border-color: rgba(var(--fg-rgb), 0.2);
+    color: var(--color-text-bright);
   }
 
   &--active {
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.3);
+    color: var(--color-text-bright);
+    border-color: rgba(var(--fg-rgb), 0.3);
 
     svg {
       fill: white;

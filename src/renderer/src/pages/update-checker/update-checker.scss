@@ -4,8 +4,8 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: globals.$background-color;
-  color: globals.$muted-color;
+  background: var(--color-background);
+  color: var(--color-text-bright);
   font-family: "Noto Sans", system-ui, sans-serif;
   user-select: none;
   overflow: hidden;
@@ -41,18 +41,18 @@
     font-size: 15px;
     font-weight: 700;
     letter-spacing: 0.02em;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__subtitle {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(var(--fg-rgb), 0.35);
     margin-top: 1px;
   }
 
   &__status {
     font-size: 13px;
-    color: globals.$body-color;
+    color: var(--color-text);
     min-height: 18px;
   }
 
@@ -68,21 +68,21 @@
 
   &__progress-bar {
     height: 4px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(var(--fg-rgb), 0.08);
     border-radius: 2px;
     overflow: hidden;
   }
 
   &__progress-fill {
     height: 100%;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(var(--fg-rgb), 0.9);
     border-radius: 2px;
     transition: width 0.15s ease;
   }
 
   &__progress-label {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(var(--fg-rgb), 0.35);
     display: flex;
     justify-content: space-between;
   }
@@ -108,24 +108,24 @@
     }
 
     &--primary {
-      background: rgba(255, 255, 255, 0.15);
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      color: #fff;
+      background: rgba(var(--fg-rgb), 0.15);
+      border: 1px solid rgba(var(--fg-rgb), 0.3);
+      color: var(--color-text-bright);
     }
 
     &--ghost {
       background: transparent;
-      color: rgba(255, 255, 255, 0.35);
+      color: rgba(var(--fg-rgb), 0.35);
       padding: 7px 0;
 
       &:hover {
-        color: globals.$body-color;
+        color: var(--color-text);
       }
     }
 
     &--console {
-      background: rgba(255, 255, 255, 0.06);
-      color: globals.$body-color;
+      background: rgba(var(--fg-rgb), 0.06);
+      color: var(--color-text);
       font-size: 11px;
       padding: 5px 12px;
     }
@@ -134,8 +134,8 @@
   &__spinner {
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.12);
-    border-top-color: rgba(255, 255, 255, 0.9);
+    border: 2px solid rgba(var(--fg-rgb), 0.12);
+    border-top-color: rgba(var(--fg-rgb), 0.9);
     border-radius: 50%;
     animation: uc-spin 0.8s linear infinite;
     flex-shrink: 0;

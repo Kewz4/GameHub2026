@@ -66,7 +66,7 @@
     svg {
       width: 28px;
       height: 28px;
-      fill: globals.$body-color;
+      fill: var(--color-text);
       opacity: 0.6;
     }
   }
@@ -88,19 +88,19 @@
     border-radius: 8px;
     object-fit: contain;
     flex-shrink: 0;
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
   }
 
   &__cover-placeholder {
     height: 100%;
     width: 180px;
     border-radius: 8px;
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__info {
@@ -121,7 +121,7 @@
   &__title {
     font-size: 22px;
     font-weight: 700;
-    color: globals.$body-color;
+    color: var(--color-text);
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -132,7 +132,7 @@
 
   &__status {
     font-size: 14px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     margin: 0;
     display: flex;
     align-items: center;
@@ -143,8 +143,8 @@
     width: 14px;
     height: 14px;
     border: 2px solid transparent;
-    border-top-color: globals.$muted-color;
-    border-right-color: globals.$muted-color;
+    border-top-color: var(--color-text-bright);
+    border-right-color: var(--color-text-bright);
     border-radius: 50%;
     animation: spinner-rotate 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     flex-shrink: 0;
@@ -199,12 +199,12 @@
     align-items: center;
     gap: calc(globals.$spacing-unit / 2);
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(var(--fg-rgb), 0.5);
   }
 
   &__button {
     width: 100%;
-    background-color: globals.$muted-color;
+    background-color: var(--color-text-bright);
     border: solid 1px transparent;
     color: #0d0d0d;
     border-radius: 8px;

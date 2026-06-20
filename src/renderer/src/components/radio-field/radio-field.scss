@@ -28,7 +28,7 @@
   &--selected .radio-field__dot {
     opacity: 1;
     transform: scale(1);
-    background: #fff;
+    background: rgb(var(--fg-rgb));
   }
 
   &__input {

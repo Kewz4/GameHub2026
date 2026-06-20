@@ -156,7 +156,7 @@
     background-color: rgba(0, 0, 0, 0.4);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 50%;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     width: 48px;
     height: 48px;
     border: none;

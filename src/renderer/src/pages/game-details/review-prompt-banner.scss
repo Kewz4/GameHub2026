@@ -1,11 +1,11 @@
 @use "../../scss/globals.scss";
 
 .review-prompt-banner {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(var(--fg-rgb), 0.02);
   border-radius: 8px;
   padding: calc(globals.$spacing-unit * 2);
   margin-bottom: calc(globals.$spacing-unit * 1.5);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg-rgb), 0.05);
 
   &__content {
     display: flex;
@@ -28,13 +28,13 @@
 
   &__playtime {
     font-size: globals.$body-font-size;
-    color: globals.$body-color;
+    color: var(--color-text);
     font-weight: 600;
   }
 
   &__question {
     font-size: globals.$small-font-size;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-weight: 400;
   }
 

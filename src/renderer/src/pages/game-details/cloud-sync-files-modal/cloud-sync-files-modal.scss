@@ -19,7 +19,7 @@
 
   &__file-item {
     flex: 1;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     text-decoration: underline;
     display: flex;
     cursor: pointer;

@@ -32,7 +32,7 @@ $logo-max-width: 200px;
         justify-content: center;
         width: 100%;
         gap: calc(globals.$spacing-unit / 2);
-        color: globals.$body-color;
+        color: var(--color-text);
         cursor: pointer;
 
         &:hover {
@@ -72,7 +72,7 @@ $logo-max-width: 200px;
     justify-content: center;
     width: 100%;
     gap: 8px;
-    color: globals.$body-color;
+    color: var(--color-text);
     cursor: pointer;
 
     &:hover {
@@ -99,7 +99,7 @@ $logo-max-width: 200px;
         display: flex;
         justify-content: space-between;
         margin-bottom: 8px;
-        color: globals.$muted-color;
+        color: var(--color-text-bright);
 
         &__trophy-count {
           display: flex;
@@ -113,12 +113,12 @@ $logo-max-width: 200px;
           transition: all ease 0.2s;
 
           &::-webkit-progress-bar {
-            background-color: rgba(255, 255, 255, 0.15);
+            background-color: rgba(var(--fg-rgb), 0.15);
             border-radius: 4px;
           }
 
           &::-webkit-progress-value {
-            background-color: globals.$muted-color;
+            background-color: var(--color-text-bright);
             border-radius: 4px;
           }
         }
@@ -151,8 +151,8 @@ $logo-max-width: 200px;
         flex-direction: column;
         background: linear-gradient(
           0deg,
-          globals.$background-color 0%,
-          globals.$background-color 100%
+          var(--color-background) 0%,
+          var(--color-background) 100%
         );
 
         &__hero {
@@ -195,7 +195,7 @@ $logo-max-width: 200px;
 
       &__table-header {
         width: 100%;
-        background-color: globals.$background-color;
+        background-color: var(--color-background);
         transition: all ease 0.2s;
         border-bottom: 1px solid globals.$border-color;
         position: sticky;
@@ -241,7 +241,7 @@ $logo-max-width: 200px;
 
     justify-content: center;
     align-items: center;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     position: relative;
     object-fit: cover;
   }

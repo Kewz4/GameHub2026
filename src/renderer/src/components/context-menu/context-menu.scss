@@ -5,7 +5,7 @@ $context-menu-danger-color: globals.$error-color;
 .context-menu {
   position: fixed;
   z-index: 1000;
-  background-color: globals.$background-color;
+  background-color: var(--color-background);
   border: 1px solid globals.$border-color;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -31,22 +31,22 @@ $context-menu-danger-color: globals.$error-color;
     padding: 8px 12px;
     background: transparent;
     border: none;
-    color: globals.$body-color;
+    color: var(--color-text);
     cursor: pointer;
     font-size: globals.$body-font-size;
     text-align: left;
     transition: background-color 0.15s ease;
 
     &:hover:not(&--disabled) {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
 
     &:active:not(&--disabled) {
-      background-color: rgba(255, 255, 255, 0.15);
+      background-color: rgba(var(--fg-rgb), 0.15);
     }
 
     &--disabled {
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
       cursor: not-allowed;
       opacity: 0.6;
     }
@@ -71,12 +71,12 @@ $context-menu-danger-color: globals.$error-color;
       position: relative;
 
       &:hover {
-        background-color: rgba(255, 255, 255, 0.1);
+        background-color: rgba(var(--fg-rgb), 0.1);
       }
     }
 
     &--active {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 
@@ -96,7 +96,7 @@ $context-menu-danger-color: globals.$error-color;
 
   &__item-arrow {
     font-size: 10px;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     margin-left: auto;
   }
 
@@ -107,7 +107,7 @@ $context-menu-danger-color: globals.$error-color;
     width: 16px;
     height: 16px;
     margin-left: auto;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__success-check {
@@ -123,7 +123,7 @@ $context-menu-danger-color: globals.$error-color;
     position: absolute;
     left: 100%;
     top: 0;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     border: 1px solid globals.$border-color;
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);

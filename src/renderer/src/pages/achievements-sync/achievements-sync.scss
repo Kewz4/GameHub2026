@@ -60,11 +60,11 @@
     gap: 8px;
     padding: 8px 12px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(var(--fg-rgb), 0.04);
     transition: background 0.15s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(var(--fg-rgb), 0.08);
     }
 
     &--dim {
@@ -90,7 +90,7 @@
     width: 32px;
     height: 32px;
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(var(--fg-rgb), 0.08);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -121,7 +121,7 @@
 
     &:hover {
       opacity: 1;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(var(--fg-rgb), 0.1);
     }
   }
 
@@ -137,7 +137,7 @@
 
   &__debug-modal {
     background: #1c1f24;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--fg-rgb), 0.1);
     border-radius: 12px;
     width: 560px;
     max-width: 90vw;
@@ -151,7 +151,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 20px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.08);
     position: sticky;
     top: 0;
     background: #1c1f24;
@@ -178,10 +178,10 @@
     td {
       padding: 6px 0;
       vertical-align: top;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
 
       &:first-child {
-        color: rgba(255, 255, 255, 0.5);
+        color: rgba(var(--fg-rgb), 0.5);
         width: 40%;
         padding-right: 12px;
       }
@@ -221,14 +221,14 @@
 
   &__progress-bar {
     height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--fg-rgb), 0.1);
     border-radius: 2px;
     overflow: hidden;
   }
 
   &__progress-fill {
     height: 100%;
-    background: #fff;
+    background: var(--color-text-bright);
     border-radius: 2px;
     transition: width 0.3s ease;
   }

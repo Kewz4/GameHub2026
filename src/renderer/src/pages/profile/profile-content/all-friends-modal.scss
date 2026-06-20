@@ -14,8 +14,8 @@
   }
 
   &__count {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(var(--fg-rgb), 0.1);
+    color: rgba(var(--fg-rgb), 0.7);
     padding: 4px 8px;
     border-radius: 6px;
     font-size: 12px;
@@ -42,7 +42,7 @@
     transition: all ease 0.2s;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.05);
+      background-color: rgba(var(--fg-rgb), 0.05);
     }
   }
 
@@ -56,7 +56,7 @@
 
   &__name {
     font-weight: 600;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$body-font-size;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -68,7 +68,7 @@
     align-items: center;
     gap: globals.$spacing-unit;
     font-size: globals.$small-font-size;
-    color: globals.$body-color;
+    color: var(--color-text);
 
     img {
       border-radius: 4px;
@@ -84,7 +84,7 @@
   &__empty {
     text-align: center;
     padding: calc(globals.$spacing-unit * 4);
-    color: globals.$body-color;
+    color: var(--color-text);
   }
 
   &__loading {

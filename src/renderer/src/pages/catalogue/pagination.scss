@@ -37,7 +37,7 @@
     border-radius: 8px;
     border: solid 1px globals.$border-color;
     background-color: transparent;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     text-align: center;
     font-size: 12px;
     padding: 0 6px;

@@ -1,9 +1,9 @@
 @use "../../scss/globals.scss";
 
 .game-item {
-  background-color: globals.$dark-background-color;
+  background-color: var(--color-dark-background);
   width: 100%;
-  color: #fff;
+  color: var(--color-text-bright);
   overflow: hidden;
   position: relative;
   border-radius: 4px;
@@ -11,7 +11,7 @@
   min-height: 103px;
 
   &:hover .game-item__content-link {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(var(--fg-rgb), 0.05);
   }
 
   &:hover,
@@ -117,14 +117,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: globals.$body-color;
+    color: var(--color-text);
     width: 200px;
     height: 103px;
     background: linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.1) 0%,
-      rgba(255, 255, 255, 0.05) 50%,
-      rgba(255, 255, 255, 0.1) 100%
+      rgba(var(--fg-rgb), 0.1) 0%,
+      rgba(var(--fg-rgb), 0.05) 50%,
+      rgba(var(--fg-rgb), 0.1) 100%
     );
   }
 
@@ -169,12 +169,12 @@
 
     &--bronze {
       background: rgb(205, 127, 50);
-      color: #fff;
+      color: var(--color-text-bright);
     }
 
     &--borked {
       background: #d72626;
-      color: #fff;
+      color: var(--color-text-bright);
     }
   }
 
@@ -195,13 +195,13 @@
   }
 
   &__genres {
-    color: globals.$body-color;
+    color: var(--color-text);
     font-size: 12px;
     text-align: left;
     margin-bottom: 4px;
 
     &--empty {
-      color: rgba(255, 255, 255, 0.35);
+      color: rgba(var(--fg-rgb), 0.35);
       font-style: italic;
     }
   }

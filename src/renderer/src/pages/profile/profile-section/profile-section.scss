@@ -1,9 +1,9 @@
 @use "../../../scss/globals.scss";
 
 .profile-section {
-  background-color: globals.$background-color;
+  background-color: var(--color-background);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg-rgb), 0.05);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 
@@ -11,11 +11,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     padding-right: calc(globals.$spacing-unit * 2);
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 
@@ -24,7 +24,7 @@
     display: flex;
     align-items: center;
     background-color: transparent;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     flex: 1;
     cursor: pointer;
     transition: all ease 0.2s;
@@ -39,8 +39,8 @@
   }
 
   &__count {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(var(--fg-rgb), 0.1);
+    color: rgba(var(--fg-rgb), 0.7);
     padding: 4px 8px;
     border-radius: 6px;
     font-size: 12px;
@@ -65,7 +65,7 @@
   &__content {
     overflow: hidden;
     transition: max-height 0.4s cubic-bezier(0, 1, 0, 1);
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     position: relative;
   }
 }

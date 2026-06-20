@@ -1,7 +1,7 @@
 @use "../../scss/globals.scss";
 
 .auto-update-sub-header {
-  border-bottom: solid 1px globals.$body-color;
+  border-bottom: solid 1px var(--color-text);
   padding: calc(globals.$spacing-unit / 2) calc(globals.$spacing-unit * 3);
 
   &__new-version-link {
@@ -21,7 +21,7 @@
     align-items: center;
     justify-content: center;
     gap: globals.$spacing-unit;
-    color: globals.$body-color;
+    color: var(--color-text);
     font-size: 12px;
 
     &:hover {

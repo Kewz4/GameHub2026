@@ -17,7 +17,7 @@
   &__reviews-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     margin: 0;
   }
 
@@ -46,7 +46,7 @@
     background-color: #2a2a2a;
     border: 1px solid #3a3a3a;
     border-radius: 4px;
-    color: #ffffff;
+    color: var(--color-text-bright);
     padding: 6px 12px;
     font-size: 14px;
     cursor: pointer;
@@ -75,7 +75,7 @@
 
     option {
       background-color: #2a2a2a;
-      color: #ffffff;
+      color: var(--color-text-bright);
     }
   }
 
@@ -98,13 +98,13 @@
     transition: all 0.2s ease;
 
     &:hover {
-      color: #ffffff;
-      background-color: rgba(255, 255, 255, 0.1);
+      color: var(--color-text-bright);
+      background-color: rgba(var(--fg-rgb), 0.1);
       transform: scale(1.1);
     }
 
     &--filled {
-      color: #ffffff;
+      color: var(--color-text-bright);
 
       &.game-details__review-score-select--red {
         color: #e74c3c;
@@ -123,7 +123,7 @@
       color: #666666;
 
       &:hover {
-        color: #ffffff;
+        color: var(--color-text-bright);
       }
     }
 
@@ -135,9 +135,9 @@
   &__review-input-container {
     display: flex;
     flex-direction: column;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--fg-rgb), 0.1);
     border-radius: 8px;
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     overflow: hidden;
   }
 
@@ -146,8 +146,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    background-color: globals.$background-color;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--color-background);
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.1);
   }
 
   &__review-editor-toolbar {
@@ -157,17 +157,17 @@
 
   &__editor-button {
     background: none;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(var(--fg-rgb), 0.15);
     border-radius: 4px;
-    color: #ffffff;
+    color: var(--color-text-bright);
     padding: 4px 8px;
     cursor: pointer;
     font-size: 12px;
     transition: all 0.2s ease;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.2);
+      background-color: rgba(var(--fg-rgb), 0.08);
+      border-color: rgba(var(--fg-rgb), 0.2);
     }
 
     &.is-active {
@@ -197,7 +197,7 @@
 
     .ProseMirror {
       outline: none;
-      color: #ffffff;
+      color: var(--color-text-bright);
       font-size: 14px;
       line-height: 1.5;
       min-height: 96px; // 120px - 24px padding

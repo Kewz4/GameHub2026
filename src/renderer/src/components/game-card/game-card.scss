@@ -70,7 +70,7 @@
   &__specifics-item {
     gap: globals.$spacing-unit;
     display: flex;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: 12px;
     align-items: center;
 
@@ -83,7 +83,7 @@
     display: flex;
     align-items: center;
     gap: globals.$spacing-unit;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__shop-icons {
@@ -109,7 +109,7 @@
   }
 
   &__no-download-label {
-    color: globals.$body-color;
+    color: var(--color-text);
     font-weight: bold;
   }
 

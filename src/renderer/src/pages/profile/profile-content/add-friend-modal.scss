@@ -13,18 +13,18 @@
     gap: calc(globals.$spacing-unit * 1.5);
     padding: calc(globals.$spacing-unit * 1.5);
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--fg-rgb), 0.1);
   }
 
   &__my-code-label {
     font-size: 0.875rem;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-weight: 500;
   }
 
   &__my-code-value {
     font-size: 0.875rem;
-    color: globals.$body-color;
+    color: var(--color-text);
     font-family: monospace;
     font-weight: 600;
     flex: 1;
@@ -36,15 +36,15 @@
     justify-content: center;
     background: none;
     border: none;
-    color: globals.$body-color;
+    color: var(--color-text);
     cursor: pointer;
     padding: calc(globals.$spacing-unit / 2);
     border-radius: 4px;
     transition: all ease 0.2s;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-      color: globals.$body-color;
+      background-color: rgba(var(--fg-rgb), 0.1);
+      color: var(--color-text);
     }
   }
 
@@ -61,11 +61,11 @@
   }
 
   &__pending-status {
-    color: globals.$body-color;
+    color: var(--color-text);
     font-size: globals.$small-font-size;
     text-align: center;
     padding: calc(globals.$spacing-unit / 2);
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(var(--fg-rgb), 0.05);
     border-radius: 4px;
     margin-top: calc(globals.$spacing-unit * -1);
   }
@@ -80,7 +80,7 @@
       margin: 0;
       font-size: globals.$body-font-size;
       font-weight: 600;
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
     }
   }
 
@@ -98,7 +98,7 @@
     align-items: center;
     gap: calc(globals.$spacing-unit * 2);
     padding: calc(globals.$spacing-unit * 1.5);
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(var(--fg-rgb), 0.05);
     border-radius: 8px;
     border: none;
     cursor: pointer;
@@ -106,14 +106,14 @@
     text-align: left;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 
   &__friend-name {
     flex: 1;
     font-weight: 600;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$body-font-size;
     overflow: hidden;
     text-overflow: ellipsis;

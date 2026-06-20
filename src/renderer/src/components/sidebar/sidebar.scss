@@ -1,8 +1,8 @@
 @use "../../scss/globals.scss";
 
 .sidebar {
-  background-color: globals.$dark-background-color;
-  color: globals.$muted-color;
+  background-color: var(--color-dark-background);
+  color: var(--color-text-bright);
   flex-direction: column;
   display: flex;
   transition: opacity ease 0.2s;
@@ -53,15 +53,15 @@
     cursor: pointer;
     text-wrap: nowrap;
     display: flex;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     border-radius: 4px;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.15);
+      background-color: rgba(var(--fg-rgb), 0.15);
     }
 
     &--active {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
 
     &--muted {
@@ -78,7 +78,7 @@
         rgba(22, 177, 149, 0.2) 0%,
         rgba(62, 98, 192, 0.1) 100%
       );
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
 
       &:hover {
         background: linear-gradient(
@@ -110,7 +110,7 @@
   }
 
   &__dl-badge {
-    background-color: #ffffff;
+    background-color: var(--color-text-bright);
     color: #000000;
     font-size: 10px;
     font-weight: 700;
@@ -174,8 +174,8 @@
 
   &__collection-count {
     margin-left: auto;
-    background-color: #fff;
-    color: globals.$background-color;
+    background-color: var(--color-text-bright);
+    color: var(--color-background);
     font-size: 10px;
     font-weight: 700;
     border-radius: 999px;
@@ -198,7 +198,7 @@
   &__section-toggle {
     background: none;
     border: none;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -225,7 +225,7 @@
     justify-content: flex-start;
     align-items: center;
     width: 100%;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(var(--fg-rgb), 0.5);
     font-size: 12px;
     line-height: 1.4;
     padding: 9px 0;
@@ -252,7 +252,7 @@
   }
 
   &__help-button {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     padding: globals.$spacing-unit calc(globals.$spacing-unit * 2);
     gap: 9px;
     display: flex;
@@ -262,7 +262,7 @@
     transition: background-color ease 0.1s;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.15);
+      background-color: rgba(var(--fg-rgb), 0.15);
     }
   }
 
@@ -277,19 +277,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--color-text-bright);
     border-radius: 50%;
   }
 
   &__play-button {
     background: none;
     border: none;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     cursor: pointer;
     padding: 0;
 
     &:active {
-      color: rgba(255, 255, 255, 0.5);
+      color: rgba(var(--fg-rgb), 0.5);
     }
 
     &--active {
@@ -304,16 +304,16 @@
   &__add-button {
     background: none;
     border: none;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     cursor: pointer;
     padding: 0;
 
     &:hover {
-      color: rgba(255, 255, 255, 0.8);
+      color: rgba(var(--fg-rgb), 0.8);
     }
 
     &:active {
-      color: rgba(255, 255, 255, 0.5);
+      color: rgba(var(--fg-rgb), 0.5);
     }
 
     svg {

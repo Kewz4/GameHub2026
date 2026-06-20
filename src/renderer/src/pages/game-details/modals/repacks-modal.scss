@@ -38,7 +38,7 @@
     flex-direction: column;
     align-items: flex-start;
     gap: calc(globals.$spacing-unit * 1);
-    color: globals.$body-color;
+    color: var(--color-text);
     padding: calc(globals.$spacing-unit * 2);
     padding-right: calc(globals.$spacing-unit * 4);
     position: relative;
@@ -71,7 +71,7 @@
   }
 
   &__repack-title {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     word-break: break-word;
     display: flex;
     align-items: center;
@@ -97,7 +97,7 @@
     width: 100%;
     padding: calc(globals.$spacing-unit * 4) 0;
     text-align: center;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$small-font-size;
     display: flex;
     align-items: center;
@@ -114,7 +114,7 @@
   }
 
   &__no-results-text {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$small-font-size;
     text-align: center;
   }
@@ -166,7 +166,7 @@
   &__source-item {
     padding: calc(globals.$spacing-unit * 0.75) calc(globals.$spacing-unit * 1);
     background: var(--color-surface, rgba(0, 0, 0, 0.03));
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(var(--fg-rgb), 0.12);
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -176,7 +176,7 @@
     transition: border-color 0.2s ease;
 
     &:hover {
-      border-color: rgba(255, 255, 255, 0.2);
+      border-color: rgba(var(--fg-rgb), 0.2);
     }
   }
 
@@ -189,8 +189,8 @@
     margin-bottom: 0;
     padding: calc(globals.$spacing-unit * 2.5) calc(globals.$spacing-unit * 2.5);
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(var(--fg-rgb), 0.05);
+    border: 1px solid rgba(var(--fg-rgb), 0.15);
   }
 
   &__platform-options-label {
@@ -219,7 +219,7 @@
     border-radius: 10px;
     border: none;
     background: #111;
-    color: #fff;
+    color: var(--color-text-bright);
     font-size: globals.$small-font-size;
     font-weight: 600;
     cursor: pointer;
@@ -245,7 +245,7 @@
   &__platform-icon {
     width: 28px;
     height: 28px;
-    color: #fff;
+    color: var(--color-text-bright);
     flex-shrink: 0;
   }
 
@@ -300,8 +300,8 @@
 
   &__install-notes {
     font-size: globals.$small-font-size;
-    color: globals.$muted-color;
-    border-left: 2px solid rgba(255, 255, 255, 0.15);
+    color: var(--color-text-bright);
+    border-left: 2px solid rgba(var(--fg-rgb), 0.15);
     padding-left: calc(globals.$spacing-unit * 1.5);
     margin-top: calc(globals.$spacing-unit * 0.5);
   }
@@ -314,13 +314,13 @@
     p {
       font-size: globals.$small-font-size;
       line-height: 1.6;
-      color: globals.$body-color;
+      color: var(--color-text);
     }
 
     h4 {
       font-size: 13px;
       font-weight: 700;
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
       margin: 0;
     }
 
@@ -333,13 +333,13 @@
       li {
         font-size: globals.$small-font-size;
         line-height: 1.5;
-        color: globals.$body-color;
+        color: var(--color-text);
       }
     }
   }
 
   &__hypervisor-note {
-    color: globals.$muted-color !important;
+    color: var(--color-text-bright) !important;
     font-style: italic;
   }
 

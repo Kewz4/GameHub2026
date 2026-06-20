@@ -27,10 +27,10 @@
   &__avatar-container {
     align-self: center;
     display: flex;
-    color: globals.$body-color;
+    color: var(--color-text);
     justify-content: center;
     align-items: center;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     position: relative;
     cursor: pointer;
   }
@@ -40,7 +40,7 @@
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.7);
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     z-index: 1;
     cursor: pointer;
     display: flex;

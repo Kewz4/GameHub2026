@@ -84,7 +84,7 @@
 
     &:hover {
       background: #2a2a2a;
-      color: #fff;
+      color: var(--color-text-bright);
     }
   }
 
@@ -134,7 +134,7 @@
     }
 
     &:hover {
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(var(--fg-rgb), 0.03);
     }
   }
 

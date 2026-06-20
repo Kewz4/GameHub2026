@@ -35,7 +35,7 @@
     top: calc(globals.$spacing-unit * 5);
     right: calc(globals.$spacing-unit * 4);
     cursor: pointer;
-    color: globals.$body-color;
+    color: var(--color-text);
     background-color: rgba(0, 0, 0, 0.5);
     border-radius: 50%;
     border: 1px solid globals.$border-color;

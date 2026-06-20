@@ -27,12 +27,12 @@
   &__frame {
     position: relative;
     overflow: hidden;
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     background-image:
-      linear-gradient(45deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%),
-      linear-gradient(-45deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.05) 75%),
-      linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.05) 75%);
+      linear-gradient(45deg, rgba(var(--fg-rgb), 0.05) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(var(--fg-rgb), 0.05) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(var(--fg-rgb), 0.05) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(var(--fg-rgb), 0.05) 75%);
     background-position:
       0 0,
       0 10px,
@@ -44,7 +44,7 @@
     padding: 0;
     box-shadow:
       0 12px 32px rgba(0, 0, 0, 0.45),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      inset 0 0 0 1px rgba(var(--fg-rgb), 0.02);
     color: inherit;
     cursor: grab;
     font: inherit;
@@ -53,7 +53,7 @@
     transition: border-color ease 0.2s;
 
     &:hover {
-      border-color: rgba(255, 255, 255, 0.16);
+      border-color: rgba(var(--fg-rgb), 0.16);
     }
 
     &:focus-visible {
@@ -62,7 +62,7 @@
       box-shadow:
         0 12px 32px rgba(0, 0, 0, 0.45),
         0 0 0 3px rgba(globals.$brand-teal, 0.35),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+        inset 0 0 0 1px rgba(var(--fg-rgb), 0.02);
     }
 
     &:active {
@@ -104,7 +104,7 @@
 
   &__grid-line {
     position: absolute;
-    background-color: rgba(255, 255, 255, 0.28);
+    background-color: rgba(var(--fg-rgb), 0.28);
     box-shadow: 0 0 1px rgba(0, 0, 0, 0.4);
 
     &--v1,
@@ -173,12 +173,12 @@
     border: none;
     border-radius: 50%;
     background-color: transparent;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     cursor: pointer;
     transition: all ease 0.2s;
 
     &:hover:not(:disabled) {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
 
     &:active:not(:disabled) {
@@ -206,11 +206,11 @@
     width: clamp(120px, 22vw, 200px);
     height: 6px;
     border-radius: 999px;
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(var(--fg-rgb), 0.12);
     background-image: linear-gradient(
       90deg,
-      globals.$muted-color,
-      globals.$muted-color
+      var(--color-text-bright),
+      var(--color-text-bright)
     );
     background-repeat: no-repeat;
     background-size: var(--fill, 0%) 100%;
@@ -229,8 +229,8 @@
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      border: solid 2px globals.$muted-color;
-      background-color: globals.$background-color;
+      border: solid 2px var(--color-text-bright);
+      background-color: var(--color-background);
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
       cursor: pointer;
       transition:
@@ -255,15 +255,15 @@
     &::-moz-range-progress {
       height: 6px;
       border-radius: 999px;
-      background-color: globals.$muted-color;
+      background-color: var(--color-text-bright);
     }
 
     &::-moz-range-thumb {
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      border: solid 2px globals.$muted-color;
-      background-color: globals.$background-color;
+      border: solid 2px var(--color-text-bright);
+      background-color: var(--color-background);
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
       cursor: pointer;
     }
@@ -286,7 +286,7 @@
     text-align: right;
     font-size: globals.$small-font-size;
     font-variant-numeric: tabular-nums;
-    color: globals.$body-color;
+    color: var(--color-text);
     user-select: none;
   }
 

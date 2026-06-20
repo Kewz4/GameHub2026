@@ -11,13 +11,13 @@
     display: flex;
     cursor: pointer;
     transition: all ease 0.1s;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     width: 100%;
     overflow: hidden;
     border-radius: 4px;
     padding: globals.$spacing-unit globals.$spacing-unit;
     &:hover {
-      background-color: rgba(255, 255, 255, 0.15);
+      background-color: rgba(var(--fg-rgb), 0.15);
     }
   }
 
@@ -47,18 +47,18 @@
   }
 
   &__notification-button {
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     cursor: pointer;
     border-radius: 50%;
     width: 40px;
     min-width: 40px;
     min-height: 40px;
     height: 40px;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     position: relative;
     transition: all ease 0.3s;
     &:hover {
-      background-color: rgba(255, 255, 255, 0.15);
+      background-color: rgba(var(--fg-rgb), 0.15);
     }
   }
 

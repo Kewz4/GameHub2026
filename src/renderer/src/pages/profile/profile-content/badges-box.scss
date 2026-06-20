@@ -23,12 +23,12 @@
     gap: calc(globals.$spacing-unit * 1.5);
     width: 100%;
     padding: calc(globals.$spacing-unit * 1.5);
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(var(--fg-rgb), 0.05);
     border-radius: 8px;
     transition: background-color ease 0.2s;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 
@@ -41,7 +41,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
 
     img {
       width: 28px;
@@ -61,13 +61,13 @@
   &__item-title {
     font-size: 0.8rem;
     font-weight: 600;
-    color: globals.$body-color;
+    color: var(--color-text);
     margin: 0;
   }
 
   &__item-description {
     font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(var(--fg-rgb), 0.6);
     margin: 0;
   }
 
@@ -81,7 +81,7 @@
   &__view-all {
     background: none;
     border: none;
-    color: globals.$body-color;
+    color: var(--color-text);
     font-size: globals.$small-font-size;
     cursor: pointer;
     text-decoration: underline;
@@ -89,7 +89,7 @@
     transition: color ease 0.2s;
 
     &:hover {
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
     }
   }
 }

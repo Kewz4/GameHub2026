@@ -4,10 +4,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: globals.$body-color;
+  color: var(--color-text);
   background-color: color-mix(
     in srgb,
-    globals.$dark-background-color 84%,
+    var(--color-dark-background) 84%,
     var(--filter-item-color) 16%
   );
   padding: 4px 6px 4px 10px;
@@ -39,7 +39,7 @@
   &__remove-button {
     color: color-mix(
       in srgb,
-      globals.$body-color 84%,
+      var(--color-text) 84%,
       var(--filter-item-color) 16%
     );
     display: flex;
@@ -59,7 +59,7 @@
 
     &:hover {
       background-color: transparent;
-      color: globals.$body-color;
+      color: var(--color-text);
     }
 
     &:focus-visible {
@@ -75,9 +75,9 @@
 }
 
 .filter-section {
-  background-color: globals.$background-color;
+  background-color: var(--color-background);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(var(--fg-rgb), 0.05);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 
@@ -85,8 +85,8 @@
     padding: calc(globals.$spacing-unit * 2.5) calc(globals.$spacing-unit * 2);
     display: flex;
     align-items: center;
-    background-color: globals.$background-color;
-    color: globals.$muted-color;
+    background-color: var(--color-background);
+    color: var(--color-text-bright);
     width: 100%;
     cursor: pointer;
     transition:
@@ -98,7 +98,7 @@
     border: none;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
 
     &:active {
@@ -124,8 +124,8 @@
   }
 
   &__header-count {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(var(--fg-rgb), 0.1);
+    color: rgba(var(--fg-rgb), 0.7);
     padding: 4px 8px;
     border-radius: 6px;
     font-size: 12px;
@@ -152,7 +152,7 @@
   &__content {
     overflow: hidden;
     transition: max-height 0.4s cubic-bezier(0, 1, 0, 1);
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     position: relative;
   }
 
@@ -170,12 +170,12 @@
     font-size: 12px;
     margin-bottom: 12px;
     display: block;
-    color: globals.$body-color;
+    color: var(--color-text);
     cursor: pointer;
     text-decoration: underline;
 
     &:focus-visible {
-      outline: 2px solid globals.$muted-color;
+      outline: 2px solid var(--color-text-bright);
       outline-offset: 1px;
     }
   }

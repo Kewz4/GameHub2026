@@ -8,7 +8,7 @@
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: solid 1px rgba(255, 255, 255, 0.15);
+  border: solid 1px rgba(var(--fg-rgb), 0.15);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -34,7 +34,7 @@
 
     p {
       font-size: globals.$small-font-size;
-      color: globals.$muted-color;
+      color: var(--color-text-bright);
       font-weight: 400;
       margin: 0;
 
@@ -52,12 +52,12 @@
   &__download-details {
     gap: globals.$spacing-unit;
     display: flex;
-    color: globals.$body-color;
+    color: var(--color-text);
     align-items: center;
   }
 
   &__downloads-link {
-    color: globals.$body-color;
+    color: var(--color-text);
     text-decoration: underline;
   }
 
@@ -74,7 +74,7 @@
     }
 
     &::-webkit-progress-value {
-      background-color: globals.$muted-color;
+      background-color: var(--color-text-bright);
     }
 
     &--disabled {
@@ -83,7 +83,7 @@
 
     &--extraction {
       &::-webkit-progress-value {
-        background-color: #fff;
+        background-color: var(--color-text-bright);
       }
     }
   }

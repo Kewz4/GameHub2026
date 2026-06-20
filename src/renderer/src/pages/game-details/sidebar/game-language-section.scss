@@ -1,19 +1,19 @@
 @use "../../../scss/globals.scss";
 
 .game-language-section {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(var(--fg-rgb), 0.02);
   overflow: hidden;
 
   &__header {
     display: flex;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(var(--fg-rgb), 0.05);
     border-bottom: 1px solid globals.$border-color;
   }
 
   &__header-item {
     display: flex;
     align-items: center;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$small-font-size;
     font-weight: 600;
     flex: 1;
@@ -33,10 +33,10 @@
   &__row {
     display: flex;
     transition: background-color 0.2s ease;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(var(--fg-rgb), 0.05);
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.03);
+      background-color: rgba(var(--fg-rgb), 0.03);
     }
 
     &:last-child {
@@ -47,7 +47,7 @@
   &__cell {
     padding: calc(globals.$spacing-unit * 1.5) calc(globals.$spacing-unit * 2.5);
     font-size: globals.$body-font-size;
-    color: globals.$body-color;
+    color: var(--color-text);
     display: flex;
     align-items: center;
     flex: 1;
@@ -66,12 +66,12 @@
   }
 
   &__check {
-    color: globals.$body-color;
+    color: var(--color-text);
     opacity: 0.8;
   }
 
   &__cross {
-    color: globals.$body-color;
+    color: var(--color-text);
     opacity: 0.8;
   }
 

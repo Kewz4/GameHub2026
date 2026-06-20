@@ -5,7 +5,7 @@
   align-items: center;
   gap: calc(globals.$spacing-unit * 2);
   padding: calc(globals.$spacing-unit * 2);
-  background-color: globals.$dark-background-color;
+  background-color: var(--color-dark-background);
   border: 1px solid globals.$border-color;
   border-radius: 8px;
   transition: all ease 0.2s;
@@ -15,7 +15,7 @@
   text-align: left;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(var(--fg-rgb), 0.03);
     opacity: 0.6;
   }
 
@@ -28,7 +28,7 @@
     }
 
     .notification-item__title {
-      color: #fff;
+      color: var(--color-text-bright);
     }
   }
 
@@ -41,8 +41,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: globals.$background-color;
-    color: #fff;
+    background-color: var(--color-background);
+    color: var(--color-text-bright);
 
     img {
       width: 100%;
@@ -57,7 +57,7 @@
 
   &__badge-picture {
     border-radius: 8px;
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
 
     img {
       width: 32px;
@@ -81,12 +81,12 @@
   &__title {
     font-size: globals.$body-font-size;
     font-weight: 600;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
   }
 
   &__description {
     font-size: globals.$small-font-size;
-    color: globals.$body-color;
+    color: var(--color-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -97,7 +97,7 @@
     align-items: center;
     gap: calc(globals.$spacing-unit / 2);
     font-size: globals.$small-font-size;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(var(--fg-rgb), 0.5);
   }
 
   &__actions {
@@ -112,7 +112,7 @@
     right: calc(globals.$spacing-unit / 2);
     background: transparent;
     border: none;
-    color: globals.$body-color;
+    color: var(--color-text);
     cursor: pointer;
     padding: calc(globals.$spacing-unit / 2);
     border-radius: 50%;
@@ -121,7 +121,7 @@
 
     &:hover {
       opacity: 1;
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(var(--fg-rgb), 0.1);
     }
   }
 }

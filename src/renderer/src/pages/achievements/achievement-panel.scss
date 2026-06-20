@@ -3,7 +3,7 @@
 .achievement-panel {
   width: 100%;
   padding: globals.$spacing-unit * 2 globals.$spacing-unit * 3;
-  background-color: globals.$background-color;
+  background-color: var(--color-background);
   display: flex;
   flex-direction: column;
   align-items: start;
@@ -25,12 +25,12 @@
   &__download-details-row {
     gap: globals.$spacing-unit;
     display: flex;
-    color: globals.$body-color;
+    color: var(--color-text);
     align-items: center;
   }
 
   &__downloads-link {
-    color: globals.$body-color;
+    color: var(--color-text);
     text-decoration: underline;
   }
 
@@ -47,7 +47,7 @@
     }
 
     &::-webkit-progress-value {
-      background-color: globals.$muted-color;
+      background-color: var(--color-text-bright);
     }
 
     &--disabled {
@@ -57,7 +57,7 @@
 
   &__link {
     text-align: start;
-    color: globals.$body-color;
+    color: var(--color-text);
     background: none;
     border: none;
     padding: 0;

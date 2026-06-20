@@ -2,7 +2,7 @@
 
 .hero-panel-actions {
   &__action {
-    border: solid 1px globals.$muted-color;
+    border: solid 1px var(--color-text-bright);
 
     &--disabled {
       opacity: 0.5;
@@ -16,7 +16,7 @@
 
   &__separator {
     width: 1px;
-    background-color: globals.$muted-color;
+    background-color: var(--color-text-bright);
     opacity: 0.2;
   }
 }

@@ -18,7 +18,7 @@
     display: flex;
     cursor: pointer;
     transition: all ease 0.1s;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     width: 100%;
     overflow: hidden;
     border-radius: 4px;
@@ -27,7 +27,7 @@
     align-items: center;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.15);
+      background-color: rgba(var(--fg-rgb), 0.15);
       text-decoration: none;
     }
   }
