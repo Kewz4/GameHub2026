@@ -59,6 +59,7 @@ const openEaAuthWindow = async (
     const win = new BrowserWindow({
       width: 520,
       height: 760,
+      backgroundColor: "#1c1c1c",
       title: "Sign in to EA",
       ...(WindowManager.mainWindow
         ? { parent: WindowManager.mainWindow, modal: true }

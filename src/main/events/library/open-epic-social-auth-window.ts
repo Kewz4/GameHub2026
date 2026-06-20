@@ -32,6 +32,7 @@ const openEpicSocialAuthWindow = async (
     const win = new BrowserWindow({
       width: 520,
       height: 680,
+      backgroundColor: "#1c1c1c",
       title: `Sign in with ${provider.charAt(0).toUpperCase() + provider.slice(1)}`,
       ...(WindowManager.mainWindow
         ? { parent: WindowManager.mainWindow, modal: true }

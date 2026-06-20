@@ -11,6 +11,7 @@ const openGogAuthWindow = async (
     const win = new BrowserWindow({
       width: 600,
       height: 700,
+      backgroundColor: "#1c1c1c",
       title: "Sign in to GOG",
       ...(WindowManager.mainWindow
         ? { parent: WindowManager.mainWindow, modal: true }

@@ -41,6 +41,7 @@ const openSteamLoginWindow = async (
     const win = new BrowserWindow({
       width: 500,
       height: 720,
+      backgroundColor: "#1c1c1c",
       title: "Sign in to Steam",
       ...(WindowManager.mainWindow
         ? { parent: WindowManager.mainWindow, modal: true }

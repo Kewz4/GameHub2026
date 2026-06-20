@@ -20,6 +20,7 @@ const openXboxAuthWindow = async (
     const win = new BrowserWindow({
       width: 500,
       height: 680,
+      backgroundColor: "#1c1c1c",
       title: "Sign in to Xbox",
       webPreferences: {
         nodeIntegration: false,

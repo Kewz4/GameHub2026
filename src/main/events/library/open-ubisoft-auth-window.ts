@@ -22,6 +22,7 @@ const openUbisoftAuthWindow = async (
     const win = new BrowserWindow({
       width: 520,
       height: 720,
+      backgroundColor: "#1c1c1c",
       title: "Sign in to Ubisoft Connect",
       ...(WindowManager.mainWindow
         ? { parent: WindowManager.mainWindow, modal: true }

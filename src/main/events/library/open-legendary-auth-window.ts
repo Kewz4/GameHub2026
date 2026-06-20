@@ -47,6 +47,7 @@ const openLegendaryAuthWindow = async (
     const win = new BrowserWindow({
       width: 640,
       height: 800,
+      backgroundColor: "#1c1c1c",
       title: "Sign in to Epic Games",
       ...(WindowManager.mainWindow
         ? { parent: WindowManager.mainWindow, modal: true }
