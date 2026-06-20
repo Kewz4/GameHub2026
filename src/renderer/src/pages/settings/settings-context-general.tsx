@@ -500,7 +500,7 @@ export function SettingsContextGeneral({
           <div className="settings-general-action-row__info">
             <span>Delete cloud library</span>
             <small>
-              Removes all games from your Hydra account server-side. Stops
+              Removes all games from your GameHub account server-side. Stops
               old imports from restoring on login. Does not affect this device.
             </small>
           </div>
@@ -518,11 +518,11 @@ export function SettingsContextGeneral({
                   try {
                     const result = await window.electron.deleteCloudLibrary();
                     if (result.error === "not-logged-in") {
-                      showErrorToast("You must be logged in to Hydra.");
+                      showErrorToast("You must be logged in to GameHub.");
                     } else {
                       showSuccessToast(
                         "Cloud library cleared",
-                        `${result.deleted} game${result.deleted !== 1 ? "s" : ""} removed from your Hydra account.`
+                        `${result.deleted} game${result.deleted !== 1 ? "s" : ""} removed from your GameHub account.`
                       );
                     }
                   } catch {
@@ -553,7 +553,7 @@ export function SettingsContextGeneral({
           <div className="settings-general-action-row__info">
             <span>Check for updates</span>
             <small>
-              {updateCheckResult ?? "Look for a newer version of Hydra"}
+              {updateCheckResult ?? "Look for a newer version of GameHub"}
             </small>
           </div>
           <Button
