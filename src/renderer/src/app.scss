@@ -16,16 +16,16 @@
   --bg-rgb: 18, 18, 18; // #121212
 
   // Surfaces
-  --color-background: #{var(--color-background)};
-  --color-dark-background: #{var(--color-dark-background)};
+  --color-background: #{globals.$background-color};
+  --color-dark-background: #{globals.$dark-background-color};
   --color-surface: rgba(var(--fg-rgb), 0.03);
   --color-surface-2: rgba(var(--fg-rgb), 0.05);
   --color-surface-hover: rgba(var(--fg-rgb), 0.08);
   --color-border: rgba(var(--fg-rgb), 0.08);
 
   // Text
-  --color-text: #{var(--color-text)};
-  --color-text-bright: #{var(--color-text-bright)};
+  --color-text: #{globals.$body-color};
+  --color-text-bright: #{globals.$muted-color};
   --color-text-muted: rgba(var(--fg-rgb), 0.55);
   --color-text-faint: rgba(var(--fg-rgb), 0.4);
 
