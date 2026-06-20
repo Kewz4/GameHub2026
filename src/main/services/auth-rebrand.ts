@@ -35,18 +35,26 @@ export const AUTH_REBRAND_CSS = `
     display: none !important;
   }
 
-  /* GameHub brand palette (teal #16b195 → blue #3e62c0). */
+  /* GameHub brand accent (teal #16b195 / blue #3e62c0) for links & misc. */
   :root {
     --primary: #16b195 !important;
     --accent: #3e62c0 !important;
     --color-primary: #16b195 !important;
   }
-  /* Primary action button → GameHub teal→blue gradient. */
+  /* Primary action button → GameHub style: solid white fill, near-black
+     text (matches the in-app .button--primary in dark mode, not a gradient). */
   button[type="submit"],
   .button--primary,
   form button:not([type="button"]) {
-    background-image: linear-gradient(90deg, #16b195 0%, #3e62c0 100%) !important;
+    background: #f0f1f7 !important;
+    background-image: none !important;
+    color: #0d0d0d !important;
     border-color: transparent !important;
+  }
+  button[type="submit"]:hover,
+  .button--primary:hover,
+  form button:not([type="button"]):hover {
+    background: #dadbe1 !important;
   }
 `;
 
