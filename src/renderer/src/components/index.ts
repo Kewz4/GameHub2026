@@ -25,3 +25,6 @@ export * from "./fullscreen-media-modal/fullscreen-media-modal";
 export * from "./proton-path-picker/proton-path-picker";
 export * from "./create-collection-modal/create-collection-modal";
 export * from "./scan-approval-modal/scan-approval-modal";
+export * from "./helper-text/helper-text";
+export * from "./progress-bar/progress-bar";
+export * from "./section-heading/section-heading";

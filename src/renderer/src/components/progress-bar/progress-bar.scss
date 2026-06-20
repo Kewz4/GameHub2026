@@ -1,0 +1,29 @@
+@use "../../scss/globals.scss";
+
+.progress-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &__track {
+    width: 100%;
+    background: var(--color-surface-hover);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  &__fill {
+    height: 100%;
+    background: var(--color-text-bright);
+    border-radius: var(--radius-sm);
+    transition: width 0.25s ease;
+  }
+
+  &__label {
+    font-size: 0.76rem;
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

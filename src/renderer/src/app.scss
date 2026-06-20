@@ -1,5 +1,43 @@
 @use "./scss/globals.scss";
 
+// ── Design tokens (CSS custom properties) ─────────────────────────────────────
+// Single source of truth for the runtime-themeable layer. Values mirror the
+// SCSS `$` tokens in globals.scss so the default (no custom theme) appearance is
+// unchanged. Components reference `var(--color-*)` so user-installed themes
+// (injected via injectCustomCss in app.tsx) can override them at runtime.
+// Pre-existing `var(--color-*, fallback)` call-sites now resolve to these
+// definitions instead of silently using their hardcoded fallbacks.
+:root {
+  // Surfaces
+  --color-background: #{globals.$background-color};
+  --color-dark-background: #{globals.$dark-background-color};
+  --color-surface: rgba(255, 255, 255, 0.03);
+  --color-surface-2: rgba(255, 255, 255, 0.05);
+  --color-surface-hover: rgba(255, 255, 255, 0.08);
+  --color-border: #{globals.$border-color};
+
+  // Text
+  --color-text: #{globals.$body-color};
+  --color-text-bright: #{globals.$muted-color};
+  --color-text-muted: rgba(240, 241, 247, 0.55);
+  --color-text-faint: rgba(240, 241, 247, 0.4);
+
+  // Brand / semantic
+  --color-primary: #{globals.$brand-teal};
+  --color-accent: #{globals.$brand-blue};
+  --color-success: #{globals.$success-color};
+  --color-warning: #{globals.$warning-color};
+  // Destructive-action red used for text/borders. Matches the prevailing
+  // call-site fallback (#e05c5c) so existing UI is pixel-identical; the Button
+  // component keeps its own darker $danger-color background.
+  --color-danger: #e05c5c;
+
+  // Radius scale
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+}
+
 * {
   box-sizing: border-box;
 }

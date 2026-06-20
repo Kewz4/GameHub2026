@@ -1,0 +1,19 @@
+@use "../../scss/globals.scss";
+
+.helper-text {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+
+  &--muted {
+    color: var(--color-text-muted);
+  }
+
+  &--faint {
+    color: var(--color-text-faint);
+  }
+
+  &--danger {
+    color: var(--color-danger);
+  }
+}

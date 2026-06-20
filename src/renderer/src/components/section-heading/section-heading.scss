@@ -1,0 +1,18 @@
+@use "../../scss/globals.scss";
+
+.section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  &__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-bright);
+
+    &--danger {
+      color: var(--color-danger);
+    }
+  }
+}
