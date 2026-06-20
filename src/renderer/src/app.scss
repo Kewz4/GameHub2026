@@ -8,19 +8,26 @@
 // Pre-existing `var(--color-*, fallback)` call-sites now resolve to these
 // definitions instead of silently using their hardcoded fallbacks.
 :root {
+  // Foreground / background channels. Every alpha-overlay surface, border and
+  // muted-text value is expressed as rgba(var(--fg-rgb), x) / rgba(var(--bg-rgb),
+  // x). Default fg is white and bg is the dark base, so the dark theme is
+  // pixel-identical — a light theme only has to flip these two triplets.
+  --fg-rgb: 255, 255, 255;
+  --bg-rgb: 18, 18, 18; // #121212
+
   // Surfaces
   --color-background: #{globals.$background-color};
   --color-dark-background: #{globals.$dark-background-color};
-  --color-surface: rgba(255, 255, 255, 0.03);
-  --color-surface-2: rgba(255, 255, 255, 0.05);
-  --color-surface-hover: rgba(255, 255, 255, 0.08);
-  --color-border: #{globals.$border-color};
+  --color-surface: rgba(var(--fg-rgb), 0.03);
+  --color-surface-2: rgba(var(--fg-rgb), 0.05);
+  --color-surface-hover: rgba(var(--fg-rgb), 0.08);
+  --color-border: rgba(var(--fg-rgb), 0.08);
 
   // Text
   --color-text: #{globals.$body-color};
   --color-text-bright: #{globals.$muted-color};
-  --color-text-muted: rgba(240, 241, 247, 0.55);
-  --color-text-faint: rgba(240, 241, 247, 0.4);
+  --color-text-muted: rgba(var(--fg-rgb), 0.55);
+  --color-text-faint: rgba(var(--fg-rgb), 0.4);
 
   // Brand / semantic
   --color-primary: #{globals.$brand-teal};

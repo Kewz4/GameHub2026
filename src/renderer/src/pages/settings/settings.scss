@@ -141,7 +141,7 @@
     gap: calc(globals.$spacing-unit * 1.5);
     padding: calc(globals.$spacing-unit * 1.5);
     border-radius: var(--radius-md);
-    background: var(--color-background-2, rgba(255, 255, 255, 0.05));
+    background: var(--color-background-2, rgba(var(--fg-rgb), 0.05));
   }
 
   &__avatar {
@@ -199,8 +199,8 @@
     gap: 10px;
     padding: 8px 12px;
     border-radius: var(--radius-md);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(var(--fg-rgb), 0.1);
+    background: rgba(var(--fg-rgb), 0.03);
     cursor: pointer;
     text-align: left;
     color: inherit;
@@ -240,10 +240,10 @@
 }
 
 .settings-integration-item {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(var(--fg-rgb), 0.08);
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(var(--fg-rgb), 0.02);
 
   &__header {
     display: flex;
@@ -259,7 +259,7 @@
     font-size: 0.95rem;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.04);
+      background: rgba(var(--fg-rgb), 0.04);
     }
 
     &:focus-visible {
@@ -277,7 +277,7 @@
     font-size: 0.75rem;
     padding: 2px 10px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(var(--fg-rgb), 0.08);
     opacity: 0.7;
 
     &--connected {
@@ -289,6 +289,6 @@
 
   &__body {
     padding: calc(globals.$spacing-unit * 1.5);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid rgba(var(--fg-rgb), 0.06);
   }
 }
