@@ -392,7 +392,7 @@ export function App() {
       {window.electron.platform === "win32" && (
         <div className="title-bar">
           <GameHubIcon
-            style={{ width: 18, height: 18, color: "#ffffff", flexShrink: 0 }}
+            style={{ width: 18, height: 18, color: "var(--color-text-bright)", flexShrink: 0 }}
           />
           <h4>GameHub</h4>
         </div>

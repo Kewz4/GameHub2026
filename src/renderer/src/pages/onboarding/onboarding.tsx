@@ -2013,8 +2013,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       <p className="onboarding-tool-card__desc">
                         Played on PlayStation? We&apos;ll credit your PSN
                         trophies onto the matching PC games (e.g. God of War
-                        PS4 → God of War PC). Link your PSN account on your
-                        Exophase profile first.
+                        PS4 → God of War PC). You need to link your PSN
+                        account on Exophase first — then come back here to
+                        import.
                       </p>
                       {exophasePsnResult ? (
                         <div className="onboarding-connected-badge" style={{ fontSize: "0.82rem" }}>
@@ -2033,12 +2034,23 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                           <Button
                             type="button"
                             theme="outline"
+                            onClick={() =>
+                              window.electron.openExternal(
+                                "https://www.exophase.com/account"
+                              )
+                            }
+                          >
+                            Link PSN on Exophase
+                          </Button>
+                          <Button
+                            type="button"
+                            theme="outline"
                             onClick={handleExophasePsnImport}
                             disabled={exophasePsnImporting}
                           >
                             {exophasePsnImporting
-                              ? "Importing trophies…"
-                              : "Import PlayStation Achievements"}
+                              ? "Importing…"
+                              : "Import Trophies"}
                           </Button>
                         </div>
                       )}

@@ -286,8 +286,26 @@ export function SettingsExophase() {
       <p style={{ margin: "8px 0 0", opacity: 0.6, fontSize: "0.8em" }}>
         PlayStation import credits trophies you earned on PSN onto the matching
         PC game in your library — e.g. God of War trophies from PS4 show up
-        unlocked on God of War. Link your PSN account on your Exophase profile
-        first.
+        unlocked on God of War. You need to{" "}
+        <button
+          type="button"
+          style={{
+            background: "none",
+            border: "none",
+            padding: 0,
+            color: "var(--color-accent)",
+            cursor: "pointer",
+            fontSize: "inherit",
+            textDecoration: "underline",
+            textUnderlineOffset: "2px",
+          }}
+          onClick={() =>
+            window.electron.openExternal("https://www.exophase.com/account")
+          }
+        >
+          link your PSN account on Exophase
+        </button>{" "}
+        first, then click Import.
       </p>
 
       {(isSyncing || isImportingPsn) && (
