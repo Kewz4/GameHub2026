@@ -26,7 +26,7 @@
       min-height: 160px;
       display: flex;
       flex-direction: column;
-      background-color: rgba(globals.$border-color, 0.01);
+      background-color: rgba(var(--fg-rgb), 0.01);
       border: 1px solid globals.$border-color;
       border-radius: 12px;
       gap: 4px;
@@ -35,7 +35,7 @@
       position: relative;
 
       &--active {
-        background-color: rgba(globals.$border-color, 0.04);
+        background-color: rgba(var(--fg-rgb), 0.04);
       }
 
       &__header {
@@ -122,7 +122,7 @@
     justify-content: center;
     align-items: center;
     padding: 40px 24px;
-    background-color: rgba(globals.$border-color, 0.01);
+    background-color: rgba(var(--fg-rgb), 0.01);
     cursor: pointer;
     border: 1px dashed globals.$border-color;
     border-radius: 12px;
@@ -130,7 +130,7 @@
     transition: background-color 0.2s ease;
 
     &:hover {
-      background-color: rgba(globals.$border-color, 0.03);
+      background-color: rgba(var(--fg-rgb), 0.03);
     }
 
     &__icon {

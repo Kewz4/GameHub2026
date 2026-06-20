@@ -5,7 +5,7 @@
   min-height: 160px;
   display: flex;
   flex-direction: column;
-  background-color: rgba(globals.$border-color, 0.01);
+  background-color: rgba(var(--fg-rgb), 0.01);
   border: 1px solid globals.$border-color;
   border-radius: 12px;
   gap: 4px;
@@ -14,7 +14,7 @@
   position: relative;
 
   &--active {
-    background-color: rgba(globals.$border-color, 0.04);
+    background-color: rgba(var(--fg-rgb), 0.04);
   }
 
   &__header {

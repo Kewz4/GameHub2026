@@ -73,7 +73,7 @@
 
         .active {
           background-color: color.adjust(
-            var(--color-dark-background),
+            globals.$dark-background-color,
             $lightness: -2%
           );
         }
