@@ -15,7 +15,7 @@
 
   &__proton-description {
     margin: 0;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     font-size: globals.$small-font-size;
   }
 

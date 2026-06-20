@@ -8,7 +8,7 @@
   }
 
   &__content {
-    background-color: globals.$background-color;
+    background-color: var(--color-background);
     width: 100%;
     height: 100%;
     border: solid 1px globals.$border-color;
@@ -27,7 +27,7 @@
     gap: globals.$spacing-unit;
     padding: calc(globals.$spacing-unit * 2) calc(globals.$spacing-unit * 1.75);
     border-right: 1px solid globals.$border-color;
-    background: globals.$dark-background-color;
+    background: var(--color-dark-background);
   }
 
   &__sidebar-button {
@@ -37,7 +37,7 @@
     gap: globals.$spacing-unit;
     border: 0;
     background: transparent;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     text-align: left;
     padding: calc(globals.$spacing-unit * 1.25)
       calc(globals.$spacing-unit * 1.5);

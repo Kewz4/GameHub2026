@@ -48,7 +48,7 @@
         &__title {
           font-size: 18px;
           font-weight: 600;
-          color: globals.$muted-color;
+          color: var(--color-text-bright);
           text-transform: capitalize;
         }
 
@@ -68,16 +68,16 @@
 
       &__author {
         font-size: 12px;
-        color: globals.$body-color;
+        color: var(--color-text);
         font-weight: 400;
 
         &__name {
           font-weight: 600;
-          color: rgba(globals.$muted-color, 0.8);
+          color: rgba(var(--fg-rgb), 0.8);
           margin-left: 4px;
 
           &:hover {
-            color: globals.$muted-color;
+            color: var(--color-text-bright);
             cursor: pointer;
             text-decoration: underline;
             text-underline-offset: 2px;
@@ -137,7 +137,7 @@
       svg {
         width: 32px;
         height: 32px;
-        color: globals.$body-color;
+        color: var(--color-text);
         opacity: 0.7;
       }
     }
@@ -148,7 +148,7 @@
       font-size: 14.5px;
       line-height: 1.6;
       font-weight: 400;
-      color: rgba(globals.$body-color, 0.85);
+      color: rgba(var(--fg-rgb), 0.85);
     }
   }
 }

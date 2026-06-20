@@ -21,7 +21,7 @@
   &__item {
     display: flex;
     flex-direction: column;
-    background-color: globals.$dark-background-color;
+    background-color: var(--color-dark-background);
     border-radius: 8px;
     padding: calc(globals.$spacing-unit * 2);
     gap: globals.$spacing-unit;
@@ -61,7 +61,7 @@
     display: flex;
     align-items: center;
     gap: globals.$spacing-unit;
-    color: globals.$muted-color;
+    color: var(--color-text-bright);
     text-decoration: underline;
     cursor: pointer;
     background: none;
