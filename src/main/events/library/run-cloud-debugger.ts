@@ -81,26 +81,45 @@ const runCloudDebugger = async (
   }
 
   // --- 3. Find local games missing from cloud ---
-  // Include ALL games (including libraryOrigin="sync" platform games) so that
-  // achievements from Steam/Epic/GOG can be pushed to the cloud profile.
+  // API only accepts shop="steam" (and "launchbox") for batch upload.
+  // Non-steam games are reported as informational — they can't be uploaded.
   const missingFromCloud = localGames.filter(
     (g) => !cloudByKey.has(`${g.shop}:${g.objectId}`)
   );
 
-  for (const g of missingFromCloud) {
+  const uploadableToCloud = missingFromCloud.filter(
+    (g) => g.shop === "steam"
+  );
+  const notUploadable = missingFromCloud.filter(
+    (g) => g.shop !== "steam"
+  );
+
+  for (const g of notUploadable) {
     issues.push({
       kind: "missing-from-cloud",
       gameTitle: g.title,
       shop: g.shop,
       objectId: g.objectId,
-      detail: `Local game not in cloud (libraryOrigin=${g.libraryOrigin ?? "?"}, remoteId=${g.remoteId ?? "null"})`,
+      detail: `${g.shop.toUpperCase()} games cannot be uploaded to GameHub cloud (API only accepts Steam)`,
+      fixed: false,
+      fixError: "Not supported by API",
+    });
+  }
+
+  for (const g of uploadableToCloud) {
+    issues.push({
+      kind: "missing-from-cloud",
+      gameTitle: g.title,
+      shop: g.shop,
+      objectId: g.objectId,
+      detail: `Local Steam game not in cloud (libraryOrigin=${g.libraryOrigin ?? "?"}, remoteId=${g.remoteId ?? "null"})`,
       fixed: false,
     });
   }
 
-  // Attempt batch upload for all missing games
-  if (missingFromCloud.length) {
-    const chunks = chunk(missingFromCloud, 30);
+  // Attempt batch upload for steam-only games
+  if (uploadableToCloud.length) {
+    const chunks = chunk(uploadableToCloud, 30);
     for (const ch of chunks) {
       const payload = ch.map((g) => ({
         objectId: g.objectId,
@@ -129,7 +148,7 @@ const runCloudDebugger = async (
       }
     }
 
-    // Re-fetch cloud after upload so we get the new remoteIds and can push achievements
+    // Re-fetch cloud after upload so we get the new remoteIds
     const refreshed = await HydraApi.get<ProfileGame[]>("/profile/games").catch(
       () => cloudGames
     );
@@ -137,7 +156,7 @@ const runCloudDebugger = async (
     cloudByKey = buildCloudMap(cloudGames);
 
     // Stamp remoteId on local games that now exist in cloud
-    for (const g of missingFromCloud) {
+    for (const g of uploadableToCloud) {
       const cloudGame = cloudByKey.get(`${g.shop}:${g.objectId}`);
       if (cloudGame) {
         const key = `${g.shop}:${g.objectId}`;
@@ -234,9 +253,9 @@ const runCloudDebugger = async (
       const remoteId = freshGame.remoteId ?? cloudGame.id;
 
       if (remoteId) {
+        const deltaSeconds = Math.round((localMs - cloudMs) / 1000);
         const ok = await HydraApi.put(`/profile/games/${remoteId}`, {
-          playTimeInMilliseconds: localMs,
-          lastTimePlayed: localGame.lastTimePlayed,
+          playTimeDeltaInSeconds: deltaSeconds,
         })
           .then(() => true)
           .catch(() => false);
