@@ -2,6 +2,7 @@ import { chunk } from "lodash-es";
 import { registerEvent } from "../register-event";
 import { HydraApi, logger } from "@main/services";
 import { gameAchievementsSublevel, gamesSublevel } from "@main/level";
+import { searchCatalogueForAchievements } from "@main/services/achievements/exophase/exophase-catalogue";
 import type { UnlockedAchievement } from "@types";
 
 export interface DebugIssue {
@@ -81,98 +82,165 @@ const runCloudDebugger = async (
   }
 
   // --- 3. Find local games missing from cloud ---
-  // API only accepts shop="steam" (and "launchbox") for batch upload.
-  // Non-steam games are reported as informational — they can't be uploaded.
+  // The cloud API only accepts shop="steam" (and "launchbox"). Non-Steam games
+  // (Epic/EA/GOG/Riot/etc.) are resolved to their Steam catalogue equivalent
+  // by title and uploaded under that Steam objectId — the same mapping the
+  // catalogue uses for achievement matching. We track each candidate's local
+  // key → resolved Steam objectId so achievements and playtime can be pushed
+  // to the right cloud record afterward.
+  type UploadCandidate = {
+    localKey: string;
+    game: (typeof localGames)[number];
+    steamObjectId: string;
+  };
+
   const missingFromCloud = localGames.filter(
     (g) => !cloudByKey.has(`${g.shop}:${g.objectId}`)
   );
 
-  const uploadableToCloud = missingFromCloud.filter(
-    (g) => g.shop === "steam"
-  );
-  const notUploadable = missingFromCloud.filter(
-    (g) => g.shop !== "steam"
-  );
-
-  for (const g of notUploadable) {
-    issues.push({
-      kind: "missing-from-cloud",
-      gameTitle: g.title,
-      shop: g.shop,
-      objectId: g.objectId,
-      detail: `${g.shop.toUpperCase()} games cannot be uploaded to GameHub cloud (API only accepts Steam)`,
-      fixed: false,
-      fixError: "Not supported by API",
-    });
+  // Maps the local game key → the cloud (steam) game it corresponds to, so the
+  // achievement/playtime passes can find the remote record even when the local
+  // game is Epic/EA/GOG/etc. but the cloud record is Steam.
+  const localKeyToCloud = new Map<string, ProfileGame>();
+  for (const [key, lg] of localByKey) {
+    const direct = cloudByKey.get(`${lg.shop}:${lg.objectId}`);
+    if (direct) localKeyToCloud.set(key, direct);
   }
 
-  for (const g of uploadableToCloud) {
-    issues.push({
-      kind: "missing-from-cloud",
-      gameTitle: g.title,
-      shop: g.shop,
-      objectId: g.objectId,
-      detail: `Local Steam game not in cloud (libraryOrigin=${g.libraryOrigin ?? "?"}, remoteId=${g.remoteId ?? "null"})`,
-      fixed: false,
-    });
-  }
+  const candidates: UploadCandidate[] = [];
 
-  // Attempt batch upload for steam-only games
-  if (uploadableToCloud.length) {
-    const chunks = chunk(uploadableToCloud, 30);
-    for (const ch of chunks) {
-      const payload = ch.map((g) => ({
-        objectId: g.objectId,
-        playTimeInMilliseconds: Math.trunc(g.playTimeInMilliseconds),
+  for (const g of missingFromCloud) {
+    const localKey = `${g.shop}:${g.objectId}`;
+
+    if (g.shop === "steam") {
+      candidates.push({ localKey, game: g, steamObjectId: g.objectId });
+      issues.push({
+        kind: "missing-from-cloud",
+        gameTitle: g.title,
         shop: g.shop,
-        lastTimePlayed: g.lastTimePlayed,
-        isFavorite: (g as any).favorite ?? false,
-        isPinned: g.isPinned ?? false,
-      }));
-
-      const ok = await HydraApi.post("/profile/games/batch", payload)
-        .then(() => true)
-        .catch(() => false);
-
-      for (const g of ch) {
-        const issue = issues.find(
-          (i) =>
-            i.kind === "missing-from-cloud" &&
-            i.shop === g.shop &&
-            i.objectId === g.objectId
-        );
-        if (issue) {
-          issue.fixed = ok;
-          if (!ok) issue.fixError = "Batch upload failed";
-        }
-      }
+        objectId: g.objectId,
+        detail: `Local Steam game not in cloud (libraryOrigin=${g.libraryOrigin ?? "?"}, remoteId=${g.remoteId ?? "null"})`,
+        fixed: false,
+      });
+      continue;
     }
 
-    // Re-fetch cloud after upload so we get the new remoteIds
+    // Non-Steam: resolve to a Steam catalogue entry by title.
+    const match = await searchCatalogueForAchievements(g.title).catch(
+      () => null
+    );
+
+    if (match && match.shop === "steam") {
+      candidates.push({
+        localKey,
+        game: g,
+        steamObjectId: match.objectId,
+      });
+      issues.push({
+        kind: "missing-from-cloud",
+        gameTitle: g.title,
+        shop: g.shop,
+        objectId: g.objectId,
+        detail: `${g.shop.toUpperCase()} game matched to Steam catalogue (steam:${match.objectId} — "${match.title}")`,
+        fixed: false,
+      });
+    } else {
+      issues.push({
+        kind: "missing-from-cloud",
+        gameTitle: g.title,
+        shop: g.shop,
+        objectId: g.objectId,
+        detail: `No Steam catalogue match found for "${g.title}" — cannot upload to cloud`,
+        fixed: false,
+        fixError: "No Steam match",
+      });
+    }
+  }
+
+  // Build the upload payload, deduped by Steam objectId, and skip any that
+  // already exist in the cloud as Steam (just link those instead).
+  const toUpload = new Map<string, UploadCandidate>();
+  for (const c of candidates) {
+    const cloudKey = `steam:${c.steamObjectId}`;
+    if (cloudByKey.has(cloudKey)) {
+      // Already in cloud under Steam — link it without re-uploading.
+      localKeyToCloud.set(c.localKey, cloudByKey.get(cloudKey)!);
+      const issue = issues.find(
+        (i) =>
+          i.kind === "missing-from-cloud" &&
+          i.shop === c.game.shop &&
+          i.objectId === c.game.objectId
+      );
+      if (issue) issue.fixed = true;
+      continue;
+    }
+    if (!toUpload.has(c.steamObjectId)) toUpload.set(c.steamObjectId, c);
+  }
+
+  if (toUpload.size) {
+    const uploadList = [...toUpload.values()];
+    const chunks = chunk(uploadList, 30);
+    for (const ch of chunks) {
+      const payload = ch.map((c) => ({
+        objectId: c.steamObjectId,
+        playTimeInMilliseconds: Math.trunc(c.game.playTimeInMilliseconds),
+        shop: "steam",
+        lastTimePlayed: c.game.lastTimePlayed,
+        isFavorite: (c.game as any).favorite ?? false,
+        isPinned: c.game.isPinned ?? false,
+      }));
+
+      await HydraApi.post("/profile/games/batch", payload).catch(() => {});
+    }
+
+    // Re-fetch cloud after upload so we get the new remoteIds.
     const refreshed = await HydraApi.get<ProfileGame[]>("/profile/games").catch(
       () => cloudGames
     );
     cloudGames = refreshed;
     cloudByKey = buildCloudMap(cloudGames);
+  }
 
-    // Stamp remoteId on local games that now exist in cloud
-    for (const g of uploadableToCloud) {
-      const cloudGame = cloudByKey.get(`${g.shop}:${g.objectId}`);
-      if (cloudGame) {
-        const key = `${g.shop}:${g.objectId}`;
-        const current = await gamesSublevel.get(key).catch(() => null);
-        if (current && !current.remoteId) {
-          await gamesSublevel
-            .put(key, { ...current, remoteId: cloudGame.id })
-            .catch(() => {});
-        }
+  // Reconcile every candidate against the refreshed cloud, mark issue status,
+  // stamp the local remoteId, and record the local→cloud mapping.
+  for (const c of candidates) {
+    const cloudGame = cloudByKey.get(`steam:${c.steamObjectId}`);
+    const issue = issues.find(
+      (i) =>
+        i.kind === "missing-from-cloud" &&
+        i.shop === c.game.shop &&
+        i.objectId === c.game.objectId
+    );
+
+    if (cloudGame) {
+      localKeyToCloud.set(c.localKey, cloudGame);
+      if (issue) {
+        issue.fixed = true;
+        if (issue.fixError) delete issue.fixError;
       }
+
+      // Stamp remoteId on the local game so future syncs link correctly.
+      const current = await gamesSublevel.get(c.localKey).catch(() => null);
+      if (current && !current.remoteId) {
+        await gamesSublevel
+          .put(c.localKey, { ...current, remoteId: cloudGame.id })
+          .catch(() => {});
+      }
+    } else if (issue && !issue.fixError) {
+      issue.fixed = false;
+      issue.fixError = "Batch upload failed";
     }
   }
 
   // --- 4. Cloud games not in local (informational only) ---
   for (const cg of cloudGames) {
     if (!localByKey.has(`${cg.shop}:${cg.objectId}`)) {
+      // Skip ones we just uploaded by mapping a non-steam local game onto them.
+      const mappedFromLocal = [...localKeyToCloud.values()].some(
+        (m) => m.id === cg.id
+      );
+      if (mappedFromLocal) continue;
+
       issues.push({
         kind: "missing-from-local",
         gameTitle: cg.title,
@@ -188,7 +256,7 @@ const runCloudDebugger = async (
   // --- 5. Achievement discrepancies: push local → cloud ---
   for (const localGame of localGames) {
     const key = `${localGame.shop}:${localGame.objectId}`;
-    const cloudGame = cloudByKey.get(key);
+    const cloudGame = localKeyToCloud.get(key) ?? cloudByKey.get(key);
     if (!cloudGame) continue;
 
     const localAch = await gameAchievementsSublevel.get(key).catch(() => null);
@@ -208,7 +276,6 @@ const runCloudDebugger = async (
         fixed: false,
       };
 
-      // Get the current remoteId (may have been stamped above)
       const freshGame = await gamesSublevel.get(key).catch(() => localGame);
       const remoteId = freshGame.remoteId ?? cloudGame.id;
 
@@ -233,7 +300,7 @@ const runCloudDebugger = async (
   // --- 6. Playtime discrepancies ---
   for (const localGame of localGames) {
     const key = `${localGame.shop}:${localGame.objectId}`;
-    const cloudGame = cloudByKey.get(key);
+    const cloudGame = localKeyToCloud.get(key) ?? cloudByKey.get(key);
     if (!cloudGame) continue;
 
     const localMs = Math.trunc(localGame.playTimeInMilliseconds);
