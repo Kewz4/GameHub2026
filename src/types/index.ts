@@ -471,6 +471,11 @@ export interface NotificationCountResponse {
   count: number;
 }
 
+export interface NotificationsChangedDetail {
+  apiUnreadDelta?: number;
+  resetApiUnread?: boolean;
+}
+
 /**
  * A single cached Exophase game → its achievement definitions. Definitions are
  * NOT user-specific, so this cache is shared across friends via R2 (one blob).
