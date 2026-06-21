@@ -179,18 +179,24 @@ const runCloudDebugger = async (
 
   if (toUpload.size) {
     const uploadList = [...toUpload.values()];
-    const chunks = chunk(uploadList, 30);
+    const chunks = chunk(uploadList, 10);
     for (const ch of chunks) {
       const payload = ch.map((c) => ({
         objectId: c.steamObjectId,
         playTimeInMilliseconds: Math.trunc(c.game.playTimeInMilliseconds),
         shop: "steam",
-        lastTimePlayed: c.game.lastTimePlayed,
+        lastTimePlayed: c.game.lastTimePlayed
+          ? new Date(c.game.lastTimePlayed).toISOString()
+          : null,
         isFavorite: (c.game as any).favorite ?? false,
         isPinned: c.game.isPinned ?? false,
       }));
 
-      await HydraApi.post("/profile/games/batch", payload).catch(() => {});
+      await HydraApi.post("/profile/games/batch", payload).catch((err) => {
+        logger.warn(
+          `[CloudDebugger] batch upload chunk failed (${ch.map((c) => c.steamObjectId).join(",")}): ${err}`
+        );
+      });
     }
 
     // Re-fetch cloud after upload so we get the new remoteIds.
@@ -320,12 +326,22 @@ const runCloudDebugger = async (
       const remoteId = freshGame.remoteId ?? cloudGame.id;
 
       if (remoteId) {
-        const deltaSeconds = Math.round((localMs - cloudMs) / 1000);
-        const ok = await HydraApi.put(`/profile/games/${remoteId}`, {
-          playTimeDeltaInSeconds: deltaSeconds,
-        })
-          .then(() => true)
-          .catch(() => false);
+        let remainingSeconds = Math.round((localMs - cloudMs) / 1000);
+        const lastTimePlayed = localGame.lastTimePlayed
+          ? new Date(localGame.lastTimePlayed).toISOString()
+          : new Date().toISOString();
+        let ok = true;
+
+        while (remainingSeconds > 0 && ok) {
+          const chunk = Math.min(remainingSeconds, 86400);
+          ok = await HydraApi.put(`/profile/games/${remoteId}`, {
+            playTimeDeltaInSeconds: chunk,
+            lastTimePlayed,
+          })
+            .then(() => true)
+            .catch(() => false);
+          remainingSeconds -= chunk;
+        }
 
         issue.fixed = ok;
         if (!ok) issue.fixError = "Playtime update failed";
