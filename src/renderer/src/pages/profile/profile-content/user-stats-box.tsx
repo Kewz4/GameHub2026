@@ -1,4 +1,4 @@
-import { useCallback, useContext, useMemo } from "react";
+import { useCallback, useContext, useMemo, useState } from "react";
 import { userProfileContext } from "@renderer/context";
 import { useTranslation } from "react-i18next";
 import { useFormat, useUserDetails } from "@renderer/hooks";
@@ -6,6 +6,7 @@ import { MAX_MINUTES_TO_SHOW_IN_PLAYTIME } from "@renderer/constants";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
 import { ClockIcon, TrophyIcon } from "@primer/octicons-react";
 import { Award } from "lucide-react";
+import { AchievementsBreakdownModal } from "./achievements-breakdown-modal";
 import "./user-stats-box.scss";
 
 export function UserStatsBox() {
@@ -14,6 +15,8 @@ export function UserStatsBox() {
   const { userDetails } = useUserDetails();
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
+  const [showAchievementsBreakdown, setShowAchievementsBreakdown] =
+    useState(false);
 
   const formatPlayTime = useCallback(
     (playTimeInSeconds: number) => {
@@ -79,10 +82,22 @@ export function UserStatsBox() {
               {t("achievements_unlocked")}
             </h3>
             <div className="user-stats__stats-row">
-              <p className="user-stats__list-description">
-                <TrophyIcon /> {achievementSum ?? 0}{" "}
-                {t("achievements")}
-              </p>
+              {isMe ? (
+                <button
+                  type="button"
+                  className="user-stats__list-description user-stats__list-description--clickable"
+                  onClick={() => setShowAchievementsBreakdown(true)}
+                  title={t("view_achievements_per_game", {
+                    defaultValue: "View achievements per game",
+                  })}
+                >
+                  <TrophyIcon /> {achievementSum ?? 0} {t("achievements")}
+                </button>
+              ) : (
+                <p className="user-stats__list-description">
+                  <TrophyIcon /> {achievementSum ?? 0} {t("achievements")}
+                </p>
+              )}
             </div>
           </li>
         )}
@@ -133,6 +148,13 @@ export function UserStatsBox() {
           </li>
         )}
       </ul>
+
+      {isMe && (
+        <AchievementsBreakdownModal
+          visible={showAchievementsBreakdown}
+          onClose={() => setShowAchievementsBreakdown(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,79 @@
+.maintenance-flow {
+  &__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 440px;
+  }
+
+  &__step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 8px;
+    border-radius: 6px;
+  }
+
+  &__step-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  &__step-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__step-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  &__step-detail {
+    opacity: 0.7;
+    font-size: 0.75rem;
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+  }
+
+  &__icon {
+    &--done {
+      color: #3fb950;
+    }
+    &--failed {
+      color: #f85149;
+    }
+    &--skipped {
+      opacity: 0.5;
+    }
+    &--pending {
+      opacity: 0.35;
+    }
+    &--spin {
+      animation: maintenance-flow-spin 1s linear infinite;
+    }
+  }
+}
+
+@keyframes maintenance-flow-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

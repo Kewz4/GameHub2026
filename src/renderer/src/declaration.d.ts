@@ -517,6 +517,9 @@ declare global {
       merged: number;
       mergedTitles: string[];
     }>;
+    runCloudDebugger: () => Promise<
+      import("@main/events/library/run-cloud-debugger").CloudDebugReport
+    >;
     clearLibrary: () => Promise<{ cleared: number }>;
     deleteCloudLibrary: () => Promise<{
       deleted: number;

@@ -40,27 +40,29 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
               ]) || []
             );
 
-            const validUnlockedAchievements =
-              achievements?.unlockedAchievements?.filter(
-                (unlocked) =>
-                  validAchievementNames.has(
-                    (unlocked.name ?? "").toUpperCase()
-                  ) && unlocked.unlockTime > 0
-              ) ?? null;
+            // Count unlocked achievements by unique, valid apiName. We do NOT
+            // require unlockTime > 0 here: achievements imported from Exophase
+            // and PlayStation often have no unlock timestamp, and excluding
+            // them undercounts the real total (the cause of the profile sum
+            // showing far fewer than are actually stored).
+            const validUnlockedNames =
+              achievements?.unlockedAchievements != null
+                ? new Set(
+                    achievements.unlockedAchievements
+                      .map((unlocked) => (unlocked.name ?? "").toUpperCase())
+                      .filter((name) => validAchievementNames.has(name))
+                  )
+                : null;
 
             const unlockedAchievementCount =
-              validUnlockedAchievements?.length ??
-              game.unlockedAchievementCount ??
-              0;
+              validUnlockedNames?.size ?? game.unlockedAchievementCount ?? 0;
 
-            const achievementsPointsEarnedSum =
-              validUnlockedAchievements?.reduce(
-                (acc, unlocked) =>
-                  acc +
-                  (achievementPoints.get((unlocked.name ?? "").toUpperCase()) ??
-                    0),
-                0
-              ) ?? 0;
+            const achievementsPointsEarnedSum = validUnlockedNames
+              ? Array.from(validUnlockedNames).reduce(
+                  (acc, name) => acc + (achievementPoints.get(name) ?? 0),
+                  0
+                )
+              : 0;
 
             // Verify installer still exists, clear if deleted externally
             let installerSizeInBytes = game.installerSizeInBytes;

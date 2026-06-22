@@ -23,6 +23,7 @@ import { SettingsAppearance } from "./appearance/settings-appearance";
 import { DownloadDirectoryReplacementModal } from "./download-directory-replacement-modal";
 import { LibrarySyncModal, type LibrarySyncResult } from "./library-sync-modal";
 import { CloudDebuggerModal } from "./cloud-debugger-modal";
+import { SettingsMaintenanceFlow } from "./settings-maintenance-flow";
 import type { CloudDebugReport } from "@main/events/library/run-cloud-debugger";
 
 interface LanguageOption {
@@ -475,6 +476,8 @@ export function SettingsContextGeneral({
           title="Cloud Sync"
           hint="Diagnose and repair discrepancies between your local library and GameHub cloud."
         />
+
+        <SettingsMaintenanceFlow />
 
         <div className="settings-general-action-row">
           <div className="settings-general-action-row__info">
