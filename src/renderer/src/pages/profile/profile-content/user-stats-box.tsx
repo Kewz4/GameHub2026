@@ -9,7 +9,7 @@ import { Award } from "lucide-react";
 import "./user-stats-box.scss";
 
 export function UserStatsBox() {
-  const { userStats, isMe, userProfile, libraryGames, pinnedGames } =
+  const { userStats, isMe, userProfile, libraryGames, pinnedGames, localAchievementSum } =
     useContext(userProfileContext);
   const { userDetails } = useUserDetails();
   const { t } = useTranslation("user_profile");
@@ -54,13 +54,14 @@ export function UserStatsBox() {
   const karma = isMe ? userDetails?.karma : userProfile?.karma;
   const hasKarma = karma !== undefined && karma !== null;
 
-  // Use server value when available; fall back to local sum for own profile.
-  const achievementSum =
-    userStats.unlockedAchievementSum !== undefined
-      ? userStats.unlockedAchievementSum
-      : isMe
-        ? localUnlockedSum
-        : undefined;
+  // Use the highest available value: server sum, full local library sum, or
+  // partial sum from the paginated profile cards (whichever is greatest).
+  // The server aggregate is often 0 for GameHub-sourced unlocks (backend bug),
+  // so we always prefer the local count for the logged-in user's own profile.
+  const serverSum = userStats.unlockedAchievementSum ?? 0;
+  const achievementSum = isMe
+    ? Math.max(serverSum, localAchievementSum ?? 0, localUnlockedSum)
+    : userStats.unlockedAchievementSum;
 
   const pointsSum =
     userStats.achievementsPointsEarnedSum !== undefined

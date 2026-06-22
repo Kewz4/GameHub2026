@@ -25,6 +25,8 @@ export interface UserProfileContext {
   isLoadingLibraryGames: boolean;
   /** Total local library count — accurate for own profile, null otherwise */
   localLibraryCount: number | null;
+  /** Total unlocked achievements across ALL local games — accurate for own profile, null otherwise */
+  localAchievementSum: number | null;
 }
 
 export const DEFAULT_USER_PROFILE_BACKGROUND = "#151515B3";
@@ -45,6 +47,7 @@ export const userProfileContext = createContext<UserProfileContext>({
   hasMoreLibraryGames: false,
   isLoadingLibraryGames: false,
   localLibraryCount: null,
+  localAchievementSum: null,
 });
 
 const { Provider } = userProfileContext;
@@ -75,6 +78,9 @@ export function UserProfileContextProvider({
   const [hasMoreLibraryGames, setHasMoreLibraryGames] = useState(true);
   const [isLoadingLibraryGames, setIsLoadingLibraryGames] = useState(false);
   const [localLibraryCount, setLocalLibraryCount] = useState<number | null>(
+    null
+  );
+  const [localAchievementSum, setLocalAchievementSum] = useState<number | null>(
     null
   );
 
@@ -192,7 +198,11 @@ export function UserProfileContextProvider({
         >();
         if (isOwnProfile) {
           const allLocal = await window.electron.getLibrary().catch(() => []);
-          setLocalLibraryCount(allLocal.filter((g) => !g.isDeleted).length);
+          const activeLocal = allLocal.filter((g) => !g.isDeleted);
+          setLocalLibraryCount(activeLocal.length);
+          setLocalAchievementSum(
+            activeLocal.reduce((acc, g) => acc + (g.unlockedAchievementCount ?? 0), 0)
+          );
           for (const localGame of allLocal) {
             localAchievementCounts.set(
               `${localGame.shop}:${localGame.objectId}`,
@@ -447,6 +457,7 @@ export function UserProfileContextProvider({
         hasMoreLibraryGames,
         isLoadingLibraryGames,
         localLibraryCount,
+        localAchievementSum,
       }}
     >
       {children}
