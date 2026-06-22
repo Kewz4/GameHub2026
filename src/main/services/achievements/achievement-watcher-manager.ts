@@ -594,6 +594,12 @@ export class AchievementWatcherManager {
       !!WindowManager.notificationWindow;
 
     if (shouldUseCustomNotification) {
+      // The notification window is created hidden and must be shown before the
+      // event is sent — otherwise the renderer plays the sound and renders the
+      // DOM but the window stays invisible (the cause of "I hear the sound but
+      // see no notification" on login). The individual-unlock path already does
+      // this in merge-achievements.ts; the combined path was missing it.
+      WindowManager.notificationWindow?.show();
       WindowManager.notificationWindow?.webContents.send(
         "on-combined-achievements-unlocked",
         totalNewGamesWithAchievements,
