@@ -3,6 +3,7 @@ import { registerEvent } from "../register-event";
 import { HydraApi, logger } from "@main/services";
 import { gameAchievementsSublevel, gamesSublevel } from "@main/level";
 import { searchCatalogueForAchievements } from "@main/services/achievements/exophase/exophase-catalogue";
+import { resolveCanonicalUnlocked } from "@main/services/achievements/exophase/exophase-cache";
 import type { UnlockedAchievement } from "@types";
 
 export interface DebugIssue {
@@ -179,24 +180,47 @@ const runCloudDebugger = async (
 
   if (toUpload.size) {
     const uploadList = [...toUpload.values()];
+    const toPayload = (c: UploadCandidate) => ({
+      objectId: c.steamObjectId,
+      playTimeInMilliseconds: Math.trunc(c.game.playTimeInMilliseconds),
+      shop: "steam",
+      lastTimePlayed: c.game.lastTimePlayed
+        ? new Date(c.game.lastTimePlayed).toISOString()
+        : null,
+      isFavorite: (c.game as any).favorite ?? false,
+      isPinned: c.game.isPinned ?? false,
+    });
+
     const chunks = chunk(uploadList, 10);
     for (const ch of chunks) {
-      const payload = ch.map((c) => ({
-        objectId: c.steamObjectId,
-        playTimeInMilliseconds: Math.trunc(c.game.playTimeInMilliseconds),
-        shop: "steam",
-        lastTimePlayed: c.game.lastTimePlayed
-          ? new Date(c.game.lastTimePlayed).toISOString()
-          : null,
-        isFavorite: (c.game as any).favorite ?? false,
-        isPinned: c.game.isPinned ?? false,
-      }));
+      const ok = await HydraApi.post("/profile/games/batch", ch.map(toPayload))
+        .then(() => true)
+        .catch(() => false);
 
-      await HydraApi.post("/profile/games/batch", payload).catch((err) => {
-        logger.warn(
-          `[CloudDebugger] batch upload chunk failed (${ch.map((c) => c.steamObjectId).join(",")}): ${err}`
-        );
-      });
+      if (!ok) {
+        // A single bad objectId 500s the whole chunk. Retry each game on its own
+        // so the rest still upload, and we learn exactly which ones the server
+        // rejects (recorded as a fixError on the matching issue below).
+        for (const c of ch) {
+          const single = await HydraApi.post("/profile/games/batch", [
+            toPayload(c),
+          ])
+            .then(() => true)
+            .catch(() => false);
+          if (!single) {
+            logger.warn(
+              `[CloudDebugger] batch upload rejected steam:${c.steamObjectId} ("${c.game.title}")`
+            );
+            const issue = issues.find(
+              (i) =>
+                i.kind === "missing-from-cloud" &&
+                i.shop === c.game.shop &&
+                i.objectId === c.game.objectId
+            );
+            if (issue) issue.fixError = "Server rejected upload (500)";
+          }
+        }
+      }
     }
 
     // Re-fetch cloud after upload so we get the new remoteIds.
@@ -272,23 +296,43 @@ const runCloudDebugger = async (
 
     if (localUnlocked.length === 0) continue;
 
-    if (localUnlocked.length > cloudUnlockedCount) {
+    // The cloud only credits achievements whose names match the Steam apiName
+    // schema. Exophase-imported unlocks carry `exophase_*` names that return 204
+    // but never raise unlockedAchievementCount — translate them to canonical
+    // Steam apiNames (via the resolved cloud Steam objectId) before pushing.
+    const canonicalUnlocked =
+      (await resolveCanonicalUnlocked(
+        cloudGame.objectId,
+        localAch?.achievements ?? [],
+        localUnlocked,
+        localAch?.language ?? "en"
+      ).catch(() => null)) ?? localUnlocked;
+
+    const pushCount = canonicalUnlocked.length;
+    if (pushCount === 0) continue;
+
+    if (pushCount > cloudUnlockedCount) {
+      const translatedNote =
+        canonicalUnlocked !== localUnlocked &&
+        pushCount !== localUnlocked.length
+          ? ` (${localUnlocked.length} local → ${pushCount} matched to Steam)`
+          : "";
       const issue: DebugIssue = {
         kind: "achievement-count-mismatch",
         gameTitle: localGame.title,
         shop: localGame.shop,
         objectId: localGame.objectId,
-        detail: `Local: ${localUnlocked.length} unlocked, Cloud: ${cloudUnlockedCount}`,
+        detail: `Local: ${pushCount} unlocked, Cloud: ${cloudUnlockedCount}${translatedNote}`,
         fixed: false,
       };
 
       const freshGame = await gamesSublevel.get(key).catch(() => localGame);
-      const remoteId = freshGame.remoteId ?? cloudGame.id;
+      const remoteId = freshGame?.remoteId ?? cloudGame.id;
 
       if (remoteId) {
         const ok = await HydraApi.put("/profile/games/achievements", {
           id: remoteId,
-          achievements: localUnlocked,
+          achievements: canonicalUnlocked,
         })
           .then(() => true)
           .catch(() => false);
@@ -323,7 +367,7 @@ const runCloudDebugger = async (
       };
 
       const freshGame = await gamesSublevel.get(key).catch(() => localGame);
-      const remoteId = freshGame.remoteId ?? cloudGame.id;
+      const remoteId = freshGame?.remoteId ?? cloudGame.id;
 
       if (remoteId) {
         let remainingSeconds = Math.round((localMs - cloudMs) / 1000);

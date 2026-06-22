@@ -628,3 +628,75 @@ export const pushSharedCache = async (): Promise<void> => {
     achievementsLogger.warn("[Exophase cache] push failed", err)
   );
 };
+
+/**
+ * Convert a list of unlocked achievements (which may carry Exophase apiNames
+ * like `exophase_12345`) into canonical Steam apiNames the HydraAPI cloud will
+ * actually credit. The cloud keys `unlockedAchievementCount` by the Steam
+ * apiName schema, so pushing raw Exophase names returns 204 but never raises
+ * the count. We fetch the Steam definitions for `steamObjectId`, map their
+ * displayNames → apiNames, and translate each unlock by display name.
+ *
+ * `localDefinitions` are the definitions stored alongside the unlocks locally
+ * (Exophase defs carry both the `exophase_*` name and the human displayName).
+ * Returns the translated unlock list, or `null` when definitions could not be
+ * fetched (caller should then fall back to the original list).
+ */
+export const resolveCanonicalUnlocked = async (
+  steamObjectId: string,
+  localDefinitions: SteamAchievement[],
+  unlocked: UnlockedAchievement[],
+  language = "en"
+): Promise<UnlockedAchievement[] | null> => {
+  if (!HydraApi.isLoggedIn() || unlocked.length === 0) return null;
+
+  const normalizeDisplayName = (s: string): string =>
+    s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const fetched = await HydraApi.get<SteamAchievement[]>(
+    `/games/steam/${steamObjectId}/achievements`,
+    { language }
+  ).catch(() => null);
+  if (!fetched || fetched.length === 0) return null;
+
+  // normalized displayName → canonical Steam apiName
+  const hydraByDisplay = new Map<string, string>(
+    fetched.map((a) => [
+      normalizeDisplayName(a.displayName ?? a.name ?? ""),
+      a.name ?? "",
+    ])
+  );
+  // local apiName (exophase_* or canonical) → its displayName
+  const localDisplay = new Map<string, string>(
+    localDefinitions.map((d) => [d.name ?? "", d.displayName ?? d.name ?? ""])
+  );
+  // canonical apiNames already valid for this game (passthrough fast path)
+  const validCanonical = new Set(
+    fetched.map((a) => (a.name ?? "").toUpperCase())
+  );
+
+  const matched: UnlockedAchievement[] = [];
+  const seen = new Set<string>();
+  for (const u of unlocked) {
+    const rawName = u.name ?? "";
+    let canonical: string | undefined;
+
+    if (validCanonical.has(rawName.toUpperCase())) {
+      // Already a canonical Steam apiName.
+      canonical = fetched.find(
+        (a) => (a.name ?? "").toUpperCase() === rawName.toUpperCase()
+      )?.name;
+    } else {
+      // Translate via display name (Exophase apiName → displayName → Steam).
+      const display = localDisplay.get(rawName) ?? rawName;
+      canonical = hydraByDisplay.get(normalizeDisplayName(display));
+    }
+
+    if (canonical && !seen.has(canonical.toUpperCase())) {
+      seen.add(canonical.toUpperCase());
+      matched.push({ name: canonical, unlockTime: u.unlockTime });
+    }
+  }
+
+  return matched;
+};
