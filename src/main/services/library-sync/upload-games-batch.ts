@@ -1,5 +1,6 @@
 import { chunk } from "lodash-es";
 import { HydraApi } from "../hydra-api";
+import { logger } from "../logger";
 import { mergeWithRemoteGames } from "./merge-with-remote-games";
 import { WindowManager } from "../window-manager";
 import { AchievementWatcherManager } from "../achievements/achievement-watcher-manager";
@@ -23,22 +24,48 @@ export const uploadGamesBatch = async () => {
       );
     });
 
-  const gamesChunks = chunk(games, 30);
+  type LocalGame = (typeof games)[number];
 
-  for (const chunk of gamesChunks) {
-    await HydraApi.post(
+  const toPayload = (game: LocalGame) => ({
+    objectId: game.objectId,
+    playTimeInMilliseconds: Math.trunc(game.playTimeInMilliseconds),
+    shop: game.shop,
+    lastTimePlayed: game.lastTimePlayed,
+    isFavorite: game.favorite,
+    isPinned: game.isPinned ?? false,
+  });
+
+  // Use modest chunks. The Hydra API 500s the *entire* batch if any single
+  // objectId in it is invalid/delisted, so a smaller chunk limits the blast
+  // radius before we fall back to per-item uploads.
+  const gamesChunks = chunk(games, 10);
+
+  for (const gamesChunk of gamesChunks) {
+    const ok = await HydraApi.post(
       "/profile/games/batch",
-      chunk.map((game) => {
-        return {
-          objectId: game.objectId,
-          playTimeInMilliseconds: Math.trunc(game.playTimeInMilliseconds),
-          shop: game.shop,
-          lastTimePlayed: game.lastTimePlayed,
-          isFavorite: game.favorite,
-          isPinned: game.isPinned ?? false,
-        };
-      })
-    ).catch(() => {});
+      gamesChunk.map(toPayload)
+    )
+      .then(() => true)
+      .catch(() => false);
+
+    if (ok) continue;
+
+    // The bulk request failed (a single bad objectId 500s the whole chunk).
+    // Retry each game individually so the valid ones still upload, and log
+    // exactly which objectIds the server rejects.
+    for (const game of gamesChunk) {
+      const single = await HydraApi.post("/profile/games/batch", [
+        toPayload(game),
+      ])
+        .then(() => true)
+        .catch(() => false);
+
+      if (!single) {
+        logger.warn(
+          `[uploadGamesBatch] server rejected ${game.shop}:${game.objectId} ("${game.title}")`
+        );
+      }
+    }
   }
 
   // Upload local catalogue/import games to the cloud so their achievements can
