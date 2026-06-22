@@ -65,10 +65,18 @@ const generateMissingMetadata = async (
     // re-fetch so the card gets a proper 600x900 grid
     const coverIsWrongRatio = isLandscapeCoverUrl(assets?.coverImageUrl);
 
+    // Steam games must use the authoritative CDN portrait grid. If the stored
+    // cover isn't already the library_600x900.jpg, treat it as outdated.
+    const isSteamButNotCdn =
+      game.shop === "steam" &&
+      assets?.coverImageUrl != null &&
+      !assets.coverImageUrl.includes("library_600x900");
+
     // Only skip if we have an actual cover or hero image — icon alone is not sufficient
     const hasCover =
-      (assets?.coverImageUrl && !coverIsWrongRatio) ||
-      (!assets?.coverImageUrl && assets?.libraryHeroImageUrl);
+      !isSteamButNotCdn &&
+      ((assets?.coverImageUrl && !coverIsWrongRatio) ||
+        (!assets?.coverImageUrl && assets?.libraryHeroImageUrl));
 
     if (hasCover) {
       skipped++;

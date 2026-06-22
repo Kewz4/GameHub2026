@@ -1,9 +1,9 @@
 /**
  * Resolves the best available artwork/metadata for a game from three sources in order:
- *  1. Hydra API  — if the game's shop+objectId is known to the API (always works for Steam)
- *  2. Hydra catalogue search — for non-Steam games, find the canonical entry by title and
- *     pull its assets (usually the Steam version which has richer metadata)
- *  3. SteamGridDB — universal fallback for any game
+ *  1. Steam CDN     — for Steam games: deterministic, highest quality (600x900 cover, hero, logo)
+ *  2. Hydra API     — if the game's shop+objectId is known to the API
+ *  3. Hydra catalogue search — for non-Steam games, find the canonical entry by title
+ *  4. SteamGridDB   — universal fallback for any game
  *
  * Returns a fully-populated partial ShopAssets object (all fields, no undefined).
  */
@@ -33,6 +33,26 @@ function shopAssetsToResult(assets: ShopAssets): BestAssets {
     logoImageUrl: assets.logoImageUrl ?? null,
     logoPosition: assets.logoPosition ?? null,
     downloadSources: assets.downloadSources ?? [],
+  };
+}
+
+const STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps";
+
+/**
+ * Builds Steam CDN artwork URLs from an appId. These URLs are deterministic
+ * and always serve full-resolution assets (600×900 portrait grid, hero banner,
+ * transparent logo) — no API call needed, never stale.
+ */
+function buildSteamCdnAssets(objectId: string): BestAssets {
+  const base = `${STEAM_CDN}/${objectId}`;
+  return {
+    iconUrl: `${base}/library_600x900.jpg`,
+    coverImageUrl: `${base}/library_600x900.jpg`,
+    libraryImageUrl: `${base}/header.jpg`,
+    libraryHeroImageUrl: `${base}/library_hero.jpg`,
+    logoImageUrl: `${base}/logo.png`,
+    logoPosition: null,
+    downloadSources: [],
   };
 }
 
@@ -131,6 +151,26 @@ export async function fetchBestAssets(
   title: string,
   initialFallback: Partial<BestAssets> = {}
 ): Promise<BestAssets> {
+  // Steam CDN is deterministic and always serves the highest-quality assets
+  // (600×900 portrait cover, hero, logo). Use it first for all Steam games,
+  // falling through to the Hydra API only for any missing fields.
+  if (shop === "steam") {
+    const cdnAssets = buildSteamCdnAssets(objectId);
+    // The Hydra API may carry extras like downloadSources; merge those in.
+    const hydraAssets = await tryHydraAssets(shop, objectId).catch(() => null);
+    return {
+      iconUrl: cdnAssets.iconUrl,
+      coverImageUrl: cdnAssets.coverImageUrl,
+      libraryImageUrl: cdnAssets.libraryImageUrl ?? hydraAssets?.libraryImageUrl ?? initialFallback.libraryImageUrl ?? null,
+      libraryHeroImageUrl: cdnAssets.libraryHeroImageUrl,
+      logoImageUrl: cdnAssets.logoImageUrl ?? hydraAssets?.logoImageUrl ?? initialFallback.logoImageUrl ?? null,
+      logoPosition: hydraAssets?.logoPosition ?? initialFallback.logoPosition ?? null,
+      downloadSources: hydraAssets?.downloadSources?.length
+        ? hydraAssets.downloadSources
+        : (initialFallback.downloadSources ?? []),
+    };
+  }
+
   if (SGDB_ONLY_SHOPS.includes(shop)) {
     try {
       const sgdb = await getSteamGridDbArtwork(title);
@@ -173,8 +213,8 @@ export async function fetchBestAssets(
     };
   }
 
-  // 2. For non-Steam shops: search the catalogue by title (may find the Steam entry)
-  if (shop !== "steam") {
+  // 2. Search the catalogue by title — may find the Steam entry with richer assets
+  {
     const catalogueAssets = await tryHydraCatalogueByTitle(title);
     if (catalogueAssets) {
       return {
