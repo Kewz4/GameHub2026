@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TrophyIcon, ArrowLeftIcon } from "@primer/octicons-react";
 
-import { Modal } from "@renderer/components";
+import { Modal, CheckboxField } from "@renderer/components";
 import type { AchievementGameStat, UserAchievement } from "@types";
 import { AchievementList } from "@renderer/pages/achievements/achievement-list";
 import "./achievements-breakdown-modal.scss";
@@ -27,6 +27,8 @@ export function AchievementsBreakdownModal({
     UserAchievement[] | null
   >(null);
   const [loadingAchievements, setLoadingAchievements] = useState(false);
+  // Hidden achievements are filtered out by default; the toggle reveals them.
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -75,13 +77,29 @@ export function AchievementsBreakdownModal({
     [sortedGames]
   );
 
+  const hasHiddenAchievements = useMemo(
+    () => (gameAchievements ?? []).some((a) => a.hidden),
+    [gameAchievements]
+  );
+
+  // Hide hidden achievements unless they're unlocked or the toggle is on.
+  const visibleAchievements = useMemo(
+    () =>
+      (gameAchievements ?? []).filter(
+        (a) => showHidden || !a.hidden || a.unlocked
+      ),
+    [gameAchievements, showHidden]
+  );
+
   const handleGameClick = (game: AchievementGameStat) => {
+    setShowHidden(false);
     setSelectedGame(game);
   };
 
   const handleBack = () => {
     setSelectedGame(null);
     setGameAchievements(null);
+    setShowHidden(false);
   };
 
   const handleClose = () => {
@@ -119,14 +137,25 @@ export function AchievementsBreakdownModal({
       <div className="achievements-breakdown">
         {selectedGame ? (
           <div className="achievements-breakdown__drilldown">
-            <button
-              type="button"
-              className="achievements-breakdown__back"
-              onClick={handleBack}
-            >
-              <ArrowLeftIcon size={14} />
-              {t("back", { defaultValue: "Back" })}
-            </button>
+            <div className="achievements-breakdown__drilldown-header">
+              <button
+                type="button"
+                className="achievements-breakdown__back"
+                onClick={handleBack}
+              >
+                <ArrowLeftIcon size={14} />
+                {t("back", { defaultValue: "Back" })}
+              </button>
+              {hasHiddenAchievements && (
+                <CheckboxField
+                  label={t("show_hidden_achievements", {
+                    defaultValue: "Show hidden achievements",
+                  })}
+                  checked={showHidden}
+                  onChange={() => setShowHidden((prev) => !prev)}
+                />
+              )}
+            </div>
             {loadingAchievements ? (
               <p className="achievements-breakdown__empty">
                 {t("loading", { defaultValue: "Loading…" })}
@@ -138,7 +167,7 @@ export function AchievementsBreakdownModal({
                 })}
               </p>
             ) : (
-              <AchievementList achievements={gameAchievements} />
+              <AchievementList achievements={visibleAchievements} />
             )}
           </div>
         ) : loading ? (
