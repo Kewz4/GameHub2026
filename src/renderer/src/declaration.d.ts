@@ -513,6 +513,7 @@ declare global {
     ) => Promise<string | null>;
     verifyExecutablePathInUse: (executablePath: string) => Promise<Game>;
     getLibrary: () => Promise<LibraryGame[]>;
+    getAchievementGames: () => Promise<import("@types").AchievementGameStat[]>;
     refreshLibraryAssets: () => Promise<void>;
     generateMissingMetadata: () => Promise<{
       updated: number;

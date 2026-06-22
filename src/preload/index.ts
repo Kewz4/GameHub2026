@@ -409,6 +409,7 @@ contextBridge.exposeInMainWorld("electron", {
   verifyExecutablePathInUse: (executablePath: string) =>
     ipcRenderer.invoke("verifyExecutablePathInUse", executablePath),
   getLibrary: () => ipcRenderer.invoke("getLibrary"),
+  getAchievementGames: () => ipcRenderer.invoke("getAchievementGames"),
   refreshLibraryAssets: () => ipcRenderer.invoke("refreshLibraryAssets"),
   generateMissingMetadata: () => ipcRenderer.invoke("generateMissingMetadata"),
   mergeDuplicateGames: () => ipcRenderer.invoke("mergeDuplicateGames"),

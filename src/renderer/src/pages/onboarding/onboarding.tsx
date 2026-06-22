@@ -227,6 +227,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [exophaseSyncChoice, setExophaseSyncChoice] = useState<"pending" | "running" | "skipped" | null>(null);
   const [exophasePsnImporting, setExophasePsnImporting] = useState(false);
   const [exophasePsnResult, setExophasePsnResult] = useState<string>("");
+  // Extra PUBLIC Exophase profiles added by URL (no login needed).
+  const [exophaseProfileUrl, setExophaseProfileUrl] = useState("");
+  const [exophaseAddingProfile, setExophaseAddingProfile] = useState(false);
+  const [exophaseAddedProfiles, setExophaseAddedProfiles] = useState<string[]>(
+    []
+  );
   // Live achievement-import progress (drives the onboarding progress modal).
   const [importActive, setImportActive] = useState(false);
   const [importProgress, setImportProgress] = useState<{
@@ -642,6 +648,29 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       // ignore
     } finally {
       setExophaseConnecting(false);
+    }
+  };
+
+  const handleExophaseAddProfile = async () => {
+    const input = exophaseProfileUrl.trim();
+    if (!input) return;
+    setExophaseAddingProfile(true);
+    try {
+      const res = await window.electron.validateExophaseProfile(input);
+      if (!res.ok || !res.username) return;
+      const prefs = await window.electron.getUserPreferences().catch(() => null);
+      const extras = prefs?.exophaseExtraProfiles ?? [];
+      await window.electron.updateUserPreferences({
+        exophaseExtraProfiles: [...extras, res.username],
+        exophaseEnabled: true,
+      });
+      setExophaseProfileUrl("");
+      setExophaseAddedProfiles((list) => [...list, res.username!]);
+      window.electron.runExophaseBackgroundSync().catch(() => {});
+    } catch {
+      // ignore
+    } finally {
+      setExophaseAddingProfile(false);
     }
   };
 
@@ -2085,6 +2114,65 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </Button>
                   </div>
                 )}
+
+                {/* Add public Exophase profiles by URL — works with or without
+                    a login; the profile just needs to be public. */}
+                <div className="onboarding-tool-card">
+                  <div className="onboarding-tool-card__header">
+                    <PersonIcon size={16} />
+                    <span className="onboarding-tool-card__title">
+                      Add a public profile by URL
+                    </span>
+                  </div>
+                  <p className="onboarding-tool-card__desc">
+                    Track another Exophase profile without logging in — just
+                    paste its public link (e.g.{" "}
+                    https://www.exophase.com/user/Kewz4/).
+                  </p>
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <input
+                      type="text"
+                      value={exophaseProfileUrl}
+                      onChange={(e) => setExophaseProfileUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !exophaseAddingProfile)
+                          handleExophaseAddProfile();
+                      }}
+                      placeholder="https://www.exophase.com/user/…"
+                      spellCheck={false}
+                      style={{
+                        flex: 1,
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: "1px solid rgba(255,255,255,0.15)",
+                        background: "rgba(255,255,255,0.04)",
+                        color: "inherit",
+                        fontSize: "0.875em",
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      theme="outline"
+                      onClick={handleExophaseAddProfile}
+                      disabled={
+                        exophaseAddingProfile || !exophaseProfileUrl.trim()
+                      }
+                    >
+                      {exophaseAddingProfile ? "Checking…" : "Add"}
+                    </Button>
+                  </div>
+                  {exophaseAddedProfiles.length > 0 && (
+                    <p
+                      style={{
+                        fontSize: "0.82rem",
+                        opacity: 0.7,
+                        margin: "8px 0 0",
+                      }}
+                    >
+                      Added: {exophaseAddedProfiles.join(", ")}
+                    </p>
+                  )}
+                </div>
               </>
             )}
 

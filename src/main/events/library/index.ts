@@ -45,6 +45,7 @@ import "./get-gogdl-status";
 import "./get-installed-proton-versions";
 import "./get-legendary-status";
 import "./get-library";
+import "./get-achievement-games";
 import "./get-riot-games";
 import "./get-steam-player-summary";
 import "./get-ubisoft-games";

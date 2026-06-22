@@ -642,6 +642,19 @@ export interface CloudDebugReport {
   notLoggedIn?: boolean;
 }
 
+/** One game's achievement progress for the profile breakdown. Sourced from the
+ *  local achievements store, so it includes games that have achievements but are
+ *  NOT in the local library (e.g. Exophase/PSN catalogue games). */
+export interface AchievementGameStat {
+  objectId: string;
+  shop: GameShop;
+  title: string;
+  iconUrl: string | null;
+  achievementCount: number;
+  unlockedAchievementCount: number;
+  inLibrary: boolean;
+}
+
 export * from "./game.types";
 export * from "./steam.types";
 export * from "./download.types";

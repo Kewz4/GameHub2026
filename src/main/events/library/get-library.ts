@@ -108,7 +108,15 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
               download: download ?? null,
               unlockedAchievementCount,
               achievementsPointsEarnedSum,
-              achievementCount: game.achievementCount ?? 0,
+              // Total possible: best of the library record and the stored
+              // definitions, so the "X/Y" display never loses its denominator
+              // (some imports leave game.achievementCount at 0 while definitions
+              // exist — that's the cause of a bare "22" instead of "22/37").
+              achievementCount: Math.max(
+                game.achievementCount ?? 0,
+                achievements?.achievements?.length ?? 0,
+                unlockedAchievementCount
+              ),
               // Image URLs: prefer custom overrides, then fresh assets, then game record
               iconUrl:
                 game.customIconUrl ||

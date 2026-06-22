@@ -1,4 +1,4 @@
-import { useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { userProfileContext } from "@renderer/context";
 import { useTranslation } from "react-i18next";
 import { useFormat, useUserDetails } from "@renderer/hooks";
@@ -17,6 +17,21 @@ export function UserStatsBox() {
   const { numberFormatter } = useFormat();
   const [showAchievementsBreakdown, setShowAchievementsBreakdown] =
     useState(false);
+  // Total unlocked achievements across ALL games that have them — including
+  // games not in the local library (Exophase/PSN catalogue imports).
+  const [allAchievementsSum, setAllAchievementsSum] = useState(0);
+
+  useEffect(() => {
+    if (!isMe) return;
+    window.electron
+      .getAchievementGames()
+      .then((all) =>
+        setAllAchievementsSum(
+          all.reduce((acc, g) => acc + (g.unlockedAchievementCount ?? 0), 0)
+        )
+      )
+      .catch(() => {});
+  }, [isMe]);
 
   const formatPlayTime = useCallback(
     (playTimeInSeconds: number) => {
@@ -63,7 +78,12 @@ export function UserStatsBox() {
   // so we always prefer the local count for the logged-in user's own profile.
   const serverSum = userStats.unlockedAchievementSum ?? 0;
   const achievementSum = isMe
-    ? Math.max(serverSum, localAchievementSum ?? 0, localUnlockedSum)
+    ? Math.max(
+        serverSum,
+        localAchievementSum ?? 0,
+        localUnlockedSum,
+        allAchievementsSum
+      )
     : userStats.unlockedAchievementSum;
 
   const pointsSum =
