@@ -31,14 +31,21 @@ export class UpdateCheckerManager {
   static readonly isPortable = (() => {
     if (process.env.PORTABLE_EXECUTABLE_DIR || process.env.PORTABLE_EXECUTABLE_FILE)
       return true;
-    // ZIP portable: packaged win32 build with no .gamehub-setup marker means
-    // the user extracted the ZIP and is running directly (never went through the
-    // NSIS installer), so we must use the portable update path.
     if (process.platform === "win32" && app.isPackaged) {
       try {
         const exeDir = path.dirname(process.execPath);
+        // Explicit portable marker written by the in-app wizard
         if (fs.existsSync(path.join(exeDir, "portable"))) return true;
-        if (!fs.existsSync(path.join(exeDir, ".gamehub-setup"))) return true;
+        // Has the setup marker → definitely an installed (NSIS or wizard-installed) build
+        if (fs.existsSync(path.join(exeDir, ".gamehub-setup"))) return false;
+        // No marker yet — could be: (a) ZIP extract on first run, (b) NSIS staging
+        // folder before the wizard completes.
+        // Distinguish them: NSIS always drops an uninstaller next to the exe.
+        // If we find it, we're in the staging folder → not portable.
+        const uninstaller = path.join(exeDir, "Uninstall GameHub.exe");
+        if (fs.existsSync(uninstaller)) return false;
+        // No marker, no uninstaller → genuine ZIP-extracted portable run
+        return true;
       } catch {
         // ignore
       }

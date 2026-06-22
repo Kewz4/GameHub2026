@@ -73,6 +73,16 @@ const _portableExeDir =
         app.isPackaged &&
         !fs.existsSync(path.join(exeDir, SETUP_MARKER_FILE))
       ) {
+        // No setup marker yet. Could be: (a) ZIP-extracted first run, (b) NSIS
+        // staging folder (setup.exe unpacked but wizard not finished yet), or
+        // (c) NSIS auto-update wiped the marker.
+        //
+        // NSIS always drops "Uninstall GameHub.exe" next to the exe — use it to
+        // distinguish staging/installed from a genuine ZIP-extracted portable run.
+        const hasNsisUninstaller = fs.existsSync(
+          path.join(exeDir, "Uninstall GameHub.exe")
+        );
+
         // NSIS auto-update wipes the marker. If data already exists at the
         // default Electron userData path (Roaming/GameHub), restore the marker
         // and keep using the normal userData path so Epic/GOG sessions survive.
@@ -81,7 +91,7 @@ const _portableExeDir =
           fs.existsSync(path.join(defaultData, "LOCK")) ||
           fs.existsSync(path.join(defaultData, "level-db")) ||
           fs.existsSync(path.join(defaultData, "legendary-config"));
-        if (hasExistingData) {
+        if (hasExistingData || hasNsisUninstaller) {
           try {
             fs.writeFileSync(path.join(exeDir, SETUP_MARKER_FILE), "", "utf8");
           } catch {
@@ -89,6 +99,9 @@ const _portableExeDir =
           }
           return null;
         }
+        // No marker, no NSIS uninstaller → genuine ZIP-extracted first run.
+        // Redirect userData to the exe folder so Roaming is never touched until
+        // the user explicitly chooses "Install" in the setup wizard.
         return exeDir;
       }
     } catch {
