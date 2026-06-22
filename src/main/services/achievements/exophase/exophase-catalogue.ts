@@ -74,10 +74,23 @@ export async function searchCatalogueForAchievements(
     // matching "Control: Ultimate Edition", "Death Stranding" matching
     // "Death Stranding: Director's Cut"). Require at least 5 chars to avoid
     // false positives on very short titles.
+    //
+    // IMPORTANT: reject matches where the extension starts with a sequel numeral
+    // (Roman or Arabic) so "God of War" does NOT match "God of War III Remastered"
+    // while still matching "God of War: Ragnarok". The extension is the first word
+    // that follows the base title in the candidate's normalized string.
+    const SEQUEL_NUMERALS = new Set([
+      "2", "3", "4", "5", "6", "7", "8", "9",
+      "ii", "iii", "iv", "vi", "vii", "viii", "ix", "xi", "xii",
+    ]);
     if (norm.length >= 5) {
       const prefix = edges.find((r) => {
         const rNorm = normalizeExophaseTitle(r.title);
-        return rNorm.startsWith(norm + " ") || rNorm === norm;
+        if (!rNorm.startsWith(norm + " ")) return false;
+        // Check first extension word — reject sequel numerals.
+        const extension = rNorm.slice(norm.length + 1);
+        const firstWord = extension.split(" ")[0];
+        return !SEQUEL_NUMERALS.has(firstWord);
       });
       if (prefix) {
         achievementsLogger.log(
