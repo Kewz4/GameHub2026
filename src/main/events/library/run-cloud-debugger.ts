@@ -402,3 +402,10 @@ const runCloudDebugger = async (
 };
 
 registerEvent("runCloudDebugger", runCloudDebugger);
+
+/** Internal entry point so post-sync paths can trigger the debugger without
+ *  an IPC round-trip. Silently no-ops when not logged in. */
+export const runCloudDebuggerInternal = (): Promise<void> =>
+  runCloudDebugger(null as unknown as Electron.IpcMainInvokeEvent)
+    .then(() => {})
+    .catch(() => {});

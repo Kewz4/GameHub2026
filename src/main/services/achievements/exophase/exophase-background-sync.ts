@@ -5,6 +5,7 @@ import { WindowManager } from "@main/services/window-manager";
 import { LocalNotificationManager } from "@main/services/notifications/local-notifications";
 import { getPrefs } from "./exophase-cache";
 import { syncExophaseAccount } from "./exophase-importer";
+import { runCloudDebuggerInternal } from "@main/events/library/run-cloud-debugger";
 
 let running = false;
 
@@ -65,6 +66,9 @@ export const runExophaseBackgroundSync = async (
         }`,
         { url: "/achievements-sync" }
       ).catch(() => {});
+
+      // Ensure every newly-unlocked achievement is pushed to the cloud.
+      await runCloudDebuggerInternal();
     }
 
     achievementsLogger.log(

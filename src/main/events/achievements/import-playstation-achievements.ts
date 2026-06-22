@@ -6,6 +6,7 @@ import {
 import { withSyncBroadcast } from "./exophase-sync-broadcast";
 import { db, levelKeys } from "@main/level";
 import type { ExophaseSyncReport, ExophaseSyncReportGame } from "@types";
+import { runCloudDebuggerInternal } from "@main/events/library/run-cloud-debugger";
 
 /**
  * Merges the PSN run's report into whatever Achievements Sync report is already
@@ -57,6 +58,9 @@ const importPlaystationAchievements = async (
     runPsnImport(onProgress)
   );
   await mergeAndPersistReport(result.report);
+  if ((result.report?.totalNewlyUnlocked ?? 0) > 0 || result.totalUnlocked > 0) {
+    await runCloudDebuggerInternal();
+  }
   return result;
 };
 
