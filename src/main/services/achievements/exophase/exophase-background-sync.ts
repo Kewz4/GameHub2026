@@ -24,8 +24,11 @@ export const runExophaseBackgroundSync = async (
   if (running) return;
 
   const prefs = await getPrefs();
-  if (!prefs?.exophaseUserId) return;
-  if (prefs.exophaseEnabled === false) return;
+  const hasProfiles =
+    Boolean(prefs?.exophaseUserId) ||
+    (prefs?.exophaseExtraProfiles?.length ?? 0) > 0;
+  if (!hasProfiles) return;
+  if (prefs?.exophaseEnabled === false) return;
 
   running = true;
   try {

@@ -9,6 +9,9 @@ import {
   SyncIcon,
   LinkExternalIcon,
   DownloadIcon,
+  PlusIcon,
+  TrashIcon,
+  PersonIcon,
 } from "@primer/octicons-react";
 import type { GameShop } from "@types";
 
@@ -36,6 +39,8 @@ export function SettingsExophase() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportingPsn, setIsImportingPsn] = useState(false);
+  const [profileUrl, setProfileUrl] = useState("");
+  const [isAddingProfile, setIsAddingProfile] = useState(false);
   const [syncProgress, setSyncProgress] = useState<{
     current: number;
     total: number;
@@ -44,6 +49,7 @@ export function SettingsExophase() {
 
   const enabled = userPreferences?.exophaseEnabled !== false;
   const managed = userPreferences?.exophaseManagedPlatforms ?? DEFAULT_MANAGED;
+  const extraProfiles = userPreferences?.exophaseExtraProfiles ?? [];
 
   useEffect(() => {
     setUsername(userPreferences?.exophaseUserId ?? null);
@@ -89,6 +95,39 @@ export function SettingsExophase() {
     setUsername(null);
     await updateUserPreferences({ exophaseUserId: null });
     showSuccessToast("Exophase disconnected.");
+  };
+
+  const handleAddProfile = async () => {
+    const input = profileUrl.trim();
+    if (!input) return;
+    setIsAddingProfile(true);
+    try {
+      const res = await window.electron.validateExophaseProfile(input);
+      if (!res.ok || !res.username) {
+        showErrorToast("Couldn't add profile", res.error ?? "Unknown error");
+        return;
+      }
+      await updateUserPreferences({
+        exophaseExtraProfiles: [...extraProfiles, res.username],
+      });
+      setProfileUrl("");
+      showSuccessToast(
+        "Profile added",
+        `${res.username} — ${res.gameCount} games found.`
+      );
+      window.electron.runExophaseBackgroundSync().catch(() => {});
+    } catch {
+      showErrorToast("Couldn't add profile.");
+    } finally {
+      setIsAddingProfile(false);
+    }
+  };
+
+  const handleRemoveProfile = async (name: string) => {
+    await updateUserPreferences({
+      exophaseExtraProfiles: extraProfiles.filter((p) => p !== name),
+    }).catch(() => {});
+    showSuccessToast("Profile removed", name);
   };
 
   const handleToggleEnabled = (next: boolean) => {
@@ -155,6 +194,8 @@ export function SettingsExophase() {
   };
 
   const isAuthenticated = Boolean(username);
+  // Sync is possible with either a logged-in account or any extra public profile.
+  const canSync = isAuthenticated || extraProfiles.length > 0;
 
   return (
     <div className="settings-exophase">
@@ -224,6 +265,97 @@ export function SettingsExophase() {
         </div>
       </div>
 
+      <h3 style={{ margin: "24px 0 4px" }}>Additional Profiles</h3>
+      <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
+        Sync extra <strong>public</strong> Exophase profiles without logging in —
+        just paste a profile link (e.g.{" "}
+        <code>https://www.exophase.com/user/Kewz4/</code>). The profile must be
+        set to public on Exophase.
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          maxWidth: 640,
+          marginBottom: extraProfiles.length ? 12 : 20,
+        }}
+      >
+        <input
+          type="text"
+          value={profileUrl}
+          onChange={(e) => setProfileUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !isAddingProfile) handleAddProfile();
+          }}
+          placeholder="https://www.exophase.com/user/…"
+          spellCheck={false}
+          style={{
+            flex: 1,
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.15)",
+            background: "rgba(255,255,255,0.04)",
+            color: "inherit",
+            fontSize: "0.875em",
+          }}
+        />
+        <Button
+          type="button"
+          onClick={handleAddProfile}
+          disabled={isAddingProfile || !profileUrl.trim()}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <PlusIcon size={14} />
+          {isAddingProfile ? "Checking…" : "Add"}
+        </Button>
+      </div>
+
+      {extraProfiles.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            maxWidth: 640,
+            marginBottom: 20,
+          }}
+        >
+          {extraProfiles.map((name) => (
+            <div
+              key={name}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.03)",
+              }}
+            >
+              <PersonIcon size={14} />
+              <span style={{ flex: 1, fontSize: "0.9em" }}>{name}</span>
+              <button
+                type="button"
+                title="Remove profile"
+                onClick={() => handleRemoveProfile(name)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--color-danger, #e05c5c)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <TrashIcon size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <h3 style={{ margin: "24px 0 4px" }}>Managed Platforms</h3>
       <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
         Games on these platforms will use Exophase for achievements. Check the
@@ -252,7 +384,7 @@ export function SettingsExophase() {
         <Button
           type="button"
           onClick={handleSync}
-          disabled={!isAuthenticated || isSyncing || isImportingPsn || !enabled}
+          disabled={!canSync || isSyncing || isImportingPsn || !enabled}
           style={{ display: "flex", alignItems: "center", gap: 6 }}
         >
           <SyncIcon size={14} />
@@ -263,7 +395,7 @@ export function SettingsExophase() {
           type="button"
           theme="outline"
           onClick={handlePsnImport}
-          disabled={!isAuthenticated || isSyncing || isImportingPsn || !enabled}
+          disabled={!canSync || isSyncing || isImportingPsn || !enabled}
           style={{ display: "flex", alignItems: "center", gap: 6 }}
         >
           <DownloadIcon size={14} />

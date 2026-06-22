@@ -15,6 +15,35 @@ export const EXOPHASE_SEARCH_URL =
 export const exophaseProfileUrl = (username: string): string =>
   `https://www.exophase.com/user/${encodeURIComponent(username)}/`;
 
+/**
+ * Extracts an Exophase username/slug from user input. Accepts:
+ *   - a full profile URL:   https://www.exophase.com/user/Kewz4/
+ *   - a platform profile:   https://www.exophase.com/psn/user/Kewz-4/
+ *   - a bare username:      Kewz4
+ * Returns null when nothing usable can be parsed.
+ */
+export const parseExophaseUsername = (input: string): string | null => {
+  const trimmed = (input ?? "").trim();
+  if (!trimmed) return null;
+
+  // Bare username (no URL, no path separators)
+  if (!trimmed.includes("/") && !/\s/.test(trimmed)) {
+    return trimmed.replace(/^@/, "") || null;
+  }
+
+  try {
+    const url = new URL(
+      trimmed.includes("://") ? trimmed : `https://${trimmed}`
+    );
+    // Matches both "/user/<name>/" and "/<platform>/user/<name>/"
+    const match = url.pathname.match(/\/user\/([^/]+)/i);
+    if (match?.[1]) return decodeURIComponent(match[1]) || null;
+  } catch {
+    // not a URL
+  }
+  return null;
+};
+
 /** A single linked platform account's games page. Exophase paths put the
  *  platform slug first: `https://www.exophase.com/<platform>/user/<account>/`.
  *  This is the SOURCE OF TRUTH for the account-driven sync — every game the

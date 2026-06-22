@@ -261,6 +261,8 @@ contextBridge.exposeInMainWorld("electron", {
   openExophaseAuthWindow: () => ipcRenderer.invoke("openExophaseAuthWindow"),
   getExophaseAuthState: (revalidate?: boolean) =>
     ipcRenderer.invoke("getExophaseAuthState", revalidate),
+  validateExophaseProfile: (input: string) =>
+    ipcRenderer.invoke("validateExophaseProfile", input),
   clearExophaseSession: () => ipcRenderer.invoke("clearExophaseSession"),
   syncExophaseAchievements: () =>
     ipcRenderer.invoke("syncExophaseAchievements"),

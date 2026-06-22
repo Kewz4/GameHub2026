@@ -353,6 +353,12 @@ declare global {
     getExophaseAuthState: (
       revalidate?: boolean
     ) => Promise<{ authenticated: boolean; username: string | null }>;
+    validateExophaseProfile: (input: string) => Promise<{
+      ok: boolean;
+      username?: string;
+      gameCount?: number;
+      error?: string;
+    }>;
     clearExophaseSession: () => Promise<{ ok: boolean }>;
     syncExophaseAchievements: () => Promise<{
       gamesProcessed: number;

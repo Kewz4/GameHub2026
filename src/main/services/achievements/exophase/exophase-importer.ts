@@ -37,6 +37,30 @@ import {
   putCacheEntry,
   toDefinitions,
 } from "./exophase-cache";
+import type { UserPreferences } from "@types";
+
+/**
+ * The full set of Exophase profiles to sync: the logged-in account (if any)
+ * plus every extra public profile the user added by URL. Deduped case-insensitively,
+ * primary first.
+ */
+export const collectExophaseProfiles = (
+  prefs: UserPreferences | null
+): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (name?: string | null) => {
+    const trimmed = name?.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(trimmed);
+  };
+  add(prefs?.exophaseUserId);
+  for (const extra of prefs?.exophaseExtraProfiles ?? []) add(extra);
+  return out;
+};
 
 export interface ExophaseSyncResult {
   gamesProcessed: number;
@@ -472,27 +496,42 @@ export async function syncExophaseAccount(
 
   const startedAt = new Date().toISOString();
   const prefs = await getPrefs();
-  if (!prefs?.exophaseUserId) {
+  const profiles = collectExophaseProfiles(prefs);
+  if (profiles.length === 0) {
     return { ...result, error: "Exophase account not connected." };
   }
-  if (prefs.exophaseEnabled === false) {
+  if (prefs?.exophaseEnabled === false) {
     return { ...result, error: "Exophase is disabled." };
   }
 
   achievementsLogger.log(
-    `[Exophase account] sync as "${prefs.exophaseUserId}" starting…`
+    `[Exophase account] sync across ${profiles.length} profile(s): ${profiles.join(", ")}`
   );
 
   const fetcher = new ExophaseFetcher();
   const reportGames: ExophaseSyncReportGame[] = [];
 
   try {
-    const accountGames = await fetchExophaseAccountGames(
-      fetcher,
-      prefs.exophaseUserId
-    );
+    // Enumerate every profile (primary + extra public profiles) and merge,
+    // deduping so the same title across profiles is only processed once.
+    const accountGames: ExophaseAccountGame[] = [];
+    const seenKeys = new Set<string>();
+    for (const profile of profiles) {
+      const games = await fetchExophaseAccountGames(fetcher, profile);
+      achievementsLogger.log(
+        `[Exophase account] profile "${profile}" → ${games.length} games`
+      );
+      for (const game of games) {
+        const key =
+          game.awardsUrl ??
+          `${game.platformSlug}:${game.title.toLowerCase()}`;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        accountGames.push(game);
+      }
+    }
     achievementsLogger.log(
-      `[Exophase account] enumerated ${accountGames.length} account games`
+      `[Exophase account] enumerated ${accountGames.length} unique account games`
     );
 
     if (accountGames.length === 0) {

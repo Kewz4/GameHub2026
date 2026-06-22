@@ -1,5 +1,6 @@
 import "./open-exophase-auth-window";
 import "./get-exophase-auth-state";
+import "./validate-exophase-profile";
 import "./clear-exophase-session";
 import "./sync-exophase-achievements";
 import "./import-playstation-achievements";

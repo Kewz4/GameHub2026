@@ -227,6 +227,10 @@ export interface UserPreferences {
   exophaseEnabled?: boolean;
   exophaseUserId?: string | null;
   exophaseManagedPlatforms?: GameShop[] | null;
+  // Additional PUBLIC Exophase profiles to sync alongside the logged-in account.
+  // These need no login — only a public profile URL/username — and are read the
+  // same way as the primary account (e.g. ["Kewz4"]).
+  exophaseExtraProfiles?: string[] | null;
 }
 
 export interface ExcludedGame {
