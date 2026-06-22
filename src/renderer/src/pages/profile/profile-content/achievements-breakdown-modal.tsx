@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { TrophyIcon } from "@primer/octicons-react";
+import { TrophyIcon, ArrowLeftIcon } from "@primer/octicons-react";
 
 import { Modal } from "@renderer/components";
-import type { AchievementGameStat } from "@types";
+import type { AchievementGameStat, UserAchievement } from "@types";
+import { AchievementList } from "@renderer/pages/achievements/achievement-list";
 import "./achievements-breakdown-modal.scss";
 
 interface AchievementsBreakdownModalProps {
@@ -12,25 +12,27 @@ interface AchievementsBreakdownModalProps {
   onClose: () => void;
 }
 
-/**
- * Lists every game that has at least one unlocked achievement — including games
- * that aren't in the local library (Exophase/PSN catalogue imports) — sorted by
- * unlocked count. Clicking a row opens that game's details page (where the full
- * achievement list lives). Opened from the achievement count on the logged-in
- * user's own profile.
- */
 export function AchievementsBreakdownModal({
   visible,
   onClose,
 }: Readonly<AchievementsBreakdownModalProps>) {
   const { t } = useTranslation("user_profile");
-  const navigate = useNavigate();
   const [games, setGames] = useState<AchievementGameStat[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [selectedGame, setSelectedGame] = useState<AchievementGameStat | null>(
+    null
+  );
+  const [gameAchievements, setGameAchievements] = useState<
+    UserAchievement[] | null
+  >(null);
+  const [loadingAchievements, setLoadingAchievements] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     setLoading(true);
+    setSelectedGame(null);
+    setGameAchievements(null);
     window.electron
       .getAchievementGames()
       .then((all) => {
@@ -41,6 +43,19 @@ export function AchievementsBreakdownModal({
       .catch(() => setGames([]))
       .finally(() => setLoading(false));
   }, [visible]);
+
+  useEffect(() => {
+    if (!selectedGame) {
+      setGameAchievements(null);
+      return;
+    }
+    setLoadingAchievements(true);
+    window.electron
+      .getUnlockedAchievements(selectedGame.objectId, selectedGame.shop)
+      .then((list) => setGameAchievements(list))
+      .catch(() => setGameAchievements([]))
+      .finally(() => setLoadingAchievements(false));
+  }, [selectedGame]);
 
   const sortedGames = useMemo(
     () =>
@@ -61,29 +76,75 @@ export function AchievementsBreakdownModal({
   );
 
   const handleGameClick = (game: AchievementGameStat) => {
-    onClose();
-    navigate(`/game/${game.shop}/${game.objectId}`);
+    setSelectedGame(game);
   };
+
+  const handleBack = () => {
+    setSelectedGame(null);
+    setGameAchievements(null);
+  };
+
+  const handleClose = () => {
+    setSelectedGame(null);
+    setGameAchievements(null);
+    onClose();
+  };
+
+  const modalTitle = selectedGame
+    ? selectedGame.title
+    : t("achievements_unlocked");
+
+  const modalDescription = selectedGame
+    ? (() => {
+        const unlocked = selectedGame.unlockedAchievementCount ?? 0;
+        const total = selectedGame.achievementCount ?? 0;
+        return total > 0 ? `${unlocked} / ${total}` : String(unlocked);
+      })()
+    : loading
+      ? undefined
+      : t("achievements_across_games", {
+          defaultValue: "{{count}} unlocked across {{games}} games",
+          count: totalUnlocked,
+          games: sortedGames.length,
+        });
 
   return (
     <Modal
       visible={visible}
-      title={t("achievements_unlocked")}
-      description={
-        loading
-          ? undefined
-          : t("achievements_across_games", {
-              defaultValue: "{{count}} unlocked across {{games}} games",
-              count: totalUnlocked,
-              games: sortedGames.length,
-            })
-      }
-      onClose={onClose}
+      title={modalTitle}
+      description={modalDescription}
+      onClose={handleClose}
       large
     >
       <div className="achievements-breakdown">
-        {loading ? (
-          <p className="achievements-breakdown__empty">{t("loading", { defaultValue: "Loading…" })}</p>
+        {selectedGame ? (
+          <div className="achievements-breakdown__drilldown">
+            <button
+              type="button"
+              className="achievements-breakdown__back"
+              onClick={handleBack}
+            >
+              <ArrowLeftIcon size={14} />
+              {t("back", { defaultValue: "Back" })}
+            </button>
+            {loadingAchievements ? (
+              <p className="achievements-breakdown__empty">
+                {t("loading", { defaultValue: "Loading…" })}
+              </p>
+            ) : !gameAchievements || gameAchievements.length === 0 ? (
+              <p className="achievements-breakdown__empty">
+                {t("no_achievements_yet", {
+                  defaultValue: "No achievement data found.",
+                })}
+              </p>
+            ) : (
+              <AchievementList achievements={gameAchievements} />
+            )}
+          </div>
+        ) : loading ? (
+          <p className="achievements-breakdown__empty">
+            {t("loading", { defaultValue: "Loading…" })}
+          </p>
         ) : sortedGames.length === 0 ? (
           <p className="achievements-breakdown__empty">
             {t("no_achievements_yet", {

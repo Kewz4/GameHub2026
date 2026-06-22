@@ -1,9 +1,11 @@
 import { registerEvent } from "../register-event";
 import {
+  exophaseCacheSublevel,
   gameAchievementsSublevel,
   gamesSublevel,
   gamesShopAssetsSublevel,
 } from "@main/level";
+import { idCacheKey } from "@main/services/achievements/exophase/exophase-cache";
 import type { AchievementGameStat, GameShop } from "@types";
 
 /**
@@ -45,6 +47,15 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
     const keyShop = sep >= 0 ? key.slice(0, sep) : key;
     const keyObjectId = sep >= 0 ? key.slice(sep + 1) : "";
 
+    // Fall back to the Exophase cache for title when the game is not in the
+    // library and the shop-assets record has no title either.
+    const exoEntry =
+      !game?.title && !assets?.title
+        ? await exophaseCacheSublevel
+            .get(idCacheKey(keyShop as GameShop, keyObjectId))
+            .catch(() => null)
+        : null;
+
     // Total possible: best of the library record and the stored definitions, so
     // the denominator is never 0 when we have definitions.
     const total = Math.max(
@@ -56,7 +67,7 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
     out.push({
       shop: (game?.shop ?? keyShop) as GameShop,
       objectId: game?.objectId ?? keyObjectId,
-      title: game?.title ?? assets?.title ?? keyObjectId,
+      title: game?.title ?? assets?.title ?? exoEntry?.title ?? keyObjectId,
       iconUrl:
         game?.customIconUrl || assets?.iconUrl || game?.iconUrl || null,
       achievementCount: total,
