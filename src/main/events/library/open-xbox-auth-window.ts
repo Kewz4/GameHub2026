@@ -8,6 +8,7 @@ import {
 import { db, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
 import { logger } from "@main/services";
+import { injectBrandedHeader } from "@main/services/auth-window-branding";
 
 const openXboxAuthWindow = async (
   _event: Electron.IpcMainInvokeEvent
@@ -29,6 +30,7 @@ const openXboxAuthWindow = async (
     });
 
     win.loadURL(XBOX_OAUTH_URL);
+    injectBrandedHeader(win, 'xbox');
 
     let handled = false;
 

@@ -9,6 +9,7 @@ import {
   EXOPHASE_PARTITION,
 } from "./constants";
 import { ExophaseFetcher } from "./exophase-web";
+import { injectBrandedHeader } from "@main/services/auth-window-branding";
 
 export interface ExophaseAuthState {
   authenticated: boolean;
@@ -134,6 +135,7 @@ export function openExophaseLoginWindow(): Promise<ExophaseAuthState> {
       }
     };
 
+    injectBrandedHeader(win, "exophase");
     win.loadURL(EXOPHASE_LOGIN_URL).catch(() => {
       if (!handled) {
         handled = true;

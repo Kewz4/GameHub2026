@@ -4,6 +4,7 @@ import { db, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
 import { logger } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
+import { injectBrandedHeader } from "@main/services/auth-window-branding";
 import {
   STEAM_AUTH_PARTITION,
   STEAM_LOGIN_URL,
@@ -54,6 +55,7 @@ const openSteamLoginWindow = async (
     });
 
     win.loadURL(STEAM_LOGIN_URL);
+    injectBrandedHeader(win, 'steam');
 
     let handled = false;
     let cookieCheckInterval: ReturnType<typeof setInterval> | null = null;

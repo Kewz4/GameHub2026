@@ -10,6 +10,7 @@ import { db, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
 import { logger } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
+import { injectBrandedHeader } from "@main/services/auth-window-branding";
 
 const REDIRECT_API =
   "https://www.epicgames.com/id/api/redirect" +
@@ -60,6 +61,7 @@ const openLegendaryAuthWindow = async (
     });
 
     win.loadURL(EPIC_LOGIN_URL);
+    injectBrandedHeader(win, 'epic');
 
     let handled = false;
 
