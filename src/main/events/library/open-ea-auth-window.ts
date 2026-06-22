@@ -12,7 +12,6 @@ import {
   isEaLoginRedirect,
 } from "@main/services/ea-auth";
 import { fetchEaIdentity } from "@main/services/ea-juno";
-import { injectBrandedHeader } from "@main/services/auth-window-branding";
 
 export interface EaAuthResult {
   accessToken: string;
@@ -73,7 +72,6 @@ const openEaAuthWindow = async (
     });
 
     win.loadURL(buildEaLoginUrl());
-    injectBrandedHeader(win, "ea");
 
     let handled = false;
 

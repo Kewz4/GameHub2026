@@ -5,7 +5,6 @@ import { db, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
 import { logger } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
-import { injectBrandedHeader } from "@main/services/auth-window-branding";
 
 const UBI_APP_ID = "f68a4c21-3006-47f3-b676-e2badf904de8";
 
@@ -40,7 +39,6 @@ const openUbisoftAuthWindow = async (
       `&nextUrl=${encodeURIComponent(`https://connect.ubisoft.com/ready?appId=${UBI_APP_ID}`)}`;
 
     win.loadURL(loginUrl);
-    injectBrandedHeader(win, 'ubisoft');
 
     let handled = false;
 

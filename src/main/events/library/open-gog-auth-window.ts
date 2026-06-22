@@ -3,7 +3,6 @@ import { registerEvent } from "../register-event";
 import { GOG_AUTH_URL, exchangeGogCode } from "@main/services/gog-account";
 import { logger } from "@main/services";
 import { WindowManager } from "@main/services/window-manager";
-import { injectBrandedHeader } from "@main/services/auth-window-branding";
 
 const openGogAuthWindow = async (
   _event: Electron.IpcMainInvokeEvent
@@ -21,7 +20,6 @@ const openGogAuthWindow = async (
     });
 
     win.loadURL(GOG_AUTH_URL);
-    injectBrandedHeader(win, 'gog');
 
     let handled = false;
 
