@@ -4,31 +4,13 @@ import { HydraApi, logger } from "@main/services";
 import { gameAchievementsSublevel, gamesSublevel } from "@main/level";
 import { searchCatalogueForAchievements } from "@main/services/achievements/exophase/exophase-catalogue";
 import { resolveCanonicalUnlocked } from "@main/services/achievements/exophase/exophase-cache";
-import type { UnlockedAchievement } from "@types";
+import type {
+  UnlockedAchievement,
+  DebugIssue,
+  CloudDebugReport,
+} from "@types";
 
-export interface DebugIssue {
-  kind:
-    | "missing-from-cloud"
-    | "missing-from-local"
-    | "achievement-count-mismatch"
-    | "playtime-mismatch";
-  gameTitle: string;
-  shop: string;
-  objectId: string;
-  detail: string;
-  fixed: boolean;
-  fixError?: string;
-}
-
-export interface CloudDebugReport {
-  checkedAt: string;
-  localCount: number;
-  cloudCount: number;
-  issues: DebugIssue[];
-  fixedCount: number;
-  unfixedCount: number;
-  notLoggedIn?: boolean;
-}
+export type { DebugIssue, CloudDebugReport };
 
 type ProfileGame = {
   id: string;

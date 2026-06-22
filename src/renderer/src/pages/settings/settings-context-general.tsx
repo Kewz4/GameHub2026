@@ -24,7 +24,7 @@ import { DownloadDirectoryReplacementModal } from "./download-directory-replacem
 import { LibrarySyncModal, type LibrarySyncResult } from "./library-sync-modal";
 import { CloudDebuggerModal } from "./cloud-debugger-modal";
 import { SettingsMaintenanceFlow } from "./settings-maintenance-flow";
-import type { CloudDebugReport } from "@main/events/library/run-cloud-debugger";
+import type { CloudDebugReport } from "@types";
 
 interface LanguageOption {
   option: string;

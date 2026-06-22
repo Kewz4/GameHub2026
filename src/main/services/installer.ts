@@ -1,9 +1,11 @@
 import { app, dialog, shell } from "electron";
 import createDesktopShortcut from "create-desktop-shortcuts";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
 const SETUP_MARKER = ".gamehub-setup";
+const PORTABLE_MARKER = "portable";
 
 export function needsSetup(): boolean {
   if (process.platform !== "win32") return false;
@@ -40,6 +42,9 @@ export function getInstallerDefaults() {
       process.env.PROGRAMFILES || "C:\\Program Files",
       "GameHub"
     ),
+    // Portable lives in a self-contained folder the user can move/copy at will
+    // (defaults to a GameHub folder in their home directory).
+    defaultPortableDir: path.join(app.getPath("home"), "GameHub"),
     exeDir: path.dirname(process.execPath),
   };
 }
@@ -122,11 +127,21 @@ function createShortcuts(exePath: string) {
   });
 }
 
-export async function setupInstall(
+/**
+ * Copies the unpacked app from the current (staging) folder into destDir,
+ * skipping the runtime `data` directory. Reports progress 0→85.
+ */
+async function copyAppInto(
   destDir: string,
   onProgress: (pct: number, file: string) => void
 ): Promise<void> {
   const srcDir = path.dirname(process.execPath);
+
+  // Nothing to copy if the user picked the folder we're already running from.
+  if (path.resolve(srcDir) === path.resolve(destDir)) {
+    onProgress(85, "Preparing…");
+    return;
+  }
 
   // Disable Electron's ASAR interception so app.asar is copied as a raw file
   process.noAsar = true;
@@ -149,24 +164,78 @@ export async function setupInstall(
       copied++;
       onProgress(Math.round((copied / total) * 85), name);
     });
-
-    onProgress(88, "Creating shortcuts…");
-    const newExe = path.join(destDir, path.basename(process.execPath));
-    createShortcuts(newExe);
-
-    onProgress(95, "Finishing up…");
-    writeSetupMarker(destDir);
-
-    onProgress(100, "Done");
   } finally {
     process.noAsar = false;
   }
 }
 
-export function setupPortable(): void {
-  const dir = path.dirname(process.execPath);
-  fs.writeFileSync(path.join(dir, "portable"), "", "utf8");
-  writeSetupMarker(dir);
+export async function setupInstall(
+  destDir: string,
+  onProgress: (pct: number, file: string) => void
+): Promise<void> {
+  await copyAppInto(destDir, onProgress);
+
+  onProgress(88, "Creating shortcuts…");
+  const newExe = path.join(destDir, path.basename(process.execPath));
+  createShortcuts(newExe);
+
+  onProgress(95, "Finishing up…");
+  writeSetupMarker(destDir);
+  scheduleStagingCleanup(destDir);
+
+  onProgress(100, "Done");
+}
+
+export async function setupPortable(
+  destDir: string,
+  onProgress: (pct: number, file: string) => void
+): Promise<void> {
+  await copyAppInto(destDir, onProgress);
+
+  onProgress(95, "Finishing up…");
+  // Portable: keep the app + its data self-contained in destDir, no shortcuts,
+  // no registry. The marker files make startup redirect userData to destDir/data.
+  fs.writeFileSync(path.join(destDir, PORTABLE_MARKER), "", "utf8");
+  writeSetupMarker(destDir);
+  scheduleStagingCleanup(destDir);
+
+  onProgress(100, "Done");
+}
+
+/**
+ * After the app has been copied to the user's chosen Install/Portable folder
+ * (and we're about to relaunch from there), remove the temporary folder the
+ * setup.exe unpacked into so nothing is left behind under %LocalAppData%.
+ *
+ * We run the NSIS silent uninstaller, which cleanly removes both the staged
+ * files and the Add/Remove Programs entry. `deleteAppDataOnUninstall: false`
+ * means the user's real data (Roaming/portable folder) is never touched.
+ *
+ * If there's no NSIS uninstaller next to us (e.g. we were launched from a plain
+ * extracted ZIP), we do nothing — we must never delete a folder we didn't stage.
+ */
+function scheduleStagingCleanup(destDir: string): void {
+  if (process.platform !== "win32") return;
+
+  const stagingDir = path.dirname(process.execPath);
+  if (path.resolve(stagingDir) === path.resolve(destDir)) return;
+
+  const uninstaller = path.join(stagingDir, "Uninstall GameHub.exe");
+  if (!fs.existsSync(uninstaller)) return;
+
+  // Wait a few seconds for this process to exit, then run the silent
+  // uninstaller. Without `_?=` it copies itself to %TEMP% and removes the whole
+  // staging directory (including itself) plus the registry uninstall entry.
+  const cmd = `ping 127.0.0.1 -n 4 >nul & "${uninstaller}" /S`;
+  try {
+    spawn("cmd.exe", ["/c", cmd], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    }).unref();
+  } catch {
+    // best-effort cleanup; safe to ignore
+  }
 }
 
 export function relaunchFrom(destDir: string): void {

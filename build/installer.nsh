@@ -1,17 +1,12 @@
 ; Runs after every NSIS install/update.
+; NOTE: We deliberately DO NOT write the .gamehub-setup marker or create
+; shortcuts here. The setup.exe only unpacks the app into its staging folder;
+; the in-app wizard (installer.tsx) then asks the user to pick Portable or
+; Installation and a destination folder, and it owns the marker + shortcuts.
+; (Existing installs are detected via their userData at startup, so the wizard
+; never re-appears after an NSIS auto-update.)
 !macro customInstall
-  ; ── 1. Write setup marker so needsSetup() stays false after updates ──
-  FileOpen $0 "$INSTDIR\.gamehub-setup" w
-  FileClose $0
-
-  ; ── 2. Recreate shortcuts to $INSTDIR so stale shortcuts from any prior
-  ;       install location (e.g. our custom installer at %LOCALAPPDATA%\GameHub)
-  ;       are replaced with the correct NSIS install path. ──
-  SetShellVarContext current
-  CreateShortcut "$DESKTOP\GameHub.lnk" "$INSTDIR\GameHub.exe"
-  CreateShortcut "$SMPROGRAMS\GameHub.lnk" "$INSTDIR\GameHub.exe"
-
-  ; ── 3. Purge per-user icon cache so the new icon shows immediately ──
+  ; ── Purge per-user icon cache so the new icon shows immediately ──
   Delete /REBOOTOK "$LOCALAPPDATA\IconCache.db"
 
   ; iconcache_*.db — Delete does not support wildcards; use FindFirst/FindNext

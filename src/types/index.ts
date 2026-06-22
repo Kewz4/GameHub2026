@@ -615,6 +615,33 @@ export type UserGameDetails = ShopAssets & {
   }[];
 };
 
+// Cloud debugger types (shared between the main-process debugger and the
+// renderer modal that displays its report). Kept here in @types so the renderer
+// never has to import from @main, which isn't on the renderer's tsconfig paths.
+export interface DebugIssue {
+  kind:
+    | "missing-from-cloud"
+    | "missing-from-local"
+    | "achievement-count-mismatch"
+    | "playtime-mismatch";
+  gameTitle: string;
+  shop: string;
+  objectId: string;
+  detail: string;
+  fixed: boolean;
+  fixError?: string;
+}
+
+export interface CloudDebugReport {
+  checkedAt: string;
+  localCount: number;
+  cloudCount: number;
+  issues: DebugIssue[];
+  fixedCount: number;
+  unfixedCount: number;
+  notLoggedIn?: boolean;
+}
+
 export * from "./game.types";
 export * from "./steam.types";
 export * from "./download.types";

@@ -21,26 +21,30 @@ ipcMain.handle(
   async (_e, mode: "install" | "portable", destDir?: string) => {
     const win = WindowManager.installerWindow;
 
-    if (mode === "portable") {
-      setupPortable();
-      // Redirect data paths for this session immediately — subsequent launches
-      // will detect the portable marker at startup, but the first launch needs
-      // it too since the marker didn't exist when app.setPath was first called.
-      const exeDir = path.dirname(process.execPath);
-      const dataDir = path.join(exeDir, "data");
-      try {
-        app.setPath("userData", dataDir);
-        app.setPath("logs", path.join(dataDir, "logs"));
-        app.setPath("sessionData", path.join(dataDir, "session"));
-        app.setPath("crashDumps", path.join(dataDir, "crashes"));
-      } catch {
-        /* setPath may fail after ready on some platforms; ignore */
-      }
-      win?.webContents.send("installer:progress", 100, "Done");
-      return { ok: true };
-    }
-
     if (!destDir) return { ok: false, error: "No destination directory" };
+
+    if (mode === "portable") {
+      try {
+        await setupPortable(destDir, (pct, file) => {
+          win?.webContents.send("installer:progress", pct, file);
+        });
+        // Redirect data paths for this session immediately — subsequent launches
+        // detect the portable marker at startup, but this first launch needs it
+        // too since the marker didn't exist when app.setPath was first called.
+        const dataDir = path.join(destDir, "data");
+        try {
+          app.setPath("userData", dataDir);
+          app.setPath("logs", path.join(dataDir, "logs"));
+          app.setPath("sessionData", path.join(dataDir, "session"));
+          app.setPath("crashDumps", path.join(dataDir, "crashes"));
+        } catch {
+          /* setPath may fail after ready on some platforms; ignore */
+        }
+        return { ok: true, destDir };
+      } catch (err: any) {
+        return { ok: false, error: err.message };
+      }
+    }
 
     try {
       await setupInstall(destDir, (pct, file) => {

@@ -13,15 +13,33 @@ export default function Installer() {
   const [progressFile, setProgressFile] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [destDir, setDestDir] = useState("");
+  const defaultsRef = useRef<{ install: string; portable: string }>({
+    install: "",
+    portable: "",
+  });
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     window.electron.installerGetDefaults().then((d: any) => {
+      defaultsRef.current = {
+        install: d.defaultInstallDir,
+        portable: d.defaultPortableDir ?? d.defaultInstallDir,
+      };
       setInstallDir(d.defaultInstallDir);
     });
 
     return () => unsubRef.current?.();
   }, []);
+
+  // Swap the suggested folder to match the chosen mode (unless the user has
+  // already typed/browsed to a custom path that isn't one of our defaults).
+  const handleSelectMode = (next: Exclude<Mode, null>) => {
+    setMode(next);
+    const { install, portable } = defaultsRef.current;
+    if (installDir === "" || installDir === install || installDir === portable) {
+      setInstallDir(next === "portable" ? portable : install);
+    }
+  };
 
   const handleBrowse = async () => {
     const dir = await window.electron.installerBrowseDirectory(installDir);
@@ -61,6 +79,7 @@ export default function Installer() {
     setMode("portable");
     setStep("installing");
     setProgress(0);
+    setError(null);
 
     const unsub = window.electron.onInstallerProgress((pct, file) => {
       setProgress(pct);
@@ -68,12 +87,16 @@ export default function Installer() {
     });
     unsubRef.current = unsub;
 
-    const result: any = await window.electron.installerRunSetup("portable");
+    const result: any = await window.electron.installerRunSetup(
+      "portable",
+      installDir
+    );
 
     unsub();
     unsubRef.current = null;
 
     if (result.ok) {
+      if (result.destDir) setDestDir(result.destDir);
       setProgress(100);
       setStep("done");
     } else {
@@ -83,7 +106,8 @@ export default function Installer() {
   };
 
   const handleLaunch = async () => {
-    if (mode === "install" && destDir) {
+    // Both modes copy the app to the chosen folder, so relaunch from there.
+    if (destDir) {
       await window.electron.installerRelaunch(destDir);
     } else {
       await window.electron.installerCloseAndLaunch();
@@ -113,7 +137,7 @@ export default function Installer() {
             <button
               type="button"
               className={`installer__card${mode === "install" ? " installer__card--active" : ""}`}
-              onClick={() => setMode("install")}
+              onClick={() => handleSelectMode("install")}
             >
               <div className="installer__card-icon">
                 <svg
@@ -141,7 +165,7 @@ export default function Installer() {
             <button
               type="button"
               className={`installer__card${mode === "portable" ? " installer__card--active" : ""}`}
-              onClick={() => setMode("portable")}
+              onClick={() => handleSelectMode("portable")}
             >
               <div className="installer__card-icon">
                 <svg
@@ -160,14 +184,14 @@ export default function Installer() {
               <div className="installer__card-body">
                 <span className="installer__card-title">Portable</span>
                 <span className="installer__card-desc">
-                  Run directly from this folder. No registry changes, no
+                  Self-contained in a folder you choose. No registry changes, no
                   shortcuts.
                 </span>
               </div>
             </button>
           </div>
 
-          {mode === "install" && (
+          {mode && (
             <div className="installer__dir-row">
               <input
                 className="installer__dir-input"
@@ -239,11 +263,11 @@ export default function Installer() {
           </h2>
           <p className="installer__sub">
             {mode === "portable"
-              ? "GameHub is ready to run from this folder."
+              ? "GameHub is ready to run from your chosen folder."
               : "GameHub has been installed. Shortcuts were added to your Desktop and Start Menu."}
           </p>
           <div className="installer__actions installer__actions--done">
-            {mode === "install" && destDir && (
+            {destDir && (
               <button
                 type="button"
                 className="installer__btn installer__btn--ghost"

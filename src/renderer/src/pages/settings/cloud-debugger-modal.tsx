@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Button } from "@renderer/components";
-import type { DebugIssue, CloudDebugReport } from "@main/events/library/run-cloud-debugger";
+import type { DebugIssue, CloudDebugReport } from "@types";
 import styles from "./cloud-debugger-modal.module.scss";
 
 interface Props {
