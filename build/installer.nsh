@@ -6,6 +6,15 @@
 ; (Existing installs are detected via their userData at startup, so the wizard
 ; never re-appears after an NSIS auto-update.)
 !macro customInstall
+  ; ── When the user runs Setup.exe manually (NOT a silent auto-update), drop a
+  ;    flag so the app shows the Portable/Install wizard on launch even if they
+  ;    already have data. Silent updates (electron-updater runs with /S) skip
+  ;    this, so background updates never pop the wizard. ──
+  ${IfNot} ${Silent}
+    FileOpen $0 "$INSTDIR\.gamehub-show-wizard" w
+    FileClose $0
+  ${EndIf}
+
   ; ── Purge per-user icon cache so the new icon shows immediately ──
   Delete /REBOOTOK "$LOCALAPPDATA\IconCache.db"
 

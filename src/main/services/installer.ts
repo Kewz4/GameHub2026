@@ -6,12 +6,30 @@ import path from "node:path";
 
 const SETUP_MARKER = ".gamehub-setup";
 const PORTABLE_MARKER = "portable";
+// NSIS writes this next to the exe ONLY when the user runs Setup.exe manually
+// (not during a silent auto-update). It forces the Portable/Install wizard to
+// appear even for users who already have data, so an explicit re-run of the
+// installer always offers the choice.
+const SHOW_WIZARD_FLAG = ".gamehub-show-wizard";
 
 export function needsSetup(): boolean {
   if (process.platform !== "win32") return false;
   if (!app.isPackaged) return false;
 
   const exeDir = path.dirname(process.execPath);
+
+  // Manually launched Setup.exe → always show the wizard, even for existing
+  // users. Consume the flag so a normal relaunch doesn't re-trigger it.
+  const wizardFlag = path.join(exeDir, SHOW_WIZARD_FLAG);
+  if (fs.existsSync(wizardFlag)) {
+    try {
+      fs.unlinkSync(wizardFlag);
+    } catch {
+      // ignore
+    }
+    return true;
+  }
+
   const marker = path.join(exeDir, SETUP_MARKER);
   if (fs.existsSync(marker)) return false;
 
