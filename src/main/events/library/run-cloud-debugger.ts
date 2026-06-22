@@ -253,6 +253,11 @@ const runCloudDebugger = async (
       );
       if (mappedFromLocal) continue;
 
+      // Skip achievement-only cloud registrations (zero playtime, no local game).
+      // These are auto-created by Exophase/PSN sync so the cloud can credit
+      // unlocks — they are NOT missing games and should not be flagged as issues.
+      if ((cg.playTimeInMilliseconds ?? 0) === 0) continue;
+
       issues.push({
         kind: "missing-from-local",
         gameTitle: cg.title,

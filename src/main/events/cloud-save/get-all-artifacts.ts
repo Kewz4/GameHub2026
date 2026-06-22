@@ -6,7 +6,7 @@ import {
   compactGameTitle,
   normalizeGameTitle,
 } from "@main/helpers/normalize-game-title";
-import type { CatalogueSearchResult, UserPreferences } from "@types";
+import type { CatalogueSearchResult, ShopAssets, UserPreferences } from "@types";
 
 /** Resolve a game not present in the local library via the Hydra catalogue,
  * so cloud saves still show proper title/icon and navigate to a real page. */
@@ -140,9 +140,22 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
             resolvedShop = catalogueMatch.shop;
             resolvedObjectId = catalogueMatch.objectId;
             resolvedTitle = catalogueMatch.title;
-            resolvedIconUrl =
-              catalogueMatch.libraryImageUrl ??
-              (catalogueMatch as Record<string, unknown>).iconUrl as string ?? null;
+            // Fetch real shop assets to get the proper small icon (not the wide
+            // header libraryImageUrl that CatalogueSearchResult carries).
+            const catalogueAssets = await HydraApi.get<ShopAssets | null>(
+              `/games/${catalogueMatch.shop}/${catalogueMatch.objectId}/assets`,
+              null,
+              { needsAuth: false }
+            ).catch(() => null);
+            if (catalogueAssets) {
+              await gamesShopAssetsSublevel
+                .put(levelKeys.game(resolvedShop, resolvedObjectId), {
+                  ...catalogueAssets,
+                  updatedAt: Date.now(),
+                })
+                .catch(() => {});
+            }
+            resolvedIconUrl = catalogueAssets?.iconUrl ?? null;
           }
         }
       }

@@ -70,6 +70,23 @@ export async function searchCatalogueForAchievements(
       return partial;
     }
 
+    // Prefix match: the query title is a prefix of the candidate (e.g. "Control"
+    // matching "Control: Ultimate Edition", "Death Stranding" matching
+    // "Death Stranding: Director's Cut"). Require at least 5 chars to avoid
+    // false positives on very short titles.
+    if (norm.length >= 5) {
+      const prefix = edges.find((r) => {
+        const rNorm = normalizeExophaseTitle(r.title);
+        return rNorm.startsWith(norm + " ") || rNorm === norm;
+      });
+      if (prefix) {
+        achievementsLogger.log(
+          `[Catalogue] prefix match: "${title}" → ${prefix.shop}:${prefix.objectId} ("${prefix.title}")`
+        );
+        return prefix;
+      }
+    }
+
     achievementsLogger.log(`[Catalogue] no match for "${title}"`);
     return null;
   } catch (err) {
