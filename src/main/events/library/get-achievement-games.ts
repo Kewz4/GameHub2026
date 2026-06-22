@@ -6,7 +6,10 @@ import {
   gamesShopAssetsSublevel,
 } from "@main/level";
 import { idCacheKey } from "@main/services/achievements/exophase/exophase-cache";
-import type { AchievementGameStat, GameShop } from "@types";
+import { HydraApi } from "@main/services/hydra-api";
+import type { AchievementGameStat, GameShop, ShopAssets } from "@types";
+
+const STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps";
 
 /**
  * Every game that has at least one unlocked achievement — sourced from the local
@@ -40,20 +43,69 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
     const game = await gamesSublevel.get(key).catch(() => null);
     if (game?.isDeleted) continue;
 
-    const assets = await gamesShopAssetsSublevel.get(key).catch(() => null);
+    let assets: ShopAssets | null = await gamesShopAssetsSublevel.get(key).then((v) => v ?? null).catch(() => null);
 
     // key is `${shop}:${objectId}`
     const sep = key.indexOf(":");
-    const keyShop = sep >= 0 ? key.slice(0, sep) : key;
+    const keyShop = (sep >= 0 ? key.slice(0, sep) : key) as GameShop;
     const keyObjectId = sep >= 0 ? key.slice(sep + 1) : "";
 
-    // Fall back to the Exophase cache for title when the game is not in the
-    // library and the shop-assets record has no title either.
-    const exoEntry =
+    const shop = (game?.shop ?? keyShop) as GameShop;
+    const objectId = game?.objectId ?? keyObjectId;
+
+    // When the game has no cached assets, fetch and persist them so the icon
+    // and title resolve correctly for non-library games (Exophase imports).
+    if (!assets?.iconUrl && !game?.iconUrl) {
+      if (shop === "steam" && objectId) {
+        // Steam CDN URLs are deterministic — no API call needed.
+        const base = `${STEAM_CDN}/${objectId}`;
+        const exoEntry = await exophaseCacheSublevel
+          .get(idCacheKey(shop, objectId))
+          .catch(() => null);
+        const title =
+          game?.title ??
+          exoEntry?.title ??
+          assets?.title ??
+          objectId;
+        const freshAssets: ShopAssets = {
+          shop,
+          objectId,
+          title,
+          iconUrl: `${base}/library_600x900.jpg`,
+          coverImageUrl: `${base}/library_600x900.jpg`,
+          libraryImageUrl: `${base}/header.jpg`,
+          libraryHeroImageUrl: `${base}/library_hero.jpg`,
+          logoImageUrl: `${base}/logo.png`,
+          logoPosition: null,
+          downloadSources: assets?.downloadSources ?? [],
+        };
+        await gamesShopAssetsSublevel
+          .put(key, { ...freshAssets, updatedAt: Date.now() })
+          .catch(() => {});
+        assets = freshAssets;
+      } else if (objectId) {
+        // Non-Steam: try the Hydra API catalogue endpoint (best-effort, no-auth).
+        const fetched = await HydraApi.get<ShopAssets | null>(
+          `/games/${shop}/${objectId}/assets`,
+          null,
+          { needsAuth: false }
+        ).catch(() => null);
+        if (fetched && (fetched.iconUrl || fetched.title)) {
+          await gamesShopAssetsSublevel
+            .put(key, { ...fetched, updatedAt: Date.now() })
+            .catch(() => {});
+          assets = fetched;
+        }
+      }
+    }
+
+    // Last-resort title fallback: Exophase cache entry title.
+    const exoTitle =
       !game?.title && !assets?.title
         ? await exophaseCacheSublevel
-            .get(idCacheKey(keyShop as GameShop, keyObjectId))
+            .get(idCacheKey(shop, objectId))
             .catch(() => null)
+            .then((e) => e?.title ?? null)
         : null;
 
     // Total possible: best of the library record and the stored definitions, so
@@ -65,9 +117,9 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
     );
 
     out.push({
-      shop: (game?.shop ?? keyShop) as GameShop,
-      objectId: game?.objectId ?? keyObjectId,
-      title: game?.title ?? assets?.title ?? exoEntry?.title ?? keyObjectId,
+      shop,
+      objectId,
+      title: game?.title ?? assets?.title ?? exoTitle ?? objectId,
       iconUrl:
         game?.customIconUrl || assets?.iconUrl || game?.iconUrl || null,
       achievementCount: total,
