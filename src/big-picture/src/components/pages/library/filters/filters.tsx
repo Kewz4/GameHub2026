@@ -72,6 +72,12 @@ const PLATFORM_PILLS = [
   { value: "epic", label: "Epic" },
   { value: "gog", label: "GOG" },
   { value: "xbox", label: "Xbox" },
+  { value: "battlenet", label: "Battle.net" },
+  { value: "riot", label: "Riot" },
+  { value: "ubisoft", label: "Ubisoft" },
+  { value: "ea", label: "EA" },
+  { value: "retigga", label: "Retigga" },
+  { value: "custom", label: "Custom" },
 ] satisfies Array<{ value: LibrarySecondaryFilter; label: string }>;
 
 const PLATFORM_FILTER_VALUES = new Set<LibrarySecondaryFilter>(

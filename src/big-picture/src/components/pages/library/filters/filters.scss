@@ -17,6 +17,7 @@
     gap: calc(var(--spacing-unit) * 3);
     flex: 1;
     min-width: 0;
+    flex-wrap: wrap;
   }
 
   /* Mirrors `.hero__action__divider` / `Divider` vertical in LibraryHero */
@@ -112,7 +113,7 @@
     display: flex;
     align-items: center;
     gap: calc(var(--spacing-unit) * 2);
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   &__platform-pill {

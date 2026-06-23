@@ -1,4 +1,5 @@
 import type { LibraryGame } from "@types";
+import { getGameOrigin } from "@renderer/helpers/game-origin";
 
 export const BUILTIN_LIBRARY_TABS = ["all", "favorites", "completed"] as const;
 export type BuiltinLibraryTab = (typeof BUILTIN_LIBRARY_TABS)[number];
@@ -25,7 +26,25 @@ export type LibrarySecondaryFilter =
   | "steam"
   | "epic"
   | "gog"
-  | "xbox";
+  | "xbox"
+  | "battlenet"
+  | "riot"
+  | "ubisoft"
+  | "ea"
+  | "retigga"
+  | "custom";
+
+/** Platform shops that map 1:1 to a `GameShop` value (owned-on-platform). */
+export const PLATFORM_FILTER_SHOPS = [
+  "steam",
+  "epic",
+  "gog",
+  "xbox",
+  "battlenet",
+  "riot",
+  "ubisoft",
+  "ea",
+] as const;
 
 export const LIBRARY_VIEW_MODE_STORAGE_KEY =
   "hydra:big-picture:library-view-mode";
@@ -169,13 +188,24 @@ export function filterLibraryBySecondaryFilter(
     return library.filter((game) => (game.playTimeInMilliseconds ?? 0) <= 0);
   }
 
-  if (
-    selectedFilter === "steam" ||
-    selectedFilter === "epic" ||
-    selectedFilter === "gog" ||
-    selectedFilter === "xbox"
-  ) {
-    return library.filter((game) => game.shop === selectedFilter);
+  // Platform filters — a game shows under its store only when it resolves to
+  // "sync" (owned on that platform), so repacks/catalogue entries that merely
+  // reuse a shop for assets don't leak into the platform tabs (mirrors desktop).
+  if ((PLATFORM_FILTER_SHOPS as readonly string[]).includes(selectedFilter)) {
+    return library.filter(
+      (game) =>
+        game.shop === selectedFilter && getGameOrigin(game) === "sync"
+    );
+  }
+
+  // Retigga = games that came from the Hydra repack catalogue.
+  if (selectedFilter === "retigga") {
+    return library.filter((game) => getGameOrigin(game) === "catalog");
+  }
+
+  // Custom = manually added games.
+  if (selectedFilter === "custom") {
+    return library.filter((game) => getGameOrigin(game) === "custom");
   }
 
   return library;
@@ -269,6 +299,12 @@ export function isLibrarySecondaryFilter(
     value === "steam" ||
     value === "epic" ||
     value === "gog" ||
-    value === "xbox"
+    value === "xbox" ||
+    value === "battlenet" ||
+    value === "riot" ||
+    value === "ubisoft" ||
+    value === "ea" ||
+    value === "retigga" ||
+    value === "custom"
   );
 }
