@@ -1,9 +1,10 @@
-import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
+import { CaretLeftIcon, CaretRightIcon, PlayIcon } from "@phosphor-icons/react";
 import type { SteamMovie, SteamScreenshot } from "@types";
 import useEmblaCarousel from "embla-carousel-react";
 import type { FocusOverrideTarget } from "../../../../services";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getItemFocusTarget } from "../../../../helpers";
+import { useUserPreferences } from "../../../../hooks";
 import { BIG_PICTURE_SIDEBAR_ITEM_IDS } from "../../../../layout";
 import { FocusItem, HorizontalFocusGroup } from "../../../common";
 import { useNavigationIsFocused, useNavigationStore } from "../../../../stores";
@@ -37,9 +38,14 @@ interface ScreenshotCarouselSlideProps {
   item: MediaItem;
   index: number;
   isSelected: boolean;
+  autoplayEnabled: boolean;
+  started: boolean;
+  isPlaying: boolean;
   onFocused: (index: number) => void;
-  onSelectItem: (index: number) => void;
+  onSelectItem: (index: number, target: EventTarget | null) => void;
   setVideoRef: (index: number, element: HTMLVideoElement | null) => void;
+  onVideoPlay: (index: number) => void;
+  onVideoPause: (index: number) => void;
   leftNavigationTarget?: FocusOverrideTarget;
   downNavigationTarget?: FocusOverrideTarget;
   rightNavigationTarget?: FocusOverrideTarget;
@@ -49,9 +55,14 @@ function ScreenshotCarouselSlide({
   item,
   index,
   isSelected,
+  autoplayEnabled,
+  started,
+  isPlaying,
   onFocused,
   onSelectItem,
   setVideoRef,
+  onVideoPlay,
+  onVideoPause,
   leftNavigationTarget,
   downNavigationTarget,
   rightNavigationTarget,
@@ -82,28 +93,41 @@ function ScreenshotCarouselSlide({
         <button
           type="button"
           className="game-page__media-carousel-surface"
-          onClick={() => onSelectItem(index)}
+          onClick={(event) => onSelectItem(index, event.target)}
           aria-label={`Media item ${index + 1}`}
         >
           {item.type === "video" ? (
-            <VideoPlayer
-              videoSrc={item.videoSrc}
-              videoType={item.videoType}
-              poster={item.poster}
-              autoplay={isSelected}
-              muted
-              loop
-              controls
-              style={{
-                width: "100%",
-                borderRadius: 8,
-                objectFit: "cover",
-                aspectRatio: "16 / 9",
-              }}
-              videoRef={(element) => {
-                setVideoRef(index, element);
-              }}
-            />
+            <>
+              <VideoPlayer
+                videoSrc={item.videoSrc}
+                videoType={item.videoType}
+                poster={item.poster}
+                autoplay={autoplayEnabled ? isSelected : started}
+                load={autoplayEnabled || started}
+                muted
+                loop
+                controls={autoplayEnabled || started}
+                style={{
+                  width: "100%",
+                  borderRadius: 8,
+                  objectFit: "cover",
+                  aspectRatio: "16 / 9",
+                }}
+                videoRef={(element) => {
+                  setVideoRef(index, element);
+                }}
+                onPlay={() => onVideoPlay(index)}
+                onPause={() => onVideoPause(index)}
+              />
+
+              {!autoplayEnabled && !isPlaying && (
+                <div className="game-page__media-carousel-play-overlay">
+                  <div className="game-page__media-carousel-play-icon">
+                    <PlayIcon size={28} weight="fill" />
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <img
               src={item.src}
@@ -127,11 +151,17 @@ export function ScreenshotCarousel({
 }: Readonly<ScreenshotCarouselProps>) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false });
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [startedIndices, setStartedIndices] = useState<Set<number>>(new Set());
+  const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const carouselContainerRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
   const isFocusDrivenScrollRef = useRef(false);
   const navigation = NavigationService.getInstance();
   const currentFocusId = useNavigationStore((state) => state.currentFocusId);
+  const userPreferences = useUserPreferences();
+  const autoplayEnabled = userPreferences
+    ? userPreferences.autoplayGameTrailers !== false
+    : false;
 
   const mediaItems: MediaItem[] = useMemo(() => {
     const items: MediaItem[] = [];
@@ -207,7 +237,7 @@ export function ScreenshotCarousel({
     videoRefs.current.forEach((video, videoIndex) => {
       if (!video) return;
 
-      if (videoIndex === index) {
+      if (videoIndex === index && autoplayEnabled) {
         video.play().catch(() => {});
       } else {
         video.pause();
@@ -225,6 +255,7 @@ export function ScreenshotCarousel({
 
     isFocusDrivenScrollRef.current = false;
   }, [
+    autoplayEnabled,
     currentFocusId,
     emblaApi,
     isFocusInsideCarousel,
@@ -247,6 +278,11 @@ export function ScreenshotCarousel({
     if (selectedIndex < mediaItems.length) return;
     setSelectedIndex(0);
   }, [mediaItems.length, selectedIndex]);
+
+  useEffect(() => {
+    setStartedIndices(new Set());
+    setPlayingIndex(null);
+  }, [mediaItems]);
 
   useEffect(() => {
     if (!emblaApi || !currentFocusId) return;
@@ -280,11 +316,42 @@ export function ScreenshotCarousel({
   );
 
   const handleSelectItem = useCallback(
-    (index: number) => {
+    (index: number, target: EventTarget | null) => {
       emblaApi?.scrollTo(index);
+
+      if (autoplayEnabled || index !== selectedIndex) return;
+
+      const video = videoRefs.current[index];
+
+      if (!startedIndices.has(index)) {
+        setStartedIndices((prev) => {
+          const next = new Set(prev);
+          next.add(index);
+          return next;
+        });
+        video?.play().catch(() => {});
+        return;
+      }
+
+      if (target instanceof HTMLVideoElement) return;
+
+      if (video && !video.paused) {
+        video.pause();
+        return;
+      }
+
+      video?.play().catch(() => {});
     },
-    [emblaApi]
+    [autoplayEnabled, emblaApi, selectedIndex, startedIndices]
   );
+
+  const handleVideoPlay = useCallback((index: number) => {
+    setPlayingIndex(index);
+  }, []);
+
+  const handleVideoPause = useCallback((index: number) => {
+    setPlayingIndex((current) => (current === index ? null : current));
+  }, []);
 
   const setVideoRef = useCallback(
     (index: number, element: HTMLVideoElement | null) => {
@@ -315,9 +382,14 @@ export function ScreenshotCarousel({
                 item={item}
                 index={index}
                 isSelected={index === selectedIndex}
+                autoplayEnabled={autoplayEnabled}
+                started={startedIndices.has(index)}
+                isPlaying={playingIndex === index}
                 onFocused={handleSlideFocused}
                 onSelectItem={handleSelectItem}
                 setVideoRef={setVideoRef}
+                onVideoPlay={handleVideoPlay}
+                onVideoPause={handleVideoPause}
                 leftNavigationTarget={
                   index === 0
                     ? getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home)
