@@ -1095,6 +1095,8 @@ contextBridge.exposeInMainWorld("electron", {
   },
   updateAchievementCustomNotificationWindow: () =>
     ipcRenderer.invoke("updateAchievementCustomNotificationWindow"),
+  hideAchievementCustomNotificationWindow: () =>
+    ipcRenderer.invoke("hideAchievementCustomNotificationWindow"),
   showAchievementTestNotification: () =>
     ipcRenderer.invoke("showAchievementTestNotification"),
 

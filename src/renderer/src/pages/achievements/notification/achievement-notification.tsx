@@ -144,6 +144,17 @@ export function AchievementNotification() {
     }
   }, [achievements]);
 
+  // Once the queue has drained and the notification has animated out, tell the
+  // main process to hide the transparent overlay window. Without this the
+  // window stays shown with no content and paints as a black rectangle in the
+  // configured corner.
+  useEffect(() => {
+    if (!hasAchievementsPending && !isVisible && !isClosing) {
+      setCurrentAchievement(null);
+      window.electron.hideAchievementCustomNotificationWindow();
+    }
+  }, [hasAchievementsPending, isVisible, isClosing]);
+
   const loadAndApplyTheme = useCallback(async () => {
     if (!shadowRootRef) return;
     const allThemes = (await levelDBService.values("themes")) as {

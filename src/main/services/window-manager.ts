@@ -677,6 +677,20 @@ export class WindowManager {
     }
   }
 
+  /**
+   * Hide (but keep alive) the transparent achievement overlay window once its
+   * notification queue has drained. The window is shown via `.show()` when an
+   * achievement unlocks but is never hidden by the unlock path itself, which
+   * left an empty transparent window painted as a black rectangle in the
+   * configured corner. The renderer signals here when it has finished
+   * animating out so we can hide the surface.
+   */
+  public static hideNotificationWindow() {
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.hide();
+    }
+  }
+
   public static openEditorWindow(themeId: string) {
     if (this.mainWindow) {
       const existingWindow = this.editorWindows.get(themeId);
