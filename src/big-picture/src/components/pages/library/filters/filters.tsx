@@ -19,6 +19,7 @@ import {
   FunnelIcon,
   ListDashesIcon,
   MagnifyingGlassIcon,
+  MagnifyingGlassPlusIcon,
   PlusIcon,
   SortAscendingIcon,
   SquaresFourIcon,
@@ -31,6 +32,7 @@ import {
   LIBRARY_FILTERS_GRID_VIEW_BUTTON_ID,
   LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID,
   LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID,
+  LIBRARY_FILTERS_SCAN_BUTTON_ID,
   LIBRARY_FILTERS_SEARCH_INPUT_ID,
   LIBRARY_FILTERS_SORT_SELECT_ID,
   LIBRARY_FILTERS_TABS_REGION_ID,
@@ -90,6 +92,7 @@ export interface LibraryFiltersProps {
   library: LibraryGame[];
   collections: GameCollection[];
   firstContentItemId?: string | null;
+  onScanGames?: () => void;
 }
 
 export function LibraryFilters({
@@ -107,6 +110,7 @@ export function LibraryFilters({
   library,
   collections,
   firstContentItemId = null,
+  onScanGames,
 }: Readonly<LibraryFiltersProps>) {
   const tabDownOverride = useMemo(
     () =>
@@ -340,6 +344,27 @@ export function LibraryFilters({
         </div>
 
         <div className="library-filters__view-actions">
+          {onScanGames && (
+            <Button
+              focusId={LIBRARY_FILTERS_SCAN_BUTTON_ID}
+              focusNavigationOverrides={{
+                left: { type: "item", itemId: LIBRARY_FILTERS_FILTER_SELECT_ID },
+                right: { type: "item", itemId: LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID },
+                up: toolbarUpOverride,
+                down: toolbarDownOverride,
+              }}
+              className="library-filters__view-button"
+              variant="secondary"
+              size="icon"
+              aria-label="Scan for games"
+              onClick={onScanGames}
+            >
+              <MagnifyingGlassPlusIcon
+                className="library-filters__view-icon"
+                size={22}
+              />
+            </Button>
+          )}
           <Button
             focusId={LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID}
             focusNavigationOverrides={listViewNavigationOverrides}

@@ -17,6 +17,7 @@ export const LIBRARY_FILTERS_COMPLETED_TAB_ID = "library-filters-tab-completed";
 
 export const LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID =
   "library-filters-new-folder-button";
+export const LIBRARY_FILTERS_SCAN_BUTTON_ID = "library-filters-scan-button";
 
 /** Prefix + collection id → stable FocusItem id for user collections */
 export const LIBRARY_FILTERS_COLLECTION_TAB_PREFIX =
