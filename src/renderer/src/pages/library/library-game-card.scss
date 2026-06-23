@@ -106,6 +106,25 @@
     color: globals.$warning-color;
   }
 
+  &__installed-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: globals.$success-color;
+  }
+
+  &__achievements--platinum {
+    .library-game-card__achievement-trophy,
+    .library-game-card__achievement-count,
+    .library-game-card__achievement-percentage {
+      color: #5ad2f0;
+    }
+
+    .library-game-card__achievement-bar {
+      background: linear-gradient(90deg, #5ad2f0, #b18cff);
+    }
+  }
+
   &__cloud-save {
     display: flex;
     align-items: center;

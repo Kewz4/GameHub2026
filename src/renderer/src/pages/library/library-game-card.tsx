@@ -7,6 +7,7 @@ import {
   TrophyIcon,
   ImageIcon,
   CloudIcon,
+  DownloadIcon,
 } from "@primer/octicons-react";
 import "./library-game-card.scss";
 import { logger } from "@renderer/logger";
@@ -154,6 +155,14 @@ export const LibraryGameCard = memo(function LibraryGameCard({
             )}
           </div>
           <div className="library-game-card__playtime">
+            {game.isInstalledLocally === true && (
+              <span
+                className="library-game-card__installed-badge"
+                title="Installed"
+              >
+                <DownloadIcon size={11} />
+              </span>
+            )}
             {game.hasManuallyUpdatedPlaytime ? (
               <AlertFillIcon
                 size={11}
@@ -182,7 +191,14 @@ export const LibraryGameCard = memo(function LibraryGameCard({
         )}
 
         {(game.achievementCount ?? 0) > 0 && (
-          <div className="library-game-card__achievements">
+          <div
+            className={`library-game-card__achievements${
+              (game.unlockedAchievementCount ?? 0) >=
+                (game.achievementCount ?? 0) && (game.achievementCount ?? 0) > 0
+                ? " library-game-card__achievements--platinum"
+                : ""
+            }`}
+          >
             <div className="library-game-card__achievement-header">
               <div className="library-game-card__achievements-gap">
                 <TrophyIcon
