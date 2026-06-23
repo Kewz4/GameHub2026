@@ -3,6 +3,7 @@ import { gamesSublevel } from "@main/level";
 import { logger, WindowManager } from "@main/services";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import { dedupeAchievementRecordsByTitle } from "@main/helpers/dedupe-achievement-records";
 
 const mergeDuplicateGames = async (_event: Electron.IpcMainInvokeEvent) => {
   const all = await gamesSublevel.values().all();
@@ -55,13 +56,26 @@ const mergeDuplicateGames = async (_event: Electron.IpcMainInvokeEvent) => {
     );
   }
 
+  // Independent pass: collapse duplicate ACHIEVEMENT records by title, even when
+  // there's no longer a matching pair of active game records (e.g. leftovers
+  // from a merge run on an older app version where the duplicate game was
+  // already soft-deleted but its achievement record was never cleaned up).
+  const achievementDuplicatesRemoved = await dedupeAchievementRecordsByTitle().catch(
+    (err) => {
+      logger.warn("mergeDuplicateGames: achievement record dedup failed", err);
+      return 0;
+    }
+  );
+
   WindowManager.sendToAppWindows("on-dedup-progress", {
     current: total,
     total,
     title: null,
     done: true,
   });
-  logger.log(`mergeDuplicateGames: ${merged} duplicates removed`);
+  logger.log(
+    `mergeDuplicateGames: ${merged} duplicates removed, ${achievementDuplicatesRemoved} duplicate achievement record(s) removed`
+  );
   return { merged, mergedTitles };
 };
 
