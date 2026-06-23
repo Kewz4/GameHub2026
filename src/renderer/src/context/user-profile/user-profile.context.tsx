@@ -133,9 +133,9 @@ export function UserProfileContextProvider({
                 (g.playTimeInMilliseconds ?? 0) / 1000
               ),
               lastTimePlayed: g.lastTimePlayed ?? null,
-              unlockedAchievementCount: 0,
-              achievementCount: 0,
-              achievementsPointsEarnedSum: 0,
+              unlockedAchievementCount: g.unlockedAchievementCount ?? 0,
+              achievementCount: g.achievementCount ?? 0,
+              achievementsPointsEarnedSum: g.achievementsPointsEarnedSum ?? 0,
               hasManuallyUpdatedPlaytime: g.hasManuallyUpdatedPlaytime ?? false,
               isFavorite: g.favorite ?? false,
               isPinned: g.isPinned ?? false,

@@ -471,7 +471,12 @@ contextBridge.exposeInMainWorld("electron", {
   selectiveScanInstalledGames: (scanPaths: string[], dryRun?: boolean) =>
     ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths, dryRun),
   confirmScanGames: (
-    approvedGames: Array<{ key: string; executablePath: string }>
+    approvedGames: Array<{
+      key: string;
+      executablePath: string;
+      title?: string;
+      isNew?: boolean;
+    }>
   ) => ipcRenderer.invoke("confirmScanGames", approvedGames),
   onScanProgress: (
     cb: (progress: {

@@ -98,7 +98,7 @@ export function ScanGamesModal({
                 </span>
                 <span className="scan-mode-card__label">Deep Scan</span>
                 <span className="scan-mode-card__desc">
-                  Scans all default directories automatically
+                  Finds installed & new games on your PC (skips store folders)
                 </span>
               </button>
               <button

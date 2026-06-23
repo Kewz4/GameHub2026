@@ -10,12 +10,18 @@ import {
 import {
   discoverScanDirectories,
   indexExecutables,
+  discoverUnknownGames,
+  discoverGameLibraryRoots,
 } from "@main/helpers/scan-executables";
+import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 
 interface FoundGame {
   title: string;
   executablePath: string;
   key: string;
+  /** True when this is a brand-new game discovered on disk (not yet in the
+   *  library). Confirming it creates a fresh custom entry. */
+  isNew?: boolean;
 }
 
 interface ScanResult {
@@ -131,6 +137,47 @@ const scanInstalledGames = async (
         currentTitle: game.title,
       });
     }
+  }
+
+  // ── Discover NEW games on disk (not yet in the library) ──────────────────
+  // Deep scan also surfaces games found on disk that aren't in the library at
+  // all — but only outside store-managed folders (Steam/Epic/GOG/Xbox), since
+  // those titles are owned by their platform integrations.
+  const knownExePaths = new Set(
+    games
+      .map((g) => g.game.executablePath?.toLowerCase())
+      .filter((p): p is string => Boolean(p))
+  );
+  const knownTitles = new Set(
+    games.map((g) => normalizeGameTitle(g.game.title))
+  );
+
+  const discoveryRoots = discoverGameLibraryRoots();
+  const discovered = await discoverUnknownGames(
+    discoveryRoots,
+    (current, total, title) =>
+      WindowManager.sendToAppWindows("on-scan-progress", {
+        scanned: current,
+        total,
+        foundCount: foundGames.length,
+        currentTitle: title,
+      })
+  );
+
+  const seenNewPaths = new Set<string>();
+  for (const game of discovered) {
+    const exeLower = game.executablePath.toLowerCase();
+    if (knownExePaths.has(exeLower) || seenNewPaths.has(exeLower)) continue;
+    if (knownTitles.has(normalizeGameTitle(game.title))) continue;
+    seenNewPaths.add(exeLower);
+    foundGames.push({
+      title: game.title,
+      executablePath: game.executablePath,
+      // Synthetic key — used only for renderer keying/toggling. The real custom
+      // entry is created at confirm time from title + executablePath.
+      key: `new:${exeLower}`,
+      isNew: true,
+    });
   }
 
   if (!dryRun) {

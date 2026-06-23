@@ -7,8 +7,7 @@ import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 
-const addCustomGameToLibrary = async (
-  _event: Electron.IpcMainInvokeEvent,
+export const addCustomGameToLibraryInternal = async (
   title: string,
   executablePath: string,
   iconUrl?: string,
@@ -198,5 +197,25 @@ const addCustomGameToLibrary = async (
 
   return game;
 };
+
+const addCustomGameToLibrary = (
+  _event: Electron.IpcMainInvokeEvent,
+  title: string,
+  executablePath: string,
+  iconUrl?: string,
+  logoImageUrl?: string,
+  libraryHeroImageUrl?: string,
+  coverImageUrl?: string,
+  libraryImageUrl?: string
+) =>
+  addCustomGameToLibraryInternal(
+    title,
+    executablePath,
+    iconUrl,
+    logoImageUrl,
+    libraryHeroImageUrl,
+    coverImageUrl,
+    libraryImageUrl
+  );
 
 registerEvent("addCustomGameToLibrary", addCustomGameToLibrary);

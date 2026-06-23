@@ -7,13 +7,32 @@ import { classifyScannedOrigin } from "@main/helpers/classify-scanned-origin";
 interface ApprovedGame {
   key: string;
   executablePath: string;
+  /** Present for games discovered on disk that aren't yet in the library. */
+  title?: string;
+  isNew?: boolean;
 }
 
 const confirmScanGames = async (
   _event: Electron.IpcMainInvokeEvent,
   approvedGames: ApprovedGame[]
 ): Promise<void> => {
-  for (const { key, executablePath } of approvedGames) {
+  const { addCustomGameToLibraryInternal } = await import(
+    "./add-custom-game-to-library"
+  );
+
+  for (const { key, executablePath, title, isNew } of approvedGames) {
+    // Newly-discovered game: create a fresh entry (catalogue-matched when
+    // possible, otherwise a custom game) instead of patching an existing key.
+    if (isNew) {
+      await addCustomGameToLibraryInternal(
+        title ?? "Unknown Game",
+        executablePath
+      ).catch((err) =>
+        logger.error(`[ConfirmScanGames] Failed to add new game ${title}:`, err)
+      );
+      continue;
+    }
+
     const game = await gamesSublevel.get(key).catch(() => null);
     if (!game) continue;
     await gamesSublevel.put(key, {

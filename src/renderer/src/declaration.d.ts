@@ -607,7 +607,12 @@ declare global {
     }) => Promise<void>;
     extractGameDownload: (shop: GameShop, objectId: string) => Promise<boolean>;
     scanInstalledGames: (dryRun?: boolean) => Promise<{
-      foundGames: { title: string; executablePath: string; key: string }[];
+      foundGames: {
+        title: string;
+        executablePath: string;
+        key: string;
+        isNew?: boolean;
+      }[];
       total: number;
     }>;
     selectiveScanInstalledGames: (
@@ -618,7 +623,12 @@ declare global {
       total: number;
     }>;
     confirmScanGames: (
-      approvedGames: Array<{ key: string; executablePath: string }>
+      approvedGames: Array<{
+        key: string;
+        executablePath: string;
+        title?: string;
+        isNew?: boolean;
+      }>
     ) => Promise<void>;
     onScanProgress: (
       cb: (progress: {

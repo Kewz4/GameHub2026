@@ -6,6 +6,8 @@ export interface ScannedGame {
   title: string;
   executablePath: string;
   key: string;
+  /** Set for games discovered on disk that aren't yet in the library. */
+  isNew?: boolean;
 }
 
 interface Props {

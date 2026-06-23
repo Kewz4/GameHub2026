@@ -112,7 +112,12 @@ export function Header() {
     currentTitle: string;
   } | null>(null);
   const [scanCandidates, setScanCandidates] = useState<
-    { title: string; executablePath: string; key: string }[]
+    {
+      title: string;
+      executablePath: string;
+      key: string;
+      isNew?: boolean;
+    }[]
   >([]);
   const [showScanApproval, setShowScanApproval] = useState(false);
 
@@ -350,11 +355,21 @@ export function Header() {
   };
 
   const handleScanApprovalConfirm = async (
-    approved: { title: string; executablePath: string; key: string }[]
+    approved: {
+      title: string;
+      executablePath: string;
+      key: string;
+      isNew?: boolean;
+    }[]
   ) => {
     setShowScanApproval(false);
     await window.electron.confirmScanGames(
-      approved.map(({ key, executablePath }) => ({ key, executablePath }))
+      approved.map(({ key, executablePath, title, isNew }) => ({
+        key,
+        executablePath,
+        title,
+        isNew,
+      }))
     );
     setScanResult({ foundGames: approved, total: scanCandidates.length });
   };
