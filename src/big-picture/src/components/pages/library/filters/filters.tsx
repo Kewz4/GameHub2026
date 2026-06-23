@@ -27,6 +27,7 @@ import {
 import type { FocusOverrides } from "../../../../services";
 import { BIG_PICTURE_SIDEBAR_ITEM_IDS } from "../../../../layout";
 import {
+  getLibraryFiltersPlatformPillId,
   getLibraryFiltersTabFocusId,
   LIBRARY_FILTERS_FILTER_SELECT_ID,
   LIBRARY_FILTERS_GRID_VIEW_BUTTON_ID,
@@ -57,16 +58,25 @@ const SORT_OPTIONS = [
   { value: "added_asc", label: "Oldest Added" },
 ] satisfies Array<DropdownSelectOption<LibrarySortOption>>;
 
+// Install-state filters live in the dropdown; platform filters are surfaced as
+// quick-toggle pills next to the filter button for a friendlier UX.
 const FILTER_OPTIONS = [
   { value: "all_games", label: "All Games" },
   { value: "installed", label: "Installed" },
   { value: "not_installed", label: "Not Installed" },
   { value: "never_played", label: "Never Played" },
-  { value: "steam", label: "Steam" },
-  { value: "epic", label: "Epic Games" },
-  { value: "gog", label: "GOG" },
-  { value: "xbox", label: "Xbox / Game Pass" },
 ] satisfies Array<DropdownSelectOption<LibrarySecondaryFilter>>;
+
+const PLATFORM_PILLS = [
+  { value: "steam", label: "Steam" },
+  { value: "epic", label: "Epic" },
+  { value: "gog", label: "GOG" },
+  { value: "xbox", label: "Xbox" },
+] satisfies Array<{ value: LibrarySecondaryFilter; label: string }>;
+
+const PLATFORM_FILTER_VALUES = new Set<LibrarySecondaryFilter>(
+  PLATFORM_PILLS.map((pill) => pill.value)
+);
 
 const TITLE_COMPARE_COLLECTIONS = { sensitivity: "base" } as const;
 
@@ -254,6 +264,56 @@ export function LibraryFilters({
     up: toolbarUpOverride,
     down: toolbarDownOverride,
   };
+  const firstPlatformPillId = getLibraryFiltersPlatformPillId(
+    PLATFORM_PILLS[0].value
+  );
+  const lastPlatformPillId = getLibraryFiltersPlatformPillId(
+    PLATFORM_PILLS[PLATFORM_PILLS.length - 1].value
+  );
+  // The dropdown only tracks install-state filters; when a platform pill is the
+  // active filter the dropdown falls back to showing "All Games".
+  const statusFilterValue: LibrarySecondaryFilter = PLATFORM_FILTER_VALUES.has(
+    filterBy
+  )
+    ? "all_games"
+    : filterBy;
+
+  const platformPillOverrides = useMemo(
+    () =>
+      PLATFORM_PILLS.map((pill, index) => ({
+        ...pill,
+        focusId: getLibraryFiltersPlatformPillId(pill.value),
+        navigationOverrides: {
+          left:
+            index === 0
+              ? { type: "item" as const, itemId: LIBRARY_FILTERS_FILTER_SELECT_ID }
+              : {
+                  type: "item" as const,
+                  itemId: getLibraryFiltersPlatformPillId(
+                    PLATFORM_PILLS[index - 1].value
+                  ),
+                },
+          right:
+            index === PLATFORM_PILLS.length - 1
+              ? {
+                  type: "item" as const,
+                  itemId: onScanGames
+                    ? LIBRARY_FILTERS_SCAN_BUTTON_ID
+                    : LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID,
+                }
+              : {
+                  type: "item" as const,
+                  itemId: getLibraryFiltersPlatformPillId(
+                    PLATFORM_PILLS[index + 1].value
+                  ),
+                },
+          up: toolbarUpOverride,
+          down: toolbarDownOverride,
+        } satisfies FocusOverrides,
+      })),
+    [onScanGames, toolbarUpOverride, toolbarDownOverride]
+  );
+
   const filterNavigationOverrides: FocusOverrides = {
     left: {
       type: "item",
@@ -261,7 +321,7 @@ export function LibraryFilters({
     },
     right: {
       type: "item",
-      itemId: LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID,
+      itemId: firstPlatformPillId,
     },
     up: toolbarUpOverride,
     down: toolbarDownOverride,
@@ -269,7 +329,9 @@ export function LibraryFilters({
   const listViewNavigationOverrides: FocusOverrides = {
     left: {
       type: "item",
-      itemId: LIBRARY_FILTERS_FILTER_SELECT_ID,
+      itemId: onScanGames
+        ? LIBRARY_FILTERS_SCAN_BUTTON_ID
+        : lastPlatformPillId,
     },
     right: {
       type: "item",
@@ -277,6 +339,11 @@ export function LibraryFilters({
     },
     up: toolbarUpOverride,
     down: toolbarDownOverride,
+  };
+
+  const handlePlatformPillClick = (value: LibrarySecondaryFilter) => {
+    // Toggle: clicking the active platform clears back to "All Games".
+    onFilterByChange(filterBy === value ? "all_games" : value);
   };
   const gridViewNavigationOverrides: FocusOverrides = {
     left: {
@@ -341,10 +408,30 @@ export function LibraryFilters({
             ariaLabel="Filter library games"
             focusId={LIBRARY_FILTERS_FILTER_SELECT_ID}
             focusNavigationOverrides={filterNavigationOverrides}
-            value={filterBy}
+            value={statusFilterValue}
             options={FILTER_OPTIONS}
             onValueChange={onFilterByChange}
           />
+
+          <div className="library-filters__platform-pills">
+            {platformPillOverrides.map((pill) => {
+              const active = filterBy === pill.value;
+              return (
+                <Button
+                  key={pill.value}
+                  focusId={pill.focusId}
+                  focusNavigationOverrides={pill.navigationOverrides}
+                  className="library-filters__platform-pill"
+                  variant={active ? "primary" : "secondary"}
+                  size="small"
+                  aria-pressed={active}
+                  onClick={() => handlePlatformPillClick(pill.value)}
+                >
+                  {pill.label}
+                </Button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="library-filters__view-actions">
@@ -352,7 +439,7 @@ export function LibraryFilters({
             <Button
               focusId={LIBRARY_FILTERS_SCAN_BUTTON_ID}
               focusNavigationOverrides={{
-                left: { type: "item", itemId: LIBRARY_FILTERS_FILTER_SELECT_ID },
+                left: { type: "item", itemId: lastPlatformPillId },
                 right: { type: "item", itemId: LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID },
                 up: toolbarUpOverride,
                 down: toolbarDownOverride,

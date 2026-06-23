@@ -19,6 +19,14 @@ export const LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID =
   "library-filters-new-folder-button";
 export const LIBRARY_FILTERS_SCAN_BUTTON_ID = "library-filters-scan-button";
 
+/** Prefix + platform value → stable FocusItem id for the platform filter pills */
+export const LIBRARY_FILTERS_PLATFORM_PILL_PREFIX =
+  "library-filters-platform-pill";
+
+export function getLibraryFiltersPlatformPillId(platform: string) {
+  return `${LIBRARY_FILTERS_PLATFORM_PILL_PREFIX}-${platform}`;
+}
+
 /** Prefix + collection id → stable FocusItem id for user collections */
 export const LIBRARY_FILTERS_COLLECTION_TAB_PREFIX =
   "library-filters-tab-collection";

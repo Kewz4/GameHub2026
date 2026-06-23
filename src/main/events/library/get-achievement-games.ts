@@ -8,6 +8,7 @@ import {
 import { idCacheKey } from "@main/services/achievements/exophase/exophase-cache";
 import { HydraApi } from "@main/services/hydra-api";
 import { getSteamGridDbArtwork } from "@main/services/steamgriddb";
+import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 import type { AchievementGameStat, GameShop, ShopAssets } from "@types";
 
 const STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps";
@@ -158,13 +159,29 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
     });
   }
 
-  // Deduplicate: same game may be stored under multiple shop keys (e.g.
-  // steam:123 and exophase:123). Keep the entry with the most unlocks.
+  // Deduplicate: the same game can be stored under multiple keys with DIFFERENT
+  // objectIds — e.g. a Steam entry (steam:677120) and an Exophase/Xbox import of
+  // the same game under another id. Dedup by normalized title so cross-platform
+  // duplicates collapse into one row, keeping the entry with the most unlocks
+  // (and, on a tie, the one that's actually in the library / has an icon).
   const best = new Map<string, AchievementGameStat>();
   for (const entry of out) {
-    const prev = best.get(entry.objectId);
-    if (!prev || entry.unlockedAchievementCount > prev.unlockedAchievementCount) {
-      best.set(entry.objectId, entry);
+    const dedupKey =
+      normalizeGameTitle(entry.title) || `${entry.shop}:${entry.objectId}`;
+    const prev = best.get(dedupKey);
+    if (!prev) {
+      best.set(dedupKey, entry);
+      continue;
+    }
+
+    const entryIsBetter =
+      entry.unlockedAchievementCount > prev.unlockedAchievementCount ||
+      (entry.unlockedAchievementCount === prev.unlockedAchievementCount &&
+        ((entry.inLibrary && !prev.inLibrary) ||
+          (!prev.iconUrl && Boolean(entry.iconUrl))));
+
+    if (entryIsBetter) {
+      best.set(dedupKey, entry);
     }
   }
   return [...best.values()];

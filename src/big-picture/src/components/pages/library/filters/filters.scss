@@ -107,3 +107,15 @@
     }
   }
 }
+
+  &__platform-pills {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing-unit) * 2);
+    flex-wrap: nowrap;
+  }
+
+  &__platform-pill {
+    border-radius: 9999px;
+    white-space: nowrap;
+  }

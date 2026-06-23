@@ -45,42 +45,83 @@ export function useGameDetails(objectId: string, shop: GameShop) {
 
     setIsLoading(true);
 
-    const [userPreferences, statsResult, assets, currentGame] =
-      await Promise.all([
-        globalThis.window.electron
-          .getUserPreferences()
-          .catch(() => ({ language: "en" })),
+    try {
+      const [userPreferences, statsResult, assets, currentGame] =
+        await Promise.all([
+          globalThis.window.electron
+            .getUserPreferences()
+            .catch(() => ({ language: "en" })),
+          shop === "custom"
+            ? Promise.resolve(null)
+            : globalThis.window.electron
+                .getGameStats(objectId, shop)
+                .catch(() => null),
+          globalThis.window.electron.getGameAssets(objectId, shop).catch(
+            () => null
+          ),
+          globalThis.window.electron
+            .getGameByObjectId(shop, objectId)
+            .catch(() => null),
+        ]);
+
+      const shopDetailsResult =
         shop === "custom"
-          ? Promise.resolve(null)
-          : globalThis.window.electron.getGameStats(objectId, shop),
-        globalThis.window.electron.getGameAssets(objectId, shop),
-        globalThis.window.electron.getGameByObjectId(shop, objectId),
-      ]);
+          ? null
+          : await globalThis.window.electron
+              .getGameShopDetails(
+                objectId,
+                shop,
+                getSteamLanguage(userPreferences?.language ?? "en")
+              )
+              .catch(() => null);
 
-    const shopDetailsResult =
-      shop === "custom"
-        ? null
-        : await globalThis.window.electron
-            .getGameShopDetails(
-              objectId,
-              shop,
-              getSteamLanguage(userPreferences?.language ?? "en")
-            )
-            .catch(() => null);
+      // Always build a usable minimal ShopDetailsWithAssets so the game page
+      // can render. Priority: full shopDetails > cached assets > game record.
+      const fallbackTitle =
+        assets?.title ?? currentGame?.title ?? objectId;
 
-    // Always build a usable minimal ShopDetailsWithAssets so the game page
-    // can render. Priority: full shopDetails > cached assets > game record.
-    const fallbackTitle =
-      assets?.title ?? currentGame?.title ?? objectId;
-
-    if (shopDetailsResult) {
-      shopDetailsResult.assets = assets ?? shopDetailsResult.assets;
-      setShopDetails(shopDetailsResult);
-    } else {
-      // Custom games, integration stores whose API details failed, etc.
+      if (shopDetailsResult) {
+        shopDetailsResult.assets = assets ?? shopDetailsResult.assets;
+        setShopDetails(shopDetailsResult);
+      } else {
+        // Custom games, integration stores whose API details failed, etc.
+        setShopDetails({
+          objectId,
+          name: fallbackTitle,
+          steam_appid: 0,
+          detailed_description: "",
+          about_the_game: "",
+          short_description: "",
+          developers: [],
+          publishers: [],
+          genres: [],
+          supported_languages: "",
+          pc_requirements: { minimum: "", recommended: "" },
+          mac_requirements: { minimum: "", recommended: "" },
+          linux_requirements: { minimum: "", recommended: "" },
+          release_date: { coming_soon: false, date: "" },
+          content_descriptors: { ids: [] },
+          assets: assets ?? {
+            objectId,
+            shop,
+            title: fallbackTitle,
+            iconUrl: currentGame?.iconUrl ?? null,
+            libraryHeroImageUrl: currentGame?.libraryHeroImageUrl ?? null,
+            libraryImageUrl: currentGame?.libraryImageUrl ?? null,
+            logoImageUrl: currentGame?.logoImageUrl ?? null,
+            logoPosition: currentGame?.logoPosition ?? null,
+            coverImageUrl: currentGame?.coverImageUrl ?? null,
+            downloadSources: [],
+            updatedAt: Date.now(),
+          },
+        } as ShopDetailsWithAssets);
+      }
+      setStats(statsResult);
+    } catch {
+      // Last-resort fallback so the page never gets stuck on "Loading…".
       setShopDetails({
         objectId,
-        name: fallbackTitle,
+        name: objectId,
         steam_appid: 0,
         detailed_description: "",
         about_the_game: "",
@@ -94,23 +135,23 @@ export function useGameDetails(objectId: string, shop: GameShop) {
         linux_requirements: { minimum: "", recommended: "" },
         release_date: { coming_soon: false, date: "" },
         content_descriptors: { ids: [] },
-        assets: assets ?? {
+        assets: {
           objectId,
           shop,
-          title: fallbackTitle,
-          iconUrl: currentGame?.iconUrl ?? null,
-          libraryHeroImageUrl: currentGame?.libraryHeroImageUrl ?? null,
-          libraryImageUrl: currentGame?.libraryImageUrl ?? null,
-          logoImageUrl: currentGame?.logoImageUrl ?? null,
-          logoPosition: currentGame?.logoPosition ?? null,
-          coverImageUrl: currentGame?.coverImageUrl ?? null,
+          title: objectId,
+          iconUrl: null,
+          libraryHeroImageUrl: null,
+          libraryImageUrl: null,
+          logoImageUrl: null,
+          logoPosition: null,
+          coverImageUrl: null,
           downloadSources: [],
           updatedAt: Date.now(),
         },
       } as ShopDetailsWithAssets);
+    } finally {
+      setIsLoading(false);
     }
-    setStats(statsResult);
-    setIsLoading(false);
   }, [objectId, shop]);
 
   useEffect(() => {
