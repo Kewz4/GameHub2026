@@ -16,6 +16,8 @@ import {
 } from "../navigation";
 import { VideoPlayer } from "./video-player";
 
+const PLAY_ICON_SIZE = 28;
+
 interface ScreenshotCarouselProps {
   screenshots: SteamScreenshot[];
   videos: SteamMovie[];
@@ -39,6 +41,7 @@ interface ScreenshotCarouselSlideProps {
   index: number;
   isSelected: boolean;
   autoplayEnabled: boolean;
+  preferencesLoaded: boolean;
   started: boolean;
   isPlaying: boolean;
   onFocused: (index: number) => void;
@@ -56,6 +59,7 @@ function ScreenshotCarouselSlide({
   index,
   isSelected,
   autoplayEnabled,
+  preferencesLoaded,
   started,
   isPlaying,
   onFocused,
@@ -120,10 +124,10 @@ function ScreenshotCarouselSlide({
                 onPause={() => onVideoPause(index)}
               />
 
-              {!autoplayEnabled && !isPlaying && (
+              {preferencesLoaded && !autoplayEnabled && !isPlaying && (
                 <div className="game-page__media-carousel-play-overlay">
                   <div className="game-page__media-carousel-play-icon">
-                    <PlayIcon size={28} weight="fill" />
+                    <PlayIcon size={PLAY_ICON_SIZE} weight="fill" />
                   </div>
                 </div>
               )}
@@ -159,7 +163,8 @@ export function ScreenshotCarousel({
   const navigation = NavigationService.getInstance();
   const currentFocusId = useNavigationStore((state) => state.currentFocusId);
   const userPreferences = useUserPreferences();
-  const autoplayEnabled = userPreferences
+  const preferencesLoaded = userPreferences != null;
+  const autoplayEnabled = preferencesLoaded
     ? userPreferences.autoplayGameTrailers !== false
     : false;
 
@@ -383,6 +388,7 @@ export function ScreenshotCarousel({
                 index={index}
                 isSelected={index === selectedIndex}
                 autoplayEnabled={autoplayEnabled}
+                preferencesLoaded={preferencesLoaded}
                 started={startedIndices.has(index)}
                 isPlaying={playingIndex === index}
                 onFocused={handleSlideFocused}
