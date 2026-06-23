@@ -46,11 +46,19 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     setIsLoading(true);
 
     try {
-      const [userPreferences, statsResult, assets, currentGame] =
+      // getUserPreferences is a fast local read; await it first so we know the
+      // language before firing getGameShopDetails, then kick off every remaining
+      // call in a single parallel batch. This avoids the ~1-2s stall that
+      // occurred when getGameShopDetails was awaited sequentially after the
+      // first batch.
+      const userPreferences = await globalThis.window.electron
+        .getUserPreferences()
+        .catch(() => ({ language: "en" as const }));
+
+      const language = getSteamLanguage(userPreferences?.language ?? "en");
+
+      const [statsResult, assets, currentGame, shopDetailsResult] =
         await Promise.all([
-          globalThis.window.electron
-            .getUserPreferences()
-            .catch(() => ({ language: "en" })),
           shop === "custom"
             ? Promise.resolve(null)
             : globalThis.window.electron
@@ -62,18 +70,12 @@ export function useGameDetails(objectId: string, shop: GameShop) {
           globalThis.window.electron
             .getGameByObjectId(shop, objectId)
             .catch(() => null),
+          shop === "custom"
+            ? Promise.resolve(null)
+            : globalThis.window.electron
+                .getGameShopDetails(objectId, shop, language)
+                .catch(() => null),
         ]);
-
-      const shopDetailsResult =
-        shop === "custom"
-          ? null
-          : await globalThis.window.electron
-              .getGameShopDetails(
-                objectId,
-                shop,
-                getSteamLanguage(userPreferences?.language ?? "en")
-              )
-              .catch(() => null);
 
       // Always build a usable minimal ShopDetailsWithAssets so the game page
       // can render. Priority: full shopDetails > cached assets > game record.

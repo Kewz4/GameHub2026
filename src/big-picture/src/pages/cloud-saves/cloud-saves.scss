@@ -2,8 +2,11 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 48px 56px;
-  height: 100%;
+  padding: calc(var(--big-picture-header-height) + 24px) 56px 48px;
+  margin-top: calc(-1 * var(--big-picture-header-height));
+  height: calc(100% + var(--big-picture-header-height));
+  min-height: calc(100% + var(--big-picture-header-height));
+  overflow-x: hidden;
   overflow-y: auto;
 
   &__header {
