@@ -1,55 +1,94 @@
-.cloud-saves-box {
+.cloud-saves-entry {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
 
-  &__header {
+  &__icon {
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  &__body {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    overflow: hidden;
   }
 
   &__title {
     font-size: 0.875rem;
     font-weight: 600;
-    opacity: 0.9;
+  }
+
+  &__subtitle {
+    font-size: 0.78rem;
+    opacity: 0.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__count {
+    font-size: 0.875rem;
+    font-weight: 600;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+}
+
+.cloud-saves-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 400px;
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
   }
 
   &__status {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     opacity: 0.55;
+    margin: 0;
   }
 
-  &__artifact-list {
+  &__list {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     list-style: none;
     margin: 0;
     padding: 0;
+    max-height: 340px;
+    overflow-y: auto;
   }
 
   &__artifact {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 12px;
+    padding: 10px 12px;
     background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    border-radius: 8px;
   }
 
   &__artifact-info {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     overflow: hidden;
     flex: 1;
   }
 
   &__artifact-name {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -57,22 +96,22 @@
   }
 
   &__artifact-meta {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     opacity: 0.5;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   &__artifact-actions {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
+    align-items: flex-start;
   }
 
   &__empty {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     opacity: 0.45;
     margin: 0;
+    text-align: center;
+    padding: 16px 0;
   }
 }
