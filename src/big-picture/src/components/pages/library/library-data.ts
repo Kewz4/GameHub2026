@@ -21,7 +21,11 @@ export type LibrarySecondaryFilter =
   | "all_games"
   | "installed"
   | "not_installed"
-  | "never_played";
+  | "never_played"
+  | "steam"
+  | "epic"
+  | "gog"
+  | "xbox";
 
 export const LIBRARY_VIEW_MODE_STORAGE_KEY =
   "hydra:big-picture:library-view-mode";
@@ -165,6 +169,15 @@ export function filterLibraryBySecondaryFilter(
     return library.filter((game) => (game.playTimeInMilliseconds ?? 0) <= 0);
   }
 
+  if (
+    selectedFilter === "steam" ||
+    selectedFilter === "epic" ||
+    selectedFilter === "gog" ||
+    selectedFilter === "xbox"
+  ) {
+    return library.filter((game) => game.shop === selectedFilter);
+  }
+
   return library;
 }
 
@@ -252,6 +265,10 @@ export function isLibrarySecondaryFilter(
     value === "all_games" ||
     value === "installed" ||
     value === "not_installed" ||
-    value === "never_played"
+    value === "never_played" ||
+    value === "steam" ||
+    value === "epic" ||
+    value === "gog" ||
+    value === "xbox"
   );
 }

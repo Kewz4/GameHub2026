@@ -344,6 +344,7 @@ export function Header() {
 
       if (result.foundGames.length > 0) {
         setScanCandidates(result.foundGames);
+        setShowScanModal(false);
         setShowScanApproval(true);
       } else {
         setScanResult({ foundGames: [], total: result.total });

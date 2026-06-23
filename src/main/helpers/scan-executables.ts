@@ -168,6 +168,19 @@ export interface DiscoveredGame {
   executablePath: string;
 }
 
+/**
+ * Clean a raw folder name into a readable game title — same logic used by
+ * resolve-custom-game-info.ts for manually-added games.
+ */
+function cleanFolderName(name: string): string {
+  return name
+    .replace(/[_]/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2") // NeonAbyss → Neon Abyss
+    .replace(/\s*v?\d+\.\d+[\d.]*\s*$/i, "") // strip trailing version like v1.2.3
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Pick the most likely main executable inside a single game folder. */
 async function bestExeForFolder(
   folder: string,
@@ -253,7 +266,7 @@ export async function discoverUnknownGames(
     i++;
     onProgress?.(i, gameFolders.length, name);
     const exe = await bestExeForFolder(folder, name);
-    if (exe) results.push({ title: name, executablePath: exe });
+    if (exe) results.push({ title: cleanFolderName(name), executablePath: exe });
   }
   return results;
 }

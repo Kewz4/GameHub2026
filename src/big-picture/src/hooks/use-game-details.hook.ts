@@ -66,9 +66,31 @@ export function useGameDetails(objectId: string, shop: GameShop) {
 
     if (shopDetailsResult) {
       shopDetailsResult.assets = assets ?? shopDetailsResult.assets;
+      setShopDetails(shopDetailsResult);
+    } else if (assets) {
+      // Catalogue lookup failed but we have cached assets — build a minimal
+      // ShopDetailsWithAssets so the game page renders with cover/title/etc.
+      setShopDetails({
+        objectId,
+        name: assets.title,
+        steam_appid: 0,
+        detailed_description: "",
+        about_the_game: "",
+        short_description: "",
+        developers: [],
+        publishers: [],
+        genres: [],
+        supported_languages: "",
+        pc_requirements: { minimum: "", recommended: "" },
+        mac_requirements: { minimum: "", recommended: "" },
+        linux_requirements: { minimum: "", recommended: "" },
+        release_date: { coming_soon: false, date: "" },
+        content_descriptors: { ids: [] },
+        assets,
+      } as ShopDetailsWithAssets);
+    } else {
+      setShopDetails(null);
     }
-
-    setShopDetails(shopDetailsResult);
     setStats(statsResult);
     setIsLoading(false);
   }, [objectId, shop]);

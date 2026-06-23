@@ -62,6 +62,10 @@ const FILTER_OPTIONS = [
   { value: "installed", label: "Installed" },
   { value: "not_installed", label: "Not Installed" },
   { value: "never_played", label: "Never Played" },
+  { value: "steam", label: "Steam" },
+  { value: "epic", label: "Epic Games" },
+  { value: "gog", label: "GOG" },
+  { value: "xbox", label: "Xbox / Game Pass" },
 ] satisfies Array<DropdownSelectOption<LibrarySecondaryFilter>>;
 
 const TITLE_COMPARE_COLLECTIONS = { sensitivity: "base" } as const;
