@@ -152,6 +152,22 @@ const scanInstalledGames = async (
     games.map((g) => normalizeGameTitle(g.game.title))
   );
 
+  // Map normalized title → an existing library entry that is in the library but
+  // has NO resolved executable yet. These are games the first (exe-name) phase
+  // couldn't resolve because their executable names aren't in the executables
+  // DB. When disk discovery finds a folder whose title matches one of these, we
+  // resolve the existing entry's executablePath instead of skipping it as a
+  // "known title" — this is how titles like Neon Abyss get picked up.
+  const unresolvedByTitle = new Map<
+    string,
+    { key: string; game: typeof games[number]["game"] }
+  >();
+  for (const { key, game } of games) {
+    if (game.executablePath && !game.isDeleted) continue;
+    const norm = normalizeGameTitle(game.title);
+    if (!unresolvedByTitle.has(norm)) unresolvedByTitle.set(norm, { key, game });
+  }
+
   const discoveryRoots = discoverGameLibraryRoots();
   const discovered = await discoverUnknownGames(
     discoveryRoots,
@@ -168,8 +184,40 @@ const scanInstalledGames = async (
   for (const game of discovered) {
     const exeLower = game.executablePath.toLowerCase();
     if (knownExePaths.has(exeLower) || seenNewPaths.has(exeLower)) continue;
-    if (knownTitles.has(normalizeGameTitle(game.title))) continue;
     seenNewPaths.add(exeLower);
+
+    const norm = normalizeGameTitle(game.title);
+
+    // Folder matches an existing-but-unresolved library entry (e.g. an owned
+    // game whose exe names aren't in the executables DB). Resolve THAT entry's
+    // executable rather than treating it as a brand-new custom game.
+    const unresolved = unresolvedByTitle.get(norm);
+    if (unresolved) {
+      if (!seenKeys.has(unresolved.key)) {
+        seenKeys.add(unresolved.key);
+        if (!dryRun) {
+          await gamesSublevel.put(unresolved.key, {
+            ...unresolved.game,
+            isDeleted: false,
+            executablePath: game.executablePath,
+            isInstalledLocally: true,
+          });
+        }
+        foundGames.push({
+          title: unresolved.game.title,
+          executablePath: game.executablePath,
+          key: unresolved.key,
+        });
+        logger.info(
+          `[ScanInstalledGames] Resolved unresolved library entry by folder match: ${unresolved.game.title} → ${game.executablePath}`
+        );
+      }
+      continue;
+    }
+
+    // Already in the library with a different title-resolved entry — skip.
+    if (knownTitles.has(norm)) continue;
+
     foundGames.push({
       title: game.title,
       executablePath: game.executablePath,

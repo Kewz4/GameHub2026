@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CloudIcon } from "@phosphor-icons/react";
 import {
   Button,
-  FocusItem,
   HorizontalFocusGroup,
   Typography,
   VerticalFocusGroup,
@@ -181,34 +180,30 @@ export default function CloudSavesPage() {
 
                           <HorizontalFocusGroup asChild>
                             <div className="cloud-saves-page__artifact-actions">
-                              <FocusItem
-                                id={getCloudSavesRestoreFocusId(artifact.id)}
-                                asChild
+                              <Button
+                                focusId={getCloudSavesRestoreFocusId(
+                                  artifact.id
+                                )}
+                                variant="primary"
+                                disabled={busy}
+                                loading={restoringId === artifact.id}
+                                onClick={() => void handleRestore(artifact)}
                               >
-                                <Button
-                                  variant="primary"
-                                  disabled={busy}
-                                  loading={restoringId === artifact.id}
-                                  onClick={() => void handleRestore(artifact)}
-                                >
-                                  {restoringId === artifact.id
-                                    ? "Restoring…"
-                                    : "Restore"}
-                                </Button>
-                              </FocusItem>
-                              <FocusItem
-                                id={getCloudSavesDeleteFocusId(artifact.id)}
-                                asChild
+                                {restoringId === artifact.id
+                                  ? "Restoring…"
+                                  : "Restore"}
+                              </Button>
+                              <Button
+                                focusId={getCloudSavesDeleteFocusId(
+                                  artifact.id
+                                )}
+                                variant="secondary"
+                                disabled={busy}
+                                loading={deletingId === artifact.id}
+                                onClick={() => void handleDelete(artifact)}
                               >
-                                <Button
-                                  variant="secondary"
-                                  disabled={busy}
-                                  loading={deletingId === artifact.id}
-                                  onClick={() => void handleDelete(artifact)}
-                                >
-                                  Delete
-                                </Button>
-                              </FocusItem>
+                                Delete
+                              </Button>
                             </div>
                           </HorizontalFocusGroup>
                         </div>

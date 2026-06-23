@@ -20,19 +20,11 @@ const confirmScanGames = async (
     "./add-custom-game-to-library"
   );
 
-  for (const { key, executablePath, title, isNew } of approvedGames) {
-    // Newly-discovered game: create a fresh entry (catalogue-matched when
-    // possible, otherwise a custom game) instead of patching an existing key.
-    if (isNew) {
-      await addCustomGameToLibraryInternal(
-        title ?? "Unknown Game",
-        executablePath
-      ).catch((err) =>
-        logger.error(`[ConfirmScanGames] Failed to add new game ${title}:`, err)
-      );
-      continue;
-    }
+  // Existing-key confirmations are cheap (local writes only) — patch them first.
+  const newGames = approvedGames.filter((g) => g.isNew);
+  const existingGames = approvedGames.filter((g) => !g.isNew);
 
+  for (const { key, executablePath } of existingGames) {
     const game = await gamesSublevel.get(key).catch(() => null);
     if (!game) continue;
     await gamesSublevel.put(key, {
@@ -48,6 +40,36 @@ const confirmScanGames = async (
     });
     logger.info(`[ConfirmScanGames] Confirmed ${key}: ${executablePath}`);
   }
+
+  // Surface the cheap confirmations immediately so the library updates without
+  // waiting on the slow (network-bound) new-game enrichment below.
+  if (existingGames.length > 0) {
+    WindowManager.sendToAppWindows("on-library-batch-complete");
+  }
+
+  // Newly-discovered games each need catalogue lookups + artwork fetches, which
+  // are network-bound. Process them with bounded concurrency (instead of one at
+  // a time) and refresh the library as each one lands so they appear
+  // progressively rather than all at the very end.
+  const CONCURRENCY = 4;
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < newGames.length) {
+      const { title, executablePath } = newGames[cursor++];
+      await addCustomGameToLibraryInternal(
+        title ?? "Unknown Game",
+        executablePath
+      ).catch((err) =>
+        logger.error(`[ConfirmScanGames] Failed to add new game ${title}:`, err)
+      );
+      WindowManager.sendToAppWindows("on-library-batch-complete");
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, newGames.length) }, () =>
+      worker()
+    )
+  );
 
   WindowManager.sendToAppWindows("on-library-batch-complete");
 

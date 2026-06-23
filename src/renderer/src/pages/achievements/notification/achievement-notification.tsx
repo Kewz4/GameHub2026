@@ -111,6 +111,7 @@ export function AchievementNotification() {
           closingAnimation.current = requestAnimationFrame(animateClosing);
         } else {
           setIsVisible(false);
+          setIsClosing(false);
           setAchievements((ach) => ach.slice(1));
         }
       }
