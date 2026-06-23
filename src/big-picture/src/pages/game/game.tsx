@@ -13,6 +13,7 @@ import {
 import { DownloadGameModal } from "../../components/modals";
 import {
   AchievementsBox,
+  ControllerSupportBox,
   GameReviews,
   Hero,
   HowLongToBeatBox,
@@ -43,6 +44,7 @@ import {
   GAME_PAGE_REGION_ID,
   GAME_SIDEBAR_ACHIEVEMENTS_ID,
   GAME_SIDEBAR_CLOUD_SAVES_ID,
+  GAME_SIDEBAR_CONTROLLER_ID,
   GAME_SIDEBAR_HLTB_ID,
   GAME_SIDEBAR_LANGUAGES_ID,
   GAME_SIDEBAR_METADATA_ID,
@@ -1226,6 +1228,14 @@ export default function Game() {
                   focusId={GAME_SIDEBAR_LANGUAGES_ID}
                   focusNavigationOrder={7}
                   focusNavigationOverrides={sidebarLanguagesNavigationOverrides}
+                />
+
+                <ControllerSupportBox
+                  shop={shop}
+                  shopDetails={shopDetails}
+                  focusId={GAME_SIDEBAR_CONTROLLER_ID}
+                  focusNavigationOrder={8}
+                  focusNavigationOverrides={sidebarCarouselNavigationOverrides}
                 />
               </div>
             </VerticalFocusGroup>

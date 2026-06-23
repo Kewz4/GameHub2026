@@ -601,7 +601,13 @@
     "create_steam_shortcut_modal_cancel_button": "Cancel",
     "delete_shortcut_success": "Steam shortcut deleted successfully",
     "delete_shortcut_error": "Failed to delete Steam shortcut",
-    "delete_steam_shortcut": "Delete Steam shortcut"
+    "delete_steam_shortcut": "Delete Steam shortcut",
+    "controller_support": "Controller support",
+    "controller_support_full_label": "Full controller support",
+    "controller_support_partial_label": "Partial controller support",
+    "controller_support_none_label": "No controller support",
+    "controller_support_full_description": "This game is fully playable with a controller, including menus.",
+    "controller_support_partial_description": "This game supports a controller for gameplay, but some menus may require a keyboard or mouse."
   },
   "activation": {
     "title": "Activate GameHub",

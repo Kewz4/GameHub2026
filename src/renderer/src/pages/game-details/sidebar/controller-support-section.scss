@@ -1,0 +1,57 @@
+@use "../../../scss/globals.scss";
+
+.controller-support {
+  display: flex;
+  flex-direction: column;
+  gap: globals.$spacing-unit;
+  padding: globals.$spacing-unit 0;
+
+  &__skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: globals.$spacing-unit;
+  }
+
+  &__icons {
+    display: flex;
+    align-items: center;
+    gap: globals.$spacing-unit;
+    color: var(--color-text-bright, #fff);
+  }
+
+  &__icon {
+    flex-shrink: 0;
+  }
+
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+
+    &--full {
+      background-color: rgba(28, 151, 73, 0.18);
+      color: globals.$success-color;
+    }
+
+    &--partial {
+      background-color: rgba(219, 171, 10, 0.18);
+      color: globals.$warning-color;
+    }
+
+    &--none {
+      background-color: rgba(255, 255, 255, 0.08);
+      color: var(--color-text-secondary, #c0c1c7);
+    }
+  }
+
+  &__description {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text-secondary, #c0c1c7);
+  }
+}

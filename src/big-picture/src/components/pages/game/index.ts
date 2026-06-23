@@ -7,3 +7,4 @@ export * from "./achievements";
 export * from "./requirements-to-play";
 export * from "./supported-languages";
 export * from "./game-reviews";
+export * from "./controller-support";

@@ -19,6 +19,7 @@ export const GAME_SIDEBAR_METADATA_ID = "game-sidebar-metadata";
 export const GAME_SIDEBAR_REQUIREMENTS_ID = "game-sidebar-requirements";
 export const GAME_SIDEBAR_LANGUAGES_ID = "game-sidebar-languages";
 export const GAME_SIDEBAR_CLOUD_SAVES_ID = "game-sidebar-cloud-saves";
+export const GAME_SIDEBAR_CONTROLLER_ID = "game-sidebar-controller";
 
 export function getGameMediaCarouselItemId(index: number) {
   return `game-media-carousel-item-${index}`;
