@@ -83,14 +83,15 @@ export function Pagination({
 
   if (totalPages <= 1) return null;
 
-  const visiblePages = 3;
-  const isLastThree = totalPages > 3 && page >= totalPages - 2;
+  const visiblePages = 5;
+  const isLastThree =
+    totalPages > visiblePages && page >= totalPages - (visiblePages - 1);
 
-  let startPage = Math.max(1, page - 1);
+  let startPage = Math.max(1, page - 2);
   let endPage = startPage + visiblePages - 1;
 
   if (isLastThree) {
-    startPage = Math.max(1, totalPages - 2);
+    startPage = Math.max(1, totalPages - (visiblePages - 1));
     endPage = totalPages;
   } else if (endPage > totalPages) {
     endPage = totalPages;
