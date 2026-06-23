@@ -91,6 +91,11 @@ export interface Game {
   xboxTitleId?: string | null;
   experimentalAchievementsEnabled?: boolean;
   achievementEmulatorChecked?: boolean;
+  platform?: string | null;
+  discs?: import("./emulator.types").ClassicsDisc[];
+  selectedDiscPath?: string | null;
+  dontAskDiscSelection?: boolean;
+  romSizeBytes?: number | null;
 }
 
 export interface Download {

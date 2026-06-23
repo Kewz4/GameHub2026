@@ -7,6 +7,7 @@ export type GameShop =
   | "riot"
   | "ubisoft"
   | "ea"
+  | "launchbox"
   | "custom";
 
 export type ShortcutLocation = "desktop" | "start_menu";

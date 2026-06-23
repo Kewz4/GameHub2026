@@ -100,3 +100,6 @@ import "./update-game-custom-assets";
 import "./update-launch-options";
 import "./verify-executable-path";
 import "./enable-experimental-achievements";
+
+import "./open-classics-game";
+import "./update-classics-disc";
