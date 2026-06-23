@@ -1,5 +1,6 @@
 import {
   BookOpenIcon,
+  CloudIcon,
   DownloadSimpleIcon,
   GearIcon,
   HouseIcon,
@@ -75,6 +76,12 @@ function SidebarRouter() {
         label: "Library",
         path: `${basePath}/library`,
         icon: BookOpenIcon,
+      },
+      {
+        key: "cloudSaves",
+        label: "Cloud Saves",
+        path: `${basePath}/cloud-saves`,
+        icon: CloudIcon,
       },
       {
         key: "downloads",

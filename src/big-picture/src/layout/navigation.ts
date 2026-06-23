@@ -5,6 +5,7 @@ import { CATALOGUE_GRID_REGION_ID } from "../pages/catalogue/navigation";
 import { HOME_PAGE_REGION_ID } from "../pages/home/navigation";
 import { SETTINGS_PAGE_REGION_ID } from "../pages/settings/navigation";
 import { LIBRARY_PAGE_REGION_ID } from "../components/pages/library/navigation";
+import { CLOUD_SAVES_PAGE_REGION_ID } from "../pages/cloud-saves/navigation";
 
 export const BIG_PICTURE_APP_LAYER_ID = "big-picture-app-layer";
 export const BIG_PICTURE_SHELL_REGION_ID = "big-picture-shell";
@@ -16,6 +17,7 @@ export const BIG_PICTURE_SIDEBAR_ITEM_IDS = {
   home: "big-picture-sidebar-home",
   catalogue: "big-picture-sidebar-catalogue",
   library: "big-picture-sidebar-library",
+  cloudSaves: "big-picture-sidebar-cloud-saves",
   downloads: "big-picture-sidebar-downloads",
   settings: "big-picture-sidebar-settings",
   componentLab: "big-picture-sidebar-component-lab",
@@ -83,6 +85,10 @@ export function getBigPictureSidebarItemIdFromPathname(pathname: string) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.catalogue;
   }
 
+  if (normalizedPathname.startsWith("/cloud-saves")) {
+    return BIG_PICTURE_SIDEBAR_ITEM_IDS.cloudSaves;
+  }
+
   if (normalizedPathname.startsWith("/downloads")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.downloads;
   }
@@ -113,6 +119,10 @@ export function getBigPictureContentEntryRegionIdFromPathname(
 
   if (normalizedPathname.startsWith("/library")) {
     return LIBRARY_PAGE_REGION_ID;
+  }
+
+  if (normalizedPathname.startsWith("/cloud-saves")) {
+    return CLOUD_SAVES_PAGE_REGION_ID;
   }
 
   if (normalizedPathname.startsWith("/downloads")) {

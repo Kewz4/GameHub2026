@@ -1,0 +1,117 @@
+.cloud-saves-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 48px 56px;
+  height: 100%;
+  overflow-y: auto;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  &__title {
+    font-size: 1.75rem;
+    font-weight: 700;
+  }
+
+  &__count {
+    font-size: 0.95rem;
+    opacity: 0.55;
+    margin-left: 4px;
+  }
+
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 80px 0;
+    opacity: 0.55;
+    text-align: center;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  &__group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__group-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__group-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &__group-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  &__group-badge {
+    font-size: 0.8rem;
+    opacity: 0.5;
+  }
+
+  &__artifacts {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__artifact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  &__artifact-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+    flex: 1;
+  }
+
+  &__artifact-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  &__artifact-meta {
+    font-size: 0.78rem;
+    opacity: 0.5;
+  }
+
+  &__artifact-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  &__status {
+    font-size: 0.85rem;
+    opacity: 0.6;
+  }
+}

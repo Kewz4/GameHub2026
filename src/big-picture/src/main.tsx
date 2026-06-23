@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import App from "./app";
 import Catalogue from "./pages/catalogue/catalogue";
+import CloudSavesPage from "./pages/cloud-saves/cloud-saves";
 import ComponentLab from "./pages/component-lab/component-lab";
 import Downloads from "./pages/downloads/downloads";
 import Game from "./pages/game/game";
@@ -28,6 +29,7 @@ ReactDOM.createRoot(rootElement).render(
           <Route path="downloads" element={<Downloads />} />
           <Route path="settings" element={<Settings />} />
           <Route path="library" element={<LibraryPage />} />
+          <Route path="cloud-saves" element={<CloudSavesPage />} />
           <Route path="game/:shop/:objectId" element={<Game />} />
           <Route
             path="game/:shop/:objectId/achievements"
