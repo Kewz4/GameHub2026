@@ -22,6 +22,7 @@ import {
   ScreenshotCarousel,
   SupportedLanguages,
 } from "../../components/pages/game";
+import { CloudSavesBox } from "../../components/pages/game/cloud-saves";
 import {
   useBigPictureToast,
   useGameDetails,
@@ -41,6 +42,7 @@ import {
   GAME_MEDIA_CAROUSEL_REGION_ID,
   GAME_PAGE_REGION_ID,
   GAME_SIDEBAR_ACHIEVEMENTS_ID,
+  GAME_SIDEBAR_CLOUD_SAVES_ID,
   GAME_SIDEBAR_HLTB_ID,
   GAME_SIDEBAR_LANGUAGES_ID,
   GAME_SIDEBAR_METADATA_ID,
@@ -1159,9 +1161,19 @@ export default function Game() {
                   focusNavigationOverrides={sidebarCarouselNavigationOverrides}
                 />
 
+                {objectId && shop && (
+                  <CloudSavesBox
+                    objectId={objectId}
+                    shop={shop}
+                    focusId={GAME_SIDEBAR_CLOUD_SAVES_ID}
+                    focusNavigationOrder={4}
+                    focusNavigationOverrides={sidebarCarouselNavigationOverrides}
+                  />
+                )}
+
                 <FocusItem
                   id={GAME_SIDEBAR_METADATA_ID}
-                  navigationOrder={4}
+                  navigationOrder={5}
                   navigationOverrides={sidebarCarouselNavigationOverrides}
                   asChild
                 >
@@ -1205,14 +1217,14 @@ export default function Game() {
                 <RequirementsToPlay
                   shopDetails={shopDetails}
                   focusId={GAME_SIDEBAR_REQUIREMENTS_ID}
-                  focusNavigationOrder={5}
+                  focusNavigationOrder={6}
                   focusNavigationOverrides={sidebarCarouselNavigationOverrides}
                 />
 
                 <SupportedLanguages
                   shopDetails={shopDetails}
                   focusId={GAME_SIDEBAR_LANGUAGES_ID}
-                  focusNavigationOrder={6}
+                  focusNavigationOrder={7}
                   focusNavigationOverrides={sidebarLanguagesNavigationOverrides}
                 />
               </div>
