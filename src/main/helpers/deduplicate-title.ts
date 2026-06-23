@@ -22,10 +22,56 @@
  * Returns the key of the surviving (canonical) entry.
  */
 
-import { gamesSublevel } from "@main/level";
+import { gamesSublevel, gameAchievementsSublevel } from "@main/level";
 import { logger } from "@main/services";
-import type { Game } from "@types";
+import type { Game, UnlockedAchievement } from "@types";
 import { normalizeGameTitle } from "./normalize-game-title";
+
+/**
+ * Fold a soft-deleted duplicate's achievement progress into the surviving
+ * entry, then drop the duplicate's achievement record. Without this, the
+ * profile achievement breakdown (which reads gameAchievementsSublevel directly)
+ * keeps showing the duplicate as its own row even after the game record itself
+ * is soft-deleted.
+ */
+async function mergeAchievementsIntoCanonical(
+  canonicalKey: string,
+  duplicateKey: string
+): Promise<void> {
+  const [canonical, duplicate] = await Promise.all([
+    gameAchievementsSublevel.get(canonicalKey).catch(() => null),
+    gameAchievementsSublevel.get(duplicateKey).catch(() => null),
+  ]);
+
+  // Nothing to fold in — just make sure the duplicate row is gone.
+  if (!duplicate) return;
+
+  const dupUnlocked = duplicate.unlockedAchievements ?? [];
+
+  if (canonical) {
+    // Union the unlocked achievements by name, keeping the earliest unlockTime.
+    const byName = new Map<string, UnlockedAchievement>();
+    for (const a of [...(canonical.unlockedAchievements ?? []), ...dupUnlocked]) {
+      const key = (a.name ?? "").toUpperCase();
+      const prev = byName.get(key);
+      if (!prev || (a.unlockTime ?? 0) < (prev.unlockTime ?? 0)) {
+        byName.set(key, a);
+      }
+    }
+
+    await gameAchievementsSublevel.put(canonicalKey, {
+      ...canonical,
+      unlockedAchievements: [...byName.values()],
+      updatedAt: Date.now(),
+    });
+  }
+  // If the canonical has no achievement record at all, we intentionally do NOT
+  // copy the duplicate's definitions over (they belong to the duplicate's
+  // shop/objectId and may not match). The breakdown will fall back to the
+  // library record's achievementCount for the survivor.
+
+  await gameAchievementsSublevel.del(duplicateKey).catch(() => {});
+}
 
 function canonicalScore(shop: Game["shop"]): number {
   switch (shop) {
@@ -121,6 +167,15 @@ export async function deduplicateTitle(title: string): Promise<string | null> {
     }
 
     await gamesSublevel.put(dupKey, { ...dupGame, isDeleted: true });
+    // Fold the duplicate's achievement progress into the survivor and remove
+    // its standalone achievement record so it stops appearing in the profile
+    // achievements breakdown.
+    await mergeAchievementsIntoCanonical(canonicalKey, dupKey).catch((err) =>
+      logger.warn(
+        `deduplicateTitle: failed to merge achievements for [${dupKey}]`,
+        err
+      )
+    );
     logger.log(
       `deduplicateTitle: soft-deleted duplicate "${dupGame.title}" [${dupKey}] → kept [${canonicalKey}]`
     );
