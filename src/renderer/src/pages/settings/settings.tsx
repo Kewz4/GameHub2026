@@ -15,7 +15,7 @@ import {
   PlayIcon,
   ShieldCheckIcon,
 } from "@primer/octicons-react";
-import { Wrench, Trophy } from "lucide-react";
+import { Wrench, Trophy, Gamepad2 } from "lucide-react";
 import { SettingsContextGeneral } from "./settings-context-general";
 import { SettingsContextDownloads } from "./settings-context-downloads";
 import { SettingsContextNotifications } from "./settings-context-notifications";
@@ -23,6 +23,7 @@ import { SettingsContextContentGameplay } from "./settings-context-content-gamep
 import { SettingsContextIntegrations } from "./settings-context-integrations";
 import { SettingsContextAchievements } from "./settings-context-achievements";
 import { SettingsContextCompatibility } from "./settings-context-compatibility";
+import { SettingsContextEmulation } from "./settings-context-emulation";
 
 export default function Settings() {
   const { t } = useTranslation("settings");
@@ -69,6 +70,11 @@ export default function Settings() {
         id: "compatibility" as const,
         label: t("compatibility"),
         icon: <Wrench size={16} />,
+      },
+      {
+        id: "emulation" as const,
+        label: t("emulation"),
+        icon: <Gamepad2 size={16} />,
       },
       ...(userDetails
         ? [
@@ -119,6 +125,10 @@ export default function Settings() {
 
             if (selectedCategoryId === "compatibility") {
               return <SettingsContextCompatibility />;
+            }
+
+            if (selectedCategoryId === "emulation") {
+              return <SettingsContextEmulation />;
             }
 
             return <SettingsAccount />;

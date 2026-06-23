@@ -1,0 +1,143 @@
+@use "../../scss/globals.scss";
+
+.settings-emulation {
+  display: flex;
+  flex-direction: column;
+  gap: globals.$spacing-unit * 3;
+
+  &__description {
+    color: var(--color-text-secondary, #c0c1c7);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  &__system {
+    display: flex;
+    flex-direction: column;
+    gap: globals.$spacing-unit * 2;
+    padding: globals.$spacing-unit * 2;
+    border-radius: 8px;
+    background-color: var(--color-dark-background, rgba(0, 0, 0, 0.2));
+    border: solid 1px globals.$border-color;
+  }
+
+  &__system-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: globals.$spacing-unit * 2;
+  }
+
+  &__system-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    h3 {
+      margin: 0;
+    }
+  }
+
+  &__system-emulator {
+    color: var(--color-text-secondary, #c0c1c7);
+    font-size: 13px;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: globals.$spacing-unit;
+  }
+
+  &__field-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-bright, #fff);
+  }
+
+  &__field-row {
+    display: flex;
+    align-items: center;
+    gap: globals.$spacing-unit;
+  }
+
+  &__input {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    padding: 0 globals.$spacing-unit * 1.5;
+    border-radius: 8px;
+    border: solid 1px globals.$border-color;
+    background-color: var(--color-background, #1c1c1c);
+    color: var(--color-text-bright, #fff);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  &__rom-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: globals.$spacing-unit;
+  }
+
+  &__rom-actions {
+    display: flex;
+    gap: globals.$spacing-unit;
+  }
+
+  &__empty {
+    color: var(--color-text-secondary, #c0c1c7);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  &__rom-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: globals.$spacing-unit;
+  }
+
+  &__rom-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: globals.$spacing-unit * 2;
+    padding: globals.$spacing-unit globals.$spacing-unit * 1.5;
+    border-radius: 8px;
+    background-color: var(--color-background, #1c1c1c);
+    border: solid 1px globals.$border-color;
+  }
+
+  &__rom-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__rom-path {
+    font-size: 13px;
+    color: var(--color-text-bright, #fff);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  &__rom-meta {
+    font-size: 12px;
+    color: var(--color-text-secondary, #c0c1c7);
+  }
+
+  &__rom-controls {
+    display: flex;
+    align-items: center;
+    gap: globals.$spacing-unit * 1.5;
+    flex-shrink: 0;
+  }
+}

@@ -972,7 +972,21 @@
     "uploadcare_saved": "Uploadcare keys saved — cloud saves enabled!",
     "uploadcare_save_failed": "Failed to save Uploadcare keys.",
     "uploadcare_connected": "Uploadcare connected — cloud saves are active.",
-    "uploadcare_disconnected": "Uploadcare disconnected."
+    "uploadcare_disconnected": "Uploadcare disconnected.",
+    "emulation": "Emulation",
+    "emulation_description": "Configure emulators to play your PS1, PS2, and PS3 classics. Set the emulator executable and add folders containing your game files.",
+    "detect_emulator": "Detect",
+    "detecting": "Detecting...",
+    "emulator_executable_path": "Emulator executable",
+    "emulator_not_configured": "Not configured",
+    "browse": "Browse",
+    "rom_folders": "Game folders",
+    "no_rom_folders": "No game folders added yet.",
+    "add_rom_folder": "Add folder",
+    "rescan": "Rescan",
+    "scanning": "Scanning...",
+    "scan_subfolders": "Scan subfolders",
+    "games_found": "games"
   },
   "notifications": {
     "download_complete": "Download complete",

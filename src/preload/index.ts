@@ -23,6 +23,8 @@ import type {
   ProtonVersion,
   TorrentFilesResponse,
   DownloadLayoutState,
+  EmulatorSystem,
+  ClassicsDisc,
 } from "@types";
 import type { AuthPage } from "@shared";
 import type { AxiosProgressEvent } from "axios";
@@ -684,6 +686,61 @@ contextBridge.exposeInMainWorld("electron", {
     writeText: (text: string) =>
       ipcRenderer.invoke("clipboardWriteText", text) as Promise<void>,
   },
+
+  /* Emulators / Classics */
+  getEmulatorConfigs: () => ipcRenderer.invoke("getEmulatorConfigs"),
+  detectEmulator: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("detectEmulator", system),
+  detectEmulators: () => ipcRenderer.invoke("detectEmulators"),
+  previewEmulatorExecutable: (system: EmulatorSystem, executablePath: string) =>
+    ipcRenderer.invoke("previewEmulatorExecutable", system, executablePath),
+  setEmulatorExecutablePath: (
+    system: EmulatorSystem,
+    executablePath: string | null
+  ) => ipcRenderer.invoke("setEmulatorExecutablePath", system, executablePath),
+  removeEmulator: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("removeEmulator", system),
+  checkEmulatorExecutable: (executablePath: string) =>
+    ipcRenderer.invoke("checkEmulatorExecutable", executablePath),
+  checkEmulatorBios: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("checkEmulatorBios", system),
+  checkPs3Firmware: () => ipcRenderer.invoke("checkPs3Firmware"),
+  getEmulatorRomExtensions: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("getEmulatorRomExtensions", system),
+  addRomFolder: (
+    system: EmulatorSystem,
+    folderPath: string,
+    scanSubfolders: boolean
+  ) => ipcRenderer.invoke("addRomFolder", system, folderPath, scanSubfolders),
+  removeRomFolder: (system: EmulatorSystem, folderId: string) =>
+    ipcRenderer.invoke("removeRomFolder", system, folderId),
+  toggleRomFolderSubfolders: (
+    system: EmulatorSystem,
+    folderId: string,
+    scanSubfolders: boolean
+  ) =>
+    ipcRenderer.invoke(
+      "toggleRomFolderSubfolders",
+      system,
+      folderId,
+      scanSubfolders
+    ),
+  rescanEmulator: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("rescanEmulator", system),
+  listEmulatorRoms: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("listEmulatorRoms", system),
+  openClassicsGame: (
+    objectId: string,
+    shop: GameShop,
+    discPath: string,
+    system: EmulatorSystem
+  ) =>
+    ipcRenderer.invoke("openClassicsGame", objectId, shop, discPath, system),
+  updateClassicsDisc: (
+    objectId: string,
+    shop: GameShop,
+    disc: ClassicsDisc
+  ) => ipcRenderer.invoke("updateClassicsDisc", objectId, shop, disc),
 
   /* Misc */
   ping: () => ipcRenderer.invoke("ping"),

@@ -41,6 +41,11 @@ import type {
   TorrentFilesResponse,
   DownloadLayoutState,
   ExcludedGame,
+  EmulatorSystem,
+  EmulatorConfig,
+  EmulatorConfigMap,
+  ClassicsDisc,
+  DetectedRom,
 } from "@types";
 import type { AxiosProgressEvent } from "axios";
 
@@ -777,6 +782,50 @@ declare global {
       logoImageUrl: string | null;
       libraryImageUrl: string | null;
     }>;
+    /* Emulators / Classics */
+    getEmulatorConfigs: () => Promise<EmulatorConfigMap>;
+    detectEmulator: (system: EmulatorSystem) => Promise<EmulatorConfig | null>;
+    detectEmulators: () => Promise<EmulatorConfigMap>;
+    previewEmulatorExecutable: (
+      system: EmulatorSystem,
+      executablePath: string
+    ) => Promise<{ executablePath: string; detectedVersion: string | null } | null>;
+    setEmulatorExecutablePath: (
+      system: EmulatorSystem,
+      executablePath: string | null
+    ) => Promise<EmulatorConfig | null>;
+    removeEmulator: (system: EmulatorSystem) => Promise<EmulatorConfig>;
+    checkEmulatorExecutable: (executablePath: string) => Promise<boolean>;
+    checkEmulatorBios: (system: EmulatorSystem) => Promise<boolean>;
+    checkPs3Firmware: () => Promise<boolean>;
+    getEmulatorRomExtensions: (system: EmulatorSystem) => Promise<string[]>;
+    addRomFolder: (
+      system: EmulatorSystem,
+      folderPath: string,
+      scanSubfolders: boolean
+    ) => Promise<EmulatorConfig>;
+    removeRomFolder: (
+      system: EmulatorSystem,
+      folderId: string
+    ) => Promise<EmulatorConfig>;
+    toggleRomFolderSubfolders: (
+      system: EmulatorSystem,
+      folderId: string,
+      scanSubfolders: boolean
+    ) => Promise<EmulatorConfig>;
+    rescanEmulator: (system: EmulatorSystem) => Promise<EmulatorConfig>;
+    listEmulatorRoms: (system: EmulatorSystem) => Promise<DetectedRom[]>;
+    openClassicsGame: (
+      objectId: string,
+      shop: GameShop,
+      discPath: string,
+      system: EmulatorSystem
+    ) => Promise<void>;
+    updateClassicsDisc: (
+      objectId: string,
+      shop: GameShop,
+      disc: ClassicsDisc
+    ) => Promise<Game | null>;
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;
