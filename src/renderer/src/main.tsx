@@ -43,6 +43,7 @@ import UpdateChecker from "./pages/update-checker/update-checker";
 import ConsolePage from "./pages/console/console";
 import BigPictureApp from "../../big-picture/src/app";
 import BigPictureCatalogue from "../../big-picture/src/pages/catalogue/catalogue";
+import BigPictureCloudSaves from "../../big-picture/src/pages/cloud-saves/cloud-saves";
 import BigPictureComponentLab from "../../big-picture/src/pages/component-lab/component-lab";
 import BigPictureDownloads from "../../big-picture/src/pages/downloads/downloads";
 import BigPictureHome from "../../big-picture/src/pages/home/home";
@@ -142,6 +143,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="component-lab" element={<BigPictureComponentLab />} />
             <Route path="downloads" element={<BigPictureDownloads />} />
             <Route path="settings" element={<BigPictureSettings />} />
+            <Route path="cloud-saves" element={<BigPictureCloudSaves />} />
             <Route path="library" element={<BigPictureLibrary />} />
             <Route path="game/:shop/:objectId" element={<BigPictureGame />} />
             <Route
