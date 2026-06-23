@@ -102,6 +102,28 @@ export const SETTINGS_SIDEBAR_RETURN_TARGET = getItemFocusTarget(
   BIG_PICTURE_SIDEBAR_ITEM_IDS.settings
 );
 
+// Platform integration button IDs
+export const INTEGRATIONS_STEAM_PRIMARY_BTN_ID = "integrations-steam-primary-btn";
+export const INTEGRATIONS_STEAM_SYNC_BTN_ID = "integrations-steam-sync-btn";
+export const INTEGRATIONS_STEAM_DISCONNECT_BTN_ID = "integrations-steam-disconnect-btn";
+export const INTEGRATIONS_EPIC_PRIMARY_BTN_ID = "integrations-epic-primary-btn";
+export const INTEGRATIONS_EPIC_SYNC_BTN_ID = "integrations-epic-sync-btn";
+export const INTEGRATIONS_EPIC_SIGNOUT_BTN_ID = "integrations-epic-signout-btn";
+export const INTEGRATIONS_GOG_PRIMARY_BTN_ID = "integrations-gog-primary-btn";
+export const INTEGRATIONS_GOG_SYNC_BTN_ID = "integrations-gog-sync-btn";
+export const INTEGRATIONS_GOG_DISCONNECT_BTN_ID = "integrations-gog-disconnect-btn";
+export const INTEGRATIONS_XBOX_PRIMARY_BTN_ID = "integrations-xbox-primary-btn";
+export const INTEGRATIONS_XBOX_SYNC_BTN_ID = "integrations-xbox-sync-btn";
+export const INTEGRATIONS_XBOX_SIGNOUT_BTN_ID = "integrations-xbox-signout-btn";
+export const INTEGRATIONS_EA_PRIMARY_BTN_ID = "integrations-ea-primary-btn";
+export const INTEGRATIONS_UBISOFT_PRIMARY_BTN_ID = "integrations-ubisoft-primary-btn";
+
+// Achievement import button IDs
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_STEAM_ID = "integrations-achievement-import-steam";
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_EPIC_ID = "integrations-achievement-import-epic";
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_GOG_ID = "integrations-achievement-import-gog";
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_XBOX_ID = "integrations-achievement-import-xbox";
+
 export type IntegrationProviderId =
   | "real-debrid"
   | "premiumize"

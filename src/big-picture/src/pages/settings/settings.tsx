@@ -21,7 +21,7 @@ import {
   CONTENT_ITEM_FOCUS_IDS,
   DOWNLOADS_BEHAVIOR_ITEM_FOCUS_IDS,
   DOWNLOAD_DIRECTORIES_DEFAULT_SELECT_ID,
-  getIntegrationProviderCheckboxFocusId,
+  INTEGRATIONS_STEAM_PRIMARY_BTN_ID,
   NOTIFICATIONS_LIBRARY_ITEM_FOCUS_IDS,
 } from "./settings-navigation";
 
@@ -217,7 +217,7 @@ export default function Settings() {
       case "content":
         return CONTENT_ITEM_FOCUS_IDS.autoplayGameTrailers;
       case "integrations":
-        return getIntegrationProviderCheckboxFocusId("real-debrid");
+        return INTEGRATIONS_STEAM_PRIMARY_BTN_ID;
       case "compatibility":
         return platform === "win32"
           ? COMPATIBILITY_COMMON_REDIST_BUTTON_ID

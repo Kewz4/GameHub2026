@@ -13,13 +13,17 @@ import { useFeature } from "../../hooks";
 import type { FocusOverrideTarget } from "../../services";
 import {
   getIntegrationProviderCheckboxFocusId,
-  SETTINGS_HEADER_RETURN_TARGET,
+  INTEGRATIONS_ACHIEVEMENT_IMPORT_STEAM_ID,
+  INTEGRATIONS_ACHIEVEMENT_IMPORT_XBOX_ID,
+  INTEGRATIONS_UBISOFT_PRIMARY_BTN_ID,
   type IntegrationProviderId,
 } from "./settings-navigation";
 import {
   IntegrationProviderSection,
   type IntegrationProviderConfig,
 } from "./integration-provider-section";
+import { PlatformIntegrationsSection } from "./platform-integrations-section";
+import { AchievementImportSection } from "./achievement-import-section";
 
 interface SettingsSectionProps {
   className?: string;
@@ -134,6 +138,16 @@ export function IntegrationsSettingsSection({
     });
   }, [features]);
 
+  const firstDebridId = visibleProviders[0]
+    ? getIntegrationProviderCheckboxFocusId(
+        visibleProviders[0].id as IntegrationProviderId
+      )
+    : null;
+
+  const achievementDownTarget: FocusOverrideTarget = firstDebridId
+    ? { type: "item", itemId: firstDebridId }
+    : { type: "block" };
+
   return (
     <div
       className={
@@ -142,6 +156,18 @@ export function IntegrationsSettingsSection({
           : "integrations-settings-section"
       }
     >
+      <PlatformIntegrationsSection
+        downTarget={{
+          type: "item",
+          itemId: INTEGRATIONS_ACHIEVEMENT_IMPORT_STEAM_ID,
+        }}
+      />
+
+      <AchievementImportSection
+        upTarget={{ type: "item", itemId: INTEGRATIONS_UBISOFT_PRIMARY_BTN_ID }}
+        downTarget={achievementDownTarget}
+      />
+
       {visibleProviders.map((provider, index) => {
         const previousProvider = visibleProviders[index - 1];
         const nextProvider = visibleProviders[index + 1];
@@ -153,7 +179,7 @@ export function IntegrationsSettingsSection({
                 previousProvider.id as IntegrationProviderId
               ),
             }
-          : SETTINGS_HEADER_RETURN_TARGET;
+          : { type: "item", itemId: INTEGRATIONS_ACHIEVEMENT_IMPORT_XBOX_ID };
 
         const downTarget: FocusOverrideTarget = nextProvider
           ? {
