@@ -7,7 +7,6 @@ import {
   INTEGRATIONS_ACHIEVEMENT_IMPORT_EPIC_ID,
   INTEGRATIONS_ACHIEVEMENT_IMPORT_GOG_ID,
   INTEGRATIONS_ACHIEVEMENT_IMPORT_XBOX_ID,
-  SETTINGS_HEADER_RETURN_TARGET,
 } from "./settings-navigation";
 import type { FocusOverrideTarget } from "../../services";
 

@@ -46,6 +46,10 @@ import {
   LIBRARY_FILTERS_SEARCH_INPUT_ID,
   LIBRARY_PAGE_REGION_ID,
 } from "../../components/pages/library/navigation";
+import {
+  ScanFlowModal,
+  type FoundGame,
+} from "../../components/pages/library/scan-flow-modal";
 import { logger } from "@renderer/logger";
 
 import "./page.scss";
@@ -137,6 +141,7 @@ export default function LibraryPage() {
   const [pendingAction, setPendingAction] =
     useState<PendingLibraryAction | null>(null);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
   const { favoriteLoadingGameId, toggleFavorite } =
     useLibraryFavorite(updateLibrary);
   const {
@@ -213,6 +218,22 @@ export default function LibraryPage() {
       setFocus(restoreFocusId);
     });
   }, [setFocus]);
+
+  const handleScanConfirmed = useCallback(
+    async (approved: FoundGame[]) => {
+      setShowScanModal(false);
+      await globalThis.window.electron.confirmScanGames(
+        approved.map((g) => ({
+          key: g.key,
+          executablePath: g.executablePath,
+          title: g.title,
+          isNew: g.isNew,
+        }))
+      );
+      await refreshLibraryData();
+    },
+    [refreshLibraryData]
+  );
 
   const handleLaunchOrDownload = useLibraryLaunchGame(
     useCallback(
@@ -433,6 +454,7 @@ export default function LibraryPage() {
             library={library}
             collections={collections}
             firstContentItemId={firstContentItemId}
+            onScanGames={() => setShowScanModal(true)}
           />
 
           <AnimatePresence mode="wait" initial={false}>
@@ -519,6 +541,12 @@ export default function LibraryPage() {
           onConfirm={handleConfirmPendingAction}
         />
       ) : null}
+
+      <ScanFlowModal
+        visible={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        onConfirmed={handleScanConfirmed}
+      />
 
       {downloadModalGame ? (
         <DownloadGameModal

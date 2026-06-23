@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, VerticalFocusGroup } from "../../components";
+import { Button } from "../../components";
 import { useBigPictureToast, useUserPreferences } from "../../hooks";
 import { SettingsSection } from "./settings-section";
 import { BPEpicAuthModal } from "./epic-auth-modal";
