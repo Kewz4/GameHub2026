@@ -1,5 +1,6 @@
 import type { Downloader } from "@shared";
 import type {
+  AchievementProgress,
   GameShop,
   SteamAchievement,
   UnlockedAchievement,
@@ -124,6 +125,9 @@ export interface DownloadLayoutState {
 export interface GameAchievement {
   achievements: SteamAchievement[];
   unlockedAchievements: UnlockedAchievement[];
+  /** Fractional progress for locked, stat-gated achievements, parsed from the
+   *  local achievement file. Local-only (not synced to the Hydra cloud). */
+  achievementProgress?: AchievementProgress[];
   updatedAt: number | undefined;
   language: string | undefined;
   /** When "exophase", both the definitions and the unlocked list were imported

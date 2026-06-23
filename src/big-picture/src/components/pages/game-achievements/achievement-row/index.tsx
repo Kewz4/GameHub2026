@@ -48,6 +48,31 @@ export function AchievementRow({ achievement }: Readonly<AchievementRowProps>) {
               {achievement.description}
             </Typography>
           ) : null}
+
+          {!achievement.unlocked &&
+            achievement.progress &&
+            achievement.progress.max > 0 && (
+              <div className="game-achievements-row__progress">
+                <div className="game-achievements-row__progress-track">
+                  <div
+                    className="game-achievements-row__progress-fill"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round(
+                          (achievement.progress.current /
+                            achievement.progress.max) *
+                            100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <span className="game-achievements-row__progress-label">
+                  {achievement.progress.current} / {achievement.progress.max}
+                </span>
+              </div>
+            )}
         </div>
 
         <div className="game-achievements-row__meta">

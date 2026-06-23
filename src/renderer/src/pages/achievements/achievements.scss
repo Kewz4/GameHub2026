@@ -121,6 +121,35 @@ $logo-max-width: 200px;
       flex: 1;
     }
 
+    &-progress {
+      display: flex;
+      align-items: center;
+      gap: globals.$spacing-unit;
+      margin-top: 6px;
+
+      &-track {
+        flex: 1;
+        max-width: 240px;
+        height: 6px;
+        border-radius: 9999px;
+        background-color: globals.$border-color;
+        overflow: hidden;
+      }
+
+      &-fill {
+        height: 100%;
+        border-radius: 9999px;
+        background-color: var(--color-muted, #c0c1c7);
+        transition: width ease 0.2s;
+      }
+
+      &-label {
+        white-space: nowrap;
+        opacity: 0.7;
+        font-variant-numeric: tabular-nums;
+      }
+    }
+
     &-title {
       display: flex;
       align-items: center;

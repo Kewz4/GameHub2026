@@ -22,6 +22,7 @@ import { publishCombinedNewAchievementNotification } from "../notifications";
 import { db, gameAchievementsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { HydraApi } from "../hydra-api";
 import { getGameAchievementData } from "./get-game-achievement-data";
+import { storeAchievementProgress } from "./store-achievement-progress";
 import { WindowManager } from "../window-manager";
 import { setTimeout } from "node:timers/promises";
 import { Wine } from "../wine";
@@ -188,6 +189,10 @@ const processAchievementFileDiff = async (
   game: Game,
   file: AchievementFile
 ) => {
+  // Update fractional progress (e.g. "38/100 kills") for stat-gated, still-
+  // locked achievements every time the file changes while the game runs.
+  await storeAchievementProgress(game, [file]).catch(() => {});
+
   const parsedAchievements = parseAchievementFile(file.filePath, file.type);
 
   if (parsedAchievements.length) {
@@ -443,6 +448,11 @@ export class AchievementWatcherManager {
       unlockedAchievements,
       false
     );
+
+    // Seed fractional progress so locked stat-gated achievements show a bar the
+    // first time the game's achievements page is opened (mergeAchievements has
+    // already populated the definitions record this writes onto).
+    await storeAchievementProgress(game, gameAchievementFiles).catch(() => {});
 
     if (game.shop === "gog") {
       newAchievements += await syncGogAchievements(game);

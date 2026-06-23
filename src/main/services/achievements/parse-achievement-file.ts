@@ -1,5 +1,5 @@
 import { Cracker } from "@shared";
-import { UnlockedAchievement } from "@types";
+import { AchievementProgress, UnlockedAchievement } from "@types";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { achievementsLogger } from "../logger";
 
@@ -99,6 +99,65 @@ export const parseAchievementFile = (
     return [];
   } catch (err) {
     achievementsLogger.error(`Error parsing ${type} - ${filePath}`, err);
+    return [];
+  }
+};
+
+/**
+ * Extract fractional progress (CurProgress/MaxProgress) for locked, stat-gated
+ * achievements from a CODEX-lineage achievements.ini. These files report e.g.
+ * `CurProgress=38` / `MaxProgress=100` for achievements that aren't unlocked
+ * yet, which lets us render a progress bar instead of a plain locked icon.
+ *
+ * Only the section-based ini crackers (CODEX/RUNE/TENOKE/HOODLUM/RLE) carry
+ * this in a shared shape; other formats return nothing so we never surface
+ * bogus progress.
+ */
+export const parseAchievementProgressFile = (
+  filePath: string,
+  type: Cracker
+): AchievementProgress[] => {
+  if (!existsSync(filePath)) return [];
+
+  const supportsProgress =
+    type === Cracker.codex ||
+    type === Cracker.rune ||
+    type === Cracker.tenoke ||
+    type === Cracker.hoodlum ||
+    type === Cracker.rle;
+
+  if (!supportsProgress) return [];
+
+  try {
+    const parsed = iniParse(filePath);
+    const progress: AchievementProgress[] = [];
+
+    for (const name of Object.keys(parsed)) {
+      const entry = parsed[name];
+      if (!entry || typeof entry !== "object") continue;
+
+      // Skip already-unlocked achievements — progress only matters while locked.
+      if (entry.Achieved == "1") continue;
+
+      const current = Number(entry.CurProgress);
+      const max = Number(entry.MaxProgress);
+
+      // Require a real, in-flight stat goal: a positive max and a meaningful
+      // current value below it. (current === 0 carries no useful signal.)
+      if (
+        Number.isFinite(current) &&
+        Number.isFinite(max) &&
+        max > 0 &&
+        current > 0 &&
+        current < max
+      ) {
+        progress.push({ name, current, max });
+      }
+    }
+
+    return progress;
+  } catch (err) {
+    achievementsLogger.error(`Error parsing progress ${type} - ${filePath}`, err);
     return [];
   }
 };

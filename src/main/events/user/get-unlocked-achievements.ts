@@ -30,6 +30,7 @@ export const getUnlockedAchievements = async (
   );
 
   const unlockedAchievements = cachedAchievements?.unlockedAchievements ?? [];
+  const achievementProgress = cachedAchievements?.achievementProgress ?? [];
 
   return achievementsData
     .map((achievementData) => {
@@ -54,11 +55,18 @@ export const getUnlockedAchievements = async (
         };
       }
 
+      const progressData = achievementProgress.find(
+        (p) => p.name.toUpperCase() === achievementData.name.toUpperCase()
+      );
+
       return {
         ...achievementData,
         unlocked: false,
         unlockTime: null,
         icongray: icongray,
+        ...(progressData && {
+          progress: { current: progressData.current, max: progressData.max },
+        }),
         description:
           !achievementData.hidden || showHiddenAchievementsDescription
             ? achievementData.description

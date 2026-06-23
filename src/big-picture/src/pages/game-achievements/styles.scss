@@ -276,6 +276,37 @@
     -webkit-box-orient: vertical;
   }
 
+  &__progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+
+    &-track {
+      flex: 1;
+      max-width: 280px;
+      height: 6px;
+      border-radius: 9999px;
+      background-color: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+    }
+
+    &-fill {
+      height: 100%;
+      border-radius: 9999px;
+      background-color: var(--text, #fff);
+      opacity: 0.85;
+      transition: width ease 0.2s;
+    }
+
+    &-label {
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+  }
+
   &__meta {
     display: flex;
     align-items: center;

@@ -41,6 +41,34 @@ export function AchievementList({
               {achievement.displayName}
             </h4>
             <p>{achievement.description}</p>
+
+            {!achievement.unlocked &&
+              achievement.progress &&
+              achievement.progress.max > 0 && (
+                <div
+                  className="achievements__item-progress"
+                  title={`${achievement.progress.current} / ${achievement.progress.max}`}
+                >
+                  <div className="achievements__item-progress-track">
+                    <div
+                      className="achievements__item-progress-fill"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round(
+                            (achievement.progress.current /
+                              achievement.progress.max) *
+                              100
+                          )
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <small className="achievements__item-progress-label">
+                    {achievement.progress.current} / {achievement.progress.max}
+                  </small>
+                </div>
+              )}
           </div>
 
           <div className="achievements__item-meta">
