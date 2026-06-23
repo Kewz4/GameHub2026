@@ -20,6 +20,19 @@ export const parseAchievementFile = (
       return processDefault(parsed);
     }
 
+    // TENOKE, HOODLUM and RLE all emit a CODEX-style achievements.ini
+    // ([ACH_NAME] sections with Achieved=1 / UnlockTime=…), so they parse the
+    // same way as CODEX/RUNE. processDefault only credits Achieved == "1", so a
+    // format mismatch can never produce a false unlock.
+    if (
+      type === Cracker.tenoke ||
+      type === Cracker.hoodlum ||
+      type === Cracker.rle
+    ) {
+      const parsed = iniParse(filePath);
+      return processDefault(parsed);
+    }
+
     if (type === Cracker.onlineFix) {
       const parsed = iniParse(filePath);
       return processOnlineFix(parsed);

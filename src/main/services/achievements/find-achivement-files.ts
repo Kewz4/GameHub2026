@@ -73,6 +73,14 @@ const crackers = [
   Cracker.empress,
   Cracker.flt,
   Cracker.razor1911,
+  // RLE had a path mapping defined below but was never actually scanned
+  // because it was missing from this list — its achievements were silently
+  // dropped. TENOKE and HOODLUM are modern (2023+) Steam crackers that share
+  // the CODEX-lineage achievements.ini format and are very common in recent
+  // repacks, so watching them meaningfully improves detection coverage.
+  Cracker.rle,
+  Cracker.tenoke,
+  Cracker.hoodlum,
 ];
 
 const getPathFromCracker = (cracker: Cracker) => {
@@ -233,6 +241,34 @@ const getPathFromCracker = (cracker: Cracker) => {
       {
         folderPath: path.join(appData, ".1911"),
         fileLocation: ["<objectId>", "achievement"],
+      },
+    ];
+  }
+
+  // TENOKE — modern Steam cracker (CODEX-lineage achievements.ini format).
+  if (cracker == Cracker.tenoke) {
+    return [
+      {
+        folderPath: path.join(publicDocuments, "Steam", "TENOKE"),
+        fileLocation: ["<objectId>", "achievements.ini"],
+      },
+      {
+        folderPath: path.join(appData, "Steam", "TENOKE"),
+        fileLocation: ["<objectId>", "achievements.ini"],
+      },
+    ];
+  }
+
+  // HOODLUM — modern Steam cracker (CODEX-lineage achievements.ini format).
+  if (cracker == Cracker.hoodlum) {
+    return [
+      {
+        folderPath: path.join(publicDocuments, "Steam", "HOODLUM"),
+        fileLocation: ["<objectId>", "achievements.ini"],
+      },
+      {
+        folderPath: path.join(appData, "Steam", "HOODLUM"),
+        fileLocation: ["<objectId>", "achievements.ini"],
       },
     ];
   }
