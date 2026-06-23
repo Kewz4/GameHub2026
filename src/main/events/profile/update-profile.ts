@@ -54,10 +54,15 @@ const updateProfile = async (
           ? { kind: "profile-banner", hydraUserId: me.id }
           : { kind: "profile-banner" }
       ).catch(() => undefined);
-      payload["backgroundImageUrl"] = uploadcareUrl ?? null;
 
-      // Copy source file to a permanent local path so re-entry always loads
-      // from a reliable local file rather than the Uploadcare CDN URL.
+      // Only update the server's background URL if we actually uploaded something.
+      // If upload failed, leave server value untouched to avoid wiping the banner.
+      if (uploadcareUrl !== undefined) {
+        payload["backgroundImageUrl"] = uploadcareUrl;
+      }
+
+      // Copy the source file to a permanent local path so the renderer can
+      // always display the banner via the local: protocol without hitting CDN.
       try {
         const profileAssetsDir = path.join(
           app.getPath("userData"),
@@ -68,7 +73,24 @@ const updateProfile = async (
         fs.copyFileSync(updateProfile.backgroundImageUrl, localBannerPath);
         prefUpdates.localBackgroundImageUrl = localBannerPath;
       } catch {
-        prefUpdates.localBackgroundImageUrl = uploadcareUrl ?? null;
+        // File copy failed — if the R2 upload succeeded, download back from R2
+        // so the local: protocol can serve the banner without a broken key.
+        if (uploadcareUrl && me?.id) {
+          try {
+            const cached = await UploadcareSync.findLatestImageByKind(
+              "profile-banner",
+              me.id
+            );
+            // findLatestImageByKind returns "local:/path", strip prefix so
+            // overlayLocalImages can re-add it when reading from prefs.
+            prefUpdates.localBackgroundImageUrl = cached
+              ? cached.replace(/^local:/, "")
+              : null;
+          } catch {
+            // R2 download also failed — leave existing localBackgroundImageUrl
+            // in place (do not set prefUpdates.localBackgroundImageUrl at all).
+          }
+        }
       }
     }
   }

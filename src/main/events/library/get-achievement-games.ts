@@ -158,7 +158,16 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
     });
   }
 
-  return out;
+  // Deduplicate: same game may be stored under multiple shop keys (e.g.
+  // steam:123 and exophase:123). Keep the entry with the most unlocks.
+  const best = new Map<string, AchievementGameStat>();
+  for (const entry of out) {
+    const prev = best.get(entry.objectId);
+    if (!prev || entry.unlockedAchievementCount > prev.unlockedAchievementCount) {
+      best.set(entry.objectId, entry);
+    }
+  }
+  return [...best.values()];
 };
 
 registerEvent("getAchievementGames", getAchievementGames);
