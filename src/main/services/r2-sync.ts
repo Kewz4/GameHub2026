@@ -529,7 +529,9 @@ export class R2Sync {
     const res = await this.client.send(
       new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
     );
-    const bytes = await (res.Body as Readable & { transformToByteArray(): Promise<Uint8Array> }).transformToByteArray();
+    const bytes = await (
+      res.Body as Readable & { transformToByteArray(): Promise<Uint8Array> }
+    ).transformToByteArray();
     return Buffer.from(bytes);
   }
 
