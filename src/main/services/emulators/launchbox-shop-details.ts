@@ -23,12 +23,40 @@ export interface LaunchboxShopDetailsEntry {
   } | null;
 }
 
-export const launchboxShopDetails = async (_objectId: string): Promise<null> =>
-  null;
+import { HydraApi } from "@main/services/hydra-api";
+
+export const launchboxShopDetails = async (
+  objectId: string
+): Promise<LaunchboxShopDetailsEntry | null> => {
+  try {
+    return await HydraApi.get<LaunchboxShopDetailsEntry>(
+      `/games/launchbox/${objectId}`,
+      undefined,
+      { needsAuth: false }
+    );
+  } catch {
+    return null;
+  }
+};
 
 export const fetchShopDetailsForSkus = async (
-  _skus: string[]
-): Promise<Map<string, LaunchboxShopDetailsEntry>> => new Map();
+  skus: string[]
+): Promise<Map<string, LaunchboxShopDetailsEntry>> => {
+  if (skus.length === 0) return new Map();
+  try {
+    const results = await HydraApi.get<
+      Array<{ sku: string; entry: LaunchboxShopDetailsEntry }>
+    >("/games/launchbox/by-skus", { skus: skus.join(",") }, { needsAuth: false });
+
+    const map = new Map<string, LaunchboxShopDetailsEntry>();
+    for (const { sku, entry } of results) {
+      map.set(normalizeSku(sku), entry);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+};
 
 export const normalizeSku = (sku: string): string =>
   sku
