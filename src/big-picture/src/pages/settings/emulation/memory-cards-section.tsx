@@ -33,7 +33,6 @@ import { ConfirmationModal } from "../../../components/modals";
 import {
   useBigPictureToast,
   useNavigation,
-  useUserDetails,
 } from "../../../hooks";
 import { getSkuRegion, getSkuRegionFlag } from "@renderer/helpers";
 import {
@@ -365,7 +364,6 @@ export function MemoryCardsSection({
   onUploaded,
 }: Readonly<MemoryCardsSectionProps>) {
   const { t } = useTranslation("settings");
-  const { hasActiveSubscription } = useUserDetails();
   const { showSuccessToast, showErrorToast } = useBigPictureToast();
   const isPs1 = config.system === "ps1";
   const api = isPs1 ? ps1Api : ps2Api;
@@ -610,15 +608,10 @@ export function MemoryCardsSection({
                       id={collapseId}
                       navigationOverrides={{
                         left: { type: "block" },
-                        right: hasActiveSubscription
-                          ? {
-                              type: "item",
-                              itemId: backupAllId,
-                            }
-                          : {
-                              type: "item",
-                              itemId: removeCardId,
-                            },
+                        right: {
+                          type: "item",
+                          itemId: backupAllId,
+                        },
                         up: previousGroup
                           ? {
                               type: "item",
@@ -685,8 +678,7 @@ export function MemoryCardsSection({
                       </button>
                     </FocusItem>
 
-                    {hasActiveSubscription ? (
-                      <FocusItem
+                    <FocusItem
                         id={backupAllId}
                         navigationOverrides={{
                           left: {
@@ -752,17 +744,14 @@ export function MemoryCardsSection({
                               : t("cloud_backup_all")}
                           </span>
                         </button>
-                      </FocusItem>
-                    ) : null}
+                    </FocusItem>
 
                     <Button
                       focusId={removeCardId}
                       focusNavigationOverrides={{
                         left: {
                           type: "item",
-                          itemId: hasActiveSubscription
-                            ? backupAllId
-                            : collapseId,
+                          itemId: backupAllId,
                         },
                         right: { type: "block" },
                         up: previousGroup
@@ -963,7 +952,6 @@ export function MemoryCardsSection({
                                       ? t("cloud_backing_up")
                                       : t("cloud_backup"),
                                   disabled:
-                                    !hasActiveSubscription ||
                                     backingUpKey === currentKey,
                                   onSelect: () => handleBackup(save),
                                 },
