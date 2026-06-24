@@ -1,0 +1,71 @@
+@use "../../../scss/globals.scss";
+
+.settings-emulation {
+  display: flex;
+  flex-direction: column;
+  gap: calc(globals.$spacing-unit * 3);
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(globals.$spacing-unit * 4);
+    color: globals.$body-color;
+  }
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: globals.$spacing-unit;
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: globals.$spacing-unit;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 18px;
+    color: globals.$muted-color;
+  }
+
+  &__new-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px calc(globals.$spacing-unit);
+    border-radius: 4px;
+    font-size: globals.$small-font-size;
+    font-weight: 600;
+    color: #fafafa;
+    background: globals.$classics-rainbow;
+  }
+
+  &__description {
+    margin: 0;
+    font-size: globals.$body-font-size;
+    color: globals.$body-color;
+  }
+
+  &__disclaimer {
+    margin: 0;
+    font-size: globals.$small-font-size;
+    color: globals.$classics-washed;
+  }
+
+  &__cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: calc(globals.$spacing-unit * 2);
+  }
+
+  &__retroachievements {
+    display: flex;
+    flex-direction: column;
+    gap: calc(globals.$spacing-unit * 1.5);
+    padding: calc(globals.$spacing-unit * 2);
+    border: 1px solid globals.$border-color;
+    border-radius: 8px;
+  }
+}

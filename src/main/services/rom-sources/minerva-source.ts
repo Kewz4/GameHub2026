@@ -27,6 +27,35 @@ const MINERVA_PLATFORMS: Partial<Record<EmulatorSystem, string[]>> = {
 
 const MINERVA_BASE = "https://minerva-archive.org";
 
+// Playwright is only available in the sandboxed dev/scraping environment; it is
+// not bundled into shipped builds. The path is held in a variable (and marked
+// @vite-ignore at each call site) so Rollup does not try to resolve it at build
+// time — resolution happens lazily at runtime, and gracefully fails otherwise.
+const PLAYWRIGHT_MODULE_PATH =
+  process.env.PLAYWRIGHT_MODULE_PATH ??
+  "/opt/node22/lib/node_modules/playwright/index.mjs";
+const CHROMIUM_EXECUTABLE_PATH =
+  process.env.PLAYWRIGHT_CHROMIUM_PATH ??
+  "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const CHROMIUM_ARGS = [
+  "--no-sandbox",
+  "--disable-quic",
+  "--disable-features=EncryptedClientHello,TLS13EarlyData",
+  "--disable-web-security",
+  "--ignore-certificate-errors",
+  "--proxy-server=http://127.0.0.1:39899",
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadPlaywright(): Promise<any | null> {
+  try {
+    return await import(/* @vite-ignore */ PLAYWRIGHT_MODULE_PATH);
+  } catch (err) {
+    console.warn("[minerva] Playwright not available:", err);
+    return null;
+  }
+}
+
 const BROWSER_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -63,19 +92,11 @@ export async function scrapeListing(platformPath: string): Promise<string[]> {
   if (html === null) {
     // Playwright fallback
     try {
-      const playwright = await import(
-        "/opt/node22/lib/node_modules/playwright/index.mjs"
-      );
+      const playwright = await loadPlaywright();
+      if (!playwright) return [];
       const browser = await playwright.chromium.launch({
-        executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-        args: [
-          "--no-sandbox",
-          "--disable-quic",
-          "--disable-features=EncryptedClientHello,TLS13EarlyData",
-          "--disable-web-security",
-          "--ignore-certificate-errors",
-          "--proxy-server=http://127.0.0.1:39899",
-        ],
+        executablePath: CHROMIUM_EXECUTABLE_PATH,
+        args: CHROMIUM_ARGS,
         headless: true,
       });
       try {
@@ -108,27 +129,15 @@ export async function scrapeListing(platformPath: string): Promise<string[]> {
 export async function scrapeRomPage(
   romPath: string
 ): Promise<{ magnet: string | null; torrentUrl: string | null }> {
-  let playwright: typeof import("/opt/node22/lib/node_modules/playwright/index.mjs");
-  try {
-    playwright = await import(
-      "/opt/node22/lib/node_modules/playwright/index.mjs"
-    );
-  } catch (err) {
-    console.warn("[minerva] Playwright not available:", err);
+  const playwright = await loadPlaywright();
+  if (!playwright) {
     return { magnet: null, torrentUrl: null };
   }
 
   const url = `${MINERVA_BASE}${romPath}`;
   const browser = await playwright.chromium.launch({
-    executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-    args: [
-      "--no-sandbox",
-      "--disable-quic",
-      "--disable-features=EncryptedClientHello,TLS13EarlyData",
-      "--disable-web-security",
-      "--ignore-certificate-errors",
-      "--proxy-server=http://127.0.0.1:39899",
-    ],
+    executablePath: CHROMIUM_EXECUTABLE_PATH,
+    args: CHROMIUM_ARGS,
     headless: true,
   });
 
