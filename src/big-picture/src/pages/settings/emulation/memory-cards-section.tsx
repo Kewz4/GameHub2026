@@ -30,10 +30,7 @@ import {
   VerticalFocusGroup,
 } from "../../../components";
 import { ConfirmationModal } from "../../../components/modals";
-import {
-  useBigPictureToast,
-  useNavigation,
-} from "../../../hooks";
+import { useBigPictureToast, useNavigation } from "../../../hooks";
 import { getSkuRegion, getSkuRegionFlag } from "@renderer/helpers";
 import {
   resolveCardBackupProgress,
@@ -679,71 +676,71 @@ export function MemoryCardsSection({
                     </FocusItem>
 
                     <FocusItem
-                        id={backupAllId}
-                        navigationOverrides={{
-                          left: {
-                            type: "item",
-                            itemId: collapseId,
-                          },
-                          right: {
-                            type: "item",
-                            itemId: removeCardId,
-                          },
-                          up: previousGroup
+                      id={backupAllId}
+                      navigationOverrides={{
+                        left: {
+                          type: "item",
+                          itemId: collapseId,
+                        },
+                        right: {
+                          type: "item",
+                          itemId: removeCardId,
+                        },
+                        up: previousGroup
+                          ? {
+                              type: "item",
+                              itemId: getEmulationMemcardBackupAllFocusId(
+                                previousGroup.cardFilePath
+                              ),
+                            }
+                          : {
+                              type: "item",
+                              itemId:
+                                EMULATION_DETAIL_MEMORY_CARDS_DETECT_BUTTON_ID,
+                            },
+                        down:
+                          !isCollapsed && firstRecordMenuId
                             ? {
                                 type: "item",
-                                itemId: getEmulationMemcardBackupAllFocusId(
-                                  previousGroup.cardFilePath
-                                ),
+                                itemId: firstRecordMenuId,
                               }
-                            : {
-                                type: "item",
-                                itemId:
-                                  EMULATION_DETAIL_MEMORY_CARDS_DETECT_BUTTON_ID,
-                              },
-                          down:
-                            !isCollapsed && firstRecordMenuId
+                            : nextGroup
                               ? {
                                   type: "item",
-                                  itemId: firstRecordMenuId,
+                                  itemId: getEmulationMemcardBackupAllFocusId(
+                                    nextGroup.cardFilePath
+                                  ),
                                 }
-                              : nextGroup
-                                ? {
-                                    type: "item",
-                                    itemId: getEmulationMemcardBackupAllFocusId(
-                                      nextGroup.cardFilePath
-                                    ),
-                                  }
-                                : {
-                                    type: "item",
-                                    itemId: downTargetId,
-                                  },
+                              : {
+                                  type: "item",
+                                  itemId: downTargetId,
+                                },
+                      }}
+                      asChild
+                    >
+                      <button
+                        type="button"
+                        className="emulator-detail__memcard-backup-all"
+                        onClick={() => {
+                          handleBackupAll(cardFilePath, records.length).catch(
+                            () => {}
+                          );
                         }}
-                        asChild
+                        disabled={isBackingUp}
                       >
-                        <button
-                          type="button"
-                          className="emulator-detail__memcard-backup-all"
-                          onClick={() => {
-                            handleBackupAll(cardFilePath, records.length).catch(
-                              () => {}
-                            );
-                          }}
-                          disabled={isBackingUp}
-                        >
-                          <UploadIcon size={13} />
-                          <span>
-                            {isBackingUp
-                              ? `${t("cloud_backing_up")} ${t(
-                                  "setup_scan_count",
-                                  {
-                                    processed: progressDone,
-                                    total: progressTotal,
-                                  }
-                                )}`
-                              : t("cloud_backup_all")}
-                          </span>
-                        </button>
+                        <UploadIcon size={13} />
+                        <span>
+                          {isBackingUp
+                            ? `${t("cloud_backing_up")} ${t(
+                                "setup_scan_count",
+                                {
+                                  processed: progressDone,
+                                  total: progressTotal,
+                                }
+                              )}`
+                            : t("cloud_backup_all")}
+                        </span>
+                      </button>
                     </FocusItem>
 
                     <Button
@@ -951,8 +948,7 @@ export function MemoryCardsSection({
                                     backingUpKey === currentKey
                                       ? t("cloud_backing_up")
                                       : t("cloud_backup"),
-                                  disabled:
-                                    backingUpKey === currentKey,
+                                  disabled: backingUpKey === currentKey,
                                   onSelect: () => handleBackup(save),
                                 },
                               ]}
