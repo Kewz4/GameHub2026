@@ -145,7 +145,8 @@ function cleanTitle(fileName) {
  * CDN entries that slip through.
  */
 function classifyWiiuFile(fileName) {
-  if (/\(Update\)/i.test(fileName)) return { contentType: "update", titleId: null };
+  if (/\(Update\)/i.test(fileName))
+    return { contentType: "update", titleId: null };
   if (/\((DLC|AOC|Add-?On Content)\)/i.test(fileName))
     return { contentType: "dlc", titleId: null };
 
