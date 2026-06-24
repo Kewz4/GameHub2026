@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { GameReview, Game, GameShop } from "@types";
 
 import { ReviewForm } from "./review-form";
-import { ReviewItem } from "./review-item";
+import { ReviewThread } from "./review-thread";
 import { ReviewSortOptions } from "./review-sort-options";
 import { ReviewPromptBanner } from "./review-prompt-banner";
 import "./game-reviews.scss";
@@ -61,6 +61,9 @@ export function GameReviews({
   );
   const [votingReviews, setVotingReviews] = useState<Set<string>>(new Set());
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
+  const [openComposerReviewId, setOpenComposerReviewId] = useState<
+    string | null
+  >(null);
 
   const previousVotesRef = useRef<
     Map<string, { upvotes: number; downvotes: number }>
@@ -503,11 +506,12 @@ export function GameReviews({
         }}
       >
         {reviews.map((review) => (
-          <ReviewItem
+          <ReviewThread
             key={review.id}
+            shop={shop}
+            objectId={objectId}
             review={review}
             userDetailsId={userDetailsId}
-            isBlocked={review.isBlocked}
             isVisible={visibleBlockedReviews.has(review.id)}
             isVoting={votingReviews.has(review.id)}
             previousVotes={
@@ -516,10 +520,14 @@ export function GameReviews({
                 downvotes: 0,
               }
             }
-            onVote={handleVoteReview}
-            onDelete={handleDeleteReview}
+            onVoteReview={handleVoteReview}
+            onDeleteReview={handleDeleteReview}
             onToggleVisibility={toggleBlockedReview}
             onAnimationComplete={handleVoteAnimationComplete}
+            composerOpen={openComposerReviewId === review.id}
+            onComposerOpenChange={(open) =>
+              setOpenComposerReviewId(open ? review.id : null)
+            }
           />
         ))}
       </div>

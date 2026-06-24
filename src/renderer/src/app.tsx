@@ -26,6 +26,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ArchiveDeletionModal } from "./pages/downloads/archive-deletion-error-modal";
 import { AchievementSupportModal } from "./pages/downloads/achievement-support-modal";
 import { Onboarding } from "./pages/onboarding/onboarding";
+import { AddFriendModal } from "./pages/profile/profile-content/add-friend-modal";
 
 import type { GameShop, UserPreferences } from "@types";
 import "./app.scss";
@@ -78,6 +79,7 @@ export function App() {
     useState(false);
   const [archivePaths, setArchivePaths] = useState<string[]>([]);
   const [achievementSupportGame, setAchievementSupportGame] = useState<{ objectId: string; shop: GameShop; title: string } | null>(null);
+  const [showAddFriendModal, setShowAddFriendModal] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -376,6 +378,20 @@ export function App() {
     };
   }, [playAudio]);
 
+  useEffect(() => {
+    const unsubscribe = globalThis.electron.onNavigate((path) => {
+      navigate(path);
+    });
+    return () => unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    const unsubscribe = globalThis.electron.onOpenAddFriendModal(() => {
+      setShowAddFriendModal(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleToastClose = useCallback(() => {
     dispatch(closeToast());
   }, [dispatch]);
@@ -419,6 +435,11 @@ export function App() {
         shop={achievementSupportGame?.shop ?? "steam"}
         objectId={achievementSupportGame?.objectId ?? ""}
         onClose={() => setAchievementSupportGame(null)}
+      />
+
+      <AddFriendModal
+        visible={showAddFriendModal}
+        onClose={() => setShowAddFriendModal(false)}
       />
 
       <main>

@@ -37,6 +37,7 @@ export class WindowManager {
   public static consoleWindow: Electron.BrowserWindow | null = null;
   public static updateCheckerWindow: Electron.BrowserWindow | null = null;
   private static bigPicture: Electron.BrowserWindow | null = null;
+  private static friendsWindow: Electron.BrowserWindow | null = null;
   private static deferredMainMaximize = false;
 
   private static readonly editorWindows: Map<string, BrowserWindow> = new Map();
@@ -123,7 +124,7 @@ export class WindowManager {
   }
 
   public static sendToAppWindows(channel: string, ...args: unknown[]) {
-    const windows = [this.mainWindow, this.bigPicture];
+    const windows = [this.mainWindow, this.bigPicture, this.friendsWindow];
 
     for (const window of windows) {
       if (!window || window.isDestroyed()) continue;
@@ -970,6 +971,80 @@ export class WindowManager {
       tray.addListener("click", showContextMenu);
       tray.addListener("right-click", showContextMenu);
     }
+  }
+
+  public static openFriendsWindow() {
+    if (this.friendsWindow) {
+      if (this.friendsWindow.isMinimized()) {
+        this.friendsWindow.restore();
+      }
+      this.friendsWindow.focus();
+      return;
+    }
+
+    this.friendsWindow = new BrowserWindow({
+      width: 420,
+      height: 780,
+      minWidth: 420,
+      maxWidth: 420,
+      minHeight: 560,
+      maximizable: false,
+      backgroundColor: "#1c1c1c",
+      frame: false,
+      icon,
+      webPreferences: {
+        preload: path.join(__dirname, "../preload/index.mjs"),
+        sandbox: false,
+      },
+      show: false,
+    });
+
+    this.friendsWindow.removeMenu();
+    this.loadWindowURL(this.friendsWindow, "friends-window");
+
+    this.friendsWindow.once("ready-to-show", () => {
+      this.friendsWindow?.show();
+      if (!app.isPackaged || isStaging) {
+        this.friendsWindow?.webContents.openDevTools();
+      }
+    });
+
+    this.friendsWindow.on("closed", () => {
+      this.friendsWindow = null;
+    });
+  }
+
+  public static minimizeFriendsWindow() {
+    if (this.friendsWindow && !this.friendsWindow.isDestroyed()) {
+      this.friendsWindow.minimize();
+    }
+  }
+
+  public static closeFriendsWindow() {
+    if (this.friendsWindow && !this.friendsWindow.isDestroyed()) {
+      this.friendsWindow.close();
+    }
+    this.friendsWindow = null;
+  }
+
+  private static focusMainWindow() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      if (this.mainWindow.isMinimized()) this.mainWindow.restore();
+      this.mainWindow.show();
+      this.mainWindow.focus();
+    } else {
+      this.createMainWindow();
+    }
+  }
+
+  public static focusMainWindowAndNavigate(targetPath: string) {
+    this.focusMainWindow();
+    this.mainWindow?.webContents.send("on-navigate", targetPath);
+  }
+
+  public static openAddFriendModalInMainWindow() {
+    this.focusMainWindow();
+    this.mainWindow?.webContents.send("on-open-add-friend-modal");
   }
 
   public static createConsoleWindow() {

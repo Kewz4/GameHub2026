@@ -9,7 +9,8 @@ const readBytesAsText = (filePath: string, maxBytes: number): Promise<string> =>
     const chunks: Buffer[] = [];
     let read = 0;
     const stream = createReadStream(filePath, { highWaterMark: 65536 });
-    stream.on("data", (chunk: Buffer) => {
+    stream.on("data", (chunk: Buffer | string) => {
+      if (typeof chunk === "string") return;
       const remaining = maxBytes - read;
       if (remaining <= 0) {
         stream.destroy();

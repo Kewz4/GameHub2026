@@ -1162,6 +1162,21 @@ declare global {
         text: string;
       }) => void
     ) => () => void;
+    /* Friends window */
+    openFriendsWindow: () => Promise<void>;
+    minimizeFriendsWindow: () => Promise<void>;
+    closeFriendsWindow: () => Promise<void>;
+    openFriendProfileInMainWindow: (userId: string) => Promise<void>;
+    openAddFriendModalInMainWindow: () => Promise<void>;
+    onOpenAddFriendModal: (cb: () => void) => () => void;
+    onFriendsUpdated: (cb: () => void) => () => void;
+    onFriendPresence: (cb: (presence: import("@types").FriendPresenceSync) => void) => () => void;
+    onProfileUpdated: (cb: () => void) => () => void;
+    onNavigate: (cb: (path: string) => void) => () => void;
+    getProcessedFriendImage: (
+      imageUrl: string | null,
+      options: { width: number; height: number; preserveAnimation?: boolean }
+    ) => Promise<string | null>;
   }
 
   interface Window {

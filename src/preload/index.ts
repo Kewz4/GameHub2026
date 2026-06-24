@@ -15,6 +15,7 @@ import type {
   GameAchievement,
   Theme,
   FriendRequestSync,
+  FriendPresenceSync,
   NotificationSync,
   ShortcutLocation,
   CreateSteamShortcutOptions,
@@ -1290,6 +1291,45 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("installer:progress", listener);
     return () => ipcRenderer.off("installer:progress", listener);
   },
+
+  /* Friends window */
+  openFriendsWindow: () => ipcRenderer.invoke("openFriendsWindow"),
+  minimizeFriendsWindow: () => ipcRenderer.invoke("minimizeFriendsWindow"),
+  closeFriendsWindow: () => ipcRenderer.invoke("closeFriendsWindow"),
+  openFriendProfileInMainWindow: (userId: string) =>
+    ipcRenderer.invoke("openFriendProfileInMainWindow", userId),
+  openAddFriendModalInMainWindow: () =>
+    ipcRenderer.invoke("openAddFriendModalInMainWindow"),
+  onOpenAddFriendModal: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("on-open-add-friend-modal", listener);
+    return () => ipcRenderer.removeListener("on-open-add-friend-modal", listener);
+  },
+  onFriendsUpdated: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("on-friends-updated", listener);
+    return () => ipcRenderer.removeListener("on-friends-updated", listener);
+  },
+  onFriendPresence: (cb: (presence: FriendPresenceSync) => void): (() => void) => {
+    const listener = (_: unknown, presence: FriendPresenceSync) => cb(presence);
+    ipcRenderer.on("on-friend-presence", listener);
+    return () => ipcRenderer.removeListener("on-friend-presence", listener);
+  },
+  onProfileUpdated: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("on-profile-updated", listener);
+    return () => ipcRenderer.removeListener("on-profile-updated", listener);
+  },
+  onNavigate: (cb: (path: string) => void): (() => void) => {
+    const listener = (_: unknown, path: string) => cb(path);
+    ipcRenderer.on("on-navigate", listener);
+    return () => ipcRenderer.removeListener("on-navigate", listener);
+  },
+  getProcessedFriendImage: (
+    imageUrl: string | null,
+    options: { width: number; height: number; preserveAnimation?: boolean }
+  ): Promise<string | null> =>
+    ipcRenderer.invoke("getProcessedFriendImage", imageUrl, options),
 
   // Cloud debugger
   runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),

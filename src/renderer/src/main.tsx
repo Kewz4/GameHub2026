@@ -41,6 +41,7 @@ import GameLauncher from "./pages/game-launcher/game-launcher";
 import Installer from "./pages/installer/installer";
 import UpdateChecker from "./pages/update-checker/update-checker";
 import ConsolePage from "./pages/console/console";
+import FriendsWindow from "./pages/friends-window/friends-window";
 import BigPictureApp from "../../big-picture/src/app";
 import BigPictureCatalogue from "../../big-picture/src/pages/catalogue/catalogue";
 import BigPictureCloudSaves from "../../big-picture/src/pages/cloud-saves/cloud-saves";
@@ -136,6 +137,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/installer" element={<Installer />} />
           <Route path="/update-checker" element={<UpdateChecker />} />
           <Route path="/console" element={<ConsolePage />} />
+          <Route path="/friends-window" element={<FriendsWindow />} />
 
           <Route path="/big-picture" element={<BigPictureApp />}>
             <Route index element={<BigPictureHome />} />

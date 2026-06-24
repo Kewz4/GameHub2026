@@ -1231,7 +1231,7 @@ export default function Game() {
                 />
 
                 <ControllerSupportBox
-                  shop={shop}
+                  shop={shop ?? "steam"}
                   shopDetails={shopDetails}
                   focusId={GAME_SIDEBAR_CONTROLLER_ID}
                   focusNavigationOrder={8}

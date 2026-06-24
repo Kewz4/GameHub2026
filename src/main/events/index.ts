@@ -5,6 +5,7 @@ import "./achievements";
 import "./auth";
 import "./autoupdater";
 import "./emulators";
+import "./friends";
 import "./big-picture";
 import "./catalogue";
 import "./cloud-save";

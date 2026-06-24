@@ -3,7 +3,7 @@ import { ThumbsUp, ThumbsDown, Star, Languages } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { GameReview } from "@types";
 
 import { getReviewTranslationLanguage, sanitizeHtml } from "@shared";
@@ -28,6 +28,7 @@ interface ReviewItemProps {
     reviewId: string,
     votes: { upvotes: number; downvotes: number }
   ) => void;
+  replyAction?: ReactNode;
 }
 
 const getRatingText = (score: number, t: (key: string) => string): string => {
@@ -58,10 +59,11 @@ export function ReviewItem({
   onDelete,
   onToggleVisibility,
   onAnimationComplete,
+  replyAction,
 }: Readonly<ReviewItemProps>) {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation("game_details");
-  const { formatDistance } = useDate();
+  const { formatDistance, formatDateTime } = useDate();
   const { numberFormatter } = useFormat();
 
   const [showOriginal, setShowOriginal] = useState(false);
@@ -178,7 +180,10 @@ export function ReviewItem({
               </div>
             </div>
           </div>
-          <div className="game-details__review-date">
+          <div
+            className="game-details__review-date"
+            title={formatDateTime(new Date(review.createdAt))}
+          >
             {formatDistance(new Date(review.createdAt), new Date(), {
               addSuffix: true,
             })}
@@ -221,6 +226,7 @@ export function ReviewItem({
         )}
       </div>
       <div className="game-details__review-actions">
+        <div className="game-details__review-actions-left">
         <div className="game-details__review-votes">
           <motion.button
             className={`game-details__vote-button game-details__vote-button--upvote ${review.hasUpvoted ? "game-details__vote-button--active" : ""}`}
@@ -318,6 +324,8 @@ export function ReviewItem({
               </motion.span>
             </AnimatePresence>
           </motion.button>
+        </div>
+          {replyAction}
         </div>
         {userDetailsId === review.user.id && (
           <button
