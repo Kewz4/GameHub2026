@@ -64,8 +64,7 @@ export async function searchMinervaCatalogue(
     void key;
     const normalEntry = normalizeTitle(value.entry.title);
     const isSubstring =
-      normalEntry.includes(normalTarget) ||
-      normalTarget.includes(normalEntry);
+      normalEntry.includes(normalTarget) || normalTarget.includes(normalEntry);
     const dist = levenshtein(normalTarget, normalEntry);
     if (isSubstring || dist <= 2) {
       candidates.push({ entry: value.entry, score: isSubstring ? 0 : dist });

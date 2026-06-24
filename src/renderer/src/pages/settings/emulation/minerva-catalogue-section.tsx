@@ -32,13 +32,14 @@ export function MinervaCatalogueSection() {
       <h3 style={{ margin: "0 0 4px" }}>Minerva ROM Catalogue</h3>
       <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
         Pre-fetch all ROM listings from Minerva Archive and store them locally
-        so download options appear instantly when you open a game. This may
-        take a few minutes.
+        so download options appear instantly when you open a game. This may take
+        a few minutes.
       </p>
 
       {counts && (
         <div style={{ marginBottom: 12, fontSize: "0.875em", opacity: 0.8 }}>
-          Cached {total?.toLocaleString()} ROMs across {Object.keys(counts).length} systems.
+          Cached {total?.toLocaleString()} ROMs across{" "}
+          {Object.keys(counts).length} systems.
         </div>
       )}
 

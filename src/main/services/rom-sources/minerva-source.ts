@@ -213,8 +213,20 @@ export async function buildSystemCatalogue(
 }
 
 const CATALOGUE_SYSTEMS: EmulatorSystem[] = [
-  "n3ds", "nds", "dsi", "n64", "gb", "gbc", "gba", "wiiu", "wii", "gc",
-  "ps1", "ps2", "ps3", "psp",
+  "n3ds",
+  "nds",
+  "dsi",
+  "n64",
+  "gb",
+  "gbc",
+  "gba",
+  "wiiu",
+  "wii",
+  "gc",
+  "ps1",
+  "ps2",
+  "ps3",
+  "psp",
 ];
 
 /**

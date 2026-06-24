@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 
 import { getSteamGridDbArtwork } from "@main/services/steamgriddb";
 import { logger } from "@main/services/logger";
-import { db, gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import {
+  db,
+  gamesShopAssetsSublevel,
+  gamesSublevel,
+  levelKeys,
+} from "@main/level";
 import type { ClassicsDisc, EmulatorSystem, UserPreferences } from "@types";
 import { igdb, IGDB_PLATFORM_IDS } from "@main/services/igdb";
 
@@ -173,7 +178,12 @@ export async function importSgdbRoms(
       const clientSecret = prefs?.igdbClientSecret?.trim();
       if (clientId && clientSecret) {
         const platformId = IGDB_PLATFORM_IDS[system];
-        const igdbGame = await igdb.searchGame(title, platformId, clientId, clientSecret);
+        const igdbGame = await igdb.searchGame(
+          title,
+          platformId,
+          clientId,
+          clientSecret
+        );
         if (igdbGame) {
           igdbDescription = igdbGame.summary ?? null;
           igdbReleaseDate = igdbGame.first_release_date
