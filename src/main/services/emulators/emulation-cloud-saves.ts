@@ -1,13 +1,14 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import FormData from "form-data";
 
 import type {
   EmulationCloudSave,
   EmulationSaveEmulator,
   EmulationSavePlatform,
+  UserPreferences,
 } from "@types";
-import { HydraApi } from "@main/services/hydra-api";
+import { R2Sync } from "@main/services/r2-sync";
+import { db, levelKeys } from "@main/level";
 import {
   readSaveContents as readPs2SaveContents,
   buildPsuBuffer as buildPs2PsuBuffer,
@@ -29,25 +30,92 @@ export interface UploadEmulationSaveOptions {
   buffer: Buffer;
 }
 
+const getOrCreateUserId = async (): Promise<string> => {
+  const prefs = await db
+    .get<string, UserPreferences>(levelKeys.userPreferences, {
+      valueEncoding: "json",
+    })
+    .catch(() => ({}) as UserPreferences);
+
+  let userId = prefs?.cloudSyncUserId;
+  if (!userId) {
+    userId = R2Sync.generateUserId();
+    await db.put(
+      levelKeys.userPreferences,
+      { ...prefs, cloudSyncUserId: userId },
+      { valueEncoding: "json" }
+    );
+  }
+  return userId;
+};
+
+const artifactToCloudSave = (artifact: {
+  id: string;
+  platform: string;
+  emulator: string;
+  saveIdentity: string;
+  fileName: string;
+  label: string | null;
+  shop: string | null;
+  objectId: string | null;
+  artifactLengthInBytes: number;
+  hostname: string;
+  localLastModifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}): EmulationCloudSave => ({
+  id: artifact.id,
+  platform: artifact.platform as EmulationSavePlatform,
+  emulator: artifact.emulator as EmulationSaveEmulator,
+  saveKind: "game_save",
+  saveIdentity: artifact.saveIdentity,
+  artifactLengthInBytes: artifact.artifactLengthInBytes,
+  fileName: artifact.fileName,
+  hostname: artifact.hostname || null,
+  localLastModifiedAt: artifact.localLastModifiedAt,
+  label: artifact.label,
+  metadata: null,
+  shop: artifact.shop as EmulationCloudSave["shop"],
+  objectId: artifact.objectId,
+  lastUploadedAt: artifact.updatedAt,
+  createdAt: artifact.createdAt,
+  updatedAt: artifact.updatedAt,
+});
+
 export const uploadEmulationSave = async (
   options: UploadEmulationSaveOptions
 ): Promise<EmulationCloudSave> => {
-  const form = new FormData();
-  form.append("platform", options.platform);
-  form.append("emulator", options.emulator);
-  if (options.shop) form.append("shop", options.shop);
-  if (options.objectId) form.append("objectId", options.objectId);
-  form.append("saveIdentity", options.saveIdentity);
-  form.append("label", options.label);
-  form.append("localLastModifiedAt", options.localLastModifiedAt);
-  form.append("file", options.buffer, {
-    filename: options.fileName,
-    contentType: "application/octet-stream",
+  const userId = await getOrCreateUserId();
+  const key = await R2Sync.uploadEmulationSave(options.buffer, {
+    userId,
+    platform: options.platform,
+    emulator: options.emulator,
+    saveIdentity: options.saveIdentity,
+    fileName: options.fileName,
+    label: options.label,
+    shop: options.shop,
+    objectId: options.objectId,
+    localLastModifiedAt: options.localLastModifiedAt,
   });
 
-  return HydraApi.post<EmulationCloudSave>("/profile/emulation-saves", form, {
-    needsAuth: true,
-  });
+  return {
+    id: key,
+    platform: options.platform,
+    emulator: options.emulator,
+    saveKind: "game_save",
+    saveIdentity: options.saveIdentity,
+    artifactLengthInBytes: options.buffer.length,
+    fileName: options.fileName,
+    hostname: null,
+    localLastModifiedAt: options.localLastModifiedAt,
+    label: options.label,
+    metadata: null,
+    shop: options.shop as EmulationCloudSave["shop"],
+    objectId: options.objectId,
+    lastUploadedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 };
 
 export const toEmulationSaveEmulator = (
@@ -143,43 +211,53 @@ export const listEmulationSaves = async (
   platform: EmulationSavePlatform,
   objectId?: string | null
 ): Promise<EmulationCloudSave[]> => {
-  const params: Record<string, string> = { platform };
-  if (objectId) params.objectId = objectId;
-  return HydraApi.get<EmulationCloudSave[]>(
-    "/profile/emulation-saves",
-    params,
-    { needsAuth: true }
-  );
+  const userId = await getOrCreateUserId();
+  const artifacts = await R2Sync.listEmulationSaves(userId, platform);
+  const filtered = objectId
+    ? artifacts.filter((a) => a.objectId === objectId)
+    : artifacts;
+  return filtered.map(artifactToCloudSave);
 };
 
 export const deleteEmulationSave = async (saveId: string): Promise<void> => {
-  await HydraApi.delete(`/profile/emulation-saves/${saveId}`, {
-    needsAuth: true,
-  });
+  await R2Sync.deleteEmulationSave(saveId);
 };
 
 export const updateEmulationSaveLabel = async (
   saveId: string,
   label: string
 ): Promise<EmulationCloudSave> => {
-  return HydraApi.patch<EmulationCloudSave>(
-    `/profile/emulation-saves/${saveId}`,
-    { label },
-    { needsAuth: true }
-  );
+  await R2Sync.updateEmulationSaveLabel(saveId, label);
+  // Return a minimal updated record; callers only need the id/label shape.
+  const userId = await getOrCreateUserId();
+  const artifacts = await R2Sync.listEmulationSaves(userId);
+  const updated = artifacts.find((a) => a.id === saveId);
+  if (updated) return artifactToCloudSave(updated);
+  // Fallback: construct a minimal shell so callers don't crash.
+  return {
+    id: saveId,
+    platform: "ps2",
+    emulator: "pcsx2",
+    saveKind: "game_save",
+    saveIdentity: "",
+    artifactLengthInBytes: 0,
+    fileName: "",
+    hostname: null,
+    localLastModifiedAt: null,
+    label,
+    metadata: null,
+    shop: null,
+    objectId: null,
+    lastUploadedAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 };
 
 export const downloadEmulationSave = async (
   saveId: string
 ): Promise<Buffer> => {
-  const url = await HydraApi.get<{ url: string }>(
-    `/profile/emulation-saves/${saveId}/download`,
-    undefined,
-    { needsAuth: true }
-  );
-  const response = await fetch(url.url);
-  const ab = await response.arrayBuffer();
-  return Buffer.from(ab);
+  return R2Sync.downloadEmulationSave(saveId);
 };
 
 // Aliases for upload-emulation-save.ts compatibility
