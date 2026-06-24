@@ -9,6 +9,7 @@ export interface MinervaCatalogueEntry {
   romPath: string;
   magnet: string | null;
   torrentUrl: string | null;
+  fileSize?: string | null;
 }
 
 export interface MinervaCacheRecord {

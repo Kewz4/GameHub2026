@@ -174,27 +174,27 @@ export async function importSgdbRoms(
           valueEncoding: "json",
         })
         .catch(() => null);
+      // Credentials are optional — the IGDB service falls back to embedded
+      // default app credentials when the user hasn't supplied their own.
       const clientId = prefs?.igdbClientId?.trim();
       const clientSecret = prefs?.igdbClientSecret?.trim();
-      if (clientId && clientSecret) {
-        const platformId = IGDB_PLATFORM_IDS[system];
-        const igdbGame = await igdb.searchGame(
-          title,
-          platformId,
-          clientId,
-          clientSecret
-        );
-        if (igdbGame) {
-          igdbDescription = igdbGame.summary ?? null;
-          igdbReleaseDate = igdbGame.first_release_date
-            ? new Date(igdbGame.first_release_date * 1000)
-            : null;
-          igdbGenres = igdbGame.genres?.map((g) => g.name) ?? null;
-          igdbDevelopers =
-            igdbGame.involved_companies
-              ?.filter((c) => c.developer)
-              .map((c) => c.company.name) ?? null;
-        }
+      const platformId = IGDB_PLATFORM_IDS[system];
+      const igdbGame = await igdb.searchGame(
+        title,
+        platformId,
+        clientId,
+        clientSecret
+      );
+      if (igdbGame) {
+        igdbDescription = igdbGame.summary ?? null;
+        igdbReleaseDate = igdbGame.first_release_date
+          ? new Date(igdbGame.first_release_date * 1000)
+          : null;
+        igdbGenres = igdbGame.genres?.map((g) => g.name) ?? null;
+        igdbDevelopers =
+          igdbGame.involved_companies
+            ?.filter((c) => c.developer)
+            .map((c) => c.company.name) ?? null;
       }
     } catch (err) {
       logger.warn(`[sgdb-import] IGDB lookup failed for "${title}"`, err);

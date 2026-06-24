@@ -1,5 +1,19 @@
 import axios from "axios";
 
+// Embedded default IGDB (Twitch) app credentials so metadata works out of the
+// box without per-user setup. Users may override these in settings if they want
+// to use their own Twitch application (e.g. to avoid sharing rate limits).
+export const DEFAULT_IGDB_CLIENT_ID = "lbccfxg1ie3739dubo4bvlj7bw0sue";
+export const DEFAULT_IGDB_CLIENT_SECRET = "e88mbm5snb40ax0n37jpyhearwfikp";
+
+const resolveCredentials = (
+  clientId?: string,
+  clientSecret?: string
+): { clientId: string; clientSecret: string } => ({
+  clientId: clientId?.trim() || DEFAULT_IGDB_CLIENT_ID,
+  clientSecret: clientSecret?.trim() || DEFAULT_IGDB_CLIENT_SECRET,
+});
+
 export interface IgdbGame {
   id: number;
   name: string;
@@ -55,10 +69,12 @@ class IgdbService {
   private token: string | null = null;
   private tokenExpiresAt = 0;
 
-  async getToken(clientId: string, clientSecret: string): Promise<string> {
+  async getToken(clientId?: string, clientSecret?: string): Promise<string> {
     if (this.token && Date.now() < this.tokenExpiresAt - 60_000) {
       return this.token;
     }
+
+    const creds = resolveCredentials(clientId, clientSecret);
 
     const resp = await axios.post<{
       access_token: string;
@@ -66,8 +82,8 @@ class IgdbService {
     }>(
       "https://id.twitch.tv/oauth2/token",
       new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
+        client_id: creds.clientId,
+        client_secret: creds.clientSecret,
         grant_type: "client_credentials",
       }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
@@ -80,12 +96,13 @@ class IgdbService {
 
   async searchGame(
     title: string,
-    platformId: number | undefined,
-    clientId: string,
-    clientSecret: string
+    platformId?: number,
+    clientId?: string,
+    clientSecret?: string
   ): Promise<IgdbGame | null> {
     try {
-      const token = await this.getToken(clientId, clientSecret);
+      const creds = resolveCredentials(clientId, clientSecret);
+      const token = await this.getToken(creds.clientId, creds.clientSecret);
       const platformClause = platformId ? ` & platforms = [${platformId}]` : "";
       const query = `fields name,summary,first_release_date,genres.name,cover.url,screenshots.url,platforms.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher;
 where name ~ *"${title.replace(/"/g, "")}"*${platformClause};
@@ -97,7 +114,7 @@ limit 5;`;
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            "Client-ID": clientId,
+            "Client-ID": creds.clientId,
             "Content-Type": "text/plain",
           },
           timeout: 10_000,
@@ -122,11 +139,12 @@ limit 5;`;
 
   async getGameById(
     igdbId: number,
-    clientId: string,
-    clientSecret: string
+    clientId?: string,
+    clientSecret?: string
   ): Promise<IgdbGame | null> {
     try {
-      const token = await this.getToken(clientId, clientSecret);
+      const creds = resolveCredentials(clientId, clientSecret);
+      const token = await this.getToken(creds.clientId, creds.clientSecret);
       const query = `fields name,summary,first_release_date,genres.name,cover.url,screenshots.url,platforms.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher;
 where id = ${igdbId};
 limit 1;`;
@@ -137,7 +155,7 @@ limit 1;`;
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            "Client-ID": clientId,
+            "Client-ID": creds.clientId,
             "Content-Type": "text/plain",
           },
           timeout: 10_000,

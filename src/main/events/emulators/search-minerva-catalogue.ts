@@ -15,7 +15,7 @@ registerEvent(
       id: `minerva-${entry.system}-${normalizeTitle(entry.title)}`,
       title: entry.title,
       uris: entry.magnet ? [entry.magnet] : [],
-      fileSize: null,
+      fileSize: entry.fileSize ?? null,
       uploadDate: null,
       downloadSourceId: "minerva",
       downloadSourceName: "Minerva Archive",

@@ -49,9 +49,10 @@ export function IgdbSection() {
     >
       <h3 style={{ margin: "0 0 4px" }}>IGDB Metadata</h3>
       <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
-        Enter your Twitch / IGDB API credentials to enrich imported ROMs with
-        descriptions, release dates, genres and developer info. Get credentials
-        at{" "}
+        IGDB enriches imported ROMs with descriptions, release dates, genres and
+        developer info. This works out of the box — these fields are{" "}
+        <strong>optional</strong> and only needed if you want to use your own
+        Twitch application instead of the built-in one. Get credentials at{" "}
         <button
           type="button"
           style={{
