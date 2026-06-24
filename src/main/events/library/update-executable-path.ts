@@ -58,3 +58,27 @@ const updateExecutablePath = async (
 };
 
 registerEvent("updateExecutablePath", updateExecutablePath);
+
+const updateTrackingExecutablePaths = async (
+  _event: Electron.IpcMainInvokeEvent,
+  shop: GameShop,
+  objectId: string,
+  trackingExecutablePaths: string[]
+) => {
+  const parsedPaths = trackingExecutablePaths.map((trackingExecutablePath) =>
+    parseExecutablePath(trackingExecutablePath)
+  );
+
+  const gameKey = levelKeys.game(shop, objectId);
+
+  const game = await gamesSublevel.get(gameKey);
+  if (!game) return;
+
+  await gamesSublevel.put(gameKey, {
+    ...game,
+    trackingExecutablePaths: parsedPaths,
+    trackingExecutablePathsUpdatedAt: parsedPaths.length ? new Date() : null,
+  });
+};
+
+registerEvent("updateTrackingExecutablePaths", updateTrackingExecutablePaths);

@@ -506,6 +506,37 @@ export function GameOptionsModal({
     updateGame();
   };
 
+  const handleAddTrackingExecutable = async () => {
+    const current = game.trackingExecutablePaths ?? [];
+    if (current.length >= 2) return;
+
+    const { filePaths } = await window.electron.showOpenDialog({
+      properties: ["openFile"],
+      defaultPath: game.executablePath ?? undefined,
+      filters: [{ name: t("game_executable"), extensions: ["exe"] }],
+    });
+
+    const path = filePaths?.[0];
+    if (!path || current.includes(path)) return;
+
+    await window.electron.updateTrackingExecutablePaths(
+      game.shop,
+      game.objectId,
+      [...current, path]
+    );
+    updateGame();
+  };
+
+  const handleRemoveTrackingExecutable = async (index: number) => {
+    const current = game.trackingExecutablePaths ?? [];
+    await window.electron.updateTrackingExecutablePaths(
+      game.shop,
+      game.objectId,
+      current.filter((_, itemIndex) => itemIndex !== index)
+    );
+    updateGame();
+  };
+
   const handleChangeWinePrefixPath = async () => {
     const defaultPath =
       await window.electron.getDefaultWinePrefixSelectionPath();
@@ -892,6 +923,8 @@ export function GameOptionsModal({
                 onShowCancelConfirm={() => setShowCancelConfirm(true)}
                 onHideCancelConfirm={() => setShowCancelConfirm(false)}
                 onConfirmCancelTransfer={handleCancelTransfer}
+                onAddTrackingExecutable={handleAddTrackingExecutable}
+                onRemoveTrackingExecutable={handleRemoveTrackingExecutable}
                 showTitleSection={false}
                 showShortcutsSection={false}
                 showLaunchOptionsSection={false}

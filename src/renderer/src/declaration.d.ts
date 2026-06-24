@@ -477,6 +477,11 @@ declare global {
       objectId: string,
       executablePath: string | null
     ) => Promise<void>;
+    updateTrackingExecutablePaths: (
+      shop: GameShop,
+      objectId: string,
+      trackingExecutablePaths: string[]
+    ) => Promise<void>;
     addGameToFavorites: (shop: GameShop, objectId: string) => Promise<void>;
     removeGameFromFavorites: (
       shop: GameShop,

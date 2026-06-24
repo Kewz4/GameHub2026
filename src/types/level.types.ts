@@ -58,6 +58,8 @@ export interface Game {
   winePrefixPath?: string | null;
   protonPath?: string | null;
   executablePath?: string | null;
+  trackingExecutablePaths?: string[] | null;
+  trackingExecutablePathsUpdatedAt?: Date | null;
   /** True when the game is confirmed installed on this machine (Steam appmanifest
    * found, Epic/EA reported installed, or located by the disk scan). Drives the
    * "Play" vs "You own this game — install via …" button. A protocol-URI

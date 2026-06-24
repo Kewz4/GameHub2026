@@ -11,6 +11,13 @@ import { AchievementWatcherManager } from "./achievements/achievement-watcher-ma
 import { INTERVALS } from "@main/constants";
 import { Wine } from "./wine";
 import { NativeAddon } from "./native-addon";
+import { launchedGamePids } from "./launched-game-pids";
+import {
+  hasLaunchedPidMatch,
+  hasLinuxNativeOrAppImageMatch,
+  type LinuxProcessInfo,
+} from "./linux-process-match";
+import { isWindowsBatchFile } from "@main/helpers/windows-batch-command";
 
 export const gamesPlaytime = new Map<
   string,
@@ -25,13 +32,6 @@ interface ExecutableInfo {
 
 interface GameExecutables {
   [key: string]: ExecutableInfo[];
-}
-
-interface LinuxProcessInfo {
-  name: string;
-  cwd: string;
-  exe: string;
-  steamCompatDataPath: string | null;
 }
 
 const TICKS_TO_UPDATE_API = (3 * 60 * 1000) / INTERVALS.processWatcher; // 3 minutes
@@ -214,6 +214,10 @@ export const watchProcesses = async () => {
   const { processMap, winePrefixMap, linuxProcesses } =
     await getSystemProcessMap();
 
+  const pidToProcess = new Map<number, LinuxProcessInfo>(
+    linuxProcesses.map((process) => [process.pid, process])
+  );
+
   for (const game of games) {
     const gameKey = levelKeys.game(game.shop, game.objectId);
     // nativeExecutablePath is set for Legendary/GOG games so we can track their real process
@@ -229,17 +233,37 @@ export const watchProcesses = async () => {
       continue;
     }
 
-    const executable = executablePath
-      .slice(executablePath.lastIndexOf(platform === "win32" ? "\\" : "/") + 1)
-      .toLowerCase();
+    const trackingPaths = game.trackingExecutablePaths?.filter(Boolean) ?? [];
 
-    let hasProcess = processMap.get(executable)?.has(executablePath) ?? false;
+    let matchPaths: string[];
+    if (isWindowsBatchFile(executablePath)) {
+      matchPaths = trackingPaths.length ? trackingPaths : [executablePath];
+    } else {
+      matchPaths = [executablePath, ...trackingPaths];
+    }
+
+    let hasProcess = matchPaths.some((matchPath) => {
+      const executable = matchPath
+        .slice(matchPath.lastIndexOf(platform === "win32" ? "\\" : "/") + 1)
+        .toLowerCase();
+
+      if (processMap.get(executable)?.has(matchPath)) return true;
+
+      if (platform === "linux") {
+        return (
+          hasLinuxNativeOrAppImageMatch(matchPath, linuxProcesses) ||
+          hasLinuxCompatibilityProcessMatch(game, matchPath, linuxProcesses)
+        );
+      }
+
+      return false;
+    });
 
     if (!hasProcess && platform === "linux") {
-      hasProcess = hasLinuxCompatibilityProcessMatch(
-        game,
+      hasProcess = hasLaunchedPidMatch(
+        launchedGamePids.get(gameKey),
         executablePath,
-        linuxProcesses
+        pidToProcess
       );
     }
 
@@ -441,6 +465,7 @@ const onCloseGame = (game: Game) => {
   const now = performance.now();
   const gamePlaytime = gamesPlaytime.get(gameKey)!;
   gamesPlaytime.delete(gameKey);
+  launchedGamePids.delete(gameKey);
   PowerSaveBlockerManager.markGameClosed(gameKey);
 
   const delta = now - gamePlaytime.lastTick;
