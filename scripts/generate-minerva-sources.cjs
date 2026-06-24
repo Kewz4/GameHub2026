@@ -22,24 +22,83 @@ const OUT_DIR = process.argv[3] || "./sources/minerva";
  *              updates and DLC live in separate catalogues.
  */
 const PLATFORM_DEFS = [
-  { path: "No-Intro/Nintendo - Nintendo 3DS (Decrypted)",          label: "Nintendo 3DS",     classify: "game",   outputs: { game: "n3ds.json" } },
-  { path: "No-Intro/Nintendo - Nintendo DS (Decrypted)",           label: "Nintendo DS",      classify: "game",   outputs: { game: "nds.json" } },
-  { path: "No-Intro/Nintendo - Nintendo DSi (Decrypted)",          label: "Nintendo DSi",     classify: "game",   outputs: { game: "dsi.json" } },
-  { path: "No-Intro/Nintendo - Nintendo 64 (BigEndian)",           label: "Nintendo 64",      classify: "game",   outputs: { game: "n64.json" } },
-  { path: "No-Intro/Nintendo - Game Boy",                          label: "Game Boy",         classify: "game",   outputs: { game: "gb.json" } },
-  { path: "No-Intro/Nintendo - Game Boy Color",                    label: "Game Boy Color",   classify: "game",   outputs: { game: "gbc.json" } },
-  { path: "No-Intro/Nintendo - Game Boy Advance",                  label: "Game Boy Advance", classify: "game",   outputs: { game: "gba.json" } },
+  {
+    path: "No-Intro/Nintendo - Nintendo 3DS (Decrypted)",
+    label: "Nintendo 3DS",
+    classify: "game",
+    outputs: { game: "n3ds.json" },
+  },
+  {
+    path: "No-Intro/Nintendo - Nintendo DS (Decrypted)",
+    label: "Nintendo DS",
+    classify: "game",
+    outputs: { game: "nds.json" },
+  },
+  {
+    path: "No-Intro/Nintendo - Nintendo DSi (Decrypted)",
+    label: "Nintendo DSi",
+    classify: "game",
+    outputs: { game: "dsi.json" },
+  },
+  {
+    path: "No-Intro/Nintendo - Nintendo 64 (BigEndian)",
+    label: "Nintendo 64",
+    classify: "game",
+    outputs: { game: "n64.json" },
+  },
+  {
+    path: "No-Intro/Nintendo - Game Boy",
+    label: "Game Boy",
+    classify: "game",
+    outputs: { game: "gb.json" },
+  },
+  {
+    path: "No-Intro/Nintendo - Game Boy Color",
+    label: "Game Boy Color",
+    classify: "game",
+    outputs: { game: "gbc.json" },
+  },
+  {
+    path: "No-Intro/Nintendo - Game Boy Advance",
+    label: "Game Boy Advance",
+    classify: "game",
+    outputs: { game: "gba.json" },
+  },
   // Wii U CDN dump uses No-Intro friendly names tagged (Update)/(DLC); split per type.
   {
     path: "No-Intro/Nintendo - Wii U (Digital) (CDN)",
     label: "Wii U",
     classify: "auto-wiiu",
-    outputs: { game: "wiiu.json", update: "wiiu-updates.json", dlc: "wiiu-dlc.json" },
+    outputs: {
+      game: "wiiu.json",
+      update: "wiiu-updates.json",
+      dlc: "wiiu-dlc.json",
+    },
   },
-  { path: "Redump/Nintendo - Wii - NKit RVZ [zstd-19-128k]",       label: "Wii",              classify: "game",   outputs: { game: "wii.json" } },
-  { path: "Redump/Nintendo - GameCube - NKit RVZ [zstd-19-128k]",  label: "GameCube",         classify: "game",   outputs: { game: "gc.json" } },
-  { path: "No-Intro/Non-Redump - Sony - PlayStation",              label: "PlayStation",      classify: "game",   outputs: { game: "ps1.json" } },
-  { path: "No-Intro/Non-Redump - Sony - PlayStation 2",            label: "PlayStation 2",    classify: "game",   outputs: { game: "ps2.json" } },
+  {
+    path: "Redump/Nintendo - Wii - NKit RVZ [zstd-19-128k]",
+    label: "Wii",
+    classify: "game",
+    outputs: { game: "wii.json" },
+  },
+  {
+    path: "Redump/Nintendo - GameCube - NKit RVZ [zstd-19-128k]",
+    label: "GameCube",
+    classify: "game",
+    outputs: { game: "gc.json" },
+  },
+  {
+    path: "No-Intro/Non-Redump - Sony - PlayStation",
+    label: "PlayStation",
+    classify: "game",
+    outputs: { game: "ps1.json" },
+  },
+  {
+    path: "No-Intro/Non-Redump - Sony - PlayStation 2",
+    label: "PlayStation 2",
+    classify: "game",
+    outputs: { game: "ps2.json" },
+  },
   // PS3 PSN Content mixes base PKG games and DLC; split into ps3.json + ps3-dlc.json.
   {
     path: "No-Intro/Sony - PlayStation 3 (PSN) (Content)",
@@ -54,7 +113,12 @@ const PLATFORM_DEFS = [
     classify: "update",
     outputs: { update: "ps3-updates.json" },
   },
-  { path: "No-Intro/Non-Redump - Sony - PlayStation Portable",     label: "PSP",              classify: "game",   outputs: { game: "psp.json" } },
+  {
+    path: "No-Intro/Non-Redump - Sony - PlayStation Portable",
+    label: "PSP",
+    classify: "game",
+    outputs: { game: "psp.json" },
+  },
 ];
 
 /**
