@@ -79,10 +79,30 @@ const SUPPLEMENTAL_SOURCES: Array<{
   system: EmulatorSystem;
   defaultContentType: "game" | "update" | "dlc";
 }> = [
-  { prefix: "ps3-upd:", file: "ps3-updates.json", system: "ps3", defaultContentType: "update" },
-  { prefix: "ps3-dlc:", file: "ps3-dlc.json", system: "ps3", defaultContentType: "dlc" },
-  { prefix: "wiiu-upd:", file: "wiiu-updates.json", system: "wiiu", defaultContentType: "update" },
-  { prefix: "wiiu-dlc:", file: "wiiu-dlc.json", system: "wiiu", defaultContentType: "dlc" },
+  {
+    prefix: "ps3-upd:",
+    file: "ps3-updates.json",
+    system: "ps3",
+    defaultContentType: "update",
+  },
+  {
+    prefix: "ps3-dlc:",
+    file: "ps3-dlc.json",
+    system: "ps3",
+    defaultContentType: "dlc",
+  },
+  {
+    prefix: "wiiu-upd:",
+    file: "wiiu-updates.json",
+    system: "wiiu",
+    defaultContentType: "update",
+  },
+  {
+    prefix: "wiiu-dlc:",
+    file: "wiiu-dlc.json",
+    system: "wiiu",
+    defaultContentType: "dlc",
+  },
 ];
 
 /** Attach the shared tracker list to a base magnet (if not already present). */
@@ -128,7 +148,11 @@ export async function syncMinervaSource(
     const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
     const ct = download.contentType ?? "game";
     const prefix =
-      ct === "update" ? `${system}-upd:` : ct === "dlc" ? `${system}-dlc:` : `${system}:`;
+      ct === "update"
+        ? `${system}-upd:`
+        : ct === "dlc"
+          ? `${system}-dlc:`
+          : `${system}:`;
 
     const entry: MinervaCatalogueEntry = {
       system,

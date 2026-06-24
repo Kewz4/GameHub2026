@@ -17,39 +17,118 @@ const OUT_DIR = process.argv[3] || "./sources/minerva";
  *                 "auto" means classify each row by its filename (see classifyRow()).
  */
 const PLATFORM_DEFS = [
-  { path: "No-Intro/Nintendo - Nintendo 3DS (Decrypted)",          output: "n3ds.json",         label: "Nintendo 3DS",       contentType: "game" },
-  { path: "No-Intro/Nintendo - Nintendo DS (Decrypted)",           output: "nds.json",          label: "Nintendo DS",        contentType: "game" },
-  { path: "No-Intro/Nintendo - Nintendo DSi (Decrypted)",          output: "dsi.json",          label: "Nintendo DSi",       contentType: "game" },
-  { path: "No-Intro/Nintendo - Nintendo 64 (BigEndian)",           output: "n64.json",          label: "Nintendo 64",        contentType: "game" },
-  { path: "No-Intro/Nintendo - Game Boy",                          output: "gb.json",           label: "Game Boy",           contentType: "game" },
-  { path: "No-Intro/Nintendo - Game Boy Color",                    output: "gbc.json",          label: "Game Boy Color",     contentType: "game" },
-  { path: "No-Intro/Nintendo - Game Boy Advance",                  output: "gba.json",          label: "Game Boy Advance",   contentType: "game" },
+  {
+    path: "No-Intro/Nintendo - Nintendo 3DS (Decrypted)",
+    output: "n3ds.json",
+    label: "Nintendo 3DS",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Nintendo - Nintendo DS (Decrypted)",
+    output: "nds.json",
+    label: "Nintendo DS",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Nintendo - Nintendo DSi (Decrypted)",
+    output: "dsi.json",
+    label: "Nintendo DSi",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Nintendo - Nintendo 64 (BigEndian)",
+    output: "n64.json",
+    label: "Nintendo 64",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Nintendo - Game Boy",
+    output: "gb.json",
+    label: "Game Boy",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Nintendo - Game Boy Color",
+    output: "gbc.json",
+    label: "Game Boy Color",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Nintendo - Game Boy Advance",
+    output: "gba.json",
+    label: "Game Boy Advance",
+    contentType: "game",
+  },
   // Wii U: CDN path mixes base games (00050000…), updates (0005000E…), and DLC (0005000C…).
   // All entries go into wiiu.json; each gets a contentType derived from its title ID prefix.
-  { path: "No-Intro/Nintendo - Wii U (Digital) (CDN)",             output: "wiiu.json",         label: "Wii U",              contentType: "auto-wiiu" },
-  { path: "Redump/Nintendo - Wii - NKit RVZ [zstd-19-128k]",       output: "wii.json",          label: "Wii",                contentType: "game" },
-  { path: "Redump/Nintendo - GameCube - NKit RVZ [zstd-19-128k]",  output: "gc.json",           label: "GameCube",           contentType: "game" },
-  { path: "No-Intro/Non-Redump - Sony - PlayStation",              output: "ps1.json",          label: "PlayStation",        contentType: "game" },
-  { path: "No-Intro/Non-Redump - Sony - PlayStation 2",            output: "ps2.json",          label: "PlayStation 2",      contentType: "game" },
+  {
+    path: "No-Intro/Nintendo - Wii U (Digital) (CDN)",
+    output: "wiiu.json",
+    label: "Wii U",
+    contentType: "auto-wiiu",
+  },
+  {
+    path: "Redump/Nintendo - Wii - NKit RVZ [zstd-19-128k]",
+    output: "wii.json",
+    label: "Wii",
+    contentType: "game",
+  },
+  {
+    path: "Redump/Nintendo - GameCube - NKit RVZ [zstd-19-128k]",
+    output: "gc.json",
+    label: "GameCube",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Non-Redump - Sony - PlayStation",
+    output: "ps1.json",
+    label: "PlayStation",
+    contentType: "game",
+  },
+  {
+    path: "No-Intro/Non-Redump - Sony - PlayStation 2",
+    output: "ps2.json",
+    label: "PlayStation 2",
+    contentType: "game",
+  },
   // PS3 PSN Content mixes base PKG games and DLC; classified per filename.
-  { path: "No-Intro/Sony - PlayStation 3 (PSN) (Content)",         output: "ps3.json",          label: "PlayStation 3",      contentType: "auto-ps3-content" },
+  {
+    path: "No-Intro/Sony - PlayStation 3 (PSN) (Content)",
+    output: "ps3.json",
+    label: "PlayStation 3",
+    contentType: "auto-ps3-content",
+  },
   // PS3 Updates — separate catalogue.
-  { path: "No-Intro/Sony - PlayStation 3 (PSN) (Updates)",         output: "ps3-updates.json",  label: "PlayStation 3 Updates", contentType: "update" },
-  { path: "No-Intro/Non-Redump - Sony - PlayStation Portable",     output: "psp.json",          label: "PSP",                contentType: "game" },
+  {
+    path: "No-Intro/Sony - PlayStation 3 (PSN) (Updates)",
+    output: "ps3-updates.json",
+    label: "PlayStation 3 Updates",
+    contentType: "update",
+  },
+  {
+    path: "No-Intro/Non-Redump - Sony - PlayStation Portable",
+    output: "psp.json",
+    label: "PSP",
+    contentType: "game",
+  },
 ];
 
 function humanSize(bytes) {
   const n = Number(bytes);
   if (!n || Number.isNaN(n)) return null;
   const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0, v = n;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  let i = 0,
+    v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
   return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 function cleanTitle(fileName) {
   let t = fileName.replace(/\.[a-z0-9]{1,5}$/i, ""); // strip extension
-  t = t.replace(/\s*[([][^)\]]*[)\]]/g, "");           // strip (..) and [..] tags
+  t = t.replace(/\s*[([][^)\]]*[)\]]/g, ""); // strip (..) and [..] tags
   return t.trim() || fileName;
 }
 
@@ -65,9 +144,14 @@ function classifyWiiuFile(fileName) {
   const m = fileName.match(/^([0-9A-Fa-f]{16})/);
   if (!m) return { contentType: "game", titleId: null };
   const tid = m[1].toUpperCase();
-  if (tid.startsWith("0005000E")) return { contentType: "update", titleId: tid.slice(8) };
-  if (tid.startsWith("0005000C")) return { contentType: "dlc",    titleId: tid.slice(8) };
-  return { contentType: "game", titleId: tid.startsWith("00050000") ? tid.slice(8) : null };
+  if (tid.startsWith("0005000E"))
+    return { contentType: "update", titleId: tid.slice(8) };
+  if (tid.startsWith("0005000C"))
+    return { contentType: "dlc", titleId: tid.slice(8) };
+  return {
+    contentType: "game",
+    titleId: tid.startsWith("00050000") ? tid.slice(8) : null,
+  };
 }
 
 /**
@@ -112,20 +196,29 @@ function classifyPs3ContentFile(fileName) {
 // ── Open database ────────────────────────────────────────────────────────────
 const db = new DatabaseSync(DB_PATH, { readOnly: true });
 
-const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+const tables = db
+  .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+  .all();
 console.error("Tables:", tables.map((t) => t.name).join(", "));
-const tableName = tables.find((t) => /file/i.test(t.name))?.name || tables[0].name;
-const cols = db.prepare(`PRAGMA table_info(${tableName})`).all().map((c) => c.name);
+const tableName =
+  tables.find((t) => /file/i.test(t.name))?.name || tables[0].name;
+const cols = db
+  .prepare(`PRAGMA table_info(${tableName})`)
+  .all()
+  .map((c) => c.name);
 console.error(`Using table '${tableName}' columns:`, cols.join(", "));
 
 const has = (c) => cols.includes(c);
-const pathCol   = ["full_path", "path", "slug"].find(has) || "full_path";
-const nameCol   = ["file_name", "name", "filename"].find(has) || "file_name";
-const sizeCol   = ["size", "file_size"].find(has);
+const pathCol = ["full_path", "path", "slug"].find(has) || "full_path";
+const nameCol = ["file_name", "name", "filename"].find(has) || "file_name";
+const sizeCol = ["size", "file_size"].find(has);
 const magnetCol = ["magnet"].find(has);
-const soCol     = ["so_id", "so"].find(has);
+const soCol = ["so_id", "so"].find(has);
 
-if (!magnetCol) { console.error("No magnet column found — aborting."); process.exit(1); }
+if (!magnetCol) {
+  console.error("No magnet column found — aborting.");
+  process.exit(1);
+}
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 

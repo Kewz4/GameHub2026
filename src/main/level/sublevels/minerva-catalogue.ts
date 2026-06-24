@@ -100,7 +100,10 @@ export async function searchMinervaCatalogue(
   candidates.sort((a, b) => {
     if (a.score !== b.score) return a.score - b.score;
     const order = { game: 0, update: 1, dlc: 2 };
-    return (order[a.entry.contentType ?? "game"] ?? 0) - (order[b.entry.contentType ?? "game"] ?? 0);
+    return (
+      (order[a.entry.contentType ?? "game"] ?? 0) -
+      (order[b.entry.contentType ?? "game"] ?? 0)
+    );
   });
   return candidates.slice(0, 20).map((c) => c.entry);
 }

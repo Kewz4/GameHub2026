@@ -1,4 +1,10 @@
-import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -700,7 +706,10 @@ export function RepacksModal({
                       ? t("updates_section", { defaultValue: "Updates" })
                       : t("dlc_section", { defaultValue: "DLC" });
                   sectionHeader = (
-                    <div key={`section-${ct}`} className="repacks-modal__section-header">
+                    <div
+                      key={`section-${ct}`}
+                      className="repacks-modal__section-header"
+                    >
                       {label}
                     </div>
                   );
@@ -777,9 +786,9 @@ export function RepacksModal({
                       </p>
                     )}
 
-                    {hashesInDebrid[getHashFromMagnet(repack.uris[0]) ?? ""] && (
-                      <DebridBadge />
-                    )}
+                    {hashesInDebrid[
+                      getHashFromMagnet(repack.uris[0]) ?? ""
+                    ] && <DebridBadge />}
                   </Button>
                 );
 
@@ -788,7 +797,9 @@ export function RepacksModal({
                     {sectionHeader}
                     {button}
                   </React.Fragment>
-                ) : button;
+                ) : (
+                  button
+                );
               });
             })()
           )}
