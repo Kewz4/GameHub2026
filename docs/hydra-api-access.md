@@ -6,13 +6,13 @@ This document covers how to authenticate with the Hydra backend API and query us
 
 ## Key URLs
 
-| Service | URL |
-|---------|-----|
-| Marketing site | `https://hydralauncher.gg` |
-| **Auth (sign-in UI)** | `https://auth.hydralauncher.gg` |
-| **API base** | `https://hydra-api-us-east-1.losbroxas.org` |
-| CDN (assets) | `https://cdn.losbroxas.org` |
-| WebSocket | `wss://ws.hydralauncher.gg` |
+| Service               | URL                                         |
+| --------------------- | ------------------------------------------- |
+| Marketing site        | `https://hydralauncher.gg`                  |
+| **Auth (sign-in UI)** | `https://auth.hydralauncher.gg`             |
+| **API base**          | `https://hydra-api-us-east-1.losbroxas.org` |
+| CDN (assets)          | `https://cdn.losbroxas.org`                 |
+| WebSocket             | `wss://ws.hydralauncher.gg`                 |
 
 > These URLs come from `.github/workflows/*.yml` — the CI bakes them in as `MAIN_VITE_API_URL` and `MAIN_VITE_AUTH_URL`. The `.env.example` file only has empty placeholders, so always check the workflow files for the real values.
 
@@ -29,12 +29,12 @@ This document covers how to authenticate with the Hydra backend API and query us
 
 ```js
 args: [
-  '--no-sandbox',
-  '--disable-quic',
-  '--disable-features=EncryptedClientHello,TLS13EarlyData',
-  '--disable-web-security',
-  '--ignore-certificate-errors',
-]
+  "--no-sandbox",
+  "--disable-quic",
+  "--disable-features=EncryptedClientHello,TLS13EarlyData",
+  "--disable-web-security",
+  "--ignore-certificate-errors",
+];
 ```
 
 Without `--disable-features=EncryptedClientHello,TLS13EarlyData`, chromium-1194 may still throw ECH errors intermittently. `--disable-web-security` is needed for cross-origin fetch from page context.
@@ -44,6 +44,7 @@ Without `--disable-features=EncryptedClientHello,TLS13EarlyData`, chromium-1194 
 ## Authentication Flow
 
 Authentication goes through the web UI at `https://auth.hydralauncher.gg`. The form has:
+
 - `input[name="login"]` — username or email
 - `input[name="password"]` — password
 
@@ -52,19 +53,19 @@ On submit, the browser POSTs to `https://hydra-api-us-east-1.losbroxas.org/auth/
 ### Full sign-in script
 
 ```js
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
 
-const API_BASE = 'https://hydra-api-us-east-1.losbroxas.org';
+const API_BASE = "https://hydra-api-us-east-1.losbroxas.org";
 
 const browser = await chromium.launch({
   headless: true,
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
   args: [
-    '--no-sandbox',
-    '--disable-quic',
-    '--disable-features=EncryptedClientHello,TLS13EarlyData',
-    '--disable-web-security',
-    '--ignore-certificate-errors',
+    "--no-sandbox",
+    "--disable-quic",
+    "--disable-features=EncryptedClientHello,TLS13EarlyData",
+    "--disable-web-security",
+    "--ignore-certificate-errors",
   ],
 });
 const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -73,20 +74,25 @@ const page = await ctx.newPage();
 let accessToken = null;
 
 // Intercept the API response to capture the token
-page.on('response', async resp => {
-  if (resp.url().includes('auth/signin')) {
-    const body = await resp.text().catch(() => '');
-    try { accessToken = JSON.parse(body).accessToken; } catch {}
+page.on("response", async (resp) => {
+  if (resp.url().includes("auth/signin")) {
+    const body = await resp.text().catch(() => "");
+    try {
+      accessToken = JSON.parse(body).accessToken;
+    } catch {}
   }
 });
 
-await page.goto('https://auth.hydralauncher.gg/', { waitUntil: 'networkidle', timeout: 30000 });
-await page.fill('input[name="login"]', 'YOUR_USERNAME');
-await page.fill('input[name="password"]', 'YOUR_PASSWORD');
+await page.goto("https://auth.hydralauncher.gg/", {
+  waitUntil: "networkidle",
+  timeout: 30000,
+});
+await page.fill('input[name="login"]', "YOUR_USERNAME");
+await page.fill('input[name="password"]', "YOUR_PASSWORD");
 await page.click('button[type="submit"]');
 await page.waitForTimeout(2000);
 
-console.log('Token:', accessToken);
+console.log("Token:", accessToken);
 ```
 
 ---
@@ -94,6 +100,7 @@ console.log('Token:', accessToken);
 ## API Endpoints
 
 All requests require the header:
+
 ```
 Authorization: Bearer <accessToken>
 ```
@@ -104,7 +111,7 @@ Returns the authenticated user's profile.
 
 ```js
 const r = await fetch(`${API_BASE}/profile/me`, {
-  headers: { Authorization: `Bearer ${token}` }
+  headers: { Authorization: `Bearer ${token}` },
 });
 const profile = await r.json();
 // profile.id  — user ID (e.g. "DjvmoDA5")
@@ -119,7 +126,7 @@ Returns all games in the user's library with metadata and achievement counts.
 
 ```js
 const r = await fetch(`${API_BASE}/profile/games`, {
-  headers: { Authorization: `Bearer ${token}` }
+  headers: { Authorization: `Bearer ${token}` },
 });
 const games = await r.json();
 // Each game object has:
@@ -150,9 +157,9 @@ Called automatically by the auth UI, but you can also call it directly:
 
 ```js
 const r = await fetch(`${API_BASE}/auth/signin`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ login: 'USERNAME', password: 'PASSWORD' }),
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ login: "USERNAME", password: "PASSWORD" }),
 });
 const { accessToken, refreshToken, expiresIn } = await r.json();
 ```
@@ -161,7 +168,7 @@ const { accessToken, refreshToken, expiresIn } = await r.json();
 
 ```js
 await fetch(`${API_BASE}/auth/logout`, {
-  method: 'POST',
+  method: "POST",
   headers: { Authorization: `Bearer ${token}` },
 });
 ```
@@ -171,53 +178,61 @@ await fetch(`${API_BASE}/auth/logout`, {
 ## Complete Example: List Games with Achievements
 
 ```js
-import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+import { chromium } from "/opt/node22/lib/node_modules/playwright/index.mjs";
 
-const API_BASE = 'https://hydra-api-us-east-1.losbroxas.org';
+const API_BASE = "https://hydra-api-us-east-1.losbroxas.org";
 
 const browser = await chromium.launch({
   headless: true,
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
   args: [
-    '--no-sandbox',
-    '--disable-quic',
-    '--disable-features=EncryptedClientHello,TLS13EarlyData',
-    '--disable-web-security',
-    '--ignore-certificate-errors',
+    "--no-sandbox",
+    "--disable-quic",
+    "--disable-features=EncryptedClientHello,TLS13EarlyData",
+    "--disable-web-security",
+    "--ignore-certificate-errors",
   ],
 });
 const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
 const page = await ctx.newPage();
 
 let accessToken = null;
-page.on('response', async resp => {
-  if (resp.url().includes('auth/signin')) {
-    const body = await resp.text().catch(() => '');
-    try { accessToken = JSON.parse(body).accessToken; } catch {}
+page.on("response", async (resp) => {
+  if (resp.url().includes("auth/signin")) {
+    const body = await resp.text().catch(() => "");
+    try {
+      accessToken = JSON.parse(body).accessToken;
+    } catch {}
   }
 });
 
-await page.goto('https://auth.hydralauncher.gg/', { waitUntil: 'networkidle', timeout: 30000 });
-await page.fill('input[name="login"]', 'Kewz');
-await page.fill('input[name="password"]', 'Jackals12$');
+await page.goto("https://auth.hydralauncher.gg/", {
+  waitUntil: "networkidle",
+  timeout: 30000,
+});
+await page.fill('input[name="login"]', "Kewz");
+await page.fill('input[name="password"]', "Jackals12$");
 await page.click('button[type="submit"]');
 await page.waitForTimeout(2000);
 
-if (!accessToken) throw new Error('Auth failed');
+if (!accessToken) throw new Error("Auth failed");
 
-const [profile, games] = await page.evaluate(async ({ base, token }) => {
-  const headers = { Authorization: `Bearer ${token}` };
-  const [p, g] = await Promise.all([
-    fetch(`${base}/profile/me`, { headers }).then(r => r.json()),
-    fetch(`${base}/profile/games`, { headers }).then(r => r.json()),
-  ]);
-  return [p, g];
-}, { base: API_BASE, token: accessToken });
+const [profile, games] = await page.evaluate(
+  async ({ base, token }) => {
+    const headers = { Authorization: `Bearer ${token}` };
+    const [p, g] = await Promise.all([
+      fetch(`${base}/profile/me`, { headers }).then((r) => r.json()),
+      fetch(`${base}/profile/games`, { headers }).then((r) => r.json()),
+    ]);
+    return [p, g];
+  },
+  { base: API_BASE, token: accessToken }
+);
 
 console.log(`User: ${profile.username} (${profile.id})`);
 console.log(`Total games: ${games.length}`);
 
-const withAchievements = games.filter(g => g.achievementCount > 0);
+const withAchievements = games.filter((g) => g.achievementCount > 0);
 console.log(`\nGames with achievements (${withAchievements.length}):`);
 for (const g of withAchievements) {
   console.log(`  ${g.title} — ${g.achievementCount} achievements`);

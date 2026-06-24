@@ -250,7 +250,8 @@
     align-items: center;
     gap: calc(globals.$spacing-unit * 1);
     width: 100%;
-    padding: calc(globals.$spacing-unit * 1.25) calc(globals.$spacing-unit * 1.5);
+    padding: calc(globals.$spacing-unit * 1.25)
+      calc(globals.$spacing-unit * 1.5);
     background: transparent;
     border: none;
     color: inherit;

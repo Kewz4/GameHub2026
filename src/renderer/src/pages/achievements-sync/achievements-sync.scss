@@ -171,7 +171,9 @@
     padding: 4px;
     border-radius: 4px;
     display: flex;
-    &:hover { opacity: 1; }
+    &:hover {
+      opacity: 1;
+    }
   }
 
   &__debug-table {
