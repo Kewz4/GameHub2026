@@ -138,7 +138,11 @@
     "scan_games_no_results": "No pudimos encontrar ningún juego instalado.",
     "scan_games_in_progress": "Escaneando tus discos en busca de juegos instalados...",
     "scan_games_close": "Cerrar",
-    "scan_games_scan_again": "Escanear nuevamente"
+    "scan_games_scan_again": "Escanear nuevamente",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   },
   "bottom_panel": {
     "no_downloads_in_progress": "Sin descargas en progreso",
@@ -846,7 +850,17 @@
     "proton_source_compatibility_tools": "Instalado en compatibilitytools.d de Steam",
     "change_achievement_sound": "Cambiar sonido de logro",
     "remove_achievement_sound": "Quitar sonido de logro",
-    "preview_sound": "Vista previa del sonido"
+    "preview_sound": "Vista previa del sonido",
+    "big_picture": "Big Picture",
+    "big_picture_startup": "Inicio",
+    "big_picture_audio": "Audio",
+    "big_picture_input": "Entrada",
+    "big_picture_diagnostics": "Diagnósticos",
+    "big_picture_enable_sounds": "Habilitar sonidos de Big Picture",
+    "big_picture_enable_virtual_keyboard": "Habilitar teclado virtual de Big Picture",
+    "big_picture_enable_diagnostics": "Habilitar diagnósticos de navegación",
+    "big_picture_diagnostics_position": "Posición de diagnósticos",
+    "launch_hydra_in_big_picture": "Iniciar en modo Big Picture (experimental)"
   },
   "notifications": {
     "download_complete": "Descarga completada",

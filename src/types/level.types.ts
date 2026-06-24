@@ -129,6 +129,14 @@ export interface DownloadLayoutState {
   pausedOrder: string[];
 }
 
+export type BigPictureDiagnosticsPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
 export interface GameAchievement {
   achievements: SteamAchievement[];
   unlockedAchievements: UnlockedAchievement[];
@@ -175,6 +183,10 @@ export interface UserPreferences {
   startMinimized?: boolean;
   launchToLibraryPage?: boolean;
   launchInBigPicture?: boolean;
+  bigPictureSoundsEnabled?: boolean;
+  bigPictureVirtualKeyboardEnabled?: boolean;
+  bigPictureDiagnosticsEnabled?: boolean;
+  bigPictureDiagnosticsPosition?: BigPictureDiagnosticsPosition;
   disableNsfwAlert?: boolean;
   enableAutoInstall?: boolean;
   seedAfterDownloadComplete?: boolean;

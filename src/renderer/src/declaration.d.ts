@@ -1178,6 +1178,8 @@ declare global {
     minimizeMainWindow: () => Promise<void>;
     toggleMaximizeMainWindow: () => Promise<void>;
     closeMainWindow: () => Promise<void>;
+    minimizeAuthWindow: () => Promise<void>;
+    closeAuthWindow: () => Promise<void>;
     isMainWindowMaximized: () => Promise<boolean>;
     onWindowMaximizeChange: (cb: (isMaximized: boolean) => void) => () => void;
     isWayland: boolean;

@@ -14,6 +14,7 @@ export type SettingsCategoryId =
   | "integrations"
   | "achievements"
   | "compatibility"
+  | "big_picture"
   | "emulation"
   | "account_privacy";
 

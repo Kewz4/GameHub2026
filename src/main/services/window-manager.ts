@@ -16,6 +16,7 @@ import {
   MenuItem,
   MenuItemConstructorOptions,
   Tray,
+  WebContentsView,
   app,
   nativeImage,
   screen,
@@ -38,7 +39,13 @@ export class WindowManager {
   public static updateCheckerWindow: Electron.BrowserWindow | null = null;
   private static bigPicture: Electron.BrowserWindow | null = null;
   private static friendsWindow: Electron.BrowserWindow | null = null;
+  private static authWindow: Electron.BrowserWindow | null = null;
   private static deferredMainMaximize = false;
+
+  private static readonly AUTH_WINDOW_WIDTH = 600;
+  private static readonly AUTH_WINDOW_HEIGHT = 640;
+  private static readonly AUTH_WINDOW_TITLE_BAR_HEIGHT = 34;
+  private static readonly AUTH_WINDOW_BORDER = 1;
 
   private static readonly editorWindows: Map<string, BrowserWindow> = new Map();
 
@@ -450,61 +457,147 @@ export class WindowManager {
     this.loadWindowURL(win, "installer");
   }
 
+  private static bindAuthNavigation(
+    webContents: Electron.WebContents,
+    onClose: () => void
+  ) {
+    webContents.on("will-navigate", (_event, url) => {
+      if (url.startsWith("hydralauncher://auth")) {
+        onClose();
+        HydraApi.handleExternalAuth(url);
+        return;
+      }
+
+      if (url.startsWith("hydralauncher://update-account")) {
+        onClose();
+        WindowManager.mainWindow?.webContents.send("on-account-updated");
+      }
+    });
+  }
+
   public static openAuthWindow(page: AuthPage, searchParams: URLSearchParams) {
-    if (this.mainWindow) {
-      const authWindow = new BrowserWindow({
-        width: 600,
-        height: 640,
-        backgroundColor: "#1c1c1c",
-        parent: this.mainWindow,
-        modal: true,
-        show: false,
-        maximizable: false,
-        resizable: false,
-        minimizable: false,
-        webPreferences: {
-          sandbox: false,
-          nodeIntegrationInSubFrames: true,
-        },
-      });
+    if (!this.mainWindow) return;
 
-      authWindow.removeMenu();
+    const authUrl = `${import.meta.env.MAIN_VITE_AUTH_URL}${page}?${searchParams.toString()}`;
 
-      if (!app.isPackaged) authWindow.webContents.openDevTools();
+    if (process.platform === "linux") {
+      this.openLinuxAuthWindow(this.mainWindow, authUrl);
+      return;
+    }
 
-      authWindow.loadURL(
-        `${import.meta.env.MAIN_VITE_AUTH_URL}${page}?${searchParams.toString()}`
-      );
+    const authWindow = new BrowserWindow({
+      width: this.AUTH_WINDOW_WIDTH,
+      height: this.AUTH_WINDOW_HEIGHT,
+      backgroundColor: "#1c1c1c",
+      parent: this.mainWindow,
+      modal: true,
+      show: false,
+      maximizable: false,
+      resizable: false,
+      minimizable: false,
+      webPreferences: {
+        sandbox: false,
+        nodeIntegrationInSubFrames: true,
+      },
+    });
 
-      authWindow.once("ready-to-show", () => {
-        authWindow.show();
-      });
+    authWindow.removeMenu();
 
-      authWindow.webContents.on("did-finish-load", () => {
-        // Re-skin the upstream Hydra auth page as GameHub: swap the logo,
-        // recolour the primary button onto the GameHub gradient, and rewrite
-        // "Hydra" copy. Runs on every load so sign-in → sign-up navigations
-        // stay branded.
-        authWindow.webContents.insertCSS(AUTH_REBRAND_CSS).catch(() => {});
-        authWindow.webContents
-          .executeJavaScript(AUTH_REBRAND_JS)
-          .catch(() => {});
-      });
+    if (!app.isPackaged) authWindow.webContents.openDevTools();
 
-      authWindow.webContents.on("will-navigate", (_event, url) => {
-        if (url.startsWith("hydralauncher://auth")) {
-          authWindow.close();
+    authWindow.loadURL(authUrl);
 
-          HydraApi.handleExternalAuth(url);
-          return;
-        }
+    authWindow.once("ready-to-show", () => {
+      authWindow.show();
+    });
 
-        if (url.startsWith("hydralauncher://update-account")) {
-          authWindow.close();
+    authWindow.webContents.on("did-finish-load", () => {
+      // Re-skin the upstream Hydra auth page as GameHub: swap the logo,
+      // recolour the primary button onto the GameHub gradient, and rewrite
+      // "Hydra" copy. Runs on every load so sign-in → sign-up navigations
+      // stay branded.
+      authWindow.webContents.insertCSS(AUTH_REBRAND_CSS).catch(() => {});
+      authWindow.webContents
+        .executeJavaScript(AUTH_REBRAND_JS)
+        .catch(() => {});
+    });
 
-          WindowManager.mainWindow?.webContents.send("on-account-updated");
-        }
-      });
+    this.bindAuthNavigation(authWindow.webContents, () => authWindow.close());
+  }
+
+  private static openLinuxAuthWindow(
+    parentWindow: Electron.BrowserWindow,
+    authUrl: string
+  ) {
+    const authWindow = new BrowserWindow({
+      width: this.AUTH_WINDOW_WIDTH + this.AUTH_WINDOW_BORDER * 2,
+      height:
+        this.AUTH_WINDOW_HEIGHT +
+        this.AUTH_WINDOW_TITLE_BAR_HEIGHT +
+        this.AUTH_WINDOW_BORDER * 2,
+      parent: parentWindow,
+      modal: true,
+      show: false,
+      maximizable: false,
+      resizable: false,
+      frame: false,
+      icon,
+      backgroundColor: "#1c1c1c",
+      webPreferences: {
+        preload: path.join(__dirname, "../preload/index.mjs"),
+        sandbox: false,
+      },
+    });
+
+    this.authWindow = authWindow;
+
+    authWindow.removeMenu();
+
+    const authView = new WebContentsView({
+      webPreferences: {
+        sandbox: false,
+        nodeIntegrationInSubFrames: true,
+      },
+    });
+
+    authWindow.contentView.addChildView(authView);
+    authView.setBounds({
+      x: this.AUTH_WINDOW_BORDER,
+      y: this.AUTH_WINDOW_BORDER + this.AUTH_WINDOW_TITLE_BAR_HEIGHT,
+      width: this.AUTH_WINDOW_WIDTH,
+      height: this.AUTH_WINDOW_HEIGHT,
+    });
+
+    this.loadWindowURL(authWindow, "auth-window");
+    authView.webContents.loadURL(authUrl);
+
+    if (!app.isPackaged) authView.webContents.openDevTools();
+
+    authWindow.once("ready-to-show", () => {
+      authWindow.show();
+    });
+
+    authWindow.once("closed", () => {
+      this.authWindow = null;
+      if (!parentWindow.isDestroyed()) {
+        parentWindow.focus();
+      }
+    });
+
+    this.bindAuthNavigation(authView.webContents, () => {
+      if (!authWindow.isDestroyed()) authWindow.close();
+    });
+  }
+
+  public static minimizeAuthWindow() {
+    if (this.authWindow && !this.authWindow.isDestroyed()) {
+      this.authWindow.minimize();
+    }
+  }
+
+  public static closeAuthWindow() {
+    if (this.authWindow && !this.authWindow.isDestroyed()) {
+      this.authWindow.close();
     }
   }
 

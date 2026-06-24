@@ -138,7 +138,11 @@
     "scan_games_no_results": "Не удалось найти ни одной установленной игры.",
     "scan_games_in_progress": "Сканирование дисков на наличие установленных игр...",
     "scan_games_close": "Закрыть",
-    "scan_games_scan_again": "Сканировать снова"
+    "scan_games_scan_again": "Сканировать снова",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   },
   "bottom_panel": {
     "no_downloads_in_progress": "Нет активных загрузок",
@@ -853,7 +857,16 @@
     "proton_version_auto": "Авто (глобальное значение по умолчанию или значение umu по умолчанию)",
     "proton_source_umu_default": "выбор umu по умолчанию",
     "proton_source_steam": "Установлено через Steam",
-    "proton_source_compatibility_tools": "Установлено в Steam compatibilitytools.d"
+    "proton_source_compatibility_tools": "Установлено в Steam compatibilitytools.d",
+    "big_picture": "Big Picture",
+    "big_picture_startup": "Запуск",
+    "big_picture_audio": "Аудио",
+    "big_picture_input": "Ввод",
+    "big_picture_diagnostics": "Диагностика",
+    "big_picture_enable_sounds": "Включить звуки Big Picture",
+    "big_picture_enable_virtual_keyboard": "Включить виртуальную клавиатуру Big Picture",
+    "big_picture_enable_diagnostics": "Включить диагностику навигации",
+    "big_picture_diagnostics_position": "Положение диагностики"
   },
   "notifications": {
     "download_complete": "Загрузка завершена",

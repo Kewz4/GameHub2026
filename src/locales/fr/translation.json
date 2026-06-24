@@ -137,7 +137,11 @@
     "scan_games_no_results": "Aucun jeu installé n’a été trouvé.",
     "scan_games_in_progress": "Analyse des disques à la recherche de jeux installés...",
     "scan_games_close": "Fermer",
-    "scan_games_scan_again": "Analyser à nouveau"
+    "scan_games_scan_again": "Analyser à nouveau",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   },
   "bottom_panel": {
     "no_downloads_in_progress": "Aucun téléchargement en cours",
@@ -804,7 +808,17 @@
     "max_download_speed_hint": "Définissez 0 ou laissez vide pour une vitesse de téléchargement illimitée en {{unit}}.",
     "max_download_speed_unit_megabytes": "Mo/s",
     "max_download_speed_unit_megabits": "Mb/s",
-    "max_download_speed_unlimited": "Illimité"
+    "max_download_speed_unlimited": "Illimité",
+    "big_picture": "Big Picture",
+    "big_picture_startup": "Startup",
+    "big_picture_audio": "Audio",
+    "big_picture_input": "Input",
+    "big_picture_diagnostics": "Diagnostics",
+    "big_picture_enable_sounds": "Enable Big Picture sounds",
+    "big_picture_enable_virtual_keyboard": "Enable Big Picture virtual keyboard",
+    "big_picture_enable_diagnostics": "Enable navigation diagnostics",
+    "big_picture_diagnostics_position": "Diagnostics position",
+    "launch_hydra_in_big_picture": "Launch in Big Picture mode (experimental)"
   },
   "notifications": {
     "download_complete": "Téléchargement terminé",

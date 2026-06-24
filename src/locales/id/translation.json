@@ -138,7 +138,11 @@
     "scan_games_no_results": "Tidak ada game terinstal yang dapat ditemukan.",
     "scan_games_in_progress": "Memindai disk Anda untuk mencari game yang terinstal...",
     "scan_games_close": "Tutup",
-    "scan_games_scan_again": "Pindai Lagi"
+    "scan_games_scan_again": "Pindai Lagi",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   },
   "bottom_panel": {
     "no_downloads_in_progress": "Tidak ada unduhan yang sedang berjalan",
@@ -853,7 +857,16 @@
     "downloads": "Unduhan",
     "create_shortcuts_on_download": "Buat pintasan desktop dan Start Menu saat game selesai diunduh",
     "default_proton_version": "Versi Proton default",
-    "default_proton_version_description": "Pilih versi Proton yang digunakan oleh mode Otomatis saat game tidak memiliki pengaturan kustom"
+    "default_proton_version_description": "Pilih versi Proton yang digunakan oleh mode Otomatis saat game tidak memiliki pengaturan kustom",
+    "big_picture": "Big Picture",
+    "big_picture_startup": "Startup",
+    "big_picture_audio": "Audio",
+    "big_picture_input": "Input",
+    "big_picture_diagnostics": "Diagnostics",
+    "big_picture_enable_sounds": "Enable Big Picture sounds",
+    "big_picture_enable_virtual_keyboard": "Enable Big Picture virtual keyboard",
+    "big_picture_enable_diagnostics": "Enable navigation diagnostics",
+    "big_picture_diagnostics_position": "Diagnostics position"
   },
   "notifications": {
     "download_complete": "Unduhan selesai",

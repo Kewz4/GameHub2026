@@ -1308,6 +1308,9 @@ contextBridge.exposeInMainWorld("electron", {
   toggleMaximizeMainWindow: () =>
     ipcRenderer.invoke("toggleMaximizeMainWindow"),
   closeMainWindow: () => ipcRenderer.invoke("closeMainWindow"),
+  /* Auth window controls (Linux) */
+  minimizeAuthWindow: () => ipcRenderer.invoke("minimizeAuthWindow"),
+  closeAuthWindow: () => ipcRenderer.invoke("closeAuthWindow"),
   isMainWindowMaximized: (): Promise<boolean> =>
     ipcRenderer.invoke("isMainWindowMaximized"),
   onWindowMaximizeChange: (

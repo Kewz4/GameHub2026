@@ -138,7 +138,11 @@
     "scan_games_no_results": "Não conseguimos encontrar nenhum jogo instalado.",
     "scan_games_in_progress": "Escaneando seus discos por jogos instalados...",
     "scan_games_close": "Fechar",
-    "scan_games_scan_again": "Escanear Novamente"
+    "scan_games_scan_again": "Escanear Novamente",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   },
   "bottom_panel": {
     "no_downloads_in_progress": "Sem downloads em andamento",
@@ -803,7 +807,16 @@
     "proton_version_auto": "Automático (padrão global ou padrão do umu)",
     "proton_source_umu_default": "seleção padrão do umu",
     "proton_source_steam": "Instalado pelo Steam",
-    "proton_source_compatibility_tools": "Instalado no compatibilitytools.d do Steam"
+    "proton_source_compatibility_tools": "Instalado no compatibilitytools.d do Steam",
+    "big_picture": "Big Picture",
+    "big_picture_startup": "Inicialização",
+    "big_picture_audio": "Áudio",
+    "big_picture_input": "Entrada",
+    "big_picture_diagnostics": "Diagnósticos",
+    "big_picture_enable_sounds": "Ativar sons do Big Picture",
+    "big_picture_enable_virtual_keyboard": "Ativar teclado virtual do Big Picture",
+    "big_picture_enable_diagnostics": "Ativar diagnósticos de navegação",
+    "big_picture_diagnostics_position": "Posição dos diagnósticos"
   },
   "notifications": {
     "download_complete": "Download concluído",
