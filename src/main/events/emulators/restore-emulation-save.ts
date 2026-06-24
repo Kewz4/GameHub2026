@@ -78,7 +78,11 @@ const restoreEmulationSave = async (
 
     return { ok: true };
   } catch (err) {
-    logger.error("Failed to restore emulation save", { saveId, cardFilePath, err });
+    logger.error("Failed to restore emulation save", {
+      saveId,
+      cardFilePath,
+      err,
+    });
     return { ok: false, error: String(err) };
   }
 };

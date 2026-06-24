@@ -2,7 +2,10 @@ import os from "node:os";
 import path from "node:path";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 
-import { duckstationConfigCandidates, findExistingConfig } from "./emulator-config";
+import {
+  duckstationConfigCandidates,
+  findExistingConfig,
+} from "./emulator-config";
 
 const DEFAULT_DIRS = (): string[] => {
   if (process.platform === "win32") {

@@ -1,7 +1,14 @@
 import { registerEvent } from "../register-event";
 import { emulators } from "@main/services";
-import { ps1MemoryCardSavesSublevel, ps2MemoryCardSavesSublevel } from "@main/level";
-import type { EmulationCloudSave, EmulationSavePlatform, MemcardRestoreTarget } from "@types";
+import {
+  ps1MemoryCardSavesSublevel,
+  ps2MemoryCardSavesSublevel,
+} from "@main/level";
+import type {
+  EmulationCloudSave,
+  EmulationSavePlatform,
+  MemcardRestoreTarget,
+} from "@types";
 
 const listEmulationSaves = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -15,7 +22,10 @@ const getMemcardRestoreTargets = async (
   _event: Electron.IpcMainInvokeEvent,
   platform: EmulationSavePlatform
 ): Promise<MemcardRestoreTarget[]> => {
-  const sublevel = platform === "ps2" ? ps2MemoryCardSavesSublevel : ps1MemoryCardSavesSublevel;
+  const sublevel =
+    platform === "ps2"
+      ? ps2MemoryCardSavesSublevel
+      : ps1MemoryCardSavesSublevel;
   const records = await sublevel.values().all();
 
   const seen = new Set<string>();

@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { BigPictureDiagnosticsPosition } from "@types";
-import { Checkbox, DropdownSelect, VerticalFocusGroup } from "../../../components";
+import {
+  Checkbox,
+  DropdownSelect,
+  VerticalFocusGroup,
+} from "../../../components";
 import { useUserPreferences } from "../../../hooks";
 import type { FocusOverrides } from "../../../services";
 import {
@@ -86,7 +90,8 @@ export function BigPictureSettingsSection({
     id: "launch-in-big-picture",
     label: t("launch_hydra_in_big_picture", "Launch in Big Picture mode"),
     checked: form.launchInBigPicture,
-    onChange: (checked: boolean) => void update({ launchInBigPicture: checked }),
+    onChange: (checked: boolean) =>
+      void update({ launchInBigPicture: checked }),
   };
 
   const audioItem = {
@@ -142,7 +147,10 @@ export function BigPictureSettingsSection({
       }
     >
       <VerticalFocusGroup regionId={BIG_PICTURE_SECTION_REGION_ID}>
-        <VerticalFocusGroup regionId={BIG_PICTURE_STARTUP_SECTION_REGION_ID} asChild>
+        <VerticalFocusGroup
+          regionId={BIG_PICTURE_STARTUP_SECTION_REGION_ID}
+          asChild
+        >
           <SettingsSection
             title={t("big_picture_startup", "Startup")}
             description={t(
@@ -162,7 +170,10 @@ export function BigPictureSettingsSection({
           </SettingsSection>
         </VerticalFocusGroup>
 
-        <VerticalFocusGroup regionId={BIG_PICTURE_AUDIO_SECTION_REGION_ID} asChild>
+        <VerticalFocusGroup
+          regionId={BIG_PICTURE_AUDIO_SECTION_REGION_ID}
+          asChild
+        >
           <SettingsSection
             title={t("big_picture_audio", "Audio")}
             description={t(

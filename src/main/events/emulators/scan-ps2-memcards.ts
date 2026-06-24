@@ -53,7 +53,11 @@ const scanPs2Memcards = async (
 
     for (let i = 0; i < cardFiles.length; i++) {
       if (signal.cancelled) {
-        send(requestId, { type: "cancelled", cardCount: i, saveCount: totalSaveCount });
+        send(requestId, {
+          type: "cancelled",
+          cardCount: i,
+          saveCount: totalSaveCount,
+        });
         return;
       }
 
@@ -67,7 +71,13 @@ const scanPs2Memcards = async (
         currentCard: cardLabel,
       });
 
-      let saveEntries: { folderName: string; fileCount: number; sizeBytes: number; createdAt: number; modifiedAt: number }[] = [];
+      let saveEntries: {
+        folderName: string;
+        fileCount: number;
+        sizeBytes: number;
+        createdAt: number;
+        modifiedAt: number;
+      }[] = [];
       try {
         saveEntries = await emulators.scanPs2MemoryCard(cardFilePath);
       } catch (err) {
@@ -80,26 +90,37 @@ const scanPs2Memcards = async (
         const save = saveEntries[j];
         totalSaveCount++;
 
-        const existingKey = levelKeys.ps2MemoryCardSave(cardFilePath, save.folderName);
-        const existing = await ps2MemoryCardSavesSublevel.get(existingKey).catch(() => undefined);
+        const existingKey = levelKeys.ps2MemoryCardSave(
+          cardFilePath,
+          save.folderName
+        );
+        const existing = await ps2MemoryCardSavesSublevel
+          .get(existingKey)
+          .catch(() => undefined);
 
         let objectId: string | null = existing?.objectId ?? null;
         let title: string | null = existing?.title ?? null;
         let iconUrl: string | null = existing?.iconUrl ?? null;
         let libraryImageUrl: string | null = existing?.libraryImageUrl ?? null;
-        let libraryHeroImageUrl: string | null = existing?.libraryHeroImageUrl ?? null;
+        let libraryHeroImageUrl: string | null =
+          existing?.libraryHeroImageUrl ?? null;
         let logoImageUrl: string | null = existing?.logoImageUrl ?? null;
         let shop: "launchbox" | null = existing?.shop ?? null;
 
         if (!objectId) {
           try {
-            const normalizedFolder = save.folderName.toUpperCase().replace(/[_-]/g, "");
+            const normalizedFolder = save.folderName
+              .toUpperCase()
+              .replace(/[_-]/g, "");
             const allGames = await gamesSublevel.values().all();
             for (const game of allGames) {
               if (game.shop !== "launchbox") continue;
-              const gameSkus: string[] = (game as unknown as Record<string, unknown>).skus as string[] ?? [];
+              const gameSkus: string[] =
+                ((game as unknown as Record<string, unknown>)
+                  .skus as string[]) ?? [];
               const matchesSku = gameSkus.some(
-                (sku) => sku.toUpperCase().replace(/[_-]/g, "") === normalizedFolder
+                (sku) =>
+                  sku.toUpperCase().replace(/[_-]/g, "") === normalizedFolder
               );
               if (matchesSku) {
                 objectId = game.objectId;
@@ -117,33 +138,53 @@ const scanPs2Memcards = async (
                 break;
               }
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
 
         const record: MemoryCardSaveRecord = {
-          cardFilePath, cardLabel,
+          cardFilePath,
+          cardLabel,
           folderName: save.folderName,
-          sku: null, objectId, shop, title,
-          iconUrl, libraryImageUrl, libraryHeroImageUrl, logoImageUrl,
-          fileCount: save.fileCount, sizeBytes: save.sizeBytes,
-          createdAt: save.createdAt, modifiedAt: save.modifiedAt,
+          sku: null,
+          objectId,
+          shop,
+          title,
+          iconUrl,
+          libraryImageUrl,
+          libraryHeroImageUrl,
+          logoImageUrl,
+          fileCount: save.fileCount,
+          sizeBytes: save.sizeBytes,
+          createdAt: save.createdAt,
+          modifiedAt: save.modifiedAt,
           detectedAt: Date.now(),
         };
 
         await ps2MemoryCardSavesSublevel.put(existingKey, record);
-        if (objectId) matched++; else unmatched++;
+        if (objectId) matched++;
+        else unmatched++;
 
         send(requestId, {
           type: "match_progress",
-          processed: j + 1, total: saveEntries.length,
+          processed: j + 1,
+          total: saveEntries.length,
           currentSave: save.folderName,
           status: objectId ? "matched" : "unmatched",
-          matched, unmatched,
+          matched,
+          unmatched,
         });
       }
     }
 
-    send(requestId, { type: "done", cardCount: cardFiles.length, saveCount: totalSaveCount, matched, unmatched });
+    send(requestId, {
+      type: "done",
+      cardCount: cardFiles.length,
+      saveCount: totalSaveCount,
+      matched,
+      unmatched,
+    });
   } catch (err) {
     logger.error("PS2 memcard scan failed", err);
     send(requestId, { type: "error", message: String(err) });

@@ -182,4 +182,3 @@ export const buildMcsBuffer = (contents: Ps1SaveContents): Buffer => {
   }
   return Buffer.concat(parts);
 };
-

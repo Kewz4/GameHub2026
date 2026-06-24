@@ -265,19 +265,10 @@ export const scanPs2MemoryCard = async (
       let fileCount = 0;
       let sizeBytes = 0;
 
-      for (
-        let j = 0;
-        j < Math.min(entry.length, 64);
-        j++
-      ) {
+      for (let j = 0; j < Math.min(entry.length, 64); j++) {
         const fileEntryOff = folderOff + j * ENTRY_STRIDE;
         const fileBuf = Buffer.alloc(64);
-        const { bytesRead: fb } = await fh.read(
-          fileBuf,
-          0,
-          64,
-          fileEntryOff
-        );
+        const { bytesRead: fb } = await fh.read(fileBuf, 0, 64, fileEntryOff);
         if (fb < 64) continue;
         const fileEntry = parseEntry(fileBuf, 0);
         if (!fileEntry || !(fileEntry.mode & MC_ATTR_FILE)) continue;
@@ -309,7 +300,8 @@ export const buildPsuBuffer = (contents: Ps2SaveContents): Buffer => {
   for (const file of contents.files) {
     parts.push(file.entry);
     // Pad file data to PAGE_SIZE boundary
-    const padded = Math.ceil(file.data.length / PAGE_SIZE) * PAGE_SIZE || PAGE_SIZE;
+    const padded =
+      Math.ceil(file.data.length / PAGE_SIZE) * PAGE_SIZE || PAGE_SIZE;
     const dataBuf = Buffer.alloc(padded);
     file.data.copy(dataBuf);
     parts.push(dataBuf);
@@ -317,4 +309,3 @@ export const buildPsuBuffer = (contents: Ps2SaveContents): Buffer => {
 
   return Buffer.concat(parts);
 };
-

@@ -27,7 +27,11 @@ const exportPs2Save = async (
 
     return { ok: true, location: outPath, sizeBytes: psuBuffer.length };
   } catch (err) {
-    logger.error("Failed to export PS2 save", { cardFilePath, folderName, err });
+    logger.error("Failed to export PS2 save", {
+      cardFilePath,
+      folderName,
+      err,
+    });
     return { ok: false, error: String(err) };
   }
 };

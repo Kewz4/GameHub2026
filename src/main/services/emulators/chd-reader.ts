@@ -155,8 +155,7 @@ export const readChdLeadingData = async (
       if (mapRead < MAP_ENTRY_SIZE) break;
 
       // Compressed length: 3 bytes big-endian at offset 0
-      const compLen =
-        (mapBuf[0] << 16) | (mapBuf[1] << 8) | mapBuf[2];
+      const compLen = (mapBuf[0] << 16) | (mapBuf[1] << 8) | mapBuf[2];
       const compType = mapBuf[3];
 
       // File offset: 8 bytes big-endian at offset 4
@@ -209,4 +208,3 @@ export const readChdLeadingData = async (
     await fh?.close();
   }
 };
-

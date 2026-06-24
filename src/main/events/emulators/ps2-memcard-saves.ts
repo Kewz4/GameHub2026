@@ -22,7 +22,10 @@ const forgetPs2MemcardCard = async (
   const all = await ps2MemoryCardSavesSublevel.values().all();
   const toDelete = all.filter((r) => r.cardFilePath === cardFilePath);
   for (const record of toDelete) {
-    const key = levelKeys.ps2MemoryCardSave(record.cardFilePath, record.folderName);
+    const key = levelKeys.ps2MemoryCardSave(
+      record.cardFilePath,
+      record.folderName
+    );
     await ps2MemoryCardSavesSublevel.del(key).catch(() => undefined);
   }
 };

@@ -3,8 +3,17 @@ import path from "node:path";
 
 import { registerEvent } from "../register-event";
 import { WindowManager, emulators, logger } from "@main/services";
-import { ps1MemoryCardSavesSublevel, levelKeys, gamesShopAssetsSublevel, gamesSublevel } from "@main/level";
-import type { Ps2MemcardScanInput, Ps2MemcardScanProgress, MemoryCardSaveRecord } from "@types";
+import {
+  ps1MemoryCardSavesSublevel,
+  levelKeys,
+  gamesShopAssetsSublevel,
+  gamesSublevel,
+} from "@main/level";
+import type {
+  Ps2MemcardScanInput,
+  Ps2MemcardScanProgress,
+  MemoryCardSaveRecord,
+} from "@types";
 
 const CHANNEL = "on-ps1-memcard-scan-progress";
 const inflight = new Map<string, { cancelled: boolean }>();
@@ -28,7 +37,12 @@ const scanPs1Memcards = async (
       cardFiles.push(...input.manualPaths);
     }
 
-    send(requestId, { type: "scan_progress", processed: 0, total: cardFiles.length, currentCard: null });
+    send(requestId, {
+      type: "scan_progress",
+      processed: 0,
+      total: cardFiles.length,
+      currentCard: null,
+    });
 
     let totalSaveCount = 0;
     let matched = 0;
@@ -36,16 +50,30 @@ const scanPs1Memcards = async (
 
     for (let i = 0; i < cardFiles.length; i++) {
       if (signal.cancelled) {
-        send(requestId, { type: "cancelled", cardCount: i, saveCount: totalSaveCount });
+        send(requestId, {
+          type: "cancelled",
+          cardCount: i,
+          saveCount: totalSaveCount,
+        });
         return;
       }
 
       const cardFilePath = cardFiles[i];
       const cardLabel = path.basename(cardFilePath);
 
-      send(requestId, { type: "scan_progress", processed: i, total: cardFiles.length, currentCard: cardLabel });
+      send(requestId, {
+        type: "scan_progress",
+        processed: i,
+        total: cardFiles.length,
+        currentCard: cardLabel,
+      });
 
-      let saveEntries: { identifier: string; fileSize: number; blockCount: number; blockIndices: number[] }[] = [];
+      let saveEntries: {
+        identifier: string;
+        fileSize: number;
+        blockCount: number;
+        blockIndices: number[];
+      }[] = [];
       try {
         saveEntries = await emulators.scanPs1MemoryCard(cardFilePath);
       } catch (err) {
@@ -58,24 +86,34 @@ const scanPs1Memcards = async (
         const save = saveEntries[j];
         totalSaveCount++;
 
-        const existingKey = levelKeys.ps1MemoryCardSave(cardFilePath, save.identifier);
-        const existing = await ps1MemoryCardSavesSublevel.get(existingKey).catch(() => undefined);
+        const existingKey = levelKeys.ps1MemoryCardSave(
+          cardFilePath,
+          save.identifier
+        );
+        const existing = await ps1MemoryCardSavesSublevel
+          .get(existingKey)
+          .catch(() => undefined);
 
         let objectId: string | null = existing?.objectId ?? null;
         let title: string | null = existing?.title ?? null;
         let iconUrl: string | null = existing?.iconUrl ?? null;
         let libraryImageUrl: string | null = existing?.libraryImageUrl ?? null;
-        let libraryHeroImageUrl: string | null = existing?.libraryHeroImageUrl ?? null;
+        let libraryHeroImageUrl: string | null =
+          existing?.libraryHeroImageUrl ?? null;
         let logoImageUrl: string | null = existing?.logoImageUrl ?? null;
         let shop: "launchbox" | null = existing?.shop ?? null;
 
         if (!objectId) {
           try {
-            const normalizedId = save.identifier.toUpperCase().replace(/[_-]/g, "");
+            const normalizedId = save.identifier
+              .toUpperCase()
+              .replace(/[_-]/g, "");
             const allGames = await gamesSublevel.values().all();
             for (const game of allGames) {
               if (game.shop !== "launchbox") continue;
-              const gameSkus: string[] = (game as unknown as Record<string, unknown>).skus as string[] ?? [];
+              const gameSkus: string[] =
+                ((game as unknown as Record<string, unknown>)
+                  .skus as string[]) ?? [];
               const matches = gameSkus.some(
                 (sku) => sku.toUpperCase().replace(/[_-]/g, "") === normalizedId
               );
@@ -95,15 +133,24 @@ const scanPs1Memcards = async (
                 break;
               }
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
 
         const sizeBytes = save.blockCount * 8192;
         const record: MemoryCardSaveRecord = {
-          cardFilePath, cardLabel,
+          cardFilePath,
+          cardLabel,
           folderName: save.identifier,
-          sku: null, objectId, shop, title,
-          iconUrl, libraryImageUrl, libraryHeroImageUrl, logoImageUrl,
+          sku: null,
+          objectId,
+          shop,
+          title,
+          iconUrl,
+          libraryImageUrl,
+          libraryHeroImageUrl,
+          logoImageUrl,
           fileCount: save.blockCount,
           sizeBytes,
           createdAt: 0,
@@ -112,17 +159,28 @@ const scanPs1Memcards = async (
         };
 
         await ps1MemoryCardSavesSublevel.put(existingKey, record);
-        if (objectId) matched++; else unmatched++;
+        if (objectId) matched++;
+        else unmatched++;
 
         send(requestId, {
-          type: "match_progress", processed: j + 1, total: saveEntries.length,
-          currentSave: save.identifier, status: objectId ? "matched" : "unmatched",
-          matched, unmatched,
+          type: "match_progress",
+          processed: j + 1,
+          total: saveEntries.length,
+          currentSave: save.identifier,
+          status: objectId ? "matched" : "unmatched",
+          matched,
+          unmatched,
         });
       }
     }
 
-    send(requestId, { type: "done", cardCount: cardFiles.length, saveCount: totalSaveCount, matched, unmatched });
+    send(requestId, {
+      type: "done",
+      cardCount: cardFiles.length,
+      saveCount: totalSaveCount,
+      matched,
+      unmatched,
+    });
   } catch (err) {
     logger.error("PS1 memcard scan failed", err);
     send(requestId, { type: "error", message: String(err) });

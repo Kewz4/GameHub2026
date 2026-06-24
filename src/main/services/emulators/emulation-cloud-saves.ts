@@ -45,11 +45,9 @@ export const uploadEmulationSave = async (
     contentType: "application/octet-stream",
   });
 
-  return HydraApi.post<EmulationCloudSave>(
-    "/profile/emulation-saves",
-    form,
-    { needsAuth: true }
-  );
+  return HydraApi.post<EmulationCloudSave>("/profile/emulation-saves", form, {
+    needsAuth: true,
+  });
 };
 
 export const toEmulationSaveEmulator = (
@@ -122,9 +120,7 @@ export const mergeWriteGamesYml = async (
     existing.set(key, val);
   }
 
-  const lines = Array.from(existing.entries()).map(
-    ([k, v]) => `${k}: ${v}`
-  );
+  const lines = Array.from(existing.entries()).map(([k, v]) => `${k}: ${v}`);
   await fs.writeFile(ymlPath, lines.join("\n") + "\n", "utf-8");
 };
 
@@ -185,6 +181,5 @@ export const downloadEmulationSave = async (
   const ab = await response.arrayBuffer();
   return Buffer.from(ab);
 };
-
 
 // Aliases for upload-emulation-save.ts compatibility

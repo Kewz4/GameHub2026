@@ -46,7 +46,11 @@ export const fetchShopDetailsForSkus = async (
   try {
     const results = await HydraApi.get<
       Array<{ sku: string; entry: LaunchboxShopDetailsEntry }>
-    >("/games/launchbox/by-skus", { skus: skus.join(",") }, { needsAuth: false });
+    >(
+      "/games/launchbox/by-skus",
+      { skus: skus.join(",") },
+      { needsAuth: false }
+    );
 
     const map = new Map<string, LaunchboxShopDetailsEntry>();
     for (const { sku, entry } of results) {

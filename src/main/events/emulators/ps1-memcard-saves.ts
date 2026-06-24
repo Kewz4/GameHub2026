@@ -22,7 +22,10 @@ const forgetPs1MemcardCard = async (
   const all = await ps1MemoryCardSavesSublevel.values().all();
   const toDelete = all.filter((r) => r.cardFilePath === cardFilePath);
   for (const record of toDelete) {
-    const key = levelKeys.ps1MemoryCardSave(record.cardFilePath, record.folderName);
+    const key = levelKeys.ps1MemoryCardSave(
+      record.cardFilePath,
+      record.folderName
+    );
     await ps1MemoryCardSavesSublevel.del(key).catch(() => undefined);
   }
 };
