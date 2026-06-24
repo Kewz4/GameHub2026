@@ -4,6 +4,7 @@ import { ipcMain } from "electron";
 import "./achievements";
 import "./auth";
 import "./autoupdater";
+import "./main-window-controls";
 import "./emulators";
 import "./friends";
 import "./big-picture";

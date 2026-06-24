@@ -266,6 +266,14 @@ export class WindowManager {
     this.loadMainWindowURL(initialHash);
     this.mainWindow.removeMenu();
 
+    this.mainWindow.on("maximize", () => {
+      this.mainWindow?.webContents.send("on-window-maximize-change", true);
+    });
+
+    this.mainWindow.on("unmaximize", () => {
+      this.mainWindow?.webContents.send("on-window-maximize-change", false);
+    });
+
     this.mainWindow.on("ready-to-show", () => {
       if (!app.isPackaged || isStaging)
         WindowManager.mainWindow?.webContents.openDevTools();
@@ -971,6 +979,31 @@ export class WindowManager {
       tray.addListener("click", showContextMenu);
       tray.addListener("right-click", showContextMenu);
     }
+  }
+
+  public static minimizeMainWindow() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.minimize();
+    }
+  }
+
+  public static toggleMaximizeMainWindow() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (this.mainWindow.isMaximized()) {
+      this.mainWindow.unmaximize();
+    } else {
+      this.mainWindow.maximize();
+    }
+  }
+
+  public static closeMainWindow() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.close();
+    }
+  }
+
+  public static isMainWindowMaximized() {
+    return this.mainWindow?.isMaximized() ?? false;
   }
 
   public static openFriendsWindow() {

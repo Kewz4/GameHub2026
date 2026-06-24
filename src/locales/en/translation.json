@@ -139,7 +139,11 @@
     "scan_games_no_results": "We couldn't find any installed games.",
     "scan_games_in_progress": "Scanning your disks for installed games...",
     "scan_games_close": "Close",
-    "scan_games_scan_again": "Scan Again"
+    "scan_games_scan_again": "Scan Again",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   },
   "bottom_panel": {
     "no_downloads_in_progress": "No downloads in progress",
@@ -524,6 +528,7 @@
     "backup_freeze_failed_description": "You must leave at least one free slot for automatic backups",
     "edit_game_modal_button": "Customize game assets",
     "game_details": "Game Details",
+    "game_options": "Game Options",
     "transferring": "Transferring...",
     "view_progress": "View progress",
     "transfer_game": "Transfer Game",

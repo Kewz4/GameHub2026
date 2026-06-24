@@ -26,7 +26,8 @@ export interface LibraryGameContextMenuHandlers {
 export function buildLibraryGameContextMenuItems(
   game: LibraryGame,
   handlers: LibraryGameContextMenuHandlers,
-  isFavoriteLoading: boolean
+  isFavoriteLoading: boolean,
+  t?: (key: string) => string
 ): ContextMenuItem[] {
   const {
     onLaunchOrDownload,
@@ -79,7 +80,7 @@ export function buildLibraryGameContextMenuItems(
   if (onOptions) {
     nextItems.push({
       id: "options",
-      label: "Options",
+      label: t ? t("game_options") : "Game Options",
       icon: <GearIcon size={18} />,
       onSelect: () => onOptions(game),
     });

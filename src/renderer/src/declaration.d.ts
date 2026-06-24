@@ -1162,6 +1162,14 @@ declare global {
         text: string;
       }) => void
     ) => () => void;
+    /* Main window controls (Linux) */
+    minimizeMainWindow: () => Promise<void>;
+    toggleMaximizeMainWindow: () => Promise<void>;
+    closeMainWindow: () => Promise<void>;
+    isMainWindowMaximized: () => Promise<boolean>;
+    onWindowMaximizeChange: (cb: (isMaximized: boolean) => void) => () => void;
+    isWayland: boolean;
+
     /* Friends window */
     openFriendsWindow: () => Promise<void>;
     minimizeFriendsWindow: () => Promise<void>;

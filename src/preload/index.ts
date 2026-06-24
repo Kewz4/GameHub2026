@@ -1292,6 +1292,20 @@ contextBridge.exposeInMainWorld("electron", {
     return () => ipcRenderer.off("installer:progress", listener);
   },
 
+  /* Main window controls (Linux) */
+  minimizeMainWindow: () => ipcRenderer.invoke("minimizeMainWindow"),
+  toggleMaximizeMainWindow: () => ipcRenderer.invoke("toggleMaximizeMainWindow"),
+  closeMainWindow: () => ipcRenderer.invoke("closeMainWindow"),
+  isMainWindowMaximized: (): Promise<boolean> =>
+    ipcRenderer.invoke("isMainWindowMaximized"),
+  onWindowMaximizeChange: (cb: (isMaximized: boolean) => void): (() => void) => {
+    const listener = (_: unknown, isMaximized: boolean) => cb(isMaximized);
+    ipcRenderer.on("on-window-maximize-change", listener);
+    return () => ipcRenderer.removeListener("on-window-maximize-change", listener);
+  },
+  isWayland: process.env.XDG_SESSION_TYPE === "wayland" ||
+    process.env.WAYLAND_DISPLAY !== undefined,
+
   /* Friends window */
   openFriendsWindow: () => ipcRenderer.invoke("openFriendsWindow"),
   minimizeFriendsWindow: () => ipcRenderer.invoke("minimizeFriendsWindow"),
