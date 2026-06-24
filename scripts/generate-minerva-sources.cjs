@@ -26,18 +26,32 @@ const PLATFORMS = {
 };
 
 const SYSTEM_LABELS = {
-  n3ds: "Nintendo 3DS", nds: "Nintendo DS", dsi: "Nintendo DSi",
-  n64: "Nintendo 64", gb: "Game Boy", gbc: "Game Boy Color",
-  gba: "Game Boy Advance", wiiu: "Wii U", wii: "Wii", gc: "GameCube",
-  ps1: "PlayStation", ps2: "PlayStation 2", ps3: "PlayStation 3", psp: "PSP",
+  n3ds: "Nintendo 3DS",
+  nds: "Nintendo DS",
+  dsi: "Nintendo DSi",
+  n64: "Nintendo 64",
+  gb: "Game Boy",
+  gbc: "Game Boy Color",
+  gba: "Game Boy Advance",
+  wiiu: "Wii U",
+  wii: "Wii",
+  gc: "GameCube",
+  ps1: "PlayStation",
+  ps2: "PlayStation 2",
+  ps3: "PlayStation 3",
+  psp: "PSP",
 };
 
 function humanSize(bytes) {
   const n = Number(bytes);
   if (!n || Number.isNaN(n)) return null;
   const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0, v = n;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  let i = 0,
+    v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
   return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
@@ -50,10 +64,16 @@ function cleanTitle(fileName) {
 const db = new DatabaseSync(DB_PATH, { readOnly: true });
 
 // Discover schema
-const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+const tables = db
+  .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+  .all();
 console.error("Tables:", tables.map((t) => t.name).join(", "));
-const tableName = tables.find((t) => /file/i.test(t.name))?.name || tables[0].name;
-const cols = db.prepare(`PRAGMA table_info(${tableName})`).all().map((c) => c.name);
+const tableName =
+  tables.find((t) => /file/i.test(t.name))?.name || tables[0].name;
+const cols = db
+  .prepare(`PRAGMA table_info(${tableName})`)
+  .all()
+  .map((c) => c.name);
 console.error(`Using table '${tableName}' columns:`, cols.join(", "));
 
 const has = (c) => cols.includes(c);
