@@ -10,6 +10,9 @@ export interface MinervaCatalogueEntry {
   magnet: string | null;
   torrentUrl: string | null;
   fileSize?: string | null;
+  contentType?: "game" | "update" | "dlc";
+  /** PS3/WiiU title ID for cross-referencing updates and DLC to base games. */
+  titleId?: string | null;
 }
 
 export interface MinervaCacheRecord {
@@ -45,9 +48,38 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
+/** Systems that have separate update/DLC catalogues stored under extended key prefixes. */
+const MULTI_CONTENT_SYSTEMS = new Set<EmulatorSystem>(["ps3", "wiiu"]);
+
+/** Key prefixes for related content types given a primary system. */
+function relatedPrefixes(system: EmulatorSystem): string[] {
+  if (!MULTI_CONTENT_SYSTEMS.has(system)) return [];
+  return [`${system}-upd:`, `${system}-dlc:`];
+}
+
+async function scanPrefix(
+  prefix: string,
+  normalTarget: string,
+  out: Array<{ entry: MinervaCatalogueEntry; score: number }>
+): Promise<void> {
+  for await (const [, value] of minervaCatalogueSublevel.iterator({
+    gte: prefix,
+    lte: `${prefix}￿`,
+  })) {
+    const normalEntry = normalizeTitle(value.entry.title);
+    const isSubstring =
+      normalEntry.includes(normalTarget) || normalTarget.includes(normalEntry);
+    const dist = levenshtein(normalTarget, normalEntry);
+    if (isSubstring || dist <= 2) {
+      out.push({ entry: value.entry, score: isSubstring ? 0 : dist });
+    }
+  }
+}
+
 /**
  * Search the Minerva catalogue by title (and optionally system).
- * Returns up to 10 best fuzzy matches.
+ * For PS3 and WiiU, also includes matching updates and DLC.
+ * Returns up to 20 best fuzzy matches (base games first, then updates, then DLC).
  */
 export async function searchMinervaCatalogue(
   title: string,
@@ -57,21 +89,18 @@ export async function searchMinervaCatalogue(
   const candidates: Array<{ entry: MinervaCatalogueEntry; score: number }> = [];
 
   const prefix = system ? `${system}:` : undefined;
+  await scanPrefix(prefix ?? "", normalTarget, candidates);
 
-  for await (const [key, value] of minervaCatalogueSublevel.iterator(
-    prefix ? { gte: prefix, lte: `${prefix}￿` } : {}
-  )) {
-    // key is always a string here
-    void key;
-    const normalEntry = normalizeTitle(value.entry.title);
-    const isSubstring =
-      normalEntry.includes(normalTarget) || normalTarget.includes(normalEntry);
-    const dist = levenshtein(normalTarget, normalEntry);
-    if (isSubstring || dist <= 2) {
-      candidates.push({ entry: value.entry, score: isSubstring ? 0 : dist });
+  if (system) {
+    for (const related of relatedPrefixes(system)) {
+      await scanPrefix(related, normalTarget, candidates);
     }
   }
 
-  candidates.sort((a, b) => a.score - b.score);
-  return candidates.slice(0, 10).map((c) => c.entry);
+  candidates.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
+    const order = { game: 0, update: 1, dlc: 2 };
+    return (order[a.entry.contentType ?? "game"] ?? 0) - (order[b.entry.contentType ?? "game"] ?? 0);
+  });
+  return candidates.slice(0, 20).map((c) => c.entry);
 }

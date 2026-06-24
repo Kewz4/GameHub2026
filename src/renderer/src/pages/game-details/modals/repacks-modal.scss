@@ -343,6 +343,36 @@
     font-style: italic;
   }
 
+  &__section-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255, 255, 255, 0.45);
+    padding: 10px 0 4px;
+    margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  &__badge--content-type {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__badge--content-type-update {
+    background: rgba(59, 130, 246, 0.25);
+    color: #93c5fd;
+  }
+
+  &__badge--content-type-dlc {
+    background: rgba(168, 85, 247, 0.25);
+    color: #d8b4fe;
+  }
+
   &__source-item :global(.checkbox-field__label) {
     white-space: normal;
     overflow: visible;

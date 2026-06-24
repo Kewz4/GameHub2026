@@ -42,6 +42,8 @@ interface MinervaSourceDownload {
   uris: string[];
   uploadDate: string | null;
   fileName?: string;
+  contentType?: "game" | "update" | "dlc";
+  titleId?: string | null;
 }
 
 interface MinervaSourceFile {
@@ -66,6 +68,23 @@ const ALL_SYSTEMS: EmulatorSystem[] = [
   "psp",
 ];
 
+/**
+ * Map from key prefix stored in LevelDB to the JSON filename that feeds it.
+ * Prefixes ending in "-upd:" / "-dlc:" are supplemental catalogues for
+ * PS3 and WiiU; they are keyed separately so base-game searches remain fast.
+ */
+const SUPPLEMENTAL_SOURCES: Array<{
+  prefix: string;
+  file: string;
+  system: EmulatorSystem;
+  defaultContentType: "game" | "update" | "dlc";
+}> = [
+  { prefix: "ps3-upd:", file: "ps3-updates.json", system: "ps3", defaultContentType: "update" },
+  { prefix: "ps3-dlc:", file: "ps3-dlc.json", system: "ps3", defaultContentType: "dlc" },
+  { prefix: "wiiu-upd:", file: "wiiu-updates.json", system: "wiiu", defaultContentType: "update" },
+  { prefix: "wiiu-dlc:", file: "wiiu-dlc.json", system: "wiiu", defaultContentType: "dlc" },
+];
+
 /** Attach the shared tracker list to a base magnet (if not already present). */
 function withTrackers(magnet: string): string {
   if (!magnet.startsWith("magnet:")) return magnet;
@@ -76,6 +95,11 @@ function withTrackers(magnet: string): string {
 /**
  * Fetch the hosted source file for one system and populate the local catalogue
  * sublevel. Returns the number of entries stored.
+ *
+ * For entries whose JSON includes a `contentType` field the routing is:
+ *   "game"   → key prefix `${system}:`
+ *   "update" → key prefix `${system}-upd:`
+ *   "dlc"    → key prefix `${system}-dlc:`
  */
 export async function syncMinervaSource(
   system: EmulatorSystem
@@ -102,6 +126,10 @@ export async function syncMinervaSource(
 
   for (const download of data.downloads) {
     const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
+    const ct = download.contentType ?? "game";
+    const prefix =
+      ct === "update" ? `${system}-upd:` : ct === "dlc" ? `${system}-dlc:` : `${system}:`;
+
     const entry: MinervaCatalogueEntry = {
       system,
       title: download.title,
@@ -111,8 +139,10 @@ export async function syncMinervaSource(
       magnet,
       torrentUrl: null,
       fileSize: download.fileSize,
+      contentType: ct,
+      titleId: download.titleId ?? null,
     };
-    const key = `${system}:${normalizeTitle(download.title)}`;
+    const key = `${prefix}${normalizeTitle(download.title)}`;
     batch.put(key, { entry, cachedAt: now });
     count += 1;
   }
@@ -121,13 +151,70 @@ export async function syncMinervaSource(
   return count;
 }
 
-/** Sync the hosted catalogue for every supported system. */
+/**
+ * Fetch a supplemental source file (updates / DLC) and store it under a fixed
+ * key prefix so base-game searches remain separate.
+ */
+async function syncSupplementalSource(opts: {
+  prefix: string;
+  file: string;
+  system: EmulatorSystem;
+  defaultContentType: "game" | "update" | "dlc";
+}): Promise<number> {
+  const url = `${MINERVA_SOURCES_BASE_URL}/${opts.file}`;
+
+  let data: MinervaSourceFile;
+  try {
+    const resp = await axios.get<MinervaSourceFile>(url, {
+      timeout: 60_000,
+      responseType: "json",
+    });
+    data = resp.data;
+  } catch {
+    // Supplemental files may not exist yet — silently skip.
+    return 0;
+  }
+
+  if (!data?.downloads?.length) return 0;
+
+  const now = Date.now();
+  let count = 0;
+  const batch = minervaCatalogueSublevel.batch();
+
+  for (const download of data.downloads) {
+    const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
+    const ct = download.contentType ?? opts.defaultContentType;
+    const entry: MinervaCatalogueEntry = {
+      system: opts.system,
+      title: download.title,
+      region: null,
+      filename: download.fileName ?? download.title,
+      romPath: "",
+      magnet,
+      torrentUrl: null,
+      fileSize: download.fileSize,
+      contentType: ct,
+      titleId: download.titleId ?? null,
+    };
+    const key = `${opts.prefix}${normalizeTitle(download.title)}`;
+    batch.put(key, { entry, cachedAt: now });
+    count += 1;
+  }
+
+  await batch.write();
+  return count;
+}
+
+/** Sync the hosted catalogue for every supported system (including updates/DLC). */
 export async function syncAllMinervaSources(): Promise<
   Partial<Record<EmulatorSystem, number>>
 > {
   const result: Partial<Record<EmulatorSystem, number>> = {};
   for (const system of ALL_SYSTEMS) {
     result[system] = await syncMinervaSource(system);
+  }
+  for (const supp of SUPPLEMENTAL_SOURCES) {
+    await syncSupplementalSource(supp);
   }
   return result;
 }

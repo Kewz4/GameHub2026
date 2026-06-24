@@ -12,7 +12,7 @@ registerEvent(
   ): Promise<GameRepack[]> => {
     const entries = await searchMinervaCatalogue(title, system);
     return entries.map((entry) => ({
-      id: `minerva-${entry.system}-${normalizeTitle(entry.title)}`,
+      id: `minerva-${entry.system}-${entry.contentType ?? "game"}-${normalizeTitle(entry.title)}`,
       title: entry.title,
       uris: entry.magnet ? [entry.magnet] : [],
       fileSize: entry.fileSize ?? null,
@@ -21,6 +21,7 @@ registerEvent(
       downloadSourceName: "Minerva Archive",
       unavailableUris: [],
       createdAt: new Date().toISOString(),
+      contentType: entry.contentType ?? "game",
     }));
   }
 );

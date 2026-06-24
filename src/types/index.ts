@@ -31,6 +31,7 @@ export interface GameRepack {
   downloadSourceName: string;
   createdAt: string;
   installNotes?: string | null;
+  contentType?: "game" | "update" | "dlc";
 }
 
 export interface DownloadSource {

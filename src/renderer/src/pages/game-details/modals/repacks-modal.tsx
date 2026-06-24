@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
@@ -199,9 +199,11 @@ export function RepacksModal({
   }, [visible, game, dispatch]);
 
   const sortedRepacks = useMemo(() => {
+    const contentTypeOrder = { game: 0, update: 1, dlc: 2 };
     return orderBy(
       repacks,
       [
+        (repack) => contentTypeOrder[repack.contentType ?? "game"] ?? 0,
         (repack) => {
           const magnet = repack.uris.find((uri) => uri.startsWith("magnet:"));
           const hash = magnet ? getHashFromMagnet(magnet) : null;
@@ -209,7 +211,7 @@ export function RepacksModal({
         },
         (repack) => repack.uploadDate,
       ],
-      ["desc", "desc"]
+      ["asc", "desc", "desc"]
     );
   }, [repacks, hashesInDebrid]);
 
@@ -682,82 +684,113 @@ export function RepacksModal({
               </div>
             </div>
           ) : (
-            filteredRepacks.map((repack) => {
-              const isLastDownloadedOption =
-                checkIfLastDownloadedOption(repack);
-              const availabilityStatus = getRepackAvailabilityStatus(repack);
-              const tooltipId = `availability-orb-${repack.id}`;
+            (() => {
+              const seenTypes = new Set<string>();
+              return filteredRepacks.map((repack) => {
+                const isLastDownloadedOption =
+                  checkIfLastDownloadedOption(repack);
+                const availabilityStatus = getRepackAvailabilityStatus(repack);
+                const tooltipId = `availability-orb-${repack.id}`;
+                const ct = repack.contentType;
+                let sectionHeader: React.ReactNode = null;
+                if (ct && ct !== "game" && !seenTypes.has(ct)) {
+                  seenTypes.add(ct);
+                  const label =
+                    ct === "update"
+                      ? t("updates_section", { defaultValue: "Updates" })
+                      : t("dlc_section", { defaultValue: "DLC" });
+                  sectionHeader = (
+                    <div key={`section-${ct}`} className="repacks-modal__section-header">
+                      {label}
+                    </div>
+                  );
+                }
 
-              return (
-                <Button
-                  key={repack.id}
-                  theme="dark"
-                  onClick={() => handleRepackClick(repack)}
-                  className="repacks-modal__repack-button"
-                >
-                  <span
-                    className={`repacks-modal__availability-orb repacks-modal__availability-orb--${availabilityStatus}`}
-                    data-tooltip-id={tooltipId}
-                    data-tooltip-content={t(`source_${availabilityStatus}`)}
-                  />
-                  <Tooltip id={tooltipId} />
+                const button = (
+                  <Button
+                    key={repack.id}
+                    theme="dark"
+                    onClick={() => handleRepackClick(repack)}
+                    className="repacks-modal__repack-button"
+                  >
+                    <span
+                      className={`repacks-modal__availability-orb repacks-modal__availability-orb--${availabilityStatus}`}
+                      data-tooltip-id={tooltipId}
+                      data-tooltip-content={t(`source_${availabilityStatus}`)}
+                    />
+                    <Tooltip id={tooltipId} />
 
-                  <p className="repacks-modal__repack-title">
-                    {repack.title}
-                    {userPreferences?.enableNewDownloadOptionsBadges !==
-                      false &&
-                      isNewRepack(repack) && (
-                        <span className="repacks-modal__new-badge">
-                          {t("new_download_option")}
+                    <p className="repacks-modal__repack-title">
+                      {repack.title}
+                      {userPreferences?.enableNewDownloadOptionsBadges !==
+                        false &&
+                        isNewRepack(repack) && (
+                          <span className="repacks-modal__new-badge">
+                            {t("new_download_option")}
+                          </span>
+                        )}
+                    </p>
+
+                    {isLastDownloadedOption && (
+                      <Badge>{t("last_downloaded_option")}</Badge>
+                    )}
+
+                    <div className="repacks-modal__badges">
+                      {repackSupportsAchievements(repack.title) && (
+                        <span className="repacks-modal__badge repacks-modal__badge--achievements">
+                          <TrophyIcon size={12} />
+                          {t("achievements_supported", {
+                            defaultValue: "Achievements",
+                          })}
                         </span>
                       )}
-                  </p>
+                      {repackIsHyperVisor(repack.title) && (
+                        <button
+                          type="button"
+                          className="repacks-modal__badge repacks-modal__badge--hypervisor"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowHyperVisorModal(true);
+                          }}
+                        >
+                          <ZapIcon size={12} />
+                          HyperVisor Crack
+                        </button>
+                      )}
+                      {ct && ct !== "game" && (
+                        <span
+                          className={`repacks-modal__badge repacks-modal__badge--content-type repacks-modal__badge--content-type-${ct}`}
+                        >
+                          {ct === "update" ? "Update" : "DLC"}
+                        </span>
+                      )}
+                    </div>
 
-                  {isLastDownloadedOption && (
-                    <Badge>{t("last_downloaded_option")}</Badge>
-                  )}
-
-                  <div className="repacks-modal__badges">
-                    {repackSupportsAchievements(repack.title) && (
-                      <span className="repacks-modal__badge repacks-modal__badge--achievements">
-                        <TrophyIcon size={12} />
-                        {t("achievements_supported", {
-                          defaultValue: "Achievements",
-                        })}
-                      </span>
-                    )}
-                    {repackIsHyperVisor(repack.title) && (
-                      <button
-                        type="button"
-                        className="repacks-modal__badge repacks-modal__badge--hypervisor"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowHyperVisorModal(true);
-                        }}
-                      >
-                        <ZapIcon size={12} />
-                        HyperVisor Crack
-                      </button>
-                    )}
-                  </div>
-
-                  <p className="repacks-modal__repack-info">
-                    {repack.fileSize} - {repack.downloadSourceName} -{" "}
-                    {repack.uploadDate ? formatDate(repack.uploadDate) : ""}
-                  </p>
-
-                  {repack.installNotes && (
-                    <p className="repacks-modal__install-notes">
-                      {repack.installNotes}
+                    <p className="repacks-modal__repack-info">
+                      {repack.fileSize} - {repack.downloadSourceName} -{" "}
+                      {repack.uploadDate ? formatDate(repack.uploadDate) : ""}
                     </p>
-                  )}
 
-                  {hashesInDebrid[getHashFromMagnet(repack.uris[0]) ?? ""] && (
-                    <DebridBadge />
-                  )}
-                </Button>
-              );
-            })
+                    {repack.installNotes && (
+                      <p className="repacks-modal__install-notes">
+                        {repack.installNotes}
+                      </p>
+                    )}
+
+                    {hashesInDebrid[getHashFromMagnet(repack.uris[0]) ?? ""] && (
+                      <DebridBadge />
+                    )}
+                  </Button>
+                );
+
+                return sectionHeader ? (
+                  <React.Fragment key={repack.id}>
+                    {sectionHeader}
+                    {button}
+                  </React.Fragment>
+                ) : button;
+              });
+            })()
           )}
         </div>
       </Modal>
