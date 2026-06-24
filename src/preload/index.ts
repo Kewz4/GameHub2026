@@ -25,7 +25,7 @@ import type {
   TorrentFilesResponse,
   DownloadLayoutState,
   EmulatorSystem,
-  ClassicsDisc,
+  ClassicsDiscUpdate,
 } from "@types";
 import type { AuthPage } from "@shared";
 import type { AxiosProgressEvent } from "axios";
@@ -708,7 +708,7 @@ contextBridge.exposeInMainWorld("electron", {
   detectEmulator: (system: EmulatorSystem) =>
     ipcRenderer.invoke("detectEmulator", system),
   detectEmulators: () => ipcRenderer.invoke("detectEmulators"),
-  previewEmulatorExecutable: (system: EmulatorSystem, executablePath: string) =>
+  previewEmulatorExecutable: (system: EmulatorSystem, executablePath?: string) =>
     ipcRenderer.invoke("previewEmulatorExecutable", system, executablePath),
   setEmulatorExecutablePath: (
     system: EmulatorSystem,
@@ -716,11 +716,12 @@ contextBridge.exposeInMainWorld("electron", {
   ) => ipcRenderer.invoke("setEmulatorExecutablePath", system, executablePath),
   removeEmulator: (system: EmulatorSystem) =>
     ipcRenderer.invoke("removeEmulator", system),
-  checkEmulatorExecutable: (executablePath: string) =>
-    ipcRenderer.invoke("checkEmulatorExecutable", executablePath),
-  checkEmulatorBios: (system: EmulatorSystem) =>
-    ipcRenderer.invoke("checkEmulatorBios", system),
-  checkPs3Firmware: () => ipcRenderer.invoke("checkPs3Firmware"),
+  checkEmulatorExecutable: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("checkEmulatorExecutable", system),
+  checkEmulatorBios: (system: EmulatorSystem, executablePath: string | null) =>
+    ipcRenderer.invoke("checkEmulatorBios", system, executablePath),
+  checkPs3Firmware: (executablePath: string | null) =>
+    ipcRenderer.invoke("checkPs3Firmware", executablePath),
   getEmulatorRomExtensions: (system: EmulatorSystem) =>
     ipcRenderer.invoke("getEmulatorRomExtensions", system),
   addRomFolder: (
@@ -751,8 +752,139 @@ contextBridge.exposeInMainWorld("electron", {
     discPath: string,
     system: EmulatorSystem
   ) => ipcRenderer.invoke("openClassicsGame", objectId, shop, discPath, system),
-  updateClassicsDisc: (objectId: string, shop: GameShop, disc: ClassicsDisc) =>
-    ipcRenderer.invoke("updateClassicsDisc", objectId, shop, disc),
+  updateClassicsDisc: (shop: GameShop, objectId: string, disc: ClassicsDiscUpdate) =>
+    ipcRenderer.invoke("updateClassicsDisc", shop, objectId, disc),
+  getClassicsImportStatus: () =>
+    ipcRenderer.invoke("getClassicsImportStatus"),
+  getActiveClassicsImport: () =>
+    ipcRenderer.invoke("getActiveClassicsImport"),
+  onClassicsImportProgress: (cb: (payload: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
+      cb(payload);
+    ipcRenderer.on("on-classics-import-progress", listener);
+    return () =>
+      ipcRenderer.removeListener("on-classics-import-progress", listener);
+  },
+  getEmulatorInstallOptions: (binary: any) =>
+    ipcRenderer.invoke("getEmulatorInstallOptions", binary),
+  installEmulator: (binary: any, optionId: string) =>
+    ipcRenderer.invoke("installEmulator", binary, optionId),
+  onEmulatorInstallProgress: (cb: (payload: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
+      cb(payload);
+    ipcRenderer.on("on-emulator-install-progress", listener);
+    return () =>
+      ipcRenderer.removeListener("on-emulator-install-progress", listener);
+  },
+  startRomScan: (
+    system: EmulatorSystem,
+    folderPath: string,
+    scanSubfolders: boolean
+  ) =>
+    ipcRenderer.invoke("startRomScan", system, folderPath, scanSubfolders),
+  cancelRomScan: (requestId: string) =>
+    ipcRenderer.invoke("cancelRomScan", requestId),
+  getEmulatorRomPaths: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("getEmulatorRomPaths", system),
+  addEmulatorRomPath: (system: EmulatorSystem, folderPath: string) =>
+    ipcRenderer.invoke("addEmulatorRomPath", system, folderPath),
+  getRpcs3DefaultSources: () =>
+    ipcRenderer.invoke("getRpcs3DefaultSources"),
+  onRomScanProgress: (requestId: string, cb: (payload: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
+      cb(payload);
+    const channel = `on-rom-scan-progress-${requestId}`;
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  importLaunchboxRoms: (
+    system: EmulatorSystem,
+    folders: { path: string; scanSubfolders: boolean }[],
+    language: string
+  ) =>
+    ipcRenderer.invoke("importLaunchboxRoms", system, folders, language),
+  cancelLaunchboxImport: (requestId: string) =>
+    ipcRenderer.invoke("cancelLaunchboxImport", requestId),
+  scanPs2Memcards: (input: any) =>
+    ipcRenderer.invoke("scanPs2Memcards", input),
+  cancelPs2MemcardScan: (requestId: string) =>
+    ipcRenderer.invoke("cancelPs2MemcardScan", requestId),
+  onPs2MemcardScanProgress: (requestId: string, cb: (payload: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
+      cb(payload);
+    const channel = `on-ps2-memcard-scan-progress-${requestId}`;
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  listPs2MemcardSaves: () => ipcRenderer.invoke("listPs2MemcardSaves"),
+  forgetPs2MemcardSave: (cardFilePath: string, folderName: string) =>
+    ipcRenderer.invoke("forgetPs2MemcardSave", cardFilePath, folderName),
+  forgetPs2MemcardCard: (cardFilePath: string) =>
+    ipcRenderer.invoke("forgetPs2MemcardCard", cardFilePath),
+  exportPs2Save: (
+    cardFilePath: string,
+    folderName: string,
+    suggestedName: string
+  ) =>
+    ipcRenderer.invoke("exportPs2Save", cardFilePath, folderName, suggestedName),
+  scanPs1Memcards: (input: any) =>
+    ipcRenderer.invoke("scanPs1Memcards", input),
+  cancelPs1MemcardScan: (requestId: string) =>
+    ipcRenderer.invoke("cancelPs1MemcardScan", requestId),
+  onPs1MemcardScanProgress: (requestId: string, cb: (payload: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
+      cb(payload);
+    const channel = `on-ps1-memcard-scan-progress-${requestId}`;
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  listPs1MemcardSaves: () => ipcRenderer.invoke("listPs1MemcardSaves"),
+  forgetPs1MemcardSave: (cardFilePath: string, identifier: string) =>
+    ipcRenderer.invoke("forgetPs1MemcardSave", cardFilePath, identifier),
+  forgetPs1MemcardCard: (cardFilePath: string) =>
+    ipcRenderer.invoke("forgetPs1MemcardCard", cardFilePath),
+  exportPs1Save: (
+    cardFilePath: string,
+    identifier: string,
+    suggestedName: string
+  ) =>
+    ipcRenderer.invoke("exportPs1Save", cardFilePath, identifier, suggestedName),
+  uploadEmulationSave: (
+    platform: any,
+    cardFilePath: string,
+    folderName: string
+  ) =>
+    ipcRenderer.invoke("uploadEmulationSave", platform, cardFilePath, folderName),
+  uploadEmulationSavesForCard: (platform: any, cardFilePath: string) =>
+    ipcRenderer.invoke("uploadEmulationSavesForCard", platform, cardFilePath),
+  onEmulationBackupProgress: (cb: (payload: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
+      cb(payload);
+    ipcRenderer.on("on-emulation-backup-progress", listener);
+    return () =>
+      ipcRenderer.removeListener("on-emulation-backup-progress", listener);
+  },
+  getActiveEmulationBackups: () =>
+    ipcRenderer.invoke("getActiveEmulationBackups"),
+  listEmulationSaves: (platform: any, objectId?: string | null) =>
+    ipcRenderer.invoke("listEmulationSaves", platform, objectId),
+  getMemcardRestoreTargets: (platform: any) =>
+    ipcRenderer.invoke("getMemcardRestoreTargets", platform),
+  restoreEmulationSave: (
+    platform: any,
+    saveId: string,
+    targetCardFilePath: string
+  ) =>
+    ipcRenderer.invoke(
+      "restoreEmulationSave",
+      platform,
+      saveId,
+      targetCardFilePath
+    ),
+  deleteEmulationSave: (saveId: string) =>
+    ipcRenderer.invoke("deleteEmulationSave", saveId),
+  updateEmulationSaveLabel: (saveId: string, label: string) =>
+    ipcRenderer.invoke("updateEmulationSaveLabel", saveId, label),
 
   /* Misc */
   ping: () => ipcRenderer.invoke("ping"),

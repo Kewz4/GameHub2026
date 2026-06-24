@@ -31,4 +31,8 @@ export const levelKeys = {
   libraryOriginRepairV2: "libraryOriginRepairV2", // One-time demotion of wrongly "sync"-stamped scan/repack games
   libraryOriginRepairV3: "libraryOriginRepairV3", // Lock-down attempt (v4.6.4) — superseded by V4
   libraryOriginRepairV4: "libraryOriginRepairV4", // URI-exe-based stamp repair: fix V3 over-demotion, stamp platform-URI games "sync"
+  ps2MemoryCardSave: (cardFilePath: string, folderName: string) =>
+    `${cardFilePath}:${folderName}`,
+  ps1MemoryCardSave: (cardFilePath: string, folderName: string) =>
+    `${cardFilePath}:${folderName}`,
 };

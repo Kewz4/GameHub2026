@@ -170,3 +170,96 @@ export const getAchievementSoundVolume = async (): Promise<number> => {
 export const getGameKey = (shop: GameShop, objectId: string): string => {
   return `${shop}:${objectId}`;
 };
+
+/* ── Emulation helpers ────────────────────────────────────────────────────── */
+
+export type SkuRegion = "US" | "EU" | "JP" | "KR" | "ASIA" | "Unknown";
+
+const SKU_REGION_FLAGS: Record<SkuRegion, string> = {
+  US: "🇺🇸",
+  EU: "🌍",
+  JP: "🇯🇵",
+  KR: "🇰🇷",
+  ASIA: "🌏",
+  Unknown: "❓",
+};
+
+/** Map of SKU prefix letters to their region. */
+const SKU_PREFIX_REGION: Record<string, SkuRegion> = {
+  // US (North America)
+  SCUS: "US",
+  SLUS: "US",
+  NPUA: "US",
+  BCUS: "US",
+  // JP (Japan)
+  SCPS: "JP",
+  SLPS: "JP",
+  NPJA: "JP",
+  NPJB: "JP",
+  BCJS: "JP",
+  // KR (Korea)
+  SLKA: "KR",
+  // EU (Europe / rest of world)
+  SCES: "EU",
+  SLES: "EU",
+  SCED: "EU",
+  SLED: "EU",
+  NPEA: "EU",
+  NPEB: "EU",
+  BCES: "EU",
+  BCED: "EU",
+};
+
+/** Extract the region string from a normalised SKU such as "SLES-50009". */
+export const getSkuRegion = (sku: string | null | undefined): SkuRegion => {
+  if (!sku) return "Unknown";
+  const prefix = sku.split("-")[0]?.toUpperCase();
+  return (prefix && SKU_PREFIX_REGION[prefix]) || "Unknown";
+};
+
+/** Return the flag emoji for a given region string. */
+export const getSkuRegionFlag = (region: string): string => {
+  return SKU_REGION_FLAGS[region as SkuRegion] ?? "❓";
+};
+
+/** Return deduplicated regions for an array of SKUs. */
+export const getRegionsFromSkus = (skus: string[]): SkuRegion[] => {
+  const regions = new Set(skus.map((s) => getSkuRegion(s)));
+  return Array.from(regions);
+};
+
+/**
+ * Extract the region from an EmulationCloudSave.saveIdentity string.
+ * Save identities encode the SKU (e.g. "SLES-50009/slot0"), so we
+ * just grab the leading part and run it through getSkuRegion.
+ */
+export const getSkuRegionFromSaveIdentity = (
+  identity: string
+): SkuRegion | null => {
+  if (!identity) return null;
+  const sku = identity.split("/")[0] ?? null;
+  return getSkuRegion(sku);
+};
+
+/**
+ * Convert a LaunchBox platform string to our EmulatorSystem key.
+ * Returns null when the platform is not a supported emulator system.
+ */
+export const platformToSystem = (
+  platform: string | null | undefined
+): "ps1" | "ps2" | "ps3" | null => {
+  if (!platform) return null;
+  const p = platform.toLowerCase();
+  if (p.includes("playstation 3") || p.includes("ps3")) return "ps3";
+  if (p.includes("playstation 2") || p.includes("ps2")) return "ps2";
+  if (p.includes("playstation") || p.includes("ps1") || p.includes("psx"))
+    return "ps1";
+  return null;
+};
+
+/** Extract a readable error code from a classics launch error. */
+export const getClassicsLaunchErrorCode = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "unknown";
+};

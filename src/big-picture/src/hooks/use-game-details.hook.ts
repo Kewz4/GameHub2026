@@ -205,15 +205,18 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     };
   }, [game?.id]);
 
-  const openGame = useCallback(async () => {
-    if (!game?.executablePath) return;
-    globalThis.window.electron.openGame(
-      game.shop,
-      game.objectId,
-      game.executablePath,
-      game.launchOptions
-    );
-  }, [game]);
+  const openGame = useCallback(
+    async (_discPath?: string, _force?: boolean) => {
+      if (!game?.executablePath) return;
+      globalThis.window.electron.openGame(
+        game.shop,
+        game.objectId,
+        game.executablePath,
+        game.launchOptions
+      );
+    },
+    [game]
+  );
 
   const closeGame = useCallback(() => {
     if (!game) return;
@@ -270,18 +273,50 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     updateGame,
   ]);
 
+  const refreshGameDetails = useCallback(async () => {
+    await fetchGameDetails();
+  }, [fetchGameDetails]);
+
+  const iconUrl = game?.iconUrl ?? shopDetails?.assets?.iconUrl ?? null;
+  const heroSrc =
+    game?.libraryHeroImageUrl ?? shopDetails?.assets?.libraryHeroImageUrl ?? null;
+  const logoSrc = game?.logoImageUrl ?? shopDetails?.assets?.logoImageUrl ?? null;
+  const libraryImageUrl =
+    game?.libraryHeroImageUrl ?? shopDetails?.assets?.libraryImageUrl ?? null;
+  const coverImageUrl =
+    game?.libraryHeroImageUrl ?? shopDetails?.assets?.coverImageUrl ?? null;
+  const preferredAssets = {
+    iconUrl,
+    iconSrc: iconUrl,
+    heroSrc,
+    heroImageUrl: heroSrc,
+    libraryHeroImageUrl: heroSrc,
+    logoSrc,
+    logoImageUrl: logoSrc,
+    title: game?.title ?? "",
+    downloadSources: shopDetails?.assets?.downloadSources ?? [],
+    coverImageUrl,
+    coverSrc: coverImageUrl,
+    landscapeSrc: heroSrc,
+    libraryImageUrl,
+    logoPosition: null as string | null,
+  };
+
   return {
     shopDetails,
     stats,
     game,
     isGameRunning,
+    runningSessionDurationInMillis: 0,
     isLoading,
     howLongToBeat,
     protonDBData,
     achievements,
+    preferredAssets,
     openGame,
     closeGame,
     toggleFavorite,
     updateGame,
+    refreshGameDetails,
   };
 }

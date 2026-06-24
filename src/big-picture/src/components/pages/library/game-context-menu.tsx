@@ -36,7 +36,7 @@ export function LibraryGameContextMenu({
   onUninstall,
   onRemoveFromLibrary,
 }: Readonly<LibraryGameContextMenuProps>) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("big_picture");
   const items = useMemo(() => {
     if (!game) return [];
 

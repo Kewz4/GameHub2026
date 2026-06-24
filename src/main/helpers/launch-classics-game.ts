@@ -9,6 +9,9 @@ import type {
   GameShop,
   UserPreferences,
 } from "@types";
+import { isGamemodeAvailable } from "./is-gamemode-available";
+import { isMangohudAvailable } from "./is-mangohud-available";
+import { resolveLaunchCommand } from "./resolve-launch-command";
 
 export class EmulatorNotConfiguredError extends Error {
   code = "EMULATOR_NOT_CONFIGURED" as const;
@@ -59,6 +62,9 @@ export const launchClassicsGame = async (
     throw new EmulatorNotConfiguredError(system);
   }
 
+  // DuckStation/PCSX2 silently crash on launch when no BIOS is present, and the
+  // emulator is spawned detached with stdio "ignore" so its own error never
+  // reaches us. Detect the missing BIOS up front and block the launch instead.
   if (system === "ps1" || system === "ps2") {
     const biosInstalled = await emulators.isEmulatorBiosInstalled(
       system,
@@ -70,7 +76,7 @@ export const launchClassicsGame = async (
   }
 
   const gameKey = levelKeys.game(shop, objectId);
-  const game = await gamesSublevel.get(gameKey).catch(() => null);
+  const game = await gamesSublevel.get(gameKey);
 
   const userPreferences = await db
     .get<string, UserPreferences | null>(levelKeys.userPreferences, {
@@ -79,13 +85,16 @@ export const launchClassicsGame = async (
     .catch(() => null);
 
   const useMangohud =
-    process.platform === "linux" &&
     (userPreferences?.autoRunMangohud === true ||
-      game?.autoRunMangohud === true);
+      game?.autoRunMangohud === true) &&
+    isMangohudAvailable();
+
   const useGamemode =
-    process.platform === "linux" &&
     (userPreferences?.autoRunGamemode === true ||
-      game?.autoRunGamemode === true);
+      game?.autoRunGamemode === true) &&
+    isGamemodeAvailable();
+
+  const selectedDisc = game?.discs?.find((d) => d.path === discPath) ?? null;
 
   if (game) {
     await gamesSublevel.put(gameKey, {
@@ -98,31 +107,39 @@ export const launchClassicsGame = async (
   const baseArgs = buildEmulatorArgs(config.binary, discPath);
   const executablePath = path.normalize(config.executablePath);
   const executableTarget =
-    emulators.resolveEmulatorExecutableTarget(executablePath) ?? executablePath;
+    emulators.resolveEmulatorExecutableTarget(executablePath);
 
-  if (!existsSync(executableTarget)) {
+  if (!executableTarget || !existsSync(executableTarget)) {
     throw new EmulatorNotConfiguredError(system);
   }
 
-  const wrappers: string[] = [];
-  if (useGamemode) wrappers.push("gamemoderun");
-  if (useMangohud) wrappers.push("mangohud");
-
-  const command = wrappers.length > 0 ? wrappers[0] : executableTarget;
-  const args =
-    wrappers.length > 0
-      ? [...wrappers.slice(1), executableTarget, ...baseArgs]
-      : baseArgs;
+  const resolvedLaunchCommand = resolveLaunchCommand({
+    baseCommand: executableTarget,
+    baseArgs,
+    launchOptions: null,
+    wrapperCommands: [
+      ...(useGamemode ? ["gamemoderun"] : []),
+      ...(useMangohud ? ["mangohud"] : []),
+    ],
+  });
 
   const workingDirectory = path.dirname(executableTarget);
 
   try {
-    const processRef = spawn(command, args, {
-      shell: false,
-      detached: true,
-      stdio: "ignore",
-      cwd: workingDirectory,
-    });
+    const processRef = spawn(
+      resolvedLaunchCommand.command,
+      resolvedLaunchCommand.args,
+      {
+        shell: false,
+        detached: true,
+        stdio: "ignore",
+        cwd: workingDirectory,
+        env: {
+          ...process.env,
+          ...resolvedLaunchCommand.env,
+        },
+      }
+    );
 
     await new Promise<void>((resolve, reject) => {
       const onSpawn = () => {
@@ -142,7 +159,7 @@ export const launchClassicsGame = async (
         game,
         system,
         executablePath: config.executablePath,
-        sku: null,
+        sku: selectedDisc?.sku ?? null,
         child: processRef,
       });
     }

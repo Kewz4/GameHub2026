@@ -307,3 +307,7 @@ export function isLibrarySecondaryFilter(
     value === "custom"
   );
 }
+
+export function isLibraryGamePlayable(game: LibraryGame): boolean {
+  return Boolean(game.executablePath || game.isInstalledLocally);
+}

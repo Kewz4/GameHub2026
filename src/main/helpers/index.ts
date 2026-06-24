@@ -97,3 +97,16 @@ export * from "./reg-parser";
 export * from "./launch-game";
 export * from "./download-error-handler";
 export * from "./download-game-helper";
+export * from "./launch-classics-game";
+
+export const platformToSystem = (
+  platform: string | null | undefined
+): "ps1" | "ps2" | "ps3" | null => {
+  if (!platform) return null;
+  const p = platform.toLowerCase();
+  if (p.includes("playstation 3") || p.includes("ps3")) return "ps3";
+  if (p.includes("playstation 2") || p.includes("ps2")) return "ps2";
+  if (p.includes("playstation") || p.includes("ps1") || p.includes("psx"))
+    return "ps1";
+  return null;
+};

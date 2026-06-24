@@ -47,3 +47,46 @@ export * from "./focus-carousel";
 export * from "./navigation-history-bridge";
 export * from "./toast";
 export * from "./virtual-keyboard";
+
+/* ── Stubs added for game-settings-modal compatibility ──────────────────── */
+import type { ReactNode } from "react";
+
+export interface SidebarModalTab<TId extends string = string> {
+  id: TId;
+  label: string;
+  content?: ReactNode;
+  primaryControlId?: string;
+}
+
+interface SidebarModalProps {
+  tabs: SidebarModalTab<string>[];
+  activeTabId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onActiveTabChange?: (id: any) => void;
+  selectedTabId?: string;
+  onTabChange?: (id: string) => void;
+  children?: ReactNode;
+  className?: string;
+  visible?: boolean;
+  onClose?: () => void;
+  title?: string;
+  coverImage?: string;
+  ariaLabel?: string;
+  contentEntryFocusId?: string;
+}
+
+export function SidebarModal(_props: Readonly<SidebarModalProps>): null {
+  return null;
+}
+
+interface EmptyStateProps {
+  children?: ReactNode;
+  className?: string;
+  icon?: ReactNode;
+  title?: string;
+  description?: string;
+}
+
+export function EmptyState(_props: Readonly<EmptyStateProps>): null {
+  return null;
+}

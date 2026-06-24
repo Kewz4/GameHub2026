@@ -6,6 +6,7 @@ import type {
   UnlockedAchievement,
 } from "./game.types";
 import type { DownloadStatus } from "./download.types";
+import type { ClassicsDisc } from "./emulator.types";
 
 export type SubscriptionStatus = "active" | "pending" | "cancelled";
 
@@ -58,8 +59,10 @@ export interface Game {
   winePrefixPath?: string | null;
   protonPath?: string | null;
   executablePath?: string | null;
+  executablePathUpdatedAt?: Date | null;
   trackingExecutablePaths?: string[] | null;
   trackingExecutablePathsUpdatedAt?: Date | null;
+  discs?: ClassicsDisc[];
   /** True when the game is confirmed installed on this machine (Steam appmanifest
    * found, Epic/EA reported installed, or located by the disk scan). Drives the
    * "Play" vs "You own this game — install via …" button. A protocol-URI
@@ -94,7 +97,6 @@ export interface Game {
   experimentalAchievementsEnabled?: boolean;
   achievementEmulatorChecked?: boolean;
   platform?: string | null;
-  discs?: import("./emulator.types").ClassicsDisc[];
   selectedDiscPath?: string | null;
   dontAskDiscSelection?: boolean;
   romSizeBytes?: number | null;
@@ -183,6 +185,8 @@ export interface UserPreferences {
   startMinimized?: boolean;
   launchToLibraryPage?: boolean;
   launchInBigPicture?: boolean;
+  hideClassicsBookmark?: boolean;
+  classicsUseHeroLayout?: boolean;
   bigPictureSoundsEnabled?: boolean;
   bigPictureVirtualKeyboardEnabled?: boolean;
   bigPictureDiagnosticsEnabled?: boolean;
@@ -210,6 +214,7 @@ export interface UserPreferences {
   createStartMenuShortcut?: boolean;
   maxDownloadSpeedBytesPerSecond?: number | null;
   defaultProtonPath?: string | null;
+  defaultWinePrefixPath?: string | null;
   autoRunMangohud?: boolean;
   autoRunGamemode?: boolean;
   steamId?: string | null;

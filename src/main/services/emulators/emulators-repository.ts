@@ -19,7 +19,7 @@ const emptyConfig = (system: EmulatorSystem): EmulatorConfig => ({
 export const getEmulatorConfig = async (
   system: EmulatorSystem
 ): Promise<EmulatorConfig> => {
-  const existing = await emulatorsSublevel.get(system).catch(() => null);
+  const existing = await emulatorsSublevel.get(system);
   return existing ?? emptyConfig(system);
 };
 
@@ -59,7 +59,7 @@ export const recomputeTotals = (config: EmulatorConfig): EmulatorConfig => {
 
 export const resetEmulatorScanData = async (): Promise<void> => {
   for (const system of SYSTEMS) {
-    const existing = await emulatorsSublevel.get(system).catch(() => null);
+    const existing = await emulatorsSublevel.get(system);
     if (!existing) continue;
     await emulatorsSublevel.put(system, {
       ...existing,

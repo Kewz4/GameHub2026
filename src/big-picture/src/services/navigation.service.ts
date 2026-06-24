@@ -13,6 +13,7 @@ export type FocusOverrideTarget =
       regionId: string;
       entryDirection?: FocusDirection;
       preferRememberedFocus?: boolean;
+      initialFocusId?: string;
     }
   | {
       type: "block";
@@ -73,6 +74,7 @@ type PendingInitialFocusRequest = {
 
 interface SetFocusRegionOptions {
   preferRememberedFocus?: boolean;
+  initialFocusId?: string;
 }
 
 const NAVIGATION_DEBUG_STORAGE_KEY = "hydra:big-picture:navigation-debug";

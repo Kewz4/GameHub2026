@@ -1,4 +1,4 @@
-import type { FocusOverrideTarget } from "../../services";
+import type { FocusOverrideTarget, FocusOverrides } from "../../services";
 import { getItemFocusTarget } from "../../helpers";
 import {
   BIG_PICTURE_HEADER_REGION_ID,
@@ -18,6 +18,7 @@ export const DOWNLOADS_SOURCES_ACTIONS_REGION_ID =
 export const DOWNLOADS_SOURCES_SYNC_BUTTON_ID = "downloads-sources-sync-button";
 export const DOWNLOADS_SOURCES_DELETE_ALL_BUTTON_ID =
   "downloads-sources-delete-all-button";
+export const DOWNLOADS_SOURCES_EMPTY_STATE_ID = "downloads-sources-empty-state";
 export const NOTIFICATIONS_LIBRARY_SECTION_REGION_ID =
   "notifications-library-section-region";
 export const NOTIFICATIONS_ACHIEVEMENTS_SECTION_REGION_ID =
@@ -29,6 +30,15 @@ export const NOTIFICATIONS_ACHIEVEMENTS_POSITION_SELECT_ID =
 export const NOTIFICATIONS_ACHIEVEMENTS_TEST_BUTTON_ID =
   "notifications-achievements-test-button";
 export const CONTENT_SECTION_REGION_ID = "content-section-region";
+export const BIG_PICTURE_SECTION_REGION_ID = "big-picture-section-region";
+export const BIG_PICTURE_STARTUP_SECTION_REGION_ID =
+  "big-picture-startup-section-region";
+export const BIG_PICTURE_AUDIO_SECTION_REGION_ID =
+  "big-picture-audio-section-region";
+export const BIG_PICTURE_DIAGNOSTICS_SECTION_REGION_ID =
+  "big-picture-diagnostics-section-region";
+export const BIG_PICTURE_DIAGNOSTICS_POSITION_SELECT_ID =
+  "big-picture-diagnostics-position-select";
 export const COMPATIBILITY_SECTION_REGION_ID = "compatibility-section-region";
 export const INTEGRATIONS_SECTION_REGION_ID = "integrations-section-region";
 export const ACCOUNT_PRIVACY_PRIVACY_SELECT_ID =
@@ -43,6 +53,39 @@ export const ACCOUNT_PRIVACY_UPDATE_PASSWORD_BUTTON_ID =
   "account-privacy-update-password";
 export const ACCOUNT_PRIVACY_HYDRA_CLOUD_BUTTON_ID =
   "account-privacy-hydra-cloud";
+export const EMULATION_OVERVIEW_REGION_ID = "emulation-overview-region";
+export const EMULATION_DETAIL_REGION_ID = "emulation-detail-region";
+export const EMULATION_DETAIL_EXECUTABLE_REGION_ID =
+  "emulation-detail-executable-region";
+export const EMULATION_DETAIL_ROM_FOLDERS_REGION_ID =
+  "emulation-detail-rom-folders-region";
+export const EMULATION_DETAIL_MEMORY_CARDS_REGION_ID =
+  "emulation-detail-memory-cards-region";
+export const EMULATION_DETAIL_CLOUD_SAVES_REGION_ID =
+  "emulation-detail-cloud-saves-region";
+export const EMULATION_DETAIL_LIBRARY_REGION_ID =
+  "emulation-detail-library-region";
+export const EMULATION_OVERVIEW_CARD_FOCUS_IDS = {
+  ps1: "emulation-overview-ps1-card",
+  ps2: "emulation-overview-ps2-card",
+  ps3: "emulation-overview-ps3-card",
+} as const;
+export const EMULATION_DETAIL_BACK_BUTTON_ID = "emulation-detail-back-button";
+export const EMULATION_DETAIL_REMOVE_EMULATOR_BUTTON_ID =
+  "emulation-detail-remove-emulator";
+export const EMULATION_DETAIL_EXECUTABLE_BUTTON_ID =
+  "emulation-detail-executable-button";
+export const EMULATION_DETAIL_REDETECT_BUTTON_ID =
+  "emulation-detail-redetect-button";
+export const EMULATION_DETAIL_ADD_FOLDER_BUTTON_ID =
+  "emulation-detail-add-folder";
+export const EMULATION_DETAIL_RESCAN_BUTTON_ID = "emulation-detail-rescan";
+export const EMULATION_DETAIL_MEMORY_CARDS_PICK_BUTTON_ID =
+  "emulation-detail-memory-cards-pick";
+export const EMULATION_DETAIL_MEMORY_CARDS_DETECT_BUTTON_ID =
+  "emulation-detail-memory-cards-detect";
+export const EMULATION_DETAIL_CLOUD_REFRESH_BUTTON_ID =
+  "emulation-detail-cloud-refresh";
 
 export const BEHAVIOR_ITEM_FOCUS_IDS = {
   preferQuitInsteadOfHiding: "behavior-prefer-quit-instead-of-hiding",
@@ -89,6 +132,13 @@ export const CONTENT_ITEM_FOCUS_IDS = {
   enableSteamAchievements: "content-enable-steam-achievements",
 } as const;
 
+export const BIG_PICTURE_ITEM_FOCUS_IDS = {
+  launchInBigPicture: "big-picture-launch-in-big-picture",
+  enableSounds: "big-picture-enable-sounds",
+  enableVirtualKeyboard: "big-picture-enable-virtual-keyboard",
+  enableDiagnostics: "big-picture-enable-diagnostics",
+} as const;
+
 export const COMPATIBILITY_PROTON_OPTION_AUTO_FOCUS_ID =
   "compatibility-proton-option-auto";
 
@@ -101,36 +151,6 @@ export const SETTINGS_HEADER_RETURN_TARGET: FocusOverrideTarget = {
 export const SETTINGS_SIDEBAR_RETURN_TARGET = getItemFocusTarget(
   BIG_PICTURE_SIDEBAR_ITEM_IDS.settings
 );
-
-// Platform integration button IDs
-export const INTEGRATIONS_STEAM_PRIMARY_BTN_ID =
-  "integrations-steam-primary-btn";
-export const INTEGRATIONS_STEAM_SYNC_BTN_ID = "integrations-steam-sync-btn";
-export const INTEGRATIONS_STEAM_DISCONNECT_BTN_ID =
-  "integrations-steam-disconnect-btn";
-export const INTEGRATIONS_EPIC_PRIMARY_BTN_ID = "integrations-epic-primary-btn";
-export const INTEGRATIONS_EPIC_SYNC_BTN_ID = "integrations-epic-sync-btn";
-export const INTEGRATIONS_EPIC_SIGNOUT_BTN_ID = "integrations-epic-signout-btn";
-export const INTEGRATIONS_GOG_PRIMARY_BTN_ID = "integrations-gog-primary-btn";
-export const INTEGRATIONS_GOG_SYNC_BTN_ID = "integrations-gog-sync-btn";
-export const INTEGRATIONS_GOG_DISCONNECT_BTN_ID =
-  "integrations-gog-disconnect-btn";
-export const INTEGRATIONS_XBOX_PRIMARY_BTN_ID = "integrations-xbox-primary-btn";
-export const INTEGRATIONS_XBOX_SYNC_BTN_ID = "integrations-xbox-sync-btn";
-export const INTEGRATIONS_XBOX_SIGNOUT_BTN_ID = "integrations-xbox-signout-btn";
-export const INTEGRATIONS_EA_PRIMARY_BTN_ID = "integrations-ea-primary-btn";
-export const INTEGRATIONS_UBISOFT_PRIMARY_BTN_ID =
-  "integrations-ubisoft-primary-btn";
-
-// Achievement import button IDs
-export const INTEGRATIONS_ACHIEVEMENT_IMPORT_STEAM_ID =
-  "integrations-achievement-import-steam";
-export const INTEGRATIONS_ACHIEVEMENT_IMPORT_EPIC_ID =
-  "integrations-achievement-import-epic";
-export const INTEGRATIONS_ACHIEVEMENT_IMPORT_GOG_ID =
-  "integrations-achievement-import-gog";
-export const INTEGRATIONS_ACHIEVEMENT_IMPORT_XBOX_ID =
-  "integrations-achievement-import-xbox";
 
 export type IntegrationProviderId =
   | "real-debrid"
@@ -179,3 +199,116 @@ export function getCompatibilityProtonOptionFocusId(path: string) {
 export function getAccountPrivacyBlockedUserButtonFocusId(userId: string) {
   return `account-privacy-blocked-user-${userId}`;
 }
+
+export function getEmulationRomFolderToggleFocusId(folderId: string) {
+  return `emulation-rom-folder-toggle-${folderId}`;
+}
+
+export function getEmulationRomFolderRemoveFocusId(folderId: string) {
+  return `emulation-rom-folder-remove-${folderId}`;
+}
+
+function sanitizeEmulationFocusToken(value: string) {
+  return value.replaceAll(/[^a-z0-9_-]/gi, "-").toLowerCase();
+}
+
+export function getEmulationMemcardGroupCollapseFocusId(cardFilePath: string) {
+  return `emulation-memcard-group-${sanitizeEmulationFocusToken(cardFilePath)}`;
+}
+
+export function getEmulationMemcardBackupAllFocusId(cardFilePath: string) {
+  return `emulation-memcard-backup-all-${sanitizeEmulationFocusToken(cardFilePath)}`;
+}
+
+export function getEmulationMemcardRemoveCardFocusId(cardFilePath: string) {
+  return `emulation-memcard-remove-card-${sanitizeEmulationFocusToken(cardFilePath)}`;
+}
+
+export function getEmulationMemcardMenuFocusId(saveKey: string) {
+  return `emulation-memcard-menu-${sanitizeEmulationFocusToken(saveKey)}`;
+}
+
+export function getEmulationCloudMenuFocusId(saveId: string) {
+  return `emulation-cloud-menu-${sanitizeEmulationFocusToken(saveId)}`;
+}
+
+export function getEmulationCloudRestoreTargetFocusId(cardFilePath: string) {
+  return `emulation-cloud-restore-target-${sanitizeEmulationFocusToken(cardFilePath)}`;
+}
+
+export function getEmulationCloudRestoreTargetNavigationOverrides({
+  cardFilePath,
+  firstCardFilePath,
+  lastCardFilePath,
+  pickButtonId,
+}: {
+  cardFilePath: string;
+  firstCardFilePath?: string;
+  lastCardFilePath?: string;
+  pickButtonId: string;
+}): FocusOverrides | undefined {
+  const isFirstTarget = firstCardFilePath === cardFilePath;
+  const isLastTarget = lastCardFilePath === cardFilePath;
+
+  if (!isFirstTarget && !isLastTarget) {
+    return undefined;
+  }
+
+  return {
+    ...(isFirstTarget
+      ? {
+          up: {
+            type: "block" as const,
+          },
+        }
+      : {}),
+    ...(isLastTarget
+      ? {
+          down: {
+            type: "item" as const,
+            itemId: pickButtonId,
+          },
+        }
+      : {}),
+  };
+}
+
+export function getEmulationCloudRestoreButtonNavigationOverrides(
+  selectedTarget: string | null
+): FocusOverrides | undefined {
+  if (!selectedTarget) {
+    return undefined;
+  }
+
+  return {
+    up: {
+      type: "item",
+      itemId: getEmulationCloudRestoreTargetFocusId(selectedTarget),
+    },
+  };
+}
+
+export const INTEGRATIONS_STEAM_PRIMARY_BTN_ID = "integrations-steam-primary";
+export const INTEGRATIONS_STEAM_SYNC_BTN_ID = "integrations-steam-sync";
+export const INTEGRATIONS_STEAM_DISCONNECT_BTN_ID =
+  "integrations-steam-disconnect";
+export const INTEGRATIONS_EPIC_PRIMARY_BTN_ID = "integrations-epic-primary";
+export const INTEGRATIONS_EPIC_SYNC_BTN_ID = "integrations-epic-sync";
+export const INTEGRATIONS_EPIC_SIGNOUT_BTN_ID = "integrations-epic-signout";
+export const INTEGRATIONS_GOG_PRIMARY_BTN_ID = "integrations-gog-primary";
+export const INTEGRATIONS_GOG_SYNC_BTN_ID = "integrations-gog-sync";
+export const INTEGRATIONS_GOG_DISCONNECT_BTN_ID = "integrations-gog-disconnect";
+export const INTEGRATIONS_XBOX_PRIMARY_BTN_ID = "integrations-xbox-primary";
+export const INTEGRATIONS_XBOX_SYNC_BTN_ID = "integrations-xbox-sync";
+export const INTEGRATIONS_XBOX_SIGNOUT_BTN_ID = "integrations-xbox-signout";
+export const INTEGRATIONS_EA_PRIMARY_BTN_ID = "integrations-ea-primary";
+export const INTEGRATIONS_UBISOFT_PRIMARY_BTN_ID =
+  "integrations-ubisoft-primary";
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_STEAM_ID =
+  "integrations-achievement-import-steam";
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_EPIC_ID =
+  "integrations-achievement-import-epic";
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_GOG_ID =
+  "integrations-achievement-import-gog";
+export const INTEGRATIONS_ACHIEVEMENT_IMPORT_XBOX_ID =
+  "integrations-achievement-import-xbox";

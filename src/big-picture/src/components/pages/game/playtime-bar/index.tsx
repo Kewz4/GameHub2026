@@ -5,6 +5,8 @@ import { useDate, useFormat } from "../../../../hooks";
 
 export interface PlaytimeBarProps {
   game: LibraryGame | null;
+  isGameRunning?: boolean;
+  runningSessionDurationInMillis?: number;
 }
 
 export function PlaytimeBar({ game }: Readonly<PlaytimeBarProps>) {

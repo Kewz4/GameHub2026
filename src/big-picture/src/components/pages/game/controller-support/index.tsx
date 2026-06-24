@@ -26,7 +26,7 @@ const COPY: Record<string, { label: string; description: string }> = {
 };
 
 export interface ControllerSupportBoxProps {
-  shop: GameShop;
+  shop: GameShop | undefined;
   shopDetails: unknown;
   focusId?: string;
   focusNavigationOverrides?: FocusOverrides;

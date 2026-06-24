@@ -60,6 +60,7 @@ interface DownloadGameModalProps {
     iconUrl?: string | null;
     libraryImageUrl?: string | null;
     coverImageUrl?: string | null;
+    downloadSources?: string[];
   };
 }
 

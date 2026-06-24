@@ -10,9 +10,11 @@ const rescanEmulator = async (
   let updated = config;
 
   for (const folder of config.romFolders) {
-    const result = await emulators.scanRomFolder(folder.path, system, {
-      scanSubfolders: folder.scanSubfolders,
-    });
+    const result = await emulators.scanRomFolder(
+      folder.path,
+      emulators.KNOWN_BINARIES[system],
+      folder.scanSubfolders
+    );
     updated = await emulators.updateEmulatorConfig(system, (cfg) => ({
       ...cfg,
       romFolders: cfg.romFolders.map((f) =>

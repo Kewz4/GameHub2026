@@ -65,10 +65,14 @@ export interface ShopAssets {
 
 export type ShopDetails = SteamAppDetails & {
   objectId: string;
+  platform?: string | null;
+  skus?: string[];
 };
 
 export type ShopDetailsWithAssets = ShopDetails & {
   assets: ShopAssets | null;
+  skus?: string[];
+  platform?: string | null;
 };
 
 export interface TorrentFile {

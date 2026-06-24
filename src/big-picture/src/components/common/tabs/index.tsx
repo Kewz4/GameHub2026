@@ -39,6 +39,8 @@ export interface TabsProps<TValue extends string = string> {
   navigationOverrides?: FocusOverrides;
   ariaLabel?: string;
   className?: string;
+  itemsFocusable?: boolean;
+  animateSegmentedIndicator?: boolean;
 }
 
 interface TabsButtonProps<TValue extends string = string> {
