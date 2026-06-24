@@ -595,21 +595,30 @@ export function GameDetailsContextProvider({
     const system = platformToEmulatorSystem(game.platform);
     if (!system) return;
 
+    const mergeRepacks = (minervaRepacks: import("@types").GameRepack[]) => {
+      if (minervaRepacks && minervaRepacks.length > 0) {
+        setRepacks((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id));
+          const newRepacks = minervaRepacks.filter(
+            (r) => !existingIds.has(r.id)
+          );
+          return [...prev, ...newRepacks];
+        });
+      }
+    };
+
     window.electron
       .getMinervaDownloadOptions(system, gameTitle)
-      .then((minervaRepacks) => {
-        if (minervaRepacks && minervaRepacks.length > 0) {
-          setRepacks((prev) => {
-            const existingIds = new Set(prev.map((r) => r.id));
-            const newRepacks = minervaRepacks.filter(
-              (r) => !existingIds.has(r.id)
-            );
-            return [...prev, ...newRepacks];
-          });
-        }
-      })
+      .then(mergeRepacks)
       .catch((err) => {
         console.error("[minerva] Failed to fetch download options:", err);
+      });
+
+    window.electron
+      .searchMinervaCatalogue(gameTitle, system)
+      .then(mergeRepacks)
+      .catch((err) => {
+        console.error("[minerva] Failed to search catalogue:", err);
       });
   }, [game?.objectId, gameTitle]);
 

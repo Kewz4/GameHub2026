@@ -100,6 +100,10 @@ export interface Game {
   selectedDiscPath?: string | null;
   dontAskDiscSelection?: boolean;
   romSizeBytes?: number | null;
+  description?: string | null;
+  releaseDate?: Date | null;
+  genres?: string[] | null;
+  developers?: string[] | null;
 }
 
 export interface Download {
@@ -263,6 +267,8 @@ export interface UserPreferences {
   // These need no login — only a public profile URL/username — and are read the
   // same way as the primary account (e.g. ["Kewz4"]).
   exophaseExtraProfiles?: string[] | null;
+  igdbClientId?: string;
+  igdbClientSecret?: string;
 }
 
 export interface ExcludedGame {

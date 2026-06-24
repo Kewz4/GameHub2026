@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 
 import { getSteamGridDbArtwork } from "@main/services/steamgriddb";
 import { logger } from "@main/services/logger";
-import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
-import type { ClassicsDisc, EmulatorSystem } from "@types";
+import { db, gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import type { ClassicsDisc, EmulatorSystem, UserPreferences } from "@types";
+import { igdb, IGDB_PLATFORM_IDS } from "@main/services/igdb";
 
 import { KNOWN_BINARIES } from "./known-binaries";
 import { scanRomFolder } from "./scan-rom-folder";
@@ -143,6 +144,11 @@ export async function importSgdbRoms(
     let logoImageUrl: string | null = null;
     let coverImageUrl: string | null = null;
 
+    let igdbDescription: string | null = null;
+    let igdbReleaseDate: Date | null = null;
+    let igdbGenres: string[] | null = null;
+    let igdbDevelopers: string[] | null = null;
+
     try {
       const artwork = await getSteamGridDbArtwork(title);
       if (artwork) {
@@ -155,6 +161,33 @@ export async function importSgdbRoms(
       }
     } catch (err) {
       logger.warn(`[sgdb-import] artwork lookup failed for "${title}"`, err);
+    }
+
+    try {
+      const prefs = await db
+        .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+          valueEncoding: "json",
+        })
+        .catch(() => null);
+      const clientId = prefs?.igdbClientId?.trim();
+      const clientSecret = prefs?.igdbClientSecret?.trim();
+      if (clientId && clientSecret) {
+        const platformId = IGDB_PLATFORM_IDS[system];
+        const igdbGame = await igdb.searchGame(title, platformId, clientId, clientSecret);
+        if (igdbGame) {
+          igdbDescription = igdbGame.summary ?? null;
+          igdbReleaseDate = igdbGame.first_release_date
+            ? new Date(igdbGame.first_release_date * 1000)
+            : null;
+          igdbGenres = igdbGame.genres?.map((g) => g.name) ?? null;
+          igdbDevelopers =
+            igdbGame.involved_companies
+              ?.filter((c) => c.developer)
+              .map((c) => c.company.name) ?? null;
+        }
+      }
+    } catch (err) {
+      logger.warn(`[sgdb-import] IGDB lookup failed for "${title}"`, err);
     }
 
     await gamesShopAssetsSublevel
@@ -192,6 +225,10 @@ export async function importSgdbRoms(
         existing.selectedDiscPath = discs[0]?.path ?? null;
       }
       existing.romSizeBytes = game.sizeBytes ?? existing.romSizeBytes ?? null;
+      if (igdbDescription) existing.description = igdbDescription;
+      if (igdbReleaseDate) existing.releaseDate = igdbReleaseDate;
+      if (igdbGenres) existing.genres = igdbGenres;
+      if (igdbDevelopers) existing.developers = igdbDevelopers;
       await gamesSublevel.put(gameKey, existing);
     } else {
       await gamesSublevel.put(gameKey, {
@@ -210,6 +247,10 @@ export async function importSgdbRoms(
         discs,
         selectedDiscPath: discs[0]?.path ?? null,
         romSizeBytes: game.sizeBytes ?? null,
+        description: igdbDescription,
+        releaseDate: igdbReleaseDate,
+        genres: igdbGenres,
+        developers: igdbDevelopers,
       });
     }
 

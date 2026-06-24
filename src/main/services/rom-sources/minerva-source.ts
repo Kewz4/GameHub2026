@@ -10,19 +10,20 @@ import type { MinervaCatalogueEntry } from "@main/level/sublevels/minerva-catalo
 export type { MinervaCatalogueEntry };
 
 const MINERVA_PLATFORMS: Partial<Record<EmulatorSystem, string[]>> = {
-  ps1: ["No-Intro/Sony - PlayStation", "Redump/Sony - PlayStation"],
-  ps2: ["Redump/Sony - PlayStation 2"],
-  psp: ["No-Intro/Sony - PlayStation Portable"],
-  n64: ["No-Intro/Nintendo - Nintendo 64"],
+  n3ds: ["No-Intro/Nintendo - Nintendo 3DS (Decrypted)"],
+  nds: ["No-Intro/Nintendo - Nintendo DS (Decrypted)"],
+  dsi: ["No-Intro/Nintendo - Nintendo DSi (Decrypted)"],
+  n64: ["No-Intro/Nintendo - Nintendo 64 (BigEndian)"],
   gb: ["No-Intro/Nintendo - Game Boy"],
   gbc: ["No-Intro/Nintendo - Game Boy Color"],
   gba: ["No-Intro/Nintendo - Game Boy Advance"],
-  nds: ["No-Intro/Nintendo - Nintendo DS"],
-  dsi: ["No-Intro/Nintendo - Nintendo DSi"],
-  n3ds: ["No-Intro/Nintendo - Nintendo 3DS"],
-  wii: ["Redump/Nintendo - Wii"],
-  gc: ["Redump/Nintendo - GameCube"],
-  wiiu: ["No-Intro/Nintendo - Wii U"],
+  wiiu: ["Redump/Nintendo - Wii U - WUX"],
+  wii: ["Redump/Nintendo - Wii - NKit RVZ [zstd-19-128k]"],
+  gc: ["Redump/Nintendo - GameCube - NKit RVZ [zstd-19-128k]"],
+  ps1: ["No-Intro/Non-Redump - Sony - PlayStation"],
+  ps2: ["No-Intro/Non-Redump - Sony - PlayStation 2"],
+  ps3: ["No-Intro/Sony - PlayStation 3 (PSN) (Content)"],
+  psp: ["No-Intro/Non-Redump - Sony - PlayStation Portable"],
 };
 
 const MINERVA_BASE = "https://minerva-archive.org";
@@ -165,8 +166,69 @@ export async function scrapeRomPage(
   }
 }
 
-function normalizeTitle(title: string): string {
+export function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Scrape all listing pages for a system, store every ROM in LevelDB (without
+ * magnet/torrent — those are fetched lazily). Returns count of entries stored.
+ */
+export async function buildSystemCatalogue(
+  system: EmulatorSystem
+): Promise<number> {
+  const platforms = MINERVA_PLATFORMS[system];
+  if (!platforms) return 0;
+
+  let count = 0;
+
+  for (const platformPath of platforms) {
+    const romPaths = await scrapeListing(platformPath);
+    for (const romPath of romPaths) {
+      const nameParam = new URL(`${MINERVA_BASE}${romPath}`).searchParams.get(
+        "name"
+      );
+      if (!nameParam) continue;
+      const filename = decodeURIComponent(nameParam).split("/").pop() ?? "";
+      const { title, region } = parseRomFilename(filename);
+      const entry: MinervaCatalogueEntry = {
+        system,
+        title,
+        region,
+        filename,
+        romPath,
+        magnet: null,
+        torrentUrl: null,
+      };
+      const cacheKey = `${system}:${normalizeTitle(title)}`;
+      await minervaCatalogueSublevel.put(cacheKey, {
+        entry,
+        cachedAt: Date.now(),
+      });
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+const CATALOGUE_SYSTEMS: EmulatorSystem[] = [
+  "n3ds", "nds", "dsi", "n64", "gb", "gbc", "gba", "wiiu", "wii", "gc",
+  "ps1", "ps2", "ps3", "psp",
+];
+
+/**
+ * Build the full Minerva catalogue for all 14 systems in sequence (to respect
+ * rate limits). Returns a map of system → count of entries stored.
+ */
+export async function buildFullCatalogue(): Promise<
+  Partial<Record<EmulatorSystem, number>>
+> {
+  const result: Partial<Record<EmulatorSystem, number>> = {};
+  for (const system of CATALOGUE_SYSTEMS) {
+    result[system] = await buildSystemCatalogue(system);
+  }
+  return result;
 }
 
 /**

@@ -30,3 +30,5 @@ import "./upload-emulation-save";
 import "./restore-emulation-save";
 import "./emulation-saves";
 import "./get-minerva-download-options";
+import "./build-minerva-catalogue";
+import "./search-minerva-catalogue";

@@ -6,6 +6,8 @@ import type { EmulatorConfigMap, EmulatorSystem } from "@types";
 
 import { ConsoleCard } from "./console-card";
 import { RetroAchievementsSection } from "./retroachievements-section";
+import { IgdbSection } from "./igdb-section";
+import { MinervaCatalogueSection } from "./minerva-catalogue-section";
 import { EmulatorDetail } from "./emulator-detail";
 import { EmulatorSetupModal } from "./setup/emulator-setup-modal";
 import {
@@ -180,6 +182,8 @@ export function SettingsContextEmulation() {
       </header>
 
       <RetroAchievementsSection />
+      <IgdbSection />
+      <MinervaCatalogueSection />
 
       <div className="settings-emulation__cards">
         {SYSTEMS.map((system) => (

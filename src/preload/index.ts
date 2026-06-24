@@ -1515,6 +1515,12 @@ contextBridge.exposeInMainWorld("electron", {
   getMinervaDownloadOptions: (system: EmulatorSystem, title: string) =>
     ipcRenderer.invoke("getMinervaDownloadOptions", system, title),
 
+  buildMinervaCatalogue: (system?: EmulatorSystem) =>
+    ipcRenderer.invoke("buildMinervaCatalogue", system),
+
+  searchMinervaCatalogue: (title: string, system?: EmulatorSystem) =>
+    ipcRenderer.invoke("searchMinervaCatalogue", title, system),
+
   // Cloud debugger
   runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),
 
