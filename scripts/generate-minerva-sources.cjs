@@ -10,108 +10,63 @@ const OUT_DIR = process.argv[3] || "./sources/minerva";
 /**
  * Platform definitions.
  *
- * `path`        – minerva full_path prefix (matches `.<Category>/<Platform>/` slug)
- * `output`      – output JSON filename (without directory)
- * `label`       – human-facing console name used in the "name" field
- * `contentType` – "game" | "update" | "dlc" | "auto"
- *                 "auto" means classify each row by its filename (see classifyRow()).
+ * `path`     – minerva full_path prefix (matches `.<Category>/<Platform>/` slug)
+ * `label`    – human-facing console name used in the "name" field
+ * `classify` – how to derive each row's content type:
+ *                "game"            → every row is a base game
+ *                "update"          → every row is an update
+ *                "auto-wiiu"       → classify Wii U CDN rows by their tags
+ *                "auto-ps3-content"→ classify PS3 PSN Content rows by filename
+ * `outputs`  – map of contentType → output JSON filename. Each content type
+ *              that `classify` can produce is written to its own file, so games,
+ *              updates and DLC live in separate catalogues.
  */
 const PLATFORM_DEFS = [
-  {
-    path: "No-Intro/Nintendo - Nintendo 3DS (Decrypted)",
-    output: "n3ds.json",
-    label: "Nintendo 3DS",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Nintendo - Nintendo DS (Decrypted)",
-    output: "nds.json",
-    label: "Nintendo DS",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Nintendo - Nintendo DSi (Decrypted)",
-    output: "dsi.json",
-    label: "Nintendo DSi",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Nintendo - Nintendo 64 (BigEndian)",
-    output: "n64.json",
-    label: "Nintendo 64",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Nintendo - Game Boy",
-    output: "gb.json",
-    label: "Game Boy",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Nintendo - Game Boy Color",
-    output: "gbc.json",
-    label: "Game Boy Color",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Nintendo - Game Boy Advance",
-    output: "gba.json",
-    label: "Game Boy Advance",
-    contentType: "game",
-  },
-  // Wii U: CDN path mixes base games (00050000…), updates (0005000E…), and DLC (0005000C…).
-  // All entries go into wiiu.json; each gets a contentType derived from its title ID prefix.
+  { path: "No-Intro/Nintendo - Nintendo 3DS (Decrypted)",          label: "Nintendo 3DS",     classify: "game",   outputs: { game: "n3ds.json" } },
+  { path: "No-Intro/Nintendo - Nintendo DS (Decrypted)",           label: "Nintendo DS",      classify: "game",   outputs: { game: "nds.json" } },
+  { path: "No-Intro/Nintendo - Nintendo DSi (Decrypted)",          label: "Nintendo DSi",     classify: "game",   outputs: { game: "dsi.json" } },
+  { path: "No-Intro/Nintendo - Nintendo 64 (BigEndian)",           label: "Nintendo 64",      classify: "game",   outputs: { game: "n64.json" } },
+  { path: "No-Intro/Nintendo - Game Boy",                          label: "Game Boy",         classify: "game",   outputs: { game: "gb.json" } },
+  { path: "No-Intro/Nintendo - Game Boy Color",                    label: "Game Boy Color",   classify: "game",   outputs: { game: "gbc.json" } },
+  { path: "No-Intro/Nintendo - Game Boy Advance",                  label: "Game Boy Advance", classify: "game",   outputs: { game: "gba.json" } },
+  // Wii U CDN dump uses No-Intro friendly names tagged (Update)/(DLC); split per type.
   {
     path: "No-Intro/Nintendo - Wii U (Digital) (CDN)",
-    output: "wiiu.json",
     label: "Wii U",
-    contentType: "auto-wiiu",
+    classify: "auto-wiiu",
+    outputs: { game: "wiiu.json", update: "wiiu-updates.json", dlc: "wiiu-dlc.json" },
   },
-  {
-    path: "Redump/Nintendo - Wii - NKit RVZ [zstd-19-128k]",
-    output: "wii.json",
-    label: "Wii",
-    contentType: "game",
-  },
-  {
-    path: "Redump/Nintendo - GameCube - NKit RVZ [zstd-19-128k]",
-    output: "gc.json",
-    label: "GameCube",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Non-Redump - Sony - PlayStation",
-    output: "ps1.json",
-    label: "PlayStation",
-    contentType: "game",
-  },
-  {
-    path: "No-Intro/Non-Redump - Sony - PlayStation 2",
-    output: "ps2.json",
-    label: "PlayStation 2",
-    contentType: "game",
-  },
-  // PS3 PSN Content mixes base PKG games and DLC; classified per filename.
+  { path: "Redump/Nintendo - Wii - NKit RVZ [zstd-19-128k]",       label: "Wii",              classify: "game",   outputs: { game: "wii.json" } },
+  { path: "Redump/Nintendo - GameCube - NKit RVZ [zstd-19-128k]",  label: "GameCube",         classify: "game",   outputs: { game: "gc.json" } },
+  { path: "No-Intro/Non-Redump - Sony - PlayStation",              label: "PlayStation",      classify: "game",   outputs: { game: "ps1.json" } },
+  { path: "No-Intro/Non-Redump - Sony - PlayStation 2",            label: "PlayStation 2",    classify: "game",   outputs: { game: "ps2.json" } },
+  // PS3 PSN Content mixes base PKG games and DLC; split into ps3.json + ps3-dlc.json.
   {
     path: "No-Intro/Sony - PlayStation 3 (PSN) (Content)",
-    output: "ps3.json",
     label: "PlayStation 3",
-    contentType: "auto-ps3-content",
+    classify: "auto-ps3-content",
+    outputs: { game: "ps3.json", dlc: "ps3-dlc.json" },
   },
   // PS3 Updates — separate catalogue.
   {
     path: "No-Intro/Sony - PlayStation 3 (PSN) (Updates)",
-    output: "ps3-updates.json",
-    label: "PlayStation 3 Updates",
-    contentType: "update",
+    label: "PlayStation 3",
+    classify: "update",
+    outputs: { update: "ps3-updates.json" },
   },
-  {
-    path: "No-Intro/Non-Redump - Sony - PlayStation Portable",
-    output: "psp.json",
-    label: "PSP",
-    contentType: "game",
-  },
+  { path: "No-Intro/Non-Redump - Sony - PlayStation Portable",     label: "PSP",              classify: "game",   outputs: { game: "psp.json" } },
 ];
+
+/**
+ * Filename tags for content we never want in any catalogue — demos, avatars,
+ * soundtracks, themes, trials and PlayView extras. Matched case-insensitively
+ * as parenthesised No-Intro tags. Entries hitting this are dropped entirely.
+ */
+function isExcluded(fileName) {
+  return /\((Demo|Avatar|Soundtrack|OST|Theme|Trial|PlayView|Wallpaper)\)/i.test(
+    fileName
+  );
+}
 
 function humanSize(bytes) {
   const n = Number(bytes);
@@ -132,6 +87,13 @@ function cleanTitle(fileName) {
   return t.trim() || fileName;
 }
 
+/** Human-readable source name for a (label, contentType) pair. */
+function nameFor(label, contentType) {
+  if (contentType === "update") return `Minerva — ${label} Updates`;
+  if (contentType === "dlc") return `Minerva — ${label} DLC`;
+  return `Minerva — ${label}`;
+}
+
 /**
  * Classify a Wii U CDN filename.
  *
@@ -139,10 +101,9 @@ function cleanTitle(fileName) {
  * content type is carried in the parenthesised tags:
  *   "<Title> (Region) (Update)" → update
  *   "<Title> (Region) (DLC)"    → DLC (also "(AOC)" add-on content)
- *   everything else             → base game (incl. Virtual Console, Demo, Beta)
+ *   everything else             → base game (incl. Virtual Console, Beta)
  *
- * A bare 16-hex title-ID prefix is still honoured as a fallback for any raw
- * CDN entries that slip through.
+ * A bare 16-hex title-ID prefix is still honoured as a fallback.
  */
 function classifyWiiuFile(fileName) {
   if (/\(Update\)/i.test(fileName))
@@ -167,41 +128,27 @@ function classifyWiiuFile(fileName) {
 }
 
 /**
- * Classify a PS3 PSN Content filename.
- * Base game PKG: <TitleID>.pkg  (exactly 9 uppercase alphanumeric chars before .pkg)
- * DLC / add-on:  <TitleID>-A<8-digits>.pkg  or similar suffix after titleId
- * We also exclude obvious non-game types (Demo, Avatar, PlayView, Trial).
+ * Classify a PS3 PSN Content filename as either a base game or DLC.
+ * (Demos/avatars/etc. are already removed by isExcluded() before this runs.)
  *
- * Returns { contentType, titleId }.
+ * Returns { contentType: "game" | "dlc", titleId }.
  */
 function classifyPs3ContentFile(fileName) {
-  const lower = fileName.toLowerCase();
-  // Exclude demos, avatars, themes, etc. — treat as DLC for completeness
-  const looksLikeDlc =
-    lower.includes("(dlc)") ||
-    lower.includes("(demo)") ||
-    lower.includes("(avatar)") ||
-    lower.includes("(trial)") ||
-    lower.includes("(playview)") ||
-    lower.includes("(theme)") ||
-    lower.includes("(soundtrack)");
-
   // Extract title ID (e.g. NPEB01234 or BCUS98174)
   const tidMatch = fileName.match(/([A-Z]{4}\d{5})/);
   const titleId = tidMatch ? tidMatch[1] : null;
 
-  if (looksLikeDlc) return { contentType: "dlc", titleId };
+  if (/\(DLC\)/i.test(fileName)) return { contentType: "dlc", titleId };
 
-  // If file looks like a plain PKG with just the title ID it's a base game
+  // A plain PKG named just for the title ID is a base game.
   const basePkgPattern = /^[A-Z]{4}\d{5}(v\d+|\s*\(.*\))?\.(pkg|zip)$/i;
   if (basePkgPattern.test(fileName)) return { contentType: "game", titleId };
 
-  // Addon/DLC packages typically have a dash-suffix after the title ID
+  // Addon packages typically carry a dash-suffix after the title ID.
   if (titleId && new RegExp(`${titleId}-[A-Z0-9]`, "i").test(fileName)) {
     return { contentType: "dlc", titleId };
   }
 
-  // Default: treat as game (base game without strict filename pattern)
   return { contentType: "game", titleId };
 }
 
@@ -239,30 +186,38 @@ const stmt = db.prepare(
 );
 
 const summary = {};
+let excludedTotal = 0;
 for (const def of PLATFORM_DEFS) {
   const like = `%${def.path}/%`;
   const rows = stmt.all(like);
   const seen = new Set();
-  const downloads = [];
+  const buckets = {}; // contentType -> downloads[]
 
   for (const row of rows) {
     const fileName = row[nameCol] || "";
     if (!fileName || seen.has(fileName)) continue;
     seen.add(fileName);
 
-    let magnet = row[magnetCol];
-    if (soCol && row[soCol] != null) magnet += `&so=${row[soCol]}`;
+    if (isExcluded(fileName)) {
+      excludedTotal += 1;
+      continue;
+    }
 
-    let contentType = def.contentType;
+    let contentType = def.classify;
     let titleId = null;
-
-    if (def.contentType === "auto-wiiu") {
+    if (def.classify === "auto-wiiu") {
       ({ contentType, titleId } = classifyWiiuFile(fileName));
-    } else if (def.contentType === "auto-ps3-content") {
+    } else if (def.classify === "auto-ps3-content") {
       ({ contentType, titleId } = classifyPs3ContentFile(fileName));
     }
 
-    downloads.push({
+    // Skip any content type this platform doesn't emit a file for.
+    if (!def.outputs[contentType]) continue;
+
+    let magnet = row[magnetCol];
+    if (soCol && row[soCol] != null) magnet += `&so=${row[soCol]}`;
+
+    (buckets[contentType] ??= []).push({
       title: cleanTitle(fileName),
       fileSize: sizeCol ? humanSize(row[sizeCol]) : null,
       uris: [magnet],
@@ -273,12 +228,16 @@ for (const def of PLATFORM_DEFS) {
     });
   }
 
-  const source = { name: `Minerva — ${def.label}`, downloads };
-  const outPath = path.join(OUT_DIR, def.output);
-  fs.writeFileSync(outPath, JSON.stringify(source));
-  summary[def.output] = downloads.length;
-  console.error(`${def.output}: ${downloads.length} entries -> ${outPath}`);
+  for (const [contentType, file] of Object.entries(def.outputs)) {
+    const downloads = buckets[contentType] || [];
+    const source = { name: nameFor(def.label, contentType), downloads };
+    const outPath = path.join(OUT_DIR, file);
+    fs.writeFileSync(outPath, JSON.stringify(source));
+    summary[file] = downloads.length;
+    console.error(`${file}: ${downloads.length} entries -> ${outPath}`);
+  }
 }
 
+console.error(`\nExcluded (demo/avatar/soundtrack/etc.): ${excludedTotal}`);
 console.error("\nSummary:", JSON.stringify(summary, null, 2));
 db.close();
