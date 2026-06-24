@@ -708,8 +708,10 @@ contextBridge.exposeInMainWorld("electron", {
   detectEmulator: (system: EmulatorSystem) =>
     ipcRenderer.invoke("detectEmulator", system),
   detectEmulators: () => ipcRenderer.invoke("detectEmulators"),
-  previewEmulatorExecutable: (system: EmulatorSystem, executablePath?: string) =>
-    ipcRenderer.invoke("previewEmulatorExecutable", system, executablePath),
+  previewEmulatorExecutable: (
+    system: EmulatorSystem,
+    executablePath?: string
+  ) => ipcRenderer.invoke("previewEmulatorExecutable", system, executablePath),
   setEmulatorExecutablePath: (
     system: EmulatorSystem,
     executablePath: string | null
@@ -752,12 +754,13 @@ contextBridge.exposeInMainWorld("electron", {
     discPath: string,
     system: EmulatorSystem
   ) => ipcRenderer.invoke("openClassicsGame", objectId, shop, discPath, system),
-  updateClassicsDisc: (shop: GameShop, objectId: string, disc: ClassicsDiscUpdate) =>
-    ipcRenderer.invoke("updateClassicsDisc", shop, objectId, disc),
-  getClassicsImportStatus: () =>
-    ipcRenderer.invoke("getClassicsImportStatus"),
-  getActiveClassicsImport: () =>
-    ipcRenderer.invoke("getActiveClassicsImport"),
+  updateClassicsDisc: (
+    shop: GameShop,
+    objectId: string,
+    disc: ClassicsDiscUpdate
+  ) => ipcRenderer.invoke("updateClassicsDisc", shop, objectId, disc),
+  getClassicsImportStatus: () => ipcRenderer.invoke("getClassicsImportStatus"),
+  getActiveClassicsImport: () => ipcRenderer.invoke("getActiveClassicsImport"),
   onClassicsImportProgress: (cb: (payload: any) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
       cb(payload);
@@ -780,16 +783,14 @@ contextBridge.exposeInMainWorld("electron", {
     system: EmulatorSystem,
     folderPath: string,
     scanSubfolders: boolean
-  ) =>
-    ipcRenderer.invoke("startRomScan", system, folderPath, scanSubfolders),
+  ) => ipcRenderer.invoke("startRomScan", system, folderPath, scanSubfolders),
   cancelRomScan: (requestId: string) =>
     ipcRenderer.invoke("cancelRomScan", requestId),
   getEmulatorRomPaths: (system: EmulatorSystem) =>
     ipcRenderer.invoke("getEmulatorRomPaths", system),
   addEmulatorRomPath: (system: EmulatorSystem, folderPath: string) =>
     ipcRenderer.invoke("addEmulatorRomPath", system, folderPath),
-  getRpcs3DefaultSources: () =>
-    ipcRenderer.invoke("getRpcs3DefaultSources"),
+  getRpcs3DefaultSources: () => ipcRenderer.invoke("getRpcs3DefaultSources"),
   onRomScanProgress: (requestId: string, cb: (payload: any) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
       cb(payload);
@@ -801,12 +802,10 @@ contextBridge.exposeInMainWorld("electron", {
     system: EmulatorSystem,
     folders: { path: string; scanSubfolders: boolean }[],
     language: string
-  ) =>
-    ipcRenderer.invoke("importLaunchboxRoms", system, folders, language),
+  ) => ipcRenderer.invoke("importLaunchboxRoms", system, folders, language),
   cancelLaunchboxImport: (requestId: string) =>
     ipcRenderer.invoke("cancelLaunchboxImport", requestId),
-  scanPs2Memcards: (input: any) =>
-    ipcRenderer.invoke("scanPs2Memcards", input),
+  scanPs2Memcards: (input: any) => ipcRenderer.invoke("scanPs2Memcards", input),
   cancelPs2MemcardScan: (requestId: string) =>
     ipcRenderer.invoke("cancelPs2MemcardScan", requestId),
   onPs2MemcardScanProgress: (requestId: string, cb: (payload: any) => void) => {
@@ -826,9 +825,13 @@ contextBridge.exposeInMainWorld("electron", {
     folderName: string,
     suggestedName: string
   ) =>
-    ipcRenderer.invoke("exportPs2Save", cardFilePath, folderName, suggestedName),
-  scanPs1Memcards: (input: any) =>
-    ipcRenderer.invoke("scanPs1Memcards", input),
+    ipcRenderer.invoke(
+      "exportPs2Save",
+      cardFilePath,
+      folderName,
+      suggestedName
+    ),
+  scanPs1Memcards: (input: any) => ipcRenderer.invoke("scanPs1Memcards", input),
   cancelPs1MemcardScan: (requestId: string) =>
     ipcRenderer.invoke("cancelPs1MemcardScan", requestId),
   onPs1MemcardScanProgress: (requestId: string, cb: (payload: any) => void) => {
@@ -848,13 +851,23 @@ contextBridge.exposeInMainWorld("electron", {
     identifier: string,
     suggestedName: string
   ) =>
-    ipcRenderer.invoke("exportPs1Save", cardFilePath, identifier, suggestedName),
+    ipcRenderer.invoke(
+      "exportPs1Save",
+      cardFilePath,
+      identifier,
+      suggestedName
+    ),
   uploadEmulationSave: (
     platform: any,
     cardFilePath: string,
     folderName: string
   ) =>
-    ipcRenderer.invoke("uploadEmulationSave", platform, cardFilePath, folderName),
+    ipcRenderer.invoke(
+      "uploadEmulationSave",
+      platform,
+      cardFilePath,
+      folderName
+    ),
   uploadEmulationSavesForCard: (platform: any, cardFilePath: string) =>
     ipcRenderer.invoke("uploadEmulationSavesForCard", platform, cardFilePath),
   onEmulationBackupProgress: (cb: (payload: any) => void) => {

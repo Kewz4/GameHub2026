@@ -279,8 +279,11 @@ export function useGameDetails(objectId: string, shop: GameShop) {
 
   const iconUrl = game?.iconUrl ?? shopDetails?.assets?.iconUrl ?? null;
   const heroSrc =
-    game?.libraryHeroImageUrl ?? shopDetails?.assets?.libraryHeroImageUrl ?? null;
-  const logoSrc = game?.logoImageUrl ?? shopDetails?.assets?.logoImageUrl ?? null;
+    game?.libraryHeroImageUrl ??
+    shopDetails?.assets?.libraryHeroImageUrl ??
+    null;
+  const logoSrc =
+    game?.logoImageUrl ?? shopDetails?.assets?.logoImageUrl ?? null;
   const libraryImageUrl =
     game?.libraryHeroImageUrl ?? shopDetails?.assets?.libraryImageUrl ?? null;
   const coverImageUrl =

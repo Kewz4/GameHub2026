@@ -23,13 +23,15 @@ export interface LaunchboxShopDetailsEntry {
   } | null;
 }
 
-export const launchboxShopDetails = async (
-  _objectId: string
-): Promise<null> => null;
+export const launchboxShopDetails = async (_objectId: string): Promise<null> =>
+  null;
 
 export const fetchShopDetailsForSkus = async (
   _skus: string[]
 ): Promise<Map<string, LaunchboxShopDetailsEntry>> => new Map();
 
 export const normalizeSku = (sku: string): string =>
-  sku.toUpperCase().replace(/[\s\-_.]/g, "").trim();
+  sku
+    .toUpperCase()
+    .replace(/[\s\-_.]/g, "")
+    .trim();

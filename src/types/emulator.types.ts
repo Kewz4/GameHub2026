@@ -43,7 +43,10 @@ export interface ClassicsDisc {
 
 /** Action payload passed to `updateClassicsDisc` IPC. */
 export type ClassicsDiscUpdate =
-  | { addDisc: { path: string; label: string; fileName: string }; selectedDiscPath: string }
+  | {
+      addDisc: { path: string; label: string; fileName: string };
+      selectedDiscPath: string;
+    }
   | { selectedDiscPath: string }
   | { dontAskDiscSelection: boolean }
   | { removeDiscPath: string };

@@ -44,7 +44,6 @@ import type {
   EmulatorSystem,
   EmulatorConfig,
   EmulatorConfigMap,
-  ClassicsDisc,
   ClassicsDiscUpdate,
   DetectedRom,
   Ps2MemcardScanInput,
@@ -822,7 +821,9 @@ declare global {
       executablePath: string | null
     ) => Promise<EmulatorConfig>;
     removeEmulator: (system: EmulatorSystem) => Promise<EmulatorConfig>;
-    checkEmulatorExecutable: (system: EmulatorSystem) => Promise<{ exists: boolean }>;
+    checkEmulatorExecutable: (
+      system: EmulatorSystem
+    ) => Promise<{ exists: boolean }>;
     getEmulatorRomExtensions: (system: EmulatorSystem) => Promise<string[]>;
     addRomFolder: (
       system: EmulatorSystem,

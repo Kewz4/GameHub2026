@@ -57,14 +57,7 @@ export const pcsx2ConfigCandidates = (
     ];
   }
   return [
-    path.join(
-      os.homedir(),
-      ".local",
-      "share",
-      "PCSX2",
-      "inis",
-      "PCSX2.ini"
-    ),
+    path.join(os.homedir(), ".local", "share", "PCSX2", "inis", "PCSX2.ini"),
     path.join(os.homedir(), ".config", "PCSX2", "inis", "PCSX2.ini"),
   ];
 };

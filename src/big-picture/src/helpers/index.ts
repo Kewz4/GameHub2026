@@ -14,24 +14,36 @@ export * from "./navigation";
 export * from "./strings";
 
 export function resolvePreferredGameAssets(
-  game: {
-    iconUrl?: string | null;
-    libraryHeroImageUrl?: string | null;
-    logoImageUrl?: string | null;
-    libraryImageUrl?: string | null;
-    coverImageUrl?: string | null;
-    title?: string;
-    downloadSources?: string[];
-    logoPosition?: string | null;
-  } | null | undefined,
+  game:
+    | {
+        iconUrl?: string | null;
+        libraryHeroImageUrl?: string | null;
+        logoImageUrl?: string | null;
+        libraryImageUrl?: string | null;
+        coverImageUrl?: string | null;
+        title?: string;
+        downloadSources?: string[];
+        logoPosition?: string | null;
+      }
+    | null
+    | undefined,
   _shopDetails?: unknown
 ) {
   if (!game) {
     return {
-      iconUrl: null, iconSrc: null, heroImageUrl: null, heroSrc: null,
-      logoImageUrl: null, logoSrc: null, title: "", downloadSources: [],
-      coverSrc: null, coverImageUrl: null, landscapeSrc: null,
-      libraryImageUrl: null, logoPosition: null,
+      iconUrl: null,
+      iconSrc: null,
+      heroImageUrl: null,
+      heroSrc: null,
+      logoImageUrl: null,
+      logoSrc: null,
+      title: "",
+      downloadSources: [],
+      coverSrc: null,
+      coverImageUrl: null,
+      landscapeSrc: null,
+      libraryImageUrl: null,
+      logoPosition: null,
     };
   }
   const iconSrc = game.iconUrl ?? null;

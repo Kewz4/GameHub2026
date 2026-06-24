@@ -1,5 +1,9 @@
 import { db } from "../level";
-import type { EmulatorConfig, EmulatorSystem, MemoryCardSaveRecord } from "@types";
+import type {
+  EmulatorConfig,
+  EmulatorSystem,
+  MemoryCardSaveRecord,
+} from "@types";
 
 export const emulatorsSublevel = db.sublevel<EmulatorSystem, EmulatorConfig>(
   "emulators",

@@ -4,9 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import { Tabs, type TabsItem, VerticalFocusGroup } from "../../components";
 import { useGamepad, useNavigation } from "../../hooks";
-import {
-  type FocusOverrideTarget,
-} from "../../services";
+import { type FocusOverrideTarget } from "../../services";
 import { GamepadButtonType } from "../../types";
 import { useVirtualKeyboardStore } from "../../stores";
 import { AccountPrivacySettingsSection } from "./account-privacy";
@@ -220,9 +218,7 @@ export default function Settings() {
           return;
         }
 
-        if (selectTabByIndex(selectedTabIndex - 1)) {
-          
-        }
+        selectTabByIndex(selectedTabIndex - 1);
       }
     );
 
@@ -237,9 +233,7 @@ export default function Settings() {
           return;
         }
 
-        if (selectTabByIndex(selectedTabIndex + 1)) {
-          
-        }
+        selectTabByIndex(selectedTabIndex + 1);
       }
     );
 
