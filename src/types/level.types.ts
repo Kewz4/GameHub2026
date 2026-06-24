@@ -150,8 +150,10 @@ export interface GameAchievement {
   /** When "exophase", both the definitions and the unlocked list were imported
    *  from Exophase and share the same apiNames — so they must be used together
    *  (never mixed with Hydra/Steam definitions, whose names wouldn't match).
+   *  When "retroachievements", definitions + unlocks came from the
+   *  RetroAchievements web API (badge images, RA achievement IDs as names).
    *  When absent/undefined, definitions came from HydraAPI/Steam (with images). */
-  source?: "exophase";
+  source?: "exophase" | "retroachievements";
 }
 
 export type AchievementCustomNotificationPosition =
@@ -208,6 +210,8 @@ export interface UserPreferences {
   extractFilesByDefault?: boolean;
   deleteArchiveFilesAfterExtractionByDefault?: boolean;
   enableSteamAchievements?: boolean;
+  retroAchievementsUsername?: string;
+  retroAchievementsApiKey?: string;
   autoplayGameTrailers?: boolean;
   hideToTrayOnGameStart?: boolean;
   enableNewDownloadOptionsBadges?: boolean;

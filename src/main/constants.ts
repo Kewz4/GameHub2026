@@ -84,6 +84,7 @@ export const INTERVALS = {
   powerSaveBlockerSync: 20_000,
   librarySync: 6 * 60 * 60 * 1000, // 6 hours
   exophaseSync: 2 * 60 * 60 * 1000, // 2 hours — Exophase achievement cache refresh
+  retroAchievementsWatcher: 30_000, // 30 seconds — RA web API polling while playing
 };
 
 export const DEFAULT_ACHIEVEMENT_SOUND_VOLUME = 0.15;

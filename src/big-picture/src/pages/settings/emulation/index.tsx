@@ -7,9 +7,10 @@ import {
   Button,
   FocusItem,
   GridFocusGroup,
+  Input,
   VerticalFocusGroup,
 } from "../../../components";
-import { useNavigationActions } from "../../../hooks";
+import { useNavigationActions, useUserPreferences } from "../../../hooks";
 import {
   EMULATION_DETAIL_BACK_BUTTON_ID,
   EMULATION_DETAIL_CLOUD_SAVES_REGION_ID,
@@ -162,6 +163,73 @@ function ConsoleOverviewCard({
   );
 }
 
+const RA_USERNAME_FOCUS_ID = "emulation-ra-username";
+const RA_APIKEY_FOCUS_ID = "emulation-ra-apikey";
+const RA_SAVE_FOCUS_ID = "emulation-ra-save";
+
+function RetroAchievementsBpSection() {
+  const userPreferences = useUserPreferences();
+  const [username, setUsername] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!userPreferences) return;
+    setUsername(userPreferences.retroAchievementsUsername ?? "");
+    setApiKey(userPreferences.retroAchievementsApiKey ?? "");
+  }, [userPreferences]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await globalThis.window.electron.updateUserPreferences({
+        retroAchievementsUsername: username.trim() || undefined,
+        retroAchievementsApiKey: apiKey.trim() || undefined,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <VerticalFocusGroup regionId="emulation-retroachievements-region" asChild>
+      <div className="emulation-settings__retroachievements">
+        <h2 className="emulation-settings__title">RetroAchievements</h2>
+        <p className="emulation-settings__description">
+          Enter your RetroAchievements username and web API key so unlocks pop
+          up as notifications while you play.
+        </p>
+        <Input
+          label="Username"
+          value={username}
+          placeholder="RetroAchievements username"
+          focusId={RA_USERNAME_FOCUS_ID}
+          autoComplete="off"
+          onChange={(e) => setUsername(e.target.value)}
+        />
+        <Input
+          label="Web API key"
+          type="password"
+          value={apiKey}
+          placeholder="Web API key"
+          focusId={RA_APIKEY_FOCUS_ID}
+          autoComplete="off"
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+        <FocusItem id={RA_SAVE_FOCUS_ID} actions={{ primary: handleSave }}>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving || !username.trim() || !apiKey.trim()}
+          >
+            {isSaving ? "Saving…" : "Save"}
+          </Button>
+        </FocusItem>
+      </div>
+    </VerticalFocusGroup>
+  );
+}
+
 export function EmulationSettingsSection() {
   const { t } = useTranslation("settings");
   const { setFocus } = useNavigationActions();
@@ -237,6 +305,8 @@ export function EmulationSettingsSection() {
           )}
         </p>
       </header>
+
+      <RetroAchievementsBpSection />
 
       <GridFocusGroup regionId={EMULATION_OVERVIEW_REGION_ID}>
         {cardItems.map(({ system, config, focusId }) => (

@@ -8,6 +8,7 @@ import { logger, networkLogger } from "./logger";
 import { PowerSaveBlockerManager } from "./power-save-blocker";
 import path from "node:path";
 import { AchievementWatcherManager } from "./achievements/achievement-watcher-manager";
+import { RaWatcherManager } from "./achievements/retroachievements/ra-watcher-manager";
 import { INTERVALS } from "@main/constants";
 import { Wine } from "./wine";
 import { NativeAddon } from "./native-addon";
@@ -306,6 +307,9 @@ function onOpenGame(game: Game) {
     performanceNow: now,
   });
 
+  // RetroAchievements live polling for RA-capable emulated games.
+  RaWatcherManager.startPolling(game).catch(() => {});
+
   // On Linux, keep the launcher visible briefly and let it auto-close itself.
   if (process.platform !== "linux") {
     WindowManager.closeGameLauncherWindow();
@@ -467,6 +471,7 @@ const onCloseGame = (game: Game) => {
   gamesPlaytime.delete(gameKey);
   launchedGamePids.delete(gameKey);
   PowerSaveBlockerManager.markGameClosed(gameKey);
+  RaWatcherManager.stopPolling(game);
 
   const delta = now - gamePlaytime.lastTick;
 

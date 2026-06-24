@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { EmulatorConfigMap, EmulatorSystem } from "@types";
 
 import { ConsoleCard } from "./console-card";
+import { RetroAchievementsSection } from "./retroachievements-section";
 import { EmulatorDetail } from "./emulator-detail";
 import { EmulatorSetupModal } from "./setup/emulator-setup-modal";
 import {
@@ -177,6 +178,8 @@ export function SettingsContextEmulation() {
           {t("emulation_disclaimer")}
         </p>
       </header>
+
+      <RetroAchievementsSection />
 
       <div className="settings-emulation__cards">
         {SYSTEMS.map((system) => (
