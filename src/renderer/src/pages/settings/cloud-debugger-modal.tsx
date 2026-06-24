@@ -71,7 +71,9 @@ export function CloudDebuggerModal({ report, onClose }: Readonly<Props>) {
           <>
             <div className={styles.summary}>
               <div className={styles.summaryItem}>
-                <span className={styles.summaryNum}>{report.issues.length}</span>
+                <span className={styles.summaryNum}>
+                  {report.issues.length}
+                </span>
                 <span>issues found</span>
               </div>
               <div className={`${styles.summaryItem} ${styles.summaryFixed}`}>
@@ -80,7 +82,9 @@ export function CloudDebuggerModal({ report, onClose }: Readonly<Props>) {
               </div>
               {report.unfixedCount > 0 && (
                 <div className={`${styles.summaryItem} ${styles.summaryError}`}>
-                  <span className={styles.summaryNum}>{report.unfixedCount}</span>
+                  <span className={styles.summaryNum}>
+                    {report.unfixedCount}
+                  </span>
                   <span>need attention</span>
                 </div>
               )}
@@ -94,7 +98,9 @@ export function CloudDebuggerModal({ report, onClose }: Readonly<Props>) {
                   <section key={kind} className={styles.section}>
                     <h3 className={styles.sectionTitle}>
                       {kindLabel[kind]}{" "}
-                      <span className={styles.sectionCount}>({items.length})</span>
+                      <span className={styles.sectionCount}>
+                        ({items.length})
+                      </span>
                     </h3>
                     <ul className={styles.list}>
                       {items.map((issue) => (
@@ -103,8 +109,12 @@ export function CloudDebuggerModal({ report, onClose }: Readonly<Props>) {
                           className={styles.row}
                         >
                           <div className={styles.rowMain}>
-                            <span className={styles.rowTitle}>{issue.gameTitle}</span>
-                            <span className={styles.rowDetail}>{issue.detail}</span>
+                            <span className={styles.rowTitle}>
+                              {issue.gameTitle}
+                            </span>
+                            <span className={styles.rowDetail}>
+                              {issue.detail}
+                            </span>
                           </div>
                           <span
                             className={
@@ -113,7 +123,9 @@ export function CloudDebuggerModal({ report, onClose }: Readonly<Props>) {
                                 : styles.badgeUnfixed
                             }
                           >
-                            {issue.fixed ? "Fixed" : issue.fixError ?? "Not fixed"}
+                            {issue.fixed
+                              ? "Fixed"
+                              : (issue.fixError ?? "Not fixed")}
                           </span>
                         </li>
                       ))}

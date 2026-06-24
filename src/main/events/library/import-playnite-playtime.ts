@@ -251,7 +251,14 @@ const importPlaynitePlaytime = async (
   const filePath = dbPath ?? detectedPath;
 
   if (!filePath || !fs.existsSync(filePath)) {
-    return { matched: 0, total: 0, games: [], unmatched: [], cached: [], detectedPath };
+    return {
+      matched: 0,
+      total: 0,
+      games: [],
+      unmatched: [],
+      cached: [],
+      detectedPath,
+    };
   }
 
   let data: Buffer;
@@ -259,7 +266,14 @@ const importPlaynitePlaytime = async (
     data = fs.readFileSync(filePath);
   } catch (err) {
     logger.error("Failed to read Playnite games.db", err);
-    return { matched: 0, total: 0, games: [], unmatched: [], cached: [], detectedPath };
+    return {
+      matched: 0,
+      total: 0,
+      games: [],
+      unmatched: [],
+      cached: [],
+      detectedPath,
+    };
   }
 
   const playniteGames = parsePlayniteDb(data);
@@ -385,7 +399,10 @@ const importPlaynitePlaytime = async (
       continue;
     }
 
-    const gameKey = levelKeys.game(catalogueMatch.shop, catalogueMatch.objectId);
+    const gameKey = levelKeys.game(
+      catalogueMatch.shop,
+      catalogueMatch.objectId
+    );
     const existingAtKey = await gamesSublevel.get(gameKey).catch(() => null);
 
     // The catalogue resolves to a canonical shop+objectId (e.g. steam:1097150).

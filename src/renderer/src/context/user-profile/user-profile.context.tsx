@@ -194,20 +194,27 @@ export function UserProfileContextProvider({
         // server-driven profile cards. Keyed by `${shop}:${objectId}`.
         const localAchievementCounts = new Map<
           string,
-          { unlockedAchievementCount: number; achievementsPointsEarnedSum: number }
+          {
+            unlockedAchievementCount: number;
+            achievementsPointsEarnedSum: number;
+          }
         >();
         if (isOwnProfile) {
           const allLocal = await window.electron.getLibrary().catch(() => []);
           const activeLocal = allLocal.filter((g) => !g.isDeleted);
           setLocalLibraryCount(activeLocal.length);
           setLocalAchievementSum(
-            activeLocal.reduce((acc, g) => acc + (g.unlockedAchievementCount ?? 0), 0)
+            activeLocal.reduce(
+              (acc, g) => acc + (g.unlockedAchievementCount ?? 0),
+              0
+            )
           );
           for (const localGame of allLocal) {
             localAchievementCounts.set(
               `${localGame.shop}:${localGame.objectId}`,
               {
-                unlockedAchievementCount: localGame.unlockedAchievementCount ?? 0,
+                unlockedAchievementCount:
+                  localGame.unlockedAchievementCount ?? 0,
                 achievementsPointsEarnedSum:
                   localGame.achievementsPointsEarnedSum ?? 0,
               }
@@ -221,7 +228,8 @@ export function UserProfileContextProvider({
           );
           if (!local) return game;
           if (
-            local.unlockedAchievementCount <= (game.unlockedAchievementCount ?? 0)
+            local.unlockedAchievementCount <=
+            (game.unlockedAchievementCount ?? 0)
           ) {
             return game;
           }
@@ -382,7 +390,8 @@ export function UserProfileContextProvider({
           // protocol handler receives a valid URL on all platforms.
           const localBgNorm = localBg?.replace(/\\/g, "/");
           const resolvedBg = localBg
-            ? localBgNorm!.startsWith("http") || localBgNorm!.startsWith("file:")
+            ? localBgNorm!.startsWith("http") ||
+              localBgNorm!.startsWith("file:")
               ? localBgNorm!
               : `local:${localBgNorm!}`
             : userProfile.backgroundImageUrl;

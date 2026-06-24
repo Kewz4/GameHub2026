@@ -45,8 +45,13 @@ export function ProfileHero() {
   const [isCopied, setIsCopied] = useState(false);
   const [failedBannerSrc, setFailedBannerSrc] = useState<string | null>(null);
 
-  const { isMe, getUserProfile, userProfile, heroBackground, backgroundImage: rawBackgroundImage } =
-    useContext(userProfileContext);
+  const {
+    isMe,
+    getUserProfile,
+    userProfile,
+    heroBackground,
+    backgroundImage: rawBackgroundImage,
+  } = useContext(userProfileContext);
   // A banner URL that fails to load (deleted CDN file, missing local copy)
   // degrades to the gradient hero instead of a broken image icon
   const backgroundImage =

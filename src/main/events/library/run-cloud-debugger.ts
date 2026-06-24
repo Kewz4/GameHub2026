@@ -4,11 +4,7 @@ import { HydraApi, logger } from "@main/services";
 import { gameAchievementsSublevel, gamesSublevel } from "@main/level";
 import { searchCatalogueForAchievements } from "@main/services/achievements/exophase/exophase-catalogue";
 import { resolveCanonicalUnlocked } from "@main/services/achievements/exophase/exophase-cache";
-import type {
-  UnlockedAchievement,
-  DebugIssue,
-  CloudDebugReport,
-} from "@types";
+import type { UnlockedAchievement, DebugIssue, CloudDebugReport } from "@types";
 
 export type { DebugIssue, CloudDebugReport };
 

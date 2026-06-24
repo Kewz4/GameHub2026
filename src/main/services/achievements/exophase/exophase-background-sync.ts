@@ -35,7 +35,8 @@ export const runExophaseBackgroundSync = async (
   try {
     // Account-driven sync — PC storefronts only (PSN is a separate import).
     const result = await syncExophaseAccount(
-      (p) => onProgress?.({ current: p.current, total: p.total, title: p.title }),
+      (p) =>
+        onProgress?.({ current: p.current, total: p.total, title: p.title }),
       "pc"
     );
 

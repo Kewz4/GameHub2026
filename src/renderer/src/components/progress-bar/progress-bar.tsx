@@ -25,10 +25,15 @@ export function ProgressBar({
   height = 4,
   className,
 }: Readonly<ProgressBarProps>) {
-  const pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+  const pct =
+    total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 
   const labelText =
-    label === true ? `${current}/${total}` : typeof label === "string" ? label : null;
+    label === true
+      ? `${current}/${total}`
+      : typeof label === "string"
+        ? label
+        : null;
 
   return (
     <div className={["progress-bar", className].filter(Boolean).join(" ")}>

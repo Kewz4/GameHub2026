@@ -175,7 +175,8 @@ export function CloudSavesBox({
             <ul className="cloud-saves-modal__list">
               {artifacts.map((artifact) => {
                 const label =
-                  artifact.label ?? `Backup — ${formatDate(artifact.createdAt)}`;
+                  artifact.label ??
+                  `Backup — ${formatDate(artifact.createdAt)}`;
                 return (
                   <li key={artifact.id} className="cloud-saves-modal__artifact">
                     <div className="cloud-saves-modal__artifact-info">
@@ -200,9 +201,7 @@ export function CloudSavesBox({
                         }
                         onClick={() => handleRestore(artifact.id)}
                       >
-                        {restoredId === artifact.id
-                          ? "Restored ✓"
-                          : "Restore"}
+                        {restoredId === artifact.id ? "Restored ✓" : "Restore"}
                       </Button>
                       <Button
                         variant="secondary"

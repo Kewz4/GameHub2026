@@ -334,10 +334,7 @@ export class R2Sync {
 
   // ── Preferences (settings backup) ────────────────────────────────────────
 
-  static async uploadPreferences(
-    userId: string,
-    json: string
-  ): Promise<void> {
+  static async uploadPreferences(userId: string, json: string): Promise<void> {
     const key = `users/${userId}/preferences/settings.json`;
     await this.client.send(
       new PutObjectCommand({

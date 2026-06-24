@@ -1169,7 +1169,9 @@ export default function Game() {
                     shop={shop}
                     focusId={GAME_SIDEBAR_CLOUD_SAVES_ID}
                     focusNavigationOrder={4}
-                    focusNavigationOverrides={sidebarCarouselNavigationOverrides}
+                    focusNavigationOverrides={
+                      sidebarCarouselNavigationOverrides
+                    }
                   />
                 )}
 

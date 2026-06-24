@@ -115,7 +115,15 @@ export function EpicAuthModal({
       noContentPadding
       noAnimation
     >
-      <div ref={containerRef} style={{ flex: 1, minHeight: "480px", display: "flex", flexDirection: "column" }} />
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          minHeight: "480px",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      />
     </Modal>
   );
 }

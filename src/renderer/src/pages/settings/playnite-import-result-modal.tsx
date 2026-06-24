@@ -31,7 +31,13 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         <div style={{ display: "flex", gap: "24px" }}>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "2rem", fontWeight: 700, color: "var(--color-success, #4caf50)" }}>
+            <div
+              style={{
+                fontSize: "2rem",
+                fontWeight: 700,
+                color: "var(--color-success, #4caf50)",
+              }}
+            >
               {result.matched}
             </div>
             <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>matched</div>
@@ -40,7 +46,9 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
             <div style={{ fontSize: "2rem", fontWeight: 700, opacity: 0.5 }}>
               {result.cached.length}
             </div>
-            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>saved for later</div>
+            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>
+              saved for later
+            </div>
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "2rem", fontWeight: 700, opacity: 0.5 }}>
@@ -52,7 +60,9 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
 
         {result.games.length > 0 && (
           <div>
-            <h4 style={{ margin: "0 0 8px", fontSize: "0.9rem" }}>Updated games</h4>
+            <h4 style={{ margin: "0 0 8px", fontSize: "0.9rem" }}>
+              Updated games
+            </h4>
             <div
               style={{
                 maxHeight: "200px",
@@ -137,7 +147,8 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
                 textDecoration: "underline",
               }}
             >
-              {showUnmatched ? "Hide" : "Show"} {result.unmatched.length} unmatched game
+              {showUnmatched ? "Hide" : "Show"} {result.unmatched.length}{" "}
+              unmatched game
               {result.unmatched.length !== 1 ? "s" : ""}
             </button>
             {showUnmatched && (

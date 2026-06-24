@@ -138,8 +138,7 @@ export function SettingsUbisoft() {
     <div className="settings-account">
       <p className="settings-account__description">
         Connect your Ubisoft account to import your owned games — no client
-        required. Games launch through Ubisoft Connect when it&apos;s
-        installed.
+        required. Games launch through Ubisoft Connect when it&apos;s installed.
       </p>
 
       {!isConnected ? (

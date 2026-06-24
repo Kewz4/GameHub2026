@@ -3,7 +3,13 @@ import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useToast, useUserDetails } from "@renderer/hooks";
 import { useCallback, useContext, useEffect, useState } from "react";
-import { KeyIcon, MailIcon, XCircleFillIcon, CloudIcon, DownloadIcon } from "@primer/octicons-react";
+import {
+  KeyIcon,
+  MailIcon,
+  XCircleFillIcon,
+  CloudIcon,
+  DownloadIcon,
+} from "@primer/octicons-react";
 import { settingsContext } from "@renderer/context";
 import { AuthPage } from "@shared";
 import "./settings-account.scss";

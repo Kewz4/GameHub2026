@@ -174,7 +174,9 @@ export function GameDetailsContent() {
         game?.customHeroImageUrl,
         shopDetails?.assets?.libraryHeroImageUrl,
         // Fallback to library assets when the game isn't in the Hydra catalogue
-        game?.libraryHeroImageUrl || game?.coverImageUrl || game?.libraryImageUrl
+        game?.libraryHeroImageUrl ||
+          game?.coverImageUrl ||
+          game?.libraryImageUrl
       );
 
   return (

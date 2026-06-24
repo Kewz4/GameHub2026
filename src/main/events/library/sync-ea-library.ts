@@ -12,10 +12,7 @@ import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { detectInstalledEaGames, getEaLaunchUri } from "@main/services/ea";
 import { fetchEaOwnedGames } from "@main/services/ea-juno";
-import {
-  getExcludedGames,
-  isGameExcluded,
-} from "@main/helpers/exclusion-list";
+import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 
 /** EA offer ids contain characters unsafe for level keys — sanitize them. */
@@ -44,9 +41,7 @@ const syncEaLibrary = async (
       ? Date.parse(prefs.eaTokenExpiry) < Date.now()
       : false;
     if (expired) {
-      const { refreshEaTokenSilently } = await import(
-        "@main/services/ea-auth"
-      );
+      const { refreshEaTokenSilently } = await import("@main/services/ea-auth");
       const refreshed = await refreshEaTokenSilently();
       if (refreshed) {
         accessToken = refreshed.accessToken;

@@ -54,7 +54,10 @@ function sessionGet(
       redirect: "manual",
     });
     request.setHeader("Accept", "application/json,*/*;q=0.9");
-    request.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+    request.setHeader(
+      "User-Agent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    );
 
     let settled = false;
     const settle = (fn: () => void) => {
@@ -126,7 +129,9 @@ async function fetchMyGamesViaApi(): Promise<{
     `&include_played_free_games=true` +
     `&format=json`;
 
-  logger.log(`[SteamAuth] fetching owned games via IPlayerService for ${steamId}`);
+  logger.log(
+    `[SteamAuth] fetching owned games via IPlayerService for ${steamId}`
+  );
 
   const { status, body, redirectedToLogin } = await sessionGet(ses, url);
 
@@ -134,7 +139,9 @@ async function fetchMyGamesViaApi(): Promise<{
     return { steamId: null, games: [], loggedOut: true };
   }
   if (status === 401 || status === 403) {
-    logger.warn(`[SteamAuth] access token rejected (HTTP ${status}) — session expired`);
+    logger.warn(
+      `[SteamAuth] access token rejected (HTTP ${status}) — session expired`
+    );
     return { steamId: null, games: [], loggedOut: true };
   }
   if (status < 200 || status >= 300) {
@@ -181,7 +188,9 @@ export const getAuthenticatedSteamOwnedGames =
       const { steamId, games, loggedOut } = await fetchMyGamesViaApi();
 
       if (loggedOut || !steamId) {
-        logger.warn("[SteamAuth] not authenticated (no cookie or token rejected)");
+        logger.warn(
+          "[SteamAuth] not authenticated (no cookie or token rejected)"
+        );
         return null;
       }
 

@@ -64,9 +64,9 @@ export function useGameDetails(objectId: string, shop: GameShop) {
             : globalThis.window.electron
                 .getGameStats(objectId, shop)
                 .catch(() => null),
-          globalThis.window.electron.getGameAssets(objectId, shop).catch(
-            () => null
-          ),
+          globalThis.window.electron
+            .getGameAssets(objectId, shop)
+            .catch(() => null),
           globalThis.window.electron
             .getGameByObjectId(shop, objectId)
             .catch(() => null),
@@ -79,8 +79,7 @@ export function useGameDetails(objectId: string, shop: GameShop) {
 
       // Always build a usable minimal ShopDetailsWithAssets so the game page
       // can render. Priority: full shopDetails > cached assets > game record.
-      const fallbackTitle =
-        assets?.title ?? currentGame?.title ?? objectId;
+      const fallbackTitle = assets?.title ?? currentGame?.title ?? objectId;
 
       if (shopDetailsResult) {
         shopDetailsResult.assets = assets ?? shopDetailsResult.assets;

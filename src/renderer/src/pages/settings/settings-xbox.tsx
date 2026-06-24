@@ -154,9 +154,7 @@ export function SettingsXbox() {
                   </small>
                 )}
               </div>
-              <p className="settings-account__hint">
-                {t("xbox_launch_hint")}
-              </p>
+              <p className="settings-account__hint">{t("xbox_launch_hint")}</p>
             </>
           )}
         </>

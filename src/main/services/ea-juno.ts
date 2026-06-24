@@ -100,7 +100,10 @@ const junoGet = async <T>(accessToken: string, query: string): Promise<T> => {
         const body =
           typeof ae.response!.data === "string"
             ? ae.response!.data.slice(0, 400)
-            : JSON.stringify(ae.response!.data ?? ae.message ?? err).slice(0, 400);
+            : JSON.stringify(ae.response!.data ?? ae.message ?? err).slice(
+                0,
+                400
+              );
         throw new Error(`HTTP 401: ${body}`);
       }
       // On the first attempt retry network/timeout errors.
@@ -112,15 +115,21 @@ const junoGet = async <T>(accessToken: string, query: string): Promise<T> => {
       const body =
         typeof ae?.response?.data === "string"
           ? ae.response.data.slice(0, 400)
-          : JSON.stringify(ae?.response?.data ?? ae?.message ?? err).slice(0, 400);
-      logger.error(`[EA] Juno request failed: HTTP ${ae?.response?.status} ${body}`);
+          : JSON.stringify(ae?.response?.data ?? ae?.message ?? err).slice(
+              0,
+              400
+            );
+      logger.error(
+        `[EA] Juno request failed: HTTP ${ae?.response?.status} ${body}`
+      );
       throw new Error(
         `EA Juno request failed (HTTP ${ae?.response?.status}): ${body}`
       );
     }
   }
 
-  if (!res) throw new Error("EA Juno request failed: no response after retries");
+  if (!res)
+    throw new Error("EA Juno request failed: no response after retries");
 
   if (res.data?.errors) {
     const msg = JSON.stringify(res.data.errors).slice(0, 400);

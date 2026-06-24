@@ -26,7 +26,8 @@ interface OriginSource {
  * system existed.
  */
 export function getGameOrigin(game: OriginSource): GameOrigin {
-  if (game.shop === "custom" || game.libraryOrigin === "custom") return "custom";
+  if (game.shop === "custom" || game.libraryOrigin === "custom")
+    return "custom";
   if (game.libraryOrigin === "sync") return "sync";
   if (game.libraryOrigin === "catalog") return "catalog";
 

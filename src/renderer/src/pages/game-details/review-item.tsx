@@ -227,104 +227,104 @@ export function ReviewItem({
       </div>
       <div className="game-details__review-actions">
         <div className="game-details__review-actions-left">
-        <div className="game-details__review-votes">
-          <motion.button
-            className={`game-details__vote-button game-details__vote-button--upvote ${review.hasUpvoted ? "game-details__vote-button--active" : ""}`}
-            onClick={() => onVote(review.id, "upvote")}
-            disabled={isVoting}
-            style={{
-              opacity: isVoting ? 0.5 : 1,
-              cursor: isVoting ? "not-allowed" : "pointer",
-            }}
-            animate={
-              review.hasUpvoted
-                ? {
-                    scale: [1, 1.2, 1],
-                    transition: { duration: 0.3 },
-                  }
-                : {}
-            }
-          >
-            <ThumbsUp size={16} />
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={review.upvotes || 0}
-                custom={(review.upvotes || 0) > previousVotes.upvotes}
-                variants={{
-                  enter: (isIncreasing: boolean) => ({
-                    y: isIncreasing ? 10 : -10,
-                    opacity: 0,
-                  }),
-                  center: { y: 0, opacity: 1 },
-                  exit: (isIncreasing: boolean) => ({
-                    y: isIncreasing ? -10 : 10,
-                    opacity: 0,
-                  }),
-                }}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.2 }}
-                onAnimationComplete={() => {
-                  onAnimationComplete(review.id, {
-                    upvotes: review.upvotes || 0,
-                    downvotes: review.downvotes || 0,
-                  });
-                }}
-              >
-                {formatNumber(review.upvotes || 0)}
-              </motion.span>
-            </AnimatePresence>
-          </motion.button>
-          <motion.button
-            className={`game-details__vote-button game-details__vote-button--downvote ${review.hasDownvoted ? "game-details__vote-button--active" : ""}`}
-            onClick={() => onVote(review.id, "downvote")}
-            disabled={isVoting}
-            style={{
-              opacity: isVoting ? 0.5 : 1,
-              cursor: isVoting ? "not-allowed" : "pointer",
-            }}
-            animate={
-              review.hasDownvoted
-                ? {
-                    scale: [1, 1.2, 1],
-                    transition: { duration: 0.3 },
-                  }
-                : {}
-            }
-          >
-            <ThumbsDown size={16} />
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={review.downvotes || 0}
-                custom={(review.downvotes || 0) > previousVotes.downvotes}
-                variants={{
-                  enter: (isIncreasing: boolean) => ({
-                    y: isIncreasing ? 10 : -10,
-                    opacity: 0,
-                  }),
-                  center: { y: 0, opacity: 1 },
-                  exit: (isIncreasing: boolean) => ({
-                    y: isIncreasing ? -10 : 10,
-                    opacity: 0,
-                  }),
-                }}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.2 }}
-                onAnimationComplete={() => {
-                  onAnimationComplete(review.id, {
-                    upvotes: review.upvotes || 0,
-                    downvotes: review.downvotes || 0,
-                  });
-                }}
-              >
-                {formatNumber(review.downvotes || 0)}
-              </motion.span>
-            </AnimatePresence>
-          </motion.button>
-        </div>
+          <div className="game-details__review-votes">
+            <motion.button
+              className={`game-details__vote-button game-details__vote-button--upvote ${review.hasUpvoted ? "game-details__vote-button--active" : ""}`}
+              onClick={() => onVote(review.id, "upvote")}
+              disabled={isVoting}
+              style={{
+                opacity: isVoting ? 0.5 : 1,
+                cursor: isVoting ? "not-allowed" : "pointer",
+              }}
+              animate={
+                review.hasUpvoted
+                  ? {
+                      scale: [1, 1.2, 1],
+                      transition: { duration: 0.3 },
+                    }
+                  : {}
+              }
+            >
+              <ThumbsUp size={16} />
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={review.upvotes || 0}
+                  custom={(review.upvotes || 0) > previousVotes.upvotes}
+                  variants={{
+                    enter: (isIncreasing: boolean) => ({
+                      y: isIncreasing ? 10 : -10,
+                      opacity: 0,
+                    }),
+                    center: { y: 0, opacity: 1 },
+                    exit: (isIncreasing: boolean) => ({
+                      y: isIncreasing ? -10 : 10,
+                      opacity: 0,
+                    }),
+                  }}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.2 }}
+                  onAnimationComplete={() => {
+                    onAnimationComplete(review.id, {
+                      upvotes: review.upvotes || 0,
+                      downvotes: review.downvotes || 0,
+                    });
+                  }}
+                >
+                  {formatNumber(review.upvotes || 0)}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
+            <motion.button
+              className={`game-details__vote-button game-details__vote-button--downvote ${review.hasDownvoted ? "game-details__vote-button--active" : ""}`}
+              onClick={() => onVote(review.id, "downvote")}
+              disabled={isVoting}
+              style={{
+                opacity: isVoting ? 0.5 : 1,
+                cursor: isVoting ? "not-allowed" : "pointer",
+              }}
+              animate={
+                review.hasDownvoted
+                  ? {
+                      scale: [1, 1.2, 1],
+                      transition: { duration: 0.3 },
+                    }
+                  : {}
+              }
+            >
+              <ThumbsDown size={16} />
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={review.downvotes || 0}
+                  custom={(review.downvotes || 0) > previousVotes.downvotes}
+                  variants={{
+                    enter: (isIncreasing: boolean) => ({
+                      y: isIncreasing ? 10 : -10,
+                      opacity: 0,
+                    }),
+                    center: { y: 0, opacity: 1 },
+                    exit: (isIncreasing: boolean) => ({
+                      y: isIncreasing ? -10 : 10,
+                      opacity: 0,
+                    }),
+                  }}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.2 }}
+                  onAnimationComplete={() => {
+                    onAnimationComplete(review.id, {
+                      upvotes: review.upvotes || 0,
+                      downvotes: review.downvotes || 0,
+                    });
+                  }}
+                >
+                  {formatNumber(review.downvotes || 0)}
+                </motion.span>
+              </AnimatePresence>
+            </motion.button>
+          </div>
           {replyAction}
         </div>
         {userDetailsId === review.user.id && (

@@ -151,7 +151,10 @@ const awardsSegment = (platformSlug: string): string =>
   platformSlug === "psn" ? "trophies" : "achievements";
 
 /** Builds the awards URL from a game-page URL: appends the awards segment. */
-const gamePageToAwardsUrl = (gamePageUrl: string, platformSlug: string): string => {
+const gamePageToAwardsUrl = (
+  gamePageUrl: string,
+  platformSlug: string
+): string => {
   const base = gamePageUrl.replace(/\/?$/, "/");
   return `${base}${awardsSegment(platformSlug)}/`;
 };

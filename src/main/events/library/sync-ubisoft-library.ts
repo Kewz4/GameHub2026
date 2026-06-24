@@ -12,10 +12,7 @@ import { logger } from "@main/services";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { detectInstalledUbisoftGames } from "@main/services/ubisoft";
-import {
-  getExcludedGames,
-  isGameExcluded,
-} from "@main/helpers/exclusion-list";
+import { getExcludedGames, isGameExcluded } from "@main/helpers/exclusion-list";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 
 const UBI_APP_ID = "f68a4c21-3006-47f3-b676-e2badf904de8";

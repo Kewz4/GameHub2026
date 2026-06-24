@@ -22,10 +22,13 @@ const openClassicsGame = async (
 ) => {
   const key = levelKeys.game(shop, objectId);
   const game = await gamesSublevel.get(key).catch(() => null);
-  if (!game) throw codedLaunchError("GAME_NOT_FOUND", `Game not found: ${objectId}`);
+  if (!game)
+    throw codedLaunchError("GAME_NOT_FOUND", `Game not found: ${objectId}`);
 
   if (!existsSync(discPath)) {
-    throw codedLaunchError("DISC_NOT_FOUND", `Disc not found: ${discPath}`, { discPath });
+    throw codedLaunchError("DISC_NOT_FOUND", `Disc not found: ${discPath}`, {
+      discPath,
+    });
   }
 
   const config = await emulators.getEmulatorConfig(system);

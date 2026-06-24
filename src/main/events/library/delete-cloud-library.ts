@@ -33,12 +33,13 @@ const deleteCloudLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
   // Strip the cached remoteId from every local game so the next login doesn't
   // treat them as still-present in the cloud (and so removing them locally
   // later won't fire a spurious cloud delete).
-  const entries = await gamesSublevel.iterator().all().catch(() => []);
+  const entries = await gamesSublevel
+    .iterator()
+    .all()
+    .catch(() => []);
   for (const [key, game] of entries) {
     if (game && game.remoteId) {
-      await gamesSublevel
-        .put(key, { ...game, remoteId: null })
-        .catch(() => {});
+      await gamesSublevel.put(key, { ...game, remoteId: null }).catch(() => {});
     }
   }
 

@@ -50,7 +50,8 @@ const validateExophaseProfile = async (
   } catch {
     return {
       ok: false,
-      error: "Couldn't load that Exophase profile. Check the URL and try again.",
+      error:
+        "Couldn't load that Exophase profile. Check the URL and try again.",
     };
   } finally {
     fetcher.close();

@@ -65,9 +65,7 @@ const getProfileImages = async (
         valueEncoding: "json",
       })
       .catch(() => null);
-    result.profileImageUrl = toRendererUrl(
-      prefs?.localProfileImageUrl ?? null
-    );
+    result.profileImageUrl = toRendererUrl(prefs?.localProfileImageUrl ?? null);
     result.backgroundImageUrl = toRendererUrl(
       prefs?.localBackgroundImageUrl ?? null
     );

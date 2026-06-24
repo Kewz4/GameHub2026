@@ -50,9 +50,7 @@ export function SettingsMaintenanceFlow() {
   const hasExophase = Boolean(userPreferences?.exophaseUserId);
 
   const buildSteps = useCallback((): StepState[] => {
-    const exophaseSkip = hasExophase
-      ? null
-      : "Exophase account not connected";
+    const exophaseSkip = hasExophase ? null : "Exophase account not connected";
     return [
       {
         key: "refresh",
@@ -99,20 +97,14 @@ export function SettingsMaintenanceFlow() {
     ];
   }, [hasExophase]);
 
-  const patchStep = useCallback(
-    (key: string, patch: Partial<StepState>) => {
-      setSteps((prev) =>
-        prev.map((step) => (step.key === key ? { ...step, ...patch } : step))
-      );
-    },
-    []
-  );
+  const patchStep = useCallback((key: string, patch: Partial<StepState>) => {
+    setSteps((prev) =>
+      prev.map((step) => (step.key === key ? { ...step, ...patch } : step))
+    );
+  }, []);
 
   const runStep = useCallback(
-    async (
-      key: string,
-      run: () => Promise<string | null>
-    ): Promise<void> => {
+    async (key: string, run: () => Promise<string | null>): Promise<void> => {
       if (cancelledRef.current) return;
       // A step already marked skipped (precondition unmet) stays skipped.
       let shouldRun = true;

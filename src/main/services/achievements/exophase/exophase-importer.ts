@@ -404,14 +404,13 @@ async function processAccountGame(
       // the cloud profile. Uses the Exophase display names to match against
       // HydraAPI canonical apiNames (Steam games only).
       const unlockedExophaseNames = unlocked.map((u) => u.name ?? "");
-      const nonLibraryHydraSync =
-        await matchAndSyncToHydraApiForNonLibraryGame(
-          gameKey,
-          shop,
-          objectId,
-          unlockedExophaseNames,
-          definitions
-        );
+      const nonLibraryHydraSync = await matchAndSyncToHydraApiForNonLibraryGame(
+        gameKey,
+        shop,
+        objectId,
+        unlockedExophaseNames,
+        definitions
+      );
       hydraApiSync = nonLibraryHydraSync;
       hydraApiSyncedCount =
         nonLibraryHydraSync === "synced" ? unlocked.length : 0;
@@ -523,8 +522,7 @@ export async function syncExophaseAccount(
       );
       for (const game of games) {
         const key =
-          game.awardsUrl ??
-          `${game.platformSlug}:${game.title.toLowerCase()}`;
+          game.awardsUrl ?? `${game.platformSlug}:${game.title.toLowerCase()}`;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
         accountGames.push(game);

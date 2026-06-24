@@ -16,7 +16,10 @@ const findInPath = (names: string[]): string | null => {
   const cmd = process.platform === "win32" ? "where" : "which";
   for (const name of names) {
     try {
-      const result = spawnSync(cmd, [name], { encoding: "utf-8", timeout: 3000 });
+      const result = spawnSync(cmd, [name], {
+        encoding: "utf-8",
+        timeout: 3000,
+      });
       if (result.status === 0 && result.stdout.trim()) {
         const found = result.stdout.trim().split("\n")[0].trim();
         if (existsSync(found)) return found;
@@ -94,7 +97,9 @@ export const detectEmulator = async (
     }
 
     const appImageDirs = [
-      process.env["HOME"] ? path.join(process.env["HOME"], "Applications") : null,
+      process.env["HOME"]
+        ? path.join(process.env["HOME"], "Applications")
+        : null,
       process.env["HOME"] ? path.join(process.env["HOME"], ".local/bin") : null,
     ].filter(Boolean) as string[];
 

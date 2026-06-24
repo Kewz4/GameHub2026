@@ -235,7 +235,11 @@ const downloadGameArtifact = async (
 
     fs.unlinkSync(zipLocation);
 
-    try { fs.rmSync(backupPath, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(backupPath, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup errors
+    }
 
     WindowManager.mainWindow?.webContents.send(
       `on-backup-download-complete-${objectId}-${shop}`,

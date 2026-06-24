@@ -9,7 +9,9 @@ const BOOT2_RE = /BOOT2\s*=/;
 const BOOT_RE = /BOOT\s*=/;
 const PS3_MARKERS = ["PS3_GAME", "PS3_DISC.SFB", "PARAM.SFO", "EBOOT.BIN"];
 
-export const sniffDiscImage = async (filePath: string): Promise<DiscPlatform> => {
+export const sniffDiscImage = async (
+  filePath: string
+): Promise<DiscPlatform> => {
   let fh: import("node:fs/promises").FileHandle | null = null;
   try {
     fh = await fs.open(filePath, "r");
@@ -32,7 +34,9 @@ export const sniffDiscImage = async (filePath: string): Promise<DiscPlatform> =>
   }
 };
 
-export const parseCueReferencedFiles = async (cuePath: string): Promise<string[]> => {
+export const parseCueReferencedFiles = async (
+  cuePath: string
+): Promise<string[]> => {
   try {
     const content = await fs.readFile(cuePath, "utf-8");
     const dir = path.dirname(cuePath);
@@ -46,7 +50,9 @@ export const parseCueReferencedFiles = async (cuePath: string): Promise<string[]
 const replaceExt = (filePath: string, fromExt: string, toExt: string): string =>
   filePath.replace(new RegExp(`\\${fromExt}$`, "i"), toExt);
 
-export const resolveSniffTarget = async (filePath: string): Promise<string | null> => {
+export const resolveSniffTarget = async (
+  filePath: string
+): Promise<string | null> => {
   const lower = filePath.toLowerCase();
   if (lower.endsWith(".cue")) {
     const refs = await parseCueReferencedFiles(filePath);

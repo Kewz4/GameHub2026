@@ -25,9 +25,7 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
 
   for (const [key, achievements] of entries) {
     const defs = achievements?.achievements ?? [];
-    const validNames = new Set(
-      defs.map((a) => (a.name ?? "").toUpperCase())
-    );
+    const validNames = new Set(defs.map((a) => (a.name ?? "").toUpperCase()));
 
     // Count unlocked by unique valid apiName (mirrors get-library). No
     // unlockTime requirement — Exophase/PSN imports often lack timestamps.
@@ -80,8 +78,7 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
             apiAssets.coverImageUrl ??
             (base ? `${base}/library_600x900.jpg` : null),
           libraryImageUrl:
-            apiAssets.libraryImageUrl ??
-            (base ? `${base}/header.jpg` : null),
+            apiAssets.libraryImageUrl ?? (base ? `${base}/header.jpg` : null),
           libraryHeroImageUrl:
             apiAssets.libraryHeroImageUrl ??
             (base ? `${base}/library_hero.jpg` : null),
@@ -151,8 +148,7 @@ const getAchievementGames = async (): Promise<AchievementGameStat[]> => {
       shop,
       objectId,
       title: game?.title ?? assets?.title ?? exoTitle ?? objectId,
-      iconUrl:
-        game?.customIconUrl || assets?.iconUrl || game?.iconUrl || null,
+      iconUrl: game?.customIconUrl || assets?.iconUrl || game?.iconUrl || null,
       achievementCount: total,
       unlockedAchievementCount,
       inLibrary: Boolean(game),

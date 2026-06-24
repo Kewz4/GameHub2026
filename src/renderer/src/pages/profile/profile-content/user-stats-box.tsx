@@ -10,8 +10,14 @@ import { AchievementsBreakdownModal } from "./achievements-breakdown-modal";
 import "./user-stats-box.scss";
 
 export function UserStatsBox() {
-  const { userStats, isMe, userProfile, libraryGames, pinnedGames, localAchievementSum } =
-    useContext(userProfileContext);
+  const {
+    userStats,
+    isMe,
+    userProfile,
+    libraryGames,
+    pinnedGames,
+    localAchievementSum,
+  } = useContext(userProfileContext);
   const { userDetails } = useUserDetails();
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
@@ -58,12 +64,17 @@ export function UserStatsBox() {
   );
 
   const localUnlockedSum = useMemo(
-    () => allGames.reduce((acc, g) => acc + (g.unlockedAchievementCount ?? 0), 0),
+    () =>
+      allGames.reduce((acc, g) => acc + (g.unlockedAchievementCount ?? 0), 0),
     [allGames]
   );
 
   const localPointsSum = useMemo(
-    () => allGames.reduce((acc, g) => acc + (g.achievementsPointsEarnedSum ?? 0), 0),
+    () =>
+      allGames.reduce(
+        (acc, g) => acc + (g.achievementsPointsEarnedSum ?? 0),
+        0
+      ),
     [allGames]
   );
 

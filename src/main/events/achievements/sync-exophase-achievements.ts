@@ -10,7 +10,10 @@ const runAndDebug = async (
   onProgress: Parameters<typeof runSync>[0]
 ): Promise<ExophaseSyncResult> => {
   const result = await runSync(onProgress);
-  if ((result.report?.totalNewlyUnlocked ?? 0) > 0 || result.totalUnlocked > 0) {
+  if (
+    (result.report?.totalNewlyUnlocked ?? 0) > 0 ||
+    result.totalUnlocked > 0
+  ) {
     await runCloudDebuggerInternal();
   }
   return result;

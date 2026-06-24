@@ -161,10 +161,19 @@ export async function fetchBestAssets(
     return {
       iconUrl: cdnAssets.iconUrl,
       coverImageUrl: cdnAssets.coverImageUrl,
-      libraryImageUrl: cdnAssets.libraryImageUrl ?? hydraAssets?.libraryImageUrl ?? initialFallback.libraryImageUrl ?? null,
+      libraryImageUrl:
+        cdnAssets.libraryImageUrl ??
+        hydraAssets?.libraryImageUrl ??
+        initialFallback.libraryImageUrl ??
+        null,
       libraryHeroImageUrl: cdnAssets.libraryHeroImageUrl,
-      logoImageUrl: cdnAssets.logoImageUrl ?? hydraAssets?.logoImageUrl ?? initialFallback.logoImageUrl ?? null,
-      logoPosition: hydraAssets?.logoPosition ?? initialFallback.logoPosition ?? null,
+      logoImageUrl:
+        cdnAssets.logoImageUrl ??
+        hydraAssets?.logoImageUrl ??
+        initialFallback.logoImageUrl ??
+        null,
+      logoPosition:
+        hydraAssets?.logoPosition ?? initialFallback.logoPosition ?? null,
       downloadSources: hydraAssets?.downloadSources?.length
         ? hydraAssets.downloadSources
         : (initialFallback.downloadSources ?? []),

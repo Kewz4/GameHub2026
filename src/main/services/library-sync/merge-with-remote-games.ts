@@ -73,9 +73,7 @@ const syncCloudAchievementsToLocal = async (
   );
   const merged = [
     ...(local?.unlockedAchievements ?? []),
-    ...cloudUnlocked.filter(
-      (u) => !existingNames.has(u.name.toUpperCase())
-    ),
+    ...cloudUnlocked.filter((u) => !existingNames.has(u.name.toUpperCase())),
   ];
 
   await gameAchievementsSublevel
@@ -128,9 +126,9 @@ const getLocalCollectionIds = (
  *     deliberately add on THIS install — we only refresh data for games that
  *     are already present locally.
  */
-export const mergeWithRemoteGames = async (
-  { createMissing = true }: { createMissing?: boolean } = {}
-) => {
+export const mergeWithRemoteGames = async ({
+  createMissing = true,
+}: { createMissing?: boolean } = {}) => {
   // Resolve the logged-in user's own ID once so we can pull cloud achievement
   // unlocks for any game that has more on the server than we have locally.
   const selfId = await db

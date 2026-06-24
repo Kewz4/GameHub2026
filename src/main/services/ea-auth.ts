@@ -150,10 +150,10 @@ export const refreshEaTokenSilently = async (): Promise<{
 } | null> => {
   const { db, levelKeys } = await import("@main/level");
   const prefs = await db
-    .get<string, { eaRefreshToken?: string } | null>(
-      levelKeys.userPreferences,
-      { valueEncoding: "json" }
-    )
+    .get<
+      string,
+      { eaRefreshToken?: string } | null
+    >(levelKeys.userPreferences, { valueEncoding: "json" })
     .catch(() => null);
   if (!prefs?.eaRefreshToken) return null;
   const refreshed = await refreshEaAccessToken(prefs.eaRefreshToken);

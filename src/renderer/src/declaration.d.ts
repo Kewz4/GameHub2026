@@ -679,7 +679,11 @@ declare global {
       objectId: string
     ) => Promise<{ success: boolean }>;
     onAchievementSupportMissing: (
-      callback: (data: { objectId: string; shop: GameShop; title: string }) => void
+      callback: (data: {
+        objectId: string;
+        shop: GameShop;
+        title: string;
+      }) => void
     ) => () => void;
     getDefaultWinePrefixSelectionPath: () => Promise<string | null>;
     createSteamShortcut: (
@@ -789,7 +793,10 @@ declare global {
     previewEmulatorExecutable: (
       system: EmulatorSystem,
       executablePath: string
-    ) => Promise<{ executablePath: string; detectedVersion: string | null } | null>;
+    ) => Promise<{
+      executablePath: string;
+      detectedVersion: string | null;
+    } | null>;
     setEmulatorExecutablePath: (
       system: EmulatorSystem,
       executablePath: string | null
@@ -1178,7 +1185,9 @@ declare global {
     openAddFriendModalInMainWindow: () => Promise<void>;
     onOpenAddFriendModal: (cb: () => void) => () => void;
     onFriendsUpdated: (cb: () => void) => () => void;
-    onFriendPresence: (cb: (presence: import("@types").FriendPresenceSync) => void) => () => void;
+    onFriendPresence: (
+      cb: (presence: import("@types").FriendPresenceSync) => void
+    ) => () => void;
     onProfileUpdated: (cb: () => void) => () => void;
     onNavigate: (cb: (path: string) => void) => () => void;
     getProcessedFriendImage: (

@@ -7,7 +7,10 @@ import { WindowManager } from "@main/services/window-manager";
 import type { UserPreferences, UserProfile } from "@types";
 import type { SettingsBackup } from "./backup-settings-to-cloud";
 
-const restoreSettingsFromCloud = async (): Promise<{ restored: boolean; updatedAt?: string }> => {
+const restoreSettingsFromCloud = async (): Promise<{
+  restored: boolean;
+  updatedAt?: string;
+}> => {
   try {
     const me = await HydraApi.get<UserProfile>("/profile/me").catch(() => null);
     if (!me?.id) return { restored: false };
@@ -50,8 +53,18 @@ const restoreSettingsFromCloud = async (): Promise<{ restored: boolean; updatedA
 };
 
 function mergeExclusionLists(
-  local: Array<{ shop: string; objectId: string; title: string; excludedAt: string }>,
-  remote: Array<{ shop: string; objectId: string; title: string; excludedAt: string }>
+  local: Array<{
+    shop: string;
+    objectId: string;
+    title: string;
+    excludedAt: string;
+  }>,
+  remote: Array<{
+    shop: string;
+    objectId: string;
+    title: string;
+    excludedAt: string;
+  }>
 ) {
   const map = new Map<string, (typeof local)[0]>();
   for (const entry of local) map.set(`${entry.shop}:${entry.objectId}`, entry);

@@ -57,11 +57,7 @@ export function compactGameTitle(title: string): string {
 
 export function normalizeGameTitle(title: string): string {
   // Strip diacritics (ö→o, é→e, etc.) so cross-encoding comparisons work
-  let s = title
-    .trim()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase();
+  let s = title.trim().normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
   // Replace punctuation separators (colon, dash variants) with a space
   s = s.replace(/\s*[:\-–—]\s*/g, " ");

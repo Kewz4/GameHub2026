@@ -19,7 +19,12 @@ import type {
 import { achievementsLogger } from "../logger";
 import { Cracker } from "@shared";
 import { publishCombinedNewAchievementNotification } from "../notifications";
-import { db, gameAchievementsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import {
+  db,
+  gameAchievementsSublevel,
+  gamesSublevel,
+  levelKeys,
+} from "@main/level";
 import { HydraApi } from "../hydra-api";
 import { getGameAchievementData } from "./get-game-achievement-data";
 import { storeAchievementProgress } from "./store-achievement-progress";
@@ -246,7 +251,12 @@ interface HydraCloudAchievement {
   icon?: string;
   hidden?: boolean;
   unlockTime: number;
-  unlockedOn: { hydra: boolean; steam: boolean; playstation: boolean; xbox: boolean };
+  unlockedOn: {
+    hydra: boolean;
+    steam: boolean;
+    playstation: boolean;
+    xbox: boolean;
+  };
 }
 
 interface CloudProfileGame {
@@ -301,8 +311,7 @@ const seedAchievementsFromCloud = async (
   const match =
     cloudGames.find(
       (c) => c.shop === game.shop && c.objectId === game.objectId
-    ) ??
-    cloudGames.find((c) => normalizeTitleForMatch(c.title) === localNorm);
+    ) ?? cloudGames.find((c) => normalizeTitleForMatch(c.title) === localNorm);
 
   if (!match || (match.unlockedAchievementCount ?? 0) <= 0) return 0;
 

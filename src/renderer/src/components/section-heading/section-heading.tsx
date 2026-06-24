@@ -24,9 +24,7 @@ export function SectionHeading({
   className,
 }: Readonly<SectionHeadingProps>) {
   return (
-    <div
-      className={["section-heading", className].filter(Boolean).join(" ")}
-    >
+    <div className={["section-heading", className].filter(Boolean).join(" ")}>
       <h3
         className={[
           "section-heading__title",

@@ -292,7 +292,10 @@ export function LibraryFilters({
         navigationOverrides: {
           left:
             index === 0
-              ? { type: "item" as const, itemId: LIBRARY_FILTERS_FILTER_SELECT_ID }
+              ? {
+                  type: "item" as const,
+                  itemId: LIBRARY_FILTERS_FILTER_SELECT_ID,
+                }
               : {
                   type: "item" as const,
                   itemId: getLibraryFiltersPlatformPillId(
@@ -335,9 +338,7 @@ export function LibraryFilters({
   const listViewNavigationOverrides: FocusOverrides = {
     left: {
       type: "item",
-      itemId: onScanGames
-        ? LIBRARY_FILTERS_SCAN_BUTTON_ID
-        : lastPlatformPillId,
+      itemId: onScanGames ? LIBRARY_FILTERS_SCAN_BUTTON_ID : lastPlatformPillId,
     },
     right: {
       type: "item",
@@ -446,7 +447,10 @@ export function LibraryFilters({
               focusId={LIBRARY_FILTERS_SCAN_BUTTON_ID}
               focusNavigationOverrides={{
                 left: { type: "item", itemId: lastPlatformPillId },
-                right: { type: "item", itemId: LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID },
+                right: {
+                  type: "item",
+                  itemId: LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID,
+                },
                 up: toolbarUpOverride,
                 down: toolbarDownOverride,
               }}

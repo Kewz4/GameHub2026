@@ -157,7 +157,10 @@ export const parseAchievementProgressFile = (
 
     return progress;
   } catch (err) {
-    achievementsLogger.error(`Error parsing progress ${type} - ${filePath}`, err);
+    achievementsLogger.error(
+      `Error parsing progress ${type} - ${filePath}`,
+      err
+    );
     return [];
   }
 };

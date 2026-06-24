@@ -1,4 +1,3 @@
-
 import "./add-battlenet-games-to-library";
 import "./add-custom-game-to-library";
 import "./add-ea-games-to-library";

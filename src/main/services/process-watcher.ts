@@ -474,7 +474,6 @@ const onCloseGame = (game: Game) => {
   if (game.shop === "custom") return;
 
   if (game.remoteId) {
-
     const deltaToSync =
       now -
       gamePlaytime.lastSyncTick +

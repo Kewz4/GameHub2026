@@ -24,11 +24,13 @@ const gogDirectLogin = async (
 ): Promise<GogLoginResult> => {
   try {
     const jar = new CookieJar();
-    const client = wrapper(axios.create({
-      jar,
-      maxRedirects: 10,
-      withCredentials: true,
-    }));
+    const client = wrapper(
+      axios.create({
+        jar,
+        maxRedirects: 10,
+        withCredentials: true,
+      })
+    );
 
     // Step 1: GET the auth page to collect cookies and CSRF token from the login form
     const authResp = await client.get(GOG_AUTH_URL, {
@@ -42,11 +44,19 @@ const gogDirectLogin = async (
       // Try alternate pattern
       const altMatch = html.match(/"_token[^"]*"\s*value="([^"]+)"/);
       if (!altMatch) {
-        logger.error("GOG direct login: could not extract CSRF token from login form");
-        return { success: false, error: "Unable to reach GOG login servers. Please try again." };
+        logger.error(
+          "GOG direct login: could not extract CSRF token from login form"
+        );
+        return {
+          success: false,
+          error: "Unable to reach GOG login servers. Please try again.",
+        };
       }
     }
-    const csrfToken = csrfMatch?.[1] ?? html.match(/"_token[^"]*"\s*value="([^"]+)"/)?.[1] ?? "";
+    const csrfToken =
+      csrfMatch?.[1] ??
+      html.match(/"_token[^"]*"\s*value="([^"]+)"/)?.[1] ??
+      "";
 
     // Step 2: POST credentials to the GOG login endpoint
     const loginResp = await client.post(
@@ -75,13 +85,22 @@ const gogDirectLogin = async (
     // Follow up to 10 redirects to find the code
     for (let i = 0; i < 10 && location && !code; i++) {
       if (location.includes("on_login_success")) {
-        try { code = new URL(location).searchParams.get("code"); } catch { /* ignore */ }
+        try {
+          code = new URL(location).searchParams.get("code");
+        } catch {
+          /* ignore */
+        }
         break;
       }
-      const nextResp = await client.get(location.startsWith("http") ? location : `https://login.gog.com${location}`, {
-        maxRedirects: 0,
-        validateStatus: (s) => s < 400 || s === 302,
-      });
+      const nextResp = await client.get(
+        location.startsWith("http")
+          ? location
+          : `https://login.gog.com${location}`,
+        {
+          maxRedirects: 0,
+          validateStatus: (s) => s < 400 || s === 302,
+        }
+      );
       location = nextResp.headers.location as string | undefined;
       if (!location && nextResp.request?.res?.responseUrl) {
         location = nextResp.request.res.responseUrl;
@@ -97,10 +116,17 @@ const gogDirectLogin = async (
     const tokens = await exchangeGogCode(code);
     writeGogdlAuthConfig(tokens.access_token, tokens.refresh_token);
 
-    return { success: true, username: tokens.username, refresh_token: tokens.refresh_token };
+    return {
+      success: true,
+      username: tokens.username,
+      refresh_token: tokens.refresh_token,
+    };
   } catch (err) {
     logger.error("GOG direct login failed", err);
-    return { success: false, error: "Login failed. Check your credentials and try again." };
+    return {
+      success: false,
+      error: "Login failed. Check your credentials and try again.",
+    };
   }
 };
 

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button, Modal } from "../../common";
-import { XIcon, FolderOpenIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
+import {
+  XIcon,
+  FolderOpenIcon,
+  MagnifyingGlassIcon,
+} from "@phosphor-icons/react";
 
 type ScanMode = "deep" | "selective";
 type Stage = "configure" | "scanning" | "approve";
@@ -287,15 +291,19 @@ export function ScanFlowModal({
               </div>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+              }}
+            >
               <Button variant="secondary" onClick={onClose}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
-                disabled={
-                  mode === "selective" && folderPaths.length === 0
-                }
+                disabled={mode === "selective" && folderPaths.length === 0}
                 onClick={() => void handleStartScan()}
               >
                 Start Scan
@@ -321,7 +329,12 @@ export function ScanFlowModal({
 
             {progress && progress.total > 0 && (
               <div
-                style={{ display: "flex", flexDirection: "column", gap: "6px", width: "100%" }}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  width: "100%",
+                }}
               >
                 <div
                   style={{
@@ -341,7 +354,13 @@ export function ScanFlowModal({
                     }}
                   />
                 </div>
-                <span style={{ fontSize: "0.75rem", opacity: 0.55, textAlign: "center" }}>
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    opacity: 0.55,
+                    textAlign: "center",
+                  }}
+                >
                   {progress.scanned}/{progress.total} — {progress.currentTitle}{" "}
                   ({progress.foundCount} found)
                 </span>
@@ -407,6 +426,7 @@ export function ScanFlowModal({
                   {candidates.map((g) => (
                     <label
                       key={g.key}
+                      aria-label={g.title}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -459,7 +479,13 @@ export function ScanFlowModal({
               </>
             )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+              }}
+            >
               <Button
                 variant="secondary"
                 onClick={() => {

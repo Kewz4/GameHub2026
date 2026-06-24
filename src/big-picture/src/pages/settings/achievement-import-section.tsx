@@ -40,7 +40,10 @@ interface Props {
   downTarget: FocusOverrideTarget;
 }
 
-export function AchievementImportSection({ upTarget, downTarget }: Readonly<Props>) {
+export function AchievementImportSection({
+  upTarget,
+  downTarget,
+}: Readonly<Props>) {
   const { showSuccessToast, showErrorToast } = useBigPictureToast();
   const [busyPlatform, setBusyPlatform] = useState<Platform | null>(null);
 

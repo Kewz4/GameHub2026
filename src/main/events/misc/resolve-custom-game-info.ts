@@ -18,7 +18,10 @@ export interface CustomGameInfo {
 
 // ─── Step 1: Windows exe version info ────────────────────────────────────────
 
-function getExeVersionField(exePath: string, field: string): Promise<string | null> {
+function getExeVersionField(
+  exePath: string,
+  field: string
+): Promise<string | null> {
   return new Promise((resolve) => {
     if (process.platform !== "win32") return resolve(null);
     const script = `[Console]::OutputEncoding = [Text.Encoding]::UTF8; (Get-Item "${exePath.replace(/"/g, '\\"')}").VersionInfo.${field}`;
@@ -29,7 +32,9 @@ function getExeVersionField(exePath: string, field: string): Promise<string | nu
       (err, stdout) => {
         if (err) return resolve(null);
         const val = stdout.trim();
-        resolve(val && val.toLowerCase() !== "n/a" && val.length > 1 ? val : null);
+        resolve(
+          val && val.toLowerCase() !== "n/a" && val.length > 1 ? val : null
+        );
       }
     );
   });
@@ -70,13 +75,23 @@ function extractNameFromPath(exePath: string): string {
   }
 
   // Use the immediate parent folder, but skip generic ones
-  const generic = new Set(["bin", "binaries", "win64", "win32", "x64", "x86", "game", "games"]);
+  const generic = new Set([
+    "bin",
+    "binaries",
+    "win64",
+    "win32",
+    "x64",
+    "x86",
+    "game",
+    "games",
+  ]);
   for (let i = parts.length - 2; i >= 0; i--) {
     const folder = parts[i];
     if (!folder || generic.has(folder.toLowerCase())) continue;
     // Skip drive roots and Program Files
     if (/^[a-z]:$/i.test(folder)) continue;
-    if (/^(program files|users|documents|downloads|desktop)$/i.test(folder)) continue;
+    if (/^(program files|users|documents|downloads|desktop)$/i.test(folder))
+      continue;
     return cleanFolderName(folder);
   }
 
@@ -85,9 +100,14 @@ function extractNameFromPath(exePath: string): string {
 
 // ─── Step 3: catalogue search ────────────────────────────────────────────────
 
-async function searchCatalogue(title: string): Promise<CatalogueSearchResult | null> {
+async function searchCatalogue(
+  title: string
+): Promise<CatalogueSearchResult | null> {
   try {
-    const resp = await HydraApi.post<{ edges: CatalogueSearchResult[]; count: number }>(
+    const resp = await HydraApi.post<{
+      edges: CatalogueSearchResult[];
+      count: number;
+    }>(
       "/catalogue/search",
       {
         title,
@@ -108,7 +128,9 @@ async function searchCatalogue(title: string): Promise<CatalogueSearchResult | n
 
     const titleNorm = normalizeGameTitle(title);
     // Exact normalised match first
-    let match = resp?.edges?.find((r) => normalizeGameTitle(r.title) === titleNorm);
+    let match = resp?.edges?.find(
+      (r) => normalizeGameTitle(r.title) === titleNorm
+    );
     // Loose: result title contains our query (handles abbreviations like "GoW" → "God of War …")
     // Do NOT match in reverse — a shorter result like "God of War" must not swallow "God of War Ragnarök"
     if (!match) {
@@ -145,7 +167,10 @@ const resolveCustomGameInfo = async (
   const catalogueMatch = await searchCatalogue(fallbackTitle);
 
   if (catalogueMatch) {
-    const assets = await fetchShopAssets(catalogueMatch.shop, catalogueMatch.objectId);
+    const assets = await fetchShopAssets(
+      catalogueMatch.shop,
+      catalogueMatch.objectId
+    );
     return {
       title: catalogueMatch.title,
       objectId: catalogueMatch.objectId,

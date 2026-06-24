@@ -25,7 +25,13 @@ function DebugModal({
 }) {
   const d = game.debug;
   return (
-    <div className="achievements-sync__debug-backdrop" onClick={onClose} role="presentation">
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div
+      className="achievements-sync__debug-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         className="achievements-sync__debug-modal"
         onClick={(e) => e.stopPropagation()}
@@ -388,6 +394,7 @@ export default function AchievementsSync() {
             </p>
           ) : (
             <ul className="achievements-sync__list">
+              {/* eslint-disable jsx-a11y/no-noninteractive-element-to-interactive-role */}
               {cloudGames.map((g) => (
                 <li
                   key={`cloud-${g.shop}-${g.objectId}`}
@@ -426,6 +433,7 @@ export default function AchievementsSync() {
                   </div>
                 </li>
               ))}
+              {/* eslint-enable jsx-a11y/no-noninteractive-element-to-interactive-role */}
             </ul>
           )}
         </section>
@@ -463,8 +471,8 @@ export default function AchievementsSync() {
           <TrophyIcon size={32} />
           <h2>No sync yet</h2>
           <p className="achievements-sync__muted">
-            Connect Exophase in Settings → Achievements and click "Sync now"
-            above.
+            Connect Exophase in Settings &rarr; Achievements and click
+            &ldquo;Sync now&rdquo; above.
           </p>
         </div>
       )}

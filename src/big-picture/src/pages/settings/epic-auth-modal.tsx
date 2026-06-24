@@ -113,7 +113,12 @@ export function BPEpicAuthModal({
     >
       <div
         ref={containerRef}
-        style={{ flex: 1, minHeight: "480px", display: "flex", flexDirection: "column" }}
+        style={{
+          flex: 1,
+          minHeight: "480px",
+          display: "flex",
+          flexDirection: "column",
+        }}
       />
     </Modal>
   );

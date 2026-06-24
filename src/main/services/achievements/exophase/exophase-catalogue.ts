@@ -80,8 +80,23 @@ export async function searchCatalogueForAchievements(
     // while still matching "God of War: Ragnarok". The extension is the first word
     // that follows the base title in the candidate's normalized string.
     const SEQUEL_NUMERALS = new Set([
-      "2", "3", "4", "5", "6", "7", "8", "9",
-      "ii", "iii", "iv", "vi", "vii", "viii", "ix", "xi", "xii",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "ii",
+      "iii",
+      "iv",
+      "vi",
+      "vii",
+      "viii",
+      "ix",
+      "xi",
+      "xii",
     ]);
     if (norm.length >= 5) {
       const prefix = edges.find((r) => {

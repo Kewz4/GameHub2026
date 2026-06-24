@@ -108,6 +108,7 @@ export function ScanApprovalModal({
               {foundGames.map((g) => (
                 <label
                   key={g.key}
+                  aria-label={g.title}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -159,7 +160,9 @@ export function ScanApprovalModal({
             </div>
           </>
         )}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+        <div
+          style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}
+        >
           <Button type="button" theme="outline" onClick={onClose}>
             Cancel
           </Button>

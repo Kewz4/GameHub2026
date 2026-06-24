@@ -29,7 +29,10 @@ export class UpdateCheckerManager {
   private static portableExtractDir = "";
 
   static readonly isPortable = (() => {
-    if (process.env.PORTABLE_EXECUTABLE_DIR || process.env.PORTABLE_EXECUTABLE_FILE)
+    if (
+      process.env.PORTABLE_EXECUTABLE_DIR ||
+      process.env.PORTABLE_EXECUTABLE_FILE
+    )
       return true;
     if (process.platform === "win32" && app.isPackaged) {
       try {
@@ -165,7 +168,7 @@ export class UpdateCheckerManager {
     const reader = zipRes.body!.getReader();
     const chunks: Buffer[] = [];
     let downloaded = 0;
-    let startTime = Date.now();
+    const startTime = Date.now();
     let lastBytes = 0;
     let lastTime = startTime;
 

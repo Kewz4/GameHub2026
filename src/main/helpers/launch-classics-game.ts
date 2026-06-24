@@ -3,7 +3,12 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import { emulators, logger } from "@main/services";
-import type { EmulatorBinary, EmulatorSystem, GameShop, UserPreferences } from "@types";
+import type {
+  EmulatorBinary,
+  EmulatorSystem,
+  GameShop,
+  UserPreferences,
+} from "@types";
 
 export class EmulatorNotConfiguredError extends Error {
   code = "EMULATOR_NOT_CONFIGURED" as const;
@@ -30,7 +35,10 @@ export interface LaunchClassicsGameOptions {
   system: EmulatorSystem;
 }
 
-const buildEmulatorArgs = (binary: EmulatorBinary, discPath: string): string[] => {
+const buildEmulatorArgs = (
+  binary: EmulatorBinary,
+  discPath: string
+): string[] => {
   switch (binary) {
     case "duckstation":
       return ["-batch", "-fullscreen", "--", discPath];
@@ -72,10 +80,12 @@ export const launchClassicsGame = async (
 
   const useMangohud =
     process.platform === "linux" &&
-    (userPreferences?.autoRunMangohud === true || game?.autoRunMangohud === true);
+    (userPreferences?.autoRunMangohud === true ||
+      game?.autoRunMangohud === true);
   const useGamemode =
     process.platform === "linux" &&
-    (userPreferences?.autoRunGamemode === true || game?.autoRunGamemode === true);
+    (userPreferences?.autoRunGamemode === true ||
+      game?.autoRunGamemode === true);
 
   if (game) {
     await gamesSublevel.put(gameKey, {

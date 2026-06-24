@@ -89,7 +89,11 @@ export function App() {
   const [showArchiveDeletionModal, setShowArchiveDeletionModal] =
     useState(false);
   const [archivePaths, setArchivePaths] = useState<string[]>([]);
-  const [achievementSupportGame, setAchievementSupportGame] = useState<{ objectId: string; shop: GameShop; title: string } | null>(null);
+  const [achievementSupportGame, setAchievementSupportGame] = useState<{
+    objectId: string;
+    shop: GameShop;
+    title: string;
+  } | null>(null);
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
 
@@ -420,7 +424,8 @@ export function App() {
     };
 
     window.electron.isMainWindowMaximized().then(applyMaximizeState);
-    const unsubscribe = window.electron.onWindowMaximizeChange(applyMaximizeState);
+    const unsubscribe =
+      window.electron.onWindowMaximizeChange(applyMaximizeState);
 
     return () => {
       cancelled = true;
@@ -451,7 +456,12 @@ export function App() {
           }`}
         >
           <GameHubIcon
-            style={{ width: 18, height: 18, color: "var(--color-text-bright)", flexShrink: 0 }}
+            style={{
+              width: 18,
+              height: 18,
+              color: "var(--color-text-bright)",
+              flexShrink: 0,
+            }}
           />
           <h4>
             GameHub

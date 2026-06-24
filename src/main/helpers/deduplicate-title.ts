@@ -51,7 +51,10 @@ async function mergeAchievementsIntoCanonical(
   if (canonical) {
     // Union the unlocked achievements by name, keeping the earliest unlockTime.
     const byName = new Map<string, UnlockedAchievement>();
-    for (const a of [...(canonical.unlockedAchievements ?? []), ...dupUnlocked]) {
+    for (const a of [
+      ...(canonical.unlockedAchievements ?? []),
+      ...dupUnlocked,
+    ]) {
       const key = (a.name ?? "").toUpperCase();
       const prev = byName.get(key);
       if (!prev || (a.unlockTime ?? 0) < (prev.unlockTime ?? 0)) {

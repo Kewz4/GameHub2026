@@ -44,9 +44,7 @@ export function SettingsBattleNet() {
   useEffect(() => {
     if (data) {
       setSelected((prev) =>
-        prev.size > 0
-          ? prev
-          : new Set(data.detected.map((g) => g.productCode))
+        prev.size > 0 ? prev : new Set(data.detected.map((g) => g.productCode))
       );
     }
   }, [data]);

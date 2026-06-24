@@ -193,8 +193,7 @@ export function filterLibraryBySecondaryFilter(
   // reuse a shop for assets don't leak into the platform tabs (mirrors desktop).
   if ((PLATFORM_FILTER_SHOPS as readonly string[]).includes(selectedFilter)) {
     return library.filter(
-      (game) =>
-        game.shop === selectedFilter && getGameOrigin(game) === "sync"
+      (game) => game.shop === selectedFilter && getGameOrigin(game) === "sync"
     );
   }
 

@@ -174,7 +174,8 @@ export default function CloudSavesPage() {
                             </Typography>
                             <Typography className="cloud-saves-page__artifact-meta">
                               {formatBytes(artifact.artifactLengthInBytes)} ·{" "}
-                              {artifact.hostname} · {formatDate(artifact.createdAt)}
+                              {artifact.hostname} ·{" "}
+                              {formatDate(artifact.createdAt)}
                             </Typography>
                           </div>
 

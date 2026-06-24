@@ -11,7 +11,9 @@ interface SessionOptions {
   child: ChildProcess;
 }
 
-export const startEmulatorSession = async (opts: SessionOptions): Promise<void> => {
+export const startEmulatorSession = async (
+  opts: SessionOptions
+): Promise<void> => {
   const { game, child } = opts;
   const startTime = Date.now();
 

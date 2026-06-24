@@ -60,12 +60,11 @@ const mergeDuplicateGames = async (_event: Electron.IpcMainInvokeEvent) => {
   // there's no longer a matching pair of active game records (e.g. leftovers
   // from a merge run on an older app version where the duplicate game was
   // already soft-deleted but its achievement record was never cleaned up).
-  const achievementDuplicatesRemoved = await dedupeAchievementRecordsByTitle().catch(
-    (err) => {
+  const achievementDuplicatesRemoved =
+    await dedupeAchievementRecordsByTitle().catch((err) => {
       logger.warn("mergeDuplicateGames: achievement record dedup failed", err);
       return 0;
-    }
-  );
+    });
 
   WindowManager.sendToAppWindows("on-dedup-progress", {
     current: total,

@@ -8,7 +8,10 @@ const detectEmulators = async () => {
       const result = await emulators.detectEmulator(system);
       if (!result) return;
       const binary = emulators.KNOWN_BINARIES[system];
-      const version = emulators.getEmulatorVersion(result.executablePath, binary);
+      const version = emulators.getEmulatorVersion(
+        result.executablePath,
+        binary
+      );
       await emulators.updateEmulatorConfig(system, (current) => ({
         ...current,
         executablePath: result.executablePath,

@@ -121,7 +121,9 @@ const openEaAuthWindow = async (
       if (code) {
         void completeWithCode(code);
       } else {
-        logger.error(`EA auth: login redirect had no code: ${url.slice(0, 160)}`);
+        logger.error(
+          `EA auth: login redirect had no code: ${url.slice(0, 160)}`
+        );
       }
     };
 

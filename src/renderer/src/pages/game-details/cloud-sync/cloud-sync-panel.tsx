@@ -49,7 +49,9 @@ export function CloudSyncPanel({
   const [artifactToRename, setArtifactToRename] = useState<GameArtifact | null>(
     null
   );
-  const [restoredArtifactId, setRestoredArtifactId] = useState<string | null>(null);
+  const [restoredArtifactId, setRestoredArtifactId] = useState<string | null>(
+    null
+  );
   const pendingRestoreRef = useRef<string | null>(null);
 
   const { t } = useTranslation("game_details");
@@ -317,7 +319,8 @@ export function CloudSyncPanel({
                     disabled={disableActions}
                     theme="outline"
                   >
-                    {restoredArtifactId === artifact.id ? null : restoringBackup ? (
+                    {restoredArtifactId ===
+                    artifact.id ? null : restoringBackup ? (
                       <SyncIcon className="cloud-sync-panel__sync-icon" />
                     ) : (
                       <HistoryIcon />

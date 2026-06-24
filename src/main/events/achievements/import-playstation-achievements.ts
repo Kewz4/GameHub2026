@@ -35,8 +35,7 @@ const mergeAndPersistReport = async (psnReport?: ExophaseSyncReport) => {
   const merged: ExophaseSyncReport = {
     startedAt: psnReport.startedAt,
     finishedAt: psnReport.finishedAt,
-    gamesProcessed:
-      (existing?.gamesProcessed ?? 0) + psnReport.gamesProcessed,
+    gamesProcessed: (existing?.gamesProcessed ?? 0) + psnReport.gamesProcessed,
     gamesUpdated: [...byKey.values()].filter((g) => g.newlyUnlocked > 0).length,
     totalNewlyUnlocked: [...byKey.values()].reduce(
       (n, g) => n + g.newlyUnlocked,
@@ -58,7 +57,10 @@ const importPlaystationAchievements = async (
     runPsnImport(onProgress)
   );
   await mergeAndPersistReport(result.report);
-  if ((result.report?.totalNewlyUnlocked ?? 0) > 0 || result.totalUnlocked > 0) {
+  if (
+    (result.report?.totalNewlyUnlocked ?? 0) > 0 ||
+    result.totalUnlocked > 0
+  ) {
     await runCloudDebuggerInternal();
   }
   return result;

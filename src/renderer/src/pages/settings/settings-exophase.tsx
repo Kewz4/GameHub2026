@@ -267,8 +267,8 @@ export function SettingsExophase() {
 
       <h3 style={{ margin: "24px 0 4px" }}>Additional Profiles</h3>
       <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
-        Sync extra <strong>public</strong> Exophase profiles without logging in —
-        just paste a profile link (e.g.{" "}
+        Sync extra <strong>public</strong> Exophase profiles without logging in
+        — just paste a profile link (e.g.{" "}
         <code>https://www.exophase.com/user/Kewz4/</code>). The profile must be
         set to public on Exophase.
       </p>

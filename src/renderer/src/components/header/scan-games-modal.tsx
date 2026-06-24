@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SyncIcon, SearchIcon, FileDirectoryIcon, XIcon } from "@primer/octicons-react";
+import {
+  SyncIcon,
+  SearchIcon,
+  FileDirectoryIcon,
+  XIcon,
+} from "@primer/octicons-react";
 
 import { Button, Modal } from "@renderer/components";
 

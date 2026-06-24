@@ -102,11 +102,8 @@ export function ProfileContent() {
 
   const dispatch = useAppDispatch();
 
-  const {
-    isHydraCloudModalVisible,
-    hydraCloudFeature,
-    hideHydraCloudModal,
-  } = useSubscription();
+  const { isHydraCloudModalVisible, hydraCloudFeature, hideHydraCloudModal } =
+    useSubscription();
 
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();

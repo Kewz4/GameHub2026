@@ -17,7 +17,12 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     system: "ps1",
     binary: "duckstation",
     displayName: "DuckStation",
-    linuxNames: ["duckstation-qt", "duckstation-nogui", "duckstation", "DuckStation"],
+    linuxNames: [
+      "duckstation-qt",
+      "duckstation-nogui",
+      "duckstation",
+      "DuckStation",
+    ],
     windowsNames: [
       "duckstation-qt-x64-ReleaseLTCG.exe",
       "duckstation-qt.exe",
@@ -26,8 +31,18 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     flatpakIds: ["org.duckstation.DuckStation"],
     versionFlags: ["-version"],
     romExtensions: [
-      ".cue", ".bin", ".iso", ".chd", ".pbp", ".img",
-      ".sub", ".ccd", ".mds", ".mdf", ".ecm", ".m3u",
+      ".cue",
+      ".bin",
+      ".iso",
+      ".chd",
+      ".pbp",
+      ".img",
+      ".sub",
+      ".ccd",
+      ".mds",
+      ".mdf",
+      ".ecm",
+      ".m3u",
     ],
     romDirectoryMarkers: [],
   },
@@ -40,8 +55,17 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     flatpakIds: ["net.pcsx2.PCSX2"],
     versionFlags: ["-version"],
     romExtensions: [
-      ".iso", ".chd", ".cso", ".zso", ".gz",
-      ".nrg", ".cue", ".bin", ".mds", ".mdf", ".m3u",
+      ".iso",
+      ".chd",
+      ".cso",
+      ".zso",
+      ".gz",
+      ".nrg",
+      ".cue",
+      ".bin",
+      ".mds",
+      ".mdf",
+      ".m3u",
     ],
     romDirectoryMarkers: [],
   },
@@ -58,10 +82,12 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
   },
 };
 
-export const EMULATOR_BINARIES: readonly EmulatorBinary[] = Object.values(KNOWN_BINARIES).map(
-  (e) => e.binary
-);
+export const EMULATOR_BINARIES: readonly EmulatorBinary[] = Object.values(
+  KNOWN_BINARIES
+).map((e) => e.binary);
 
-export const isKnownEmulatorBinary = (value: unknown): value is EmulatorBinary =>
+export const isKnownEmulatorBinary = (
+  value: unknown
+): value is EmulatorBinary =>
   typeof value === "string" &&
   (EMULATOR_BINARIES as readonly string[]).includes(value);

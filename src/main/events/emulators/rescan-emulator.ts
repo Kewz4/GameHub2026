@@ -17,7 +17,12 @@ const rescanEmulator = async (
       ...cfg,
       romFolders: cfg.romFolders.map((f) =>
         f.id === folder.id
-          ? { ...f, fileCount: result.fileCount, sizeBytes: result.sizeBytes, lastScanAt: Date.now() }
+          ? {
+              ...f,
+              fileCount: result.fileCount,
+              sizeBytes: result.sizeBytes,
+              lastScanAt: Date.now(),
+            }
           : f
       ),
     }));

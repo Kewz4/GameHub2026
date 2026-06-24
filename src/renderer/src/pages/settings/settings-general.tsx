@@ -555,8 +555,12 @@ export function SettingsGeneral() {
         </div>
       )}
 
-      <p className="settings-general__common-redist-description" style={{ color: "var(--color-danger, #e05c5c)" }}>
-        Permanently removes all games from your local library. This cannot be undone.
+      <p
+        className="settings-general__common-redist-description"
+        style={{ color: "var(--color-danger, #e05c5c)" }}
+      >
+        Permanently removes all games from your local library. This cannot be
+        undone.
       </p>
 
       {!clearLibraryConfirm ? (
@@ -565,7 +569,10 @@ export function SettingsGeneral() {
           className="settings-general__common-redist-button"
           type="button"
           theme="outline"
-          style={{ borderColor: "var(--color-danger, #e05c5c)", color: "var(--color-danger, #e05c5c)" }}
+          style={{
+            borderColor: "var(--color-danger, #e05c5c)",
+            color: "var(--color-danger, #e05c5c)",
+          }}
         >
           Delete Entire Library
         </Button>
@@ -577,7 +584,9 @@ export function SettingsGeneral() {
               setClearingLibrary(true);
               try {
                 const result = await window.electron.clearLibrary();
-                showSuccessToast(`Library cleared — ${result.cleared} game${result.cleared !== 1 ? "s" : ""} removed.`);
+                showSuccessToast(
+                  `Library cleared — ${result.cleared} game${result.cleared !== 1 ? "s" : ""} removed.`
+                );
               } catch {
                 showErrorToast("Failed to clear library.");
               } finally {
@@ -587,7 +596,10 @@ export function SettingsGeneral() {
             }}
             type="button"
             disabled={clearingLibrary}
-            style={{ background: "var(--color-danger, #e05c5c)", color: "#fff" }}
+            style={{
+              background: "var(--color-danger, #e05c5c)",
+              color: "#fff",
+            }}
           >
             {clearingLibrary ? "Clearing…" : "Yes, delete all"}
           </Button>

@@ -45,7 +45,9 @@ export type EpicLoginResult =
 
 async function exchangeAndAuth(
   accessToken: string
-): Promise<{ success: true; account: string } | { success: false; error: string }> {
+): Promise<
+  { success: true; account: string } | { success: false; error: string }
+> {
   const exchangeRes = await axios.get<{ code: string }>(EXCHANGE_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },
     timeout: 15_000,
@@ -107,8 +109,7 @@ const epicDirectLogin = async (
       res.data.errorCode?.includes("mfa_required") ||
       res.data.error?.includes("mfa_required")
     ) {
-      const mfaToken =
-        res.data.mfa_token ?? res.data.metadata?.mfaToken ?? "";
+      const mfaToken = res.data.mfa_token ?? res.data.metadata?.mfaToken ?? "";
       const challengeType =
         res.data.challenge_type ?? res.data.metadata?.challengeType ?? "TOTP";
       return {
@@ -119,8 +120,7 @@ const epicDirectLogin = async (
       };
     }
 
-    const message =
-      res.data.errorMessage ?? res.data.error ?? "Login failed";
+    const message = res.data.errorMessage ?? res.data.error ?? "Login failed";
     return { success: false, error: message };
   } catch (err: any) {
     logger.error("epicDirectLogin failed", err);

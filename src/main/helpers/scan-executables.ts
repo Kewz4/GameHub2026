@@ -223,7 +223,9 @@ async function bestExeForFolder(
   if (folderNorm.length >= 3) {
     const nameMatch = candidates.find((c) => {
       const b = norm(c.base);
-      return b.length >= 3 && (folderNorm.includes(b) || b.includes(folderNorm));
+      return (
+        b.length >= 3 && (folderNorm.includes(b) || b.includes(folderNorm))
+      );
     });
     if (nameMatch) return nameMatch.path;
   }
@@ -266,7 +268,8 @@ export async function discoverUnknownGames(
     i++;
     onProgress?.(i, gameFolders.length, name);
     const exe = await bestExeForFolder(folder, name);
-    if (exe) results.push({ title: cleanFolderName(name), executablePath: exe });
+    if (exe)
+      results.push({ title: cleanFolderName(name), executablePath: exe });
   }
   return results;
 }

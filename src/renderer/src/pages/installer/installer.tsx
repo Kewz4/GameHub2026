@@ -36,7 +36,11 @@ export default function Installer() {
   const handleSelectMode = (next: Exclude<Mode, null>) => {
     setMode(next);
     const { install, portable } = defaultsRef.current;
-    if (installDir === "" || installDir === install || installDir === portable) {
+    if (
+      installDir === "" ||
+      installDir === install ||
+      installDir === portable
+    ) {
       setInstallDir(next === "portable" ? portable : install);
     }
   };

@@ -88,7 +88,9 @@ const syncGogLibrary = async (_event: Electron.IpcMainInvokeEvent) => {
                 credentials.clientId
               );
               if (gogPlaytimeMs > (existing.playTimeInMilliseconds ?? 0)) {
-                logger.log(`[GOG sync] updating playtime for "${existing.title}": ${Math.round(gogPlaytimeMs / 60000)} min`);
+                logger.log(
+                  `[GOG sync] updating playtime for "${existing.title}": ${Math.round(gogPlaytimeMs / 60000)} min`
+                );
                 await gamesSublevel.put(gameKey, {
                   ...existing,
                   playTimeInMilliseconds: gogPlaytimeMs,

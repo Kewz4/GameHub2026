@@ -75,9 +75,14 @@ const scanInstalledGames = async (
   // each scan directory ONCE to resolve them (a single O(tree) pass instead of
   // re-walking the whole tree per game). Map each lower-cased exe name back to
   // the games that want it so a single found file can satisfy multiple games.
-  const namesToGames = new Map<string, Array<{ key: string; game: typeof games[number]["game"] }>>();
+  const namesToGames = new Map<
+    string,
+    Array<{ key: string; game: (typeof games)[number]["game"] }>
+  >();
   for (const { key, game } of gamesToScan) {
-    const executableNames = GameExecutables.getExecutablesForGame(game.objectId);
+    const executableNames = GameExecutables.getExecutablesForGame(
+      game.objectId
+    );
     if (!executableNames || executableNames.length === 0) continue;
     for (const name of executableNames) {
       const lower = name.toLowerCase();
@@ -160,12 +165,13 @@ const scanInstalledGames = async (
   // "known title" — this is how titles like Neon Abyss get picked up.
   const unresolvedByTitle = new Map<
     string,
-    { key: string; game: typeof games[number]["game"] }
+    { key: string; game: (typeof games)[number]["game"] }
   >();
   for (const { key, game } of games) {
     if (game.executablePath && !game.isDeleted) continue;
     const norm = normalizeGameTitle(game.title);
-    if (!unresolvedByTitle.has(norm)) unresolvedByTitle.set(norm, { key, game });
+    if (!unresolvedByTitle.has(norm))
+      unresolvedByTitle.set(norm, { key, game });
   }
 
   const discoveryRoots = discoverGameLibraryRoots();

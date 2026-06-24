@@ -129,7 +129,9 @@ export function SettingsEpicAccount() {
   // Render connected state instantly from the cached account name; the
   // background status check corrects it if the session actually expired
   const cachedAccount = userPreferences?.epicAccountName ?? null;
-  const isAuthenticated = status ? status.authenticated : Boolean(cachedAccount);
+  const isAuthenticated = status
+    ? status.authenticated
+    : Boolean(cachedAccount);
   const accountName = status?.account ?? cachedAccount;
 
   return (

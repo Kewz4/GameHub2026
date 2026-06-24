@@ -131,11 +131,7 @@ function EmulatorSection({
         </div>
 
         <div className="settings-emulation__system-actions">
-          <Button
-            theme="outline"
-            onClick={handleDetect}
-            disabled={detecting}
-          >
+          <Button theme="outline" onClick={handleDetect} disabled={detecting}>
             <SearchIcon />
             {detecting ? t("detecting") : t("detect_emulator")}
           </Button>

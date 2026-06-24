@@ -1,7 +1,11 @@
 import { t } from "i18next";
 import { registerEvent } from "../register-event";
 import { gamesSublevel } from "@main/level";
-import { LocalNotificationManager, logger, WindowManager } from "@main/services";
+import {
+  LocalNotificationManager,
+  logger,
+  WindowManager,
+} from "@main/services";
 import { classifyScannedOrigin } from "@main/helpers/classify-scanned-origin";
 
 interface ApprovedGame {
@@ -76,8 +80,18 @@ const confirmScanGames = async (
   const hasFoundGames = approvedGames.length > 0;
   await LocalNotificationManager.createNotification(
     "SCAN_GAMES_COMPLETE",
-    t(hasFoundGames ? "scan_games_complete_title" : "scan_games_no_results_title", { ns: "notifications" }),
-    t(hasFoundGames ? "scan_games_complete_description" : "scan_games_no_results_description", { ns: "notifications", count: approvedGames.length }),
+    t(
+      hasFoundGames
+        ? "scan_games_complete_title"
+        : "scan_games_no_results_title",
+      { ns: "notifications" }
+    ),
+    t(
+      hasFoundGames
+        ? "scan_games_complete_description"
+        : "scan_games_no_results_description",
+      { ns: "notifications", count: approvedGames.length }
+    ),
     { url: "/library?openScanModal=true" }
   );
 };

@@ -1,4 +1,8 @@
-import type { EmulatorBinary, EmulatorInstallProgress, EmulatorInstallResult } from "@types";
+import type {
+  EmulatorBinary,
+  EmulatorInstallProgress,
+  EmulatorInstallResult,
+} from "@types";
 
 export const installEmulator = async (
   _binary: EmulatorBinary,

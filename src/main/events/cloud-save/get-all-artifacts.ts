@@ -1,12 +1,21 @@
 import { UploadcareSync } from "@main/services/uploadcare-sync";
 import { registerEvent } from "../register-event";
-import { db, gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
+import {
+  db,
+  gamesSublevel,
+  gamesShopAssetsSublevel,
+  levelKeys,
+} from "@main/level";
 import { HydraApi } from "@main/services";
 import {
   compactGameTitle,
   normalizeGameTitle,
 } from "@main/helpers/normalize-game-title";
-import type { CatalogueSearchResult, ShopAssets, UserPreferences } from "@types";
+import type {
+  CatalogueSearchResult,
+  ShopAssets,
+  UserPreferences,
+} from "@types";
 
 /** Resolve a game not present in the local library via the Hydra catalogue,
  * so cloud saves still show proper title/icon and navigate to a real page. */
@@ -77,14 +86,16 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
       // vs "Neon Abyss") and curly vs straight apostrophes alike. Also try
       // the gameName metadata field when present.
       if (!game) {
-        const all = await gamesSublevel.iterator().all().catch(() => []);
+        const all = await gamesSublevel
+          .iterator()
+          .all()
+          .catch(() => []);
         const candidates = [artifact.objectId, artifact.gameName]
           .filter((s): s is string => Boolean(s))
           .map((s) => compactGameTitle(s));
         const match = all.find(
           ([, g]) =>
-            !g.isDeleted &&
-            candidates.includes(compactGameTitle(g.title ?? ""))
+            !g.isDeleted && candidates.includes(compactGameTitle(g.title ?? ""))
         );
         if (match) {
           game = match[1];
@@ -95,13 +106,18 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
           if (game.shop === "steam" && !/^\d+$/.test(game.objectId)) {
             const cacheKey = `__repair__${(game.title ?? "").toLowerCase()}`;
             if (!catalogueCache.has(cacheKey)) {
-              catalogueCache.set(cacheKey, await resolveFromCatalogue(game.title ?? ""));
+              catalogueCache.set(
+                cacheKey,
+                await resolveFromCatalogue(game.title ?? "")
+              );
             }
             const repaired = catalogueCache.get(cacheKey);
             if (repaired && repaired.objectId !== game.objectId) {
               const oldKey = levelKeys.game(game.shop, game.objectId);
               const newKey = levelKeys.game(repaired.shop, repaired.objectId);
-              const existing = await gamesSublevel.get(newKey).catch(() => null);
+              const existing = await gamesSublevel
+                .get(newKey)
+                .catch(() => null);
               if (!existing) {
                 await gamesSublevel.put(newKey, {
                   ...game,
@@ -110,7 +126,11 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
                 });
               }
               await gamesSublevel.del(oldKey).catch(() => {});
-              game = { ...game, objectId: repaired.objectId, shop: repaired.shop };
+              game = {
+                ...game,
+                objectId: repaired.objectId,
+                shop: repaired.shop,
+              };
               resolvedShop = repaired.shop;
               resolvedObjectId = repaired.objectId;
             } else {
@@ -133,7 +153,10 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
         if (searchTerm) {
           const cacheKey = searchTerm.toLowerCase();
           if (!catalogueCache.has(cacheKey)) {
-            catalogueCache.set(cacheKey, await resolveFromCatalogue(searchTerm));
+            catalogueCache.set(
+              cacheKey,
+              await resolveFromCatalogue(searchTerm)
+            );
           }
           const catalogueMatch = catalogueCache.get(cacheKey);
           if (catalogueMatch) {

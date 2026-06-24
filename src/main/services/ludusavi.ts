@@ -181,22 +181,36 @@ export class Ludusavi {
     if (!fs.existsSync(manifestPath)) return [];
 
     // Try exact title first (no binary)
-    let { paths: rawPaths, installDirName } = this.extractPathsFromManifest(manifestPath, title);
+    let { paths: rawPaths, installDirName } = this.extractPathsFromManifest(
+      manifestPath,
+      title
+    );
 
     // If not found, try canonical name via ludusavi binary (slower, one shot)
     if (rawPaths.length === 0) {
       const canonical = await this.findCanonicalName(shop, title, objectId);
       if (canonical && canonical !== title) {
-        ({ paths: rawPaths, installDirName } = this.extractPathsFromManifest(manifestPath, canonical));
+        ({ paths: rawPaths, installDirName } = this.extractPathsFromManifest(
+          manifestPath,
+          canonical
+        ));
       }
     }
 
     if (rawPaths.length === 0) return [];
 
     // Resolve install dir: prefer executablePathOverride if it's a real file path
-    const platformUrlPrefixes = ["steam://", "legendary://", "gog://", "epic://", "heroic://"];
+    const platformUrlPrefixes = [
+      "steam://",
+      "legendary://",
+      "gog://",
+      "epic://",
+      "heroic://",
+    ];
     const isPlatformUrl = executablePathOverride
-      ? platformUrlPrefixes.some((prefix) => executablePathOverride.startsWith(prefix))
+      ? platformUrlPrefixes.some((prefix) =>
+          executablePathOverride.startsWith(prefix)
+        )
       : true;
 
     let resolvedInstallDir: string | null = null;
@@ -212,7 +226,8 @@ export class Ludusavi {
     // If no full install path found but we have the manifest installDir name,
     // build a synthetic <base> using known Steam library roots
     if (!resolvedInstallDir && installDirName && shop === "steam") {
-      const syntheticDir = await this.resolveSteamInstallDirByName(installDirName);
+      const syntheticDir =
+        await this.resolveSteamInstallDirByName(installDirName);
       if (syntheticDir) resolvedInstallDir = syntheticDir;
     }
 
@@ -251,16 +266,25 @@ export class Ludusavi {
       if (!fs.existsSync(knownBase)) return null;
 
       // Collect remaining template suffix after the wildcard segment(s)
-      const suffixParts = parts.slice(wildcardIdx + 1).filter((p) => !p.includes("<"));
+      const suffixParts = parts
+        .slice(wildcardIdx + 1)
+        .filter((p) => !p.includes("<"));
       const suffix = suffixParts.join(path.sep);
 
-      const candidates = fs.readdirSync(knownBase, { withFileTypes: true })
+      const candidates = fs
+        .readdirSync(knownBase, { withFileTypes: true })
         .filter((e) => e.isDirectory())
         .map((e) => path.join(knownBase, e.name, suffix));
 
-      return candidates.find((c) => {
-        try { return fs.statSync(c).isDirectory(); } catch { return false; }
-      }) ?? null;
+      return (
+        candidates.find((c) => {
+          try {
+            return fs.statSync(c).isDirectory();
+          } catch {
+            return false;
+          }
+        }) ?? null
+      );
     } catch {
       return null;
     }
@@ -284,7 +308,10 @@ export class Ludusavi {
     const manifestPath = path.join(this.configPath, "manifest.yaml");
     if (!fs.existsSync(manifestPath)) return [];
 
-    const { paths: rawPaths } = this.extractPathsFromManifest(manifestPath, canonicalName);
+    const { paths: rawPaths } = this.extractPathsFromManifest(
+      manifestPath,
+      canonicalName
+    );
     if (rawPaths.length === 0) return [];
 
     const steamInstallDir =
@@ -297,7 +324,9 @@ export class Ludusavi {
           ])
         : null;
 
-    return rawPaths.map((p) => this.expandLudusaviPath(p, steamInstallDir, objectId));
+    return rawPaths.map((p) =>
+      this.expandLudusaviPath(p, steamInstallDir, objectId)
+    );
   }
 
   /**
@@ -364,7 +393,8 @@ export class Ludusavi {
           }
         } else {
           const spaceCount = line.length - line.trimStart().length;
-          if (line.trim() && spaceCount <= installDirDepth) inInstallDir = false;
+          if (line.trim() && spaceCount <= installDirDepth)
+            inInstallDir = false;
         }
       }
 
@@ -425,13 +455,13 @@ export class Ludusavi {
       .replace(/<home>/g, home)
       .replace(/<winAppData>/g, appData)
       .replace(/<winLocalAppData>/g, localAppData)
-      .replace(
-        /<winLocalAppDataLow>/g,
-        path.join(home, "AppData", "LocalLow")
-      )
+      .replace(/<winLocalAppDataLow>/g, path.join(home, "AppData", "LocalLow"))
       .replace(/<winDocuments>/g, path.join(home, "Documents"))
       .replace(/<winPublic>/g, path.join("C:\\Users", "Public"))
-      .replace(/<winProgramData>/g, process.env.PROGRAMDATA ?? "C:\\ProgramData")
+      .replace(
+        /<winProgramData>/g,
+        process.env.PROGRAMDATA ?? "C:\\ProgramData"
+      )
       .replace(/<winDir>/g, process.env.WINDIR ?? "C:\\Windows")
       .replace(/<osUserName>/g, os.userInfo().username)
       .replace(/<xdgHome>/g, home)
@@ -442,9 +472,7 @@ export class Ludusavi {
       result = result.replace(/<storeGameId>/g, storeGameId);
     }
 
-    return result
-      .replace(/\//g, path.sep)
-      .replace(/\\/g, path.sep);
+    return result.replace(/\//g, path.sep).replace(/\\/g, path.sep);
   }
 
   /** Find an install dir in Steam library roots by folder name (from manifest installDir). */
@@ -456,9 +484,15 @@ export class Ludusavi {
       const steamPath = await getSteamLocation().catch(() => null);
       if (!steamPath) return null;
 
-      const libraryPaths: string[] = [path.join(steamPath, "steamapps", "common")];
+      const libraryPaths: string[] = [
+        path.join(steamPath, "steamapps", "common"),
+      ];
 
-      const libraryFoldersPath = path.join(steamPath, "steamapps", "libraryfolders.vdf");
+      const libraryFoldersPath = path.join(
+        steamPath,
+        "steamapps",
+        "libraryfolders.vdf"
+      );
       if (fs.existsSync(libraryFoldersPath)) {
         const vdf = fs.readFileSync(libraryFoldersPath, "utf-8");
         for (const m of vdf.matchAll(/"path"\s+"([^"]+)"/g)) {

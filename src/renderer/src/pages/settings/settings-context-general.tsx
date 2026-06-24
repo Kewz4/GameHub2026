@@ -92,7 +92,8 @@ export function SettingsContextGeneral({
   } | null>(null);
 
   const [debuggingCloud, setDebuggingCloud] = useState(false);
-  const [cloudDebugReport, setCloudDebugReport] = useState<CloudDebugReport | null>(null);
+  const [cloudDebugReport, setCloudDebugReport] =
+    useState<CloudDebugReport | null>(null);
 
   const [form, setForm] = useState({
     downloadsPath: "",
@@ -350,8 +351,9 @@ export function SettingsContextGeneral({
           label={t("theme_mode", { defaultValue: "Theme" })}
           value={userPreferences?.themeMode ?? "dark"}
           onChange={(event) => {
-            const themeMode = event.target
-              .value as NonNullable<typeof userPreferences>["themeMode"];
+            const themeMode = event.target.value as NonNullable<
+              typeof userPreferences
+            >["themeMode"];
             // Apply instantly, then persist.
             document.documentElement.setAttribute(
               "data-theme-mode",
@@ -360,9 +362,21 @@ export function SettingsContextGeneral({
             updateUserPreferences({ themeMode });
           }}
           options={[
-            { key: "dark", value: "dark", label: t("theme_dark", { defaultValue: "Dark" }) },
-            { key: "light", value: "light", label: t("theme_light", { defaultValue: "Light" }) },
-            { key: "system", value: "system", label: t("theme_system", { defaultValue: "Follow system" }) },
+            {
+              key: "dark",
+              value: "dark",
+              label: t("theme_dark", { defaultValue: "Dark" }),
+            },
+            {
+              key: "light",
+              value: "light",
+              label: t("theme_light", { defaultValue: "Light" }),
+            },
+            {
+              key: "system",
+              value: "system",
+              label: t("theme_system", { defaultValue: "Follow system" }),
+            },
           ]}
         />
         <SettingsAppearance appearance={appearance} />
@@ -377,14 +391,20 @@ export function SettingsContextGeneral({
         <div className="settings-general-action-row">
           <div className="settings-general-action-row__info">
             <span>Generate missing artwork</span>
-            <small>Fetch covers from SteamGridDB for games without images</small>
+            <small>
+              Fetch covers from SteamGridDB for games without images
+            </small>
           </div>
           <Button
             onClick={async () => {
               setGeneratingMetadata(true);
               setMetadataProgress(null);
               const unsub = window.electron.onMetadataProgress((p) => {
-                setMetadataProgress({ current: p.current, total: p.total, title: p.title });
+                setMetadataProgress({
+                  current: p.current,
+                  total: p.total,
+                  title: p.title,
+                });
               });
               try {
                 const result = await window.electron.generateMissingMetadata();
@@ -425,7 +445,9 @@ export function SettingsContextGeneral({
         <div className="settings-general-action-row">
           <div className="settings-general-action-row__info">
             <span>Check for duplicates</span>
-            <small>Merge duplicate library entries, preserving download links</small>
+            <small>
+              Merge duplicate library entries, preserving download links
+            </small>
           </div>
           <Button
             theme="outline"
@@ -433,7 +455,11 @@ export function SettingsContextGeneral({
               setDeduping(true);
               setDedupProgress(null);
               const unsub = window.electron.onDedupProgress((p) => {
-                setDedupProgress({ current: p.current, total: p.total, title: p.title });
+                setDedupProgress({
+                  current: p.current,
+                  total: p.total,
+                  title: p.title,
+                });
               });
               try {
                 const result = await window.electron.mergeDuplicateGames();
@@ -517,7 +543,10 @@ export function SettingsContextGeneral({
         <div className="settings-general-action-row settings-general-action-row--danger">
           <div className="settings-general-action-row__info">
             <span>Delete local library</span>
-            <small>Removes every game from this device. Useful for a fresh start before re-syncing.</small>
+            <small>
+              Removes every game from this device. Useful for a fresh start
+              before re-syncing.
+            </small>
           </div>
           {!clearLibraryConfirm ? (
             <Button theme="danger" onClick={() => setClearLibraryConfirm(true)}>
@@ -561,12 +590,15 @@ export function SettingsContextGeneral({
           <div className="settings-general-action-row__info">
             <span>Delete cloud library</span>
             <small>
-              Removes all games from your GameHub account server-side. Stops
-              old imports from restoring on login. Does not affect this device.
+              Removes all games from your GameHub account server-side. Stops old
+              imports from restoring on login. Does not affect this device.
             </small>
           </div>
           {!deleteCloudLibraryConfirm ? (
-            <Button theme="danger" onClick={() => setDeleteCloudLibraryConfirm(true)}>
+            <Button
+              theme="danger"
+              onClick={() => setDeleteCloudLibraryConfirm(true)}
+            >
               Delete
             </Button>
           ) : (
@@ -628,16 +660,22 @@ export function SettingsContextGeneral({
                 updateUnsubRef.current = window.electron.onAutoUpdaterEvent(
                   (event) => {
                     if (event.type === "update-available") {
-                      setUpdateCheckResult(`Update available: v${event.info.version}`);
+                      setUpdateCheckResult(
+                        `Update available: v${event.info.version}`
+                      );
                     } else if (event.type === "update-downloaded") {
-                      setUpdateCheckResult("Update downloaded — restart to install.");
+                      setUpdateCheckResult(
+                        "Update downloaded — restart to install."
+                      );
                     }
                     updateUnsubRef.current?.();
                   }
                 );
                 if (!isAutoInstall) {
                   setTimeout(() => {
-                    setUpdateCheckResult((prev) => prev ?? "No new update found.");
+                    setUpdateCheckResult(
+                      (prev) => prev ?? "No new update found."
+                    );
                   }, 8000);
                 }
               } finally {

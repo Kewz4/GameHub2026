@@ -121,7 +121,6 @@ export function Header() {
   >([]);
   const [showScanApproval, setShowScanApproval] = useState(false);
 
-
   const { t } = useTranslation("header");
 
   const { addToHistory, removeFromHistory, clearHistory, getRecentHistory } =
@@ -325,7 +324,10 @@ export function Header() {
     setActiveIndex(-1);
   };
 
-  const handleStartScan = async (mode: "deep" | "selective", paths?: string[]) => {
+  const handleStartScan = async (
+    mode: "deep" | "selective",
+    paths?: string[]
+  ) => {
     if (isScanning) return;
 
     setIsScanning(true);

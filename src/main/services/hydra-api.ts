@@ -103,10 +103,10 @@ export class HydraApi {
       // orphan every existing backup under a new folder).
       if (userDetails?.id) {
         const prefs = await db
-          .get<string, Record<string, unknown> | null>(
-            levelKeys.userPreferences,
-            { valueEncoding: "json" }
-          )
+          .get<
+            string,
+            Record<string, unknown> | null
+          >(levelKeys.userPreferences, { valueEncoding: "json" })
           .catch(() => null);
         if (prefs?.cloudSyncUserId !== userDetails.id) {
           await db

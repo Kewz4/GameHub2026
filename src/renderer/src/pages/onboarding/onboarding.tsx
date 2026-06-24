@@ -224,7 +224,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   // Achievements (Exophase) step state
   const [exophaseUsername, setExophaseUsername] = useState<string | null>(null);
   const [exophaseConnecting, setExophaseConnecting] = useState(false);
-  const [exophaseSyncChoice, setExophaseSyncChoice] = useState<"pending" | "running" | "skipped" | null>(null);
+  const [exophaseSyncChoice, setExophaseSyncChoice] = useState<
+    "pending" | "running" | "skipped" | null
+  >(null);
   const [exophasePsnImporting, setExophasePsnImporting] = useState(false);
   const [exophasePsnResult, setExophasePsnResult] = useState<string>("");
   // Extra PUBLIC Exophase profiles added by URL (no login needed).
@@ -372,7 +374,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       themeMode,
     });
     onComplete();
-  }, [onComplete, downloadNotifs, achievementNotifs, startMinimized, themeMode]);
+  }, [
+    onComplete,
+    downloadNotifs,
+    achievementNotifs,
+    startMinimized,
+    themeMode,
+  ]);
 
   const handleLanguageSave = async () => {
     await window.electron.updateUserPreferences({ language: selectedLanguage });
@@ -658,7 +666,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     try {
       const res = await window.electron.validateExophaseProfile(input);
       if (!res.ok || !res.username) return;
-      const prefs = await window.electron.getUserPreferences().catch(() => null);
+      const prefs = await window.electron
+        .getUserPreferences()
+        .catch(() => null);
       const extras = prefs?.exophaseExtraProfiles ?? [];
       await window.electron.updateUserPreferences({
         exophaseExtraProfiles: [...extras, res.username],
@@ -864,9 +874,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       } else {
         const parts: string[] = [];
         if (result.matched > 0)
-          parts.push(`Updated ${result.matched} game${result.matched !== 1 ? "s" : ""}`);
+          parts.push(
+            `Updated ${result.matched} game${result.matched !== 1 ? "s" : ""}`
+          );
         if (cached > 0)
-          parts.push(`saved playtime for ${cached} more — will apply when you add them`);
+          parts.push(
+            `saved playtime for ${cached} more — will apply when you add them`
+          );
         setPlayniteResult(parts.join(", ") + ".");
       }
     } catch {
@@ -1381,7 +1395,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   <button
                     type="button"
                     className="onboarding-skip"
-                    onClick={() => setStepIndex(ALL_STEPS.indexOf("achievements"))}
+                    onClick={() =>
+                      setStepIndex(ALL_STEPS.indexOf("achievements"))
+                    }
                   >
                     Skip All
                   </button>
@@ -1770,9 +1786,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </>
                 ) : (
                   <>
-                    <div
-                      className="onboarding-actions"
-                    >
+                    <div className="onboarding-actions">
                       <button
                         type="button"
                         className="onboarding-skip"
@@ -1794,9 +1808,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       ubisoftState.installed &&
                       ubisoftState.detected.length > 0 && (
                         <>
-                          <div
-                            className="onboarding-divider onboarding-divider--spaced"
-                          >
+                          <div className="onboarding-divider onboarding-divider--spaced">
                             or add installed games
                           </div>
                           {ubisoftResult ? (
@@ -1890,9 +1902,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   </>
                 ) : (
                   <>
-                    <div
-                      className="onboarding-actions"
-                    >
+                    <div className="onboarding-actions">
                       <button
                         type="button"
                         className="onboarding-skip"
@@ -1914,9 +1924,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       eaState.installed &&
                       eaState.detected.length > 0 && (
                         <>
-                          <div
-                            className="onboarding-divider onboarding-divider--spaced"
-                          >
+                          <div className="onboarding-divider onboarding-divider--spaced">
                             or add installed games
                           </div>
                           {eaResult ? (
@@ -1981,8 +1989,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                         </div>
                         <p className="onboarding-tool-card__desc">
                           Sync your Exophase achievements now. It runs fully in
-                          the background — you can continue setup while it works.
-                          Check progress anytime on the Sync Report page.
+                          the background — you can continue setup while it
+                          works. Check progress anytime on the Sync Report page.
                         </p>
                         <div className="onboarding-tool-card__actions">
                           <button
@@ -2004,7 +2012,10 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     {exophaseSyncChoice === "running" && (
                       <div className="onboarding-tool-card">
                         <div className="onboarding-tool-card__import-banner-text">
-                          <SyncIcon size={12} className="onboarding-tool-card__spin" />
+                          <SyncIcon
+                            size={12}
+                            className="onboarding-tool-card__spin"
+                          />
                           {importProgress
                             ? `Syncing… ${importProgress.current}/${importProgress.total} — ${importProgress.title}`
                             : importActive
@@ -2025,7 +2036,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     )}
 
                     {exophaseSyncChoice === "skipped" && (
-                      <p style={{ fontSize: "0.82rem", opacity: 0.55, margin: 0 }}>
+                      <p
+                        style={{
+                          fontSize: "0.82rem",
+                          opacity: 0.55,
+                          margin: 0,
+                        }}
+                      >
                         Sync skipped — you can run it anytime from{" "}
                         <strong>Settings → Achievements</strong>.
                       </p>
@@ -2041,13 +2058,15 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       </div>
                       <p className="onboarding-tool-card__desc">
                         Played on PlayStation? We&apos;ll credit your PSN
-                        trophies onto the matching PC games (e.g. God of War
-                        PS4 → God of War PC). You need to link your PSN
-                        account on Exophase first — then come back here to
-                        import.
+                        trophies onto the matching PC games (e.g. God of War PS4
+                        → God of War PC). You need to link your PSN account on
+                        Exophase first — then come back here to import.
                       </p>
                       {exophasePsnResult ? (
-                        <div className="onboarding-connected-badge" style={{ fontSize: "0.82rem" }}>
+                        <div
+                          className="onboarding-connected-badge"
+                          style={{ fontSize: "0.82rem" }}
+                        >
                           <CheckCircleFillIcon size={14} />
                           {exophasePsnResult}
                         </div>
@@ -2092,9 +2111,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </div>
                   </>
                 ) : (
-                  <div
-                    className="onboarding-actions"
-                  >
+                  <div className="onboarding-actions">
                     <button
                       type="button"
                       className="onboarding-skip"
@@ -2351,7 +2368,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       type="button"
                       className={[
                         "onboarding-theme-choice",
-                        themeMode === id ? "onboarding-theme-choice--active" : "",
+                        themeMode === id
+                          ? "onboarding-theme-choice--active"
+                          : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}

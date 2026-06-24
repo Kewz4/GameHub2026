@@ -2,7 +2,11 @@ import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import type { EmulatorSystem } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
-import { parseCueReferencedFiles, resolveSniffTarget, sniffDiscImage } from "./sniff-disc-platform";
+import {
+  parseCueReferencedFiles,
+  resolveSniffTarget,
+  sniffDiscImage,
+} from "./sniff-disc-platform";
 
 export interface ScannedGame {
   primaryPath: string;

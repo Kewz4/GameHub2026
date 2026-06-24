@@ -156,7 +156,9 @@ export const runLibraryMigrations = async (): Promise<void> => {
         "riot://",
       ];
       const exe = game.executablePath?.toLowerCase() ?? "";
-      const hasPlatformUri = PLATFORM_URI_SCHEMES.some((s) => exe.startsWith(s));
+      const hasPlatformUri = PLATFORM_URI_SCHEMES.some((s) =>
+        exe.startsWith(s)
+      );
       let desired: "sync" | "catalog" | "custom" | null = null;
 
       if (game.shop === "custom") {
@@ -182,7 +184,8 @@ export const runLibraryMigrations = async (): Promise<void> => {
       }
 
       const updates: Partial<typeof game> = {};
-      if (desired && game.libraryOrigin !== desired) updates.libraryOrigin = desired;
+      if (desired && game.libraryOrigin !== desired)
+        updates.libraryOrigin = desired;
       if (game.automaticCloudSync !== true) updates.automaticCloudSync = true;
       if (Object.keys(updates).length > 0) {
         await gamesSublevel.put(key, { ...game, ...updates });

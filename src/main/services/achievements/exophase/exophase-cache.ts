@@ -540,7 +540,9 @@ export const matchAndSyncToHydraApiForNonLibraryGame = async (
   if (matched.length === 0) return "no-match";
 
   // Update the persisted unlocked list with the matched HydraAPI names.
-  const existing = await gameAchievementsSublevel.get(gameKey).catch(() => null);
+  const existing = await gameAchievementsSublevel
+    .get(gameKey)
+    .catch(() => null);
   const existingUnlocked = existing?.unlockedAchievements ?? [];
   const existingNames = new Set(
     existingUnlocked.map((u) => (u.name ?? "").toUpperCase())
@@ -565,24 +567,22 @@ export const matchAndSyncToHydraApiForNonLibraryGame = async (
   // record so the PUT /profile/games/achievements endpoint accepts the request.
   let remoteId: string | null = null;
   try {
-    const remoteGames = await HydraApi.get<
-      Array<{ id: string; shop: string; objectId: string }>
-    >("/profile/games");
+    const remoteGames =
+      await HydraApi.get<Array<{ id: string; shop: string; objectId: string }>>(
+        "/profile/games"
+      );
     const existing = remoteGames.find(
       (g) => g.shop === shop && g.objectId === objectId
     );
     if (existing) {
       remoteId = existing.id;
     } else {
-      const created = await HydraApi.post<{ id: string }>(
-        "/profile/games",
-        {
-          objectId,
-          playTimeInMilliseconds: 0,
-          shop,
-          lastTimePlayed: null,
-        }
-      ).catch(() => null);
+      const created = await HydraApi.post<{ id: string }>("/profile/games", {
+        objectId,
+        playTimeInMilliseconds: 0,
+        shop,
+        lastTimePlayed: null,
+      }).catch(() => null);
       remoteId = created?.id ?? null;
     }
   } catch {

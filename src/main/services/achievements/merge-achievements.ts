@@ -44,7 +44,6 @@ const saveAchievementsOnLocal = async (
       language: gameAchievement?.language,
     })
     .then(async () => {
-
       if (!sendUpdateEvent) return;
 
       return getUnlockedAchievements(objectId, shop, true)

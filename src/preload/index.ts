@@ -584,7 +584,11 @@ contextBridge.exposeInMainWorld("electron", {
   enableExperimentalAchievements: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("enableExperimentalAchievements", shop, objectId),
   onAchievementSupportMissing: (
-    callback: (data: { objectId: string; shop: GameShop; title: string }) => void
+    callback: (data: {
+      objectId: string;
+      shop: GameShop;
+      title: string;
+    }) => void
   ) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
@@ -735,13 +739,9 @@ contextBridge.exposeInMainWorld("electron", {
     shop: GameShop,
     discPath: string,
     system: EmulatorSystem
-  ) =>
-    ipcRenderer.invoke("openClassicsGame", objectId, shop, discPath, system),
-  updateClassicsDisc: (
-    objectId: string,
-    shop: GameShop,
-    disc: ClassicsDisc
-  ) => ipcRenderer.invoke("updateClassicsDisc", objectId, shop, disc),
+  ) => ipcRenderer.invoke("openClassicsGame", objectId, shop, discPath, system),
+  updateClassicsDisc: (objectId: string, shop: GameShop, disc: ClassicsDisc) =>
+    ipcRenderer.invoke("updateClassicsDisc", objectId, shop, disc),
 
   /* Misc */
   ping: () => ipcRenderer.invoke("ping"),
@@ -1294,16 +1294,21 @@ contextBridge.exposeInMainWorld("electron", {
 
   /* Main window controls (Linux) */
   minimizeMainWindow: () => ipcRenderer.invoke("minimizeMainWindow"),
-  toggleMaximizeMainWindow: () => ipcRenderer.invoke("toggleMaximizeMainWindow"),
+  toggleMaximizeMainWindow: () =>
+    ipcRenderer.invoke("toggleMaximizeMainWindow"),
   closeMainWindow: () => ipcRenderer.invoke("closeMainWindow"),
   isMainWindowMaximized: (): Promise<boolean> =>
     ipcRenderer.invoke("isMainWindowMaximized"),
-  onWindowMaximizeChange: (cb: (isMaximized: boolean) => void): (() => void) => {
+  onWindowMaximizeChange: (
+    cb: (isMaximized: boolean) => void
+  ): (() => void) => {
     const listener = (_: unknown, isMaximized: boolean) => cb(isMaximized);
     ipcRenderer.on("on-window-maximize-change", listener);
-    return () => ipcRenderer.removeListener("on-window-maximize-change", listener);
+    return () =>
+      ipcRenderer.removeListener("on-window-maximize-change", listener);
   },
-  isWayland: process.env.XDG_SESSION_TYPE === "wayland" ||
+  isWayland:
+    process.env.XDG_SESSION_TYPE === "wayland" ||
     process.env.WAYLAND_DISPLAY !== undefined,
 
   /* Friends window */
@@ -1317,14 +1322,17 @@ contextBridge.exposeInMainWorld("electron", {
   onOpenAddFriendModal: (cb: () => void): (() => void) => {
     const listener = () => cb();
     ipcRenderer.on("on-open-add-friend-modal", listener);
-    return () => ipcRenderer.removeListener("on-open-add-friend-modal", listener);
+    return () =>
+      ipcRenderer.removeListener("on-open-add-friend-modal", listener);
   },
   onFriendsUpdated: (cb: () => void): (() => void) => {
     const listener = () => cb();
     ipcRenderer.on("on-friends-updated", listener);
     return () => ipcRenderer.removeListener("on-friends-updated", listener);
   },
-  onFriendPresence: (cb: (presence: FriendPresenceSync) => void): (() => void) => {
+  onFriendPresence: (
+    cb: (presence: FriendPresenceSync) => void
+  ): (() => void) => {
     const listener = (_: unknown, presence: FriendPresenceSync) => cb(presence);
     ipcRenderer.on("on-friend-presence", listener);
     return () => ipcRenderer.removeListener("on-friend-presence", listener);

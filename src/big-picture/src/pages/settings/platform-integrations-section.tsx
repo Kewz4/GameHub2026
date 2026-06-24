@@ -158,8 +158,14 @@ function SteamSection() {
               loading={isSyncing}
               focusId={INTEGRATIONS_STEAM_SYNC_BTN_ID}
               focusNavigationOverrides={{
-                up: { type: "item", itemId: INTEGRATIONS_STEAM_DISCONNECT_BTN_ID },
-                down: { type: "item", itemId: INTEGRATIONS_STEAM_DISCONNECT_BTN_ID },
+                up: {
+                  type: "item",
+                  itemId: INTEGRATIONS_STEAM_DISCONNECT_BTN_ID,
+                },
+                down: {
+                  type: "item",
+                  itemId: INTEGRATIONS_STEAM_DISCONNECT_BTN_ID,
+                },
               }}
               onClick={() => void handleSync()}
             >
@@ -170,7 +176,10 @@ function SteamSection() {
               focusId={INTEGRATIONS_STEAM_DISCONNECT_BTN_ID}
               focusNavigationOverrides={{
                 up: { type: "item", itemId: INTEGRATIONS_STEAM_SYNC_BTN_ID },
-                down: { type: "item", itemId: INTEGRATIONS_EPIC_PRIMARY_BTN_ID },
+                down: {
+                  type: "item",
+                  itemId: INTEGRATIONS_EPIC_PRIMARY_BTN_ID,
+                },
               }}
               onClick={() => void handleDisconnect()}
             >
@@ -231,7 +240,9 @@ function EpicSection() {
           .catch(() => {});
         showSuccessToast("Epic Games connected", {
           fallbackVisual: "settings",
-          message: result.account ? `Signed in as ${result.account}.` : "Signed in.",
+          message: result.account
+            ? `Signed in as ${result.account}.`
+            : "Signed in.",
         });
       } else {
         showErrorToast("Epic sign-in failed", { fallbackVisual: "settings" });
@@ -282,8 +293,14 @@ function EpicSection() {
                 loading={isSyncing}
                 focusId={INTEGRATIONS_EPIC_SYNC_BTN_ID}
                 focusNavigationOverrides={{
-                  up: { type: "item", itemId: INTEGRATIONS_STEAM_PRIMARY_BTN_ID },
-                  down: { type: "item", itemId: INTEGRATIONS_EPIC_SIGNOUT_BTN_ID },
+                  up: {
+                    type: "item",
+                    itemId: INTEGRATIONS_STEAM_PRIMARY_BTN_ID,
+                  },
+                  down: {
+                    type: "item",
+                    itemId: INTEGRATIONS_EPIC_SIGNOUT_BTN_ID,
+                  },
                 }}
                 onClick={() => void handleSync()}
               >
@@ -294,7 +311,10 @@ function EpicSection() {
                 focusId={INTEGRATIONS_EPIC_SIGNOUT_BTN_ID}
                 focusNavigationOverrides={{
                   up: { type: "item", itemId: INTEGRATIONS_EPIC_SYNC_BTN_ID },
-                  down: { type: "item", itemId: INTEGRATIONS_GOG_PRIMARY_BTN_ID },
+                  down: {
+                    type: "item",
+                    itemId: INTEGRATIONS_GOG_PRIMARY_BTN_ID,
+                  },
                 }}
                 onClick={() => void handleSignOut()}
               >
@@ -410,7 +430,10 @@ function GogSection() {
               focusId={INTEGRATIONS_GOG_SYNC_BTN_ID}
               focusNavigationOverrides={{
                 up: { type: "item", itemId: INTEGRATIONS_EPIC_PRIMARY_BTN_ID },
-                down: { type: "item", itemId: INTEGRATIONS_GOG_DISCONNECT_BTN_ID },
+                down: {
+                  type: "item",
+                  itemId: INTEGRATIONS_GOG_DISCONNECT_BTN_ID,
+                },
               }}
               onClick={() => void handleSync()}
             >
@@ -421,7 +444,10 @@ function GogSection() {
               focusId={INTEGRATIONS_GOG_DISCONNECT_BTN_ID}
               focusNavigationOverrides={{
                 up: { type: "item", itemId: INTEGRATIONS_GOG_SYNC_BTN_ID },
-                down: { type: "item", itemId: INTEGRATIONS_XBOX_PRIMARY_BTN_ID },
+                down: {
+                  type: "item",
+                  itemId: INTEGRATIONS_XBOX_PRIMARY_BTN_ID,
+                },
               }}
               onClick={() => void handleDisconnect()}
             >
@@ -567,7 +593,10 @@ function XboxSection() {
                 focusId={INTEGRATIONS_XBOX_SYNC_BTN_ID}
                 focusNavigationOverrides={{
                   up: { type: "item", itemId: INTEGRATIONS_GOG_PRIMARY_BTN_ID },
-                  down: { type: "item", itemId: INTEGRATIONS_XBOX_SIGNOUT_BTN_ID },
+                  down: {
+                    type: "item",
+                    itemId: INTEGRATIONS_XBOX_SIGNOUT_BTN_ID,
+                  },
                 }}
                 onClick={() => void handleSync()}
               >

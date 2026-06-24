@@ -21,7 +21,9 @@ function unlockedNameSet(
   defs: { name?: string | null }[] | undefined,
   unlocked: { name?: string | null }[] | undefined
 ): Set<string> {
-  const validNames = new Set((defs ?? []).map((a) => (a.name ?? "").toUpperCase()));
+  const validNames = new Set(
+    (defs ?? []).map((a) => (a.name ?? "").toUpperCase())
+  );
   const out = new Set<string>();
   for (const u of unlocked ?? []) {
     const name = (u.name ?? "").toUpperCase();

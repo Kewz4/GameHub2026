@@ -40,7 +40,10 @@ export const storeAchievementProgress = async (
   const merged = new Map<string, AchievementProgress>();
 
   for (const file of achievementFiles) {
-    for (const entry of parseAchievementProgressFile(file.filePath, file.type)) {
+    for (const entry of parseAchievementProgressFile(
+      file.filePath,
+      file.type
+    )) {
       const key = progressKey(entry);
       const existing = merged.get(key);
       // Highest reported current wins when multiple files mention the same
