@@ -133,25 +133,36 @@ function cleanTitle(fileName) {
 }
 
 /**
- * Classify a Wii U CDN filename by its title ID prefix.
- * CDN filenames typically start with the 16-hex-char title ID:
- *   00050000… → base game
- *   0005000E… → update
- *   0005000C… → DLC
- * Falls back to "game" if the pattern isn't recognised.
+ * Classify a Wii U CDN filename.
+ *
+ * minerva's CDN dump uses No-Intro friendly names, not raw title IDs, so the
+ * content type is carried in the parenthesised tags:
+ *   "<Title> (Region) (Update)" → update
+ *   "<Title> (Region) (DLC)"    → DLC (also "(AOC)" add-on content)
+ *   everything else             → base game (incl. Virtual Console, Demo, Beta)
+ *
+ * A bare 16-hex title-ID prefix is still honoured as a fallback for any raw
+ * CDN entries that slip through.
  */
 function classifyWiiuFile(fileName) {
+  if (/\(Update\)/i.test(fileName)) return { contentType: "update", titleId: null };
+  if (/\((DLC|AOC|Add-?On Content)\)/i.test(fileName))
+    return { contentType: "dlc", titleId: null };
+
   const m = fileName.match(/^([0-9A-Fa-f]{16})/);
-  if (!m) return { contentType: "game", titleId: null };
-  const tid = m[1].toUpperCase();
-  if (tid.startsWith("0005000E"))
-    return { contentType: "update", titleId: tid.slice(8) };
-  if (tid.startsWith("0005000C"))
-    return { contentType: "dlc", titleId: tid.slice(8) };
-  return {
-    contentType: "game",
-    titleId: tid.startsWith("00050000") ? tid.slice(8) : null,
-  };
+  if (m) {
+    const tid = m[1].toUpperCase();
+    if (tid.startsWith("0005000E"))
+      return { contentType: "update", titleId: tid.slice(8) };
+    if (tid.startsWith("0005000C"))
+      return { contentType: "dlc", titleId: tid.slice(8) };
+    return {
+      contentType: "game",
+      titleId: tid.startsWith("00050000") ? tid.slice(8) : null,
+    };
+  }
+
+  return { contentType: "game", titleId: null };
 }
 
 /**
