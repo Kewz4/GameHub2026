@@ -182,7 +182,8 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     install: {
       githubRepo: "RetroAchievements/RALibretro",
       windowsAssetPattern: "\\.(zip|7z)$",
-      releasePageUrl: "https://github.com/RetroAchievements/RALibretro/releases",
+      releasePageUrl:
+        "https://github.com/RetroAchievements/RALibretro/releases",
     },
   },
   dsi: {
@@ -200,7 +201,8 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     install: {
       githubRepo: "RetroAchievements/RALibretro",
       windowsAssetPattern: "\\.(zip|7z)$",
-      releasePageUrl: "https://github.com/RetroAchievements/RALibretro/releases",
+      releasePageUrl:
+        "https://github.com/RetroAchievements/RALibretro/releases",
     },
   },
   n64: {

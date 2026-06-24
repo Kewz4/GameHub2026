@@ -1,5 +1,6 @@
 import axios from "axios";
 import { logger } from "./logger";
+import { sgdbSearchCacheSublevel } from "@main/level";
 
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
 const SGDB_KEY = "a41b22e5f9b93f698ff15cf05892aed6";
@@ -48,6 +49,20 @@ async function findSgdbGameId(title: string): Promise<number | null> {
   const key = title.trim().toLowerCase();
   if (searchCache.has(key)) return searchCache.get(key)!;
 
+  // Persistent cache: survives restarts so we don't re-query SGDB each scan.
+  const cached = await sgdbSearchCacheSublevel.get(key).catch(() => undefined);
+  if (cached) {
+    searchCache.set(key, cached.gameId);
+    return cached.gameId;
+  }
+
+  const remember = (id: number | null) => {
+    searchCache.set(key, id);
+    void sgdbSearchCacheSublevel
+      .put(key, { gameId: id, cachedAt: Date.now() })
+      .catch((err) => logger.warn("SteamGridDB: cache write failed", err));
+  };
+
   try {
     const res = await axios.get<{ success: boolean; data: SgdbGame[] }>(
       `${SGDB_BASE}/search/autocomplete/${encodeURIComponent(title.trim())}`,
@@ -60,11 +75,11 @@ async function findSgdbGameId(title: string): Promise<number | null> {
       results.find((g) => titlesSimilar(g.name, title)) ??
       null;
     const id = match?.id ?? null;
-    searchCache.set(key, id);
+    remember(id);
     return id;
   } catch (err) {
     logger.warn(`SteamGridDB: search failed for "${title}"`, err);
-    searchCache.set(key, null);
+    remember(null);
     return null;
   }
 }

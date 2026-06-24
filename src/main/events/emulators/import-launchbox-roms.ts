@@ -13,6 +13,7 @@ import { HydraApi, WindowManager, emulators, logger } from "@main/services";
 import { platformToSystem } from "@main/helpers";
 import {
   fetchShopDetailsForSkus,
+  importSgdbRoms,
   normalizeSku,
   type LaunchboxShopDetailsEntry,
 } from "@main/services/emulators";
@@ -782,6 +783,65 @@ const reconcileDeletedGames = async (
   }
 };
 
+const LAUNCHBOX_SYSTEMS: ReadonlySet<EmulatorSystem> = new Set([
+  "ps1",
+  "ps2",
+  "ps3",
+]);
+
+// Drives the SteamGridDB importer for non-PlayStation (cartridge) systems and
+// adapts its progress/result onto the shared classics-import shapes so the
+// renderer's progress UI works identically.
+async function runSgdbImport(
+  system: EmulatorSystem,
+  folders: FolderInput[],
+  signal: CancelSignal,
+  onProgress?: ProgressFn
+): Promise<LaunchboxImportResult> {
+  let fileCount = 0;
+  let sizeBytes = 0;
+  let matched = 0;
+
+  for (const folder of folders) {
+    if (signal.cancelled) break;
+    const result = await importSgdbRoms(
+      system,
+      folder.path,
+      folder.scanSubfolders,
+      (p) => {
+        if (signal.cancelled) return;
+        onProgress?.({
+          type: "progress",
+          phase: "matching",
+          processed: p.processed,
+          total: p.total,
+          percent:
+            p.total > 0
+              ? Math.min(100, Math.round((p.processed / p.total) * 1000) / 10)
+              : 0,
+          currentFile: p.currentFile,
+          status: null,
+          discovered: p.total,
+          matched: p.matched,
+          sizeBytes: p.sizeBytes,
+        });
+      }
+    );
+    fileCount += result.fileCount;
+    sizeBytes += result.sizeBytes;
+    matched += result.matched;
+  }
+
+  return {
+    fileCount,
+    sizeBytes,
+    matched,
+    unmatched: 0,
+    unmatchedFiles: [],
+    cancelled: signal.cancelled,
+  };
+}
+
 export async function runLaunchboxImport(
   system: EmulatorSystem,
   folders: FolderInput[],
@@ -951,30 +1011,28 @@ const importLaunchboxRoms = async (
 
   void (async () => {
     try {
-      const result = await runLaunchboxImport(
-        system,
-        folders,
-        language,
-        signal,
-        (payload) => {
-          updateActiveClassicsImport({
-            phase: payload.phase,
-            processed: payload.processed,
-            total: payload.total,
-            percent: payload.percent,
-            currentFile: payload.currentFile,
-            status: payload.status,
-            discovered: payload.discovered,
-            matched: payload.matched,
-            sizeBytes: payload.sizeBytes,
-          });
-          WindowManager.sendToAppWindows(CLASSICS_IMPORT_PROGRESS_CHANNEL, {
-            requestId,
-            system,
-            ...payload,
-          });
-        }
-      );
+      const onPayload = (payload: LaunchboxImportProgress) => {
+        updateActiveClassicsImport({
+          phase: payload.phase,
+          processed: payload.processed,
+          total: payload.total,
+          percent: payload.percent,
+          currentFile: payload.currentFile,
+          status: payload.status,
+          discovered: payload.discovered,
+          matched: payload.matched,
+          sizeBytes: payload.sizeBytes,
+        });
+        WindowManager.sendToAppWindows(CLASSICS_IMPORT_PROGRESS_CHANNEL, {
+          requestId,
+          system,
+          ...payload,
+        });
+      };
+
+      const result = await (LAUNCHBOX_SYSTEMS.has(system)
+        ? runLaunchboxImport(system, folders, language, signal, onPayload)
+        : runSgdbImport(system, folders, signal, onPayload));
 
       WindowManager.sendToAppWindows(CLASSICS_IMPORT_PROGRESS_CHANNEL, {
         type: result.cancelled ? "cancelled" : "done",

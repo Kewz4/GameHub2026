@@ -5,6 +5,8 @@ export * from "./sku-normalize";
 export * from "./macos-app-bundle";
 export * from "./validate-emulator-executable";
 export * from "./scan-rom-folder";
+export * from "./parse-rom-filename";
+export * from "./import-sgdb-roms";
 export * from "./emulators-repository";
 export * from "./firmware-detection";
 export * from "./bios-detection";
