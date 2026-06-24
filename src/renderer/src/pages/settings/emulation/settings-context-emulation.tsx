@@ -14,12 +14,38 @@ import {
 
 import "./settings-context-emulation.scss";
 
-const SYSTEMS: EmulatorSystem[] = ["ps1", "ps2", "ps3"];
+const SYSTEMS: EmulatorSystem[] = [
+  "ps1",
+  "ps2",
+  "ps3",
+  "psp",
+  "n3ds",
+  "nds",
+  "dsi",
+  "n64",
+  "gb",
+  "gbc",
+  "gba",
+  "wiiu",
+  "wii",
+  "gc",
+];
 
 const SYSTEM_LABELS: Record<EmulatorSystem, string> = {
-  ps1: "PlayStation 1",
+  ps1: "PlayStation",
   ps2: "PlayStation 2",
   ps3: "PlayStation 3",
+  psp: "PSP",
+  n3ds: "Nintendo 3DS",
+  nds: "Nintendo DS",
+  dsi: "Nintendo DSi",
+  n64: "Nintendo 64",
+  gb: "Game Boy",
+  gbc: "Game Boy Color",
+  gba: "Game Boy Advance",
+  wiiu: "Wii U",
+  wii: "Wii",
+  gc: "GameCube",
 };
 
 export function SettingsContextEmulation() {

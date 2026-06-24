@@ -1,6 +1,30 @@
-export type EmulatorSystem = "ps1" | "ps2" | "ps3";
+export type EmulatorSystem =
+  | "ps1"
+  | "ps2"
+  | "ps3"
+  | "psp"
+  | "n3ds"
+  | "nds"
+  | "dsi"
+  | "n64"
+  | "gb"
+  | "gbc"
+  | "gba"
+  | "wiiu"
+  | "wii"
+  | "gc";
 
-export type EmulatorBinary = "duckstation" | "pcsx2" | "rpcs3";
+export type EmulatorBinary =
+  | "duckstation"
+  | "pcsx2"
+  | "rpcs3"
+  | "ppsspp"
+  | "azahar"
+  | "ralibretro"
+  | "raproject64"
+  | "ravba"
+  | "cemu"
+  | "dolphin";
 
 export interface RomFolder {
   id: string;

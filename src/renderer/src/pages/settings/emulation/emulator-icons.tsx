@@ -4,4 +4,11 @@ export const EMULATOR_ICONS: Record<EmulatorBinary, string | undefined> = {
   pcsx2: undefined,
   rpcs3: undefined,
   duckstation: undefined,
+  ppsspp: undefined,
+  azahar: undefined,
+  ralibretro: undefined,
+  raproject64: undefined,
+  ravba: undefined,
+  cemu: undefined,
+  dolphin: undefined,
 };

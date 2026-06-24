@@ -158,6 +158,17 @@ const SYSTEM_DEFAULT_PLATFORM: Record<EmulatorSystem, string> = {
   ps1: "PlayStation",
   ps2: "PlayStation 2",
   ps3: "PlayStation 3",
+  psp: "PlayStation Portable",
+  n3ds: "Nintendo 3DS",
+  nds: "Nintendo DS",
+  dsi: "Nintendo DSi",
+  n64: "Nintendo 64",
+  gb: "Game Boy",
+  gbc: "Game Boy Color",
+  gba: "Game Boy Advance",
+  wiiu: "Nintendo Wii U",
+  wii: "Nintendo Wii",
+  gc: "Nintendo GameCube",
 };
 
 const persistEntryLocally = async (
@@ -331,6 +342,17 @@ const SYSTEM_CATALOGUE_PLATFORM: Record<EmulatorSystem, string> = {
   ps1: "Sony Playstation",
   ps2: "Sony Playstation 2",
   ps3: "Sony Playstation 3",
+  psp: "Sony PSP",
+  n3ds: "Nintendo 3DS",
+  nds: "Nintendo DS",
+  dsi: "Nintendo DSi",
+  n64: "Nintendo 64",
+  gb: "Nintendo Game Boy",
+  gbc: "Nintendo Game Boy Color",
+  gba: "Nintendo Game Boy Advance",
+  wiiu: "Nintendo Wii U",
+  wii: "Nintendo Wii",
+  gc: "Nintendo GameCube",
 };
 
 const normalizePlatformName = (value: string): string =>

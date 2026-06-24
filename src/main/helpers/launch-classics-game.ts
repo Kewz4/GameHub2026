@@ -49,6 +49,22 @@ const buildEmulatorArgs = (
       return ["-batch", "-fullscreen", "--", discPath];
     case "rpcs3":
       return ["--no-gui", discPath];
+    case "ppsspp":
+      return ["--fullscreen", discPath];
+    case "azahar":
+      return ["--fullscreen", discPath];
+    case "dolphin":
+      return ["-b", "-e", discPath];
+    case "cemu":
+      return ["-f", "-g", discPath];
+    case "raproject64":
+      // RAProject64 takes the ROM path positionally.
+      return [discPath];
+    case "ravba":
+      return [discPath];
+    case "ralibretro":
+      // RALibretro launches the ROM directly; the user picks the core in-app.
+      return [discPath];
   }
 };
 

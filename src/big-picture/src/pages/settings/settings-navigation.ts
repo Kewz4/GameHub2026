@@ -69,6 +69,17 @@ export const EMULATION_OVERVIEW_CARD_FOCUS_IDS = {
   ps1: "emulation-overview-ps1-card",
   ps2: "emulation-overview-ps2-card",
   ps3: "emulation-overview-ps3-card",
+  psp: "emulation-overview-psp-card",
+  n3ds: "emulation-overview-n3ds-card",
+  nds: "emulation-overview-nds-card",
+  dsi: "emulation-overview-dsi-card",
+  n64: "emulation-overview-n64-card",
+  gb: "emulation-overview-gb-card",
+  gbc: "emulation-overview-gbc-card",
+  gba: "emulation-overview-gba-card",
+  wiiu: "emulation-overview-wiiu-card",
+  wii: "emulation-overview-wii-card",
+  gc: "emulation-overview-gc-card",
 } as const;
 export const EMULATION_DETAIL_BACK_BUTTON_ID = "emulation-detail-back-button";
 export const EMULATION_DETAIL_REMOVE_EMULATOR_BUTTON_ID =

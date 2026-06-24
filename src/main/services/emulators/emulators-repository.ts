@@ -1,8 +1,8 @@
 import { emulatorsSublevel } from "@main/level";
 import type { EmulatorConfig, EmulatorConfigMap, EmulatorSystem } from "@types";
-import { KNOWN_BINARIES } from "./known-binaries";
+import { ALL_SYSTEMS, KNOWN_BINARIES } from "./known-binaries";
 
-const SYSTEMS: EmulatorSystem[] = ["ps1", "ps2", "ps3"];
+const SYSTEMS: EmulatorSystem[] = ALL_SYSTEMS;
 
 const emptyConfig = (system: EmulatorSystem): EmulatorConfig => ({
   system,

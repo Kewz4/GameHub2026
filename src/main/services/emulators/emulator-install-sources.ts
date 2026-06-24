@@ -1,5 +1,154 @@
-import type { EmulatorSystem, ResolvedInstallOption } from "@types";
+import axios from "axios";
 
+import type {
+  EmulatorBinary,
+  EmulatorInstallKind,
+  EmulatorSystem,
+  ResolvedInstallOption,
+} from "@types";
+import { logger } from "../logger";
+import { KNOWN_BINARIES, primarySystemForBinary } from "./known-binaries";
+import type { EmulatorInstallSource } from "./known-binaries";
+
+const isWindows = process.platform === "win32";
+const isLinux = process.platform === "linux";
+
+interface GithubAsset {
+  name: string;
+  browser_download_url: string;
+  size: number;
+}
+
+interface GithubRelease {
+  tag_name: string;
+  html_url: string;
+  prerelease: boolean;
+  assets: GithubAsset[];
+}
+
+const matchAsset = (
+  assets: GithubAsset[],
+  pattern: string | undefined
+): GithubAsset | null => {
+  if (!pattern) return null;
+  const regex = new RegExp(pattern, "i");
+  return assets.find((asset) => regex.test(asset.name)) ?? null;
+};
+
+const kindForAsset = (assetName: string): EmulatorInstallKind => {
+  const lower = assetName.toLowerCase();
+  if (lower.endsWith(".appimage")) return "linux-appimage";
+  if (lower.endsWith(".exe")) return "windows-installer";
+  return "windows-archive";
+};
+
+/**
+ * Resolve the latest GitHub release asset matching the current OS for a binary.
+ * Returns null when the repo has no matching asset (callers fall back to a link).
+ */
+const resolveGithubOption = async (
+  binary: EmulatorBinary,
+  source: EmulatorInstallSource
+): Promise<ResolvedInstallOption | null> => {
+  if (!source.githubRepo) return null;
+
+  const pattern = isWindows
+    ? source.windowsAssetPattern
+    : source.linuxAssetPattern;
+  if (!pattern) return null;
+
+  try {
+    const { data } = await axios.get<GithubRelease>(
+      `https://api.github.com/repos/${source.githubRepo}/releases/latest`,
+      {
+        timeout: 15_000,
+        headers: { Accept: "application/vnd.github+json" },
+      }
+    );
+
+    const asset = matchAsset(data.assets, pattern);
+    if (!asset) return null;
+
+    return {
+      id: `${binary}-github-${data.tag_name}`,
+      binary,
+      kind: kindForAsset(asset.name),
+      channel: data.prerelease ? "prerelease" : "release",
+      downloadUrl: asset.browser_download_url,
+      fileName: asset.name,
+      version: data.tag_name,
+      htmlUrl: data.html_url,
+      linkUrl: null,
+      linkKind: null,
+    };
+  } catch (err) {
+    logger.warn(`Emulator install: GitHub lookup failed for ${binary}`, err);
+    return null;
+  }
+};
+
+const linkOption = (
+  binary: EmulatorBinary,
+  source: EmulatorInstallSource
+): ResolvedInstallOption[] => {
+  const options: ResolvedInstallOption[] = [];
+
+  if (isLinux && source.flatpakInstallId) {
+    options.push({
+      id: `${binary}-flatpak`,
+      binary,
+      kind: "link",
+      channel: null,
+      downloadUrl: null,
+      fileName: null,
+      version: null,
+      htmlUrl: null,
+      linkUrl: `https://flathub.org/apps/${source.flatpakInstallId}`,
+      linkKind: "flatpak",
+    });
+  }
+
+  if (source.releasePageUrl) {
+    options.push({
+      id: `${binary}-release-page`,
+      binary,
+      kind: "link",
+      channel: null,
+      downloadUrl: null,
+      fileName: null,
+      version: null,
+      htmlUrl: null,
+      linkUrl: source.releasePageUrl,
+      linkKind: "release_page",
+    });
+  }
+
+  return options;
+};
+
+/** Build the install options offered for an emulator system. */
 export const getEmulatorInstallOptions = async (
-  _system: EmulatorSystem
-): Promise<ResolvedInstallOption[]> => [];
+  system: EmulatorSystem
+): Promise<ResolvedInstallOption[]> => {
+  const binary = KNOWN_BINARIES[system].binary;
+  const source = KNOWN_BINARIES[primarySystemForBinary(binary)].install;
+
+  const options: ResolvedInstallOption[] = [];
+
+  const direct = await resolveGithubOption(binary, source);
+  if (direct) options.push(direct);
+
+  options.push(...linkOption(binary, source));
+
+  return options;
+};
+
+/** Resolve a single option by id (used by the installer to find the URL). */
+export const resolveInstallOptionById = async (
+  binary: EmulatorBinary,
+  optionId: string
+): Promise<ResolvedInstallOption | null> => {
+  const system = primarySystemForBinary(binary);
+  const options = await getEmulatorInstallOptions(system);
+  return options.find((option) => option.id === optionId) ?? null;
+};

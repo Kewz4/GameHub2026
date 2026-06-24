@@ -1,11 +1,170 @@
+import axios from "axios";
+import {
+  chmodSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import path from "node:path";
+import { pipeline } from "node:stream/promises";
+
 import type {
   EmulatorBinary,
   EmulatorInstallProgress,
   EmulatorInstallResult,
+  EmulatorSystem,
 } from "@types";
+import { emulatorsInstallPath } from "@main/constants";
+import { logger } from "../logger";
+import { SevenZip } from "../7zip";
+import { ALL_SYSTEMS, KNOWN_BINARIES } from "./known-binaries";
+import { resolveInstallOptionById } from "./emulator-install-sources";
+import { updateEmulatorConfig } from "./emulators-repository";
+
+const isWindows = process.platform === "win32";
+
+const systemsForBinary = (binary: EmulatorBinary): EmulatorSystem[] =>
+  ALL_SYSTEMS.filter((system) => KNOWN_BINARIES[system].binary === binary);
+
+const executableNamesFor = (binary: EmulatorBinary): string[] => {
+  const known = KNOWN_BINARIES[systemsForBinary(binary)[0]];
+  return isWindows ? known.windowsNames : known.linuxNames;
+};
+
+/** Recursively locate the emulator executable inside an extracted directory. */
+const findExecutable = (root: string, names: string[]): string | null => {
+  const lowerNames = names.map((n) => n.toLowerCase());
+  const stack = [root];
+
+  while (stack.length > 0) {
+    const dir = stack.pop()!;
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const full = path.join(dir, entry);
+      let isDir = false;
+      try {
+        isDir = statSync(full).isDirectory();
+      } catch {
+        continue;
+      }
+
+      if (isDir) {
+        stack.push(full);
+      } else if (lowerNames.includes(entry.toLowerCase())) {
+        return full;
+      }
+    }
+  }
+
+  return null;
+};
+
+const downloadToFile = async (
+  url: string,
+  destPath: string,
+  onProgress: (loaded: number, total: number) => void
+): Promise<void> => {
+  const response = await axios.get<NodeJS.ReadableStream>(url, {
+    responseType: "stream",
+    timeout: 0,
+    maxRedirects: 5,
+  });
+
+  const total = Number(response.headers["content-length"] ?? 0);
+  let loaded = 0;
+  response.data.on("data", (chunk: Buffer) => {
+    loaded += chunk.length;
+    onProgress(loaded, total);
+  });
+
+  await pipeline(response.data, createWriteStream(destPath));
+};
 
 export const installEmulator = async (
-  _binary: EmulatorBinary,
-  _optionId: string,
-  _onProgress: (p: EmulatorInstallProgress) => void
-): Promise<EmulatorInstallResult> => ({ ok: false, reason: "Not implemented" });
+  binary: EmulatorBinary,
+  optionId: string,
+  onProgress: (p: EmulatorInstallProgress) => void
+): Promise<EmulatorInstallResult> => {
+  const emit = (
+    phase: EmulatorInstallProgress["phase"],
+    extra?: Partial<EmulatorInstallProgress>
+  ) => onProgress({ binary, optionId, phase, ...extra });
+
+  try {
+    const option = await resolveInstallOptionById(binary, optionId);
+    if (!option || !option.downloadUrl) {
+      return { ok: false, reason: "No downloadable asset for this option" };
+    }
+
+    const installDir = path.join(emulatorsInstallPath, binary);
+    // Fresh install — clear any previous build so stale executables don't win.
+    if (existsSync(installDir)) {
+      rmSync(installDir, { recursive: true, force: true });
+    }
+    mkdirSync(installDir, { recursive: true });
+
+    const fileName = option.fileName ?? `${binary}-download`;
+    const archivePath = path.join(installDir, fileName);
+
+    emit("downloading", { loaded: 0, total: 0 });
+    await downloadToFile(option.downloadUrl, archivePath, (loaded, total) =>
+      emit("downloading", { loaded, total })
+    );
+
+    let executablePath: string | null = null;
+
+    if (option.kind === "linux-appimage") {
+      // AppImages run directly; just make them executable.
+      chmodSync(archivePath, 0o755);
+      executablePath = archivePath;
+    } else {
+      emit("extracting");
+      await SevenZip.extractFile({
+        filePath: archivePath,
+        outputPath: installDir,
+      });
+      rmSync(archivePath, { force: true });
+      executablePath = findExecutable(installDir, executableNamesFor(binary));
+    }
+
+    if (!executablePath || !existsSync(executablePath)) {
+      return { ok: false, reason: "Could not locate the emulator executable" };
+    }
+
+    if (!isWindows) {
+      try {
+        chmodSync(executablePath, 0o755);
+      } catch {
+        /* best effort */
+      }
+    }
+
+    // Persist the executable for every system this binary serves.
+    const now = Date.now();
+    for (const system of systemsForBinary(binary)) {
+      await updateEmulatorConfig(system, (current) => ({
+        ...current,
+        executablePath,
+        detectedVersion: option.version ?? current.detectedVersion,
+        detectedAt: now,
+      }));
+    }
+
+    emit("done", { path: executablePath });
+    logger.log(`Emulator installed: ${binary} → ${executablePath}`);
+    return { ok: true, path: executablePath };
+  } catch (err) {
+    logger.error(`Emulator install failed for ${binary}`, err);
+    emit("error", { reason: String(err) });
+    return { ok: false, reason: String(err) };
+  }
+};

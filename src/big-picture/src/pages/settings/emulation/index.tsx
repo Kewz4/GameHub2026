@@ -22,12 +22,38 @@ import { CloudSavesSection } from "./cloud-saves-section";
 import { MemoryCardsSection } from "./memory-cards-section";
 import "./styles.scss";
 
-const SYSTEMS: EmulatorSystem[] = ["ps1", "ps2", "ps3"];
+const SYSTEMS: EmulatorSystem[] = [
+  "ps1",
+  "ps2",
+  "ps3",
+  "psp",
+  "n3ds",
+  "nds",
+  "dsi",
+  "n64",
+  "gb",
+  "gbc",
+  "gba",
+  "wiiu",
+  "wii",
+  "gc",
+];
 
 const SYSTEM_LABELS: Record<EmulatorSystem, string> = {
-  ps1: "PlayStation 1",
+  ps1: "PlayStation",
   ps2: "PlayStation 2",
   ps3: "PlayStation 3",
+  psp: "PSP",
+  n3ds: "Nintendo 3DS",
+  nds: "Nintendo DS",
+  dsi: "Nintendo DSi",
+  n64: "Nintendo 64",
+  gb: "Game Boy",
+  gbc: "Game Boy Color",
+  gba: "Game Boy Advance",
+  wiiu: "Wii U",
+  wii: "Wii",
+  gc: "GameCube",
 };
 
 interface EmulationDetailProps {
@@ -43,7 +69,7 @@ function EmulationDetail({ config, onBack }: Readonly<EmulationDetailProps>) {
     setFocus(EMULATION_DETAIL_BACK_BUTTON_ID);
   }, [setFocus]);
 
-  const isPs3 = config.system === "ps3";
+  const hasMemcards = config.system === "ps1" || config.system === "ps2";
   const [cloudRefreshKey, setCloudRefreshKey] = useState(0);
 
   return (
@@ -68,7 +94,7 @@ function EmulationDetail({ config, onBack }: Readonly<EmulationDetailProps>) {
           </h2>
         </div>
 
-        {!isPs3 && (
+        {hasMemcards && (
           <>
             <VerticalFocusGroup
               regionId={EMULATION_DETAIL_MEMORY_CARDS_REGION_ID}
@@ -93,7 +119,7 @@ function EmulationDetail({ config, onBack }: Readonly<EmulationDetailProps>) {
           </>
         )}
 
-        {isPs3 && (
+        {!hasMemcards && (
           <p className="emulation-settings__ps3-note">
             {t("ps3_cloud_saves_coming_soon", "PS3 cloud saves coming soon.")}
           </p>

@@ -26,12 +26,26 @@ const OFFICIAL_WEBSITES: Record<EmulatorBinary, string> = {
   duckstation: "https://www.duckstation.org/",
   pcsx2: "https://pcsx2.net/",
   rpcs3: "https://rpcs3.net/",
+  ppsspp: "https://www.ppsspp.org/download/",
+  azahar: "https://github.com/azahar-emu/azahar/releases",
+  ralibretro: "https://github.com/RetroAchievements/RALibretro/releases",
+  raproject64: "https://github.com/RetroAchievements/RAProject64/releases",
+  ravba: "https://github.com/RetroAchievements/RAVBA/releases",
+  cemu: "https://github.com/cemu-project/Cemu/releases",
+  dolphin: "https://dolphin-emu.org/download/",
 };
 
 const ARTICLE_KEYS: Record<EmulatorBinary, string> = {
   duckstation: "install-duckstation",
   pcsx2: "install-pcsx2",
   rpcs3: "install-rpcs3",
+  ppsspp: "install-ppsspp",
+  azahar: "install-azahar",
+  ralibretro: "install-ralibretro",
+  raproject64: "install-raproject64",
+  ravba: "install-ravba",
+  cemu: "install-cemu",
+  dolphin: "install-dolphin",
 };
 
 const SEMVER_RE = /v?\d{1,9}\.\d{1,9}(?:\.\d{1,9})?/;

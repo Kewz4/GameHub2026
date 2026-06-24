@@ -66,6 +66,9 @@ export const achievementSoundPath = app.isPackaged
 
 export const backupsPath = path.join(getUserDataPath(), "Backups");
 
+/** Root folder under which portable emulator builds are installed. */
+export const emulatorsInstallPath = path.join(getUserDataPath(), "emulators");
+
 export const appVersion = app.getVersion() + (isStaging ? "-staging" : "");
 
 export const ASSETS_PATH = path.join(getUserDataPath(), "Assets");

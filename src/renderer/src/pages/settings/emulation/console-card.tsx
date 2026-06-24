@@ -9,6 +9,17 @@ import { formatRelativeShort } from "./relative-time";
 import ps1Art from "@renderer/assets/emulation/ps1.png";
 import ps2Art from "@renderer/assets/emulation/ps2.png";
 import ps3Art from "@renderer/assets/emulation/ps3.png";
+import pspArt from "@renderer/assets/emulation/psp.png";
+import n3dsArt from "@renderer/assets/emulation/n3ds.png";
+import ndsArt from "@renderer/assets/emulation/nds.png";
+import dsiArt from "@renderer/assets/emulation/dsi.png";
+import n64Art from "@renderer/assets/emulation/n64.png";
+import gbArt from "@renderer/assets/emulation/gb.png";
+import gbcArt from "@renderer/assets/emulation/gbc.png";
+import gbaArt from "@renderer/assets/emulation/gba.png";
+import wiiuArt from "@renderer/assets/emulation/wiiu.png";
+import wiiArt from "@renderer/assets/emulation/wii.png";
+import gcArt from "@renderer/assets/emulation/gc.png";
 
 import "./console-card.scss";
 
@@ -16,6 +27,17 @@ const ART: Record<string, string> = {
   ps1: ps1Art,
   ps2: ps2Art,
   ps3: ps3Art,
+  psp: pspArt,
+  n3ds: n3dsArt,
+  nds: ndsArt,
+  dsi: dsiArt,
+  n64: n64Art,
+  gb: gbArt,
+  gbc: gbcArt,
+  gba: gbaArt,
+  wiiu: wiiuArt,
+  wii: wiiArt,
+  gc: gcArt,
 };
 
 interface ConsoleCardProps {
