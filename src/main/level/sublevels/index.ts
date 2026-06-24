@@ -14,3 +14,4 @@ export * from "./exophase-cache";
 export * from "./playnite-playtime-cache";
 export * from "./sgdb-search-cache";
 export * from "./emulators";
+export * from "./minerva-catalogue";

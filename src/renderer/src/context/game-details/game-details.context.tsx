@@ -13,6 +13,7 @@ import {
 
 import type {
   DownloadSource,
+  EmulatorSystem,
   GameRepack,
   GameShop,
   GameStats,
@@ -20,6 +21,37 @@ import type {
   ShopDetailsWithAssets,
   UserAchievement,
 } from "@types";
+
+/**
+ * Maps a Launchbox platform string to an EmulatorSystem for minerva lookups.
+ * Extends the main-process platformToSystem helper to cover all minerva-supported systems.
+ */
+function platformToEmulatorSystem(
+  platform: string | null | undefined
+): EmulatorSystem | null {
+  if (!platform) return null;
+  const p = platform.toLowerCase();
+  if (p.includes("playstation 3") || p.includes("ps3")) return null; // ps3 not in minerva
+  if (p.includes("playstation 2") || p.includes("ps2")) return "ps2";
+  if (
+    p.includes("playstation portable") ||
+    p.includes("psp")
+  )
+    return "psp";
+  if (p.includes("playstation") || p.includes("ps1") || p.includes("psx"))
+    return "ps1";
+  if (p.includes("nintendo 64") || p.includes("n64")) return "n64";
+  if (p.includes("game boy advance") || p.includes("gba")) return "gba";
+  if (p.includes("game boy color") || p.includes("gbc")) return "gbc";
+  if (p.includes("game boy")) return "gb";
+  if (p.includes("nintendo ds") || p.includes("nds")) return "nds";
+  if (p.includes("nintendo dsi") || p.includes("dsi")) return "dsi";
+  if (p.includes("nintendo 3ds") || p.includes("3ds")) return "n3ds";
+  if (p.includes("wii u") || p.includes("wiiu")) return "wiiu";
+  if (p.includes("gamecube") || p.includes("gc")) return "gc";
+  if (p.includes("wii")) return "wii";
+  return null;
+}
 
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
@@ -559,6 +591,31 @@ export function GameDetailsContextProvider({
 
     fetchDownloadSources();
   }, [shop, objectId]);
+
+  // For launchbox (emulated) games, fetch minerva-archive.org ROM sources
+  useEffect(() => {
+    if (!game || game.shop !== "launchbox" || !gameTitle) return;
+
+    const system = platformToEmulatorSystem(game.platform);
+    if (!system) return;
+
+    window.electron
+      .getMinervaDownloadOptions(system, gameTitle)
+      .then((minervaRepacks) => {
+        if (minervaRepacks && minervaRepacks.length > 0) {
+          setRepacks((prev) => {
+            const existingIds = new Set(prev.map((r) => r.id));
+            const newRepacks = minervaRepacks.filter(
+              (r) => !existingIds.has(r.id)
+            );
+            return [...prev, ...newRepacks];
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("[minerva] Failed to fetch download options:", err);
+      });
+  }, [game?.objectId, gameTitle]);
 
   const getDownloadsPath = async () => {
     if (userPreferences?.downloadsPath) return userPreferences.downloadsPath;

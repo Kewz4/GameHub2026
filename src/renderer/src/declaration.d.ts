@@ -1026,6 +1026,10 @@ declare global {
       saveId: string,
       label: string
     ) => Promise<EmulationCloudSave>;
+    getMinervaDownloadOptions: (
+      system: EmulatorSystem,
+      title: string
+    ) => Promise<import("@types").GameRepack[]>;
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;

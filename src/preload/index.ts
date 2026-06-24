@@ -1512,6 +1512,9 @@ contextBridge.exposeInMainWorld("electron", {
   ): Promise<string | null> =>
     ipcRenderer.invoke("getProcessedFriendImage", imageUrl, options),
 
+  getMinervaDownloadOptions: (system: EmulatorSystem, title: string) =>
+    ipcRenderer.invoke("getMinervaDownloadOptions", system, title),
+
   // Cloud debugger
   runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),
 
