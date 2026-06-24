@@ -517,9 +517,7 @@ export class WindowManager {
       // "Hydra" copy. Runs on every load so sign-in → sign-up navigations
       // stay branded.
       authWindow.webContents.insertCSS(AUTH_REBRAND_CSS).catch(() => {});
-      authWindow.webContents
-        .executeJavaScript(AUTH_REBRAND_JS)
-        .catch(() => {});
+      authWindow.webContents.executeJavaScript(AUTH_REBRAND_JS).catch(() => {});
     });
 
     this.bindAuthNavigation(authWindow.webContents, () => authWindow.close());
