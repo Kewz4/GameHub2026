@@ -33,11 +33,7 @@ function platformToEmulatorSystem(
   const p = platform.toLowerCase();
   if (p.includes("playstation 3") || p.includes("ps3")) return null; // ps3 not in minerva
   if (p.includes("playstation 2") || p.includes("ps2")) return "ps2";
-  if (
-    p.includes("playstation portable") ||
-    p.includes("psp")
-  )
-    return "psp";
+  if (p.includes("playstation portable") || p.includes("psp")) return "psp";
   if (p.includes("playstation") || p.includes("ps1") || p.includes("psx"))
     return "ps1";
   if (p.includes("nintendo 64") || p.includes("n64")) return "n64";

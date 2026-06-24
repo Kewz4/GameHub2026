@@ -176,9 +176,9 @@ export async function catalogueForSystem(
     const romPaths = await scrapeListing(platformPath);
     for (const romPath of romPaths) {
       // romPath looks like /rom?name=.%2FNo-Intro%2F...%2Ffilename.zip
-      const nameParam = new URL(
-        `${MINERVA_BASE}${romPath}`
-      ).searchParams.get("name");
+      const nameParam = new URL(`${MINERVA_BASE}${romPath}`).searchParams.get(
+        "name"
+      );
       if (!nameParam) continue;
       // Extract just the filename (last segment)
       const filename = decodeURIComponent(nameParam).split("/").pop() ?? "";
