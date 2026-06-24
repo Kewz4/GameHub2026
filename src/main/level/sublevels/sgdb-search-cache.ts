@@ -13,9 +13,9 @@ export interface SgdbSearchCacheEntry {
  * (trimmed + lower-cased) title. Survives restarts so we don't re-query the
  * SGDB autocomplete endpoint for every ROM on every scan.
  */
-export const sgdbSearchCacheSublevel = db.sublevel<string, SgdbSearchCacheEntry>(
-  levelKeys.sgdbSearchCache,
-  {
-    valueEncoding: "json",
-  }
-);
+export const sgdbSearchCacheSublevel = db.sublevel<
+  string,
+  SgdbSearchCacheEntry
+>(levelKeys.sgdbSearchCache, {
+  valueEncoding: "json",
+});

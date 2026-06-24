@@ -20,16 +20,16 @@ export interface ParsedRomFilename {
 const REGION_MAP: Record<string, string> = {
   usa: "USA",
   us: "USA",
-  "u": "USA",
+  u: "USA",
   europe: "Europe",
   eur: "Europe",
-  "e": "Europe",
+  e: "Europe",
   japan: "Japan",
   jpn: "Japan",
   jap: "Japan",
-  "j": "Japan",
+  j: "Japan",
   world: "World",
-  "w": "World",
+  w: "World",
 };
 
 const stripExtension = (fileName: string): string => {

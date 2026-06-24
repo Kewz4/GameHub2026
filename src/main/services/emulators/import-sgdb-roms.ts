@@ -2,20 +2,13 @@ import { createHash } from "node:crypto";
 
 import { getSteamGridDbArtwork } from "@main/services/steamgriddb";
 import { logger } from "@main/services/logger";
-import {
-  gamesShopAssetsSublevel,
-  gamesSublevel,
-  levelKeys,
-} from "@main/level";
+import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import type { ClassicsDisc, EmulatorSystem } from "@types";
 
 import { KNOWN_BINARIES } from "./known-binaries";
 import { scanRomFolder } from "./scan-rom-folder";
 import { parseRomFilename } from "./parse-rom-filename";
-import {
-  updateEmulatorConfig,
-  recomputeTotals,
-} from "./emulators-repository";
+import { updateEmulatorConfig, recomputeTotals } from "./emulators-repository";
 import { randomUUID } from "node:crypto";
 import type { RomFolder } from "@types";
 
@@ -178,7 +171,9 @@ export async function importSgdbRoms(
         downloadSources: [],
         updatedAt: Date.now(),
       })
-      .catch((err) => logger.error("[sgdb-import] could not cache assets", err));
+      .catch((err) =>
+        logger.error("[sgdb-import] could not cache assets", err)
+      );
 
     const existing = await gamesSublevel.get(gameKey).catch(() => undefined);
     if (existing) {
