@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global globalThis */
 /**
  * Playwright + Electron smoke tests for emulator game bugs:
  *
@@ -55,7 +56,8 @@ const OBJ_ID_URL = encodeURIComponent(OBJ_ID); // for hash router
 const COVER_URL = "https://cdn.steamgriddb.com/grid/mk-cover.png";
 const HERO_URL = "https://cdn.steamgriddb.com/hero/mk-hero.png";
 const LOGO_URL = "https://cdn.steamgriddb.com/logo/mk-logo.png";
-const DESCRIPTION = "A fighting game featuring brutal kombat between warriors from many realms.";
+const DESCRIPTION =
+  "A fighting game featuring brutal kombat between warriors from many realms.";
 
 // ─── Launch app ──────────────────────────────────────────────────────────────
 
@@ -186,7 +188,9 @@ console.log("✓ LevelDB seeded");
 
 // ─── TEST 1: getGameShopDetails — launchbox with full seeded data ─────────────
 
-console.log("\n[TEST 1] getGameShopDetails IPC: launchbox with full seeded data");
+console.log(
+  "\n[TEST 1] getGameShopDetails IPC: launchbox with full seeded data"
+);
 
 // Preload signature: getGameShopDetails(objectId, shop, language)
 const shopDetails = await mainWin
@@ -265,7 +269,10 @@ if (!shopDetails) {
   if (shopDetails.heroImageUrl === HERO_URL) {
     ok("assets.libraryHeroImageUrl from gamesShopAssets");
   } else {
-    fail("assets.libraryHeroImageUrl wrong", shopDetails.heroImageUrl ?? "null");
+    fail(
+      "assets.libraryHeroImageUrl wrong",
+      shopDetails.heroImageUrl ?? "null"
+    );
   }
 
   if (shopDetails.assetsShop === "launchbox") {
@@ -355,7 +362,9 @@ const bareDetails = await mainWin
   .catch((e) => ({ __error: e.message }));
 
 if (!bareDetails) {
-  fail("bare-seed: returned null (no gamesShopAssets row, meta fallback failed)");
+  fail(
+    "bare-seed: returned null (no gamesShopAssets row, meta fallback failed)"
+  );
 } else if (bareDetails.__error) {
   fail("bare-seed: IPC threw", bareDetails.__error.slice(0, 80));
 } else {
@@ -378,7 +387,9 @@ if (!bareDetails) {
 
 // ─── TEST 3: Game details page UI ─────────────────────────────────────────────
 
-console.log("\n[TEST 3] Game details page: navigate renderer to launchbox game");
+console.log(
+  "\n[TEST 3] Game details page: navigate renderer to launchbox game"
+);
 
 // Skip onboarding and clean up any null-title LevelDB entries from prior test runs
 await mainWin
@@ -463,7 +474,9 @@ if (
 
 // ─── TEST 4: Download options — launchbox must use minerva, not PC repacks ────
 
-console.log("\n[TEST 4] Download options: launchbox uses minerva, not PC repacks");
+console.log(
+  "\n[TEST 4] Download options: launchbox uses minerva, not PC repacks"
+);
 
 const spyResult = await mainWin
   .evaluate(
