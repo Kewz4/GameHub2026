@@ -17,3 +17,4 @@ export * from "./emulators";
 export * from "./minerva-catalogue";
 export * from "./gamehub-meta";
 export * from "./ra-game-list-cache";
+export * from "./hltb-cache";

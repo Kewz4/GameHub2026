@@ -137,6 +137,18 @@ export function Sidebar({
   const { numberFormatter } = useFormat();
 
   useEffect(() => {
+    // Console/emulated games aren't in the Hydra backend, so resolve HLTB live
+    // by title (cached in main); PC games use the server-side endpoint.
+    if (shop === "launchbox") {
+      if (!gameTitle) return;
+      setHowLongToBeat({ isLoading: true, data: null });
+      window.electron
+        .getConsoleHowLongToBeat(gameTitle)
+        .then((data) => setHowLongToBeat({ isLoading: false, data }))
+        .catch(() => setHowLongToBeat({ isLoading: false, data: null }));
+      return;
+    }
+
     if (effectiveObjectId) {
       setHowLongToBeat({ isLoading: true, data: null });
 
@@ -154,7 +166,7 @@ export function Sidebar({
           setHowLongToBeat({ isLoading: false, data: null });
         });
     }
-  }, [effectiveObjectId, effectiveShop]);
+  }, [effectiveObjectId, effectiveShop, shop, gameTitle]);
 
   useEffect(() => {
     if (!shouldShowProtonFeatures || !effectiveObjectId) {

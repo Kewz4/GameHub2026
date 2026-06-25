@@ -1037,6 +1037,9 @@ declare global {
       title: string,
       system?: EmulatorSystem
     ) => Promise<import("@types").GameRepack[]>;
+    getConsoleHowLongToBeat: (
+      title: string
+    ) => Promise<import("@types").HowLongToBeatCategory[] | null>;
     searchMinervaGames: (
       query: string,
       limit?: number
