@@ -5,7 +5,9 @@
     "ghostrider": {
       "title": "Ghost Rider",
       "description": "Produced in part by Marvel's dedicated game production division, this game is based on the Marvel comic and 2006 motion picture starring Nick Cage. The tormented superhero/anti-hero Johnny Blaze, once a heroic daredevil cycle rider before making a deal with the devil for his soul in exchange for the life of his father, rides in this action-packed videogame adventure.",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/2800a901597876b19a05fa2ba197a966.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/2f589949a81999d2fb73f269ef068ef1.jpg",
@@ -16,7 +18,9 @@
     "medalofhonorvanguard": {
       "title": "Medal of Honor - Vanguard",
       "description": "Players take on the role of Sgt. Frank Keegan, a member of the 82nd Airborne Division, and 17th Airborne Division fighting the Axis forces of Nazi Germany and the Kingdom of Italy.\n\nThe first mission, which is Operation Husky places Keegan in a C-47 aircraft somewhere off the coast of Sicily Suddenly, the plane explodes, and Keegan is thrown out. He manages to deploy his parachute and make it to the ground, where he fights through a town against Italian forces. Once through the town, they make their way around the coast to a bunker somewhere in Sicily, and shoot their way in, defeating the German forces inside. For this level, you are armed with a Thompson submachine gun, you may pick up weapons such as the MP40 and the M1 Garand rifle.",
-      "genres": ["Shooter"],
+      "genres": [
+        "Shooter"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/42fb4f55c16363cbbdd9d66489f6676b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/261bc89527e8c6c258df758daedcdc58.png",
@@ -27,7 +31,9 @@
     "mobilesuitgundamseedneverendingtomorrow": {
       "title": "Mobile Suit Gundam Seed - Never Ending Tomorrow",
       "description": "Mobile Suit Gundam Seed: Never Ending Tomorrow is an 3D action game based on the Mobile Suit Gundam SEED animated series. The game takes place in the future where the human race split into two groups. These are the genetically enhanced Coordinators and unmodified Naturals. A war between the two faction broke out in the year C.E. 70, quickly escalating into a full scale war. The battles are waged on earth and in space. In the story mode the player can take on the role of Kira Yamato of the Earth Alliance or Athrun Zala of the ZAFT forces.\n\nAside from the story mode there is also a mission mode and VS mode. In the game the player takes control of a mech that has the ability to run on the ground and fly in the air. The player can attack enemies with projectiles and with the mechs fists. The game offers over 50 Mobile Suits.",
-      "genres": ["Simulator"],
+      "genres": [
+        "Simulator"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/7ea8b2b4e4b8e23894e6709c539afd9e.png",
       "libraryImageUrl": null,
@@ -38,7 +44,11 @@
     "ghostmasterthegravenvillechronicles": {
       "title": "Ghost Master - The Gravenville Chronicles",
       "description": "Ghost Master: The Gravenville Chronicles is the console version of the PC game Ghost Master. In this strategy game, you become the scourge of humanity by managing haunting teams consisting of various ghosts. The levels, usually inspired by famous scenes from horror movies, require you to scare mortals and complete additional objectives such as freeing trapped ghosts. Deployed ghosts need to be bound to certain objects, called fetters, that match their type.",
-      "genres": ["Platform", "Puzzle", "Strategy"],
+      "genres": [
+        "Platform",
+        "Puzzle",
+        "Strategy"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/d095fccf8bb59b52688834032be4dcd3.png",
       "libraryImageUrl": null,
@@ -60,7 +70,10 @@
     "atvoffroadfury3": {
       "title": "ATV Offroad Fury 3",
       "description": "ATV Offroad Fury 3 gives players intense, free-roaming offroad racing! Playable from both first- and third-person perspectives, with all-new modes of play. Race in more than 30 unique environments with six distinct terrain types including snow, dirt, mud, ice, water and grass, as well as compete in eight exciting mini-games!",
-      "genres": ["Racing", "Sport"],
+      "genres": [
+        "Racing",
+        "Sport"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/995b2a2582eb4efaf3d68217dae1ed6a.png",
       "libraryImageUrl": null,
@@ -93,7 +106,9 @@
     "speedkings": {
       "title": "Speed Kings",
       "description": null,
-      "genres": ["Racing"],
+      "genres": [
+        "Racing"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4d081fc4127237f7e21fab7546deb177.jpg",
       "libraryImageUrl": null,
@@ -104,7 +119,11 @@
     "vectorman": {
       "title": "Vectorman",
       "description": "By the year 2049, Earth has been turned into a toxic waste dump. Humankind has fled into space leaving behind an army of mechanized “Orbots” to clean up the mess.\nBut when the Orbot leader “WarHead” goes haywire and starts a global revolt against the humans, it falls on the shoulders of the last Orbot loyal to its human masters to save the planet.",
-      "genres": ["Platform", "Adventure", "Arcade"],
+      "genres": [
+        "Platform",
+        "Adventure",
+        "Arcade"
+      ],
       "releaseYear": 1995,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/d14c453c305c50a1647ccedf88ec0268.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/d46daa696c698bb1d839a818d061169f.png",
@@ -126,7 +145,9 @@
     "urbanreign": {
       "title": "Urban Reign",
       "description": "Urban Reign is a Namco-produced 3D brawler, done in the tradition of Double Dragon and Final Fight.",
-      "genres": ["Hack and slash/Beat 'em up"],
+      "genres": [
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/792ca3582ecbe9f10b573a05455edd10.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/6f39194d3df14d057e8ba796fcae6942.png",
@@ -137,7 +158,10 @@
     "persona3fes": {
       "title": "Persona 3 FES",
       "description": "Shin Megami Tensei: Persona 3 FES is an add-on disc for Persona 3 containing updates to the original game (referred in the game as \"The Journey\"), as well as a new epilogue story, The Answer, in which the player controls Aigis. The subtitle \"Fes\" is derived from the word \"festival\".",
-      "genres": ["Role-playing (RPG)", "Adventure"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Adventure"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5011c560a9233c63cf0e6cb6d06cf22c.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/f7d2ffbbe47e35ca2a3a9120a255680a.png",
@@ -192,7 +216,9 @@
     "maxpayne2thefallofmaxpayne": {
       "title": "Max Payne 2 - The Fall of Max Payne",
       "description": "Max Payne 2 is a third-person shooter, in which the player assumes the role of Max Payne, but also plays as Mona Sax in a few levels. Initially, the player's weapon is a 9mm pistol. As they progress, players access other weapons including other handguns, shotguns, submachine guns, assault rifles, sniper rifles, and hand-thrown weapons. To move the game along, the player is told what the next objective is through Max's internal monologue, in which Max iterates what his next steps should be.",
-      "genres": ["Shooter"],
+      "genres": [
+        "Shooter"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/275a5602cd91a468a0e10c226a03a39c.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/14c4f36143b4b09cbc320d7c95a50ee7.png",
@@ -203,7 +229,10 @@
     "reddeadrevolver": {
       "title": "Red Dead Revolver",
       "description": "Red Dead Revolver is a 2004 action-adventure game developed by Rockstar San Diego and published by Rockstar Games. It is the first entry in the Red Dead series and was released for the PlayStation 2 and Xbox in May 2004.\n\nSet in the 1880s, during the American frontier, the single-player story follows bounty hunter Red Harlow's quest for revenge after the murder of his parents.\n\nA local multiplayer mode allows up to four players to face off against each other or AI-controlled bots in free-for-all battles.",
-      "genres": ["Shooter", "Adventure"],
+      "genres": [
+        "Shooter",
+        "Adventure"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/090f8ff99e837c9370df1ab1e806fd8e.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/718876ebd04b7c9cf65e2f6ed6000eec.png",
@@ -214,7 +243,11 @@
     "lapucelle": {
       "title": "La Pucelle",
       "description": "Prier and her brother Culotte are novices with the demon-hunting organization, La Pucelle. They've just passed their final exams and are ready to do real work fighting demons and zombies, but quickly find themselves embroiled in a series of plots orchestrated by a rival church with dark intentions. The gameplay is played on a tactical map, as teams up to six characters work to clear boards of enemies and dark energy. The unique \"purify\" command allows players to recruit monsters to their team and execute complex \"miracle\" energy attacks.\n\nThe game was ported to the PlayStation Portable in Japan on November 26, 2009 as La Pucelle Ragnarok.",
-      "genres": ["Role-playing (RPG)", "Strategy", "Turn-based strategy (TBS)"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Strategy",
+        "Turn-based strategy (TBS)"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/15012959432b5cf52188a5ae81e89342.jpg",
       "libraryImageUrl": null,
@@ -225,7 +258,11 @@
     "ratchetclank": {
       "title": "Ratchet & Clank",
       "description": "Ratchet & Clank is a platform/adventure game in a similar vein to the 3D versions of the Rayman, Sonic, Mario, or other games. It involves the two protagonists Ratchet, a furry alien creature, and Clank, a nerdy little robot, going on a quest to find Captain Qwark and ultimately to help save the galaxy.\n\nRatchet & Clank includes many of the best features of previous similar games, but makes itself unique in a number of ways. Firstly each of the game's levels are huge sweeping vistas with extremely detailed buildings which are visible at all times (i.e. there is no distance fog). This means that a building on the horizon is not just a \"backdrop\"; in all likelihood Ratchet will be exploring it in a few moments time. Secondly, the game includes a number of sub-games, such as a space fight sequence and a number of turret shoot-outs which are akin to Missile Command in the first person.\n\nThe game has over twenty levels (planets) and includes as many real-time cut-scenes which tell the story. Also of note is that the story is non-linear, requiring the player to return to previous levels to complete objectives and to choose between multiple paths forward. There is also a respectable array of weapons, gadgets, and accessories to find or buy as the game progresses, which offer some unique gameplay features.",
-      "genres": ["Shooter", "Platform", "Adventure"],
+      "genres": [
+        "Shooter",
+        "Platform",
+        "Adventure"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/da5a21d5b7479ac98965612f25b95a76.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/a7bd8e0eec6d65cc72740a061f9a8229.png",
@@ -236,7 +273,9 @@
     "forbiddensiren2": {
       "title": "Forbidden Siren 2",
       "description": "Forbidden Siren 2 is the second installment in the Siren series.\nThe game tells the story of several characters who become trapped on Yamijima Island, an island off the coast of mainland Japan. On August 3, 1976, an underwater cable was cut, and all power to the island was lost. During the subsequent blackout, all of the islanders disappeared and the island became deserted. Twenty-nine years later, in 2005, a magazine editor called Mamoru Itsuki is visiting the island to conduct research for an article when the ferry he and a small group of other passengers are on capsizes, after it is hit by a red tidal wave. Shortly after his arrival, a group of soldiers crash land on the island after their helicopter has engine troubles. They must all find ways to survive the island's \"monsters\", the shibito.\n\nThe game is played through several character perspectives, each with his or her own strengths and weaknesses, through an overlapping timeline of the fateful night that alternates between the present and the past. The story can unfold in different ways with, in many cases, two or more different versions of a level, which will have slightly different objectives than the original. If the player is thorough and plays through these optional versions, the story and characters may develop even further than before",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/e5dfefad5c4c792ed58626768629d626.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/08d562c1eedd30b15b51e35d8486d14c.png",
@@ -247,7 +286,10 @@
     "dancedancerevolutionextreme": {
       "title": "Dance Dance Revolution Extreme",
       "description": "Dance Dance Revolution Extreme is a music video game by Konami and is the eighth release in the main Dance Dance Revolution (DDR) series. It was released on December 25, 2002 for Japanese arcades, on October 9, 2003 for the Japanese PlayStation 2, and on September 21, 2004 for the North American PlayStation 2. This game is the ninth release in North America, but despite having the same name as its Japanese counterpart, its gameplay and soundtrack is significantly different[1] and won the Video Music Awards in 2005 on MTV for Best Video Game Soundtrack.\n\nWhile the PlayStation 2 version came out in North America, the arcade version was exclusive to Japan. Despite this, the arcade version was exported to many arcades in the USA (most of them being bootlegged). Dance Dance Revolution Extreme was the last game in the DDR arcade franchise for four years until Dance Dance Revolution SuperNova in 2006. The arcade release of the game contains one of the largest soundtracks of any DDR game, featuring 240 songs, as well as music from other Bemani music titles. Konami issued an in-game thank you to the fans of Dance Dance Revolution and announced a rejuvenation of the entire series, but did not go into details. Konami's announcement led people to believe that DDR Extreme might be the final DDR release or that the series might be on hiatus or rebooted in the same manner as Beatmania and Beatmania IIDX.",
-      "genres": ["Music", "Arcade"],
+      "genres": [
+        "Music",
+        "Arcade"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/2bd5e4e70ac82c255d2f51391faa6cc3.png",
       "libraryImageUrl": null,
@@ -258,7 +300,9 @@
     "kaena": {
       "title": "Kaena",
       "description": "Based on the 2003 French-Canadian CGI-animated film, 'Kaena: The Prophecy', by Xilam.",
-      "genres": ["Hack and slash/Beat 'em up"],
+      "genres": [
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/0e5b1c1f07951111a99a8b8a7a6b58b1.png",
       "libraryImageUrl": null,
@@ -269,7 +313,9 @@
     "manhunt2": {
       "title": "Manhunt 2",
       "description": "An experiment at a secret research facility has gone catastrophically wrong. Daniel Lamb and Leo Kasper are the only surviving subjects. The Pickman Project will stop at nothing to hunt them down and stop the truth from getting out.\n\nDemented screams echo around the dank asylum that has caged you for the last six years. You open your eyes. A white-coated body slumps to the floor through your shaking hands. A bloody syringe slips from your arm. Waves of confusion and paranoia crash over you. You have no idea who you are or how you got here.\n\nThe door to your cell is open. One choice. One chance. They took your life. Time to take it back.",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/220615ab910bfe2e6c6571ce2dfc8847.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/9924e991f052dc84dbb06d13401175c4.jpg",
@@ -280,7 +326,11 @@
     "jak3": {
       "title": "Jak 3",
       "description": "Jak 3 is a platform game developed by Naughty Dog for Sony's PlayStation 2 console. The game is the sequel to Jak II, and third in the series. The game features new weapons and devices, new playable areas, and a storyline that picks up after the events of the previous games. As in the other games in the series, the player takes on the dual role of recurring protagonists Jak and Daxter.",
-      "genres": ["Shooter", "Platform", "Adventure"],
+      "genres": [
+        "Shooter",
+        "Platform",
+        "Adventure"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4ee285c12ef11f247df48292946aea6d.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/29c98cb673c911ee8f9977094a220f17.png",
@@ -291,7 +341,10 @@
     "silenthill3": {
       "title": "Silent Hill 3",
       "description": "Silent Hill 3 is the third installment in the Silent Hill series. Like the previous entries, Silent Hill 3 is a survival horror combining action-based combat and puzzle-solving, but is somewhat more combat-oriented than the preceding installments. The main character is able to side-step and block some attacks, but in general shares with the other protagonists of the series their relative ineptitude in combat.",
-      "genres": ["Puzzle", "Adventure"],
+      "genres": [
+        "Puzzle",
+        "Adventure"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a228a3fd54f3096e2fdac092e7127afc.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/d1b48e98d68672e4eb9b8a8b06799ede.png",
@@ -318,7 +371,11 @@
     "ededdneddythemisedventures": {
       "title": "Ed, Edd n Eddy - The Mis-Edventures",
       "description": "Ed, Edd n Eddy: The Mis-Edventures is a 3D platform game based on the Cartoon Network animated television series Ed, Edd n Eddy. It was developed by Artificial Mind and Movement, Warner Bros. Interactive Entertainment and Cartoon Network Interactive, published by Midway Games and released on November 3, 2005, for the Nintendo GameCube, PlayStation 2, Xbox, Game Boy Advance, and PC. Midway announced the game on February 15, 2005.",
-      "genres": ["Platform", "Sport", "Adventure"],
+      "genres": [
+        "Platform",
+        "Sport",
+        "Adventure"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/8202b4da22897f56447fa25c30303c41.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ddd9d2a931bfa1f8fcde19c7a236d195.jpg",
@@ -329,7 +386,9 @@
     "tokimekimemorialgirlsside": {
       "title": "Tokimeki Memorial - Girl's Side",
       "description": "There is a fairy-tale story of a traveling prince who falls in love with a princess but are torn apart. The story is told by a young boy to the main character as a young girl in a church on the grounds of Habataki High School. The boy promises to one day return to that same place to declare his love. The protagonist returns to Habataki High School, after living away for a time due to her parents' work. While leading a normal high school life including academics, club activities and part-time work, it is also possible to become friendly with boys who can make a declaration of love on graduation day.",
-      "genres": ["Simulator"],
+      "genres": [
+        "Simulator"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/602e98532026a6cd275a22a5a3f2a09f.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/d383e70c8385c4eda23a1c87b86263dc.png",
@@ -351,7 +410,9 @@
     "atvquadpowerracing2": {
       "title": "ATV - Quad Power Racing 2",
       "description": "ATV Quad Power Racing is the sequel to ATV Quad Power Racing on the Playstation, with many new features: Choose from 10 of the top professional riders from all over the world, including Dana Creech, Kory Ellis and Tim Farr. Race through 17 massive tracks and five environments, located in challenging countries throughout the world. Get dirty and physically fight with opponents to the finish line, letting them know that you're king off-road. Over-the-top controls and game physics, allowing players to pull huge air and amazingly fun power slides. More than 20 freestyle tricks to let riders express their wild side while tearing up the competition. Several multi-player modes of play, brings the action to players and their friends. Real-life in-game sponsors, adding to the realism of the game.",
-      "genres": ["Racing"],
+      "genres": [
+        "Racing"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/0a31f1b1e10f9b52db5ce599412bbfa4.png",
       "libraryImageUrl": null,
@@ -362,7 +423,9 @@
     "lordoftheringsthearagornsquest": {
       "title": "Lord of the Rings, The - Aragorn's Quest",
       "description": "The PlayStation 2 of the game is different from the Wii and PS3 version in several ways. For example, they lack a co-op mode or the free-roam Shire over-world. However, it includes an arena mode not featured in the Wii and PS3 versions, and levels set in Caradhras, at the Gates of Erebor (including a battle with the Watcher in the Water), and in Dunharrow, areas not found in the Wii/PS3 versions. This version is played from an isometric three-quarter top-down view, and is more of an action role-playing game, featuring stat-management and experience points to spend on special abilities. The Wii/PS3 version does not feature any kind of stat-management or experience points, save for the above mentioned ability to collect items to improve the attack and defense of characters.",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": 2010,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f94191ff2bd04f45dbead4795a3d8616.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/f7f14d14e579134fc81c421644392b1a.png",
@@ -373,7 +436,10 @@
     "inthegroove2": {
       "title": "In the Groove 2",
       "description": "In The Groove 2 is the second iteration of a dance/rhythm series made by Roxor. It's extremely similar to Konami's Dance Dance Revolution and is the center of a massive gaming community for it's ability to play custom songs.",
-      "genres": ["Music", "Arcade"],
+      "genres": [
+        "Music",
+        "Arcade"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5f941d891f4176364a8bdd851aeaea78.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/7b6254e1785b9c8ca405fde33064a0e6.png",
@@ -384,7 +450,9 @@
     "highheatmajorleaguebaseball2003": {
       "title": "High Heat Major League Baseball 2003",
       "description": "High Heat Major League Baseball 2003 was the second-to-last of a series of baseball computer games, released on PlayStation 2, PC, and Game Boy Advance. The game, featuring the official licensed team and player names from all 30 MLB teams, was created by games company 3DO, who later filed for bankruptcy in May 2003.[4",
-      "genres": ["Sport"],
+      "genres": [
+        "Sport"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/75ea5c4800e50f24964aaf2ccaac86bf.png",
       "libraryImageUrl": null,
@@ -424,7 +492,9 @@
     "fordracing3": {
       "title": "Ford Racing 3",
       "description": "Flex your racing skills with some of the most famous cars in history!",
-      "genres": ["Racing"],
+      "genres": [
+        "Racing"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5e68e8883db310542f822125fde95d7b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/2aae40fa19776a62585c6b60d091354f.png",
@@ -435,7 +505,9 @@
     "burnoutrevenge": {
       "title": "Burnout Revenge",
       "description": "In Burnout Revenge, players compete in a range of racing game types with different aims. These take place within rush-hour traffic, and include circuit racing, Road Rage (where players cause as many rivals to crash as possible within a time limit, or until the player's car is wrecked), Burning Lap (a single-lap, single-racer time attack mode), Eliminator (a circuit race where every thirty seconds, the last-placed racer's car is detonated; the race continues until only one racer is left), and Crash (where the player is placed at a junction with the aim of accumulating as many \"Crash Dollars\" as possible). A new gameplay feature in Burnout Revenge is the ability to ram same-way small to medium traffic, known as \"traffic checking\", propelling the rammed car forward; the event in which a \"checked\" car hits a rival is considered as a Traffic Takedown. Traffic checking is the focus of a new race type, Traffic Attack (whereby a player must earn a set amount of Crash Dollars through checking traffic), which can be used later on.\nDuring these events, players have access to a limited amount of boost which is acquired through various dangerous driving techniques, including but not limited to driving on the wrong side of the road, tailgating opponents and drifting. Unique to the series is the concept of battling other rivals; unlike other video games in the racing genre, players are encouraged, and sometimes even required, to ram rival cars and cause traffic to crash. Causing a rival to crash is referred to as a \"Takedown\", rewarding the player by extending the length of their boost gauge and completely refilling it. In designated events, boost can also be used to activate a \"Crashbreaker\" during a crash, detonating the car and causing other nearby cars to crash. When the rival car takes the player down, the player will have to take the ultimate REVENGE by taking down the revenge rivals (which the arrow at the top of the car turned red) is referred to as \"Revenge Takedown\".\nIn the main single-player game mode, players compete in a world tour consisting of 169 events across three continents, divided into a series of 11 \"ranks\" (Rank 11 has no events). The ranks which a player has access to is determined by their \"Revenge Rank\", which increases after completing events. By increasing their Rank sufficiently, the player \"ranks up\" and unlocks the next rank of events.\nThere are 77 cars in the game, some of which can only be used for crash events. The SUVs and saloon cars are some of them.\nThe game also features support for multiplayer gameplay, both online and offline. In addition to the racing modes, the game features three types of Crash modes: Crash Battle (multiple players attempt a junction at the same time), Crash Party (players take turns at attempting junctions across several rounds), and Crash Tour (a golf-like version of Crash Party, with players attempting to accumulate a certain amount of Crash Dollars in as few attempts as possible; after the last round ends the player with the lowest score wins).\n\nThe Xbox 360 version of Burnout Revenge includes several new features and improves the graphics of the game to utilize the power of the next-gen console. The game includes 10 new crash junctions on the Crash Tour. It also includes a vastly improved online mode that introduces online Revenge Rivals. This system allows players to keep track of their number of times they have been taken out or have taken out any given player.\nThe new version also includes a new Burnout Clips feature, which allows to save 30 second clips of any offline race played and can be shared with other players over Xbox Live.",
-      "genres": ["Racing"],
+      "genres": [
+        "Racing"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/0066a9752d9cb8aaa8e517c703c5ad1f.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/e27a6e93cb00930fb0b5c1a533b0df88.png",
@@ -446,7 +518,9 @@
     "hitmanbloodmoney": {
       "title": "Hitman - Blood Money",
       "description": "Hitman Blood Money is the fourth installment of the critically acclaimed Hitman series. If Agent 47 must stay hidden, make clean ‘hits’ and leave the scene unnoticed, he will be rewarded. But if he is revealed during a violent act, his picture will end up in the papers and on wanted posters, making the job as a contract killer more difficult.\n\nThis time, Agent 47 is paid in cold, hard cash. How the money is spent will affect his passage through the game and the weapons at his disposal, resulting in a unique game-play experience for each player.",
-      "genres": ["Shooter"],
+      "genres": [
+        "Shooter"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/947681124aee4951c310b0dab1e91fea.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/9c73053694b67fdb4a722f289d7db71a.jpg",
@@ -468,7 +542,11 @@
     "ratchetclankupyourarsenal": {
       "title": "Ratchet & Clank - Up Your Arsenal",
       "description": "A 3D platform video game and the third installment in the Ratchet & Clank series. The gameplay is similar to previous games in the series but introduces new features such as a new control system and more levels in the upgrade system for weapons. It follows Ratchet and Clank's adventure through a fictional universe to defeat a robotic villain, Dr. Nefarious, who intends to destroy all organic life. Characters such as Dr. Nefarious and Sasha, a Cazar starship captain who helps Ratchet throughout the game, are introduced, and a number of characters return from the original Ratchet & Clank.",
-      "genres": ["Shooter", "Platform", "Adventure"],
+      "genres": [
+        "Shooter",
+        "Platform",
+        "Adventure"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4e2b3264ead437e99dd16b434ca7dbaf.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/919f1088f253af27dcd27c45e6b8b723.png",
@@ -490,7 +568,10 @@
     "24thegame": {
       "title": "24 - The Game",
       "description": "CTU is investigating a series of terrorist attacks in the Los Angeles area ranging from an assassination attempt on the vice president to the kidnapping of the chairman of a highly profitable corporation. CTU identifies Peter Madsen, a former employee of Jack Bauer, as the leader of the terrorist cell responsible for the attacks on Los Angeles. What remains unknown to CTU is that the attacks have been arranged by an old enemy who plans on smuggling nuclear weapons into the hands of Middle Eastern terrorist networks. Jack Bauer must shoot, drive, and interrogate his way to the truth behind the attacks.",
-      "genres": ["Shooter", "Adventure"],
+      "genres": [
+        "Shooter",
+        "Adventure"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a21b679eef9be3b2344537789192ae9b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/7af451c5ca299fcf0d689e9c7f102742.png",
@@ -501,7 +582,9 @@
     "princessprincesshimetachinoabunaihoukago": {
       "title": "Princess Princess - Himetachi no Abunai Houkago",
       "description": "A visual novel based on the anime/manga series Princess Princess. Released on October 26, 2006 for the PlayStation 2 in Japan.",
-      "genres": ["Visual Novel"],
+      "genres": [
+        "Visual Novel"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/354163093961e56922f4bc265f889e6f.png",
       "libraryImageUrl": null,
@@ -512,7 +595,10 @@
     "tinytoonadventuresdefendersoftheuniverse": {
       "title": "Tiny Toon Adventures - Defenders of the Universe",
       "description": "Tiny Toon Adventures: Defenders of the Universe is a cancelled fighting game based on the Tiny Toon Adventures franchise. It was initially scheduled for release in mid-2002, but was cancelled for unknown reasons, despite having completed development. It was developed by Treasure and originally slated for the PlayStation 2.\n\nOn 25 February 2009, a ROM image of the game was released by a member of the Internet forum Lost Levels.",
-      "genres": ["Fighting", "Platform"],
+      "genres": [
+        "Fighting",
+        "Platform"
+      ],
       "releaseYear": null,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c8d4266ed652c4d5151b69ac856e5b80.png",
       "libraryImageUrl": null,
@@ -523,7 +609,9 @@
     "daredevilthemanwithoutfear": {
       "title": "Daredevil - The Man Without Fear",
       "description": "A beat 'em up based on the Marvel hero Daredevil. It was cancelled not long before its slated release.",
-      "genres": ["Hack and slash/Beat 'em up"],
+      "genres": [
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": null,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/183ed692120ed5aa0876518d0ffaf6b8.jpg",
       "libraryImageUrl": null,
@@ -534,7 +622,9 @@
     "neocontra": {
       "title": "Neo Contra",
       "description": "Neo Contra is the sequel to Contra: Shattered Soldier. The game is a 3-D Shooter with lots of action and huge boss battles. Unlike Shattered Soldiers this game has a top-down perspective. The game is set in the future with Bill Razer's return. He teams up with a samurai, Genbei Jaguer Yagyu. The game takes about two hours to beat but will take you several tries to make it there.",
-      "genres": ["Shooter"],
+      "genres": [
+        "Shooter"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/ca813c2cf9a2986cbe5b216981208b4f.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/53bc77b31096cecd8d2400859d034b69.png",
@@ -556,7 +646,9 @@
     "brianlarainternationalcricket2007": {
       "title": "Brian Lara International Cricket 2007",
       "description": "Brian Lara International Cricket 2007 is a cricket video game from Codemasters available on PlayStation 2, PC and Xbox 360. It is endorsed by West Indian cricketer Brian Lara. It is the sequel to Brian Lara International Cricket 2005.",
-      "genres": ["Sport"],
+      "genres": [
+        "Sport"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/2b7344726223da55ea6f3f2eea3012d4.jpg",
       "libraryImageUrl": null,
@@ -567,7 +659,9 @@
     "forgottenrealmsdemonstone": {
       "title": "Forgotten Realms - Demon Stone",
       "description": "Centuries ago two unspeakably evil forces were entrapped in a Demon Stone while battling each other. Now three adventurers happen to meet by chance and discover the Demon Stone just as it breaks and releases the two spirits: a Githyanki general and a Slaad lord. Now only these three can prevent a war that will sweep over all Faerun. Forgotten Realms: Demon Stone is an action RPG set in the world of Dungeons & Dragons: Forgotten Realms. Take control of three heroes, Rannek the fighter, Illius the sorcerer, and Zhai the rogue, as they try to destroy the evil unleashed by the breaking of the Demon Stone. The player only controls one character at a time but can switch between them on the fly with the direction pad. Each character has his/her own attack and can perform combos by pressing certain button combinations, e.g. B + B or A + B + A, and even perform team attacks and a team super attack. As they gain experience they will gain levels and can purchase new moves (combos) or upgrade old ones with experience points. They also collect gold with which they purchase new weapons, armor, and accessories at the end of each chapter.",
-      "genres": ["Role-playing (RPG)"],
+      "genres": [
+        "Role-playing (RPG)"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f617f29c61ed977d2047e5b510e39f11.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/fee0927dbe268c3b7e8b38a356bfc448.png",
@@ -578,7 +672,9 @@
     "medalofhonoreuropeanassault": {
       "title": "Medal of Honor - European Assault",
       "description": "There are four overall areas the player (as Lt. William Holt) will be sent to: France, North Africa, the Soviet Union and Belgium. Each area has a set of missions for the player to complete. While some objectives will be detailed from the start, exploration of the area will cause Holt to discover more missions. Each mission consists of five elements: a primary objective, secondary objectives, killing a German officer (Nemesis battle in the game), obtaining documents from the officer and escaping. If all are completed, a gold medallion will be given. Missing one or two will gain a silver or bronze. Most missions involve Holt fighting alongside allied NPCs and working towards a common objective, often based on historical events during WWII. However, as a member of the OSS, Holt also has secondary objectives for each level, including finding documents and eliminating important German officers, such as henchmen belonging to the antagonist Graf Von Schrader.",
-      "genres": ["Shooter"],
+      "genres": [
+        "Shooter"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/35eca710783734c24b732c57f3943ad2.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/6a375c9d24d1b6f92a1f9f903f9f3aab.png",
@@ -589,7 +685,10 @@
     "sly3honoramongthieves": {
       "title": "Sly 3 - Honor Among Thieves",
       "description": "Sly 3: Honor Among Thieves is a stealth-action platformer developed by Sucker Punch Productions and released for PlayStation 2 in 2005. The game follows Sly Cooper and his crew as they recruit new allies to help unlock the Cooper Vault while facing off against Dr. M, a former member of Sly’s family lineage. It introduces new playable characters, expanded mini-games, and a 3D mode with optional glasses.",
-      "genres": ["Platform", "Adventure"],
+      "genres": [
+        "Platform",
+        "Adventure"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/7e806cac30fa898ea5f94dd6224f49c8.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/578b1543ee966633d532ab50437689a4.png",
@@ -600,7 +699,9 @@
     "motiongravureseriesharuminemoto": {
       "title": "Motion Gravure Series - Harumi Nemoto",
       "description": "View and navigate photos of the Japanese idol Nemoto Harumi. Released in 2003.",
-      "genres": ["Simulator"],
+      "genres": [
+        "Simulator"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c6e667780562b7d8c797429bfd71bbc9.png",
       "libraryImageUrl": null,
@@ -611,7 +712,11 @@
     "4x4evo2": {
       "title": "4x4 Evo 2",
       "description": "Professional drivers get paid by winning races and in career mode so do you. Win fast money and deck out your truck from over 125 upgrades like performance shocks, race tires, brush guards, roll bars, snorkels, working winches and performance exhaust to increase vehicle power and speed.",
-      "genres": ["Racing", "Simulator", "Sport"],
+      "genres": [
+        "Racing",
+        "Simulator",
+        "Sport"
+      ],
       "releaseYear": 2001,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9173003064218a5f9e5a2504b53210ad.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/f9512dcbf35928e2ae670db1d4510aec.png",
@@ -622,7 +727,9 @@
     "armoredcoreninebreaker": {
       "title": "Armored Core - Nine Breaker",
       "description": "Armored Core: Nine Breaker brings back the super strong \"Nine Ball\" mech who appeared in the original PlayStation Armored Core. Those who can defeat \"Nine Ball\" (which likely means you if you see the end credits of Nine Breaker) are labeled as the true most powerful mech around, the \"Nine Breaker.\" In Armored Core: Nine Breaker, players play through two main modes of play: training mode and arena mode. Training mode features 150 programs that test players' skills. Players can try out programs that focus on attack, defense, movement, \"technic,\" \"special\" and \"overall.\" Each of these areas are further divided, with attack comprised of multiple tests in accuracy, power, judgment, \"hit - single\" and \"hit - melee.\" Arena mode is a battle mode in which players take on other mechs in battle. Mech modification, the series' bread and butter, is of course featured heavily in Nine Breaker.",
-      "genres": ["Simulator"],
+      "genres": [
+        "Simulator"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/ba2a411bfa10e52cc481727f95b13b77.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/27bc42aaeb1540e87949a69ebeb4eb4c.png",
@@ -633,7 +740,11 @@
     "ratchetclankgoingcommando": {
       "title": "Ratchet & Clank - Going Commando",
       "description": "Ratchet and Clank return as heroes for hire in Ratchet and Clank: Going Commando, the second game in this action platforming franchise.There are 18 entirely new weapons, as well as five weapons from the first game (you can upload them if using your old memory save). Each weapon is upgradeable, utilizing a new experience system, where weapons transform into more powerful forms the more they are used. In addition to main story levels, new Maxi-games give players a chance to test their skills and gain experience.",
-      "genres": ["Shooter", "Platform", "Adventure"],
+      "genres": [
+        "Shooter",
+        "Platform",
+        "Adventure"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/283be75416bebcd216da59ea11fad1d5.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ad94c2e77823716effe45e50ab291435.png",
@@ -644,7 +755,9 @@
     "dynastywarriors6": {
       "title": "Dynasty Warriors 6",
       "description": "Based on the epic novel, Romance of the Three Kingdoms, the genre-defining Dynasty Warriors series depicts the massive battles ignited by the fall of the Han Dynasty when three rebellious states moved to overthrow the Emperor of China. Expanding over the original with a new combat engine, Dynasty Warriors 6 delivers the exhilaration of single-handedly destroying thousands of soldiers on massive fields of combat. The lightning-fast king-fu fighting, fluid animation, intuitive combat system and immersive game environments push the limits of tactical action!",
-      "genres": ["Hack and slash/Beat 'em up"],
+      "genres": [
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/68cab6074ff02c00379c6636e727082c.png",
       "libraryImageUrl": null,
@@ -655,7 +768,9 @@
     "phantomphantomofinferno": {
       "title": "Phantom - Phantom of Inferno",
       "description": "Assassinations by the Mafia occur repeatedly in the underworld. Rumors of a mysterious organization called \"Inferno\" and its most powerful assassin named \"Phantom\" begin to surface. A young man embarked on a trip alone to the United States and runs into \"Phantom\" by accident. \"Phantom\" turned out to be a young girl about the same age as him.\n\nErasing the young mans memories of his past, the \"Phantom\" trains him to become one of the top assassins in the organization. In a violent and lawless world, his journey begins...\n\nA censored port of Phantom: Phantom of Inferno for DVD players and PlayStation 2.",
-      "genres": ["Visual Novel"],
+      "genres": [
+        "Visual Novel"
+      ],
       "releaseYear": 2001,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c6c9c6eddb028026ce60cb2eb9900cb5.png",
       "libraryImageUrl": null,
@@ -666,7 +781,10 @@
     "zoneoftheenders": {
       "title": "Zone of the Enders",
       "description": "Take control of a fully armed prototype mechanized robot and fight off enemies during a space colony hijack in Hideo Kojima's Zone of the Enders. In it, players become the character Leo Stenbuck, who sees the consequences of fighting first hand as he learns the true meaning of life and death. Combining state of the art PlayStation 2 graphics, tons of weapons, and an involving storyline, Zone of the Enders also provides a dynamically changing mission structure, a versus mode for two players, and a playable demo of Metal Gear Solid 2: Snake Eater in all first-run production copies.",
-      "genres": ["Shooter", "Hack and slash/Beat 'em up"],
+      "genres": [
+        "Shooter",
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": 2001,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/6bc44bf736056fecfd958fec6893cc83.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/00b546d495d29ea025af220831ceee42.png",
@@ -677,7 +795,10 @@
     "hitman2silentassassin": {
       "title": "Hitman 2 - Silent Assassin",
       "description": "Enter the realm of a retired assassin, forced back into action by treason. You may be a hired killer but you still have a sense of loyalty and justice. Visit the dark recesses of a world corrupted by crime, greed, degradation and dishonor. And a past that catches up with you.\n\nTrust no one - if the price is right, the finger of your most trusted ally will be on the trigger. Your targets may hide in the most remote areas of the planet, but their destruction is never prevented - only postponed.\n\nLearn your trade - master your tools - overcome your obstacles - outsmart your enemies - eliminate your targets. Remember: rash decisions bleed consequences. Know when to strike instantly, know when to take your time. Chance favors the prepared. Failure is not an option.",
-      "genres": ["Shooter", "Tactical"],
+      "genres": [
+        "Shooter",
+        "Tactical"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5b2f16e950daeab64b597227513d743b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/610cd15bc6ff55a03cfc33e0e39197b6.jpg",
@@ -688,7 +809,10 @@
     "summoner2": {
       "title": "Summoner 2",
       "description": "The player takes on the role of Maia, Queen of Halassar, who is the goddess Laharah reborn, and can transform herself into a variety of \"summonable\" creatures. The game's story revolves around Maia's quest to heal the World Tree, Eleh, which was shattered by the Storm.",
-      "genres": ["Role-playing (RPG)", "Adventure"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Adventure"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/af8b0734f3c83108f45c3a05098daf0b.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/9b22a40256b079f338827b0ff1f4792b.png",
@@ -710,7 +834,10 @@
     "finalfantasyx": {
       "title": "Final Fantasy X",
       "description": "Final Fantasy X is the tenth main installment in the FF series and the first title released on sixth-generation consoles. It was also the first game to feature fully three-dimensional areas rather than including pre-rendered backdrops, and the first to include voice acting. Final Fantasy X tells the story of a star blitzball player, Tidus, who journeys with a young and beautiful summoner named Yuna on her quest to save the world of Spira from an endless cycle of destruction wrought by the colossal menace Sin.",
-      "genres": ["Role-playing (RPG)", "Adventure"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Adventure"
+      ],
       "releaseYear": 2001,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/95831099d5d2171aea50c24de5332f73.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/2c8d78969b0a6bd71dee527dcc84bcea.png",
@@ -721,7 +848,9 @@
     "contrashatteredsoldier": {
       "title": "Contra - Shattered Soldier",
       "description": "In A.D. 2642, Earth remains scarred from previous alien conflicts as environmental problems grow beyond humanity's control. 80% of the planet's population was completely devastated by a malfunctioning hyper-magnetic weapons grid during development. Bill Rizer, the hero of the Alien Wars, was held responsible for the incident, as well as for murdering his partner, Lance Bean, who reportedly tried to stop him. He was given a sentence of 10,000 years in cryogenic prison.\n\nHowever, five years later, in 2647, Earth faces another threat as the terrorist organization \"Blood Falcon\", led by a mysterious and superhuman commander, spreads panic over the world. The ruling government, referred to as the \"Triumvirate\", decides to release Bill Rizer prior to completing his sentence, in view of his previous successes in defending Earth, in hope of neutralizing Blood Falcon. Lucia, an advanced cyborg soldier built by the government from Dr. Geo Mandrake's research, is sent to accompany and assist Bill's endeavors. Bill eventually finds out that Lance is still alive and is in fact the commander of Blood Falcon himself.\n\nAfter defeating Lance, it is revealed that the aliens from the past games attacked because the Triumvirate secretly stole a mysterious, powerful \"Relic\" from them. With this information, Bill and Lucia have to confront Triumvirate and uncover the secret of the alien Relic.",
-      "genres": ["Shooter"],
+      "genres": [
+        "Shooter"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/81f5996d93c9c58b5e86d740abc69815.png",
       "libraryImageUrl": null,
@@ -739,17 +868,6 @@
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/7aedaa9271fdee6dc5b0d3e9858e1cf1.png",
       "logoImageUrl": "https://cdn2.steamgriddb.com/logo/7cbf30c9b6104ef5c28e30c8569aa72e.png",
       "iconUrl": "https://cdn2.steamgriddb.com/icon/b164250f03b08804a9697111ba542f21.ico"
-    },
-    "kouenjijoshisoccer": {
-      "title": "Kouenji Joshi Soccer",
-      "description": null,
-      "genres": ["Sport", "Visual Novel"],
-      "releaseYear": 2006,
-      "coverImageUrl": null,
-      "libraryImageUrl": null,
-      "libraryHeroImageUrl": null,
-      "logoImageUrl": null,
-      "iconUrl": null
     },
     "castlevaniacurseofdarkness": {
       "title": "Castlevania - Curse of Darkness",
@@ -780,7 +898,10 @@
     "megamanx8": {
       "title": "Mega Man X8",
       "description": "Mega Man X 8 adds more depth and variety to this classic gaming series. With Earth in ruins after Sigma's invasion, humanity builds a new kind of reploid to colonize the moon. Sigma has corrupted their DNA and made them turn on humans. You and your teammates head to the moon for outer-space adventure of epic proportions!",
-      "genres": ["Shooter", "Platform"],
+      "genres": [
+        "Shooter",
+        "Platform"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/02a03f97877f4f58c8bc1ddff733e520.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/243f6a5292350cc163601aac9ad3e854.png",
@@ -791,7 +912,9 @@
     "rayman3hoodlumhavoc": {
       "title": "Rayman 3 - Hoodlum Havoc",
       "description": "Hoodlum Havoc is a 3-D platformer from Ubisoft starring limbless hero Rayman. A hilarious story takes a few twists as Rayman sets out to stop the evil black lum Andre and his army of hoodlums.",
-      "genres": ["Platform"],
+      "genres": [
+        "Platform"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9f98a5aba25eede4ec90737707aeff64.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/b532f0f8baa4651aac8ccd180dcba01d.png",
@@ -813,7 +936,11 @@
     "shadowofthecolossus": {
       "title": "Shadow of the Colossus",
       "description": "An open-world action/adventure game in which a young wanderer, along with a stolen magical sword and his steed companion, trespasses a cursed land, makes a deal with an ancient being to bring a sacrificial victim back to life, and sets off to fulfill his end of the bargain, which involves tracking down and infiltrating the abodes of sixteen colossi and sacrificing them to achieve his goal.",
-      "genres": ["Platform", "Puzzle", "Adventure"],
+      "genres": [
+        "Platform",
+        "Puzzle",
+        "Adventure"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/acaca856b38c00847ecc1ca2c02ae4b4.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/69cb3ea317a32c4e6143e665fdb20b14.png",
@@ -835,7 +962,9 @@
     "tanteijinguujisaburoinnocentblack": {
       "title": "Tantei Jinguuji Saburo - Innocent Black",
       "description": "The 8th installment of the Tantei Jinguuji Saburo series, and the first to be developed by WorkJam. Jinguuji is asked to search for a missing daughter from the director of a hospital where he had received treatment. This small case gradually expands to revive a deep and complex mystery.",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/6d73ddc61c8228b93b060959d05baadf.png",
       "libraryImageUrl": null,
@@ -857,7 +986,9 @@
     "artonelicoiimelodyofmetafalica": {
       "title": "Ar tonelico II - Melody of Metafalica",
       "description": "The setting for the game is the same as the previous game: the planet of Ar Ciel, albeit centered on a different region this time. The Tower of Ar tonelico from Metafalss is different from the tower in the first game since it doesn't look like a tower initially, but still has some of the same essential facilities (Rinkernator, Plasma Bell (represented as the Lift Generators) and Musical Corridor). The Song Magics are still used like programs, but in this tower there are two Song Magic servers: the Sol Marta server and the Infel Phira Server. The Sol Marta server is located in the upper zone of the tower, acting like a stationary satellite. It is collocated with the S. P. U. and Rinkernator and is the main server for the tower. The Infel Phira server is located in a satellite that orbits the sky around the tower and shares its name with said server. The Sol Marta satellite is a relay station used to increase the range of Song Magic usage of the first tower, so it works with the same kind of hymmnos and executes the EXEC variety of hymns. Plus, it also has the function of receiving energy from the first tower and sending it to the second tower. On the other hand, the Infel Phira server works with another kind of hymmnos called the Pastalia hymmnos, and executes the METHOD variety of hymns.",
-      "genres": ["Role-playing (RPG)"],
+      "genres": [
+        "Role-playing (RPG)"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/647cde6efbb2fc246c3d34145d589ea7.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/512dea4132628ddddccdd5b133c3c502.png",
@@ -868,7 +999,9 @@
     "tenchufatalshadows": {
       "title": "Tenchu - Fatal Shadows",
       "description": "Two black-clad ninjas, Ayame and Rin, silently stalk enemies and strike with brutal Stealh kills in revenge for the massacre of Rin's village. With lethal blades and their own specialized attacks, the fierce assassins draw ever closer to discovering who ordered this heinous crime.",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9ead9b982d4e0b335289b3ebec1e6e79.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/502d30a5c064ddc708c46ffb8481e846.png",
@@ -879,7 +1012,9 @@
     "worldracing2": {
       "title": "World Racing 2",
       "description": "Compared to its predecessor, where players could only drive different Mercedes Benz cars, this sequel allows them to control over 90 different cars from 17 different manufacturers, such as Alfa Romeo, Morgan, and others.\n\nThe core of the game is the career-mode with 120 races which take players all around the globe, from Italy to Florida, where players can earn their 'Speedbucks' to buy new cars and tuning options.\n\nThe game also features oncoming traffic and a detailed damage model including realistic driving physics. Players can also customize their cars with vinyls, alloy rims and many other extras.",
-      "genres": ["Racing"],
+      "genres": [
+        "Racing"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f7c0a1b02afcee5c280614400f4f87e9.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/5d69431458378d11d6a9c2c06809f6cd.jpg",
@@ -890,7 +1025,9 @@
     "homemaidowarinotachi": {
       "title": "Home Maid - Owari no Tachi",
       "description": "Japanese adventure game for PS2.",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": null,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/7482d965e9c3156079b7ea6423fd41fa.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/9421c38d86e75f5851f5241770f86142.png",
@@ -901,7 +1038,10 @@
     "gregoryhorrorshow": {
       "title": "Gregory Horror Show",
       "description": "A bizarre adventure game that follows the adventures of a main hero named Gregory whose purpose it is to collect lost souls in a haunted mansion. This hotel of the undead is filled with a bizarre group of guests -- along with Gregory and a mischievous little punk kid called James. Your goal is to steal the soul fragment (contained in milk bottles) that each guest holds. Doing so will, as Death informed you, get you out of the hotel, and apparently fill you in on why you were out walking about in the forest in the first place. You obtain the soul fragments by interacting with guests and solving basic puzzles. The game ends when you've run out of spirit as indicated by a spirit meter.",
-      "genres": ["Puzzle", "Adventure"],
+      "genres": [
+        "Puzzle",
+        "Adventure"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/252141e3f065ad9cb2bc6c5ad5fd571c.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/90e67987539164c4f62dd88d4558b1d6.png",
@@ -912,7 +1052,9 @@
     "larush": {
       "title": "L.A. Rush",
       "description": "L.A. Rush is the 4th installment in the Rush series of video games. It was released in North America for the PlayStation 2 and Xbox consoles on October 10, 2005 and on October 21 in Europe. The PC version was released on November 4 in Europe. PlayStation Portable version was released on October 30, 2006 named Rush. Many details were revealed at E3 in May 2005. The game is free-roaming with races similar to those in Need for Speed: Underground 2. The GPS map can have a point assigned to a certain location and then the point shows up on the radar during gameplay. The game features voice talent from Orlando Jones, Bill Bellamy, and Twista. In addition to the console versions and PC version it was to be available on Gizmondo.",
-      "genres": ["Racing"],
+      "genres": [
+        "Racing"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/76fd917e6ae27b780447928bb8247cb4.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/adc3f8bdbbc32f4b3dc4b2489397e498.png",
@@ -923,7 +1065,10 @@
     "jadecocoon2": {
       "title": "Jade Cocoon 2",
       "description": "Presenting a combination of monster breeding and RPG elements, Jade Cocoon 2 expands upon Genki's original title in a number of significant ways. Gameplay comprises a familiar mix of storytelling and monster raising, with significant tweaks implemented for good measure. The town acts as your base of operations and it's here you can stock up on supplies, or take jobs for which you can earn money and build a reputation. The latter proves vital as it's directly related to the number of monsters you can use in battle. The successful completion of certain tests rewards you with the ability to command more beasts -- up to a maximum of 12 at once, however, you can only take these tests when your reputation is high enough.\n\nThese trials take place in the Arena, which is also home to Beast Hunter battles, where you can test your mettle against fellow Beast Hunters. Monster eggs are found on your travels and can be hatched in the Room of Life; an all-encompassing monster management room that provides detailed information on the beasts and allows you to merge them, creating hybrid creatures. The monsters now also evolve over time. Your amulet consists of 12 slots, three for each of the four elements. Your creatures are placed in positions on the amulet corresponding to their position in battle, and during combat they'll attack the enemy and defend you from harm. Their amulet position also dictates the effectiveness of their elemental powers.\n\nThe storyline starts 100 years after the original adventure, with the Cocoon Masters having become the stuff of myth and legend. Beast Hunters are the modern equivalent, and players take on the role of Kahu; an aspirant Beast Hunter. A chance encounter results in Kahu being cursed, and he, along with a fairy named Nico, must rid his body of the curse or die. Levant (the original title's protagonist) is now a guardian and acts as your guide.",
-      "genres": ["Role-playing (RPG)", "Adventure"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Adventure"
+      ],
       "releaseYear": 2001,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/d908e85823c24d4fb5da56726e38660b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/07cc6105aa9cd337ee0422e0add6cd02.jpg",
@@ -934,7 +1079,9 @@
     "mlb2004": {
       "title": "MLB 2004",
       "description": "This year's entry in the MLB series adds more authenticity to the baseball experience with new modes, detailed stadiums, and fresh commentary. In MLB 2004, you can build yourself an unbeatable dynasty with Franchise mode, take your favorite team or player through a ten-year Career mode, manage the front office in General Manager mode, or take a rookie from A-Ball to the big leagues in Spring Training mode. Replays, play-by-plays from Vin Scully, and commentary from ESPN's Dave Campbell, enhance the action from Opening Day to the Fall Classic.",
-      "genres": ["Sport"],
+      "genres": [
+        "Sport"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/93acf23d948168eb4604d446017db32f.png",
       "libraryImageUrl": null,
@@ -945,7 +1092,10 @@
     "nflgameday2004": {
       "title": "NFL GameDay 2004",
       "description": null,
-      "genres": ["Simulator", "Sport"],
+      "genres": [
+        "Simulator",
+        "Sport"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/2d55c05c84eceac6cffc9db65f375eb9.png",
       "libraryImageUrl": null,
@@ -978,7 +1128,10 @@
     "monsterhunterg": {
       "title": "Monster Hunter G",
       "description": "Monster Hunter G is a Japan-exclusive expansion of Monster Hunter for PlayStation 2. It featured more Quests, equipment, and recolors of the original monsters, as well as a brand new tier of \"G-class\" or \"G-rank\" Quests. The Hunter Rank cap was increased from HR20 to HR30, and many quality of life features were added to this version.\n\nMonster Hunter G was originally released on PlayStation 2 in 2005 but rereleased on the Nintendo Wii in 2009. The Wii version features many gameplay changes that made it more akin to the preceding Monster Hunter game, Monster Hunter Freedom Unite.",
-      "genres": ["Role-playing (RPG)", "Strategy"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Strategy"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c08f6e9e6f6bd522c58177731a7c85e8.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/8eeefa76162aecd2cbab0f27b8ecffad.png",
@@ -989,7 +1142,10 @@
     "wrecklesstheyakuzamissions": {
       "title": "Wreckless - The Yakuza Missions",
       "description": "Welcome to Hong Kong, where mystery and intrigue, money and power, and East and West intermingle. As the Yakuza terrorizes citizens, you arrive on the scene to answer the call of the city. You'll command an elite police unit called the Dragons, or you can play as a couple of spies hired to defeat Tiger Takagi--the head of the Hong Kong Yakuza. In 40 wild missions, you'll fire at moving targets with car-mounted rocket launchers, maneuver through the destructive environments, and experience real-time crashes and vehicle deformation.",
-      "genres": ["Racing", "Arcade"],
+      "genres": [
+        "Racing",
+        "Arcade"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/8c2fb2268e29daa95082472a8c638641.png",
       "libraryImageUrl": null,
@@ -1000,7 +1156,10 @@
     "sly2bandofthieves": {
       "title": "Sly 2 - Band of Thieves",
       "description": "Sly 2: Band of Thieves is a stealth-action platformer developed by Sucker Punch Productions and released for PlayStation 2 in 2004. Players control Sly Cooper and his gang as they attempt to dismantle the Klaww Gang and recover the scattered parts of Clockwerk. The game expands on its predecessor with open-ended mission structures, multiple playable characters, and improved stealth mechanics.\n\nThe story takes place two years after Sly Cooper and the Thievius Raccoonus. In the first game, Sly was becoming a professional thief, but in Band of Thieves, he is a professional thief, so he retains all of the moves from the first game. He also earns new moves and gains different items to assist him in his dark craft. Players might start a level as Sly, and then after completing a particular task, players switch to Bentley, and Murray, respectively.",
-      "genres": ["Platform", "Adventure"],
+      "genres": [
+        "Platform",
+        "Adventure"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5bc6960dad8ab0694bb4d6ff884b0c1e.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/4e724df610312665500826ab87cb0812.png",
@@ -1033,7 +1192,10 @@
     "siren": {
       "title": "Siren",
       "description": "The story revolves around an interconnected cast of characters that possess a power which enables them to see and hear what a nearby character sees. The game was followed by a PlayStation 2 sequel, a reimagining for the PlayStation 3 and a film adaption.\n\nSiren is divided into stages, each taking place in one of ten areas in the village of Hanuda, and organized chronologically in a table called the \"Link Navigator\". In order to complete a stage, the player must accomplish a primary objective that usually involves reaching an exit point, subduing undead enemies called \"Shibito\", or finding an item. Objectives in different stages are interconnected via a butterfly effect, and a character's actions in one stage can trigger a secondary objective in another stage.\n\nThere are miscellaneous items scattered throughout each stage that give the player further insight into the plot's background. Once obtained, these items are archived in a catalog and can be viewed at any time during the game's duration. The game's player characters possess a psychic power named \"sightjack,\" which enables them to see and hear what a nearby Shibito or human sees and hears, and thus pinpoint its position, as well as gain knowledge of their activities and of the position of obtainable items. The clarity of each target depends on the distance from the player character. Once a point of view is located, it can be assigned to one of certain buttons of the controller to easily switch between multiple points of view. However, the player character is unable to move during use of the ability and is thus vulnerable to attack.\n\nThe game encourages the player to avoid Shibito rather than fight them. Characters can walk silently, avoid the use of a flashlight, and crouch behind objects to elude detection. Certain mission objectives require the player character to use items and/or the environment to distract Shibito from their activity, in order for them to achieve a goal. Others require the player to escort a non-player character. Player characters can also shout at any time in order to get the attention of nearby Shibito. Within most stages, the player character can hide in certain places such as cupboards and lock doors to prevent Shibito from entering. When a Shibito hears a sound made by the player character, it will search in the direction from which they heard the sound. If a character is seen by a Shibito, the latter will pursue the character to kill them either with a melee or ranged weapon or by strangulation. The Shibito will also shout to alert other nearby Shibito. Once the character has remained out of the Shibito's sight for a period of time, the Shibito will give up and resume its usual habits. Weapons are available for the player throughout the game, ranging from melee weapons to firearms. While Shibito can be knocked out in combat, they cannot be killed and will reanimate after a short period of time. If a character is injured, they can recover after some time has passed. Characters will lose stamina during combat and while running.",
-      "genres": ["Strategy", "Adventure"],
+      "genres": [
+        "Strategy",
+        "Adventure"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a79f59cdea2a01f4425b94c3882fde0e.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/8cf639fc4bb4f35a2bb4105e85ff9957.jpg",
@@ -1055,7 +1217,10 @@
     "redstarthe": {
       "title": "Red Star, The",
       "description": "Set around three main characters, The Red Star tells the tale of an alternate Russia, the URRS, where massive technology and futuristic weapons are wielded by its army, The Red Fleet. Your journey begins as Maya Antares, the sorceress-general for The Red Fleet, searches for her husband, Marcus, who was lost in battle. Each of the game's three characters offers different game experiences. During cooperative play, player characters can interact with each other and perform special attacks.",
-      "genres": ["Shooter", "Hack and slash/Beat 'em up"],
+      "genres": [
+        "Shooter",
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b2a3da9945a8067cc1e52804861653bd.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/d0f5722f11a0cc839fa2ca6ea49d8585.png",
@@ -1066,7 +1231,10 @@
     "onepiecegrandadventure": {
       "title": "One Piece - Grand Adventure",
       "description": "One Piece: Grand Adventure is a video game for the PlayStation 2 and the GameCube, based on the popular manga and anime series One Piece. Unlike other games in the series, Grand Adventure was developed specifically for the United States.",
-      "genres": ["Fighting", "Adventure"],
+      "genres": [
+        "Fighting",
+        "Adventure"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/01c7f8565b8971ab886737012cf1f1cf.png",
       "libraryImageUrl": null,
@@ -1077,7 +1245,9 @@
     "romancingsaga": {
       "title": "Romancing SaGa",
       "description": "A thousand years ago, Saruin was imprisoned. Now the barriers that contain him are weakening, and his foreboding shadow threatens to swallow the world of Mardias once again. Who will rid the world of Saruin's scourge? A mysterious minstrel appears and guides the group to adventure, at times shielding them from adversity. Occasionally, the minstrel forces grave choices upon them, which change their world and twist the plots they encounter. Romancing SaGa reclaims the renowned features of the series and boasts all new elements enhancing gameplay, bringing the player even deeper into the story. The free-roaming scenario system gives gamers a choice of eight intriguing playable characters, each with their own unique adventures and individual goals. Depending on the character and actions chosen, the plot and the subsequent events differentiate dramatically. This free-roaming scenario system promises the ultimate in open-ended adventure.",
-      "genres": ["Role-playing (RPG)"],
+      "genres": [
+        "Role-playing (RPG)"
+      ],
       "releaseYear": 1992,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5bc77e58ca22c9f5b889b6c0a1a07d09.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/96b591794a81d64dfc9d9fe49060088d.png",
@@ -1088,7 +1258,9 @@
     "megamanxcommandmission": {
       "title": "Mega Man X - Command Mission",
       "description": "Mega Man X: Command Mission, known as Rockman X Command Mission in Japan, is a spin-off game in the Mega Man X series. It was released in 2004 on both the PlayStation 2 and the Nintendo GameCube, making it the second-to-last game in the Mega Man X series to be released. Unique to the series, it is an RPG featuring turn-based combat and an extensive story. It plays quite similarly to Capcom's signature Breath of Fire series in a number of ways, due to the shared development team. Chronologically, it is currently the Mega Man X game set furthest in the future, taking place sometime in the twenty-third century (22XX time period); however, it is also set in an alternate timeline outside of the main storyline of the Mega Man series.\n\nThe Gamecube version let's you link up to Game Boy Advance so you can use the GBA as a treasure hunter locater. The PS2 version contains a Mega Man X8 Demo.",
-      "genres": ["Role-playing (RPG)"],
+      "genres": [
+        "Role-playing (RPG)"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/ea26d7632974b9674121019875916c4b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/a1d2b0ef5b72772ee48ce14b993e225c.png",
@@ -1099,7 +1271,10 @@
     "mxvsatvunleashed": {
       "title": "MX vs. ATV Unleashed",
       "description": "Take on the racing world in an attempt to knock off motocross and ATV riders in over 50 technical supercross and rugged outdoor tracks.",
-      "genres": ["Racing", "Simulator"],
+      "genres": [
+        "Racing",
+        "Simulator"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/93acae4bc551d07f54dc4e3b89977f35.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/b9e530b906fbe11e975e14c658ec9f9a.png",
@@ -1121,7 +1296,12 @@
     "grandtheftautovicecity": {
       "title": "Grand Theft Auto - Vice City",
       "description": "In the year 1986, Tommy Vercetti is heavily indebted to his mafia superiors after a drug deal gone awry, but his dreams of taking over Vice City (based on Miami) push him down a different path. Featuring a wide variety of vehicles and weapons, radio stations playing hit songs from the era and an intense atmosphere, GTA: Vice City is an open-world sandbox satire of '80's Miami.",
-      "genres": ["Shooter", "Racing", "Adventure", "Arcade"],
+      "genres": [
+        "Shooter",
+        "Racing",
+        "Adventure",
+        "Arcade"
+      ],
       "releaseYear": 2002,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c35f96e6c46a58248ab0ca39bae23039.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/85554f207d7a7d8f7817ae532f0dd828.png",
@@ -1132,7 +1312,11 @@
     "worldchampionshippokerfeaturinghowardledererallin": {
       "title": "World Championship Poker featuring Howard Lederer - All In",
       "description": "World Championship Poker Featuring Howard Lederer: All In features some of the most recognizable and successful poker stars in the world, including Howard Lederer, his sister Annie Duke, Greg Raymer, Amir Vahidi, Paul Darden, and Robert Williamson III. Joining the roster for this year's edition are noted international poker superstars Marcel Luske, Thomas Bihl, and Erin Ness, who parlayed a victory at a Maxim Magazine office tournament into a seat at the 2004 World Series of Poker. 18 types of poker are featured, including Texas Hold'em, Five Card Draw, Seven Card Stud Omaha and more. Multi-Table Online Tournaments. Scenario Mode: Players are presented with a series of poker \"puzzle\" challenges that gradually increase in difficulty. Lucky Charms: Players can improve their luck through this Career Mode skill. Mixed Games: Play two or more variations of poker during a single game, with the game changing every time the dealer button makes it around the table.",
-      "genres": ["Sport", "Turn-based strategy (TBS)", "Card & Board Game"],
+      "genres": [
+        "Sport",
+        "Turn-based strategy (TBS)",
+        "Card & Board Game"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/af3ad7166f70d48d304d8231e891f084.png",
       "libraryImageUrl": null,
@@ -1143,7 +1327,10 @@
     "silenthillorigins": {
       "title": "Silent Hill - Origins",
       "description": "Silent Hill: Origins is the fifth installment in the Silent Hill survival horror series, and a prequel to the original game. As in the previous entries, the player move back and forth between nightmare and real versions of the town, gathering items used to solve puzzles and open up new areas. Monsters of various types provide obstacles and, in series tradition, are mostly disturbingly twisted versions of humanity. The main character can fight with his bare fists or use melee weapons. Unlike previous games in the series, melee weapons break after a time. There are also one-shot items that can be thrown and several guns. There is no HUD, but the edge of the screen turns red when the protagonist is near death.",
-      "genres": ["Puzzle", "Adventure"],
+      "genres": [
+        "Puzzle",
+        "Adventure"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/ff7b29042de2ddca8a4cd0554276013d.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/d2926739cef5ccec5a4a76a576b4221b.png",
@@ -1154,7 +1341,11 @@
     "kingdomheartsrechainofmemories": {
       "title": "Kingdom Hearts - ReChain of Memories",
       "description": "Kingdom Hearts Re:Chain of Memories is a full remake of Kingdom Hearts: Chain of Memories, released on the PlayStation 2. In Japan, it is part of the Kingdom Hearts II Final Mix+ compilation and has connectivity features with Kingdom Hearts II Final Mix. As there were no plans to release Kingdom Hearts II Final Mix internationally, these features were modified for the North American release.",
-      "genres": ["Role-playing (RPG)", "Tactical", "Card & Board Game"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Tactical",
+        "Card & Board Game"
+      ],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/326218bdee2c0ab4ddd8f48a02eae2f4.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/3c21592f7ee4365adc273a0526955fd0.png",
@@ -1165,7 +1356,10 @@
     "kingdomheartsii": {
       "title": "Kingdom Hearts II",
       "description": "Kingdom Hearts II is an action role-playing game, and the primary entry to the series since the 2002 Disney Interactive and Square collaboration. The game's setting is a collection of various levels (referred to in-game as \"worlds\") that the player progresses through. As in the first game, it II allows the player to travel to locales from various Disney works, along with original worlds specifically created for the series.",
-      "genres": ["Role-playing (RPG)", "Adventure"],
+      "genres": [
+        "Role-playing (RPG)",
+        "Adventure"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4de0f7455c14e8aee7baa617ea72c6a3.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/7a4a467e968ac32c4f328e6fb2d211f6.png",
@@ -1176,7 +1370,10 @@
     "supermonkeyballdeluxe": {
       "title": "Super Monkey Ball Deluxe",
       "description": "This game is basically a fusion of Super Monkey Ball 1 and 2 for the PS2 and XBox. All of the levels from those two games are available in this collection, and all of the minigames are already unlocked and included. Formerly only available to GameCube players, the Super Monkey Ball series has made it to the PS2 and Xbox after a wait of almost 3 and a half years.\n\nThe game itself plays very much like the old arcade game Marble Madness. You control a monkey in a ball, and you have to navigate it through many perilous labyrinths to the finish. In the previous two games you had limited lives/tries, but here you have infinite lives, which makes it all the easier.",
-      "genres": ["Platform", "Puzzle"],
+      "genres": [
+        "Platform",
+        "Puzzle"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/d01993d4b6ed9bb7791893bdc2fc87d6.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/2bb2636170e5a675b595a84643a34c4e.png",
@@ -1187,7 +1384,10 @@
     "silenthill2": {
       "title": "Silent Hill 2",
       "description": "The second entry in the Silent Hill franchise, Silent Hill 2 is a narrative-focused third-person psychological survival horror game with emphasis on combat, exploration and puzzle-solving elements which follows James Sunderland, a man who receives a letter, seemingly sent by his three-years-deceased wife Mary, in which he is beckoned to the fog-ridden town of Silent Hill at the same time as numerous other people troubled by their past.",
-      "genres": ["Puzzle", "Adventure"],
+      "genres": [
+        "Puzzle",
+        "Adventure"
+      ],
       "releaseYear": 2001,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/6e5629f2ab9973c09e947a0e1100fb52.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/4c19391d894ba5f7beda84353628644d.png",
@@ -1198,7 +1398,9 @@
     "pumpitupexceed": {
       "title": "Pump It Up - Exceed",
       "description": "Pump It Up: Exceed is a dancing game similar to the games in the Dance Dance Revolution series. The Pump It Up dance mat is different from the norm as the arrows are set on diagonals and includes a button in the middle which allows for more complexity in the dance moves that are required to be performed in the game.\n\nThe general gameplay has the player watching a music video as symbols scroll by. The player must match the symbols on the screen with the symbols on the Pump It Up dance pad with their feet. Hitting the arrows in sync with the music will keep the players life bar up and give the player a good rating, while doing the opposite will drain the life bar and give bad ratings. If the life bar drains all the way, the game ends.\n\nThe game has several mode to choose from:\nArcade Mode has the player trying to achieve an “A” or an “S” rating on three consecutive songs. Doing that allows the player to play an extra song. Successfully completing songs in the Arcade mode opens them for play in Home Mode.\nHome Mode allows the player to choose any song they have available to them.\nSudden Death Mode forces the player to perform a song flawlessly or the game ends.\nSurvival Mode - This mode becomes available after the player completes twenty songs in the Home Mode. This is an endurance test for the player, as the game keeps giving the players songs to go through until their life bar is finally depleted.\nVideo Mode - This mode is unlocked after the player completes a total of twenty songs in either Home or Arcade Mode. It allows the player to just watch the videos for any song they've completed.\nTutorial mode - Teaches the player how the game works.\nThe game also keeps track of the players statistics (the rating grades they received for each song).\n\nThe PS2 version of the game features 101 songs, while the Xbox version contains 97 songs, but offers the option to download more songs. As some songs are more difficult then others, the game provides a rating from one to twenty to inform the player on just how hard of a task they are taking on by choosing a particular song.Two dance mats will be required for some songs that offer a freestyle option if the player chooses that setting.",
-      "genres": ["Music"],
+      "genres": [
+        "Music"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/88c53b30f63ecbf2bd8ddf5a9cd8ac10.png",
       "libraryImageUrl": null,
@@ -1209,7 +1411,10 @@
     "frequency": {
       "title": "Frequency",
       "description": "With 4 unique game modes, top hits from major bands in a variety of genres and stunning 3D graphics, Frequency stays in tune with an immersive musical gaming experience.",
-      "genres": ["Music", "Hack and slash/Beat 'em up"],
+      "genres": [
+        "Music",
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": 2001,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/791c688b6765d5eaa87eb28b77941157.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ee1abc6b5f7c6acb34ad076b05d40815.png",
@@ -1253,7 +1458,10 @@
     "onepiecepiratescarnival": {
       "title": "One Piece - Pirates' Carnival",
       "description": "One Piece: Pirates’ Carnival brings the crazy pirate party without having to hit the ocean. Players can dominate the game board by defeating up to three friends in a series of zany games guaranteed to tickle the funny bone of the surliest of pirates. Gamers must evade bombs in a dodge ball field, locate the Pandaman, out-maneuver giant feet and more to become King of the Pirates.",
-      "genres": ["Puzzle", "Strategy"],
+      "genres": [
+        "Puzzle",
+        "Strategy"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a7fbc3031f025a611ddee2ba9f02a6a4.png",
       "libraryImageUrl": null,
@@ -1264,7 +1472,12 @@
     "sniperelite": {
       "title": "Sniper Elite",
       "description": "Sniper Elite is a third-person action strategy game with a focus on sniping. The player takes on the role of an American agent working for the OSS (the organization that later became the CIA) stationed in Berlin at the end of World War II, tasked with preventing the Russian troops from getting hold of the research Germany had been conducting into nuclear weaponry. As an elite sniper, the style of play is much less run-and-gun and much more about finding good positions, lining up shots and taking out the enemy before he even knows where you are.\n\nThe single-player campaign takes place over 28 missions set in and around Berlin. Players use stealth tactics, and things like wind and background noise can be a factor when lining up shots. When a shot is performed particularly well, players are rewarded with a 'bullet cam' which follows the bullet in slow-motion from gun barrel to target.",
-      "genres": ["Shooter", "Simulator", "Strategy", "Tactical"],
+      "genres": [
+        "Shooter",
+        "Simulator",
+        "Strategy",
+        "Tactical"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9547fdc30796b4fc1932f75d28e9a1a5.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/5129fe8053ac7bfc1a1f72b28a2d6dcc.jpg",
@@ -1275,7 +1488,9 @@
     "silenthill4theroom": {
       "title": "Silent Hill 4 - The Room",
       "description": "Silent Hill 4: The Room is the fourth installment in the Silent Hill survival horror series. The game is similar to the past entries in terms of atmosphere, never letting the player know what's behind the next corner or down the street. Aside from the traditional third-person-view, there is now a first-person mode which is used to control the main character when he is in his apartment. Objects that can be interacted with are highlighted by eyeball icons. The previous games in the series have mostly been about exploring the town and solving puzzles, but this installment has much more combat involved. There are more enemies in a given area, spread in cramped spaces. The main character mostly uses a standard Silent Hill arsenal of weapons, such as the steel pipe, pistol and a golf club.",
-      "genres": ["Adventure"],
+      "genres": [
+        "Adventure"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a00ffcaff1ed3a0803a8d48d7b4bde91.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/987b75e2727ae55289abd70d3f5864e6.png",
@@ -1286,7 +1501,11 @@
     "brothersinarmsearnedinblood": {
       "title": "Brothers in Arms - Earned in Blood",
       "description": "Brothers in Arms Earned in Blood adds new features and game modes and builds upon the elements that made Brothers in Arms Road to Hill 30 a runaway success.\nFeaturing a new single player narrative, new multiplayer missions, an all-new cooperative style game mode, and new weapons and vehicles.",
-      "genres": ["Shooter", "Strategy", "Tactical"],
+      "genres": [
+        "Shooter",
+        "Strategy",
+        "Tactical"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/98eb573ff019b2f5725efdcf36dc19f3.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/51c722b4c99812d450b628f38461408e.png",
@@ -1297,7 +1516,9 @@
     "godhand": {
       "title": "God Hand",
       "description": "THERE AIN'T NO JUSTICE IN THE\nWILD, WEIRD WEST. JUST YOU.\nThings can't get any worse after demonic thugs cut your arm off, right? Dead wrong, partner. The lady you saved from them has only gone and given you the legendary GOD HAND as a replacement - the ultimate hand-to-hand weapon. Every undead outlaw in a Stetson, rootin' tootin' demon and circus freak in the prairies is going to want to fight you for it. Welcome to the town of Asskickin... have a nice stay y'all.\n\nBIG HAND - Explosive martial arts and hand-to-hand action get in your face and ugly. No bullets, lots of bruised knuckles.\n\nSLAP STICKS - Totally customisable fight system. Pull off the most outrageous combo moves ever with awesome God Hand powers - punch your opponent into orbit!\n\nFIGHTING FORM - Pugilistic adventure from the makers of RESIDENT EVIL, DEVIL MAY CRY and VIEWTIFUL JOE!",
-      "genres": ["Hack and slash/Beat 'em up"],
+      "genres": [
+        "Hack and slash/Beat 'em up"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f13c5f36a2ec27ae21683487a11044d5.png",
       "libraryImageUrl": null,
@@ -1319,7 +1540,9 @@
     "snkvscapcomchaos": {
       "title": "SNK vs. Capcom - Chaos",
       "description": "SNK vs. Capcom: SVC Chaos primarily utilizes the command system of The King of Fighters series, incorporating light/strong kicks, punches, cancels and charging attacks. Unlike its predecessor, Capcom vs. SNK 2, this game lacks both air guards and a \"groove system\", instead focusing on quicker gameplay. Characters are provided with a basic 3-level bar system for executing super-special attacks with basic filling options attributed to strikes and damage. Additionally, the sprites from the various series received new models and some special effects were changed in the command lists (for example, the player cannot increase the damage of the Zujou Sashi used by Choi Bounge by tapping the buttons anymore).",
-      "genres": ["Fighting"],
+      "genres": [
+        "Fighting"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c56f7daa3da6c7a912f58d554fd5b444.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/23bd1310ead30084bec9ec84a3f1721d.png",
@@ -1330,7 +1553,10 @@
     "dirgeofcerberusfinalfantasyvii": {
       "title": "Dirge of Cerberus Final Fantasy VII",
       "description": "Dirge of Cerberus: Final Fantasy VII is an action role-playing third-person shooter. As the first shooter game in the Final Fantasy series, the action is viewed from an over-the-shoulder perspective similar to Resident Evil 4, although players can switch to a first-person perspective if they wish. Defeating enemies yields EXP, and at the end of each stage, the player can either use that EXP to level up, increasing Vincent's stats, or convert it to Gil (the in-game currency), which can then be used to purchase items and equipment upgrades.",
-      "genres": ["Shooter", "Role-playing (RPG)"],
+      "genres": [
+        "Shooter",
+        "Role-playing (RPG)"
+      ],
       "releaseYear": 2006,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/509a8130c69ae4799a9e17d3cbab5bd4.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ffc58105bf6f8a91aba0fa2d99e6f106.png",
@@ -1341,7 +1567,9 @@
     "sixgun": {
       "title": "Six Gun",
       "description": null,
-      "genres": ["Turn-based strategy (TBS)"],
+      "genres": [
+        "Turn-based strategy (TBS)"
+      ],
       "releaseYear": 1985,
       "coverImageUrl": null,
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/f1a90e1c055459c26e3280c607f8fe5e.png",
@@ -1352,7 +1580,9 @@
     "natsuirohoshikuzunomemory": {
       "title": "Natsuiro - Hoshikuzu no Memory",
       "description": "This is an adventure game originally released on PC, depicting a story of pure love with girls met during a lakeside summer vacation. The PlayStation 2 edition features an enhanced storyline, with new events and CG illustrations added. After the death of his father, the protagonist returns to his hometown villa for the first time in many years. There, he meets four girls, and through their interactions, his sorrowful memories gradually transform into gentle, cherished ones.",
-      "genres": ["Visual Novel"],
+      "genres": [
+        "Visual Novel"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9dc0ead419e12cd2f283cfc66b59812b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/2e59883683f9baf2a5df4bd9a615c187.png",
@@ -1363,7 +1593,11 @@
     "princeofpersiathetwothrones": {
       "title": "Prince of Persia - The Two Thrones",
       "description": "I returned home expecting peace. Instead, I found my kingdom ravaged by war and my people enslaved. Now I am a fugitive, hunted by hostile armies and plagued by a curse that is gradually possessing my soul. A darker Prince resides in me now. And I must embrace his powers and skill if I want to restore peace to my land, my people, and my soul.",
-      "genres": ["Platform", "Hack and slash/Beat 'em up", "Adventure"],
+      "genres": [
+        "Platform",
+        "Hack and slash/Beat 'em up",
+        "Adventure"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/abae7d98a0ce038be2705fc36f5de8d9.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/380eb0bb65b66b606141832164ef05a9.png",
@@ -1385,7 +1619,10 @@
     "psikyoshootingcollectionvol2sengokuacesengokublade": {
       "title": "Psikyo Shooting Collection Vol. 2 - Sengoku Ace + Sengoku Blade",
       "description": "A two game compilation that was released as part of the Psikyo Shooting Collection in Japan.",
-      "genres": ["Shooter", "Arcade"],
+      "genres": [
+        "Shooter",
+        "Arcade"
+      ],
       "releaseYear": 2004,
       "coverImageUrl": null,
       "libraryImageUrl": null,
@@ -1396,7 +1633,9 @@
     "northwindeiennoyakusoku": {
       "title": "North Wind - Eien no Yakusoku",
       "description": "North Wind is a dating-sim game, is published for PC (Windows) and PlayStation 2.\n\nThe PC version has three chapters, but the PlayStation 2 version has two chapters. The structure is somewhat unique. Usually, the mystery in chapter 1 is revealed in chapter 2, but in this game, chapters 1 and 2 are on the same time line. Some cut scene are added to PlayStation 2 version.",
-      "genres": ["Visual Novel"],
+      "genres": [
+        "Visual Novel"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": null,
       "libraryImageUrl": null,
@@ -1407,7 +1646,10 @@
     "deadlands": {
       "title": "Deadlands",
       "description": "The Deadlands, is a haunting journey of vengeance. Conquer undead horrors, face formidable bosses, and harness their souls to save your son from an evil necromancer. Pixel art meets gothic aesthetic in this intense, captivating metroidvania.",
-      "genres": ["Adventure", "Indie"],
+      "genres": [
+        "Adventure",
+        "Indie"
+      ],
       "releaseYear": 2023,
       "coverImageUrl": null,
       "libraryImageUrl": null,
@@ -1418,7 +1660,10 @@
     "projectalteredbeast": {
       "title": "Project Altered Beast",
       "description": "Altered Beast is a 2005 action-adventure beat 'em up video game for the PlayStation 2. The game is a remake of the 1988 arcade game Altered Beast. While the gameplay still involves the main character transforming into different kinds of beasts like in the original, the story, characters and setting are completely different, along with notable gameplay additions.",
-      "genres": ["Hack and slash/Beat 'em up", "Adventure"],
+      "genres": [
+        "Hack and slash/Beat 'em up",
+        "Adventure"
+      ],
       "releaseYear": 2005,
       "coverImageUrl": null,
       "libraryImageUrl": null,
@@ -1429,7 +1674,11 @@
     "mahoromaticmoettokirakiramaidsan": {
       "title": "Mahoromatic - Moetto Kira Kira Maid-san.",
       "description": "A PS2 game based off the anime and manga Mahoromatic.",
-      "genres": ["Strategy", "Adventure", "Visual Novel"],
+      "genres": [
+        "Strategy",
+        "Adventure",
+        "Visual Novel"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": null,
       "libraryImageUrl": null,
@@ -1451,7 +1700,9 @@
     "cafelittlewishmahounorecipe": {
       "title": "Cafe Little Wish - Mahou no Recipe",
       "description": "An unknown and starving young man enters in a small restaurant called “Cafe Little Wish.” After gorging on everything without knowing he doesn’t have any money, he tries to escape but is thwarted by the strength of the waitresses. It’s later revealed he’s an amnesiac who doesn’t even know his own name. In a gesture of pity and generosity, the owner hires him to work off his debt. The story begins with our protagonist known furthermore as “Leon” and his life in Cafe Little Wish.",
-      "genres": ["Visual Novel"],
+      "genres": [
+        "Visual Novel"
+      ],
       "releaseYear": 2003,
       "coverImageUrl": null,
       "libraryImageUrl": null,
