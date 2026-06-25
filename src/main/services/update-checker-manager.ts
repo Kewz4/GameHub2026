@@ -133,13 +133,19 @@ export class UpdateCheckerManager {
       .on("error", (err: Error) => {
         clearFallback();
         logger.error("Auto-updater error:", err);
-        this.sendEvent({ type: "not-available", currentVersion: app.getVersion() });
+        this.sendEvent({
+          type: "not-available",
+          currentVersion: app.getVersion(),
+        });
       });
 
     autoUpdater.checkForUpdates().catch((err) => {
       clearFallback();
       logger.error("checkForUpdates failed:", err);
-      this.sendEvent({ type: "not-available", currentVersion: app.getVersion() });
+      this.sendEvent({
+        type: "not-available",
+        currentVersion: app.getVersion(),
+      });
     });
   }
 
