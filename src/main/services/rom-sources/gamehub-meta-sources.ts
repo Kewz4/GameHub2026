@@ -43,9 +43,7 @@ interface HostedMetaFile {
  * Fetch one system's hosted metadata file and store each entry locally. Returns
  * the number of entries stored (0 when the file is missing or empty).
  */
-export async function syncGameHubMeta(
-  system: EmulatorSystem
-): Promise<number> {
+export async function syncGameHubMeta(system: EmulatorSystem): Promise<number> {
   const url = `${GAMEHUB_META_BASE_URL}/${system}.json`;
 
   let data: HostedMetaFile;

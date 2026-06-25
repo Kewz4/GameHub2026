@@ -28,8 +28,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 // ---- credentials (same embedded keys the app ships with) -------------------
-const SGDB_KEY =
-  process.env.SGDB_API_KEY || "a41b22e5f9b93f698ff15cf05892aed6";
+const SGDB_KEY = process.env.SGDB_API_KEY || "a41b22e5f9b93f698ff15cf05892aed6";
 const IGDB_CLIENT_ID =
   process.env.IGDB_CLIENT_ID || "lbccfxg1ie3739dubo4bvlj7bw0sue";
 const IGDB_CLIENT_SECRET =
@@ -294,9 +293,7 @@ async function main() {
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
-    (a, i) =>
-      ALL_SYSTEMS.includes(a) &&
-      !(limitIdx >= 0 && i === limitIdx + 1)
+    (a, i) => ALL_SYSTEMS.includes(a) && !(limitIdx >= 0 && i === limitIdx + 1)
   );
   const targets = systems.length ? systems : ALL_SYSTEMS;
 

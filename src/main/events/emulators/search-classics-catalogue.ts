@@ -27,8 +27,7 @@ registerEvent(
           shop: "launchbox" as const,
           genres: meta?.genres ?? [],
           releaseYear: meta?.releaseYear ?? null,
-          libraryImageUrl:
-            meta?.libraryImageUrl ?? meta?.coverImageUrl ?? null,
+          libraryImageUrl: meta?.libraryImageUrl ?? meta?.coverImageUrl ?? null,
           downloadSources: ["Minerva Archive"],
         } satisfies CatalogueSearchResult;
       })
