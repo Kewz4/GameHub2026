@@ -25,9 +25,7 @@ function appendStartupLog(message: string): void {
   }
 }
 
-appendStartupLog(
-  `startup pid=${process.pid} packaged=${app.isPackaged}`
-);
+appendStartupLog(`startup pid=${process.pid} packaged=${app.isPackaged}`);
 
 // Catch main-process crashes before the logger is ready.
 process.on("uncaughtException", (err) => {
