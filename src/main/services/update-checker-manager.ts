@@ -79,14 +79,25 @@ export class UpdateCheckerManager {
     autoUpdater.autoDownload = false;
     autoUpdater.removeAllListeners();
 
+    // If GitHub doesn't respond within 20 s, assume no update and proceed.
+    const fallbackTimer = setTimeout(() => {
+      this.sendEvent({
+        type: "not-available",
+        currentVersion: app.getVersion(),
+      });
+    }, 20_000);
+    const clearFallback = () => clearTimeout(fallbackTimer);
+
     autoUpdater
       .on("update-not-available", () => {
+        clearFallback();
         this.sendEvent({
           type: "not-available",
           currentVersion: app.getVersion(),
         });
       })
       .on("update-available", (info: UpdateInfo) => {
+        clearFallback();
         if (info.version === app.getVersion()) {
           this.sendEvent({
             type: "not-available",
@@ -120,13 +131,15 @@ export class UpdateCheckerManager {
         this.sendEvent({ type: "downloaded", version: _info.version });
       })
       .on("error", (err: Error) => {
+        clearFallback();
         logger.error("Auto-updater error:", err);
-        this.sendEvent({ type: "error", message: err.message });
+        this.sendEvent({ type: "not-available", currentVersion: app.getVersion() });
       });
 
     autoUpdater.checkForUpdates().catch((err) => {
+      clearFallback();
       logger.error("checkForUpdates failed:", err);
-      this.sendEvent({ type: "error", message: String(err) });
+      this.sendEvent({ type: "not-available", currentVersion: app.getVersion() });
     });
   }
 
