@@ -1,10 +1,6 @@
 import type { HowLongToBeatCategory } from "@types";
 import { logger } from "../logger";
-import {
-  type HltbGame,
-  mapHltbGame,
-  pickBestHltbMatch,
-} from "./hltb-parse";
+import { type HltbGame, mapHltbGame, pickBestHltbMatch } from "./hltb-parse";
 
 /**
  * Minimal HowLongToBeat client used for console/emulated games (which the Hydra
@@ -44,10 +40,9 @@ async function resolveSearchEndpoint(): Promise<string | null> {
   )?.[1];
   if (!bundle) return null;
 
-  const js = await fetch(
-    `${BASE}/_next/static/chunks/pages/${bundle}`,
-    { headers: browserHeaders() }
-  ).then((r) => (r.ok ? r.text() : ""));
+  const js = await fetch(`${BASE}/_next/static/chunks/pages/${bundle}`, {
+    headers: browserHeaders(),
+  }).then((r) => (r.ok ? r.text() : ""));
   if (!js) return null;
 
   // Form: "/api/<word>/".concat("<token>")  ->  /api/<word>/<token>
