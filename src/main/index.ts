@@ -7,21 +7,27 @@ import url from "node:url";
 import os from "node:os";
 
 // ── Early startup log — written before any async work so crashes are visible ──
-{
-  const logDir = path.join(
-    process.env.APPDATA ??
-      path.join(os.homedir(), app.isPackaged ? "AppData/Roaming" : "."),
-    "GameHub"
-  );
+function appendStartupLog(message: string): void {
   try {
+    const logDir = path.join(
+      process.env.APPDATA ??
+        path.join(os.homedir(), app.isPackaged ? "AppData/Roaming" : "."),
+      "GameHub"
+    );
     fs.mkdirSync(logDir, { recursive: true });
-    const logPath = path.join(logDir, "startup.log");
-    const entry = `[${new Date().toISOString()}] pid=${process.pid} ver=${process.env.npm_package_version ?? "?"} packaged=${app.isPackaged}\n`;
-    fs.appendFileSync(logPath, entry, "utf8");
+    fs.appendFileSync(
+      path.join(logDir, "startup.log"),
+      `[${new Date().toISOString()}] ${message}\n`,
+      "utf8"
+    );
   } catch {
     // non-fatal — ignore if the directory isn't writable yet
   }
 }
+
+appendStartupLog(
+  `startup pid=${process.pid} packaged=${app.isPackaged}`
+);
 
 // Catch main-process crashes before the logger is ready.
 process.on("uncaughtException", (err) => {
@@ -328,8 +334,25 @@ app.whenReady().then(async () => {
     });
   });
 
-  // Create the update checker window FIRST so the user always sees a UI
-  // even if loadState() throws (e.g. DB failure on first launch).
+  // Register IPC handlers and open the DB BEFORE creating any window. The
+  // renderer's bootstrap (src/renderer/src/main.tsx) does top-level `await`
+  // on getVersion(), isStaging() and the userPreferences read — if those
+  // handlers aren't registered yet, the renderer module throws during
+  // evaluation and React never mounts, leaving a blank window. These steps
+  // are fast and must not be gated behind the slow/failure-prone parts of
+  // loadState() (network, Python RPC, etc.).
+  await db.open().catch((err) => {
+    logger.error("Failed to open level db:", err);
+  });
+  appendStartupLog("db opened");
+  await import("./events")
+    .then(() => appendStartupLog("events registered"))
+    .catch((err) => {
+      appendStartupLog("events import FAILED: " + (err?.stack ?? err));
+      logger.error("Failed to register IPC events:", err);
+    });
+
+  // Now it is safe to show UI: the renderer's bootstrap IPC calls will resolve.
   UpdateCheckerManager.setSendEvent((event) => {
     WindowManager.updateCheckerWindow?.webContents.send(
       "updateCheckerEvent",
@@ -344,7 +367,10 @@ app.whenReady().then(async () => {
     WindowManager.toggleConsoleWindow();
   });
 
-  await loadState().catch((err) => {
+  // Run the rest of startup (Lock, library sync, HydraApi, Python RPC, …) in
+  // the background. A failure here must not blank the window — the UI is
+  // already up and the update checker drives the flow forward.
+  loadState().catch((err) => {
     logger.error("loadState failed:", err);
   });
 

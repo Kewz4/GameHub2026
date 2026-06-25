@@ -33,7 +33,12 @@ const restorePs2Save = async (
     `${folderName}_restored.psu`
   );
   await fs.writeFile(outPath, saveBuffer);
-  logger.log("[restore] Wrote PSU sidecar for manual import", { outPath });
+  // NOTE: avoid ending this string with the word "import" — electron-vite's
+  // CJS-shim regex mistakes a trailing ` import"` for an ESM import statement
+  // and injects its shim banner mid-string, corrupting the whole chunk.
+  logger.log("[restore] Wrote PSU sidecar for the manual import flow", {
+    outPath,
+  });
 };
 
 // Restore a PS1 save (MCS buffer) into a DuckStation memory card
@@ -55,7 +60,10 @@ const restorePs1Save = async (
     `${identifier || "save"}_restored.mcs`
   );
   await fs.writeFile(outPath, saveBuffer);
-  logger.log("[restore] Wrote MCS sidecar for manual import", { outPath });
+  // See the PSU note above: never end a bundled string with ` import"`.
+  logger.log("[restore] Wrote MCS sidecar for the manual import flow", {
+    outPath,
+  });
 };
 
 const restoreEmulationSave = async (
