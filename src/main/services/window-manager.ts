@@ -28,7 +28,7 @@ import path from "node:path";
 import UserAgent from "user-agents";
 import { AUTH_REBRAND_CSS, AUTH_REBRAND_JS } from "./auth-rebrand";
 import { HydraApi } from "./hydra-api";
-import { logger, setConsoleWindowSender, type ConsoleLogEntry } from "./logger";
+import { setConsoleWindowSender, type ConsoleLogEntry } from "./logger";
 
 export class WindowManager {
   public static mainWindow: Electron.BrowserWindow | null = null;
@@ -72,32 +72,17 @@ export class WindowManager {
       show: false,
     };
 
-  private static formatVersionNumber(version: string) {
-    return version.replaceAll(".", "-");
-  }
 
   private static async loadWindowURL(window: BrowserWindow, hash: string = "") {
     // HMR for renderer base on electron-vite cli.
     // Load the remote URL for development or the local html file for production.
     if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
       window.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}#/${hash}`);
-    } else if (import.meta.env.MAIN_VITE_LAUNCHER_SUBDOMAIN) {
-      // Try to load from remote URL in production
-      try {
-        await window.loadURL(
-          `https://release-v${this.formatVersionNumber(app.getVersion())}.${import.meta.env.MAIN_VITE_LAUNCHER_SUBDOMAIN}#/${hash}`
-        );
-      } catch (error) {
-        // Fall back to local file if remote URL fails
-        logger.error(
-          "Failed to load from MAIN_VITE_LAUNCHER_SUBDOMAIN, falling back to local file:",
-          error
-        );
-        window.loadFile(path.join(__dirname, "../renderer/index.html"), {
-          hash,
-        });
-      }
     } else {
+      // This fork ships the renderer bundled inside the app. Upstream Hydra
+      // hosts a per-version renderer on a CDN subdomain, but we don't deploy
+      // there — loading that remote URL would show a blank window — so always
+      // load the local file in production.
       window.loadFile(path.join(__dirname, "../renderer/index.html"), {
         hash,
       });
