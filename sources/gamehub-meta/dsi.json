@@ -5,9 +5,7 @@
     "systemflaw": {
       "title": "System - Flaw",
       "description": "DSi cartridge game in which you scan the environment using the DSi camera and eliminate \"bugs\".",
-      "genres": [
-        "Shooter"
-      ],
+      "genres": ["Shooter"],
       "releaseYear": 2009,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/27dab3caece78442d008c3ad28103d1b.png",
       "libraryImageUrl": null,
@@ -51,9 +49,7 @@
     "fotoshowdown": {
       "title": "Foto Showdown",
       "description": "Use the Nintendo DSi camera to take photos that’ll spawn monsters and bring them to battle! As you win and grow, you’ll collect better cameras to snap more photos and create more powerful monsters! Adventure through a universe of over 100 levels snapping photos using the Nintendo DSi camera. Advanced color recognition will take your photos and generate monsters which you can take and battle other monsters throughout the game. Build your monsters, upgrade their powers and provide increased weapons and fighting power to wreak havoc on your duelist partners! It's an adventure that encourages creative photography, where the photos you take have lasting effects on the total gameplay.",
-      "genres": [
-        "Role-playing (RPG)"
-      ],
+      "genres": ["Role-playing (RPG)"],
       "releaseYear": 2009,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/2d00c265ac0a423bbf23c598b267cae5.png",
       "libraryImageUrl": null,
@@ -64,10 +60,7 @@
     "mysims": {
       "title": "MySims",
       "description": "The Nintendo DS version of MySims takes place in a vacation resort with the player tasked with the job of luring tourists. This is accomplished by doing tasks for the locals who live in your town and after you're done with a certain task you earn stars. Players collect stars to unlock other parts of the city as well as new minigames and new items in stores. As more stars are collected, the town grows and mini games are unlocked.",
-      "genres": [
-        "Simulator",
-        "Strategy"
-      ],
+      "genres": ["Simulator", "Strategy"],
       "releaseYear": 2007,
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/d68ff856a35cd84ee1b853a7d11b1177.png",
       "libraryImageUrl": null,
