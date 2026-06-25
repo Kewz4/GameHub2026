@@ -1,6 +1,6 @@
 {
   "system": "ps1",
-  "generatedAt": 1782369205340,
+  "generatedAt": 1782371938278,
   "games": {
     "nickelodeonspongebobsquarepantssupersponge": {
       "title": "Nickelodeon SpongeBob SquarePants - SuperSponge",
@@ -10,7 +10,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/00df16cd6a87fdbb0d4dddd1a725fe9e.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": null
+      "logoImageUrl": null,
+      "iconUrl": null
     },
     "fapremierleaguestars2001the": {
       "title": "F.A. Premier League Stars 2001, The",
@@ -20,7 +21,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9cb7e68587f1348ccdd80a9ef60a2e8a.jpg",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/56c6d19ee947025ec19f9eb9b283f368.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/076ba05a45d179132cdec4c2c55591bb.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/076ba05a45d179132cdec4c2c55591bb.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/ad00ad125782c8dfc70a6c8e18b82792.png"
     },
     "teamlosircracer": {
       "title": "Team Losi RC Racer",
@@ -30,7 +32,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b0d061600ef10a175f63f0f010d1a828.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": null
+      "logoImageUrl": null,
+      "iconUrl": null
     },
     "sabanspowerrangerslightspeedrescue": {
       "title": "Saban's Power Rangers - Lightspeed Rescue",
@@ -40,7 +43,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/49af8fb9925be1c8ee91f400a8078817.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/0975572a8c4af170ffd76dcca301cdae.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/785ebac7c4da5d0790543aaeb511fc4d.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ca508b71f8e81b9ba5c419e9b31cc2ef.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ca508b71f8e81b9ba5c419e9b31cc2ef.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/9bff601cec084432a684668c641ea05b.png"
     },
     "finalfantasyix": {
       "title": "Final Fantasy IX",
@@ -50,7 +54,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/afd61904eb25c8efcf646d0b04c521f9.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/424f11c9aae1b53bfb4a75ac6e4d5c83.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/6e29a42d687b8cea141df2f46378b007.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/6ae948577c0bd7c07f4e74b4745f74a8.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/6ae948577c0bd7c07f4e74b4745f74a8.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/f6c2a0c4b566bc99d596e58638e342b0.ico"
     },
     "koudelka": {
       "title": "Koudelka",
@@ -60,7 +65,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/be952b283978b1775bf8daf79034be1a.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/07feb1e17b2da92bd4e1f870eaaa6add.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/a8e5a72192378802318bf51063153729.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5a87c42972dfb55ff9cdb144a3ba5cc3.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5a87c42972dfb55ff9cdb144a3ba5cc3.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/bceca960386ff1b9b627b4db3d12bf0e.ico"
     },
     "steelharbinger": {
       "title": "Steel Harbinger",
@@ -70,7 +76,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/23a9d3c98ed00a88429d2e3c00a88be6.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/09f75b964527c439989e74e34ea9ce64.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/09f75b964527c439989e74e34ea9ce64.png",
+      "iconUrl": null
     },
     "urbanassault": {
       "title": "Urban Assault",
@@ -80,7 +87,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/6183fa3af78401462fe2cd9c1ce4afff.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ac42c9d40e7ba0f7192750c9c0596a8e.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ac42c9d40e7ba0f7192750c9c0596a8e.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/06f2ae7068ee80cf19e8083bf7f3091e.ico"
     },
     "hogsofwar": {
       "title": "Hogs of War",
@@ -90,7 +98,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b5372c821691eff5fb470f33af079a64.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/82b80c166d36d93daeb5363e5e7a0c2f.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/04fc43b71d94475cea197c2821237a06.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/f942c03b0954ea15bc3aab7c6d8847eb.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/f942c03b0954ea15bc3aab7c6d8847eb.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/f335bf480fd91007c3c81a67a1dd4294.ico"
     },
     "gex3deepcovergecko": {
       "title": "Gex 3 - Deep Cover Gecko",
@@ -100,7 +109,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/da85e7f36be5ab13e7c1b0dab0dd50e9.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ecc92a19f0de821519b715d10cbf7c62.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/77cb0f00a09e329ee7926ef1d7c66518.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5c8e07660e3000f141dda8b83107ed6e.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5c8e07660e3000f141dda8b83107ed6e.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/afecc60f82be41c1b52f6705ec69e0f1.ico"
     },
     "tombraideriistarringlaracroft": {
       "title": "Tomb Raider II - Starring Lara Croft",
@@ -110,7 +120,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4a8eaf9e3f33cd033aa0bc42b446a427.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/01bead0568960c7daec66bb373943955.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/861f8aa2598860c0023f399e992eb747.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/94358038d1af59f0edc1be49d2aef692.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/94358038d1af59f0edc1be49d2aef692.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/903356ae8ff820105d57f744c8a24396.ico"
     },
     "megamanlegends2": {
       "title": "Mega Man Legends 2",
@@ -120,7 +131,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c4f67f7d632843a4fc5dbe9c090df9df.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/dafd2bc3a016e34da1c696cb44993a56.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/99bbb17674e75c528140126a3deb730e.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/bdd2774e07352f1dbdfeab81e5763c05.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/bdd2774e07352f1dbdfeab81e5763c05.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/cb41662fe265cad3ff1baab4df37b9fa.png"
     },
     "spiritmaster": {
       "title": "Spirit Master",
@@ -130,7 +142,8 @@
       "coverImageUrl": null,
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/59c0665c39a2bb9c8776d66f4e8b8f66.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a1341c517cd50c93bf46e2c545a9b7af.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a1341c517cd50c93bf46e2c545a9b7af.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/a6796dbc0e26e42775f1ab72b9fa1b3b.ico"
     },
     "legacyofkainsoulreaver": {
       "title": "Legacy of Kain - Soul Reaver",
@@ -140,7 +153,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4ef81cfbbfcabdabfb8388a0514b5a32.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/3a0039709a62567da5910352d68487bd.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/c40d81efdade5f24d4d1181392064079.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e9a8f256f4904b06246375df06a8864b.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e9a8f256f4904b06246375df06a8864b.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/fcf70ea0bbeb4edca72cc304e75f4c98.ico"
     },
     "planecrazy": {
       "title": "Plane Crazy",
@@ -150,7 +164,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b41c4803e901560e99e423c17675013a.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/40b0de5f68597721b8591fa6701857f7.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/40b0de5f68597721b8591fa6701857f7.png",
+      "iconUrl": null
     },
     "biohazard15": {
       "title": "Biohazard 1.5",
@@ -160,7 +175,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/98fb1f40ff4945ab36b9ccbf16626d60.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ca4bdb7c37b869497e735331b818d2a4.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/5fc17e04f87f6161a2f1a3be17d4ba2b.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5077e7663db851a1db0b3f61a80acc61.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5077e7663db851a1db0b3f61a80acc61.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/d19544ae709580379cd2523b0e72c86d.ico"
     },
     "jetmoto2124": {
       "title": "Jet Moto 2124",
@@ -170,7 +186,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/483e11b323ba61276926679ff49f2ee7.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/66b7353f1946e0406d8130770d96279b.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9bf4a3500a3d1198df75512492692cb2.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9bf4a3500a3d1198df75512492692cb2.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/0d92af1eab239465721da02549c61854.png"
     },
     "pocketdungeon": {
       "title": "Pocket Dungeon",
@@ -180,7 +197,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/09c80da56bcba456f4983b39203148bf.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/3d595fe61ea042570a58097730e94880.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/90f0db2516373a08548329b98afaf89f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/90f0db2516373a08548329b98afaf89f.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/f432fa27b2b43ed5fd747a0a7096d5dd.ico"
     },
     "xpo2089cyberrevolution": {
       "title": "X-PO 2089 Cyber Revolution",
@@ -190,7 +208,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/e82b6ad346eb6c8c5229b6f1c5f35b8c.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/269766150fa7a771f71f2f5777b1000c.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1da36fd1cd911e8f6606051e5402a127.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1da36fd1cd911e8f6606051e5402a127.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/0df840aed5f513a02964d0c27bc4f277.png"
     },
     "tonyhawksproskater": {
       "title": "Tony Hawk's Pro Skater",
@@ -200,7 +219,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/d483c1937e7a464a1b64ef9c4c67c67e.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/b555f4a2901228cc826327079761e696.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/107387d5d48032f826cb8b095753b055.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/3c333aadfc3ee8ecb8d77ee31197d96a.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/3c333aadfc3ee8ecb8d77ee31197d96a.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/ea5250104950beb07a8d2381d98560f1.png"
     },
     "legostuntrally": {
       "title": "Lego Stunt Rally",
@@ -210,7 +230,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/90c8fe898d05789a4514a3ccc6f8f873.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/cc1d6397370f680339bb84ca6ad55267.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/f1459d2834596bb9b3f0bc1235052614.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/f1459d2834596bb9b3f0bc1235052614.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/4271846620d203fd0511c422d483cdbd.ico"
     },
     "crashcollection": {
       "title": "Crash Collection",
@@ -220,7 +241,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/32400a3ca08db24b6fbb1edf5d0471c6.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/149787a6b7986f31b3dcc0e4e857cd2a.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/149787a6b7986f31b3dcc0e4e857cd2a.png",
+      "iconUrl": null
     },
     "croclegendofthegobbos": {
       "title": "Croc - Legend of the Gobbos",
@@ -230,7 +252,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/983c043bcda0cae71f65748a01b7b94f.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/bd9b9c4db28f248398d0357d87700ef4.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/477da0983d95bcf2049b7016f6e56c9f.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e5e672a281e5c1c17b87e731dd9b750d.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e5e672a281e5c1c17b87e731dd9b750d.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/30a49758f35829d153225ec1ec09f8ed.ico"
     },
     "bubsy3dfurbittenplanet": {
       "title": "Bubsy 3D - Furbitten Planet",
@@ -240,7 +263,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/e91cf90e99333964197170ba435de070.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/b091041b6a9c7b39ba303f8d4c950e4a.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/6c74381b46f6f7b848f8485af8c9fd1f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/6c74381b46f6f7b848f8485af8c9fd1f.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/116a953adea9e4d7d57c4768fd518693.ico"
     },
     "populousthebeginning": {
       "title": "Populous - The Beginning",
@@ -250,7 +274,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/96748080dc669f94a14327927d7f5191.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/831fc8fc3df63a054cda8cc5b32a95f7.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/942215e8919fdb8e8776ce470980cae7.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/bb5b5546e7cae6a27e0697a11918958e.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/bb5b5546e7cae6a27e0697a11918958e.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/35d4f69ad714757ec15987abf27fbf05.ico"
     },
     "dukenukemtotalmeltdown": {
       "title": "Duke Nukem - Total Meltdown",
@@ -260,7 +285,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9b1347ebd516dd05210fcc9e8291b9d1.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/2ab439c02ddc48446d861937b4adc066.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/387d6ae83cbc6fa0b9192b56bf095c49.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ca1d3153a1cf0ed998d4879fbb50d9ab.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ca1d3153a1cf0ed998d4879fbb50d9ab.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/11fd8782bc06376acf87d07bbe096834.png"
     },
     "gexjr": {
       "title": "Gex Jr.",
@@ -270,7 +296,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/ccf086b6b6d4c31272cccd3960aae300.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/2adee8815dd939548ee6b2772524b6f2.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/e3db3d2c4e2856dcb72526473106baa5.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a91edecd508cd9e5b3049e1918f0c6eb.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a91edecd508cd9e5b3049e1918f0c6eb.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/b0d27a96830a31567e231774445b7e16.ico"
     },
     "rockman8": {
       "title": "Rockman 8",
@@ -280,7 +307,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/504b676494b25669bfb9d3e386c9f5c2.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/c36872fac3121ac0c53f7ec12124506e.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/08a920d3826037374bbf12096bc9ee1a.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/08a920d3826037374bbf12096bc9ee1a.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/9f16563436a5d946e37538eb164ee775.png"
     },
     "apocalypse": {
       "title": "Apocalypse",
@@ -290,7 +318,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/05c396b4ebe2ad12cd330de050269cfb.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/dac4c90ce2d13f1548e94c0bf98dcf1f.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/6f21381d768068443d21079d0bb72b0c.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/be23c41621390a448779ee72409e5f49.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/be23c41621390a448779ee72409e5f49.png",
+      "iconUrl": null
     },
     "twistedmetal": {
       "title": "Twisted Metal",
@@ -300,7 +329,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/deacb252e8bae7dd25f71fc5da182493.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/e42166c93fb3bbb2644d14e7a64ef89c.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/663cbae89ccfbb0ab05119a672fb1b9e.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/8dd27ef9cff2bc385d5ae7ddae409e7f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/8dd27ef9cff2bc385d5ae7ddae409e7f.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/5fcc629edc0cfa360016263112fe8058.png"
     },
     "contralegacyofwar": {
       "title": "Contra - Legacy of War",
@@ -310,7 +340,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9360e2bc1078089d348d0cb50e6f2eaa.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/1354b98ee215d7231701d300a7b4451c.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/0ae94e6d0bf2f557b24a832338b3c466.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a7b9872d0b50348db7dd085a0f2d4b99.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a7b9872d0b50348db7dd085a0f2d4b99.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/10508a9cbb7a643e4737e14c464c3176.ico"
     },
     "bloodomenlegacyofkain": {
       "title": "Blood Omen - Legacy of Kain",
@@ -320,7 +351,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/acb750a8d55ac0f804fca52bf05c1ddb.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/8226961a64e331581440a90183cf0a1d.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/ed0eebbaa23beae2d9fcb2fd70cd6feb.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e44e875c12109e4fa3716c05008048b2.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e44e875c12109e4fa3716c05008048b2.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/547dcee2f9ccacd21cb7a6a758ca8697.ico"
     },
     "shanghaibanrinochoujou": {
       "title": "Shanghai - Banri no Choujou",
@@ -330,7 +362,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/edf3f3bdac5470d6ea6e95e2cff40b83.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/8f56656a9943cc5310f155e6ac7eee6f.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/f79b0b20fa3ea7b85a72a14a3632445a.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/7d7c8867715e4480cd4dca3983427258.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/7d7c8867715e4480cd4dca3983427258.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/c9d9d1b612142bb3297259211e8dd54e.png"
     },
     "robocop": {
       "title": "RoboCop",
@@ -340,7 +373,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/49fbd1288d97164bec8c52277ea8d994.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/f5bf0ba0a17ef18f9607774722f5698c.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/36c5d795235ef304afd54a4c84934d00.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9cf47de50dddf986b650a87b6a9acfc7.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9cf47de50dddf986b650a87b6a9acfc7.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/12c16a3c767144329cec5d65ba3f8198.ico"
     },
     "robotronx": {
       "title": "Robotron X",
@@ -350,7 +384,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f0e3d0bfaccc94bf568af55a82663661.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/cde20eb3474d500c8c1b121d1f866e7d.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/cde20eb3474d500c8c1b121d1f866e7d.png",
+      "iconUrl": null
     },
     "skullmonkeys": {
       "title": "Skullmonkeys",
@@ -360,7 +395,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b69158d2bf237ef350a35e10b649322b.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ba5d35769aa3568f9333a89fa8796938.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/7e0e96c45a3dbcbc22aeb190a466e0a7.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/c29f8020d4f15475b0a5aa00e742ce04.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/c29f8020d4f15475b0a5aa00e742ce04.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/e0c4ba8f6e02c02ed67cc30334e8c183.png"
     },
     "tombraiderchronicles": {
       "title": "Tomb Raider Chronicles",
@@ -370,7 +406,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/39396812ba2a20fe66e2db2461e0bdc9.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/41f860e3b7f548abc1f8b812059137bf.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/626c8e06612900e985ac01abf663cc6f.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ddf9029977a61241841edeae15e9b53f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ddf9029977a61241841edeae15e9b53f.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/f569c3d708a7558b3049d2896d2b6ce1.ico"
     },
     "biohazard2": {
       "title": "Biohazard 2",
@@ -380,7 +417,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/05a19977a23b33d30e45203b211f8f9d.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/2e57db4ed5a2c4833d214b85655137b2.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/2e57db4ed5a2c4833d214b85655137b2.png",
+      "iconUrl": null
     },
     "formulaone99": {
       "title": "Formula One 99",
@@ -390,7 +428,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/2254f7b3b273b4c1f6ccab18f1ec97e4.jpg",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/3c15ed824470b5b7ec72fc4c39ee3075.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/af8e600dc7b9d186560061e3e73cbe57.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/af8e600dc7b9d186560061e3e73cbe57.png",
+      "iconUrl": null
     },
     "commandconquercommando": {
       "title": "Command & Conquer - Commando",
@@ -400,7 +439,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a08a967a3fb9931ada49bb349c92fa72.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/8483c7571af3b612e0c3538da027be95.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/80b0c85e6c57765e36477a986b101ede.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/48c1c1cfe38d8291bb6b2f09319c58df.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/48c1c1cfe38d8291bb6b2f09319c58df.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/a60d05725fe3891716ad214ef47b2937.ico"
     },
     "dukenukemlandofthebabes": {
       "title": "Duke Nukem - Land of the Babes",
@@ -410,7 +450,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/21554b11c0c2fa70aa2529024a599f40.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/357819d66be982ac9ffda638dc126635.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/9e30387be1bdc568dfca37927852dc94.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/bb70b0afa16c416f649bce6b3cd298b4.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/bb70b0afa16c416f649bce6b3cd298b4.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/5d1fb61538e2d816200cec17d202eba1.ico"
     },
     "tombraiderthelastrevelation": {
       "title": "Tomb Raider - The Last Revelation",
@@ -420,7 +461,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/53d395e763c58cbce7cc0575b9a0edf9.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/1a09e19f5eacbec80640b3286d175afa.jpg",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/798f03483442d7307a34e6f1860dba47.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/cd8d5260c8131ca7aeea5d41796d1a0a.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/cd8d5260c8131ca7aeea5d41796d1a0a.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/1343777b8ead1cef5a79b78a1a48d805.ico"
     },
     "rockmanx5": {
       "title": "Rockman X5",
@@ -430,7 +472,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c1a19a1f3c50dee579d8b7fdbcd63b1d.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/823840e9b6a2d39447db218c69612fcd.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/823840e9b6a2d39447db218c69612fcd.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/4d5d6268965dc3ba88c0fc78060bc9c6.png"
     },
     "castlevaniasymphonyofthenight": {
       "title": "Castlevania - Symphony of the Night",
@@ -440,7 +483,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/13e50e203d8be253cc8cd7fbe1509c63.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/e1021d43911ca2c1845910d84f40aeae.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/3b036b877a6a074d7dbfc706fe868c1d.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e946209592563be0f01c844ab2170f0c.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/e946209592563be0f01c844ab2170f0c.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/eadccc9ad3d1c5ce3861fabfbf759493.png"
     },
     "wormsarmageddon": {
       "title": "Worms Armageddon",
@@ -450,7 +494,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/dcd9d88bc4e54d6aaaec310696f34b16.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/504d8900dec6fc001704a4fdb33c3c0a.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5ffaa9f5182c2a36843f438bb1fdbdea.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5ffaa9f5182c2a36843f438bb1fdbdea.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/f90503d430452da9236bffac39001e1a.ico"
     },
     "dukenukemtimetokill": {
       "title": "Duke Nukem - Time to Kill",
@@ -460,7 +505,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f7dcef5e0ce632bd23e63109b3ebfdaa.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/83a17b1aec90395c67bba676be661288.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/677a5147e751ae36d431ec35b8ee58aa.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/8b4a964c4c9dda615ee18ef86187d4d4.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/8b4a964c4c9dda615ee18ef86187d4d4.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/2c05ff9a5ff26100a8e61da06f1a716b.ico"
     },
     "virtualtennis": {
       "title": "Virtual Tennis",
@@ -470,7 +516,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/374c2488b6594ae99e140362276b12fa.jpg",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": null
+      "logoImageUrl": null,
+      "iconUrl": null
     },
     "misadventuresoftronbonnethe": {
       "title": "Misadventures of Tron Bonne, The",
@@ -480,7 +527,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a3dea493bbe0e9e246702717cf41c5ad.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/24d46bc840ae608148f503bf70e8355e.jpg",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/1ca4dffd6cb96dfe66f1a044d3bb7cfb.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/21f3d4bc641e7a5a14e17d0d54dd9883.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/21f3d4bc641e7a5a14e17d0d54dd9883.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/8ed16b12adc574bb06ec2cb2f5479952.png"
     },
     "tombraideriiiadventuresoflaracroft": {
       "title": "Tomb Raider III - Adventures of Lara Croft",
@@ -490,7 +538,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/8bd1bbbdfca85541f055bbd2d448620d.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/a5664caf73d5cf149b9bd38fc9edd754.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/d2817e5b9188a8fac590cb6c263f2222.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/758874998f5bd0c393da094e1967a72b.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/758874998f5bd0c393da094e1967a72b.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/d3e8fc83b3e886a0dc2aa9845a5215bf.ico"
     },
     "crashbandicoot": {
       "title": "Crash Bandicoot",
@@ -500,7 +549,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/8282b546dda9ec05515966ba0fe3e5d1.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/f7e3b9df4fd0b3183fc4f380480c7788.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/c281d780ae00740bafb97fea5389bbc9.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a1727f8a84477e378910901380dee67e.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a1727f8a84477e378910901380dee67e.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/8c97612c3a3f6f599b47dce13298f48a.png"
     },
     "ecwhardcorerevolution": {
       "title": "ECW Hardcore Revolution",
@@ -510,7 +560,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/41ed6a95b304269aefa9bafe9c41e489.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/39349a7c3ed00bda5647ff55406aa4d2.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/577ce6c6a40dd525dffb99e780a08a1b.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/237fe40996eac2622f184361a0d1ae85.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/237fe40996eac2622f184361a0d1ae85.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/da4064fde1f9d43d8e2c723d78f91abe.png"
     },
     "screamerrally": {
       "title": "Screamer Rally",
@@ -520,7 +571,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f8e8ce58b493febecbbf3c12b18353dc.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1bff39d1c198ac13abb74acc6fa3549a.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1bff39d1c198ac13abb74acc6fa3549a.png",
+      "iconUrl": null
     },
     "thrillkill": {
       "title": "Thrill Kill",
@@ -530,7 +582,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5d145aa1f6d2f3bdb437e50999fd5958.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/7bb3ac47a110633d78acf851d524566a.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/59386272857f013b167191da57f9eb91.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/23094cc903a83555659aa7a7a0b7a5aa.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/23094cc903a83555659aa7a7a0b7a5aa.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/7c63a554c36ea63c77723a472b7ca20f.ico"
     },
     "biohazard": {
       "title": "Biohazard",
@@ -540,7 +593,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9474b676e28bd6b372081d0902d48de4.jpg",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/c447dec4c6828275655416d3ceebc18f.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/8b65e7a34bd7f333588177e3580aa7a9.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/8b65e7a34bd7f333588177e3580aa7a9.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/cbd765d222226f30835a00e331feb2de.png"
     },
     "baldursgate": {
       "title": "Baldur's Gate",
@@ -550,7 +604,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/bacea30d16b0bb49c20bbd59106591e4.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/760a94acedbc3ecfd54b02d08e5a1465.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/95444b7e1845b5a61dd3c44576b7548a.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9c75bab0f5d964591655e73e7c22c540.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9c75bab0f5d964591655e73e7c22c540.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/289dff07669d7a23de0ef88d2f7129e7.png"
     },
     "torclegendoftheogrecrown": {
       "title": "Torc - Legend Of The Ogre Crown",
@@ -560,7 +615,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b10639b589f4bc19a0887ad3f82029f1.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": null
+      "logoImageUrl": null,
+      "iconUrl": null
     },
     "z": {
       "title": "Z",
@@ -570,7 +626,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/792b2eb6ecb026c35f5d189a2d727003.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/7a8940a8e598612e4e91d4478c968409.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/7390570152113f820a3e4068500df41d.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/7390570152113f820a3e4068500df41d.png",
+      "iconUrl": null
     },
     "tonyhawksproskater2": {
       "title": "Tony Hawk's Pro Skater 2",
@@ -580,7 +637,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/e2ffe5d0169206eb0995e28446bc0cdd.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/12bdd15f05fb2ed3a519510a429870cb.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/806379e230b4283d02e676e99f730621.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/dc2b690516158a874dd8aabe1365c6a0.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/dc2b690516158a874dd8aabe1365c6a0.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/258e130476290221f597c56d351224b6.png"
     },
     "missilecommand": {
       "title": "Missile Command",
@@ -590,7 +648,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4df3e04947c3e6ef972271b12bbe0657.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/f3bd3b7e7a3b885df4a89b92aa0d5c3e.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/b974006f61bd5a3f95e3e9530a579d14.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/b2909c95b8276677c385c18f23b60a68.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/b2909c95b8276677c385c18f23b60a68.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/7fa3fafd201895f23af9b5fcb13e233a.png"
     },
     "medievil": {
       "title": "MediEvil",
@@ -605,7 +664,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b8b0e9685190772ecdb089f0b4a0369f.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/74f23f9e28cbc5ddaae8582f48642a59.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/430579c489bddb6b10e67206face1d18.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a188af0bc920853d3673ab71c5f2a440.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/a188af0bc920853d3673ab71c5f2a440.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/85ba4c9aa69f722ed73d37afa4ad75ca.png"
     },
     "brokenswordtheshadowofthetemplars": {
       "title": "Broken Sword - The Shadow of the Templars",
@@ -615,7 +675,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/0939fce6dc3096420aded5fa5457e59e.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/4f8cbe5a7ccb0b9c8127417a690175d4.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/4ad13f04ef4373992c9d3046200aa350.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/4ad13f04ef4373992c9d3046200aa350.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/4a8a66a2a35fdaec18cb1af7e6540f09.ico"
     },
     "tombraider2": {
       "title": "Tomb Raider 2",
@@ -625,7 +686,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4a8eaf9e3f33cd033aa0bc42b446a427.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/01bead0568960c7daec66bb373943955.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/861f8aa2598860c0023f399e992eb747.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/94358038d1af59f0edc1be49d2aef692.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/94358038d1af59f0edc1be49d2aef692.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/903356ae8ff820105d57f744c8a24396.ico"
     },
     "tombraider": {
       "title": "Tomb Raider",
@@ -635,7 +697,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/87368138229b6995db6b5c482f90a5bf.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/14e31e268a0edec1a4ff6b58df3db4d7.jpg",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/f0b1d5879866f2c2eba77f39993d1184.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5e4b3bf0d97e959f577e143845dd852d.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/5e4b3bf0d97e959f577e143845dd852d.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/1dec69fd432365f7affe596a50965e29.ico"
     },
     "dragonwarriorvii": {
       "title": "Dragon Warrior VII",
@@ -645,7 +708,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f31299036eea10ffe72b2611846646e1.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/6e8f3c01ad6111fbcd4c67dbacb1d05c.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1140f8fcb665a26a1aec050a359cfe9f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1140f8fcb665a26a1aec050a359cfe9f.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/f9d0851d7a3540c141ad626b4ebd4e01.png"
     },
     "rockmanx6": {
       "title": "Rockman X6",
@@ -655,7 +719,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/c1a19a1f3c50dee579d8b7fdbcd63b1d.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/823840e9b6a2d39447db218c69612fcd.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/823840e9b6a2d39447db218c69612fcd.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/4d5d6268965dc3ba88c0fc78060bc9c6.png"
     },
     "hellokittynooshaberiabc": {
       "title": "Hello Kitty no Oshaberi ABC",
@@ -665,7 +730,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/d52e54d1f43cbfc8fd786718a67cbe5b.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": null
+      "logoImageUrl": null,
+      "iconUrl": null
     },
     "chronocross": {
       "title": "Chrono Cross",
@@ -679,7 +745,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/62ff479880ad9a16a568691f85f90ba4.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/73847751ae607f99a9bbed87f731338c.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/f1b77376e6da9ea8126410f9331886e8.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/c61aed648da48aa3893fb3eaadd88a7f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/c61aed648da48aa3893fb3eaadd88a7f.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/373cb8cd58cad5f1309b31c56e2d5a83.png"
     },
     "nightmarecreaturesii": {
       "title": "Nightmare Creatures II",
@@ -689,7 +756,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/41e6c09ff1681db649fb3619fcac9c65.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/df4dc4a2a2e34014279a7fe7dd5fd47b.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/f0d92a0e3d866de3ab42f2223efddec7.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/4113e430544c25cc1af8e2317f4b7875.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/4113e430544c25cc1af8e2317f4b7875.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/80b684a68f08b78f660352dd6437b60b.png"
     },
     "40winks": {
       "title": "40 Winks",
@@ -699,7 +767,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/025fab6aca1e503be8442040f712a83e.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/ab8867645b0ef41d278102c85b55f782.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/0a09b1d63341c622851a50e02d48e19c.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/45b02e9da70144e563ddb3407d8718ae.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/45b02e9da70144e563ddb3407d8718ae.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/8ff7d9eca2df771f960b2ab4d0c67e6e.png"
     },
     "manhattanproject": {
       "title": "Manhattan Project",
@@ -709,7 +778,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/b9f32627ddd94850ea1a25c2917947d0.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/94b087da83ceb5fe6f1a13150f8c0471.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1c54985e4f95b7819ca0357c0cb9a09f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/1c54985e4f95b7819ca0357c0cb9a09f.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/deee792bbdc227183f4ec6bbecef8bb2.ico"
     },
     "tonyhawksproskater3": {
       "title": "Tony Hawk's Pro Skater 3",
@@ -719,7 +789,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/ae2dc84ba5f6527d946ee5e6f2f2fd81.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/195f15384c2a79cedf293e4a847ce85c.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/b458201027eb55a7a6dcb41b0af61993.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/fa003a753346e732d8f02d6199dd2d2c.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/fa003a753346e732d8f02d6199dd2d2c.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/e8d66338fab3727e34a9179ed8804f64.png"
     },
     "razorwing": {
       "title": "Razor Wing",
@@ -729,7 +800,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/bdbf4f4d0f41622c0a70bebf0e7640bc.jpg",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/67565dc4287bf385ac51e5e461cd49fb.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/47e32a448bae6f47591951c07f363a5c.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/47e32a448bae6f47591951c07f363a5c.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/c93a16e73f0e88c6790b8c6fd9f9ed81.png"
     },
     "spiderman": {
       "title": "Spider-Man",
@@ -739,7 +811,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/ab54ae2145b66c0c6400e21f850f4aec.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/78b505caa846675b46cac33365e25811.jpg",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/57696f4c6d8a92b1eb18308677a59ca2.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/3c11b06a39962827e21ddff5932f5262.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/3c11b06a39962827e21ddff5932f5262.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/75743dbfcf177f2885a59b460017feee.png"
     },
     "loaded": {
       "title": "Loaded",
@@ -749,7 +822,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/e78d3d237123a8bbcbd6b22023fe64eb.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/85be7e92377849414323f55a9e3c4e36.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/35604d3f9b03c751e336807aadab6e97.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/15cf76466b97264765356fcc56d801d1.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/15cf76466b97264765356fcc56d801d1.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/c748d08c853dce45d5413435a4c3aa10.png"
     },
     "persona2eternalpunishment": {
       "title": "Persona 2 - Eternal Punishment",
@@ -759,7 +833,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/a5e04401a23d7d496388bbad2b77a24c.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/48e770a9e95213cab24019b4604c3dca.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/95b431e51fc53692913da5263c214162.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/dfce06801e1a85d6d06f1fdd4475dacd.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/dfce06801e1a85d6d06f1fdd4475dacd.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/8f0c515e934bbf18ceaff7e9782be37e.png"
     },
     "shadowmaster": {
       "title": "Shadow Master",
@@ -769,7 +844,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/4c9f0c2c0cc5f6e46d818f646ed5d4cb.jpg",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/26407acd0e4c9d9d8f021614aa4393cf.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/26407acd0e4c9d9d8f021614aa4393cf.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/bde95ec6bf8eb31e51946f68102ea0c7.ico"
     },
     "crashbandicoot2cortexstrikesback": {
       "title": "Crash Bandicoot 2 - Cortex Strikes Back",
@@ -779,7 +855,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/5d709139c178362453256cec2c762e58.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/9744d4f003ffdce5eaa7fa9586087114.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/82b38c6b4df3498e4ab1528e988c1b4d.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9023effe3c16b0477df9b93e26d57e2c.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/9023effe3c16b0477df9b93e26d57e2c.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/a537c315b8774b9881ff1d80c2741fe7.ico"
     },
     "brokenswordiithesmokingmirror": {
       "title": "Broken Sword II - The Smoking Mirror",
@@ -789,7 +866,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/43829cbde6a6862b0f13133736da5c0c.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/8d5811b4392100576b5aeb713f07369d.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/ed633b300970fc08660e8535f3c87b7f.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/6829f04c08f76d864d84dfad889698f2.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/6829f04c08f76d864d84dfad889698f2.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/53a5bd61dfc6a512ba5da320ed0e4494.png"
     },
     "reloadedthehardcoresequel": {
       "title": "Re-Loaded - The Hardcore Sequel",
@@ -799,7 +877,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/f99d0980a5a603dd3a0c7fc0ef4b644b.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": null,
-      "logoImageUrl": null
+      "logoImageUrl": null,
+      "iconUrl": null
     },
     "starcon": {
       "title": "StarCon",
@@ -809,7 +888,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/9853aed1c15d7b9a5d3ad1ce20a4110c.png",
       "libraryImageUrl": null,
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/f50138e44513e32ed931886c24067ba7.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/3d194d58a6470121c92f29c1ee4c936f.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/3d194d58a6470121c92f29c1ee4c936f.png",
+      "iconUrl": null
     },
     "rollcagestageii": {
       "title": "Rollcage Stage II",
@@ -819,7 +899,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/3a7677cd86c61092a7aba73f544f82b2.png",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/31b003a626248a656aec183841b155a4.png",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/d03ade331adc2cc7b45cd0355f0022aa.png",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/49f1166a6220873fb19f1905f439850c.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/49f1166a6220873fb19f1905f439850c.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/1abdd1363896305b867bff7bbd5b9efd.png"
     },
     "oddworldabesexoddus": {
       "title": "Oddworld - Abe's Exoddus",
@@ -829,7 +910,8 @@
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/55d8e5f063980efddb64e772442c3ab2.jpg",
       "libraryImageUrl": "https://cdn2.steamgriddb.com/grid/03e0754e0505abd3f0b96cdba3a3e4c2.jpg",
       "libraryHeroImageUrl": "https://cdn2.steamgriddb.com/hero/051cb0d72dcd23f16842e894f5c46051.jpg",
-      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ffb63ce82f8961fadf084270e3b1310d.png"
+      "logoImageUrl": "https://cdn2.steamgriddb.com/logo/ffb63ce82f8961fadf084270e3b1310d.png",
+      "iconUrl": "https://cdn2.steamgriddb.com/icon/eeb4f82f38a7dee9f0db75cca0501082.png"
     }
   }
 }
