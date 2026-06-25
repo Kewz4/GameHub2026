@@ -235,8 +235,7 @@ limit 20;`;
       };
     })
     .filter(
-      (x) =>
-        x.candidateCovered >= 0.6 && x.queryCovered >= 0.6 && x.lead === 0
+      (x) => x.candidateCovered >= 0.6 && x.queryCovered >= 0.6 && x.lead === 0
     );
   if (scored.length === 0) return null;
 
