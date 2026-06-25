@@ -13,12 +13,14 @@ import {
   gamesShopCacheSublevel,
   gamesSublevel,
   levelKeys,
+  getGameHubMeta,
 } from "@main/level";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 import {
   isCuratedRiotGame,
   buildRiotShopDetails,
 } from "@main/helpers/riot-metadata";
+import type { EmulatorSystem } from "@types";
 
 const getLocalizedSteamAppDetails = async (
   objectId: string,
@@ -38,6 +40,67 @@ const getGameShopDetails = async (
   language: string
 ): Promise<ShopDetailsWithAssets | null> => {
   if (shop === "custom") return null;
+
+  // Launchbox (console/emulated) games: serve data from the local gamehub-meta
+  // sublevel (SteamGridDB art + IGDB description) — no Steam lookup needed.
+  if (shop === "launchbox") {
+    const gameKey = levelKeys.game(shop, objectId);
+    const gameEntry = await gamesSublevel.get(gameKey).catch(() => null);
+    const gameAssets = await gamesShopAssetsSublevel
+      .get(gameKey)
+      .catch(() => null);
+
+    const title = gameAssets?.title ?? gameEntry?.title ?? null;
+
+    // Derive system from objectId (format: "<system>:<normalizedTitle>")
+    const system = (objectId.split(":")[0] ?? "") as EmulatorSystem;
+    const meta = title ? await getGameHubMeta(system, title) : null;
+
+    if (!title && !meta) return null;
+
+    const description = meta?.description ?? "";
+    const assets: ShopDetailsWithAssets["assets"] = {
+      objectId,
+      shop,
+      title: title ?? meta?.title ?? "",
+      coverImageUrl: gameAssets?.coverImageUrl ?? meta?.coverImageUrl ?? null,
+      libraryImageUrl:
+        gameAssets?.libraryImageUrl ?? meta?.libraryImageUrl ?? null,
+      libraryHeroImageUrl:
+        gameAssets?.libraryHeroImageUrl ?? meta?.libraryHeroImageUrl ?? null,
+      logoImageUrl: gameAssets?.logoImageUrl ?? meta?.logoImageUrl ?? null,
+      iconUrl: gameAssets?.iconUrl ?? meta?.iconUrl ?? null,
+      logoPosition: null,
+      downloadSources: [],
+    };
+
+    return {
+      objectId,
+      name: title ?? meta?.title ?? objectId,
+      steam_appid: 0,
+      detailed_description: description,
+      about_the_game: description,
+      short_description: description,
+      developers: [],
+      publishers: [],
+      genres: (meta?.genres ?? []).map((g, i) => ({
+        id: String(i + 1),
+        name: g,
+      })),
+      supported_languages: "English",
+      screenshots: [],
+      movies: [],
+      pc_requirements: { minimum: "", recommended: "" },
+      mac_requirements: { minimum: "", recommended: "" },
+      linux_requirements: { minimum: "", recommended: "" },
+      release_date: {
+        coming_soon: false,
+        date: meta?.releaseYear ? String(meta.releaseYear) : "",
+      },
+      content_descriptors: { ids: [] },
+      assets,
+    } as ShopDetailsWithAssets;
+  }
 
   // For non-Steam games: find the canonical Steam equivalent via the catalogue
   // so the game detail page can show descriptions, publisher info, etc.

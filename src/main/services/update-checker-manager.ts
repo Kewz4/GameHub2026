@@ -80,7 +80,10 @@ export class UpdateCheckerManager {
     autoUpdater.removeAllListeners();
 
     // If GitHub doesn't respond within 20 s, assume no update and proceed.
+    // Also remove all listeners so a late-arriving response doesn't fire
+    // after the UI has already advanced.
     const fallbackTimer = setTimeout(() => {
+      autoUpdater.removeAllListeners();
       this.sendEvent({
         type: "not-available",
         currentVersion: app.getVersion(),

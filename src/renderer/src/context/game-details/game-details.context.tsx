@@ -533,7 +533,8 @@ export function GameDetailsContextProvider({
   }, [objectId, shop, userDetails]);
 
   useEffect(() => {
-    if (shop === "custom") return;
+    // launchbox (console/emulated) games use the minerva effect below instead
+    if (shop === "custom" || shop === "launchbox") return;
 
     const fetchDownloadSources = async () => {
       try {
