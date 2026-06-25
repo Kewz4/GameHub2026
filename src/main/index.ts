@@ -49,7 +49,7 @@ process.on("unhandledRejection", (reason) => {
     );
     const msg =
       reason instanceof Error
-        ? reason.stack ?? String(reason)
+        ? (reason.stack ?? String(reason))
         : String(reason);
     fs.appendFileSync(
       logPath,
