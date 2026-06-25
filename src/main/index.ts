@@ -6,6 +6,57 @@ import fs from "node:fs";
 import url from "node:url";
 import os from "node:os";
 
+// ── Early startup log — written before any async work so crashes are visible ──
+{
+  const logDir = path.join(
+    process.env.APPDATA ??
+      path.join(os.homedir(), app.isPackaged ? "AppData/Roaming" : "."),
+    "GameHub"
+  );
+  try {
+    fs.mkdirSync(logDir, { recursive: true });
+    const logPath = path.join(logDir, "startup.log");
+    const entry = `[${new Date().toISOString()}] pid=${process.pid} ver=${process.env.npm_package_version ?? "?"} packaged=${app.isPackaged}\n`;
+    fs.appendFileSync(logPath, entry, "utf8");
+  } catch {
+    // non-fatal — ignore if the directory isn't writable yet
+  }
+}
+
+// Catch main-process crashes before the logger is ready.
+process.on("uncaughtException", (err) => {
+  try {
+    const logPath = path.join(
+      process.env.APPDATA ?? path.join(os.homedir(), "AppData/Roaming"),
+      "GameHub",
+      "startup.log"
+    );
+    fs.appendFileSync(
+      logPath,
+      `[${new Date().toISOString()}] UNCAUGHT ${err?.stack ?? err}\n`,
+      "utf8"
+    );
+  } catch {
+    // ignore
+  }
+});
+process.on("unhandledRejection", (reason) => {
+  try {
+    const logPath = path.join(
+      process.env.APPDATA ?? path.join(os.homedir(), "AppData/Roaming"),
+      "GameHub",
+      "startup.log"
+    );
+    fs.appendFileSync(
+      logPath,
+      `[${new Date().toISOString()}] UNHANDLED_REJECTION ${reason}\n`,
+      "utf8"
+    );
+  } catch {
+    // ignore
+  }
+});
+
 // Ensure app name matches productName so electron-updater uses
 // "GameHub-updater" instead of "hydralauncher-updater" for its temp dir.
 app.setName("GameHub");
