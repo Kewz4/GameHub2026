@@ -74,7 +74,7 @@ const version = await app.evaluate(async ({ app }) => app.getVersion());
 
 // Get the first renderer window:
 const win = await app.firstWindow({ timeout: 40000 });
-console.log(win.url());          // e.g. file://…/out/renderer/index.html#update-checker
+console.log(win.url()); // e.g. file://…/out/renderer/index.html#update-checker
 
 // Capture renderer console + uncaught errors (this is how the blank-screen
 // "No handler registered for 'getVersion'" was found):
@@ -82,10 +82,13 @@ win.on("console", (m) => console.log(`[console.${m.type()}]`, m.text()));
 win.on("pageerror", (e) => console.log("[pageerror]", String(e)));
 
 // Assert the renderer actually painted (not a blank window):
-await win.waitForFunction(() => {
-  const r = document.getElementById("root") || document.body;
-  return r && r.innerText.trim().length > 0;
-}, { timeout: 15000 });
+await win.waitForFunction(
+  () => {
+    const r = document.getElementById("root") || document.body;
+    return r && r.innerText.trim().length > 0;
+  },
+  { timeout: 15000 }
+);
 
 await win.screenshot({ path: "shot.png" });
 await app.close();
@@ -131,7 +134,7 @@ caused the blank window.
   This is expected in the smoke test; the packaged app reports the real version.
 
 - Graphics/dbus stderr noise (`GPU`, `Vulkan`, `EGL`, `Failed to connect to the
-  bus`) is harmless in a headless sandbox — filter it out when scanning logs.
+bus`) is harmless in a headless sandbox — filter it out when scanning logs.
 
 ## Reference smoke-test script
 
@@ -149,15 +152,27 @@ const app = await electron.launch({
 });
 
 const win = await app.firstWindow({ timeout: 40000 });
-win.on("pageerror", (e) => { console.error("RENDERER ERROR:", String(e)); process.exitCode = 1; });
+win.on("pageerror", (e) => {
+  console.error("RENDERER ERROR:", String(e));
+  process.exitCode = 1;
+});
 
 await win.waitForFunction(
-  () => (document.getElementById("root") || document.body).innerText.trim().length > 0,
+  () =>
+    (document.getElementById("root") || document.body).innerText.trim().length >
+    0,
   { timeout: 15000 }
 );
-console.log("OK:", JSON.stringify(
-  await win.evaluate(() => (document.getElementById("root") || document.body).innerText.replace(/\s+/g, " ").slice(0, 120))
-));
+console.log(
+  "OK:",
+  JSON.stringify(
+    await win.evaluate(() =>
+      (document.getElementById("root") || document.body).innerText
+        .replace(/\s+/g, " ")
+        .slice(0, 120)
+    )
+  )
+);
 await win.screenshot({ path: "smoke.png" });
 await app.close();
 ```
