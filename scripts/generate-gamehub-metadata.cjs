@@ -369,14 +369,22 @@ async function processSystem(system, opts) {
         didWork = true;
       }
 
-      // IGDB backfill: art resolved but no description — retry IGDB with the
-      // improved (article/subtitle-fixed) title. Skips the 5 art calls that
-      // already succeeded, so it's one IGDB request per missing entry.
-      if (opts.igdbBackfill && !existing.description) {
+      // IGDB backfill: re-resolve IGDB with the improved resolver. In
+      // --igdb-revalidate mode every entry is re-checked and its IGDB fields
+      // overwritten (set null on miss) to scrub wrong matches from the old
+      // substring resolver; otherwise only entries missing a description are
+      // filled. Either way the 5 art calls are skipped (one IGDB request each).
+      if (opts.igdbBackfill && (opts.revalidate || !existing.description)) {
         const igdb = await igdbSearch(igdbTitle(title), platformId).catch(
           () => null
         );
-        if (igdb) {
+        if (opts.revalidate) {
+          existing.description = igdb?.summary ?? null;
+          existing.genres = (igdb?.genres ?? []).map((g) => g.name);
+          existing.releaseYear = igdb?.first_release_date
+            ? new Date(igdb.first_release_date * 1000).getUTCFullYear()
+            : null;
+        } else if (igdb) {
           existing.description = igdb.summary ?? existing.description ?? null;
           existing.genres = (igdb.genres ?? []).map((g) => g.name);
           existing.releaseYear = igdb.first_release_date
@@ -450,7 +458,8 @@ function flush(outPath, data) {
 async function main() {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
-  const igdbBackfill = args.includes("--igdb-backfill");
+  const revalidate = args.includes("--igdb-revalidate");
+  const igdbBackfill = args.includes("--igdb-backfill") || revalidate;
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
@@ -463,7 +472,7 @@ async function main() {
   );
 
   for (const system of targets) {
-    await processSystem(system, { force, limit, igdbBackfill });
+    await processSystem(system, { force, limit, igdbBackfill, revalidate });
   }
   process.stdout.write("All done.\n");
 }
