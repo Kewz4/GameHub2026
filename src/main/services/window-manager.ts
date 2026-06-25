@@ -72,7 +72,6 @@ export class WindowManager {
       show: false,
     };
 
-
   private static async loadWindowURL(window: BrowserWindow, hash: string = "") {
     // HMR for renderer base on electron-vite cli.
     // Load the remote URL for development or the local html file for production.
