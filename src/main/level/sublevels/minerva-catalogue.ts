@@ -107,3 +107,68 @@ export async function searchMinervaCatalogue(
   });
   return candidates.slice(0, 20).map((c) => c.entry);
 }
+
+/** Every base-game system prefix (excludes the large update/DLC catalogues). */
+const BASE_GAME_SYSTEMS: EmulatorSystem[] = [
+  "ps1",
+  "ps2",
+  "ps3",
+  "psp",
+  "n3ds",
+  "nds",
+  "dsi",
+  "n64",
+  "gb",
+  "gbc",
+  "gba",
+  "wiiu",
+  "wii",
+  "gc",
+];
+
+/** A single console game surfaced in the global search (no download payload). */
+export interface MinervaGameSuggestion {
+  title: string;
+  system: EmulatorSystem;
+  /** Synthetic, stable id used to open a game-details page for this entry. */
+  objectId: string;
+}
+
+/** Build the synthetic launchbox objectId used to route to a minerva game. */
+export function minervaObjectId(
+  system: EmulatorSystem,
+  title: string
+): string {
+  return `minerva:${system}:${normalizeTitle(title)}`;
+}
+
+/**
+ * Fuzzy-search base games across every system for the global search dropdown
+ * and catalogue. Updates/DLC are excluded. Results are deduped by
+ * system+title and ranked best-match first.
+ */
+export async function searchMinervaGames(
+  title: string,
+  limit = 8
+): Promise<MinervaGameSuggestion[]> {
+  const normalTarget = normalizeTitle(title);
+  if (normalTarget.length < 2) return [];
+
+  const candidates: Array<{ entry: MinervaCatalogueEntry; score: number }> = [];
+  for (const system of BASE_GAME_SYSTEMS) {
+    await scanPrefix(`${system}:`, normalTarget, candidates);
+  }
+
+  candidates.sort((a, b) => a.score - b.score);
+
+  const seen = new Set<string>();
+  const out: MinervaGameSuggestion[] = [];
+  for (const { entry } of candidates) {
+    const objectId = minervaObjectId(entry.system, entry.title);
+    if (seen.has(objectId)) continue;
+    seen.add(objectId);
+    out.push({ title: entry.title, system: entry.system, objectId });
+    if (out.length >= limit) break;
+  }
+  return out;
+}

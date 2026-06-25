@@ -2,14 +2,16 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAppSelector } from "./redux";
 import { debounce } from "lodash-es";
 import { logger } from "@renderer/logger";
-import type { GameShop } from "@types";
+import type { EmulatorSystem, GameShop } from "@types";
 
 export interface SearchSuggestion {
   title: string;
   objectId: string;
   shop: GameShop;
   iconUrl: string | null;
-  source: "library" | "catalogue";
+  source: "library" | "catalogue" | "classics";
+  /** Set only for classics (emulated) suggestions, used to route + fetch ROMs. */
+  system?: EmulatorSystem;
 }
 
 export function useSearchSuggestions(
@@ -104,20 +106,25 @@ export function useSearchSuggestions(
       setIsLoading(true);
 
       try {
-        const response = await window.electron.hydraApi.get<
-          {
-            title: string;
-            objectId: string;
-            shop: GameShop;
-            iconUrl: string | null;
-          }[]
-        >("/catalogue/search/suggestions", {
-          params: {
-            query: searchQuery,
-            limit,
-          },
-          needsAuth: false,
-        });
+        // Query the PC catalogue (HydraApi) and the local console/emulated
+        // catalogue (minerva) in parallel — a failure of one must not hide the
+        // other, so each side falls back to an empty list.
+        const [response, classics] = await Promise.all([
+          window.electron.hydraApi
+            .get<
+              {
+                title: string;
+                objectId: string;
+                shop: GameShop;
+                iconUrl: string | null;
+              }[]
+            >("/catalogue/search/suggestions", {
+              params: { query: searchQuery, limit },
+              needsAuth: false,
+            })
+            .catch(() => []),
+          window.electron.searchMinervaGames(searchQuery, limit).catch(() => []),
+        ]);
 
         if (abortController.signal.aborted) return;
 
@@ -128,12 +135,25 @@ export function useSearchSuggestions(
           })
         );
 
-        cacheRef.current.set(cacheKey, catalogueSuggestions);
-        setSuggestions(catalogueSuggestions);
+        const classicsSuggestions: SearchSuggestion[] = classics.map(
+          (item) => ({
+            title: item.title,
+            objectId: item.objectId,
+            shop: "launchbox" as const,
+            iconUrl: null,
+            source: "classics" as const,
+            system: item.system,
+          })
+        );
+
+        const merged = [...catalogueSuggestions, ...classicsSuggestions];
+
+        cacheRef.current.set(cacheKey, merged);
+        setSuggestions(merged);
       } catch (error) {
         if (!abortController.signal.aborted) {
           setSuggestions([]);
-          logger.error("Failed to fetch catalogue suggestions", error);
+          logger.error("Failed to fetch search suggestions", error);
         }
       } finally {
         if (!abortController.signal.aborted) {

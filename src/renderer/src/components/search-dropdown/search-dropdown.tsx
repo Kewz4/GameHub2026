@@ -202,6 +202,11 @@ export function SearchDropdown({
                   <span className="search-dropdown__item-text">
                     <HighlightText text={item.title} query={currentQuery} />
                   </span>
+                  {item.source === "classics" && item.system && (
+                    <span className="search-dropdown__item-platform">
+                      {item.system.toUpperCase()}
+                    </span>
+                  )}
                 </button>
               </li>
             ))}

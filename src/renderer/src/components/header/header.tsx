@@ -254,10 +254,16 @@ export function Header() {
     title: string;
     objectId: string;
     shop: GameShop;
+    system?: string;
   }) => {
     setIsDropdownVisible(false);
     inputRef.current?.blur();
-    navigate(buildGameDetailsPath(suggestion));
+    // Classics (emulated) suggestions carry their system so the game-details
+    // page can resolve minerva ROM sources without a library record.
+    const params: Record<string, string> = suggestion.system
+      ? { platform: suggestion.system }
+      : {};
+    navigate(buildGameDetailsPath(suggestion, params));
   };
 
   const handleClearSearch = () => {

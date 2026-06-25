@@ -242,3 +242,25 @@ export async function syncAllMinervaSources(): Promise<
   }
   return result;
 }
+
+/** True when the local catalogue already holds at least one entry. */
+async function minervaCatalogueHasEntries(): Promise<boolean> {
+  for await (const _key of minervaCatalogueSublevel.keys({ limit: 1 })) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Populate the catalogue on first run so console games are searchable without
+ * the user manually pressing "Refresh" in settings. No-ops once cached; runs
+ * in the background and swallows network errors.
+ */
+export async function ensureMinervaCatalogue(): Promise<void> {
+  try {
+    if (await minervaCatalogueHasEntries()) return;
+    await syncAllMinervaSources();
+  } catch (err) {
+    console.warn("[minerva] Background catalogue bootstrap failed:", err);
+  }
+}

@@ -86,6 +86,7 @@ export default function GameDetails() {
       gameTitle={gameTitle!}
       shop={shop! as GameShop}
       objectId={objectId!}
+      platform={searchParams.get("platform") ?? undefined}
     >
       <GameDetailsContextConsumer>
         {({

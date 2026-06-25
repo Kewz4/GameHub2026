@@ -32,3 +32,4 @@ import "./emulation-saves";
 import "./get-minerva-download-options";
 import "./build-minerva-catalogue";
 import "./search-minerva-catalogue";
+import "./search-minerva-games";

@@ -1520,6 +1520,8 @@ contextBridge.exposeInMainWorld("electron", {
 
   searchMinervaCatalogue: (title: string, system?: EmulatorSystem) =>
     ipcRenderer.invoke("searchMinervaCatalogue", title, system),
+  searchMinervaGames: (query: string, limit?: number) =>
+    ipcRenderer.invoke("searchMinervaGames", query, limit),
 
   // Cloud debugger
   runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),

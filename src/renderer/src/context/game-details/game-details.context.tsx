@@ -31,7 +31,26 @@ function platformToEmulatorSystem(
 ): EmulatorSystem | null {
   if (!platform) return null;
   const p = platform.toLowerCase();
-  if (p.includes("playstation 3") || p.includes("ps3")) return null; // ps3 not in minerva
+  // Fast path: an exact EmulatorSystem key (passed by the search dropdown for
+  // games not yet in the library).
+  const EXACT: EmulatorSystem[] = [
+    "ps1",
+    "ps2",
+    "ps3",
+    "psp",
+    "n3ds",
+    "nds",
+    "dsi",
+    "n64",
+    "gb",
+    "gbc",
+    "gba",
+    "wiiu",
+    "wii",
+    "gc",
+  ];
+  if ((EXACT as string[]).includes(p)) return p as EmulatorSystem;
+  if (p.includes("playstation 3") || p.includes("ps3")) return "ps3";
   if (p.includes("playstation 2") || p.includes("ps2")) return "ps2";
   if (p.includes("playstation portable") || p.includes("psp")) return "psp";
   if (p.includes("playstation") || p.includes("ps1") || p.includes("psx"))
@@ -94,6 +113,12 @@ export interface GameDetailsContextProps {
   objectId: string;
   gameTitle: string;
   shop: GameShop;
+  /**
+   * Console/emulated platform for games opened from search that are not yet in
+   * the library (carried as the `platform` route param). Lets the minerva ROM
+   * lookup run without a stored game record.
+   */
+  platform?: string;
 }
 
 export function GameDetailsContextProvider({
@@ -101,6 +126,7 @@ export function GameDetailsContextProvider({
   objectId,
   gameTitle,
   shop,
+  platform,
 }: Readonly<GameDetailsContextProps>) {
   const [shopDetails, setShopDetails] = useState<ShopDetailsWithAssets | null>(
     null
@@ -588,11 +614,14 @@ export function GameDetailsContextProvider({
     fetchDownloadSources();
   }, [shop, objectId]);
 
-  // For launchbox (emulated) games, fetch minerva-archive.org ROM sources
+  // For launchbox (emulated) games, fetch minerva-archive.org ROM sources.
+  // Works both for library games (system derived from the stored platform) and
+  // for games opened straight from search (system from the `platform` param).
   useEffect(() => {
-    if (!game || game.shop !== "launchbox" || !gameTitle) return;
+    if (!gameTitle) return;
+    if (game && game.shop !== "launchbox") return;
 
-    const system = platformToEmulatorSystem(game.platform);
+    const system = platformToEmulatorSystem(game?.platform ?? platform);
     if (!system) return;
 
     const mergeRepacks = (minervaRepacks: import("@types").GameRepack[]) => {
@@ -620,7 +649,7 @@ export function GameDetailsContextProvider({
       .catch((err) => {
         console.error("[minerva] Failed to search catalogue:", err);
       });
-  }, [game?.objectId, gameTitle]);
+  }, [game?.objectId, game?.platform, gameTitle, platform]);
 
   const getDownloadsPath = async () => {
     if (userPreferences?.downloadsPath) return userPreferences.downloadsPath;

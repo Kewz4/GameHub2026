@@ -372,6 +372,12 @@ app.whenReady().then(async () => {
     logger.error("loadState failed:", err);
   });
 
+  // Populate the console/emulated ROM catalogue on first run so those games are
+  // searchable out of the box. No-ops once cached; never blocks startup.
+  import("./services/rom-sources/minerva-sources")
+    .then(({ ensureMinervaCatalogue }) => ensureMinervaCatalogue())
+    .catch((err) => logger.error("minerva catalogue bootstrap failed:", err));
+
   const language = await db
     .get<string, string>(levelKeys.language, {
       valueEncoding: "utf8",

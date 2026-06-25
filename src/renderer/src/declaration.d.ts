@@ -1037,6 +1037,12 @@ declare global {
       title: string,
       system?: EmulatorSystem
     ) => Promise<import("@types").GameRepack[]>;
+    searchMinervaGames: (
+      query: string,
+      limit?: number
+    ) => Promise<
+      Array<{ title: string; system: EmulatorSystem; objectId: string }>
+    >;
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;
