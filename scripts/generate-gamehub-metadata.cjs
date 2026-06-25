@@ -90,6 +90,28 @@ function cleanTitle(title) {
     .trim();
 }
 
+/** Move a trailing article ("Zelda, The" -> "The Zelda") on one segment. */
+function fixArticle(segment) {
+  const m = segment.match(/^(.*),\s+(The|A|An)$/i);
+  return m ? `${m[2]} ${m[1]}`.trim() : segment;
+}
+
+/**
+ * Convert a No-Intro/Redump ROM title to the form IGDB indexes:
+ *   "Legend of Zelda, The - Breath of the Wild"
+ *     -> "The Legend of Zelda: Breath of the Wild"
+ * The `, The` article suffix and ` - ` subtitle separator break IGDB search
+ * otherwise (worst on marquee first-party titles). SGDB is more forgiving so
+ * it keeps using cleanTitle; this is for the IGDB query only.
+ */
+function igdbTitle(title) {
+  const cleaned = cleanTitle(title) || title;
+  return cleaned
+    .split(/\s+-\s+/)
+    .map(fixArticle)
+    .join(": ");
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchJson(url, options = {}, retries = 4) {
@@ -261,11 +283,34 @@ async function processSystem(system, opts) {
     const existing = games[key];
 
     if (!opts.force && existing) {
-      // Already resolved. Backfill just the icon if this entry predates icons
-      // (cheap: one SGDB search + one icon fetch, no IGDB / other art).
+      let didWork = false;
+
+      // Icon backfill if this entry predates icons (cheap: 1 SGDB search + 1
+      // icon fetch).
       if (!("iconUrl" in existing)) {
         const search = cleanTitle(title) || title;
         existing.iconUrl = await sgdbIconOnly(search).catch(() => null);
+        didWork = true;
+      }
+
+      // IGDB backfill: art resolved but no description — retry IGDB with the
+      // improved (article/subtitle-fixed) title. Skips the 5 art calls that
+      // already succeeded, so it's one IGDB request per missing entry.
+      if (opts.igdbBackfill && !existing.description) {
+        const igdb = await igdbSearch(igdbTitle(title), platformId).catch(
+          () => null
+        );
+        if (igdb) {
+          existing.description = igdb.summary ?? existing.description ?? null;
+          existing.genres = (igdb.genres ?? []).map((g) => g.name);
+          existing.releaseYear = igdb.first_release_date
+            ? new Date(igdb.first_release_date * 1000).getUTCFullYear()
+            : (existing.releaseYear ?? null);
+        }
+        didWork = true;
+      }
+
+      if (didWork) {
         resolved++;
         processed++;
         if (processed % 25 === 0) {
@@ -274,17 +319,16 @@ async function processSystem(system, opts) {
           );
           flush(outPath, { system, generatedAt: Date.now(), games });
         }
-        await sleep(120);
+        await sleep(opts.igdbBackfill ? 280 : 120);
       } else {
         processed++;
       }
       continue;
     }
 
-    const search = cleanTitle(title) || title;
     const [art, igdb] = await Promise.all([
-      sgdbArtwork(search).catch(() => null),
-      igdbSearch(search, platformId).catch(() => null),
+      sgdbArtwork(cleanTitle(title) || title).catch(() => null),
+      igdbSearch(igdbTitle(title), platformId).catch(() => null),
     ]);
 
     if (art || igdb) {
@@ -330,6 +374,7 @@ function flush(outPath, data) {
 async function main() {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
+  const igdbBackfill = args.includes("--igdb-backfill");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
@@ -342,7 +387,7 @@ async function main() {
   );
 
   for (const system of targets) {
-    await processSystem(system, { force, limit });
+    await processSystem(system, { force, limit, igdbBackfill });
   }
   process.stdout.write("All done.\n");
 }
