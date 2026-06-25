@@ -163,18 +163,39 @@ export default function Catalogue() {
         };
 
         try {
-          const response = await window.electron.hydraApi.post<{
-            edges: CatalogueSearchResult[];
-            count: number;
-          }>("/catalogue/search", {
-            data: requestData,
-            needsAuth: false,
-          });
+          // Console/emulated games are only meaningful for a plain title
+          // search — they carry no Steam genres/tags/proton data, so any
+          // PC-only filter must exclude them. They're prepended on page 1 only.
+          const hasPcOnlyFilters =
+            filters.genres.length > 0 ||
+            filters.tags.length > 0 ||
+            filters.publishers.length > 0 ||
+            filters.developers.length > 0 ||
+            filters.downloadSourceFingerprints.length > 0 ||
+            filters.protondbSupportBadges.length > 0 ||
+            filters.deckCompatibility.length > 0;
+          const wantClassics =
+            offset === 0 && !!filters.title?.trim() && !hasPcOnlyFilters;
+
+          const [response, classics] = await Promise.all([
+            window.electron.hydraApi.post<{
+              edges: CatalogueSearchResult[];
+              count: number;
+            }>("/catalogue/search", {
+              data: requestData,
+              needsAuth: false,
+            }),
+            wantClassics
+              ? window.electron
+                  .searchClassicsCatalogue(filters.title, 12)
+                  .catch(() => [])
+              : Promise.resolve([] as CatalogueSearchResult[]),
+          ]);
 
           if (requestId !== requestSequenceRef.current) return;
 
-          setResults(response.edges);
-          setItemsCount(response.count);
+          setResults([...classics, ...response.edges]);
+          setItemsCount(response.count + classics.length);
           setIsLoading(false);
         } finally {
           if (requestId === requestSequenceRef.current) {

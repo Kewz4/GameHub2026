@@ -142,7 +142,7 @@ export function useSearchSuggestions(
             title: item.title,
             objectId: item.objectId,
             shop: "launchbox" as const,
-            iconUrl: null,
+            iconUrl: item.iconUrl ?? null,
             source: "classics" as const,
             system: item.system,
           })

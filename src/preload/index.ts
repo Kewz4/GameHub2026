@@ -1522,6 +1522,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("searchMinervaCatalogue", title, system),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),
+  searchClassicsCatalogue: (query: string, limit?: number) =>
+    ipcRenderer.invoke("searchClassicsCatalogue", query, limit),
 
   // Cloud debugger
   runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),

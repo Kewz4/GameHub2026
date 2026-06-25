@@ -378,6 +378,12 @@ app.whenReady().then(async () => {
     .then(({ ensureMinervaCatalogue }) => ensureMinervaCatalogue())
     .catch((err) => logger.error("minerva catalogue bootstrap failed:", err));
 
+  // Populate the hosted console metadata (art/genres) so emulated games render
+  // rich cards in search and the catalogue. No-ops once cached.
+  import("./services/rom-sources/gamehub-meta-sources")
+    .then(({ ensureGameHubMeta }) => ensureGameHubMeta())
+    .catch((err) => logger.error("gamehub-meta bootstrap failed:", err));
+
   const language = await db
     .get<string, string>(levelKeys.language, {
       valueEncoding: "utf8",

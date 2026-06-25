@@ -1,8 +1,14 @@
 import { registerEvent } from "../register-event";
-import {
-  searchMinervaGames,
-  type MinervaGameSuggestion,
-} from "@main/level/sublevels/minerva-catalogue";
+import { searchMinervaGames } from "@main/level/sublevels/minerva-catalogue";
+import { getGameHubMeta } from "@main/level/sublevels/gamehub-meta";
+import type { EmulatorSystem } from "@types";
+
+export interface ClassicsSuggestion {
+  title: string;
+  system: EmulatorSystem;
+  objectId: string;
+  iconUrl: string | null;
+}
 
 registerEvent(
   "searchMinervaGames",
@@ -10,5 +16,20 @@ registerEvent(
     _event: Electron.IpcMainInvokeEvent,
     query: string,
     limit?: number
-  ): Promise<MinervaGameSuggestion[]> => searchMinervaGames(query, limit)
+  ): Promise<ClassicsSuggestion[]> => {
+    const games = await searchMinervaGames(query, limit);
+    // Attach cover art from the hosted metadata when available (cheap local
+    // lookups — bounded by `limit`).
+    return Promise.all(
+      games.map(async (g) => {
+        const meta = await getGameHubMeta(g.system, g.title);
+        return {
+          title: g.title,
+          system: g.system,
+          objectId: g.objectId,
+          iconUrl: meta?.coverImageUrl ?? meta?.libraryImageUrl ?? null,
+        };
+      })
+    );
+  }
 );

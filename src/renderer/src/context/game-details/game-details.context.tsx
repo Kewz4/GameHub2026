@@ -621,7 +621,15 @@ export function GameDetailsContextProvider({
     if (!gameTitle) return;
     if (game && game.shop !== "launchbox") return;
 
-    const system = platformToEmulatorSystem(game?.platform ?? platform);
+    // Resolve the console system from (in priority order): the stored library
+    // platform, the `platform` route param, or a `minerva:<system>:…` objectId
+    // (catalogue results and shared links carry it there).
+    const systemFromObjectId = objectId?.startsWith("minerva:")
+      ? objectId.split(":")[1]
+      : null;
+    const system = platformToEmulatorSystem(
+      game?.platform ?? platform ?? systemFromObjectId
+    );
     if (!system) return;
 
     const mergeRepacks = (minervaRepacks: import("@types").GameRepack[]) => {
@@ -649,7 +657,7 @@ export function GameDetailsContextProvider({
       .catch((err) => {
         console.error("[minerva] Failed to search catalogue:", err);
       });
-  }, [game?.objectId, game?.platform, gameTitle, platform]);
+  }, [game?.objectId, game?.platform, gameTitle, platform, objectId]);
 
   const getDownloadsPath = async () => {
     if (userPreferences?.downloadsPath) return userPreferences.downloadsPath;
