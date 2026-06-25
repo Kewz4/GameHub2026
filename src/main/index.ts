@@ -343,6 +343,22 @@ app.whenReady().then(async () => {
     logger.error("Failed to open level db:", err);
   });
   appendStartupLog("db opened");
+
+  // Expose level sublevels on globalThis for Playwright smoke tests.
+  // This is a no-op in production — just a reference to existing singletons.
+  if (!app.isPackaged) {
+    const {
+      gamesSublevel: gs,
+      gamesShopAssetsSublevel,
+      gamehubMetaSublevel,
+    } = await import("./level");
+    (globalThis as Record<string, unknown>).__levelSublevels = {
+      gamesSublevel: gs,
+      gamesShopAssetsSublevel,
+      gamehubMetaSublevel,
+    };
+  }
+
   await import("./events")
     .then(() => appendStartupLog("events registered"))
     .catch((err) => {
