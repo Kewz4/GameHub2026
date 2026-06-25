@@ -14,7 +14,7 @@ import { normalizeTitle } from "./minerva-source";
  */
 const MINERVA_SOURCES_BASE_URL =
   process.env.MINERVA_SOURCES_BASE_URL ??
-  "https://raw.githubusercontent.com/Kewz4/hydra/claude/gracious-shannon-XPvzz/sources/minerva";
+  "https://raw.githubusercontent.com/Kewz4/hydra/dev/sources/minerva";
 
 /** The shared tracker list minerva appends to every magnet (from its rom.js). */
 const MINERVA_TRACKERS = [
