@@ -135,10 +135,7 @@ export interface MinervaGameSuggestion {
 }
 
 /** Build the synthetic launchbox objectId used to route to a minerva game. */
-export function minervaObjectId(
-  system: EmulatorSystem,
-  title: string
-): string {
+export function minervaObjectId(system: EmulatorSystem, title: string): string {
   return `minerva:${system}:${normalizeTitle(title)}`;
 }
 

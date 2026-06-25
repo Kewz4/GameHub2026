@@ -123,7 +123,9 @@ export function useSearchSuggestions(
               needsAuth: false,
             })
             .catch(() => []),
-          window.electron.searchMinervaGames(searchQuery, limit).catch(() => []),
+          window.electron
+            .searchMinervaGames(searchQuery, limit)
+            .catch(() => []),
         ]);
 
         if (abortController.signal.aborted) return;
