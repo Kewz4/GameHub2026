@@ -16,8 +16,20 @@ const path = require("node:path");
 
 const DIR = path.join(__dirname, "..", "sources", "gamehub-meta");
 const SYSTEMS = [
-  "ps1","ps2","ps3","psp","n3ds","nds","dsi","n64",
-  "gb","gbc","gba","wiiu","wii","gc",
+  "ps1",
+  "ps2",
+  "ps3",
+  "psp",
+  "n3ds",
+  "nds",
+  "dsi",
+  "n64",
+  "gb",
+  "gbc",
+  "gba",
+  "wiiu",
+  "wii",
+  "gc",
 ];
 
 // Known JP brand → EN brand substitutions (order matters — longer first)
@@ -25,7 +37,10 @@ const JP_EN = [
   ["Biohazard - Code - Veronica X", "Resident Evil - Code - Veronica X"],
   ["Biohazard - Revelations 2", "Resident Evil - Revelations 2"],
   ["Biohazard - Revelations", "Resident Evil - Revelations"],
-  ["Biohazard - Operation Raccoon City", "Resident Evil - Operation Raccoon City"],
+  [
+    "Biohazard - Operation Raccoon City",
+    "Resident Evil - Operation Raccoon City",
+  ],
   ["Biohazard 0", "Resident Evil 0"],
   ["Biohazard 1", "Resident Evil"],
   ["Biohazard 2", "Resident Evil 2"],
@@ -47,15 +62,27 @@ const JP_EN = [
   ["Seiken Densetsu 3", "Trials of Mana"],
   ["Seiken Densetsu 2", "Secret of Mana"],
   ["Seiken Densetsu", "Secret of Mana"],
-  ["Dragon Quest", "Dragon Quest"],  // same brand, catches romanized subtitle dupes
+  ["Dragon Quest", "Dragon Quest"], // same brand, catches romanized subtitle dupes
   ["Final Fantasy", "Final Fantasy"], // same brand, catches alt-region variants
 ];
 
-const STOPWORDS = new Set(["the","a","an","of","and","version","edition","game"]);
+const STOPWORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "of",
+  "and",
+  "version",
+  "edition",
+  "game",
+]);
 
 function tokenize(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g," ").split(/\s+/)
-    .filter(t => t.length >= 2 && !STOPWORDS.has(t));
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
 
 function titleOverlap(a, b) {
@@ -68,12 +95,14 @@ function titleOverlap(a, b) {
 }
 
 function metaScore(g) {
-  return (g.description ? 10 : 0) +
+  return (
+    (g.description ? 10 : 0) +
     (g.coverImageUrl ? 2 : 0) +
     (g.libraryHeroImageUrl ? 2 : 0) +
     (g.logoImageUrl ? 1 : 0) +
     (g.genres?.length ? 1 : 0) +
-    (g.releaseYear ? 1 : 0);
+    (g.releaseYear ? 1 : 0)
+  );
 }
 
 let grandRemoved = 0;
@@ -101,9 +130,12 @@ for (const sys of SYSTEMS) {
       // Drop the JP entry — EN entry is canonical
       toRemove.add(key);
       // Copy any metadata the JP entry has that EN is missing
-      if (!enGame.description && game.description) enGame.description = game.description;
-      if (!enGame.genres?.length && game.genres?.length) enGame.genres = game.genres;
-      if (!enGame.releaseYear && game.releaseYear) enGame.releaseYear = game.releaseYear;
+      if (!enGame.description && game.description)
+        enGame.description = game.description;
+      if (!enGame.genres?.length && game.genres?.length)
+        enGame.genres = game.genres;
+      if (!enGame.releaseYear && game.releaseYear)
+        enGame.releaseYear = game.releaseYear;
       console.log(`[${sys}] JP→EN drop: "${game.title}" (kept "${enTitle}")`);
       break;
     }
@@ -114,21 +146,33 @@ for (const sys of SYSTEMS) {
   for (const [key, game] of entries) {
     if (toRemove.has(key) || !game.description) continue;
     const dk = game.description.slice(0, 120).trim();
-    if (!descMap.has(dk)) { descMap.set(dk, [key, game]); continue; }
+    if (!descMap.has(dk)) {
+      descMap.set(dk, [key, game]);
+      continue;
+    }
     const [otherKey, otherGame] = descMap.get(dk);
-    if (toRemove.has(otherKey)) { descMap.set(dk, [key, game]); continue; }
+    if (toRemove.has(otherKey)) {
+      descMap.set(dk, [key, game]);
+      continue;
+    }
     const overlap = titleOverlap(game.title, otherGame.title);
     if (overlap < 0.7) continue; // different games, same IGDB blurb — skip
     // Keep the one with more metadata; on tie, keep shorter title
-    const keepCurrent = metaScore(game) > metaScore(otherGame) ||
-      (metaScore(game) === metaScore(otherGame) && game.title.length <= otherGame.title.length);
+    const keepCurrent =
+      metaScore(game) > metaScore(otherGame) ||
+      (metaScore(game) === metaScore(otherGame) &&
+        game.title.length <= otherGame.title.length);
     if (keepCurrent) {
       toRemove.add(otherKey);
       descMap.set(dk, [key, game]);
-      console.log(`[${sys}] desc-dupe drop: "${otherGame.title}" (kept "${game.title}")`);
+      console.log(
+        `[${sys}] desc-dupe drop: "${otherGame.title}" (kept "${game.title}")`
+      );
     } else {
       toRemove.add(key);
-      console.log(`[${sys}] desc-dupe drop: "${game.title}" (kept "${otherGame.title}")`);
+      console.log(
+        `[${sys}] desc-dupe drop: "${game.title}" (kept "${otherGame.title}")`
+      );
     }
   }
 
@@ -141,7 +185,9 @@ for (const sys of SYSTEMS) {
   }
   raw.games = newGames;
   fs.writeFileSync(p, JSON.stringify(raw, null, 2) + "\n");
-  console.log(`[${sys}] removed ${toRemove.size} duplicates → ${Object.keys(newGames).length} remain`);
+  console.log(
+    `[${sys}] removed ${toRemove.size} duplicates → ${Object.keys(newGames).length} remain`
+  );
   grandRemoved += toRemove.size;
 }
 
