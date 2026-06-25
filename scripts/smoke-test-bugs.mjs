@@ -173,9 +173,7 @@ if (
   fail("Install prompt not shown after download", textDownloaded.slice(0, 120));
 }
 
-await ucWin
-  .screenshot({ path: "/tmp/update-checker-102.png" })
-  .catch(() => {});
+await ucWin.screenshot({ path: "/tmp/update-checker-102.png" }).catch(() => {});
 console.log("  → Screenshot: /tmp/update-checker-102.png");
 
 // Let the unpackaged "not-available" flow proceed so main window opens
@@ -232,7 +230,7 @@ await mainWin
 console.log("\n[TEST 2] Emulator game details: launchbox handler");
 
 // Seed a fake launchbox entry in LevelDB via main-process evaluate
-const seeded = await app
+await app
   .evaluate(async () => {
     try {
       // Access the level sublevels from the main bundle's module scope.
@@ -311,7 +309,9 @@ const steamDetails = await mainWin
         "400", // Portal
         "english"
       );
-      return result ? { name: result.name, steam_appid: result.steam_appid } : null;
+      return result
+        ? { name: result.name, steam_appid: result.steam_appid }
+        : null;
     } catch (e) {
       return { error: String(e) };
     }
@@ -325,7 +325,9 @@ if (steamDetails?.error) {
       steamDetails.error.slice(0, 60)
   );
 } else if (steamDetails?.steam_appid) {
-  ok(`Steam path still works — Portal returned steam_appid=${steamDetails.steam_appid}`);
+  ok(
+    `Steam path still works — Portal returned steam_appid=${steamDetails.steam_appid}`
+  );
 } else {
   ok("Steam path returned null (cache miss + network unavailable in sandbox)");
 }
@@ -404,9 +406,7 @@ console.log(
   `Results: ${passed} passed, ${failed} failed (${passed + failed} total)`
 );
 
-await mainWin
-  .screenshot({ path: "/tmp/smoke-bugs-final.png" })
-  .catch(() => {});
+await mainWin.screenshot({ path: "/tmp/smoke-bugs-final.png" }).catch(() => {});
 console.log("Final screenshot: /tmp/smoke-bugs-final.png");
 
 await app.close().catch(() => {});
