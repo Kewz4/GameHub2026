@@ -1181,6 +1181,12 @@ declare global {
       objectId: string,
       shop: GameShop
     ) => Promise<UserAchievement[]>;
+    loadRetroAchievementsList: (
+      shop: GameShop,
+      objectId: string,
+      system: EmulatorSystem,
+      title: string
+    ) => Promise<UserAchievement[]>;
 
     /* Profile */
     getMe: () => Promise<UserDetails | null>;

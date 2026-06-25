@@ -370,7 +370,9 @@ export function GameDetailsContextProvider({
         setIsLoading(false);
       });
 
-    if (userDetails && shop !== "custom") {
+    // launchbox (console/emulated) games are owned by the RetroAchievements
+    // effect below — skip them here so the two don't race on setAchievements.
+    if (userDetails && shop !== "custom" && shop !== "launchbox") {
       // Achievements are indexed by Steam — wait for shopDetails so we have the canonical Steam ID
       rawShopDetailsPromise.then((details) => {
         if (abortController.signal.aborted) return;
@@ -658,6 +660,50 @@ export function GameDetailsContextProvider({
         console.error("[minerva] Failed to search catalogue:", err);
       });
   }, [game?.objectId, game?.platform, gameTitle, platform, objectId]);
+
+  // For RA-capable console games, resolve the RetroAchievements set by title so
+  // the full achievement list (e.g. 0/34) shows before the first in-emulator
+  // unlock. Main returns [] for non-RA systems or when no credentials are set.
+  useEffect(() => {
+    if (!gameTitle || !userDetails) return;
+    if (game && game.shop !== "launchbox") return;
+
+    const systemFromObjectId = objectId?.startsWith("minerva:")
+      ? objectId.split(":")[1]
+      : null;
+    const system = platformToEmulatorSystem(
+      game?.platform ?? platform ?? systemFromObjectId
+    );
+    if (!system) return;
+
+    let cancelled = false;
+    window.electron
+      .loadRetroAchievementsList(
+        shop,
+        objectId,
+        system as EmulatorSystem,
+        gameTitle
+      )
+      .then((raAchievements) => {
+        if (cancelled || raAchievements.length === 0) return;
+        setAchievements(raAchievements);
+      })
+      .catch((err) => {
+        console.error("[retroachievements] Failed to load list:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    game?.objectId,
+    game?.platform,
+    gameTitle,
+    platform,
+    objectId,
+    shop,
+    userDetails,
+  ]);
 
   const getDownloadsPath = async () => {
     if (userPreferences?.downloadsPath) return userPreferences.downloadsPath;
