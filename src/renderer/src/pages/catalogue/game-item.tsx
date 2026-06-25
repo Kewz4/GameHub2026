@@ -13,7 +13,6 @@ import {
   CheckIcon,
   ShareAndroidIcon,
 } from "@primer/octicons-react";
-import CartridgePlaceholder from "@renderer/assets/emulation/cartridge-placeholder.svg?react";
 import cn from "classnames";
 
 const ProtonDBBadge = lazy(async () => {
@@ -119,20 +118,12 @@ export function GameItem({ game }: GameItemProps) {
       );
     }
 
-    if (game.shop === "launchbox") {
-      return (
-        <div className="game-item__cover-placeholder">
-          <CartridgePlaceholder className="game-item__cartridge-placeholder" />
-        </div>
-      );
-    }
-
     return (
       <div className="game-item__cover-placeholder">
         <QuestionIcon size={28} />
       </div>
     );
-  }, [game.libraryImageUrl, game.title, game.shop]);
+  }, [game.libraryImageUrl, game.title]);
 
   const rawProtonValue =
     game.tier ??
