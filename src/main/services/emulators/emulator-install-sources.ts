@@ -3,7 +3,6 @@ import axios from "axios";
 import type {
   EmulatorBinary,
   EmulatorInstallKind,
-  EmulatorSystem,
   ResolvedInstallOption,
 } from "@types";
 import { logger } from "../logger";
@@ -126,11 +125,10 @@ const linkOption = (
   return options;
 };
 
-/** Build the install options offered for an emulator system. */
+/** Build the install options offered for an emulator binary. */
 export const getEmulatorInstallOptions = async (
-  system: EmulatorSystem
+  binary: EmulatorBinary
 ): Promise<ResolvedInstallOption[]> => {
-  const binary = KNOWN_BINARIES[system].binary;
   const source = KNOWN_BINARIES[primarySystemForBinary(binary)].install;
 
   const options: ResolvedInstallOption[] = [];
@@ -148,7 +146,6 @@ export const resolveInstallOptionById = async (
   binary: EmulatorBinary,
   optionId: string
 ): Promise<ResolvedInstallOption | null> => {
-  const system = primarySystemForBinary(binary);
-  const options = await getEmulatorInstallOptions(system);
+  const options = await getEmulatorInstallOptions(binary);
   return options.find((option) => option.id === optionId) ?? null;
 };
