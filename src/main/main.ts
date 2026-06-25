@@ -53,6 +53,11 @@ const hasMissingSeedFiles = async (download: Download): Promise<boolean> => {
 };
 
 export const loadState = async () => {
+  // Ensure the database is fully open before any operations.
+  // ClassicLevel opens asynchronously; if loadState() is called before the
+  // internal open resolves, db.get() throws "Database is not open".
+  await db.open().catch(() => {});
+
   await Lock.acquireLock();
 
   const userPreferences = await db.get<string, UserPreferences | null>(

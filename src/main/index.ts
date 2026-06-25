@@ -47,9 +47,13 @@ process.on("unhandledRejection", (reason) => {
       "GameHub",
       "startup.log"
     );
+    const msg =
+      reason instanceof Error
+        ? reason.stack ?? String(reason)
+        : String(reason);
     fs.appendFileSync(
       logPath,
-      `[${new Date().toISOString()}] UNHANDLED_REJECTION ${reason}\n`,
+      `[${new Date().toISOString()}] UNHANDLED_REJECTION ${msg}\n`,
       "utf8"
     );
   } catch {
@@ -324,7 +328,25 @@ app.whenReady().then(async () => {
     });
   });
 
-  await loadState();
+  // Create the update checker window FIRST so the user always sees a UI
+  // even if loadState() throws (e.g. DB failure on first launch).
+  UpdateCheckerManager.setSendEvent((event) => {
+    WindowManager.updateCheckerWindow?.webContents.send(
+      "updateCheckerEvent",
+      event
+    );
+  });
+  WindowManager.createUpdateCheckerWindow();
+  UpdateCheckerManager.checkAndUpdate().catch(() => {});
+
+  // Ctrl+Shift+L / Cmd+Shift+L toggles the debug console window
+  globalShortcut.register("CommandOrControl+Shift+L", () => {
+    WindowManager.toggleConsoleWindow();
+  });
+
+  await loadState().catch((err) => {
+    logger.error("loadState failed:", err);
+  });
 
   const language = await db
     .get<string, string>(levelKeys.language, {
@@ -340,23 +362,6 @@ app.whenReady().then(async () => {
   const isRunDeepLink = deepLinkArg?.startsWith("hydralauncher://run");
 
   const { needsSetup } = await import("./services/installer");
-
-  // Ctrl+Shift+L / Cmd+Shift+L toggles the debug console window
-  globalShortcut.register("CommandOrControl+Shift+L", () => {
-    WindowManager.toggleConsoleWindow();
-  });
-
-  // Wire update checker events to the update checker window
-  UpdateCheckerManager.setSendEvent((event) => {
-    WindowManager.updateCheckerWindow?.webContents.send(
-      "updateCheckerEvent",
-      event
-    );
-  });
-
-  // Show the update checker on every launch; it signals "proceed" when done
-  WindowManager.createUpdateCheckerWindow();
-  UpdateCheckerManager.checkAndUpdate().catch(() => {});
 
   // When the update checker window closes (no update / error / user skipped),
   // open the normal app flow
