@@ -151,12 +151,59 @@ async function igdbAuth() {
   return igdbToken;
 }
 
+/** Significant lowercase tokens (drop short words / common edition noise). */
+const STOPWORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "of",
+  "and",
+  "version",
+  "edition",
+  "game",
+]);
+function tokenize(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+}
+
+/** Count of symbol differences between two token lists (as sets). */
+function tokenSymDiff(a, b) {
+  const A = new Set(a);
+  const B = new Set(b);
+  let d = 0;
+  for (const x of A) if (!B.has(x)) d++;
+  for (const x of B) if (!A.has(x)) d++;
+  return d;
+}
+
+/** # of leading candidate tokens not present in the query (prefix-hack guard:
+ *  real subtitles append words, hacks like "Shin Pokemon" prepend them). */
+function leadingExtra(qTokens, cTokens) {
+  let i = 0;
+  while (i < cTokens.length && !qTokens.includes(cTokens[i])) i++;
+  return i;
+}
+
+/**
+ * Resolve a game on IGDB using its relevance-ranked `search` index (handles
+ * punctuation/articles far better than a `name ~ *"..."*` substring) and then
+ * select defensively:
+ *   - token guard: candidate & query must share most of their significant
+ *     tokens (rejects token-sharing junk like "Shin Pokemon" for "Pokemon Red")
+ *   - no leading extra tokens (prefix-hack guard)
+ *   - sort by token-set difference, then EARLIEST release date (prefer the
+ *     original over later re-releases/ports), then IGDB relevance.
+ * Returns null rather than a dubious match — a null field beats wrong data.
+ */
 async function igdbSearch(title, platformId) {
   const token = await igdbAuth();
-  const platformClause = platformId ? ` & platforms = [${platformId}]` : "";
-  const query = `fields name,summary,first_release_date,genres.name;
-where name ~ *"${title.replace(/"/g, "")}"*${platformClause};
-limit 5;`;
+  const query = `search "${title.replace(/"/g, "")}";
+fields name,summary,first_release_date,genres.name,platforms;
+limit 20;`;
   const data = await fetchJson("https://api.igdb.com/v4/games", {
     method: "POST",
     headers: {
@@ -167,19 +214,49 @@ limit 5;`;
     body: query,
   });
   if (!Array.isArray(data) || data.length === 0) return null;
-  const norm = title.toLowerCase();
-  // Prefer the closest name match.
-  let best = data[0];
-  let bestLen = Math.abs(best.name.toLowerCase().length - norm.length);
-  for (const g of data) {
-    if (g.name.toLowerCase() === norm) return g;
-    const len = Math.abs(g.name.toLowerCase().length - norm.length);
-    if (len < bestLen) {
-      best = g;
-      bestLen = len;
-    }
-  }
-  return best;
+
+  const qTokens = tokenize(title);
+  if (qTokens.length === 0) return null;
+
+  const scored = data
+    .map((g, rank) => {
+      const cTokens = tokenize(g.name || "");
+      const shared = cTokens.filter((t) => qTokens.includes(t)).length;
+      const candidateCovered = cTokens.length ? shared / cTokens.length : 0;
+      const queryCovered = shared / qTokens.length;
+      return {
+        g,
+        candidateCovered,
+        queryCovered,
+        sd: tokenSymDiff(qTokens, cTokens),
+        date: g.first_release_date ?? Number.MAX_SAFE_INTEGER,
+        rank,
+        lead: leadingExtra(qTokens, cTokens),
+      };
+    })
+    .filter(
+      (x) =>
+        x.candidateCovered >= 0.6 && x.queryCovered >= 0.6 && x.lead === 0
+    );
+  if (scored.length === 0) return null;
+
+  scored.sort(
+    (a, b) =>
+      a.sd - b.sd ||
+      a.date - b.date ||
+      (platformId
+        ? platformPref(a, platformId) - platformPref(b, platformId)
+        : 0) ||
+      a.rank - b.rank
+  );
+  return scored[0].g;
+}
+
+/** 0 if the candidate lists the target platform, 1 otherwise (tiebreak only). */
+function platformPref(x, platformId) {
+  return Array.isArray(x.g.platforms) && x.g.platforms.includes(platformId)
+    ? 0
+    : 1;
 }
 
 // ---- SteamGridDB -----------------------------------------------------------
