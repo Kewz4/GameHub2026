@@ -1139,18 +1139,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </span>
               </div>
 
-              <div className="onboarding-sidebar__section-label">
-                Emulation
-              </div>
+              <div className="onboarding-sidebar__section-label">Emulation</div>
               <div
                 className={[
                   "onboarding-nav-item",
                   navStepIsActive("emulators")
                     ? "onboarding-nav-item--active"
                     : "",
-                  navStepIsDone("emulators")
-                    ? "onboarding-nav-item--done"
-                    : "",
+                  navStepIsDone("emulators") ? "onboarding-nav-item--done" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}

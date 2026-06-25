@@ -30,15 +30,13 @@ import "./onboarding-emulators.scss";
  * shows a broken image.
  */
 const EMULATOR_LOGOS: Record<EmulatorBinary, string | undefined> = {
-  duckstation:
-    "https://www.duckstation.org/icon.png",
+  duckstation: "https://www.duckstation.org/icon.png",
   pcsx2: "https://pcsx2.net/assets/logo-2dac0e8e.svg",
   rpcs3: "https://rpcs3.net/img/rpcs3.png",
   ppsspp: "https://www.ppsspp.org/img/logo.png",
   azahar:
     "https://raw.githubusercontent.com/azahar-emu/azahar/master/dist/azahar.svg",
-  ralibretro:
-    "https://static.retroachievements.org/assets/images/ra-icon.webp",
+  ralibretro: "https://static.retroachievements.org/assets/images/ra-icon.webp",
   raproject64:
     "https://static.retroachievements.org/assets/images/ra-icon.webp",
   ravba: "https://static.retroachievements.org/assets/images/ra-icon.webp",
