@@ -18,11 +18,17 @@ const STOPWORDS = new Set([
 
 /** Significant lowercase tokens (matches the metadata generator's tokenizer). */
 export function titleTokens(name: string): string[] {
-  return name
+  const camelExpanded = name
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+  const base = camelExpanded
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .split(/\s+/)
     .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
+  const joined: string[] = [];
+  for (let i = 0; i < base.length - 1; i++) joined.push(base[i] + base[i + 1]);
+  return [...new Set([...base, ...joined])];
 }
 
 /** Seconds -> "12 Hours" / "45 Mins" (the HowLongToBeatSection splits on space). */
