@@ -27,7 +27,11 @@ registerEvent(
           title: g.title,
           system: g.system,
           objectId: g.objectId,
-          iconUrl: meta?.coverImageUrl ?? meta?.libraryImageUrl ?? null,
+          iconUrl:
+            meta?.iconUrl ??
+            meta?.coverImageUrl ??
+            meta?.libraryImageUrl ??
+            null,
         };
       })
     );

@@ -71,7 +71,8 @@ entries have art but no description — that's expected.
       "coverImageUrl": "https://cdn2.steamgriddb.com/grid/….png",
       "libraryImageUrl": "https://….png",
       "libraryHeroImageUrl": "https://….png",
-      "logoImageUrl": "https://….png"
+      "logoImageUrl": "https://….png",
+      "iconUrl": "https://….png"
     }
   }
 }

@@ -184,22 +184,43 @@ async function sgdbAsset(url) {
 async function sgdbArtwork(title) {
   const id = await sgdbSearchId(title);
   if (!id) return null;
-  const [coverImageUrl, libraryImageUrl, libraryHeroImageUrl, logoImageUrl] =
-    await Promise.all([
-      sgdbAsset(`${SGDB_BASE}/grids/game/${id}?dimensions=600x900&limit=1`),
-      sgdbAsset(`${SGDB_BASE}/grids/game/${id}?dimensions=460x215&limit=1`),
-      sgdbAsset(`${SGDB_BASE}/heroes/game/${id}?limit=1`),
-      sgdbAsset(`${SGDB_BASE}/logos/game/${id}?limit=1`),
-    ]);
+  const [
+    coverImageUrl,
+    libraryImageUrl,
+    libraryHeroImageUrl,
+    logoImageUrl,
+    iconUrl,
+  ] = await Promise.all([
+    sgdbAsset(`${SGDB_BASE}/grids/game/${id}?dimensions=600x900&limit=1`),
+    sgdbAsset(`${SGDB_BASE}/grids/game/${id}?dimensions=460x215&limit=1`),
+    sgdbAsset(`${SGDB_BASE}/heroes/game/${id}?limit=1`),
+    sgdbAsset(`${SGDB_BASE}/logos/game/${id}?limit=1`),
+    sgdbAsset(`${SGDB_BASE}/icons/game/${id}?limit=1`),
+  ]);
   if (
     !coverImageUrl &&
     !libraryImageUrl &&
     !libraryHeroImageUrl &&
-    !logoImageUrl
+    !logoImageUrl &&
+    !iconUrl
   ) {
     return null;
   }
-  return { coverImageUrl, libraryImageUrl, libraryHeroImageUrl, logoImageUrl };
+  return {
+    coverImageUrl,
+    libraryImageUrl,
+    libraryHeroImageUrl,
+    logoImageUrl,
+    iconUrl,
+  };
+}
+
+/** Cheap icon-only resolve, used to backfill entries generated before icons
+ *  were added (avoids re-doing IGDB + the other 4 art calls). */
+async function sgdbIconOnly(title) {
+  const id = await sgdbSearchId(title);
+  if (!id) return null;
+  return sgdbAsset(`${SGDB_BASE}/icons/game/${id}?limit=1`);
 }
 
 // ---- per-system run --------------------------------------------------------
@@ -237,8 +258,26 @@ async function processSystem(system, opts) {
 
   for (const title of todo) {
     const key = normalizeTitle(title);
-    if (!opts.force && games[key]) {
-      processed++;
+    const existing = games[key];
+
+    if (!opts.force && existing) {
+      // Already resolved. Backfill just the icon if this entry predates icons
+      // (cheap: one SGDB search + one icon fetch, no IGDB / other art).
+      if (!("iconUrl" in existing)) {
+        const search = cleanTitle(title) || title;
+        existing.iconUrl = await sgdbIconOnly(search).catch(() => null);
+        resolved++;
+        processed++;
+        if (processed % 25 === 0) {
+          process.stdout.write(
+            `  ${system}: ${processed}/${todo.length} (${resolved} backfilled)\n`
+          );
+          flush(outPath, { system, generatedAt: Date.now(), games });
+        }
+        await sleep(120);
+      } else {
+        processed++;
+      }
       continue;
     }
 
@@ -260,6 +299,7 @@ async function processSystem(system, opts) {
         libraryImageUrl: art?.libraryImageUrl ?? null,
         libraryHeroImageUrl: art?.libraryHeroImageUrl ?? null,
         logoImageUrl: art?.logoImageUrl ?? null,
+        iconUrl: art?.iconUrl ?? null,
       };
       resolved++;
     }

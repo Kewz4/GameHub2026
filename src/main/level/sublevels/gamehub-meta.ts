@@ -15,6 +15,8 @@ export interface GameHubMetaEntry {
   libraryImageUrl: string | null;
   libraryHeroImageUrl: string | null;
   logoImageUrl: string | null;
+  /** Square game icon (SteamGridDB). Optional: absent in pre-icon datasets. */
+  iconUrl?: string | null;
 }
 
 export const gamehubMetaSublevel = db.sublevel<string, GameHubMetaEntry>(
