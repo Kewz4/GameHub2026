@@ -21,27 +21,37 @@ import gbArt from "@renderer/assets/emulation/gb.png";
 import wiiuArt from "@renderer/assets/emulation/wiiu.png";
 import wiiArt from "@renderer/assets/emulation/wii.png";
 
+// Official emulator logos, bundled locally (downloaded from each project's
+// GitHub repo) so they always render — no runtime hotlinking, CSP issues or
+// 403s. They're forced to white via CSS so they read on the dark cards.
+import duckstationLogo from "@renderer/assets/emulation/logos/duckstation.png";
+import pcsx2Logo from "@renderer/assets/emulation/logos/pcsx2.svg?url";
+import rpcs3Logo from "@renderer/assets/emulation/logos/rpcs3.svg?url";
+import ppssppLogo from "@renderer/assets/emulation/logos/ppsspp.png";
+import azaharLogo from "@renderer/assets/emulation/logos/azahar.svg?url";
+import cemuLogo from "@renderer/assets/emulation/logos/cemu.png";
+import dolphinLogo from "@renderer/assets/emulation/logos/dolphin.png";
+import raLogo from "@renderer/assets/emulation/logos/retroachievements.svg?url";
+
 import "./onboarding-emulators.scss";
 
 /**
- * White/monochrome emulator wordmarks fetched from the web. Each URL points at
- * a light variant where one exists; if a logo fails to load (404 / offline),
- * `EmulatorLogo` falls back to a clean white text wordmark so the card never
- * shows a broken image.
+ * Bundled emulator logos. If a logo somehow fails to load, `EmulatorLogo`
+ * falls back to a clean white text wordmark so the card never shows a broken
+ * image. The RA cores (RALibretro/RAProject64/RAVBA) share the
+ * RetroAchievements logo.
  */
 const EMULATOR_LOGOS: Record<EmulatorBinary, string | undefined> = {
-  duckstation: "https://www.duckstation.org/icon.png",
-  pcsx2: "https://pcsx2.net/assets/logo-2dac0e8e.svg",
-  rpcs3: "https://rpcs3.net/img/rpcs3.png",
-  ppsspp: "https://www.ppsspp.org/img/logo.png",
-  azahar:
-    "https://raw.githubusercontent.com/azahar-emu/azahar/master/dist/azahar.svg",
-  ralibretro: "https://static.retroachievements.org/assets/images/ra-icon.webp",
-  raproject64:
-    "https://static.retroachievements.org/assets/images/ra-icon.webp",
-  ravba: "https://static.retroachievements.org/assets/images/ra-icon.webp",
-  cemu: "https://cemu.info/assets/img/cemu_logo.png",
-  dolphin: "https://dolphin-emu.org/images/dolphin-logo.png",
+  duckstation: duckstationLogo,
+  pcsx2: pcsx2Logo,
+  rpcs3: rpcs3Logo,
+  ppsspp: ppssppLogo,
+  azahar: azaharLogo,
+  ralibretro: raLogo,
+  raproject64: raLogo,
+  ravba: raLogo,
+  cemu: cemuLogo,
+  dolphin: dolphinLogo,
 };
 
 function EmulatorLogo({
