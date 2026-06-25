@@ -402,11 +402,7 @@ export class WindowManager {
 
     this.updateCheckerWindow = win;
 
-    win.once("ready-to-show", () => {
-      win.show();
-      // Open DevTools on the update-checker so crashes are visible to the user.
-      win.webContents.openDevTools({ mode: "detach" });
-    });
+    win.once("ready-to-show", () => win.show());
     win.on("closed", () => {
       this.updateCheckerWindow = null;
     });

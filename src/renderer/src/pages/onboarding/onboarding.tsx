@@ -21,7 +21,9 @@ import {
   TrophyIcon,
   SyncIcon,
   ArrowLeftIcon,
+  DeviceDesktopIcon,
 } from "@primer/octicons-react";
+import { OnboardingEmulators } from "./onboarding-emulators";
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
 import GogLogo from "@renderer/assets/gog-logo.svg?react";
@@ -54,6 +56,7 @@ type StepId =
   | "ea"
   | "achievements"
   | "tools"
+  | "emulators"
   | "preferences"
   | "done";
 
@@ -73,6 +76,7 @@ const ALL_STEPS: StepId[] = [
   "ea",
   "achievements",
   "tools",
+  "emulators",
   "preferences",
   "done",
 ];
@@ -92,6 +96,7 @@ const NAV_STEPS: StepId[] = [
   "ea",
   "achievements",
   "tools",
+  "emulators",
   "preferences",
 ];
 
@@ -111,6 +116,7 @@ const STEP_LABELS: Record<StepId, string> = {
   ea: "EA app",
   achievements: "Achievements",
   tools: "Tools",
+  emulators: "Emulators",
   preferences: "Preferences",
   done: "Done",
 };
@@ -314,7 +320,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         return "achievements";
       }
       if (from === "achievements") return "tools";
-      if (from === "tools") return "preferences";
+      if (from === "tools") return "emulators";
+      if (from === "emulators") return "preferences";
       if (from === "preferences") return "done";
       // Default linear progression for other steps
       const idx = ALL_STEPS.indexOf(from);
@@ -343,7 +350,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         return (lastSelected as StepId) ?? "integrations-select";
       }
       if (from === "tools") return "achievements";
-      if (from === "preferences") return "tools";
+      if (from === "emulators") return "tools";
+      if (from === "preferences") return "emulators";
       return "language";
     },
     [selectedIntegrations]
@@ -1128,6 +1136,30 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </span>
                 <span className="onboarding-nav-item__label">
                   {STEP_LABELS["tools"]}
+                </span>
+              </div>
+
+              <div className="onboarding-sidebar__section-label">
+                Emulation
+              </div>
+              <div
+                className={[
+                  "onboarding-nav-item",
+                  navStepIsActive("emulators")
+                    ? "onboarding-nav-item--active"
+                    : "",
+                  navStepIsDone("emulators")
+                    ? "onboarding-nav-item--done"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <span className="onboarding-nav-item__dot">
+                  {navStepIsDone("emulators") ? "✓" : ""}
+                </span>
+                <span className="onboarding-nav-item__label">
+                  {STEP_LABELS["emulators"]}
                 </span>
               </div>
 
@@ -2334,6 +2366,42 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 </div>
 
                 <div className="onboarding-actions">
+                  <Button type="button" onClick={next}>
+                    Continue
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {/* ── Emulators ── */}
+            {currentStep === "emulators" && (
+              <>
+                <div className="onboarding-step-header">
+                  <div className="onboarding-step-header__icon">
+                    <DeviceDesktopIcon size={20} />
+                  </div>
+                  <div>
+                    <h2>Emulators</h2>
+                    <p>Set up emulators for retro &amp; console games</p>
+                  </div>
+                </div>
+                <p className="onboarding-step-description">
+                  GameHub can install and manage portable emulators for you —
+                  PlayStation, Nintendo and handheld systems. Install the ones
+                  you want now, or set them all up in one click. You can do this
+                  later from <strong>Settings → Emulation</strong>.
+                </p>
+
+                <OnboardingEmulators />
+
+                <div className="onboarding-actions onboarding-actions--spaced">
+                  <button
+                    type="button"
+                    className="onboarding-skip"
+                    onClick={next}
+                  >
+                    Skip for now
+                  </button>
                   <Button type="button" onClick={next}>
                     Continue
                   </Button>

@@ -1,0 +1,132 @@
+.onboarding-emulators {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  &__topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__count {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.7;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+}
+
+.onboarding-emu-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  &--done {
+    border-color: rgba(74, 222, 128, 0.35);
+    background: rgba(74, 222, 128, 0.06);
+  }
+
+  &__logos {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+  }
+
+  &__x {
+    font-size: 0.9rem;
+    opacity: 0.35;
+    flex-shrink: 0;
+  }
+
+  &__gamehub {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+
+  &__emu {
+    max-width: 110px;
+    max-height: 32px;
+    object-fit: contain;
+    // Force light/white rendering for dark-on-transparent logos.
+    filter: brightness(0) invert(1);
+  }
+
+  &__wordmark {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+
+  &__platform {
+    height: 36px;
+    max-width: 64px;
+    object-fit: contain;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__name {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  &__console {
+    font-size: 0.78rem;
+    opacity: 0.6;
+  }
+
+  &__ra {
+    margin-top: 4px;
+    align-self: flex-start;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    color: #ffd479;
+    background: rgba(255, 212, 121, 0.12);
+  }
+
+  &__action {
+    margin-top: auto;
+  }
+
+  &__installed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #4ade80;
+  }
+}
