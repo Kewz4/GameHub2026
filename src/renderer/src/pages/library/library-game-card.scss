@@ -282,6 +282,12 @@
     justify-content: center;
     z-index: 0;
   }
+
+  &__cartridge-placeholder {
+    width: 52%;
+    height: auto;
+    opacity: 0.55;
+  }
 }
 
 @keyframes pulse {

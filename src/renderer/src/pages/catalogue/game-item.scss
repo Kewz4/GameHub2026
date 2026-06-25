@@ -128,6 +128,12 @@
     );
   }
 
+  &__cartridge-placeholder {
+    height: 72px;
+    width: auto;
+    opacity: 0.5;
+  }
+
   &__compatibility-badge-group {
     position: absolute;
     right: 8px;

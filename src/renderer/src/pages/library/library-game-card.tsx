@@ -20,6 +20,7 @@ import RiotLogo from "@renderer/assets/riot-logo.svg?react";
 import UbisoftLogo from "@renderer/assets/ubisoft-logo.svg?react";
 import EaLogo from "@renderer/assets/ea-logo.svg?react";
 import GameHubLogo from "@renderer/assets/gamehub-logo.svg?react";
+import CartridgePlaceholder from "@renderer/assets/emulation/cartridge-placeholder.svg?react";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
 
 const shopIcon: Record<string, JSX.Element> = {
@@ -233,7 +234,11 @@ export const LibraryGameCard = memo(function LibraryGameCard({
 
       {imageError || !activeImageSource ? (
         <div className="library-game-card__cover-placeholder">
-          <ImageIcon size={48} />
+          {game.shop === "launchbox" ? (
+            <CartridgePlaceholder className="library-game-card__cartridge-placeholder" />
+          ) : (
+            <ImageIcon size={48} />
+          )}
         </div>
       ) : (
         <img
