@@ -16,12 +16,7 @@
 
 import os from "node:os";
 import path from "node:path";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { EmulatorSystem } from "@types";
 import {
   duckstationConfigCandidates,
@@ -70,7 +65,10 @@ function setNumberedIniKeys(
       continue;
     }
     if (inSection && line.trim().startsWith("[")) inSection = false;
-    if (inSection && new RegExp(`^${keyPrefix}\\d+\\s*=`, "i").test(line.trim()))
+    if (
+      inSection &&
+      new RegExp(`^${keyPrefix}\\d+\\s*=`, "i").test(line.trim())
+    )
       continue;
     filtered.push(line);
   }
@@ -146,9 +144,15 @@ function configureDuckstation(romFolders: string[]): void {
     findExistingConfig(duckstationConfigCandidates()) ??
     duckstationConfigCandidates()[0];
   let ini = readIni(cfgPath);
-  ini = setNumberedIniKeys(ini, "GameList", "SearchDirectory", romFolders, () => ({
-    RecurseSearchDirectory: "true",
-  }));
+  ini = setNumberedIniKeys(
+    ini,
+    "GameList",
+    "SearchDirectory",
+    romFolders,
+    () => ({
+      RecurseSearchDirectory: "true",
+    })
+  );
   writeIni(cfgPath, ini);
 }
 
@@ -165,9 +169,17 @@ function configureCemu(romFolders: string[]): void {
   // Cemu settings.xml may live next to the executable (portable) or in config dir
   const candidates: string[] = [
     path.join(os.homedir(), ".config", "Cemu", "settings.xml"),
-    path.join(os.homedir(), ".var", "app", "info.cemu.Cemu", "config", "Cemu", "settings.xml"),
+    path.join(
+      os.homedir(),
+      ".var",
+      "app",
+      "info.cemu.Cemu",
+      "config",
+      "Cemu",
+      "settings.xml"
+    ),
   ];
-  let cfgPath = candidates.find(existsSync) ?? candidates[0];
+  const cfgPath = candidates.find(existsSync) ?? candidates[0];
 
   let xml: string;
   try {
@@ -200,7 +212,12 @@ function configureDolphin(romFolders: string[]): void {
   const cfgPath = candidates.find(existsSync) ?? candidates[0];
   let ini = readIni(cfgPath);
   ini = setIniKey(ini, "General", "ISOPaths", String(romFolders.length));
-  ini = setNumberedIniKeys(ini, "General", "ISOPath", romFolders.map((_, i) => `ISOPath${i}`));
+  ini = setNumberedIniKeys(
+    ini,
+    "General",
+    "ISOPath",
+    romFolders.map((_, i) => `ISOPath${i}`)
+  );
   // Dolphin uses 0-indexed keys without separator
   let iniFixed = ini;
   romFolders.forEach((folder, i) => {
@@ -240,7 +257,7 @@ function configureAzahar(romFolders: string[]): void {
     .filter((l) => !/^Paths\\gamedirs\\/i.test(l.trim()))
     .join("\n");
   // Append new entries
-  let sectionIdx = ini.split("\n").findIndex((l) => l.trim() === "[UI]");
+  const sectionIdx = ini.split("\n").findIndex((l) => l.trim() === "[UI]");
   const uiLines: string[] = [];
   uiLines.push(`Paths\\gamedirs\\size=${romFolders.length}`);
   romFolders.forEach((folder, i) => {
