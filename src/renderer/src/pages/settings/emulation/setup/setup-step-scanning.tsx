@@ -76,7 +76,9 @@ export function SetupStepScanning({
       <h3 className="setup-modal__body-title">
         {t("setup_scan_title", { system: systemLabel })}
       </h3>
-      <p className="setup-modal__body-intro">{t("setup_scan_intro")}</p>
+      <p className="setup-modal__body-intro">
+        {t("setup_scan_intro", { system: systemLabel })}
+      </p>
 
       <div className="setup-modal__progress-meta">
         <span className="setup-modal__progress-status">
@@ -92,6 +94,7 @@ export function SetupStepScanning({
         </span>
         <span>
           {t("setup_scan_count", {
+            count: processed,
             processed,
             total: Math.max(total, processed),
           })}

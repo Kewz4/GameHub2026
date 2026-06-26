@@ -99,14 +99,70 @@ export * from "./download-error-handler";
 export * from "./download-game-helper";
 export * from "./launch-classics-game";
 
+import type { EmulatorSystem } from "@types";
+
+/**
+ * Resolve an EmulatorSystem from a stored platform string, an exact system key,
+ * or a `minerva:<system>:...` / `local-<system>-...` objectId prefix. Covers
+ * every supported console — not just PlayStation — so launch/metadata/scan code
+ * can route a game to the correct emulator binary. Mirrors the renderer's
+ * `platformToEmulatorSystem`.
+ */
 export const platformToSystem = (
   platform: string | null | undefined
-): "ps1" | "ps2" | "ps3" | null => {
+): EmulatorSystem | null => {
   if (!platform) return null;
   const p = platform.toLowerCase();
+
+  // Fast path: an exact EmulatorSystem key (search dropdown / synthetic ids).
+  const EXACT: EmulatorSystem[] = [
+    "ps1",
+    "ps2",
+    "ps3",
+    "psp",
+    "n3ds",
+    "nds",
+    "dsi",
+    "n64",
+    "gb",
+    "gbc",
+    "gba",
+    "wiiu",
+    "wii",
+    "gc",
+  ];
+  if ((EXACT as string[]).includes(p)) return p as EmulatorSystem;
+
   if (p.includes("playstation 3") || p.includes("ps3")) return "ps3";
   if (p.includes("playstation 2") || p.includes("ps2")) return "ps2";
+  if (p.includes("playstation portable") || p.includes("psp")) return "psp";
   if (p.includes("playstation") || p.includes("ps1") || p.includes("psx"))
     return "ps1";
+  if (p.includes("nintendo 64") || p.includes("n64")) return "n64";
+  if (p.includes("game boy advance") || p.includes("gba")) return "gba";
+  if (p.includes("game boy color") || p.includes("gbc")) return "gbc";
+  if (p.includes("game boy")) return "gb";
+  if (p.includes("nintendo dsi") || p.includes("dsi")) return "dsi";
+  if (p.includes("nintendo 3ds") || p.includes("3ds")) return "n3ds";
+  if (p.includes("nintendo ds") || p.includes("nds")) return "nds";
+  if (p.includes("wii u") || p.includes("wiiu")) return "wiiu";
+  if (p.includes("gamecube") || p.includes("gc")) return "gc";
+  if (p.includes("wii")) return "wii";
+  return null;
+};
+
+/**
+ * Extract the EmulatorSystem encoded in a launchbox objectId. Minerva games use
+ * `minerva:<system>:<normalizedTitle>`; imported ROMs use `local-<system>-<hash>`.
+ * Returns null for opaque launchbox ids (fall back to the stored platform).
+ */
+export const systemFromObjectId = (
+  objectId: string
+): EmulatorSystem | null => {
+  if (objectId.startsWith("minerva:")) {
+    return platformToSystem(objectId.split(":")[1] ?? null);
+  }
+  const local = objectId.match(/^local-([a-z0-9]+)-/i);
+  if (local) return platformToSystem(local[1]);
   return null;
 };

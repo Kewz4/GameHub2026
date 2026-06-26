@@ -259,7 +259,23 @@ const dedupGames = (binary: KnownBinary, files: Candidate[]): GameGroup[] => {
     byDir.set(parent, arr);
   }
 
-  const games: GameGroup[] = markerDirs.map((primary) => ({
+  // Extracted titles (e.g. Wii U "loadiine" / Cemu folder games) expose
+  // `code` / `content` / `meta` sub-directories. Collapse every marker triplet
+  // up to its shared parent so the game is counted ONCE, named after the parent
+  // folder — not three bogus games named "code"/"content"/"meta".
+  const markerParents = new Map<string, Candidate>();
+  for (const m of markerDirs) {
+    const parent = path.dirname(m.fullPath);
+    if (!markerParents.has(parent)) {
+      markerParents.set(parent, {
+        fullPath: parent,
+        name: path.basename(parent),
+        isMarkerDir: true,
+      });
+    }
+  }
+
+  const games: GameGroup[] = [...markerParents.values()].map((primary) => ({
     primary,
     sidecars: [],
   }));

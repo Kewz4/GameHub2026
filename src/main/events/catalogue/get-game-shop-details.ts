@@ -16,6 +16,7 @@ import {
   getGameHubMeta,
 } from "@main/level";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import { platformToSystem, systemFromObjectId } from "@main/helpers";
 import {
   isCuratedRiotGame,
   buildRiotShopDetails,
@@ -50,11 +51,23 @@ const getGameShopDetails = async (
       .get(gameKey)
       .catch(() => null);
 
-    const title = gameAssets?.title ?? gameEntry?.title ?? null;
+    // Derive the system from the objectId first (minerva:/local- prefixes carry
+    // it), then fall back to the stored platform for opaque launchbox ids.
+    const system = (systemFromObjectId(objectId) ??
+      platformToSystem(gameEntry?.platform) ??
+      "") as EmulatorSystem;
 
-    // Derive system from objectId (format: "<system>:<normalizedTitle>")
-    const system = (objectId.split(":")[0] ?? "") as EmulatorSystem;
-    const meta = title ? await getGameHubMeta(system, title) : null;
+    // Minerva ids embed the already-normalized title as the trailing segment,
+    // so meta resolves even for games that are not in the library yet.
+    const objectIdTitle = objectId.startsWith("minerva:")
+      ? (objectId.split(":").slice(2).join(":") || null)
+      : null;
+    const title =
+      gameAssets?.title ?? gameEntry?.title ?? objectIdTitle ?? null;
+
+    const metaTitle = title ?? objectIdTitle;
+    const meta =
+      metaTitle && system ? await getGameHubMeta(system, metaTitle) : null;
 
     if (!title && !meta) return null;
 

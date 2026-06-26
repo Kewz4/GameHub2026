@@ -288,7 +288,7 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     windowsNames: ["Cemu.exe"],
     flatpakIds: ["info.cemu.Cemu"],
     versionFlags: ["--version"],
-    romExtensions: [".wux", ".wud", ".wad", ".rpx", ".iso"],
+    romExtensions: [".wux", ".wud", ".wua", ".wad", ".rpx", ".iso"],
     romDirectoryMarkers: ["code", "content", "meta"],
     install: {
       githubRepo: "cemu-project/Cemu",
