@@ -351,11 +351,13 @@ app.whenReady().then(async () => {
       gamesSublevel: gs,
       gamesShopAssetsSublevel,
       gamehubMetaSublevel,
+      minervaCatalogueSublevel,
     } = await import("./level");
     (globalThis as Record<string, unknown>).__levelSublevels = {
       gamesSublevel: gs,
       gamesShopAssetsSublevel,
       gamehubMetaSublevel,
+      minervaCatalogueSublevel,
     };
   }
 
