@@ -14,9 +14,7 @@ function buildRepackTitle(entry: MinervaCatalogueEntry): string {
       entry.filename.match(/[Uu]pdate\s+(v[\d.]+)/i) ??
       entry.filename.match(/(v[\d.]+)/i);
     const ver = m?.[1] ?? "";
-    return ver
-      ? `Update ${ver.startsWith("v") ? ver : "v" + ver}`
-      : "Update";
+    return ver ? `Update ${ver.startsWith("v") ? ver : "v" + ver}` : "Update";
   }
   if (entry.contentType === "dlc") {
     // e.g. "Game Title - DLC Pack 2 - Master Sword Trials (USA).wux"
