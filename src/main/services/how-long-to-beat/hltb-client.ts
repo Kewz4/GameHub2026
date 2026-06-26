@@ -106,7 +106,10 @@ async function postBleedSearch(
   });
   if (!res.ok) return { status: res.status, data: [] };
   const json = (await res.json()) as { data?: HltbGame[] };
-  return { status: res.status, data: Array.isArray(json.data) ? json.data : [] };
+  return {
+    status: res.status,
+    data: Array.isArray(json.data) ? json.data : [],
+  };
 }
 
 /**
