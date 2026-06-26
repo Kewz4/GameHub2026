@@ -80,6 +80,7 @@ export function RepacksModal({
   sharedLink = false,
 }: Readonly<RepacksModalProps>) {
   const [filteredRepacks, setFilteredRepacks] = useState<GameRepack[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [repack, setRepack] = useState<GameRepack | null>(null);
   const [showSelectFolderModal, setShowSelectFolderModal] = useState(false);
   const [downloadSources, setDownloadSources] = useState<DownloadSource[]>([]);
@@ -207,6 +208,31 @@ export function RepacksModal({
     }
   }, [visible, game, dispatch]);
 
+  const REGION_RE = /\((USA|Europe|Japan|World)\)/i;
+
+  const availableRegions = useMemo<string[]>(() => {
+    const isMinerva = repacks.some((r) =>
+      r.downloadSourceName?.toLowerCase().includes("minerva")
+    );
+    if (!isMinerva) return [];
+    const regions = new Set<string>();
+    for (const r of repacks) {
+      const m = r.title.match(REGION_RE);
+      if (m) regions.add(m[1]);
+    }
+    return Array.from(regions);
+  }, [repacks]);
+
+  // Auto-select USA when regions first appear
+  useEffect(() => {
+    if (availableRegions.length > 0 && selectedRegion === null) {
+      setSelectedRegion(
+        availableRegions.includes("USA") ? "USA" : availableRegions[0]
+      );
+    }
+    if (availableRegions.length === 0) setSelectedRegion(null);
+  }, [availableRegions]);
+
   const sortedRepacks = useMemo(() => {
     const contentTypeOrder = { game: 0, update: 1, dlc: 2 };
     return orderBy(
@@ -241,7 +267,14 @@ export function RepacksModal({
   useEffect(() => {
     const term = filterTerm.trim().toLowerCase();
 
-    const byTerm = sortedRepacks.filter((repack) => {
+    const byRegion = sortedRepacks.filter((repack) => {
+      if (!selectedRegion || availableRegions.length < 2) return true;
+      const m = repack.title.match(REGION_RE);
+      if (!m) return true; // non-regional entries always shown
+      return m[1].toLowerCase() === selectedRegion.toLowerCase();
+    });
+
+    const byTerm = byRegion.filter((repack) => {
       if (!term) return true;
       const lowerTitle = repack.title.toLowerCase();
       const lowerRepacker = repack.downloadSourceName.toLowerCase();
@@ -260,7 +293,14 @@ export function RepacksModal({
     });
 
     setFilteredRepacks(bySource);
-  }, [sortedRepacks, filterTerm, selectedFingerprints, downloadSources]);
+  }, [
+    sortedRepacks,
+    filterTerm,
+    selectedFingerprints,
+    downloadSources,
+    selectedRegion,
+    availableRegions,
+  ]);
 
   const openDownloadSettings = (repack: GameRepack) => {
     setRepack(repack);
@@ -518,6 +558,7 @@ export function RepacksModal({
       setFilterTerm("");
       setSelectedFingerprints([]);
       setIsFilterDrawerOpen(false);
+      setSelectedRegion(null);
     }
   }, [visible]);
 
@@ -979,6 +1020,22 @@ export function RepacksModal({
               </div>
             );
           })()}
+
+        {availableRegions.length > 1 && (
+          <div className="repacks-modal__region-picker">
+            <span className="repacks-modal__region-label">Region:</span>
+            {availableRegions.map((region) => (
+              <button
+                key={region}
+                type="button"
+                className={`repacks-modal__region-chip${selectedRegion === region ? " repacks-modal__region-chip--active" : ""}`}
+                onClick={() => setSelectedRegion(region)}
+              >
+                {region}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="repacks-modal__repacks">
           {filteredRepacks.length === 0 ? (
