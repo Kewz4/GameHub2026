@@ -2,6 +2,7 @@ import { registerEvent } from "../register-event";
 import { emulators } from "@main/services";
 import type { EmulatorSystem, RomFolder } from "@types";
 import crypto from "node:crypto";
+import { syncEmulatorRomPaths } from "@main/services/emulators/configure-emulator-rom-paths";
 
 const addRomFolder = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -21,10 +22,15 @@ const addRomFolder = async (
     lastScanAt: null,
   };
 
-  return emulators.updateEmulatorConfig(system, (cfg) => ({
+  const updated = await emulators.updateEmulatorConfig(system, (cfg) => ({
     ...cfg,
     romFolders: [...cfg.romFolders, newFolder],
   }));
+
+  // Best-effort: mirror the new folder list into the emulator's own config file.
+  syncEmulatorRomPaths(system).catch(() => {});
+
+  return updated;
 };
 
 registerEvent("addRomFolder", addRomFolder);

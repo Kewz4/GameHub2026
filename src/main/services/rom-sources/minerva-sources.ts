@@ -166,7 +166,17 @@ export async function syncMinervaSource(
       contentType: ct,
       titleId: download.titleId ?? null,
     };
-    const key = `${prefix}${normalizeTitle(download.title)}`;
+    // For updates/DLC, append a filename-derived disambiguator so multiple packs
+    // for the same game title don't overwrite each other in LevelDB.
+    const filenameStem = (download.fileName ?? "").replace(
+      /\.[a-z0-9]{1,6}$/i,
+      ""
+    );
+    const uniqueSuffix =
+      (ct === "dlc" || ct === "update") && filenameStem
+        ? `:${normalizeTitle(filenameStem)}`
+        : "";
+    const key = `${prefix}${normalizeTitle(download.title)}${uniqueSuffix}`;
     batch.put(key, { entry, cachedAt: now });
     count += 1;
   }
@@ -220,7 +230,15 @@ async function syncSupplementalSource(opts: {
       contentType: ct,
       titleId: download.titleId ?? null,
     };
-    const key = `${opts.prefix}${normalizeTitle(download.title)}`;
+    const filenameStem2 = (download.fileName ?? "").replace(
+      /\.[a-z0-9]{1,6}$/i,
+      ""
+    );
+    const uniqueSuffix2 =
+      (ct === "dlc" || ct === "update") && filenameStem2
+        ? `:${normalizeTitle(filenameStem2)}`
+        : "";
+    const key = `${opts.prefix}${normalizeTitle(download.title)}${uniqueSuffix2}`;
     batch.put(key, { entry, cachedAt: now });
     count += 1;
   }
