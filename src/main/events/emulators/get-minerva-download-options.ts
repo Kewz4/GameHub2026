@@ -44,11 +44,7 @@ async function scanAllVariants(
   normalizedTitle: string
 ): Promise<MinervaCatalogueEntry[]> {
   const entries: MinervaCatalogueEntry[] = [];
-  const prefixes = [
-    `${system}:`,
-    `${system}-upd:`,
-    `${system}-dlc:`,
-  ];
+  const prefixes = [`${system}:`, `${system}-upd:`, `${system}-dlc:`];
 
   for (const prefix of prefixes) {
     const gte = `${prefix}${normalizedTitle}`;
