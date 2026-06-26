@@ -18,7 +18,7 @@ const getMinervaDownloadOptions = async (
       {
         id: `minerva:${system}:${entry.filename}`,
         title: entry.title,
-        fileSize: null,
+        fileSize: entry.fileSize ?? null,
         uris: [uri],
         unavailableUris: [],
         uploadDate: null,

@@ -1,6 +1,5 @@
 import { registerEvent } from "../register-event";
 import { searchMinervaCatalogue } from "@main/level/sublevels/minerva-catalogue";
-import { normalizeTitle } from "@main/services/rom-sources/minerva-source";
 import type { EmulatorSystem, GameRepack } from "@types";
 
 registerEvent(
@@ -12,7 +11,7 @@ registerEvent(
   ): Promise<GameRepack[]> => {
     const entries = await searchMinervaCatalogue(title, system);
     return entries.map((entry) => ({
-      id: `minerva-${entry.system}-${entry.contentType ?? "game"}-${normalizeTitle(entry.title)}`,
+      id: `minerva:${entry.system}:${entry.filename}`,
       title: entry.title,
       uris: entry.magnet ? [entry.magnet] : [],
       fileSize: entry.fileSize ?? null,
