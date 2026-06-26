@@ -298,7 +298,10 @@ function configureAzahar(romFolders: string[]): void {
  */
 const PS3_TITLE_ID = /^([A-Z]{4}\d{5})$/;
 
-function configureRpcs3(romFolders: string[], executablePath: string | null): void {
+function configureRpcs3(
+  romFolders: string[],
+  executablePath: string | null
+): void {
   if (!executablePath) return;
   const ymlPath = path.join(path.dirname(executablePath), "games.yml");
 
@@ -348,7 +351,10 @@ function configureRpcs3(romFolders: string[], executablePath: string | null): vo
  * the emulator's ROM browser opens in the right place by default.
  * The cfg is in the same directory as the executable.
  */
-function configureRaproject64(romFolders: string[], executablePath: string | null): void {
+function configureRaproject64(
+  romFolders: string[],
+  executablePath: string | null
+): void {
   if (!executablePath || romFolders.length === 0) return;
   const cfgPath = path.join(path.dirname(executablePath), "Project64.cfg");
   let ini = readIni(cfgPath);
