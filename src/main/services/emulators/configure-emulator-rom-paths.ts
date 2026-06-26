@@ -11,10 +11,11 @@
  *   PPSSPP       → INI  ~/.config/ppsspp/PSP/SYSTEM/ppsspp.ini   [General] BrowsePath (last added)
  *   Azahar(3DS)  → INI  ~/.config/azahar-emu/azahar/qt-config.ini Paths\gamedirs\…
  *   RAProject64  → INI  <rpj64-dir>/Project64.cfg                 [Settings] Rom Directory=<path>
+ *   RAVBA(GB/GBC/GBA) → INI %APPDATA%\VBA-M\vbam.ini / ~/.vbam/vbam.ini
+ *                             [GB] ROMDir / GBCROMDir  [GBA] ROMDir
  *
- * Emulators with no persistent ROM-directory config (users open ROMs directly):
- *   RALibretro (NDS/DSI) — libretro frontend, no game-list config
- *   RAVBA (GB/GBC/GBA)   — VBA-M variant, no persistent game-list
+ * Emulators with no persistent ROM-directory config:
+ *   RALibretro (NDS/DSI) — stores only a recent-games JSON list, no browse dir
  *
  * All writes are best-effort and silently swallowed — Hydra always passes
  * the ROM path as a direct CLI argument at launch time.
@@ -362,6 +363,37 @@ function configureRaproject64(
   writeIni(cfgPath, ini);
 }
 
+/**
+ * RAVBA (GB/GBC/GBA): write ROM directory into vbam.ini.
+ * - Windows: %APPDATA%\VBA-M\vbam.ini
+ * - Linux:   ~/.vbam/vbam.ini
+ * Keys: [GB] ROMDir (GB), [GB] GBCROMDir (GBC), [GBA] ROMDir (GBA).
+ * The same file covers all three systems — each call only updates
+ * the key for the system being configured.
+ */
+function configureRavba(
+  romFolders: string[],
+  system: "gb" | "gbc" | "gba"
+): void {
+  if (romFolders.length === 0) return;
+  const dir =
+    process.platform === "win32"
+      ? path.join(process.env.APPDATA ?? os.homedir(), "VBA-M")
+      : path.join(os.homedir(), ".vbam");
+  const cfgPath = path.join(dir, "vbam.ini");
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  let ini = readIni(cfgPath);
+  const folder = romFolders[0];
+  if (system === "gb") {
+    ini = setIniKey(ini, "GB", "ROMDir", folder);
+  } else if (system === "gbc") {
+    ini = setIniKey(ini, "GB", "GBCROMDir", folder);
+  } else {
+    ini = setIniKey(ini, "GBA", "ROMDir", folder);
+  }
+  writeIni(cfgPath, ini);
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -405,8 +437,17 @@ export async function syncEmulatorRomPaths(
         // RAProject64 keeps a rom-directory preference in Project64.cfg
         configureRaproject64(romPaths, config.executablePath);
         break;
-      // RALibretro (nds/dsi) and RAVBA (gb/gbc/gba) have no persistent
-      // ROM-directory config — they open ROMs via file dialog directly.
+      case "gb":
+        configureRavba(romPaths, "gb");
+        break;
+      case "gbc":
+        configureRavba(romPaths, "gbc");
+        break;
+      case "gba":
+        configureRavba(romPaths, "gba");
+        break;
+      // RALibretro (nds/dsi): stores only a recent-games JSON list,
+      // no browse-directory config to set.
       default:
         break;
     }
