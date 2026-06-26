@@ -382,7 +382,79 @@
     width: 100%;
     word-break: break-word;
   }
-}
+
+  // ── Update / DLC confirmation prompt ────────────────────────────────
+  &__prompt-content {
+    display: flex;
+    flex-direction: column;
+    gap: calc(globals.$spacing-unit * 2);
+    min-width: 360px;
+  }
+
+  &__prompt-intro {
+    color: var(--color-text-secondary);
+    font-size: globals.$small-font-size;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  &__prompt-items {
+    display: flex;
+    flex-direction: column;
+    gap: calc(globals.$spacing-unit * 1);
+    background: var(--color-background-2);
+    border-radius: 8px;
+    padding: calc(globals.$spacing-unit * 1.5) calc(globals.$spacing-unit * 2);
+  }
+
+  &__prompt-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(globals.$spacing-unit * 2);
+    padding: calc(globals.$spacing-unit * 0.5) 0;
+    border-bottom: 1px solid var(--color-border);
+
+    &:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+  }
+
+  &__prompt-item-name {
+    font-weight: 500;
+    font-size: globals.$small-font-size;
+    color: var(--color-text);
+    flex: 1;
+  }
+
+  &__prompt-item-size {
+    font-size: globals.$small-font-size;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__prompt-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: calc(globals.$spacing-unit * 1) calc(globals.$spacing-unit * 2);
+    background: var(--color-background-3, rgba(255, 255, 255, 0.05));
+    border-radius: 6px;
+    font-size: globals.$small-font-size;
+    font-weight: 600;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+  }
+
+  &__prompt-actions {
+    display: flex;
+    gap: calc(globals.$spacing-unit * 1.5);
+    justify-content: flex-end;
+    padding-top: calc(globals.$spacing-unit * 1);
+  }
+} // end .repacks-modal
 
 @keyframes flyToSidebar {
   0% {

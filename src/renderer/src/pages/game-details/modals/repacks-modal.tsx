@@ -19,7 +19,6 @@ import { Tooltip } from "react-tooltip";
 import {
   Badge,
   Button,
-  ConfirmationModal,
   DebridBadge,
   Modal,
   TextField,
@@ -299,9 +298,36 @@ export function RepacksModal({
     }
   };
 
-  const extractVersionFromTitle = (title: string): string => {
-    const match = title.match(/v[\d.]+/i);
-    return match ? match[0] : "";
+  /** Parse a human-readable size string like "1.8 GB" → gigabytes as a number. */
+  const parseSizeGB = (size: string | null): number => {
+    if (!size) return 0;
+    const m = size.match(/([\d.]+)\s*(TB|GB|MB|KB)/i);
+    if (!m) return 0;
+    const v = parseFloat(m[1]);
+    switch (m[2].toUpperCase()) {
+      case "TB":
+        return v * 1024;
+      case "GB":
+        return v;
+      case "MB":
+        return v / 1024;
+      case "KB":
+        return v / (1024 * 1024);
+      default:
+        return 0;
+    }
+  };
+
+  const formatGB = (gb: number): string => {
+    if (gb === 0) return "";
+    return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(gb * 1024).toFixed(0)} MB`;
+  };
+
+  const totalDownloadSize = (packs: (GameRepack | null)[]): string => {
+    const total = packs
+      .filter(Boolean)
+      .reduce((s, r) => s + parseSizeGB(r!.fileSize), 0);
+    return formatGB(total);
   };
 
   const handleUpdatePromptConfirm = () => {
@@ -346,11 +372,11 @@ export function RepacksModal({
 
     if (applyUpdate && pendingUpdates.length > 0) {
       const updateRepack = pendingUpdates[0];
-      const version = extractVersionFromTitle(updateRepack.title);
+      // updateRepack.title is now already "Update v208" (enriched in IPC handler)
       await addGameToQueue({
         objectId: `${objectId}::update`,
         title: gameTitle
-          ? `${gameTitle} — Update${version ? " " + version : ""}`
+          ? `${gameTitle} — ${updateRepack.title}`
           : updateRepack.title,
         shop,
         downloader,
@@ -375,7 +401,10 @@ export function RepacksModal({
           .slice(0, 40);
         await addGameToQueue({
           objectId: `${objectId}::dlc::${dlcSlug}`,
-          title: dlcRepack.title,
+          // dlcRepack.title is now the DLC name (e.g. "DLC Pack 2") from IPC handler
+          title: gameTitle
+            ? `${gameTitle} — ${dlcRepack.title}`
+            : dlcRepack.title,
           shop,
           downloader,
           downloadPath,
@@ -582,35 +611,114 @@ export function RepacksModal({
         repack={repack}
       />
 
-      <ConfirmationModal
+      {/* ── Update prompt ─────────────────────────────────────────────── */}
+      <Modal
         visible={showUpdatePrompt}
         title={t("apply_update_title", { defaultValue: "Apply Update?" })}
-        descriptionText={
-          pendingUpdates.length > 0
-            ? t("apply_update_description", {
-                defaultValue: `An update is available (${pendingUpdates[0].title}). Queue it to download after the base game?`,
-                title: pendingUpdates[0].title,
-              })
-            : ""
-        }
-        confirmButtonLabel={t("yes", { defaultValue: "Yes" })}
-        cancelButtonLabel={t("no", { defaultValue: "No" })}
-        onConfirm={handleUpdatePromptConfirm}
         onClose={handleUpdatePromptCancel}
-      />
+        clickOutsideToClose={false}
+      >
+        <div className="repacks-modal__prompt-content">
+          <p className="repacks-modal__prompt-intro">
+            {t("apply_update_intro", {
+              defaultValue:
+                "An update is available for this game. It will be queued to download automatically after the base game finishes.",
+            })}
+          </p>
 
-      <ConfirmationModal
+          <div className="repacks-modal__prompt-items">
+            {pendingUpdates.map((u) => (
+              <div key={u.id} className="repacks-modal__prompt-item">
+                <span className="repacks-modal__prompt-item-name">
+                  {u.title}
+                </span>
+                {u.fileSize && (
+                  <span className="repacks-modal__prompt-item-size">
+                    {u.fileSize}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {pendingBaseRepack && (
+            <div className="repacks-modal__prompt-total">
+              <span>
+                {t("total_download_size", {
+                  defaultValue: "Total download",
+                })}
+              </span>
+              <span>
+                {totalDownloadSize([pendingBaseRepack, ...pendingUpdates])}
+              </span>
+            </div>
+          )}
+
+          <div className="repacks-modal__prompt-actions">
+            <Button theme="outline" onClick={handleUpdatePromptCancel}>
+              {t("skip_update", { defaultValue: "Skip update" })}
+            </Button>
+            <Button theme="primary" onClick={handleUpdatePromptConfirm}>
+              {t("yes_queue_update", { defaultValue: "Yes, queue update" })}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── DLC prompt ────────────────────────────────────────────────── */}
+      <Modal
         visible={showDLCPrompt}
-        title={t("apply_dlc_title", { defaultValue: "Apply All DLC?" })}
-        descriptionText={t("apply_dlc_description", {
-          defaultValue: `${pendingDLCs.length} DLC pack(s) found. Queue them all to download after the base game?`,
+        title={t("apply_dlc_title", {
+          defaultValue: `Apply All DLC? (${pendingDLCs.length} pack${pendingDLCs.length !== 1 ? "s" : ""})`,
           count: pendingDLCs.length,
         })}
-        confirmButtonLabel={t("yes", { defaultValue: "Yes" })}
-        cancelButtonLabel={t("no", { defaultValue: "No" })}
-        onConfirm={handleDLCPromptConfirm}
         onClose={handleDLCPromptCancel}
-      />
+        clickOutsideToClose={false}
+      >
+        <div className="repacks-modal__prompt-content">
+          <p className="repacks-modal__prompt-intro">
+            {t("apply_dlc_intro", {
+              defaultValue:
+                "The following DLC packs were found. They will be queued after the base game (and update, if selected).",
+            })}
+          </p>
+
+          <div className="repacks-modal__prompt-items">
+            {pendingDLCs.map((dlc) => (
+              <div key={dlc.id} className="repacks-modal__prompt-item">
+                <span className="repacks-modal__prompt-item-name">
+                  {dlc.title}
+                </span>
+                {dlc.fileSize && (
+                  <span className="repacks-modal__prompt-item-size">
+                    {dlc.fileSize}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {pendingDLCs.length > 0 && (
+            <div className="repacks-modal__prompt-total">
+              <span>
+                {t("total_dlc_size", { defaultValue: "Total DLC size" })}
+              </span>
+              <span>{totalDownloadSize(pendingDLCs)}</span>
+            </div>
+          )}
+
+          <div className="repacks-modal__prompt-actions">
+            <Button theme="outline" onClick={handleDLCPromptCancel}>
+              {t("skip_dlc", { defaultValue: "Skip DLC" })}
+            </Button>
+            <Button theme="primary" onClick={handleDLCPromptConfirm}>
+              {t("yes_queue_dlc", {
+                defaultValue: "Yes, queue all DLC",
+              })}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {epicGogModal && (
         <EpicGogDownloadModal
