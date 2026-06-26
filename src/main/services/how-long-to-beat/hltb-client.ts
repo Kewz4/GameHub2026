@@ -56,9 +56,9 @@ async function resolveSearchEndpoint(): Promise<string | null> {
   }).then((r) => (r.ok ? r.text() : ""));
   if (!html) return null;
 
-  const allSrcs = [
-    ...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi),
-  ].map((m) => m[1]);
+  const allSrcs = [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi)].map(
+    (m) => m[1]
+  );
   // Try the _app chunk(s) first, then any chunk — the POST call lives in a
   // lazily-loaded chunk on current builds.
   const ordered = [
