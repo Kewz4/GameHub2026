@@ -2,21 +2,34 @@
  * Write ROM search directories to each emulator's own config file so its
  * native game list matches the folders the user configured in Hydra.
  *
- * Each emulator uses a different config format:
+ * Config format per emulator:
  *   DuckStation  → INI  ~/.local/share/duckstation/settings.ini  [GameList] SearchDirectory1..N
- *   PCSX2        → INI  ~/.local/share/PCSX2/inis/PCSX2.ini      [GameList] Paths / RecursivePaths
+ *   PCSX2        → INI  ~/.local/share/PCSX2/inis/PCSX2.ini      [GameList] RecursivePaths (colon-sep)
+ *   RPCS3        → YAML <rpcs3-dir>/games.yml  TITLEID: /path     (scan ROM folder for title-ID subdirs)
  *   Cemu         → XML  ~/.config/Cemu/settings.xml               <GamePaths><path>…</path></GamePaths>
  *   Dolphin      → INI  ~/.config/dolphin-emu/Dolphin.ini         [General] ISOPath0..N / ISOPaths=N
  *   PPSSPP       → INI  ~/.config/ppsspp/PSP/SYSTEM/ppsspp.ini   [General] BrowsePath (last added)
  *   Azahar(3DS)  → INI  ~/.config/azahar-emu/azahar/qt-config.ini Paths\gamedirs\…
+ *   RAProject64  → INI  <rpj64-dir>/Project64.cfg                 [Settings] Rom Directory=<path>
  *
- * Failures are silently swallowed — the emulator's own game-list is a
- * convenience; Hydra always launches by passing the ROM path directly.
+ * Emulators with no persistent ROM-directory config (users open ROMs directly):
+ *   RALibretro (NDS/DSI) — libretro frontend, no game-list config
+ *   RAVBA (GB/GBC/GBA)   — VBA-M variant, no persistent game-list
+ *
+ * All writes are best-effort and silently swallowed — Hydra always passes
+ * the ROM path as a direct CLI argument at launch time.
  */
 
 import os from "node:os";
 import path from "node:path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import type { EmulatorSystem } from "@types";
 import {
   duckstationConfigCandidates,
@@ -275,6 +288,74 @@ function configureAzahar(romFolders: string[]): void {
   writeIni(cfgPath, lines.join("\n"));
 }
 
+/**
+ * RPCS3: scan each ROM folder for subdirectories that look like PS3 title IDs
+ * (e.g. BLUS30588, NPEB01017) and add them to RPCS3's games.yml so the
+ * emulator's own game list stays in sync.
+ *
+ * RPCS3 does not have a global "scan directory" config — its game list is a
+ * YAML file (<rpcs3_dir>/games.yml) that maps title-ID → absolute path.
+ */
+const PS3_TITLE_ID = /^([A-Z]{4}\d{5})$/;
+
+function configureRpcs3(romFolders: string[], executablePath: string | null): void {
+  if (!executablePath) return;
+  const ymlPath = path.join(path.dirname(executablePath), "games.yml");
+
+  // Read existing entries
+  const existing = new Map<string, string>();
+  try {
+    for (const line of readFileSync(ymlPath, "utf-8").split(/\r?\n/)) {
+      const m = /^([A-Z0-9_-]{9,12})\s*:\s*(.+)$/.exec(line.trim());
+      if (m) existing.set(m[1].trim(), m[2].trim());
+    }
+  } catch {
+    /* file may not exist yet */
+  }
+
+  let changed = false;
+  for (const folder of romFolders) {
+    let entries: string[];
+    try {
+      entries = readdirSync(folder);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!PS3_TITLE_ID.test(entry)) continue;
+      const gamePath = path.join(folder, entry);
+      try {
+        if (!statSync(gamePath).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      if (!existing.has(entry)) {
+        existing.set(entry, gamePath);
+        changed = true;
+      }
+    }
+  }
+
+  if (!changed) return;
+  const dir = path.dirname(ymlPath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const lines = Array.from(existing.entries()).map(([k, v]) => `${k}: ${v}`);
+  writeFileSync(ymlPath, lines.join("\n") + "\n", "utf-8");
+}
+
+/**
+ * RAProject64 (N64): write the first ROM folder into Project64.cfg so
+ * the emulator's ROM browser opens in the right place by default.
+ * The cfg is in the same directory as the executable.
+ */
+function configureRaproject64(romFolders: string[], executablePath: string | null): void {
+  if (!executablePath || romFolders.length === 0) return;
+  const cfgPath = path.join(path.dirname(executablePath), "Project64.cfg");
+  let ini = readIni(cfgPath);
+  ini = setIniKey(ini, "Settings", "Rom Directory", romFolders[0]);
+  writeIni(cfgPath, ini);
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -297,6 +378,10 @@ export async function syncEmulatorRomPaths(
       case "ps2":
         configurePcsx2(romPaths);
         break;
+      case "ps3":
+        // RPCS3 uses games.yml keyed by PS3 title-ID, not a scan-dir config
+        configureRpcs3(romPaths, config.executablePath);
+        break;
       case "wiiu":
         configureCemu(romPaths);
         break;
@@ -310,7 +395,12 @@ export async function syncEmulatorRomPaths(
       case "n3ds":
         configureAzahar(romPaths);
         break;
-      // ralibretro / raproject64 / ravba don't use a persistent game-list config
+      case "n64":
+        // RAProject64 keeps a rom-directory preference in Project64.cfg
+        configureRaproject64(romPaths, config.executablePath);
+        break;
+      // RALibretro (nds/dsi) and RAVBA (gb/gbc/gba) have no persistent
+      // ROM-directory config — they open ROMs via file dialog directly.
       default:
         break;
     }
