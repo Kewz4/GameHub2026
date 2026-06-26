@@ -32,6 +32,11 @@ export interface GameRepack {
   createdAt: string;
   installNotes?: string | null;
   contentType?: "game" | "update" | "dlc";
+  /** Canonical region parsed from the source filename (USA/Europe/Japan/World),
+   *  or null for region-free entries. Used to group/filter minerva variants. */
+  region?: string | null;
+  /** EmulatorSystem this repack belongs to (minerva/console games only). */
+  emulatorSystem?: string | null;
 }
 
 export interface DownloadSource {

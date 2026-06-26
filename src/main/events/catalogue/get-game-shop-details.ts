@@ -60,7 +60,7 @@ const getGameShopDetails = async (
     // Minerva ids embed the already-normalized title as the trailing segment,
     // so meta resolves even for games that are not in the library yet.
     const objectIdTitle = objectId.startsWith("minerva:")
-      ? (objectId.split(":").slice(2).join(":") || null)
+      ? objectId.split(":").slice(2).join(":") || null
       : null;
     const title =
       gameAssets?.title ?? gameEntry?.title ?? objectIdTitle ?? null;

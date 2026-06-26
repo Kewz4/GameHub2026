@@ -16,8 +16,7 @@ import { scanRomFolder } from "@main/services/emulators/scan-rom-folder";
 
 const inflight = new Map<string, { cancelled: boolean }>();
 
-const channelFor = (requestId: string) =>
-  `on-rom-scan-progress-${requestId}`;
+const channelFor = (requestId: string) => `on-rom-scan-progress-${requestId}`;
 
 const startRomScan = async (
   _event: Electron.IpcMainInvokeEvent,

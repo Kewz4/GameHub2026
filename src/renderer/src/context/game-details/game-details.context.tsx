@@ -647,19 +647,33 @@ export function GameDetailsContextProvider({
       }
     };
 
+    // Exact prefix scan (base + updates + DLC for THIS title) is authoritative
+    // and region-tagged. The fuzzy catalogue search is only a fallback for when
+    // the title doesn't match exactly — running both would collide on the same
+    // repack id (same id, possibly different title) and leak wrong-region or
+    // wrong-game entries.
+    let cancelled = false;
     window.electron
       .getMinervaDownloadOptions(system, gameTitle)
-      .then(mergeRepacks)
+      .then((primary) => {
+        if (cancelled) return;
+        if (primary && primary.length > 0) {
+          mergeRepacks(primary);
+          return;
+        }
+        return window.electron
+          .searchMinervaCatalogue(gameTitle, system)
+          .then((fallback) => {
+            if (!cancelled) mergeRepacks(fallback);
+          });
+      })
       .catch((err) => {
         console.error("[minerva] Failed to fetch download options:", err);
       });
 
-    window.electron
-      .searchMinervaCatalogue(gameTitle, system)
-      .then(mergeRepacks)
-      .catch((err) => {
-        console.error("[minerva] Failed to search catalogue:", err);
-      });
+    return () => {
+      cancelled = true;
+    };
   }, [game?.objectId, game?.platform, gameTitle, platform, objectId]);
 
   // For RA-capable console games, resolve the RetroAchievements set by title so

@@ -4,15 +4,11 @@ import {
   type MinervaCatalogueEntry,
 } from "@main/level/sublevels/minerva-catalogue";
 import { normalizeTitle } from "@main/services/rom-sources/minerva-source";
+import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem, GameRepack } from "@types";
 
-function extractRegion(filename: string): string {
-  const m = filename.match(/\((USA|Europe|Japan|World|JPN|EUR)\)/i);
-  return m ? m[1] : "";
-}
-
 function buildRepackTitle(entry: MinervaCatalogueEntry): string {
-  const region = extractRegion(entry.filename);
+  const region = parseRomFilename(entry.filename).region;
   const regionSuffix = region ? ` (${region})` : "";
 
   if (entry.contentType === "update") {
@@ -87,6 +83,8 @@ const getMinervaDownloadOptions = async (
         downloadSourceName: "Minerva Archive",
         createdAt: new Date().toISOString(),
         contentType: entry.contentType ?? "game",
+        region: entry.region ?? parseRomFilename(entry.filename).region,
+        emulatorSystem: system,
       });
     }
 

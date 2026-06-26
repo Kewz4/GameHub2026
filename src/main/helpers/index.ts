@@ -156,9 +156,7 @@ export const platformToSystem = (
  * `minerva:<system>:<normalizedTitle>`; imported ROMs use `local-<system>-<hash>`.
  * Returns null for opaque launchbox ids (fall back to the stored platform).
  */
-export const systemFromObjectId = (
-  objectId: string
-): EmulatorSystem | null => {
+export const systemFromObjectId = (objectId: string): EmulatorSystem | null => {
   if (objectId.startsWith("minerva:")) {
     return platformToSystem(objectId.split(":")[1] ?? null);
   }

@@ -210,6 +210,14 @@ export function RepacksModal({
 
   const REGION_RE = /\((USA|Europe|Japan|World)\)/i;
 
+  // Prefer the structured `region` field (set by the minerva handlers); fall
+  // back to parsing the title only for older entries that lack it.
+  const regionOf = (repack: GameRepack): string | null => {
+    if (repack.region) return repack.region;
+    const m = repack.title.match(REGION_RE);
+    return m ? m[1] : null;
+  };
+
   const availableRegions = useMemo<string[]>(() => {
     const isMinerva = repacks.some((r) =>
       r.downloadSourceName?.toLowerCase().includes("minerva")
@@ -217,8 +225,8 @@ export function RepacksModal({
     if (!isMinerva) return [];
     const regions = new Set<string>();
     for (const r of repacks) {
-      const m = r.title.match(REGION_RE);
-      if (m) regions.add(m[1]);
+      const region = regionOf(r);
+      if (region) regions.add(region);
     }
     return Array.from(regions);
   }, [repacks]);
@@ -269,9 +277,9 @@ export function RepacksModal({
 
     const byRegion = sortedRepacks.filter((repack) => {
       if (!selectedRegion || availableRegions.length < 2) return true;
-      const m = repack.title.match(REGION_RE);
-      if (!m) return true; // non-regional entries always shown
-      return m[1].toLowerCase() === selectedRegion.toLowerCase();
+      const region = regionOf(repack);
+      if (!region) return true; // region-free entries (e.g. World) always shown
+      return region.toLowerCase() === selectedRegion.toLowerCase();
     });
 
     const byTerm = byRegion.filter((repack) => {
