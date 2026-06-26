@@ -90,7 +90,10 @@ export function Sidebar() {
   const location = useLocation();
 
   const sortedLibrary = useMemo(() => {
-    return sortBy(library, (game) => game.title);
+    return sortBy(
+      library.filter((game) => !game.objectId.includes("::")),
+      (game) => game.title
+    );
   }, [library]);
 
   const { userDetails } = useUserDetails();

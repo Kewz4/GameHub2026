@@ -19,6 +19,7 @@ import { Tooltip } from "react-tooltip";
 import {
   Badge,
   Button,
+  ConfirmationModal,
   DebridBadge,
   Modal,
   TextField,
@@ -44,6 +45,7 @@ import { Downloader } from "@shared";
 import { orderBy } from "lodash-es";
 import {
   useDate,
+  useDownload,
   useFeature,
   useAppDispatch,
   useAppSelector,
@@ -98,7 +100,9 @@ export function RepacksModal({
     new Set()
   );
 
-  const { game, repacks } = useContext(gameDetailsContext);
+  const { game, repacks, objectId, shop, gameTitle } =
+    useContext(gameDetailsContext);
+  const { addGameToQueue } = useDownload();
 
   const { t } = useTranslation("game_details");
 
@@ -259,10 +263,132 @@ export function RepacksModal({
     setFilteredRepacks(bySource);
   }, [sortedRepacks, filterTerm, selectedFingerprints, downloadSources]);
 
-  const handleRepackClick = (repack: GameRepack) => {
+  const openDownloadSettings = (repack: GameRepack) => {
     setRepack(repack);
     setShowSelectFolderModal(true);
     setViewedRepackIds((prev) => new Set(prev).add(repack.id));
+  };
+
+  const handleRepackClick = (repack: GameRepack) => {
+    const ct = repack.contentType ?? "game";
+    if (ct !== "game") {
+      openDownloadSettings(repack);
+      return;
+    }
+
+    // For base game repacks, check if there are updates/DLC to prompt about
+    const updates = sortedRepacks.filter((r) => r.contentType === "update");
+    const dlcs = sortedRepacks.filter((r) => r.contentType === "dlc");
+
+    if (updates.length === 0 && dlcs.length === 0) {
+      openDownloadSettings(repack);
+      return;
+    }
+
+    setPendingBaseRepack(repack);
+    setPendingUpdates(updates);
+    setPendingDLCs(dlcs);
+    setApplyUpdate(false);
+    setApplyDLC(false);
+    setViewedRepackIds((prev) => new Set(prev).add(repack.id));
+
+    if (updates.length > 0) {
+      setShowUpdatePrompt(true);
+    } else if (dlcs.length > 0) {
+      setShowDLCPrompt(true);
+    }
+  };
+
+  const extractVersionFromTitle = (title: string): string => {
+    const match = title.match(/v[\d.]+/i);
+    return match ? match[0] : "";
+  };
+
+  const handleUpdatePromptConfirm = () => {
+    setApplyUpdate(true);
+    setShowUpdatePrompt(false);
+    if (pendingDLCs.length > 0) {
+      setShowDLCPrompt(true);
+    } else {
+      openDownloadSettings(pendingBaseRepack!);
+    }
+  };
+
+  const handleUpdatePromptCancel = () => {
+    setShowUpdatePrompt(false);
+    if (pendingDLCs.length > 0) {
+      setShowDLCPrompt(true);
+    } else {
+      openDownloadSettings(pendingBaseRepack!);
+    }
+  };
+
+  const handleDLCPromptConfirm = () => {
+    setApplyDLC(true);
+    setShowDLCPrompt(false);
+    openDownloadSettings(pendingBaseRepack!);
+  };
+
+  const handleDLCPromptCancel = () => {
+    setApplyDLC(false);
+    setShowDLCPrompt(false);
+    openDownloadSettings(pendingBaseRepack!);
+  };
+
+  // Called after the base game download/queue is confirmed so we can queue update + DLC
+  const handleBaseDownloadStarted = async (
+    downloader: Parameters<typeof startDownload>[1],
+    downloadPath: Parameters<typeof startDownload>[2],
+    automaticallyExtract: Parameters<typeof startDownload>[3],
+    automaticallyDeleteArchiveFiles: Parameters<typeof startDownload>[7]
+  ) => {
+    if (!objectId || !shop) return;
+
+    if (applyUpdate && pendingUpdates.length > 0) {
+      const updateRepack = pendingUpdates[0];
+      const version = extractVersionFromTitle(updateRepack.title);
+      await addGameToQueue({
+        objectId: `${objectId}::update`,
+        title: gameTitle
+          ? `${gameTitle} — Update${version ? " " + version : ""}`
+          : updateRepack.title,
+        shop,
+        downloader,
+        downloadPath,
+        uri:
+          updateRepack.uris.find((u) => u.startsWith("magnet:")) ??
+          updateRepack.uris[0],
+        automaticallyExtract,
+        automaticallyDeleteArchiveFiles: automaticallyDeleteArchiveFiles ?? false,
+        fileSize: updateRepack.fileSize,
+        fileIndices: undefined,
+        selectedFilesSize: null,
+      }).catch(() => {});
+    }
+
+    if (applyDLC && pendingDLCs.length > 0) {
+      for (const dlcRepack of pendingDLCs) {
+        const dlcSlug = dlcRepack.title
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "-")
+          .slice(0, 40);
+        await addGameToQueue({
+          objectId: `${objectId}::dlc::${dlcSlug}`,
+          title: dlcRepack.title,
+          shop,
+          downloader,
+          downloadPath,
+          uri:
+            dlcRepack.uris.find((u) => u.startsWith("magnet:")) ??
+            dlcRepack.uris[0],
+          automaticallyExtract,
+          automaticallyDeleteArchiveFiles: automaticallyDeleteArchiveFiles ?? false,
+          fileSize: dlcRepack.fileSize,
+          fileIndices: undefined,
+          selectedFilesSize: null,
+        }).catch(() => {});
+      }
+    }
   };
 
   const handleFilter: React.ChangeEventHandler<HTMLInputElement> = (event) => {
@@ -305,6 +431,17 @@ export function RepacksModal({
       return false;
     }
   };
+
+  // Update / DLC prompt state
+  const [pendingBaseRepack, setPendingBaseRepack] = useState<GameRepack | null>(
+    null
+  );
+  const [pendingUpdates, setPendingUpdates] = useState<GameRepack[]>([]);
+  const [pendingDLCs, setPendingDLCs] = useState<GameRepack[]>([]);
+  const [applyUpdate, setApplyUpdate] = useState(false);
+  const [applyDLC, setApplyDLC] = useState(false);
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [showDLCPrompt, setShowDLCPrompt] = useState(false);
 
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [showHyperVisorModal, setShowHyperVisorModal] = useState(false);
@@ -403,8 +540,74 @@ export function RepacksModal({
       <DownloadSettingsModal
         visible={showSelectFolderModal}
         onClose={() => setShowSelectFolderModal(false)}
-        startDownload={startDownload}
+        startDownload={async (
+          rp,
+          downloader,
+          downloadPath,
+          automaticallyExtract,
+          addToQueueOnly,
+          fileIndices,
+          selectedFilesSize,
+          automaticallyDeleteArchiveFiles,
+          signal
+        ) => {
+          const response = await startDownload(
+            rp,
+            downloader,
+            downloadPath,
+            automaticallyExtract,
+            addToQueueOnly,
+            fileIndices,
+            selectedFilesSize,
+            automaticallyDeleteArchiveFiles,
+            signal
+          );
+          if (response.ok && pendingBaseRepack?.id === rp.id) {
+            await handleBaseDownloadStarted(
+              downloader,
+              downloadPath,
+              automaticallyExtract,
+              automaticallyDeleteArchiveFiles
+            );
+            setPendingBaseRepack(null);
+            setPendingUpdates([]);
+            setPendingDLCs([]);
+            setApplyUpdate(false);
+            setApplyDLC(false);
+          }
+          return response;
+        }}
         repack={repack}
+      />
+
+      <ConfirmationModal
+        visible={showUpdatePrompt}
+        title={t("apply_update_title", { defaultValue: "Apply Update?" })}
+        descriptionText={
+          pendingUpdates.length > 0
+            ? t("apply_update_description", {
+                defaultValue: `An update is available (${pendingUpdates[0].title}). Queue it to download after the base game?`,
+                title: pendingUpdates[0].title,
+              })
+            : ""
+        }
+        confirmButtonLabel={t("yes", { defaultValue: "Yes" })}
+        cancelButtonLabel={t("no", { defaultValue: "No" })}
+        onConfirm={handleUpdatePromptConfirm}
+        onClose={handleUpdatePromptCancel}
+      />
+
+      <ConfirmationModal
+        visible={showDLCPrompt}
+        title={t("apply_dlc_title", { defaultValue: "Apply All DLC?" })}
+        descriptionText={t("apply_dlc_description", {
+          defaultValue: `${pendingDLCs.length} DLC pack(s) found. Queue them all to download after the base game?`,
+          count: pendingDLCs.length,
+        })}
+        confirmButtonLabel={t("yes", { defaultValue: "Yes" })}
+        cancelButtonLabel={t("no", { defaultValue: "No" })}
+        onConfirm={handleDLCPromptConfirm}
+        onClose={handleDLCPromptCancel}
       />
 
       {epicGogModal && (
