@@ -1065,6 +1065,8 @@
     "setup_bios_intro_2": "Place the BIOS file in the folder below.",
     "setup_bios_step_1": "Open the BIOS folder",
     "setup_bios_step_2_ps2": "Copy your PS2 BIOS (.bin) into it.",
+    "setup_bios_step_2_ps1": "Copy your PS1 BIOS (.bin) into it.",
+    "setup_bios_found": "BIOS detected!",
     "setup_bios_found_note": "BIOS detected — you're all set.",
     "setup_bios_not_yet": "BIOS not detected yet.",
     "setup_bios_recheck_note": "Place the file, then check again.",

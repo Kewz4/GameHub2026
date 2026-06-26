@@ -7,8 +7,12 @@ const checkEmulatorBios = async (
   system: EmulatorSystem
 ) => {
   const config = await emulators.getEmulatorConfig(system);
-  if (!config.executablePath) return false;
-  return emulators.isEmulatorBiosInstalled(system, config.executablePath);
+  if (!config.executablePath) return { installed: false };
+  const installed = await emulators.isEmulatorBiosInstalled(
+    system,
+    config.executablePath
+  );
+  return { installed };
 };
 
 registerEvent("checkEmulatorBios", checkEmulatorBios);

@@ -53,7 +53,7 @@ export function SetupStepFirmware({
       </h3>
       <div>
         <p className="setup-modal__body-intro" style={{ margin: 0 }}>
-          {t("setup_firmware_intro_1")}
+          {t("setup_firmware_intro_1", { name: systemLabel })}
         </p>
         <p className="setup-modal__body-intro" style={{ margin: 0 }}>
           {t("setup_firmware_intro_2")}

@@ -57,7 +57,7 @@ export function SetupStepBios({
       </h3>
       <div>
         <p className="setup-modal__body-intro" style={{ margin: 0 }}>
-          {t("setup_bios_intro_1", { system: systemLabel })}
+          {t("setup_bios_intro_1", { name: systemLabel })}
         </p>
         <p className="setup-modal__body-intro" style={{ margin: 0 }}>
           {t("setup_bios_intro_2")}
