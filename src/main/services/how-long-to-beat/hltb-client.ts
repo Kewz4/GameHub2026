@@ -6,14 +6,16 @@ import { type HltbGame, mapHltbGame, pickBestHltbMatch } from "./hltb-parse";
  * Minimal HowLongToBeat client used for console/emulated games (which the Hydra
  * backend doesn't know about, so they can't use the server-side HLTB endpoint).
  *
- * HLTB has no public API. As of their 2025 redesign the SPA first calls
- * `/api/bleed/init` to obtain a short-lived `{ token, hpKey, hpVal }` security
- * triplet, then POSTs the search to `/api/bleed` carrying that triplet as the
+ * HLTB has no public API. As of their 2025 redesign the SPA resolves a rotating
+ * `/api/<path>` search endpoint from its JS bundle (the path changes between
+ * deploys — `/api/search`, `/api/seek`, `/api/bleed` have all been seen), then
+ * GETs `<path>/init` for a short-lived `{ token, hpKey, hpVal }` security
+ * triplet and POSTs the search to `<path>` carrying that triplet as the
  * `x-auth-token` / `x-hp-key` / `x-hp-val` headers. The token embeds the
  * caller's egress IP + User-Agent, so it must be used from the same session
  * that minted it. Runs on the user's machine (residential IP + real app
  * session), where HLTB's anti-bot WAF is lenient — unlike datacenter IPs, which
- * it rejects with "Session expired or invalid fingerprint".
+ * it rejects with "Session expired or invalid fingerprint" (or a soft 404).
  *
  * Everything is best-effort: any failure returns null and the UI simply omits
  * the HLTB section, exactly like a PC game with no HLTB data.
@@ -39,18 +41,62 @@ interface BleedSecurity {
 }
 
 /**
- * Fetch the short-lived search security triplet from `/api/bleed/init`. The
+ * Resolve the current `/api/<path>` search endpoint by scraping the SPA's JS
+ * bundle for the POST `fetch` call. HLTB rotates this path between deploys
+ * (observed values include `/api/search`, `/api/seek`, `/api/bleed`), so it
+ * must be discovered at runtime rather than hard-coded. Returns the base path
+ * (e.g. `/api/bleed`); the matching token endpoint is `<base>/init`.
+ *
+ * Mirrors the strategy of the maintained `howlongtobeatpy` package: prefer the
+ * `_app-*` chunk, fall back to scanning every `<script src>` chunk.
+ */
+async function resolveSearchEndpoint(): Promise<string | null> {
+  const html = await fetch(`${BASE}/`, {
+    headers: { ...browserHeaders(), Accept: "text/html" },
+  }).then((r) => (r.ok ? r.text() : ""));
+  if (!html) return null;
+
+  const allSrcs = [
+    ...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi),
+  ].map((m) => m[1]);
+  // Try the _app chunk(s) first, then any chunk — the POST call lives in a
+  // lazily-loaded chunk on current builds.
+  const ordered = [
+    ...allSrcs.filter((s) => s.includes("_app-")),
+    ...allSrcs.filter((s) => !s.includes("_app-")),
+  ];
+
+  // Confirm the endpoint by the POST method so we don't grab the GET init call.
+  const postFetch =
+    /fetch\s*\(\s*["']\/api\/([a-zA-Z0-9_]+)[^"']*["']\s*,\s*\{[^}]*method:\s*["']POST["']/i;
+
+  for (const src of ordered) {
+    const url = src.startsWith("http")
+      ? src
+      : `${BASE}${src.startsWith("/") ? "" : "/"}${src}`;
+    try {
+      const js = await fetch(url, { headers: browserHeaders() }).then((r) =>
+        r.ok ? r.text() : ""
+      );
+      const m = js.match(postFetch);
+      if (m) return `/api/${m[1]}`;
+    } catch {
+      // try next chunk
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetch the short-lived search security triplet from `<endpoint>/init`. The
  * homepage is loaded first so the request carries the same cookies/session the
  * real SPA would, then init mints the token bound to this caller.
  */
-async function initBleedSecurity(): Promise<BleedSecurity | null> {
+async function initSearchSecurity(
+  endpoint: string
+): Promise<BleedSecurity | null> {
   try {
-    // Warm the session (some WAF rules require a prior homepage hit).
-    await fetch(`${BASE}/`, {
-      headers: { ...browserHeaders(), Accept: "text/html" },
-    }).catch(() => undefined);
-
-    const res = await fetch(`${BASE}/api/bleed/init?t=${Date.now()}`, {
+    const res = await fetch(`${BASE}${endpoint}/init?t=${Date.now()}`, {
       headers: browserHeaders(),
     });
     if (!res.ok) return null;
@@ -89,12 +135,13 @@ function searchBody(title: string) {
   };
 }
 
-/** POST a search to `/api/bleed` with the given security triplet. */
-async function postBleedSearch(
+/** POST a search to the resolved endpoint with the given security triplet. */
+async function postSearch(
+  endpoint: string,
   title: string,
   security: BleedSecurity
 ): Promise<{ status: number; data: HltbGame[] } | null> {
-  const res = await fetch(`${BASE}/api/bleed`, {
+  const res = await fetch(`${BASE}${endpoint}`, {
     method: "POST",
     headers: {
       ...browserHeaders(),
@@ -120,18 +167,24 @@ export async function fetchHowLongToBeat(
   title: string
 ): Promise<HowLongToBeatCategory[] | null> {
   try {
-    let security = await initBleedSecurity();
+    const endpoint = await resolveSearchEndpoint();
+    if (!endpoint) {
+      logger.log("HLTB: could not resolve search endpoint");
+      return null;
+    }
+
+    let security = await initSearchSecurity(endpoint);
     if (!security) {
       logger.log("HLTB: could not obtain search security token");
       return null;
     }
 
-    let result = await postBleedSearch(title, security);
+    let result = await postSearch(endpoint, title, security);
     // The token expires quickly; on 403 refresh it once and retry, exactly as
     // the SPA does ("Search token expired, refreshing and retrying...").
     if (result?.status === 403) {
-      security = await initBleedSecurity();
-      if (security) result = await postBleedSearch(title, security);
+      security = await initSearchSecurity(endpoint);
+      if (security) result = await postSearch(endpoint, title, security);
     }
 
     if (!result || result.status !== 200) {
