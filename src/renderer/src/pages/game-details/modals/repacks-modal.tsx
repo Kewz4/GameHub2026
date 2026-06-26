@@ -359,7 +359,8 @@ export function RepacksModal({
           updateRepack.uris.find((u) => u.startsWith("magnet:")) ??
           updateRepack.uris[0],
         automaticallyExtract,
-        automaticallyDeleteArchiveFiles: automaticallyDeleteArchiveFiles ?? false,
+        automaticallyDeleteArchiveFiles:
+          automaticallyDeleteArchiveFiles ?? false,
         fileSize: updateRepack.fileSize,
         fileIndices: undefined,
         selectedFilesSize: null,
@@ -382,7 +383,8 @@ export function RepacksModal({
             dlcRepack.uris.find((u) => u.startsWith("magnet:")) ??
             dlcRepack.uris[0],
           automaticallyExtract,
-          automaticallyDeleteArchiveFiles: automaticallyDeleteArchiveFiles ?? false,
+          automaticallyDeleteArchiveFiles:
+            automaticallyDeleteArchiveFiles ?? false,
           fileSize: dlcRepack.fileSize,
           fileIndices: undefined,
           selectedFilesSize: null,
