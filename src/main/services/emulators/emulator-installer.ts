@@ -126,13 +126,30 @@ export const installEmulator = async (
       // AppImages run directly; just make them executable.
       chmodSync(archivePath, 0o755);
       executablePath = archivePath;
+    } else if (option.kind === "windows-installer") {
+      // An NSIS/Inno .exe is not an archive — feeding it to 7-Zip yields a few
+      // junk files ($PLUGINSDIR), not a usable build. We don't silently run
+      // installers, so surface this instead of pretending it worked.
+      return {
+        ok: false,
+        reason:
+          "This emulator only ships a Windows installer (.exe). Use the release page option to install it.",
+      };
     } else {
       emit("extracting");
-      await SevenZip.extractFile({
+      const extraction = await SevenZip.extractFile({
         filePath: archivePath,
         outputPath: installDir,
       });
       rmSync(archivePath, { force: true });
+      // A correct extract yields many files; 0–1 means we grabbed the wrong
+      // asset (symbols/libretro core) or the archive was bad.
+      if (!extraction.success || extraction.extractedFiles.length <= 1) {
+        return {
+          ok: false,
+          reason: `Extraction produced ${extraction.extractedFiles.length} file(s) — the downloaded asset was not a full emulator build.`,
+        };
+      }
       executablePath = findExecutable(installDir, executableNamesFor(binary));
     }
 

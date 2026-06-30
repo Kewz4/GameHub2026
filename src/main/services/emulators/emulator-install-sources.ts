@@ -25,13 +25,24 @@ interface GithubRelease {
   assets: GithubAsset[];
 }
 
+// Assets that match a build pattern but are NOT the runnable emulator: debug
+// symbols, libretro cores (a single DLL/so), source tarballs, checksums, and
+// zsync deltas. When a pattern matches several assets we drop these first so a
+// loose pattern never resolves to "one file" junk.
+const JUNK_ASSET_RE =
+  /(symbols|libretro|source|\.sha\d|\.zsync$|debuginfo|-pdb)/i;
+
 const matchAsset = (
   assets: GithubAsset[],
   pattern: string | undefined
 ): GithubAsset | null => {
   if (!pattern) return null;
   const regex = new RegExp(pattern, "i");
-  return assets.find((asset) => regex.test(asset.name)) ?? null;
+  const matches = assets.filter((asset) => regex.test(asset.name));
+  if (matches.length === 0) return null;
+  // Prefer a non-junk asset; only fall back to a junk match if that is all
+  // the pattern produced.
+  return matches.find((a) => !JUNK_ASSET_RE.test(a.name)) ?? matches[0];
 };
 
 const kindForAsset = (assetName: string): EmulatorInstallKind => {

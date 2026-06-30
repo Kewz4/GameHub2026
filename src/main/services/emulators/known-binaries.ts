@@ -72,7 +72,9 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     romDirectoryMarkers: [],
     install: {
       githubRepo: "stenzek/duckstation",
-      windowsAssetPattern: "windows-x64.*\\.zip$",
+      // Pick the plain x64 release zip — NOT -sse2, -arm64, -symbols or the .exe
+      // installer (all of which also contain "windows-x64"/"windows").
+      windowsAssetPattern: "windows-x64-release\\.zip$",
       linuxAssetPattern: "x64\\.AppImage$",
       flatpakInstallId: "org.duckstation.DuckStation",
     },
@@ -103,7 +105,9 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     romDirectoryMarkers: [],
     install: {
       githubRepo: "PCSX2/pcsx2",
-      windowsAssetPattern: "windows-x64.*\\.7z$",
+      // The real build is "...windows-x64-Qt.7z"; exclude "...-Qt-symbols.7z"
+      // (debug symbols), which "windows-x64.*\\.7z$" matched first.
+      windowsAssetPattern: "windows-x64-Qt\\.7z$",
       linuxAssetPattern: "x64\\.AppImage$",
       flatpakInstallId: "net.pcsx2.PCSX2",
     },
@@ -143,7 +147,8 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     romDirectoryMarkers: [],
     install: {
       githubRepo: "hrydgard/ppsspp",
-      windowsAssetPattern: "windows.*\\.(zip|7z)$",
+      // Windows-x64 only — "windows.*" also matched the ARM64 zip first.
+      windowsAssetPattern: "Windows-x64\\.zip$",
       releasePageUrl: "https://www.ppsspp.org/download/",
       flatpakInstallId: "org.ppsspp.PPSSPP",
     },
@@ -162,7 +167,10 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     romDirectoryMarkers: [],
     install: {
       githubRepo: "azahar-emu/azahar",
-      windowsAssetPattern: "windows.*(msvc|x86_64).*\\.zip$",
+      // Standalone MSVC build zip only — exclude the libretro CORE zip
+      // ("azahar-libretro-windows-x86_64-….zip", a single DLL) and the
+      // "-installer.exe", both of which the old pattern matched first.
+      windowsAssetPattern: "azahar-windows-msvc-[\\d.]+\\.zip$",
       linuxAssetPattern: "\\.AppImage$",
       flatpakInstallId: "org.azahar_emu.Azahar",
     },
