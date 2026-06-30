@@ -576,23 +576,50 @@ export class DownloadManager {
       if (shouldPauseSeedingForExtraction) {
         await this.cancelDownload(gameId);
 
-        void this.handleExtraction(download, game).finally(() => {
-          this.resumeSeeding(download).catch((error) => {
-            logger.error(
-              "[DownloadManager] Failed to resume seeding after extraction",
-              error
-            );
+        void this.handleExtraction(download, game)
+          .finally(() => this.bindEmulatorRomIfNeeded(download))
+          .finally(() => {
+            this.resumeSeeding(download).catch((error) => {
+              logger.error(
+                "[DownloadManager] Failed to resume seeding after extraction",
+                error
+              );
+            });
           });
-        });
       } else {
-        void this.handleExtraction(download, game);
+        void this.handleExtraction(download, game).finally(() =>
+          this.bindEmulatorRomIfNeeded(download)
+        );
       }
     } else {
       const gameFilesManager = new GameFilesManager(game.shop, game.objectId);
       gameFilesManager.searchAndBindExecutable();
+      // Raw ROM (no archive) — bind it directly so the Play button appears.
+      void this.bindEmulatorRomIfNeeded(download);
     }
 
     await this.processNextQueuedDownload();
+  }
+
+  /**
+   * For console/emulator downloads, locate the downloaded ROM and bind it to
+   * the library entry as a disc so the game becomes launchable. No-op for
+   * regular (PC) downloads. Imported lazily to avoid a startup import cycle.
+   */
+  private static async bindEmulatorRomIfNeeded(download: Download) {
+    if (!download.emulatorSystem) return;
+    try {
+      const { bindDownloadedRom } = await import(
+        "../emulators/bind-downloaded-rom"
+      );
+      const latest = await downloadsSublevel
+        .get(levelKeys.game(download.shop, download.objectId))
+        .catch(() => null);
+      await bindDownloadedRom(latest ?? download);
+      WindowManager.sendToAppWindows("on-library-batch-complete");
+    } catch (error) {
+      logger.error("[DownloadManager] Failed to bind emulator ROM", error);
+    }
   }
 
   private static async updateDownloadStatus(

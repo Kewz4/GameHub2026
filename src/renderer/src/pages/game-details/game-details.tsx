@@ -130,6 +130,7 @@ export default function GameDetails() {
                     fileSize: repack.fileSize,
                     fileIndices,
                     selectedFilesSize,
+                    emulatorSystem: repack.emulatorSystem ?? null,
                   },
                   signal
                 )
@@ -146,6 +147,7 @@ export default function GameDetails() {
                     fileSize: repack.fileSize,
                     fileIndices,
                     selectedFilesSize,
+                    emulatorSystem: repack.emulatorSystem ?? null,
                   },
                   signal
                 );

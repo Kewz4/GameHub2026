@@ -158,6 +158,9 @@ export interface StartGameDownloadPayload {
   fileSize?: string | null;
   fileIndices?: number[];
   selectedFilesSize?: number | null;
+  /** Set for minerva/console downloads so main routes them into
+   *  "Emulator Games/<platform>" and binds them to the right emulator. */
+  emulatorSystem?: string | null;
 }
 
 export interface UserFriend {

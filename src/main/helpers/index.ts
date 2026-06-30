@@ -151,6 +151,37 @@ export const platformToSystem = (
   return null;
 };
 
+/** Human folder name for each console, used to group emulator downloads under
+ *  "Emulator Games/<platform>" instead of dumping the torrent's own tree. */
+const EMULATOR_PLATFORM_FOLDER: Record<EmulatorSystem, string> = {
+  ps1: "PS1 Games",
+  ps2: "PS2 Games",
+  ps3: "PS3 Games",
+  psp: "PSP Games",
+  n3ds: "3DS Games",
+  nds: "DS Games",
+  dsi: "DSi Games",
+  n64: "N64 Games",
+  gb: "GB Games",
+  gbc: "GBC Games",
+  gba: "GBA Games",
+  wiiu: "Wii U Games",
+  wii: "Wii Games",
+  gc: "GameCube Games",
+};
+
+export const EMULATOR_GAMES_ROOT = "Emulator Games";
+
+/** Relative folder (e.g. "Emulator Games/Wii U Games") a console download for
+ *  `system` should be stored under. */
+export const emulatorPlatformFolder = (
+  system: EmulatorSystem | null | undefined
+): string | null => {
+  if (!system) return null;
+  const folder = EMULATOR_PLATFORM_FOLDER[system];
+  return folder ? `${EMULATOR_GAMES_ROOT}/${folder}` : null;
+};
+
 /**
  * Extract the EmulatorSystem encoded in a launchbox objectId. Minerva games use
  * `minerva:<system>:<normalizedTitle>`; imported ROMs use `local-<system>-<hash>`.

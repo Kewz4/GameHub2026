@@ -10,10 +10,13 @@ import { createGame } from "@main/services/library-sync";
 import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { parseBytes } from "@shared";
 import {
+  emulatorPlatformFolder,
   handleDownloadError,
   isKnownDownloadError,
   prepareGameEntry,
 } from "@main/helpers";
+import path from "node:path";
+import type { EmulatorSystem } from "@types";
 
 const addGameToQueue = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -23,7 +26,6 @@ const addGameToQueue = async (
     objectId,
     title,
     shop,
-    downloadPath,
     downloader,
     uri,
     automaticallyExtract,
@@ -31,7 +33,15 @@ const addGameToQueue = async (
     fileSize,
     fileIndices,
     selectedFilesSize,
+    emulatorSystem,
   } = payload;
+
+  const platformFolder = emulatorPlatformFolder(
+    (emulatorSystem ?? null) as EmulatorSystem | null
+  );
+  const downloadPath = platformFolder
+    ? path.join(payload.downloadPath, ...platformFolder.split("/"))
+    : payload.downloadPath;
 
   const parsedFileSize = parseBytes(fileSize ?? null);
   const gameKey = levelKeys.game(shop, objectId);
@@ -56,6 +66,7 @@ const addGameToQueue = async (
     automaticallyDeleteArchiveFiles,
     fileIndices,
     selectedFilesSize,
+    emulatorSystem: emulatorSystem ?? null,
   };
 
   try {

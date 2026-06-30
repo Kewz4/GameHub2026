@@ -749,11 +749,11 @@ contextBridge.exposeInMainWorld("electron", {
   listEmulatorRoms: (system: EmulatorSystem) =>
     ipcRenderer.invoke("listEmulatorRoms", system),
   openClassicsGame: (
-    objectId: string,
     shop: GameShop,
-    discPath: string,
-    system: EmulatorSystem
-  ) => ipcRenderer.invoke("openClassicsGame", objectId, shop, discPath, system),
+    objectId: string,
+    discPath?: string,
+    force?: boolean
+  ) => ipcRenderer.invoke("openClassicsGame", shop, objectId, discPath, force),
   updateClassicsDisc: (
     shop: GameShop,
     objectId: string,

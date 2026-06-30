@@ -26,6 +26,37 @@ import { WindowManager } from "./window-manager";
 
 const PROGRESS_THROTTLE_MS = 1000;
 
+/**
+ * Collect file paths (relative to `root`) under a directory, descending up to
+ * `maxDepth` levels. Used to locate ROM archives that torrent sources bury
+ * inside a deep directory tree. Bounded so a pathological tree can't hang.
+ */
+async function collectFilesRecursive(
+  root: string,
+  maxDepth = 6
+): Promise<string[]> {
+  const out: string[] = [];
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    if (depth > maxDepth || out.length > 5000) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full, depth + 1);
+      } else if (entry.isFile()) {
+        out.push(path.relative(root, full));
+      }
+    }
+  };
+  await walk(root, 0);
+  return out;
+}
+
 export class GameFilesManager {
   private lastProgressUpdateTime = 0;
   private lastProgressUpdateValue = 0;
@@ -126,7 +157,11 @@ export class GameFilesManager {
 
     let files: string[];
     try {
-      files = await fs.promises.readdir(directoryPath);
+      // Walk recursively: torrent sources (e.g. minerva/Myrient) nest the ROM
+      // archive several directories deep (No-Intro/<console>/<game>.zip), so a
+      // top-level readdir would miss it and the ROM would stay zipped. Paths are
+      // relative to directoryPath; extraction below joins them back.
+      files = await collectFilesRecursive(directoryPath);
     } catch (error) {
       await this.setExtractionFailedState(error, directoryPath);
       return false;

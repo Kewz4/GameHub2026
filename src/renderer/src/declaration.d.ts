@@ -842,10 +842,10 @@ declare global {
     rescanEmulator: (system: EmulatorSystem) => Promise<EmulatorConfig>;
     listEmulatorRoms: (system: EmulatorSystem) => Promise<DetectedRom[]>;
     openClassicsGame: (
-      objectId: string,
       shop: GameShop,
-      discPath: string,
-      system: EmulatorSystem
+      objectId: string,
+      discPath?: string,
+      force?: boolean
     ) => Promise<void>;
     updateClassicsDisc: (
       shop: GameShop,

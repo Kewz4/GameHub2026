@@ -9,10 +9,13 @@ import {
 import { createGame } from "@main/services/library-sync";
 import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import {
+  emulatorPlatformFolder,
   handleDownloadError,
   isKnownDownloadError,
   prepareGameEntry,
 } from "@main/helpers";
+import path from "node:path";
+import type { EmulatorSystem } from "@types";
 
 const startGameDownload = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -22,14 +25,24 @@ const startGameDownload = async (
     objectId,
     title,
     shop,
-    downloadPath,
     downloader,
     uri,
     automaticallyExtract,
     automaticallyDeleteArchiveFiles,
     fileIndices,
     selectedFilesSize,
+    emulatorSystem,
   } = payload;
+
+  // Console/emulator downloads are grouped under "Emulator Games/<platform>"
+  // instead of inheriting the torrent's own directory tree (which produced
+  // paths like ...\Minerva_Myrient\No-Intro\Source\).
+  const platformFolder = emulatorPlatformFolder(
+    (emulatorSystem ?? null) as EmulatorSystem | null
+  );
+  const downloadPath = platformFolder
+    ? path.join(payload.downloadPath, ...platformFolder.split("/"))
+    : payload.downloadPath;
 
   const gameKey = levelKeys.game(shop, objectId);
 
@@ -60,6 +73,7 @@ const startGameDownload = async (
     fileIndices,
     selectedFilesSize,
     fileSize: selectedFilesSize ?? null,
+    emulatorSystem: emulatorSystem ?? null,
   };
 
   try {

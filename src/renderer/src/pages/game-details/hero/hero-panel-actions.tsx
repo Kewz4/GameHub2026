@@ -19,8 +19,10 @@ import {
 } from "@renderer/hooks";
 import { useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { gameDetailsContext } from "@renderer/context";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
+import { getClassicsLaunchErrorCode } from "@renderer/helpers";
 
 import "./hero-panel-actions.scss";
 import { useEffect } from "react";
@@ -56,6 +58,8 @@ export function HeroPanelActions() {
   const { updateLibrary } = useLibrary();
 
   const { showSuccessToast, showErrorToast } = useToast();
+
+  const navigate = useNavigate();
 
   const { t } = useTranslation("game_details");
 
@@ -188,6 +192,55 @@ export function HeroPanelActions() {
     }
   };
 
+  // Launch a console/emulated (launchbox) game through its emulator, gating on
+  // emulator setup: if the emulator for this console isn't configured yet, tell
+  // the user to set it up and route them to Settings instead of failing silently.
+  const openClassicsGame = async () => {
+    if (!game) return;
+    try {
+      await window.electron.openClassicsGame(game.shop, game.objectId);
+      await updateGame();
+    } catch (error) {
+      const code = getClassicsLaunchErrorCode(error);
+
+      if (code === "EMULATOR_NOT_CONFIGURED" || code === "BIOS_NOT_CONFIGURED") {
+        showErrorToast(
+          t("emulator_not_configured_title", {
+            defaultValue: "Set up the emulator first",
+          }),
+          t("emulator_not_configured_message", {
+            defaultValue:
+              "Configure the emulator for this console in Settings before playing.",
+          })
+        );
+        navigate("/settings");
+        return;
+      }
+
+      if (code === "NO_DISC") {
+        showErrorToast(
+          t("classics_no_disc", { defaultValue: "Game files not found" }),
+          t("classics_no_disc_message", {
+            defaultValue:
+              "The downloaded game files could not be located. Try re-downloading.",
+          })
+        );
+        return;
+      }
+
+      if (code === "PLATFORM_UNKNOWN") {
+        showErrorToast(
+          t("classics_platform_unknown", {
+            defaultValue: "Console not supported",
+          })
+        );
+        return;
+      }
+
+      showErrorToast(t("classics_launch_failed", { defaultValue: "Launch failed" }));
+    }
+  };
+
   const closeGame = () => {
     if (game) window.electron.closeGame(game.shop, game.objectId);
   };
@@ -257,6 +310,15 @@ export function HeroPanelActions() {
   // Launchable right now: installed AND we have a path to launch with.
   const isLaunchable = Boolean(game?.executablePath) && isConfirmedInstalled;
 
+  // Console/emulated (launchbox) games launch via an emulator and never have an
+  // executablePath; they're launchable once the downloaded ROM has been bound
+  // as a disc. The emulator-setup gate is enforced on click (openClassicsGame).
+  const isClassicsLaunchable =
+    game?.shop === "launchbox" &&
+    Boolean(
+      game.selectedDiscPath || (game.discs && game.discs.length > 0)
+    );
+
   // Owned on a platform (synced from the platform account) — NOT a catalogue /
   // repack entry that merely reuses the steam shop for assets (Retigga).
   const isOwnedOnPlatform = game != null && getGameOrigin(game) === "sync";
@@ -292,6 +354,22 @@ export function HeroPanelActions() {
         >
           <XCircle size={18} />
           {t("close")}
+        </Button>
+      );
+    }
+
+    // Console/emulated game with its ROM downloaded → Play (gated on emulator
+    // setup at click time).
+    if (isClassicsLaunchable) {
+      return (
+        <Button
+          onClick={openClassicsGame}
+          theme="outline"
+          disabled={deleting || isGameRunning}
+          className="hero-panel-actions__action"
+        >
+          <PlayIcon />
+          {t("play")}
         </Button>
       );
     }

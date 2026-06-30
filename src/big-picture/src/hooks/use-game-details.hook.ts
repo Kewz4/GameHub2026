@@ -206,8 +206,19 @@ export function useGameDetails(objectId: string, shop: GameShop) {
   }, [game?.id]);
 
   const openGame = useCallback(
-    async (_discPath?: string, _force?: boolean) => {
-      if (!game?.executablePath) return;
+    async (discPath?: string, force?: boolean) => {
+      if (!game) return;
+      // Console/emulated games launch through the emulator, not an executable.
+      if (game.shop === "launchbox") {
+        await globalThis.window.electron.openClassicsGame(
+          game.shop,
+          game.objectId,
+          discPath,
+          force
+        );
+        return;
+      }
+      if (!game.executablePath) return;
       globalThis.window.electron.openGame(
         game.shop,
         game.objectId,
