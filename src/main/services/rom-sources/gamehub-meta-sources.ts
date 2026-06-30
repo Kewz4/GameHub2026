@@ -1,10 +1,32 @@
 import axios from "axios";
+import { app } from "electron";
+import fs from "node:fs";
+import path from "node:path";
 import type { EmulatorSystem } from "@types";
 import {
   gamehubMetaSublevel,
   gamehubMetaKey,
   type GameHubMetaEntry,
 } from "@main/level/sublevels/gamehub-meta";
+
+/**
+ * Directory holding the bundled metadata JSON. Packaged builds ship it as an
+ * extraResource (`<resources>/gamehub-meta`); a dev run reads it straight from
+ * the repo (`<repo>/sources/gamehub-meta`).
+ */
+const LOCAL_META_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, "gamehub-meta")
+  : path.join(__dirname, "..", "..", "sources", "gamehub-meta");
+
+function readLocalMeta(system: EmulatorSystem): HostedMetaFile | null {
+  try {
+    const file = path.join(LOCAL_META_DIR, `${system}.json`);
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, "utf-8")) as HostedMetaFile;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Hosted GameHub metadata dataset — one static JSON file per system, generated
@@ -44,18 +66,22 @@ interface HostedMetaFile {
  * the number of entries stored (0 when the file is missing or empty).
  */
 export async function syncGameHubMeta(system: EmulatorSystem): Promise<number> {
-  const url = `${GAMEHUB_META_BASE_URL}/${system}.json`;
+  // Prefer the bundled file (always present, no network). Fall back to the
+  // hosted dataset only if the local copy is missing.
+  let data: HostedMetaFile | null = readLocalMeta(system);
 
-  let data: HostedMetaFile;
-  try {
-    const resp = await axios.get<HostedMetaFile>(url, {
-      timeout: 60_000,
-      responseType: "json",
-    });
-    data = resp.data;
-  } catch {
-    // A system may not have a generated file yet — skip silently.
-    return 0;
+  if (!data) {
+    const url = `${GAMEHUB_META_BASE_URL}/${system}.json`;
+    try {
+      const resp = await axios.get<HostedMetaFile>(url, {
+        timeout: 60_000,
+        responseType: "json",
+      });
+      data = resp.data;
+    } catch {
+      // A system may not have a generated file yet — skip silently.
+      return 0;
+    }
   }
 
   const games = data?.games;
@@ -82,24 +108,32 @@ export async function syncAllGameHubMeta(): Promise<
   return result;
 }
 
-/** True when the local metadata store already holds at least one entry. */
-async function gamehubMetaHasEntries(): Promise<boolean> {
-  for await (const _key of gamehubMetaSublevel.keys({ limit: 1 })) {
+/** True when the store already holds an entry for THIS system. */
+async function systemHasEntries(system: EmulatorSystem): Promise<boolean> {
+  for await (const _key of gamehubMetaSublevel.keys({
+    gte: `${system}:`,
+    lte: `${system}:\xFF`,
+    limit: 1,
+  })) {
     return true;
   }
   return false;
 }
 
 /**
- * Populate the console metadata store on first run so emulated games render
- * rich cards out of the box. No-ops once cached; runs in the background and
- * swallows network errors.
+ * Populate the console metadata store so emulated games render rich cards out
+ * of the box. Re-syncs PER SYSTEM: a previous partial/failed bootstrap (which a
+ * single global "has any entry" guard would have frozen forever) is repaired
+ * because each system is checked independently. Reads the bundled JSON, so it
+ * works offline.
  */
 export async function ensureGameHubMeta(): Promise<void> {
-  try {
-    if (await gamehubMetaHasEntries()) return;
-    await syncAllGameHubMeta();
-  } catch (err) {
-    console.warn("[gamehub-meta] Background bootstrap failed:", err);
+  for (const system of META_SYSTEMS) {
+    try {
+      if (await systemHasEntries(system)) continue;
+      await syncGameHubMeta(system);
+    } catch (err) {
+      console.warn(`[gamehub-meta] bootstrap failed for ${system}:`, err);
+    }
   }
 }

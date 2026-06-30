@@ -43,8 +43,12 @@ async function scanAllVariants(
   const prefixes = [`${system}:`, `${system}-upd:`, `${system}-dlc:`];
 
   for (const prefix of prefixes) {
-    const gte = `${prefix}${normalizedTitle}`;
-    const lte = `${prefix}${normalizedTitle}\xFF`;
+    // Keys are `${prefix}${normalizedTitle}:${normalizedFilenameStem}`. The
+    // trailing colon delimiter is REQUIRED: scanning `${prefix}${title}` without
+    // it matches every title that merely STARTS with this string — e.g. title
+    // "N+" normalizes to "n" and bled into 305 unrelated "n…" games.
+    const gte = `${prefix}${normalizedTitle}:`;
+    const lte = `${prefix}${normalizedTitle}:\xFF`;
     for await (const [, record] of minervaCatalogueSublevel.iterator({
       gte,
       lte,

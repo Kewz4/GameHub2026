@@ -1,10 +1,39 @@
 import axios from "axios";
+import { app } from "electron";
+import fs from "node:fs";
+import path from "node:path";
 import type { EmulatorSystem } from "@types";
+import { db } from "@main/level";
 import {
   minervaCatalogueSublevel,
   type MinervaCatalogueEntry,
 } from "@main/level/sublevels/minerva-catalogue";
 import { normalizeTitle } from "./minerva-source";
+import { isNonGameEntry } from "./non-game-filter";
+import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
+
+/**
+ * Catalogue schema version. Bump when the way entries are built changes (e.g.
+ * non-game filtering, region tagging, key format) so existing installs purge
+ * and re-sync instead of keeping stale/polluted data.
+ */
+const CATALOGUE_VERSION = 2;
+const CATALOGUE_VERSION_KEY = "minervaCatalogueVersion";
+
+/** Bundled catalogue dir (extraResource in packaged builds; repo in dev). */
+const LOCAL_MINERVA_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, "minerva")
+  : path.join(__dirname, "..", "..", "sources", "minerva");
+
+function readLocalMinerva<T>(fileName: string): T | null {
+  try {
+    const file = path.join(LOCAL_MINERVA_DIR, fileName);
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, "utf-8")) as T;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Hosted Minerva catalogue. Each platform is a static JSON file (Hydra download
@@ -124,18 +153,21 @@ function withTrackers(magnet: string): string {
 export async function syncMinervaSource(
   system: EmulatorSystem
 ): Promise<number> {
-  const url = `${MINERVA_SOURCES_BASE_URL}/${system}.json`;
+  // Prefer the bundled catalogue (offline, always present); fall back to GitHub.
+  let data: MinervaSourceFile | null = readLocalMinerva(`${system}.json`);
 
-  let data: MinervaSourceFile;
-  try {
-    const resp = await axios.get<MinervaSourceFile>(url, {
-      timeout: 60_000,
-      responseType: "json",
-    });
-    data = resp.data;
-  } catch (err) {
-    console.warn(`[minerva] Failed to fetch source for ${system}:`, err);
-    return 0;
+  if (!data) {
+    const url = `${MINERVA_SOURCES_BASE_URL}/${system}.json`;
+    try {
+      const resp = await axios.get<MinervaSourceFile>(url, {
+        timeout: 60_000,
+        responseType: "json",
+      });
+      data = resp.data;
+    } catch (err) {
+      console.warn(`[minerva] Failed to fetch source for ${system}:`, err);
+      return 0;
+    }
   }
 
   if (!data?.downloads?.length) return 0;
@@ -145,6 +177,10 @@ export async function syncMinervaSource(
   const batch = minervaCatalogueSublevel.batch();
 
   for (const download of data.downloads) {
+    // Skip cheat carts (Action Replay/GameShark), demo/kiosk discs, trailers —
+    // they pollute the catalogue and aren't playable games.
+    if (isNonGameEntry(download.title, download.fileName)) continue;
+
     const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
     const ct = download.contentType ?? "game";
     const prefix =
@@ -154,10 +190,13 @@ export async function syncMinervaSource(
           ? `${system}-dlc:`
           : `${system}:`;
 
+    const region = parseRomFilename(
+      download.fileName ?? download.title
+    ).region;
     const entry: MinervaCatalogueEntry = {
       system,
       title: download.title,
-      region: null,
+      region,
       filename: download.fileName ?? download.title,
       romPath: "",
       magnet,
@@ -192,18 +231,20 @@ async function syncSupplementalSource(opts: {
   system: EmulatorSystem;
   defaultContentType: "game" | "update" | "dlc";
 }): Promise<number> {
-  const url = `${MINERVA_SOURCES_BASE_URL}/${opts.file}`;
+  let data: MinervaSourceFile | null = readLocalMinerva(opts.file);
 
-  let data: MinervaSourceFile;
-  try {
-    const resp = await axios.get<MinervaSourceFile>(url, {
-      timeout: 60_000,
-      responseType: "json",
-    });
-    data = resp.data;
-  } catch {
-    // Supplemental files may not exist yet — silently skip.
-    return 0;
+  if (!data) {
+    const url = `${MINERVA_SOURCES_BASE_URL}/${opts.file}`;
+    try {
+      const resp = await axios.get<MinervaSourceFile>(url, {
+        timeout: 60_000,
+        responseType: "json",
+      });
+      data = resp.data;
+    } catch {
+      // Supplemental files may not exist yet — silently skip.
+      return 0;
+    }
   }
 
   if (!data?.downloads?.length) return 0;
@@ -213,12 +254,13 @@ async function syncSupplementalSource(opts: {
   const batch = minervaCatalogueSublevel.batch();
 
   for (const download of data.downloads) {
+    if (isNonGameEntry(download.title, download.fileName)) continue;
     const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
     const ct = download.contentType ?? opts.defaultContentType;
     const entry: MinervaCatalogueEntry = {
       system: opts.system,
       title: download.title,
-      region: null,
+      region: parseRomFilename(download.fileName ?? download.title).region,
       filename: download.fileName ?? download.title,
       romPath: "",
       magnet,
@@ -248,11 +290,16 @@ export async function syncAllMinervaSources(): Promise<
   Partial<Record<EmulatorSystem, number>>
 > {
   const result: Partial<Record<EmulatorSystem, number>> = {};
+  const yieldToLoop = () => new Promise((r) => setImmediate(r));
   for (const system of ALL_SYSTEMS) {
     result[system] = await syncMinervaSource(system);
+    // Yield between systems so loading ~29k entries at startup never blocks the
+    // window / renderer bootstrap.
+    await yieldToLoop();
   }
   for (const supp of SUPPLEMENTAL_SOURCES) {
     await syncSupplementalSource(supp);
+    await yieldToLoop();
   }
   return result;
 }
@@ -265,15 +312,40 @@ async function minervaCatalogueHasEntries(): Promise<boolean> {
   return false;
 }
 
+async function getStoredCatalogueVersion(): Promise<number> {
+  try {
+    const v = await db.get<string, number>(
+      CATALOGUE_VERSION_KEY,
+      { valueEncoding: "json" }
+    );
+    return typeof v === "number" ? v : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Populate the catalogue on first run so console games are searchable without
- * the user manually pressing "Refresh" in settings. No-ops once cached; runs
- * in the background and swallows network errors.
+ * the user manually pressing "Refresh" in settings. Re-syncs from scratch when
+ * CATALOGUE_VERSION is bumped so existing installs pick up new filtering/region
+ * logic instead of keeping stale, polluted entries. Reads bundled JSON (offline).
  */
 export async function ensureMinervaCatalogue(): Promise<void> {
   try {
-    if (await minervaCatalogueHasEntries()) return;
+    const storedVersion = await getStoredCatalogueVersion();
+    const hasEntries = await minervaCatalogueHasEntries();
+
+    if (hasEntries && storedVersion === CATALOGUE_VERSION) return;
+
+    // Stale schema (or partial) — purge and rebuild with current logic.
+    if (hasEntries && storedVersion !== CATALOGUE_VERSION) {
+      await minervaCatalogueSublevel.clear();
+    }
+
     await syncAllMinervaSources();
+    await db.put(CATALOGUE_VERSION_KEY, CATALOGUE_VERSION, {
+      valueEncoding: "json",
+    });
   } catch (err) {
     console.warn("[minerva] Background catalogue bootstrap failed:", err);
   }
