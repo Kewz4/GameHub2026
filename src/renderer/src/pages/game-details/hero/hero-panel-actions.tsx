@@ -203,7 +203,10 @@ export function HeroPanelActions() {
     } catch (error) {
       const code = getClassicsLaunchErrorCode(error);
 
-      if (code === "EMULATOR_NOT_CONFIGURED" || code === "BIOS_NOT_CONFIGURED") {
+      if (
+        code === "EMULATOR_NOT_CONFIGURED" ||
+        code === "BIOS_NOT_CONFIGURED"
+      ) {
         showErrorToast(
           t("emulator_not_configured_title", {
             defaultValue: "Set up the emulator first",
@@ -237,7 +240,9 @@ export function HeroPanelActions() {
         return;
       }
 
-      showErrorToast(t("classics_launch_failed", { defaultValue: "Launch failed" }));
+      showErrorToast(
+        t("classics_launch_failed", { defaultValue: "Launch failed" })
+      );
     }
   };
 
@@ -315,9 +320,7 @@ export function HeroPanelActions() {
   // as a disc. The emulator-setup gate is enforced on click (openClassicsGame).
   const isClassicsLaunchable =
     game?.shop === "launchbox" &&
-    Boolean(
-      game.selectedDiscPath || (game.discs && game.discs.length > 0)
-    );
+    Boolean(game.selectedDiscPath || (game.discs && game.discs.length > 0));
 
   // Owned on a platform (synced from the platform account) — NOT a catalogue /
   // repack entry that merely reuses the steam shop for assets (Retigga).
