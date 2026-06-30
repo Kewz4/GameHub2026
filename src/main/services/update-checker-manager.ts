@@ -67,6 +67,10 @@ export class UpdateCheckerManager {
   static async checkAndUpdate(): Promise<void> {
     this.sendEvent({ type: "checking", currentVersion: app.getVersion() });
 
+    logger.log(
+      `[updater] checking for updates — current v${app.getVersion()}, feed github:Kewz4/hydra, portable=${this.isPortable}`
+    );
+
     if (!app.isPackaged) {
       await new Promise((r) => setTimeout(r, 800));
       this.sendEvent({
@@ -84,9 +88,10 @@ export class UpdateCheckerManager {
     // after the UI has already advanced.
     const fallbackTimer = setTimeout(() => {
       autoUpdater.removeAllListeners();
+      logger.warn("[updater] no response within 20s — proceeding");
       this.sendEvent({
-        type: "not-available",
-        currentVersion: app.getVersion(),
+        type: "error",
+        message: "Update check timed out (no response from GitHub).",
       });
     }, 20_000);
     const clearFallback = () => clearTimeout(fallbackTimer);
@@ -94,6 +99,7 @@ export class UpdateCheckerManager {
     autoUpdater
       .on("update-not-available", () => {
         clearFallback();
+        logger.log(`[updater] up to date (v${app.getVersion()})`);
         this.sendEvent({
           type: "not-available",
           currentVersion: app.getVersion(),
@@ -135,19 +141,22 @@ export class UpdateCheckerManager {
       })
       .on("error", (err: Error) => {
         clearFallback();
-        logger.error("Auto-updater error:", err);
+        // Surface the real failure instead of masking it as "up to date" — a
+        // silently-failing check is exactly why updates looked broken. The
+        // splash auto-proceeds after showing it, so startup isn't blocked.
+        logger.error("[updater] auto-updater error:", err);
         this.sendEvent({
-          type: "not-available",
-          currentVersion: app.getVersion(),
+          type: "error",
+          message: `Update check failed: ${err?.message ?? String(err)}`,
         });
       });
 
     autoUpdater.checkForUpdates().catch((err) => {
       clearFallback();
-      logger.error("checkForUpdates failed:", err);
+      logger.error("[updater] checkForUpdates failed:", err);
       this.sendEvent({
-        type: "not-available",
-        currentVersion: app.getVersion(),
+        type: "error",
+        message: `Update check failed: ${err?.message ?? String(err)}`,
       });
     });
   }

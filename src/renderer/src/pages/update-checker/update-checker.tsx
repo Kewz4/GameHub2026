@@ -71,6 +71,9 @@ export default function UpdateChecker() {
       } else if (event.type === "error") {
         setErrorMsg(event.message);
         setPhase("error");
+        // Show the reason briefly, then continue into the app so a transient
+        // GitHub failure never traps the user on the splash.
+        setTimeout(proceed, 4000);
       }
     });
     return unsub;

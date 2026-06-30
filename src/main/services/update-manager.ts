@@ -60,6 +60,14 @@ export class UpdateManager {
           this.hasNotified = true;
           publishNotificationUpdateReadyToInstall(this.newVersion);
         }
+      })
+      .on("update-not-available", () => {
+        logger.log(`[updater] in-app check: up to date (v${app.getVersion()})`);
+      })
+      .on("error", (err: Error) => {
+        // Log instead of swallowing — a periodic check that silently errors is
+        // why updates appeared to never arrive.
+        logger.error("[updater] in-app check error:", err);
       });
 
     const isAutoInstallAvailable = await this.isAutoInstallEnabled();
