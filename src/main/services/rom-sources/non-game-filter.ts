@@ -13,8 +13,11 @@
 const NON_GAME_TEXT =
   /(\baction replay\b|\bgame ?genie\b|\bgameshark\b|\bcode ?breaker\b|\bpro action replay\b|\bultimate (codes|cheats)\b|\b(codes|cheats) for use\b|interactive multi-?game demo|\bdemo disc\b|tentou demo|\bpreview (trailer|video)\b|\btrailer\b|\bservice (disc|manual)\b)/i;
 
-// Parenthetical No-Intro/Redump tags that mark non-final, non-game content.
-const NON_GAME_TAG = /\((Demo|Kiosk|Trade Demo|Tech Demo|Promo)\)/i;
+// Parenthetical No-Intro/Redump tags that mark non-final / non-retail content:
+// store/kiosk demos AND unfinished builds (beta/proto/sample/debug). The user
+// wants only finished, real games — none of these.
+const NON_GAME_TAG =
+  /\((Demo|Kiosk|Trade Demo|Tech Demo|Promo|Beta|Proto|Prototype|Sample|Debug|Dev|Test Program|Pre-Release|Preview)\b[^)]*\)/i;
 
 /** True when a catalogue entry is a cheat device, demo/kiosk disc, trailer, etc. */
 export function isNonGameEntry(

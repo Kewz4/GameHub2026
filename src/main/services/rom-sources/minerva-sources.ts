@@ -17,7 +17,7 @@ import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
  * non-game filtering, region tagging, key format) so existing installs purge
  * and re-sync instead of keeping stale/polluted data.
  */
-const CATALOGUE_VERSION = 2;
+const CATALOGUE_VERSION = 3;
 const CATALOGUE_VERSION_KEY = "minervaCatalogueVersion";
 
 /** Bundled catalogue dir (extraResource in packaged builds; repo in dev). */

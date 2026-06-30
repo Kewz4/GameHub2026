@@ -182,6 +182,61 @@ if (meta && !meta.__error) {
   fail("getGameShopDetails failed", meta?.__error ?? "null");
 }
 
+// ── R5: betas / protos / demos excluded ───────────────────────────────────────
+console.log("\n[R5] Beta / Proto / Demo builds excluded from the catalogue");
+const badTags = await app.evaluate(async () => {
+  const s = globalThis.__levelSublevels;
+  let found = 0;
+  const samples = [];
+  const re = /\((Beta|Proto|Prototype|Sample|Demo|Debug)\b/i;
+  for await (const [, rec] of s.minervaCatalogueSublevel.iterator({
+    limit: 40000,
+  })) {
+    if (re.test(rec.entry.filename)) {
+      found++;
+      if (samples.length < 4) samples.push(rec.entry.filename);
+    }
+  }
+  return { found, samples };
+});
+if (badTags.found === 0)
+  ok("no Beta/Proto/Demo-tagged entries remain in the catalogue");
+else
+  fail(
+    `${badTags.found} beta/proto/demo entries still present`,
+    badTags.samples.join("; ")
+  );
+
+// ── R6: Breath of the Wild — each region has base + update + DLC ───────────────
+console.log("\n[R6] Breath of the Wild groups base+update+DLC per region");
+const botw = await mainWin
+  .evaluate(() =>
+    window.electron.getMinervaDownloadOptions(
+      "wiiu",
+      "Legend of Zelda, The - Breath of the Wild"
+    )
+  )
+  .catch((e) => ({ __error: String(e) }));
+if (Array.isArray(botw)) {
+  const by = {};
+  for (const o of botw) {
+    const r = o.region || "none";
+    by[r] = by[r] || { game: 0, update: 0, dlc: 0 };
+    by[r][o.contentType || "game"]++;
+  }
+  console.log("    by region:", JSON.stringify(by));
+  const okRegion = (r) =>
+    by[r] && by[r].game >= 1 && by[r].update >= 1 && by[r].dlc >= 1;
+  if (okRegion("USA"))
+    ok("USA has base game + update + DLC (was: no update/DLC)");
+  else fail("USA missing base/update/DLC", JSON.stringify(by.USA));
+  if (okRegion("Europe"))
+    ok("Europe has base game + update + DLC (was: no base game)");
+  else fail("Europe missing base/update/DLC", JSON.stringify(by.Europe));
+} else {
+  fail("BotW options failed", botw.__error);
+}
+
 console.log(`\n${"─".repeat(58)}`);
 console.log(`Real-data results: ${passed} passed, ${failed} failed`);
 await app.close().catch(() => {});
