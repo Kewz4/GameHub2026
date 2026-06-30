@@ -71,11 +71,17 @@ const getGameShopDetails = async (
 
     if (!title && !meta) return null;
 
+    // Prefer a real, human title for display. When the game isn't in the
+    // library yet the only title we have is the normalized objectId slug
+    // (e.g. "supersmashbrosforwiiu") — the meta's proper title wins over it.
+    const displayTitle =
+      gameAssets?.title ?? gameEntry?.title ?? meta?.title ?? title ?? objectId;
+
     const description = meta?.description ?? "";
     const assets: ShopDetailsWithAssets["assets"] = {
       objectId,
       shop,
-      title: title ?? meta?.title ?? "",
+      title: displayTitle,
       coverImageUrl: gameAssets?.coverImageUrl ?? meta?.coverImageUrl ?? null,
       libraryImageUrl:
         gameAssets?.libraryImageUrl ?? meta?.libraryImageUrl ?? null,
@@ -89,7 +95,7 @@ const getGameShopDetails = async (
 
     return {
       objectId,
-      name: title ?? meta?.title ?? objectId,
+      name: displayTitle,
       steam_appid: 0,
       detailed_description: description,
       about_the_game: description,

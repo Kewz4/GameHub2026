@@ -279,13 +279,23 @@ const dedupGames = (binary: KnownBinary, files: Candidate[]): GameGroup[] => {
     primary,
     sidecars: [],
   }));
+  // Only PlayStation discs need pairing/sniffing rules. Every other console
+  // (carts, handhelds, single-file Wii U/Cemu .wua/.wux, GC/Wii images) is a
+  // single ROM file per game — each collected candidate (already filtered to the
+  // system's romExtensions) is its own game. Previously these all fell through
+  // to PS1 disc rules, which dropped any file whose extension wasn't a PS1 disc
+  // ext (.cue/.iso/…) — i.e. it silently found ZERO games for gb/gba/nds/n64/
+  // 3ds/wiiu/wii/gc, matching the "scanning finds nothing" bug.
   for (const [, group] of byDir) {
     if (binary.system === "ps3") {
       games.push(...applyPs3Rules(group));
     } else if (binary.system === "ps2") {
       games.push(...applyPairedRules(group, PS2_PRIMARY_EXTS, PS2_PAIR_RULES));
-    } else {
+    } else if (binary.system === "ps1") {
       games.push(...applyPairedRules(group, PS1_PRIMARY_EXTS, PS1_PAIR_RULES));
+    } else {
+      // Single-file systems: one game per ROM file.
+      for (const f of group) games.push({ primary: f, sidecars: [] });
     }
   }
   return games;
