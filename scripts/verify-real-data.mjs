@@ -107,7 +107,10 @@ const npOpts = await mainWin
 if (Array.isArray(npOpts)) {
   console.log(
     "    options:",
-    npOpts.map((o) => o.title).slice(0, 6).join(" | ")
+    npOpts
+      .map((o) => o.title)
+      .slice(0, 6)
+      .join(" | ")
   );
   if (npOpts.length <= 3)
     ok(`N+ returns ${npOpts.length} option(s) (was 305 from prefix bleed)`);
@@ -130,7 +133,10 @@ if (Array.isArray(stOpts) && stOpts.length > 0) {
   const regions = [...new Set(stOpts.map((o) => o.region).filter(Boolean))];
   console.log(
     "    variants:",
-    stOpts.map((o) => `${o.title}[${o.region}]`).slice(0, 6).join(" | ")
+    stOpts
+      .map((o) => `${o.title}[${o.region}]`)
+      .slice(0, 6)
+      .join(" | ")
   );
   if (regions.includes("USA") && regions.includes("Europe"))
     ok(`Spirit Tracks variants tagged with regions: ${regions.join(", ")}`);
@@ -143,7 +149,9 @@ if (Array.isArray(stOpts) && stOpts.length > 0) {
 }
 
 // ── R4: metadata (cover + description) for a real game ────────────────────────
-console.log("\n[R4] Real metadata (cover + description) from bundled gamehub-meta");
+console.log(
+  "\n[R4] Real metadata (cover + description) from bundled gamehub-meta"
+);
 const meta = await mainWin
   .evaluate(() =>
     window.electron.getGameShopDetails(

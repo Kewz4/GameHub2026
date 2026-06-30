@@ -63,6 +63,29 @@ export function HeroPanelActions() {
 
   const { t } = useTranslation("game_details");
 
+  // For console/emulated (launchbox) games, track whether the emulator is
+  // installed so the action button can say "Set up emulator" instead of
+  // offering a Play that fails.
+  const [emulatorReady, setEmulatorReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (game?.shop !== "launchbox" || !game?.objectId) {
+      setEmulatorReady(null);
+      return;
+    }
+    let cancelled = false;
+    window.electron
+      .isEmulatorReady(game.shop, game.objectId)
+      .then((ready) => {
+        if (!cancelled) setEmulatorReady(ready);
+      })
+      .catch(() => {
+        if (!cancelled) setEmulatorReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [game?.shop, game?.objectId, isGameRunning]);
+
   useEffect(() => {
     const onFavoriteToggled = () => {
       updateLibrary();
@@ -361,9 +384,23 @@ export function HeroPanelActions() {
       );
     }
 
-    // Console/emulated game with its ROM downloaded → Play (gated on emulator
-    // setup at click time).
+    // Console/emulated game with its ROM downloaded. If the emulator isn't
+    // installed yet, the button routes to setup ("Set up emulator") instead of
+    // offering a Play that would fail; once ready it becomes Play.
     if (isClassicsLaunchable) {
+      if (emulatorReady === false) {
+        return (
+          <Button
+            onClick={() => navigate("/settings")}
+            theme="outline"
+            disabled={deleting}
+            className="hero-panel-actions__action"
+          >
+            <GearIcon />
+            {t("setup_emulator", { defaultValue: "Set up emulator" })}
+          </Button>
+        );
+      }
       return (
         <Button
           onClick={openClassicsGame}

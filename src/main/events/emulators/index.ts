@@ -13,6 +13,7 @@ import "./check-ps3-firmware";
 import "./check-emulator-bios";
 import "./get-emulator-install-options";
 import "./install-emulator";
+import "./is-emulator-ready";
 import "./rom-scan-progress";
 import "./emulator-rom-paths";
 import "./list-emulator-roms";

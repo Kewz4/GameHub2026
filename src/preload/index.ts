@@ -772,6 +772,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("getEmulatorInstallOptions", binary),
   installEmulator: (binary: any, optionId: string) =>
     ipcRenderer.invoke("installEmulator", binary, optionId),
+  isEmulatorReady: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("isEmulatorReady", shop, objectId),
   onEmulatorInstallProgress: (cb: (payload: any) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
       cb(payload);

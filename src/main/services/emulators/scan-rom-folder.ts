@@ -153,11 +153,43 @@ const computeDirSize = async (root: string): Promise<number> => {
 
 type GameClassification = "ok" | "wrong-platform" | "skip";
 
+/**
+ * Read a Wii U title's content category from its meta.xml title_id. The high
+ * half of the id encodes the type: 00050000 = base game, 0005000E = update/
+ * patch, 0005000C = DLC/add-on. Returns "game" when unknown so nothing is lost.
+ */
+const wiiuContentType = async (
+  folderPath: string
+): Promise<"game" | "update" | "dlc"> => {
+  try {
+    const xml = await fs.readFile(
+      path.join(folderPath, "meta", "meta.xml"),
+      "utf-8"
+    );
+    const m = xml.match(/<title_id[^>]*>\s*([0-9a-fA-F]{16})\s*<\/title_id>/);
+    const high = m?.[1]?.slice(0, 8).toUpperCase();
+    if (high === "0005000E") return "update";
+    if (high === "0005000C") return "dlc";
+    return "game";
+  } catch {
+    return "game";
+  }
+};
+
 const classifyForSystem = async (
   candidate: Candidate,
   system: EmulatorSystem
 ): Promise<GameClassification> => {
-  if (candidate.isMarkerDir) return "ok";
+  if (candidate.isMarkerDir) {
+    // A Wii U folder game may actually be an installed update or DLC — skip
+    // those so the scan lists only base games (Cemu installs them as separate
+    // code/content/meta titles that would otherwise each look like a game).
+    if (system === "wiiu") {
+      const ct = await wiiuContentType(candidate.fullPath);
+      if (ct !== "game") return "skip";
+    }
+    return "ok";
+  }
   const ext = extOf(candidate.name);
 
   if (system === "ps3") {

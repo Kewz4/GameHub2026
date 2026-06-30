@@ -12,6 +12,21 @@ import type { EmulatorInstallSource } from "./known-binaries";
 const isWindows = process.platform === "win32";
 const isLinux = process.platform === "linux";
 
+/**
+ * Per-binary cache of resolved install options. The emulation settings page
+ * resolves options for every emulator (9+ binaries) on each visit; without a
+ * cache that is 9+ unauthenticated GitHub API calls per page view, which
+ * quickly trips GitHub's 60-requests/hour limit and makes EVERY emulator fall
+ * back to "open the releases page". We cache successful resolutions for a few
+ * hours and, on a later rate-limit/network failure, keep serving the last good
+ * result instead of regressing to a link.
+ */
+const OPTIONS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const optionsCache = new Map<
+  EmulatorBinary,
+  { at: number; options: ResolvedInstallOption[] }
+>();
+
 interface GithubAsset {
   name: string;
   browser_download_url: string;
@@ -72,7 +87,11 @@ const resolveGithubOption = async (
       `https://api.github.com/repos/${source.githubRepo}/releases/latest`,
       {
         timeout: 15_000,
-        headers: { Accept: "application/vnd.github+json" },
+        headers: {
+          Accept: "application/vnd.github+json",
+          // GitHub rejects API requests with no User-Agent.
+          "User-Agent": "GameHub-Launcher",
+        },
       }
     );
 
@@ -142,12 +161,28 @@ export const getEmulatorInstallOptions = async (
 ): Promise<ResolvedInstallOption[]> => {
   const source = KNOWN_BINARIES[primarySystemForBinary(binary)].install;
 
+  // Serve a fresh cached result without touching the API.
+  const cached = optionsCache.get(binary);
+  if (cached && Date.now() - cached.at < OPTIONS_CACHE_TTL_MS) {
+    return cached.options;
+  }
+
   const options: ResolvedInstallOption[] = [];
 
   const direct = await resolveGithubOption(binary, source);
   if (direct) options.push(direct);
 
   options.push(...linkOption(binary, source));
+
+  // Only cache a result that actually has a direct download — if the lookup
+  // failed (rate-limited/offline) and we previously had a good result, keep
+  // serving that instead of caching the link-only fallback.
+  const hasDirect = options.some((o) => o.kind !== "link");
+  if (hasDirect) {
+    optionsCache.set(binary, { at: Date.now(), options });
+  } else if (cached) {
+    return cached.options;
+  }
 
   return options;
 };

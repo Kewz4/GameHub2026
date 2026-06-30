@@ -918,6 +918,7 @@ declare global {
       binary: EmulatorBinary,
       optionId: string
     ) => Promise<EmulatorInstallResult>;
+    isEmulatorReady: (shop: GameShop, objectId: string) => Promise<boolean>;
     onEmulatorInstallProgress: (
       cb: (payload: EmulatorInstallProgress) => void
     ) => () => void;

@@ -190,9 +190,7 @@ export async function syncMinervaSource(
           ? `${system}-dlc:`
           : `${system}:`;
 
-    const region = parseRomFilename(
-      download.fileName ?? download.title
-    ).region;
+    const region = parseRomFilename(download.fileName ?? download.title).region;
     const entry: MinervaCatalogueEntry = {
       system,
       title: download.title,
@@ -314,10 +312,9 @@ async function minervaCatalogueHasEntries(): Promise<boolean> {
 
 async function getStoredCatalogueVersion(): Promise<number> {
   try {
-    const v = await db.get<string, number>(
-      CATALOGUE_VERSION_KEY,
-      { valueEncoding: "json" }
-    );
+    const v = await db.get<string, number>(CATALOGUE_VERSION_KEY, {
+      valueEncoding: "json",
+    });
     return typeof v === "number" ? v : 0;
   } catch {
     return 0;
