@@ -75,12 +75,6 @@ else fail("expected false before install", JSON.stringify(before));
 // Configure a fake-but-existing emulator executable for gb (binary: ravba).
 const fakeExe = path.join(os.tmpdir(), "ravba-fake");
 fs.writeFileSync(fakeExe, "#!/bin/true");
-await app.evaluate(async (_, exe) => {
-  const s = globalThis.__levelSublevels;
-  // emulatorsSublevel isn't exposed; write via the repository through a config.
-  await globalThis.__setEmu?.("gb", exe);
-}, fakeExe).catch(() => {});
-// Fallback: set config directly if exposed, else use updateEmulatorConfig IPC path.
 const setOk = await app.evaluate(async (_, exe) => {
   try {
     const lvl = globalThis.__levelSublevels;
