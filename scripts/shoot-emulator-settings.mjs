@@ -27,7 +27,12 @@ fs.writeFileSync(path.join(dolphinDir, "Dolphin.exe"), "x");
 
 const app = await electron.launch({
   executablePath: path.resolve("node_modules/electron/dist/electron"),
-  args: [path.resolve("out/main/index.js"), "--no-sandbox", "--force-device-scale-factor=1", "--high-dpi-support=1"],
+  args: [
+    path.resolve("out/main/index.js"),
+    "--no-sandbox",
+    "--force-device-scale-factor=1",
+    "--high-dpi-support=1",
+  ],
   cwd: process.cwd(),
   timeout: 60_000,
 });
