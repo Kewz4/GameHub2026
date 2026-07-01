@@ -137,19 +137,34 @@ if (await select.count()) {
     .locator("option")
     .allTextContents()
     .catch(() => []);
-  const expected = ["Console", "PlayStation", "Nintendo 64", "Game Boy Advance"];
+  const expected = [
+    "Console",
+    "PlayStation",
+    "Nintendo 64",
+    "Game Boy Advance",
+  ];
   const missing = expected.filter((e) => !opts.includes(e));
-  if (missing.length === 0 && !opts.includes("PSP") && !opts.includes("Nintendo DS"))
+  if (
+    missing.length === 0 &&
+    !opts.includes("PSP") &&
+    !opts.includes("Nintendo DS")
+  )
     ok(`options = ${JSON.stringify(opts)} (no empty consoles offered)`);
   else fail(`unexpected options ${JSON.stringify(opts)}`, `missing ${missing}`);
 } else {
   fail("Console dropdown not rendered");
 }
-await win.screenshot({ path: path.join(OUT, "library-all.png"), fullPage: false });
+await win.screenshot({
+  path: path.join(OUT, "library-all.png"),
+  fullPage: false,
+});
 
 // The number of game cards currently rendered in the grid.
 const cardCount = () =>
-  win.locator(".library__games-grid li").count().catch(() => -1);
+  win
+    .locator(".library__games-grid li")
+    .count()
+    .catch(() => -1);
 // The card titles (each card root carries title={game.title}).
 const gridTitles = () =>
   win
