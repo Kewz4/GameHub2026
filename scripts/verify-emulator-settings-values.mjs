@@ -67,29 +67,29 @@ if (!win) {
 }
 
 for (const sys of ["ps1", "psp", "gba", "nds", "dsi", "n64"]) {
-  await app.evaluate(async (_, { system, raExe }) => {
-    const s = globalThis.__levelSublevels;
-    await s.emulatorsSublevel.put(system, {
-      system,
-      binary: "ralibretro",
-      executablePath: raExe,
-      detectedVersion: "1.0",
-      detectedAt: Date.now(),
-      romFolders: [],
-      lastScanAt: null,
-      totalFiles: 0,
-      totalSizeBytes: 0,
-    });
-  }, { system: sys, raExe: path.join(raDir, "RALibretro.exe") });
+  await app.evaluate(
+    async (_, { system, raExe }) => {
+      const s = globalThis.__levelSublevels;
+      await s.emulatorsSublevel.put(system, {
+        system,
+        binary: "ralibretro",
+        executablePath: raExe,
+        detectedVersion: "1.0",
+        detectedAt: Date.now(),
+        romFolders: [],
+        lastScanAt: null,
+        totalFiles: 0,
+        totalSizeBytes: 0,
+      });
+    },
+    { system: sys, raExe: path.join(raDir, "RALibretro.exe") }
+  );
 }
 
 // Query the setting defs straight from the IPC the UI uses — this is what the
 // <select> options are built from.
 const defsFor = (system) =>
-  win.evaluate(
-    (sys) => window.electron.getEmulatorSettings(sys),
-    system
-  );
+  win.evaluate((sys) => window.electron.getEmulatorSettings(sys), system);
 
 // Expected VALUES per key, from the verified upstream core options.
 const EXPECT = {
@@ -128,7 +128,11 @@ const FORBIDDEN_VALUES = {
   },
 };
 const FORBIDDEN_KEYS = {
-  nds: ["melonds_ds_render_mode", "melonds_ds_opengl_resolution", "melonds_ds_screen_layout1"],
+  nds: [
+    "melonds_ds_render_mode",
+    "melonds_ds_opengl_resolution",
+    "melonds_ds_screen_layout1",
+  ],
   gba: ["mgba_gb_colors"],
 };
 
@@ -168,7 +172,8 @@ for (const [sys, badKeys] of Object.entries(FORBIDDEN_KEYS)) {
   const { defs } = await defsFor(sys);
   const present = new Set(defs.map((d) => d.key));
   const leaked = badKeys.filter((k) => present.has(k));
-  if (leaked.length === 0) ok(`[${sys}] no stale keys ${JSON.stringify(badKeys)}`);
+  if (leaked.length === 0)
+    ok(`[${sys}] no stale keys ${JSON.stringify(badKeys)}`);
   else fail(`[${sys}] stale keys present ${JSON.stringify(leaked)}`);
 }
 

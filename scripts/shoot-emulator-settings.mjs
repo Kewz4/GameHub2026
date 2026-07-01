@@ -157,9 +157,7 @@ const shoot = async (system, tab, name) => {
   const file = path.join(OUT, `${name}.png`);
   // Prefer an element-level shot of the settings/controls panel so the full
   // (inner-scrolling) list is captured, not just the viewport.
-  const panel = win
-    .locator(".emulator-settings, .controller-mapping")
-    .first();
+  const panel = win.locator(".emulator-settings, .controller-mapping").first();
   if (await panel.count().catch(() => 0)) {
     await panel.screenshot({ path: file }).catch(async () => {
       await win.screenshot({ path: file, fullPage: true });
