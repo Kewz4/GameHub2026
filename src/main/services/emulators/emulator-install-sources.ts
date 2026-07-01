@@ -76,8 +76,7 @@ const resolveDirectOption = (
   source: EmulatorInstallSource
 ): ResolvedInstallOption | null => {
   if (!source.directDownloadUrl || !isWindows) return null;
-  const fileName =
-    source.directDownloadUrl.split("/").pop() || `${binary}.zip`;
+  const fileName = source.directDownloadUrl.split("/").pop() || `${binary}.zip`;
   return {
     id: `${binary}-direct`,
     binary,

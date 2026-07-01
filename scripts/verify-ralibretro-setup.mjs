@@ -52,7 +52,10 @@ for (const s of want) {
   else fail(`${s} → ${b} (expected ralibretro)`);
 }
 // gb/gbc stay on RAVBA; ps2/ps3 unchanged
-if (KNOWN_BINARIES.gb.binary === "ravba" && KNOWN_BINARIES.ps2.binary === "pcsx2")
+if (
+  KNOWN_BINARIES.gb.binary === "ravba" &&
+  KNOWN_BINARIES.ps2.binary === "pcsx2"
+)
   ok("gb→ravba and ps2→pcsx2 unchanged");
 else fail("gb/ps2 wrongly changed");
 if (
@@ -61,7 +64,8 @@ if (
   )
 )
   ok("install source is the RA direct-download URL");
-else fail("RA direct URL missing", KNOWN_BINARIES.ps1.install.directDownloadUrl);
+else
+  fail("RA direct URL missing", KNOWN_BINARIES.ps1.install.directDownloadUrl);
 
 // ── S2: bundled assets ────────────────────────────────────────────────────────
 console.log("\n[S2] Bundled RALibretro assets present");
@@ -85,8 +89,7 @@ console.log("\n[S3] Config templates (F11 fullscreen, notifications off)");
 const cfg = JSON.parse(
   fs.readFileSync(path.join(A, "config", "RALibretro.json"), "utf8")
 );
-if (cfg.bindings.TOGGLE_FULLSCREEN === "F11")
-  ok("TOGGLE_FULLSCREEN = F11");
+if (cfg.bindings.TOGGLE_FULLSCREEN === "F11") ok("TOGGLE_FULLSCREEN = F11");
 else fail("fullscreen not F11", cfg.bindings.TOGGLE_FULLSCREEN);
 if (cfg.bindings.LOAD_SLOT !== "F11")
   ok("F11 conflict resolved (LOAD_SLOT freed)");
