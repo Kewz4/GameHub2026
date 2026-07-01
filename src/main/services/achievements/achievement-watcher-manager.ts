@@ -607,25 +607,19 @@ export class AchievementWatcherManager {
       }
     );
 
-    const shouldUseCustomNotification =
+    const customEnabled =
       userPreferences.achievementCustomNotificationsEnabled !== false &&
-      process.platform !== "darwin" &&
-      !!WindowManager.notificationWindow;
+      process.platform !== "darwin";
 
-    if (shouldUseCustomNotification) {
-      // The notification window is created hidden and must be shown before the
-      // event is sent — otherwise the renderer plays the sound and renders the
-      // DOM but the window stays invisible (the cause of "I hear the sound but
-      // see no notification" on login). The individual-unlock path already does
-      // this in merge-achievements.ts; the combined path was missing it.
-      WindowManager.notificationWindow?.show();
-      WindowManager.notificationWindow?.webContents.send(
-        "on-combined-achievements-unlocked",
+    const shownInOverlay =
+      customEnabled &&
+      (await WindowManager.showCombinedAchievementsNotification(
         totalNewGamesWithAchievements,
         totalNewAchievements,
         userPreferences.achievementCustomNotificationPosition ?? "top-left"
-      );
-    } else {
+      ));
+
+    if (!shownInOverlay) {
       publishCombinedNewAchievementNotification(
         totalNewAchievements,
         totalNewGamesWithAchievements

@@ -645,6 +645,84 @@ export class WindowManager {
     };
   }
 
+  /**
+   * Re-assert the overlay's top-most level so it sits above a game running in
+   * fullscreen. A game that grabs the foreground can push a previously-created
+   * always-on-top window below it, so we re-apply the highest level (and, on
+   * macOS, visibility on fullscreen spaces) right before showing.
+   */
+  private static raiseOverFullscreen(win: Electron.BrowserWindow) {
+    try {
+      win.setAlwaysOnTop(true, "screen-saver", 1);
+      win.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true,
+      });
+      win.moveTop();
+    } catch {
+      /* window may have been torn down mid-call */
+    }
+  }
+
+  /**
+   * Lazily (re)create the transparent achievement overlay and show it hardened
+   * to appear over a game running in (borderless) fullscreen:
+   *  - re-asserts the highest always-on-top level right before showing (a game
+   *    grabbing the foreground can push a previously-created always-on-top
+   *    window below it);
+   *  - shows it *inactive* so we never steal focus from the game (stealing
+   *    focus can drop it out of fullscreen or minimize it).
+   *
+   * Returns the window on success, or null when the overlay can't be used
+   * (caller should fall back to the OS toast). NOTE: a true DXGI *exclusive*
+   * fullscreen surface cannot be overlaid by any window; this covers
+   * borderless / windowed-fullscreen, which is what RALibretro (F11) and most
+   * emulators use.
+   */
+  private static async raiseAndShowOverlay(): Promise<Electron.BrowserWindow | null> {
+    if (process.platform === "darwin") return null;
+
+    if (!this.notificationWindow || this.notificationWindow.isDestroyed()) {
+      this.notificationWindow = null;
+      await this.createNotificationWindow();
+    }
+
+    const win = this.notificationWindow;
+    if (!win || win.isDestroyed()) return null;
+
+    this.raiseOverFullscreen(win);
+    win.showInactive();
+    this.raiseOverFullscreen(win);
+    return win;
+  }
+
+  /** Show a single/multi achievement-unlock toast in the hardened overlay. */
+  public static async showAchievementNotification(
+    position: AchievementCustomNotificationPosition,
+    achievements: AchievementNotificationInfo[]
+  ): Promise<boolean> {
+    const win = await this.raiseAndShowOverlay();
+    if (!win) return false;
+    win.webContents.send("on-achievement-unlocked", position, achievements);
+    return true;
+  }
+
+  /** Show the "N achievements across M games" combined-unlock toast. */
+  public static async showCombinedAchievementsNotification(
+    totalNewGamesWithAchievements: number,
+    totalNewAchievements: number,
+    position: AchievementCustomNotificationPosition
+  ): Promise<boolean> {
+    const win = await this.raiseAndShowOverlay();
+    if (!win) return false;
+    win.webContents.send(
+      "on-combined-achievements-unlocked",
+      totalNewGamesWithAchievements,
+      totalNewAchievements,
+      position
+    );
+    return true;
+  }
+
   public static sendAchievementToFocusedWindow(
     position: AchievementCustomNotificationPosition,
     achievements: AchievementNotificationInfo[]

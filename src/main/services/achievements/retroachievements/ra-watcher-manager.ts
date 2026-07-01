@@ -236,18 +236,60 @@ export class RaWatcherManager {
 
     await gameAchievementsSublevel.put(gameKey, record);
 
-    await publishNewAchievementNotification({
-      achievements: [
-        {
-          title: achievement.title,
-          iconUrl: raBadgeUrl(achievement.badgeName),
-        },
-      ],
-      unlockedAchievementCount: unlocked.length,
-      totalAchievementCount: definitions.length || unlocked.length,
-      gameTitle: achievement.gameTitle || game.title,
-      gameIcon: game.iconUrl ?? null,
-    });
+    const totalAchievementCount = definitions.length || unlocked.length;
+    const prefs = await db
+      .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+        valueEncoding: "json",
+      })
+      .catch(() => null);
+    const customEnabled =
+      (prefs?.achievementCustomNotificationsEnabled ?? true) &&
+      process.platform !== "darwin";
+    const position = prefs?.achievementCustomNotificationPosition ?? "top-left";
+    const achievementsInfo = [
+      {
+        title: achievement.title,
+        description: achievement.description,
+        iconUrl: raBadgeUrl(achievement.badgeName),
+        isHidden: false,
+        isRare: false,
+        isPlatinum: unlocked.length === totalAchievementCount,
+        points: achievement.points,
+      },
+    ];
+
+    // Prefer the in-app surface over the OS toast — on Windows/Linux that's
+    // the custom always-on-top overlay, which (unlike the OS toast) shows over
+    // a game running in (borderless) fullscreen, which is how RALibretro and
+    // most emulators run. Linux has no transparent-overlay support, so it
+    // mirrors the Steam/Exophase path and posts into the app's own focused
+    // window instead.
+    const shownInOverlay =
+      customEnabled &&
+      (process.platform === "linux"
+        ? WindowManager.sendAchievementToFocusedWindow(
+            position,
+            achievementsInfo
+          )
+        : await WindowManager.showAchievementNotification(
+            position,
+            achievementsInfo
+          ));
+
+    if (!shownInOverlay) {
+      await publishNewAchievementNotification({
+        achievements: [
+          {
+            title: achievement.title,
+            iconUrl: raBadgeUrl(achievement.badgeName),
+          },
+        ],
+        unlockedAchievementCount: unlocked.length,
+        totalAchievementCount,
+        gameTitle: achievement.gameTitle || game.title,
+        gameIcon: game.iconUrl ?? null,
+      });
+    }
 
     WindowManager.sendToAppWindows("on-achievement-unlocked");
 

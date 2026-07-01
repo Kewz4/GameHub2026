@@ -183,17 +183,14 @@ export const mergeAchievements = async (
         publishOsNotification();
       }
     } else {
-      const shouldUseCustomNotification =
-        customEnabled && !!WindowManager.notificationWindow;
-
-      if (shouldUseCustomNotification) {
-        WindowManager.notificationWindow?.show();
-        WindowManager.notificationWindow?.webContents.send(
-          "on-achievement-unlocked",
+      const shownInOverlay =
+        customEnabled &&
+        (await WindowManager.showAchievementNotification(
           position,
           achievementsInfo
-        );
-      } else {
+        ));
+
+      if (!shownInOverlay) {
         publishOsNotification();
       }
     }

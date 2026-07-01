@@ -368,6 +368,7 @@ app.whenReady().then(async () => {
     );
     (globalThis as Record<string, unknown>).__raWatcherManager =
       RaWatcherManager;
+    (globalThis as Record<string, unknown>).__windowManager = WindowManager;
   }
 
   await import("./events")
