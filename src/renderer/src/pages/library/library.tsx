@@ -42,6 +42,12 @@ import { LibraryGameCardLarge } from "./library-game-card-large";
 import { ViewOptions, ViewMode } from "./view-options";
 import { FilterOptions, SortOption } from "./filter-options";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
+import {
+  CONSOLE_FILTER_SYSTEMS,
+  CONSOLE_LABELS,
+  systemForGame,
+} from "./console-filter";
+import type { EmulatorSystem } from "@types";
 import "./library.scss";
 
 const FAVORITES_COLLECTION_ID = "__favorites__";
@@ -109,6 +115,9 @@ export default function Library() {
   const [showCreateCollectionModal, setShowCreateCollectionModal] =
     useState(false);
   const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [consoleFilter, setConsoleFilter] = useState<EmulatorSystem | "all">(
+    "all"
+  );
 
   const searchQuery = useAppSelector((state) => state.library.searchQuery);
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -521,6 +530,32 @@ export default function Library() {
     return filteredLibrary.filter((g) => g.shop === storeFilter);
   }, [filteredLibrary, storeFilter]);
 
+  // Consoles that actually have games in the library, so the Console pill only
+  // offers relevant options (and hides entirely when there are no ROM games).
+  const availableConsoles = useMemo(() => {
+    const present = new Set<EmulatorSystem>();
+    for (const game of library) {
+      const system = systemForGame(game);
+      if (system) present.add(system);
+    }
+    return CONSOLE_FILTER_SYSTEMS.filter((s) => present.has(s));
+  }, [library]);
+
+  // A selected console narrows the (store-filtered) list to that console's ROMs.
+  const consoleFilteredLibrary = useMemo(() => {
+    if (consoleFilter === "all") return storeFilteredLibrary;
+    return storeFilteredLibrary.filter(
+      (game) => systemForGame(game) === consoleFilter
+    );
+  }, [storeFilteredLibrary, consoleFilter]);
+
+  // Reset the console filter if the selected console no longer has any games.
+  useEffect(() => {
+    if (consoleFilter !== "all" && !availableConsoles.includes(consoleFilter)) {
+      setConsoleFilter("all");
+    }
+  }, [availableConsoles, consoleFilter]);
+
   const favoritesCount = useMemo(() => {
     return library.filter((game) => game.favorite).length;
   }, [library]);
@@ -537,7 +572,7 @@ export default function Library() {
   }, [collections, favoritesCount, t]);
 
   const hasGames = library.length > 0;
-  const hasNoFilteredGames = storeFilteredLibrary.length === 0;
+  const hasNoFilteredGames = consoleFilteredLibrary.length === 0;
   const isFavoritesCollectionSelected =
     selectedCollectionId === FAVORITES_COLLECTION_ID;
   const shouldShowFavoritesEmptyState =
@@ -616,6 +651,39 @@ export default function Library() {
                 {label}
               </button>
             ))}
+
+            {availableConsoles.length > 0 && (
+              <select
+                aria-label="Filter by console"
+                value={consoleFilter}
+                onChange={(e) =>
+                  setConsoleFilter(e.target.value as EmulatorSystem | "all")
+                }
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "12px",
+                  border:
+                    consoleFilter !== "all"
+                      ? "1px solid var(--color-primary, #8b5cf6)"
+                      : "1px solid rgba(255,255,255,0.2)",
+                  background:
+                    consoleFilter !== "all"
+                      ? "var(--color-primary, #8b5cf6)"
+                      : "transparent",
+                  color: "inherit",
+                  cursor: "pointer",
+                  fontSize: "0.8rem",
+                  opacity: consoleFilter !== "all" ? 1 : 0.7,
+                }}
+              >
+                <option value="all">Console</option>
+                {availableConsoles.map((system) => (
+                  <option key={system} value={system}>
+                    {CONSOLE_LABELS[system] ?? system}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="library__collections-section">
@@ -726,7 +794,7 @@ export default function Library() {
                 exit={{ opacity: 0, x: 10 }}
                 transition={{ duration: 0.2 }}
               >
-                {storeFilteredLibrary.map((game) => (
+                {consoleFilteredLibrary.map((game) => (
                   <LibraryGameCardLarge
                     key={game.id}
                     game={game}
@@ -745,7 +813,7 @@ export default function Library() {
                 exit={{ opacity: 0, x: 10 }}
                 transition={{ duration: 0.2 }}
               >
-                {storeFilteredLibrary.map((game) => (
+                {consoleFilteredLibrary.map((game) => (
                   <li key={game.id} style={{ listStyle: "none" }}>
                     <LibraryGameCard
                       game={game}
