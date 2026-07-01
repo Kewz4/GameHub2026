@@ -44,6 +44,7 @@ import type {
   EmulatorSystem,
   EmulatorConfig,
   EmulatorConfigMap,
+  ControllerProfile,
   ClassicsDiscUpdate,
   DetectedRom,
   Ps2MemcardScanInput,
@@ -919,6 +920,25 @@ declare global {
       optionId: string
     ) => Promise<EmulatorInstallResult>;
     isEmulatorReady: (shop: GameShop, objectId: string) => Promise<boolean>;
+    getEmulatorSettings: (system: EmulatorSystem) => Promise<{
+      defs: {
+        key: string;
+        label: string;
+        type: "enum" | "toggle";
+        options?: { value: string; label: string }[];
+        group: string;
+        hint?: string;
+      }[];
+      values: { key: string; value: string }[];
+    }>;
+    setEmulatorSettings: (
+      system: EmulatorSystem,
+      values: { key: string; value: string }[]
+    ) => Promise<boolean>;
+    getControllerProfile: () => Promise<ControllerProfile>;
+    saveControllerProfile: (
+      profile: ControllerProfile
+    ) => Promise<{ applied: { binary: string; ok: boolean }[] }>;
     onEmulatorInstallProgress: (
       cb: (payload: EmulatorInstallProgress) => void
     ) => () => void;

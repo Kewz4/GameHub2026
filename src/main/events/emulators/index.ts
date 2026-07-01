@@ -14,6 +14,7 @@ import "./check-emulator-bios";
 import "./get-emulator-install-options";
 import "./install-emulator";
 import "./is-emulator-ready";
+import "./emulator-settings-events";
 import "./rom-scan-progress";
 import "./emulator-rom-paths";
 import "./list-emulator-roms";

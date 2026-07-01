@@ -49,6 +49,57 @@ export interface EmulatorConfig {
 
 export type EmulatorConfigMap = Record<EmulatorSystem, EmulatorConfig>;
 
+/**
+ * The standard logical controls of a modern gamepad, in a layout that maps
+ * cleanly onto every emulator we target. Each is bound to an SDL
+ * GameController input token (see `PadBinding`), so one profile can be written
+ * into RALibretro, PCSX2, RPCS3, Dolphin and Azahar configs.
+ */
+export type PadControl =
+  | "up"
+  | "down"
+  | "left"
+  | "right"
+  | "a" // bottom face (SDL a / PS cross)
+  | "b" // right face  (SDL b / PS circle)
+  | "x" // left face   (SDL x / PS square)
+  | "y" // top face    (SDL y / PS triangle)
+  | "l1" // left shoulder
+  | "r1" // right shoulder
+  | "l2" // left trigger
+  | "r2" // right trigger
+  | "l3" // left stick click
+  | "r3" // right stick click
+  | "select"
+  | "start"
+  | "lstick_up"
+  | "lstick_down"
+  | "lstick_left"
+  | "lstick_right"
+  | "rstick_up"
+  | "rstick_down"
+  | "rstick_left"
+  | "rstick_right";
+
+/**
+ * The physical SDL GameController input a control is bound to — a button name
+ * ("a", "dpup", "leftshoulder", …), a signed axis ("-leftx", "+lefty",
+ * "lefttrigger"), or "none". This is the RALibretro token vocabulary and the
+ * lingua franca we translate from for the other emulators.
+ */
+export type PadBinding = string;
+
+export interface ControllerProfile {
+  /** Human name of the mapped controller (e.g. "Xbox 360 Controller"). */
+  controllerName: string | null;
+  /** SDL/joystick index of the controller (0 for the first pad). */
+  controllerIndex: number;
+  /** SDL GUID of the controller, when known (needed by Azahar/Citra). */
+  controllerGuid: string | null;
+  /** Logical control → SDL input token. */
+  bindings: Record<PadControl, PadBinding>;
+}
+
 export interface DetectedRom {
   objectId: string;
   title: string;

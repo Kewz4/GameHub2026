@@ -774,6 +774,13 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("installEmulator", binary, optionId),
   isEmulatorReady: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("isEmulatorReady", shop, objectId),
+  getEmulatorSettings: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("getEmulatorSettings", system),
+  setEmulatorSettings: (system: EmulatorSystem, values: any) =>
+    ipcRenderer.invoke("setEmulatorSettings", system, values),
+  getControllerProfile: () => ipcRenderer.invoke("getControllerProfile"),
+  saveControllerProfile: (profile: any) =>
+    ipcRenderer.invoke("saveControllerProfile", profile),
   onEmulatorInstallProgress: (cb: (payload: any) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: any) =>
       cb(payload);
