@@ -570,10 +570,7 @@ export default function Library() {
   useEffect(() => {
     if (consoleDeepLinkApplied.current) return;
     const requested = searchParams.get("console");
-    if (
-      requested &&
-      availableConsoles.includes(requested as EmulatorSystem)
-    ) {
+    if (requested && availableConsoles.includes(requested as EmulatorSystem)) {
       consoleDeepLinkApplied.current = true;
       setConsoleFilter(requested as EmulatorSystem);
     }

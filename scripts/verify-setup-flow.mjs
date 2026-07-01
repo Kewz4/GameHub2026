@@ -116,7 +116,12 @@ await app.evaluate(
       `launchbox:${objId}`,
       rom(objId, "N64 Mario", "Nintendo 64", {
         discs: [
-          { path: disc, label: "N64 Mario", fileName: "N64 Mario.z64", sku: null },
+          {
+            path: disc,
+            label: "N64 Mario",
+            fileName: "N64 Mario.z64",
+            sku: null,
+          },
         ],
         selectedDiscPath: disc,
       })
@@ -169,7 +174,10 @@ await win
 await new Promise((r) => setTimeout(r, 2000));
 
 const cardCount = () =>
-  win.locator(".library__games-grid li").count().catch(() => -1);
+  win
+    .locator(".library__games-grid li")
+    .count()
+    .catch(() => -1);
 const selectValue = await win
   .locator('select[aria-label="Filter by console"]')
   .inputValue()
