@@ -38,6 +38,8 @@ import { EMULATOR_ICONS } from "./emulator-icons";
 import { MemoryCardsSection } from "./memory-cards-section";
 import { CloudSavesSection } from "./cloud-saves-section";
 import { RomsDetectedSection } from "./roms-detected-section";
+import { EmulatorSettingsSection } from "./emulator-settings-section";
+import { ControllerMappingSection } from "./controller-mapping-section";
 import { formatRelativeShort } from "./relative-time";
 
 import "./emulator-detail.scss";
@@ -50,7 +52,13 @@ interface EmulatorDetailProps {
   refresh: () => Promise<EmulatorConfig | unknown>;
 }
 
-type EmulatorTab = "emulator" | "rom-folders" | "memory-cards" | "library";
+type EmulatorTab =
+  | "emulator"
+  | "settings"
+  | "controls"
+  | "rom-folders"
+  | "memory-cards"
+  | "library";
 
 function GamepadIcon({ size = 16 }: Readonly<{ size?: number }>) {
   return (
@@ -301,6 +309,18 @@ export function EmulatorDetail({
 
   const tabs: { id: EmulatorTab; label: string }[] = [
     { id: "emulator", label: t("tab_emulator") },
+    ...(isConfigured
+      ? [
+          {
+            id: "settings" as const,
+            label: t("tab_settings", { defaultValue: "Settings" }),
+          },
+          {
+            id: "controls" as const,
+            label: t("tab_controls", { defaultValue: "Controls" }),
+          },
+        ]
+      : []),
     { id: "rom-folders", label: t("tab_rom_folders") },
     ...(supportsMemoryCards
       ? [{ id: "memory-cards" as const, label: t("tab_memory_card_backups") }]
@@ -503,6 +523,18 @@ export function EmulatorDetail({
             )}
           </section>
         </>
+      )}
+
+      {activeTab === "settings" && (
+        <section className="emulator-detail__section">
+          <EmulatorSettingsSection system={config.system} />
+        </section>
+      )}
+
+      {activeTab === "controls" && (
+        <section className="emulator-detail__section">
+          <ControllerMappingSection />
+        </section>
       )}
 
       {activeTab === "rom-folders" && (

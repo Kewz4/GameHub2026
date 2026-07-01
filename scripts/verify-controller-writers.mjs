@@ -21,7 +21,10 @@ const fail = (l, d = "") => {
 };
 
 async function loadTs(srcRel) {
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tsb-")), "m.mjs");
+  const out = path.join(
+    fs.mkdtempSync(path.join(os.tmpdir(), "tsb-")),
+    "m.mjs"
+  );
   await build({
     entryPoints: [path.resolve(srcRel)],
     outfile: out,
@@ -34,9 +37,7 @@ async function loadTs(srcRel) {
   return import(pathToFileURL(out).href);
 }
 
-const mod = await loadTs(
-  "src/main/services/emulators/controller-writers.ts"
-);
+const mod = await loadTs("src/main/services/emulators/controller-writers.ts");
 const {
   DEFAULT_CONTROLLER_PROFILE: P,
   ralibretroBindings,
@@ -67,7 +68,8 @@ for (const [k, v] of Object.entries(expectRA)) {
     raOk = false;
   }
 }
-if (raOk) ok("RALibretro J0 bindings match the verified default (incl. A/B, X/Y swap)");
+if (raOk)
+  ok("RALibretro J0 bindings match the verified default (incl. A/B, X/Y swap)");
 
 // Compare against the actual shipped zip config if present.
 const zipCfg =
@@ -81,7 +83,10 @@ if (fs.existsSync(zipCfg)) {
   else
     fail(
       `${mismatches.length} bindings differ from the shipped config`,
-      mismatches.slice(0, 3).map((k) => `${k}: ${ra[k]} vs ${real[k]}`).join("; ")
+      mismatches
+        .slice(0, 3)
+        .map((k) => `${k}: ${ra[k]} vs ${real[k]}`)
+        .join("; ")
     );
 } else {
   console.log("    (shipped zip config not present — skipping byte-match)");
@@ -102,7 +107,8 @@ const pcChecks = [
   "LLeft = SDL-0/-LeftX",
 ];
 const pcMiss = pcChecks.filter((c) => !pc.includes(c));
-if (pcMiss.length === 0) ok("PCSX2 section has correct DualShock2 SDL bindings");
+if (pcMiss.length === 0)
+  ok("PCSX2 section has correct DualShock2 SDL bindings");
 else fail("PCSX2 missing lines", pcMiss.join(" | "));
 
 // ── RPCS3 ─────────────────────────────────────────────────────────────────────

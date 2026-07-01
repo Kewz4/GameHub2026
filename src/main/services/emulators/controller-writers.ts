@@ -85,7 +85,10 @@ export function ralibretroBindings(
   };
 }
 
-export function writeRalibretro(installDir: string, p: ControllerProfile): boolean {
+export function writeRalibretro(
+  installDir: string,
+  p: ControllerProfile
+): boolean {
   const file = path.join(installDir, "RALibretro.json");
   let json: Record<string, unknown> = {};
   if (fs.existsSync(file)) {
@@ -256,8 +259,7 @@ const DOLPHIN_TOKEN: Record<string, string> = {
 };
 
 export function dolphinGcPadSection(p: ControllerProfile): string {
-  const q = (c: PadControl) =>
-    `\`${DOLPHIN_TOKEN[bind(p, c)] ?? bind(p, c)}\``;
+  const q = (c: PadControl) => `\`${DOLPHIN_TOKEN[bind(p, c)] ?? bind(p, c)}\``;
   return [
     "[GCPad1]",
     `Device = SDL/${p.controllerIndex}/Controller`,
