@@ -68,6 +68,31 @@ const kindForAsset = (assetName: string): EmulatorInstallKind => {
 };
 
 /**
+ * A vendor-hosted, fixed direct-download archive (e.g. RALibretro's
+ * retroachievements.org/bin zip). Bypasses the GitHub API entirely.
+ */
+const resolveDirectOption = (
+  binary: EmulatorBinary,
+  source: EmulatorInstallSource
+): ResolvedInstallOption | null => {
+  if (!source.directDownloadUrl || !isWindows) return null;
+  const fileName =
+    source.directDownloadUrl.split("/").pop() || `${binary}.zip`;
+  return {
+    id: `${binary}-direct`,
+    binary,
+    kind: kindForAsset(fileName),
+    channel: "release",
+    downloadUrl: source.directDownloadUrl,
+    fileName,
+    version: null,
+    htmlUrl: null,
+    linkUrl: null,
+    linkKind: null,
+  };
+};
+
+/**
  * Resolve the latest GitHub release asset matching the current OS for a binary.
  * Returns null when the repo has no matching asset (callers fall back to a link).
  */
@@ -169,7 +194,10 @@ export const getEmulatorInstallOptions = async (
 
   const options: ResolvedInstallOption[] = [];
 
-  const direct = await resolveGithubOption(binary, source);
+  // A fixed vendor URL (RALibretro) wins over the GitHub API path.
+  const direct =
+    resolveDirectOption(binary, source) ??
+    (await resolveGithubOption(binary, source));
   if (direct) options.push(direct);
 
   options.push(...linkOption(binary, source));

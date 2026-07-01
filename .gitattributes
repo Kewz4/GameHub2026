@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# RALibretro bundled assets are Windows binaries/config — never convert EOLs
+resources/ralibretro/** binary

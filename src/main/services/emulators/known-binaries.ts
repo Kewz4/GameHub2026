@@ -12,6 +12,9 @@ export interface EmulatorInstallSource {
   windowsAssetPattern?: string;
   /** Case-insensitive regex (source string) matching the Linux asset. */
   linuxAssetPattern?: string;
+  /** A fixed direct-download archive URL (used instead of the GitHub API when a
+   *  vendor publishes a stable URL, e.g. RALibretro on retroachievements.org). */
+  directDownloadUrl?: string;
   /** Fallback page shown as a "link" option when no direct asset resolves. */
   releasePageUrl?: string;
   /** Flatpak app id offered as a Linux install option. */
@@ -35,50 +38,59 @@ export interface KnownBinary {
   install: EmulatorInstallSource;
 }
 
+/**
+ * RALibretro is the RetroAchievements libretro front-end. One install serves
+ * PS1, PSP, GBA, N64, DS and DSi via the bundled cores (mednafen_psx, ppsspp,
+ * mgba, mupen64plus_next, melondsds). It ships a stable direct-download zip on
+ * retroachievements.org rather than a GitHub release. Windows-only.
+ */
+export const RALIBRETRO_SYSTEMS: EmulatorSystem[] = [
+  "ps1",
+  "psp",
+  "gba",
+  "n64",
+  "nds",
+  "dsi",
+];
+const RALIBRETRO_INSTALL: EmulatorInstallSource = {
+  githubRepo: null,
+  directDownloadUrl: "https://retroachievements.org/bin/RALibretro-x64.zip",
+  releasePageUrl: "https://retroachievements.org/download.php",
+};
+const RALIBRETRO_WIN_NAMES = ["RALibretro.exe", "RALibretro-x64.exe"];
+const RALIBRETRO_LINUX_NAMES = ["RALibretro", "ralibretro"];
+
+/** Build a RALibretro-backed KnownBinary for one of its systems. */
+const ralibretro = (
+  system: EmulatorSystem,
+  romExtensions: string[]
+): KnownBinary => ({
+  system,
+  binary: "ralibretro",
+  displayName: "RALibretro",
+  systems: RALIBRETRO_SYSTEMS,
+  hasRetroAchievements: true,
+  linuxNames: RALIBRETRO_LINUX_NAMES,
+  windowsNames: RALIBRETRO_WIN_NAMES,
+  flatpakIds: [],
+  versionFlags: ["--version"],
+  romExtensions,
+  romDirectoryMarkers: [],
+  install: RALIBRETRO_INSTALL,
+});
+
 export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
-  ps1: {
-    system: "ps1",
-    binary: "duckstation",
-    displayName: "DuckStation",
-    systems: ["ps1"],
-    hasRetroAchievements: false,
-    linuxNames: [
-      "duckstation-qt",
-      "duckstation-nogui",
-      "duckstation",
-      "DuckStation",
-    ],
-    windowsNames: [
-      "duckstation-qt-x64-ReleaseLTCG.exe",
-      "duckstation-qt.exe",
-      "duckstation-nogui.exe",
-    ],
-    flatpakIds: ["org.duckstation.DuckStation"],
-    versionFlags: ["-version"],
-    romExtensions: [
-      ".cue",
-      ".bin",
-      ".iso",
-      ".chd",
-      ".pbp",
-      ".img",
-      ".sub",
-      ".ccd",
-      ".mds",
-      ".mdf",
-      ".ecm",
-      ".m3u",
-    ],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "stenzek/duckstation",
-      // Pick the plain x64 release zip — NOT -sse2, -arm64, -symbols or the .exe
-      // installer (all of which also contain "windows-x64"/"windows").
-      windowsAssetPattern: "windows-x64-release\\.zip$",
-      linuxAssetPattern: "x64\\.AppImage$",
-      flatpakInstallId: "org.duckstation.DuckStation",
-    },
-  },
+  // PS1 via Beetle PSX (mednafen_psx) — cue/chd/pbp/m3u; .bin is a cue sidecar.
+  ps1: ralibretro("ps1", [
+    ".cue",
+    ".bin",
+    ".chd",
+    ".pbp",
+    ".m3u",
+    ".ccd",
+    ".img",
+    ".ecm",
+  ]),
   ps2: {
     system: "ps2",
     binary: "pcsx2",
@@ -133,26 +145,8 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
       flatpakInstallId: "net.rpcs3.RPCS3",
     },
   },
-  psp: {
-    system: "psp",
-    binary: "ppsspp",
-    displayName: "PPSSPP",
-    systems: ["psp"],
-    hasRetroAchievements: true,
-    linuxNames: ["PPSSPPSDL", "PPSSPPQt", "ppsspp"],
-    windowsNames: ["PPSSPPWindows64.exe", "PPSSPPWindows.exe"],
-    flatpakIds: ["org.ppsspp.PPSSPP"],
-    versionFlags: ["--version"],
-    romExtensions: [".iso", ".cso", ".chd", ".pbp", ".prx", ".elf"],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "hrydgard/ppsspp",
-      // Windows-x64 only — "windows.*" also matched the ARM64 zip first.
-      windowsAssetPattern: "Windows-x64\\.zip$",
-      releasePageUrl: "https://www.ppsspp.org/download/",
-      flatpakInstallId: "org.ppsspp.PPSSPP",
-    },
-  },
+  // PSP via the ppsspp libretro core — iso/chd/pbp.
+  psp: ralibretro("psp", [".iso", ".cso", ".chd", ".pbp"]),
   n3ds: {
     system: "n3ds",
     binary: "azahar",
@@ -175,63 +169,11 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
       flatpakInstallId: "org.azahar_emu.Azahar",
     },
   },
-  nds: {
-    system: "nds",
-    binary: "ralibretro",
-    displayName: "RALibretro",
-    systems: ["nds", "dsi"],
-    hasRetroAchievements: true,
-    linuxNames: ["RALibretro", "ralibretro"],
-    windowsNames: ["RALibretro.exe", "RALibretro-x64.exe"],
-    flatpakIds: [],
-    versionFlags: ["--version"],
-    romExtensions: [".nds", ".srl"],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "RetroAchievements/RALibretro",
-      windowsAssetPattern: "\\.(zip|7z)$",
-      releasePageUrl:
-        "https://github.com/RetroAchievements/RALibretro/releases",
-    },
-  },
-  dsi: {
-    system: "dsi",
-    binary: "ralibretro",
-    displayName: "RALibretro",
-    systems: ["nds", "dsi"],
-    hasRetroAchievements: true,
-    linuxNames: ["RALibretro", "ralibretro"],
-    windowsNames: ["RALibretro.exe", "RALibretro-x64.exe"],
-    flatpakIds: [],
-    versionFlags: ["--version"],
-    romExtensions: [".nds", ".dsi", ".srl", ".ids"],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "RetroAchievements/RALibretro",
-      windowsAssetPattern: "\\.(zip|7z)$",
-      releasePageUrl:
-        "https://github.com/RetroAchievements/RALibretro/releases",
-    },
-  },
-  n64: {
-    system: "n64",
-    binary: "raproject64",
-    displayName: "RAProject64",
-    systems: ["n64"],
-    hasRetroAchievements: true,
-    linuxNames: ["RAProject64", "project64"],
-    windowsNames: ["RAProject64.exe", "Project64.exe"],
-    flatpakIds: [],
-    versionFlags: ["--version"],
-    romExtensions: [".z64", ".n64", ".v64", ".ndd", ".u1"],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "RetroAchievements/RAProject64",
-      windowsAssetPattern: "\\.(zip|7z|exe)$",
-      releasePageUrl:
-        "https://github.com/RetroAchievements/RAProject64/releases",
-    },
-  },
+  // DS / DSi via melonDS DS.
+  nds: ralibretro("nds", [".nds", ".srl"]),
+  dsi: ralibretro("dsi", [".nds", ".dsi", ".srl", ".ids"]),
+  // N64 via mupen64plus_next.
+  n64: ralibretro("n64", [".z64", ".n64", ".v64", ".ndd"]),
   gb: {
     system: "gb",
     binary: "ravba",
@@ -268,24 +210,8 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
       releasePageUrl: "https://github.com/RetroAchievements/RAVBA/releases",
     },
   },
-  gba: {
-    system: "gba",
-    binary: "ravba",
-    displayName: "RAVBA",
-    systems: ["gb", "gbc", "gba"],
-    hasRetroAchievements: true,
-    linuxNames: ["RAVBA", "visualboyadvance-m"],
-    windowsNames: ["RAVBA.exe", "visualboyadvance-m.exe"],
-    flatpakIds: [],
-    versionFlags: ["--version"],
-    romExtensions: [".gba", ".agb", ".bin"],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "RetroAchievements/RAVBA",
-      windowsAssetPattern: "\\.(zip|7z)$",
-      releasePageUrl: "https://github.com/RetroAchievements/RAVBA/releases",
-    },
-  },
+  // GBA via the mGBA libretro core (gb/gbc stay on RAVBA).
+  gba: ralibretro("gba", [".gba", ".agb"]),
   wiiu: {
     system: "wiiu",
     binary: "cemu",

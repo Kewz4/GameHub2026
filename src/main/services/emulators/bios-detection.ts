@@ -80,6 +80,9 @@ export const resolvePs1BiosDirs = async (
   }
   if (executablePath) {
     dirs.push(path.join(path.dirname(executablePath), "bios"));
+    // PS1 now runs through RALibretro's Beetle PSX core, which reads BIOS from
+    // the libretro `System/` folder next to the exe.
+    dirs.push(path.join(path.dirname(executablePath), "System"));
   }
   return Array.from(new Set(dirs)).filter((dir) => existsSync(dir));
 };

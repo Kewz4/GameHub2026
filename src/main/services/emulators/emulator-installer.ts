@@ -1,6 +1,8 @@
 import axios from "axios";
 import {
   chmodSync,
+  cpSync,
+  copyFileSync,
   createWriteStream,
   existsSync,
   mkdirSync,
@@ -9,6 +11,7 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
+import { app } from "electron";
 import { pipeline } from "node:stream/promises";
 
 import type {
@@ -25,6 +28,59 @@ import { resolveInstallOptionById } from "./emulator-install-sources";
 import { updateEmulatorConfig } from "./emulators-repository";
 
 const isWindows = process.platform === "win32";
+
+/** Bundled RALibretro assets (cores + default configs + N64 system files). */
+const ralibretroAssetsDir = (): string =>
+  app.isPackaged
+    ? path.join(process.resourcesPath, "ralibretro")
+    : path.join(__dirname, "..", "..", "resources", "ralibretro");
+
+/**
+ * Seed a fresh RALibretro install with the bundled cores and default configs so
+ * it runs games out of the box: copies the 5 libretro cores + their option
+ * files, the N64 system catalog, and writes our default RALibretro.json
+ * (F11 = fullscreen) and RAPrefs (RA overlay notifications OFF so GameHub's own
+ * achievement overlay is used). Never overwrites an existing RAPrefs so a user
+ * who already logged into RetroAchievements keeps their account.
+ */
+function preSetupRalibretro(installDir: string): void {
+  const assets = ralibretroAssetsDir();
+  if (!existsSync(assets)) {
+    logger.warn(`RALibretro assets not found at ${assets}`);
+    return;
+  }
+
+  // Cores + N64 system files (safe to overwrite — they're our pinned versions).
+  const coresSrc = path.join(assets, "Cores");
+  if (existsSync(coresSrc)) {
+    cpSync(coresSrc, path.join(installDir, "Cores"), { recursive: true });
+  }
+  const systemSrc = path.join(assets, "System");
+  if (existsSync(systemSrc)) {
+    cpSync(systemSrc, path.join(installDir, "System"), { recursive: true });
+  }
+
+  // Runtime dirs RALibretro expects.
+  for (const dir of ["Saves", "Screenshots", "RACache"]) {
+    mkdirSync(path.join(installDir, dir), { recursive: true });
+  }
+
+  // Global config (bindings incl. F11 fullscreen) — refresh to our defaults.
+  const cfgSrc = path.join(assets, "config", "RALibretro.json");
+  if (existsSync(cfgSrc)) {
+    copyFileSync(cfgSrc, path.join(installDir, "RALibretro.json"));
+  }
+
+  // RA prefs (notifications OFF). Only write if absent so we never clobber an
+  // existing RetroAchievements login.
+  const prefsSrc = path.join(assets, "config", "RAPrefs_RALibRetro.cfg");
+  const prefsDest = path.join(installDir, "RAPrefs_RALibRetro.cfg");
+  if (existsSync(prefsSrc) && !existsSync(prefsDest)) {
+    copyFileSync(prefsSrc, prefsDest);
+  }
+
+  logger.log(`RALibretro pre-setup complete at ${installDir}`);
+}
 
 const systemsForBinary = (binary: EmulatorBinary): EmulatorSystem[] =>
   ALL_SYSTEMS.filter((system) => KNOWN_BINARIES[system].binary === binary);
@@ -155,6 +211,16 @@ export const installEmulator = async (
 
     if (!executablePath || !existsSync(executablePath)) {
       return { ok: false, reason: "Could not locate the emulator executable" };
+    }
+
+    // RALibretro ships as a bare exe — pre-seed the cores + default configs so
+    // it's playable immediately (no manual core download / RA overlay setup).
+    if (binary === "ralibretro") {
+      try {
+        preSetupRalibretro(path.dirname(executablePath));
+      } catch (err) {
+        logger.error("RALibretro pre-setup failed", err);
+      }
     }
 
     if (!isWindows) {
