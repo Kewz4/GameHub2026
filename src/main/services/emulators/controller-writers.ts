@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ControllerProfile, PadControl } from "@types";
+import type {
+  ControllerProfile,
+  EmulatedControllerType,
+  PadControl,
+} from "@types";
 
 /**
  * One controller profile → every emulator's native controller config.
@@ -285,5 +289,199 @@ export function dolphinGcPadSection(p: ControllerProfile): string {
     `Triggers/R = ${q("r1")}`,
     `Triggers/L-Analog = ${q("l2")}`,
     `Triggers/R-Analog = ${q("r2")}`,
+  ].join("\n");
+}
+
+/** Dolphin Wii Remote (sideways-Wiimote button mapping + optional motion). */
+export function dolphinWiimoteSection(p: ControllerProfile): string {
+  const q = (c: PadControl) => `\`${DOLPHIN_TOKEN[bind(p, c)] ?? bind(p, c)}\``;
+  const lines = [
+    "[Wiimote1]",
+    "Source = 1",
+    `Device = SDL/${p.controllerIndex}/Controller`,
+    `Buttons/A = ${q("a")}`,
+    `Buttons/B = ${q("b")}`,
+    `Buttons/1 = ${q("x")}`,
+    `Buttons/2 = ${q("y")}`,
+    `Buttons/- = ${q("select")}`,
+    `Buttons/+ = ${q("start")}`,
+    `Buttons/Home = ${q("r3")}`,
+    `D-Pad/Up = ${q("up")}`,
+    `D-Pad/Down = ${q("down")}`,
+    `D-Pad/Left = ${q("left")}`,
+    `D-Pad/Right = ${q("right")}`,
+  ];
+  if (p.motion) {
+    // Native SDL controller gyro/accel (DualShock4/DualSense/Switch pads).
+    lines.push(
+      "IMUGyroscope/Pitch Up = `Gyro Pitch Up`",
+      "IMUGyroscope/Pitch Down = `Gyro Pitch Down`",
+      "IMUGyroscope/Roll Left = `Gyro Roll Left`",
+      "IMUGyroscope/Roll Right = `Gyro Roll Right`",
+      "IMUGyroscope/Yaw Left = `Gyro Yaw Left`",
+      "IMUGyroscope/Yaw Right = `Gyro Yaw Right`",
+      "IMUAccelerometer/Up = `Accel Up`",
+      "IMUAccelerometer/Down = `Accel Down`",
+      "IMUAccelerometer/Left = `Accel Left`",
+      "IMUAccelerometer/Right = `Accel Right`",
+      "IMUAccelerometer/Forward = `Accel Forward`",
+      "IMUAccelerometer/Backward = `Accel Backward`"
+    );
+  }
+  return lines.join("\n");
+}
+
+// ─── Cemu (controllerProfiles/controllerN.xml) ────────────────────────────────
+// SDL GameController token → Cemu physical control id (Buttons2 enum). Digital
+// buttons use the SDL3 button index (identity); analog directions use the
+// dedicated half-axis ids 38–49.
+const CEMU_BUTTON: Record<string, number> = {
+  a: 0,
+  b: 1,
+  x: 2,
+  y: 3,
+  back: 4,
+  guide: 5,
+  start: 6,
+  leftstick: 7,
+  rightstick: 8,
+  leftshoulder: 9,
+  rightshoulder: 10,
+  dpup: 11,
+  dpdown: 12,
+  dpleft: 13,
+  dpright: 14,
+  lefttrigger: 42, // kTriggerXP
+  righttrigger: 43, // kTriggerYP
+  "+leftx": 38, // kAxisXP (right)
+  "-leftx": 44, // kAxisXN (left)
+  "+lefty": 39, // kAxisYP (down)
+  "-lefty": 45, // kAxisYN (up)
+  "+rightx": 40,
+  "-rightx": 46,
+  "+righty": 41,
+  "-righty": 47,
+};
+
+const CEMU_TYPE_STRING: Record<string, string> = {
+  wiiu_gamepad: "Wii U GamePad",
+  wiiu_pro: "Wii U Pro Controller",
+  wiiu_classic: "Wii U Classic Controller",
+};
+
+// Wii U GamePad emulated-button ids (VPADController::ButtonId) → our control.
+const CEMU_VPAD_MAP: [number, PadControl][] = [
+  [1, "a"],
+  [2, "b"],
+  [3, "x"],
+  [4, "y"],
+  [5, "l1"],
+  [6, "r1"],
+  [7, "l2"],
+  [8, "r2"],
+  [9, "start"],
+  [10, "select"],
+  [11, "up"],
+  [12, "down"],
+  [13, "left"],
+  [14, "right"],
+  [15, "l3"],
+  [16, "r3"],
+  [17, "lstick_up"],
+  [18, "lstick_down"],
+  [19, "lstick_left"],
+  [20, "lstick_right"],
+  [21, "rstick_up"],
+  [22, "rstick_down"],
+  [23, "rstick_left"],
+  [24, "rstick_right"],
+];
+
+export function cemuControllerXml(
+  p: ControllerProfile,
+  type: EmulatedControllerType = "wiiu_gamepad"
+): string {
+  const uuid = `${p.controllerIndex}_${p.controllerGuid ?? "0".repeat(32)}`;
+  const entries = CEMU_VPAD_MAP.map(([mapping, control]) => {
+    const btn = CEMU_BUTTON[bind(p, control)];
+    if (btn === undefined) return "";
+    return `      <entry><mapping>${mapping}</mapping><button>${btn}</button></entry>`;
+  })
+    .filter(Boolean)
+    .join("\n");
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    "<emulated_controller>",
+    `  <type>${CEMU_TYPE_STRING[type] ?? "Wii U GamePad"}</type>`,
+    "  <controller>",
+    "    <api>SDLController</api>",
+    `    <uuid>${uuid}</uuid>`,
+    "    <display_name>Controller 1</display_name>",
+    `    <motion>${p.motion ? "true" : "false"}</motion>`,
+    "    <axis><deadzone>0.25</deadzone><range>1</range></axis>",
+    "    <rotation><deadzone>0.25</deadzone><range>1</range></rotation>",
+    "    <trigger><deadzone>0.25</deadzone><range>1</range></trigger>",
+    "    <mappings>",
+    entries,
+    "    </mappings>",
+    "  </controller>",
+    "</emulated_controller>",
+  ].join("\n");
+}
+
+// ─── Azahar / Citra (qt-config.ini [Controls]) ───────────────────────────────
+// SDL GameController token → SDL2 joystick button index (standard layout).
+const AZAHAR_BUTTON: Record<string, number> = {
+  a: 0,
+  b: 1,
+  x: 2,
+  y: 3,
+  leftshoulder: 4,
+  rightshoulder: 5,
+  back: 6,
+  start: 7,
+  leftstick: 8,
+  rightstick: 9,
+  guide: 10,
+};
+
+export function azaharControls(p: ControllerProfile): string {
+  const guid = p.controllerGuid ?? "0".repeat(32);
+  const port = p.controllerIndex;
+  const btn = (c: PadControl) => {
+    const tok = bind(p, c);
+    const i = AZAHAR_BUTTON[tok];
+    return i === undefined
+      ? ""
+      : `engine:sdl,guid:${guid},port:${port},button:${i}`;
+  };
+  const hat = (dir: string) =>
+    `engine:sdl,guid:${guid},port:${port},hat:0,direction:${dir}`;
+  const axisBtn = (axis: number, sign: string) =>
+    `engine:sdl,guid:${guid},port:${port},axis:${axis},direction:${sign},threshold:${sign === "+" ? "0.5" : "-0.5"}`;
+  const stick = (ax: number, ay: number) =>
+    `engine:sdl,guid:${guid},port:${port},axis_x:${ax},axis_y:${ay}`;
+  const q = (v: string) => `"${v}"`;
+
+  return [
+    "[Controls]",
+    "profiles\\size=1",
+    "profiles\\1\\name=GameHub",
+    `profiles\\1\\button_a=${q(btn("a"))}`,
+    `profiles\\1\\button_b=${q(btn("b"))}`,
+    `profiles\\1\\button_x=${q(btn("x"))}`,
+    `profiles\\1\\button_y=${q(btn("y"))}`,
+    `profiles\\1\\button_up=${q(hat("up"))}`,
+    `profiles\\1\\button_down=${q(hat("down"))}`,
+    `profiles\\1\\button_left=${q(hat("left"))}`,
+    `profiles\\1\\button_right=${q(hat("right"))}`,
+    `profiles\\1\\button_l=${q(btn("l1"))}`,
+    `profiles\\1\\button_r=${q(btn("r1"))}`,
+    `profiles\\1\\button_zl=${q(axisBtn(2, "+"))}`,
+    `profiles\\1\\button_zr=${q(axisBtn(5, "+"))}`,
+    `profiles\\1\\button_start=${q(btn("start"))}`,
+    `profiles\\1\\button_select=${q(btn("select"))}`,
+    `profiles\\1\\circle_pad=${q(stick(0, 1))}`,
+    `profiles\\1\\c_stick=${q(stick(3, 4))}`,
   ].join("\n");
 }

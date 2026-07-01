@@ -45,6 +45,8 @@ import type {
   EmulatorConfig,
   EmulatorConfigMap,
   ControllerProfile,
+  EmulatorBinary,
+  EmulatedControllerType,
   ClassicsDiscUpdate,
   DetectedRom,
   Ps2MemcardScanInput,
@@ -935,10 +937,17 @@ declare global {
       system: EmulatorSystem,
       values: { key: string; value: string }[]
     ) => Promise<boolean>;
-    getControllerProfile: () => Promise<ControllerProfile>;
+    getControllerProfile: (binary?: EmulatorBinary) => Promise<{
+      profile: ControllerProfile;
+      isCustom: boolean;
+      type: EmulatedControllerType | null;
+    }>;
     saveControllerProfile: (
-      profile: ControllerProfile
+      profile: ControllerProfile,
+      binary?: EmulatorBinary,
+      type?: EmulatedControllerType
     ) => Promise<{ applied: { binary: string; ok: boolean }[] }>;
+    useGlobalController: (binary: EmulatorBinary) => Promise<boolean>;
     onEmulatorInstallProgress: (
       cb: (payload: EmulatorInstallProgress) => void
     ) => () => void;

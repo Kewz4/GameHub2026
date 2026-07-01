@@ -96,8 +96,34 @@ export interface ControllerProfile {
   controllerIndex: number;
   /** SDL GUID of the controller, when known (needed by Azahar/Citra). */
   controllerGuid: string | null;
+  /** Enable motion (gyro/accel) for emulators/controllers that support it. */
+  motion?: boolean;
   /** Logical control → SDL input token. */
   bindings: Record<PadControl, PadBinding>;
+}
+
+/**
+ * The emulated-controller kind for emulators that expose more than one (Cemu:
+ * Wii U GamePad / Pro / Classic; Dolphin: GameCube pad / Wii Remote). Ignored
+ * by single-type emulators.
+ */
+export type EmulatedControllerType =
+  | "wiiu_gamepad"
+  | "wiiu_pro"
+  | "wiiu_classic"
+  | "gamecube"
+  | "wiimote";
+
+/**
+ * Controller profiles keyed by scope. `global` is the one-for-all default;
+ * `byBinary` holds optional per-emulator overrides so users can keep distinct
+ * mappings per console. `types` records the chosen emulated-controller kind per
+ * emulator that supports several.
+ */
+export interface ControllerProfileStore {
+  global: ControllerProfile;
+  byBinary: Partial<Record<EmulatorBinary, ControllerProfile>>;
+  types: Partial<Record<EmulatorBinary, EmulatedControllerType>>;
 }
 
 export interface DetectedRom {

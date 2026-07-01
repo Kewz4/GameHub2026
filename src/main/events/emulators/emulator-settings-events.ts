@@ -1,4 +1,10 @@
-import type { ControllerProfile, EmulatorSystem } from "@types";
+import type {
+  ControllerProfile,
+  ControllerProfileStore,
+  EmulatedControllerType,
+  EmulatorBinary,
+  EmulatorSystem,
+} from "@types";
 import { registerEvent } from "../register-event";
 import { db } from "@main/level";
 import {
@@ -10,58 +16,105 @@ import {
 } from "@main/services/emulators/emulator-settings";
 import {
   DEFAULT_CONTROLLER_PROFILE,
-  applyControllerProfileToAll,
+  applyControllerStoreToAll,
+  applyControllerToBinary,
 } from "@main/services/emulators/controller-profile";
 
-const CONTROLLER_PROFILE_KEY = "controllerProfile";
+const STORE_KEY = "controllerProfileStore";
 
-/** Settings schema + current values for a system's emulator. */
-const getEmulatorSettings = async (
-  _event: Electron.IpcMainInvokeEvent,
-  system: EmulatorSystem
-): Promise<{ defs: SettingDef[]; values: SettingValue[] }> => {
+async function loadStore(): Promise<ControllerProfileStore> {
+  const stored = await db
+    .get<string, ControllerProfileStore>(STORE_KEY, { valueEncoding: "json" })
+    .catch(() => null);
   return {
-    defs: getSettingDefs(system),
-    values: await readEmulatorSettings(system),
+    global: {
+      ...DEFAULT_CONTROLLER_PROFILE,
+      ...(stored?.global ?? {}),
+      bindings: {
+        ...DEFAULT_CONTROLLER_PROFILE.bindings,
+        ...(stored?.global?.bindings ?? {}),
+      },
+    },
+    byBinary: stored?.byBinary ?? {},
+    types: stored?.types ?? {},
   };
-};
+}
+
+// ── Emulator settings (core options) ──────────────────────────────────────────
+const getEmulatorSettings = async (
+  _e: Electron.IpcMainInvokeEvent,
+  system: EmulatorSystem
+): Promise<{ defs: SettingDef[]; values: SettingValue[] }> => ({
+  defs: getSettingDefs(system),
+  values: await readEmulatorSettings(system),
+});
 
 const setEmulatorSettings = async (
-  _event: Electron.IpcMainInvokeEvent,
+  _e: Electron.IpcMainInvokeEvent,
   system: EmulatorSystem,
   values: SettingValue[]
-): Promise<boolean> => {
-  return writeEmulatorSettings(system, values);
-};
+): Promise<boolean> => writeEmulatorSettings(system, values);
 
-const getControllerProfile = async (): Promise<ControllerProfile> => {
-  const stored = await db
-    .get<string, ControllerProfile>(CONTROLLER_PROFILE_KEY, {
-      valueEncoding: "json",
-    })
-    .catch(() => null);
-  // Merge with defaults so a stored profile missing a newer control still works.
+// ── Controller profiles (global + per-console) ────────────────────────────────
+
+/** Effective profile for a scope: the per-binary override, else global. */
+const getControllerProfile = async (
+  _e: Electron.IpcMainInvokeEvent,
+  binary?: EmulatorBinary
+): Promise<{
+  profile: ControllerProfile;
+  isCustom: boolean;
+  type: EmulatedControllerType | null;
+}> => {
+  const store = await loadStore();
+  const override = binary ? store.byBinary[binary] : undefined;
   return {
-    ...DEFAULT_CONTROLLER_PROFILE,
-    ...(stored ?? {}),
-    bindings: {
-      ...DEFAULT_CONTROLLER_PROFILE.bindings,
-      ...(stored?.bindings ?? {}),
-    },
+    profile: override ?? store.global,
+    isCustom: Boolean(override),
+    type: (binary && store.types[binary]) || null,
   };
 };
 
-/** Persist the controller profile and write it into every installed emulator. */
+/**
+ * Save a profile. With no `binary`, updates the global profile and re-applies to
+ * every installed emulator (that uses global). With a `binary`, saves a
+ * per-console override and writes just that emulator's config.
+ */
 const saveControllerProfile = async (
-  _event: Electron.IpcMainInvokeEvent,
-  profile: ControllerProfile
+  _e: Electron.IpcMainInvokeEvent,
+  profile: ControllerProfile,
+  binary?: EmulatorBinary,
+  type?: EmulatedControllerType
 ): Promise<{ applied: { binary: string; ok: boolean }[] }> => {
-  await db.put(CONTROLLER_PROFILE_KEY, profile, { valueEncoding: "json" });
-  const applied = await applyControllerProfileToAll(profile);
+  const store = await loadStore();
+
+  if (binary) {
+    store.byBinary[binary] = profile;
+    if (type) store.types[binary] = type;
+    await db.put(STORE_KEY, store, { valueEncoding: "json" });
+    const ok = await applyControllerToBinary(binary, profile, type);
+    return { applied: [{ binary, ok }] };
+  }
+
+  store.global = profile;
+  await db.put(STORE_KEY, store, { valueEncoding: "json" });
+  const applied = await applyControllerStoreToAll(store);
   return { applied };
+};
+
+/** Clear a per-console override so the emulator uses the global profile again. */
+const useGlobalController = async (
+  _e: Electron.IpcMainInvokeEvent,
+  binary: EmulatorBinary
+): Promise<boolean> => {
+  const store = await loadStore();
+  delete store.byBinary[binary];
+  await db.put(STORE_KEY, store, { valueEncoding: "json" });
+  return applyControllerToBinary(binary, store.global, store.types[binary]);
 };
 
 registerEvent("getEmulatorSettings", getEmulatorSettings);
 registerEvent("setEmulatorSettings", setEmulatorSettings);
 registerEvent("getControllerProfile", getControllerProfile);
 registerEvent("saveControllerProfile", saveControllerProfile);
+registerEvent("useGlobalController", useGlobalController);

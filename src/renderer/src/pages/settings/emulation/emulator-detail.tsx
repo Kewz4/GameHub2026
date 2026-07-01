@@ -533,7 +533,7 @@ export function EmulatorDetail({
 
       {activeTab === "controls" && (
         <section className="emulator-detail__section">
-          <ControllerMappingSection />
+          <ControllerMappingSection binary={config.binary} />
         </section>
       )}
 

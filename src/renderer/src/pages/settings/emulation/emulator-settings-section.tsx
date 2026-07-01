@@ -79,6 +79,11 @@ export function EmulatorSettingsSection({ system }: Readonly<Props>) {
 
   return (
     <div className="emulator-settings">
+      <p className="emulator-settings__notice">
+        Changes are saved instantly, but the emulator only reads them when a
+        game starts — close and relaunch the game for new video/resolution
+        settings to take effect.
+      </p>
       {Object.entries(groups).map(([group, list]) => (
         <div key={group} className="emulator-settings__group">
           <h4 className="emulator-settings__group-title">{group}</h4>

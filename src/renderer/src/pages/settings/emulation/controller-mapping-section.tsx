@@ -1,7 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ControllerProfile, PadControl } from "@types";
+import type {
+  ControllerProfile,
+  EmulatedControllerType,
+  EmulatorBinary,
+  PadControl,
+} from "@types";
 import { Button } from "@renderer/components";
 import { useToast } from "@renderer/hooks";
+
+/** Emulated-controller kinds offered per emulator that supports several. */
+const CONTROLLER_TYPES: Partial<
+  Record<EmulatorBinary, { value: EmulatedControllerType; label: string }[]>
+> = {
+  cemu: [
+    { value: "wiiu_gamepad", label: "Wii U GamePad" },
+    { value: "wiiu_pro", label: "Wii U Pro Controller" },
+    { value: "wiiu_classic", label: "Classic Controller" },
+  ],
+  dolphin: [
+    { value: "gamecube", label: "GameCube Controller" },
+    { value: "wiimote", label: "Wii Remote" },
+  ],
+};
 
 /**
  * Live controller mapper. Detects connected pads via the Gamepad API (XInput /
@@ -74,22 +94,50 @@ function tokenLabel(token: string): string {
   return token;
 }
 
-export function ControllerMappingSection() {
+interface Props {
+  /** The emulator this mapper is shown under (for per-console overrides). */
+  binary: EmulatorBinary;
+}
+
+export function ControllerMappingSection({ binary }: Readonly<Props>) {
   const { showSuccessToast, showErrorToast } = useToast();
   const [profile, setProfile] = useState<ControllerProfile | null>(null);
   const [pads, setPads] = useState<{ index: number; id: string }[]>([]);
   const [selectedPad, setSelectedPad] = useState<number>(0);
   const [capturing, setCapturing] = useState<PadControl | null>(null);
   const [applying, setApplying] = useState(false);
+  const [scope, setScope] = useState<"global" | "custom">("global");
+  const [controllerType, setControllerType] =
+    useState<EmulatedControllerType | null>(null);
   const captureRef = useRef<PadControl | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const typeOptions = CONTROLLER_TYPES[binary];
+
+  const loadProfile = useCallback(
+    (asBinary: EmulatorBinary | undefined) => {
+      window.electron
+        .getControllerProfile(asBinary)
+        .then((res) => {
+          setProfile(res.profile);
+          if (res.type) setControllerType(res.type);
+          else if (typeOptions) setControllerType(typeOptions[0].value);
+        })
+        .catch(() => {});
+    },
+    [typeOptions]
+  );
+
   useEffect(() => {
+    // Discover whether this emulator already has a custom override.
     window.electron
-      .getControllerProfile()
-      .then(setProfile)
-      .catch(() => {});
-  }, []);
+      .getControllerProfile(binary)
+      .then((res) => {
+        setScope(res.isCustom ? "custom" : "global");
+        loadProfile(res.isCustom ? binary : undefined);
+      })
+      .catch(() => loadProfile(undefined));
+  }, [binary, loadProfile]);
 
   // Poll connected controllers so the list stays live.
   useEffect(() => {
@@ -157,28 +205,52 @@ export function ControllerMappingSection() {
     };
   }, [capturing, selectedPad, finishCapture]);
 
-  const applyToAll = async () => {
+  const save = async () => {
     if (!profile) return;
     setApplying(true);
     try {
       const pad = pads.find((p) => p.index === selectedPad);
-      const res = await window.electron.saveControllerProfile({
+      const finalProfile: ControllerProfile = {
         ...profile,
         controllerIndex: selectedPad,
         controllerName: pad?.id ?? profile.controllerName,
-      });
+      };
+      const res =
+        scope === "custom"
+          ? await window.electron.saveControllerProfile(
+              finalProfile,
+              binary,
+              controllerType ?? undefined
+            )
+          : await window.electron.saveControllerProfile(finalProfile);
       const okCount = res.applied.filter((a) => a.ok).length;
       showSuccessToast(
-        okCount > 0
-          ? `Controller applied to ${okCount} installed emulator(s)`
-          : "Controller saved (no emulators installed yet)"
+        scope === "custom"
+          ? okCount > 0
+            ? "Custom mapping saved for this console"
+            : "Custom mapping saved (emulator not installed yet)"
+          : okCount > 0
+            ? `Applied to ${okCount} installed emulator(s)`
+            : "Saved (no emulators installed yet)"
       );
     } catch {
-      showErrorToast("Couldn't apply the controller mapping");
+      showErrorToast("Couldn't save the controller mapping");
     } finally {
       setApplying(false);
     }
   };
+
+  const onScopeChange = (next: "global" | "custom") => {
+    setScope(next);
+    if (next === "custom") loadProfile(binary);
+    else {
+      loadProfile(undefined);
+      window.electron.useGlobalController(binary).catch(() => {});
+    }
+  };
+
+  const setMotion = (on: boolean) =>
+    setProfile((p) => (p ? { ...p, motion: on } : p));
 
   if (!profile) {
     return <p className="emulator-detail__muted">Loading controller…</p>;
@@ -203,10 +275,59 @@ export function ControllerMappingSection() {
             ))}
           </select>
         </label>
-        <Button theme="primary" onClick={applyToAll} disabled={applying}>
-          {applying ? "Applying…" : "Apply to all emulators"}
+
+        <label className="controller-mapping__pad-select">
+          <span>Profile</span>
+          <select
+            value={scope}
+            onChange={(e) =>
+              onScopeChange(e.target.value as "global" | "custom")
+            }
+          >
+            <option value="global">Shared (all emulators)</option>
+            <option value="custom">Custom for this console</option>
+          </select>
+        </label>
+
+        {typeOptions && (
+          <label className="controller-mapping__pad-select">
+            <span>Controller type</span>
+            <select
+              value={controllerType ?? typeOptions[0].value}
+              onChange={(e) =>
+                setControllerType(e.target.value as EmulatedControllerType)
+              }
+            >
+              {typeOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <Button theme="primary" onClick={save} disabled={applying}>
+          {applying
+            ? "Saving…"
+            : scope === "custom"
+              ? "Save for this console"
+              : "Apply to all emulators"}
         </Button>
       </div>
+
+      <label className="controller-mapping__motion">
+        <input
+          type="checkbox"
+          checked={Boolean(profile.motion)}
+          onChange={(e) => setMotion(e.target.checked)}
+        />
+        <span>
+          Enable motion (gyro/accel) — needs a controller with motion
+          (DualShock 4, DualSense, Switch Pro) and an emulator that supports it
+          (Dolphin, Cemu).
+        </span>
+      </label>
 
       <p className="emulator-detail__muted">
         Press a control&apos;s &quot;Set&quot; button below, then press the

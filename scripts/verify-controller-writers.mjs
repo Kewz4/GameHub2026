@@ -44,6 +44,9 @@ const {
   pcsx2PadSection,
   rpcs3Yaml,
   dolphinGcPadSection,
+  dolphinWiimoteSection,
+  cemuControllerXml,
+  azaharControls,
 } = mod;
 
 // ── RALibretro: must match the hand-tuned config the user shipped ─────────────
@@ -156,6 +159,61 @@ const pc2 = pcsx2PadSection(remapped);
 if (ra2.J0_B === "J0 y" && pc2.includes("Cross = SDL-0/Y"))
   ok("remap of 'a'→y shows in RALibretro (J0_B) and PCSX2 (Cross)");
 else fail("remap did not propagate", `${ra2.J0_B} / PCSX2`);
+
+// ── Cemu (XML, controller types + motion) ─────────────────────────────────────
+console.log("\n[C6] Cemu controllerProfile XML (type + button ids + motion)");
+const cemuGamepad = cemuControllerXml(
+  { ...P, controllerGuid: "abc", motion: true },
+  "wiiu_gamepad"
+);
+const cemuChecks = [
+  "<type>Wii U GamePad</type>",
+  "<api>SDLController</api>",
+  "<motion>true</motion>",
+  "<entry><mapping>1</mapping><button>0</button></entry>", // A ← SDL button 0
+  "<entry><mapping>7</mapping><button>42</button></entry>", // ZL ← LT (kTriggerXP)
+  "<entry><mapping>17</mapping><button>45</button></entry>", // LS Up ← kAxisYN
+];
+const cemuMiss = cemuChecks.filter((c) => !cemuGamepad.includes(c));
+if (cemuMiss.length === 0)
+  ok("Cemu GamePad XML has correct type, button ids and motion");
+else fail("Cemu XML missing", cemuMiss.join(" | "));
+if (
+  cemuControllerXml({ ...P }, "wiiu_pro").includes(
+    "<type>Wii U Pro Controller</type>"
+  )
+)
+  ok("Cemu Pro Controller type string correct");
+else fail("Cemu Pro type wrong");
+
+// ── Dolphin Wiimote motion ────────────────────────────────────────────────────
+console.log("\n[C7] Dolphin WiimoteNew.ini motion (IMU keys)");
+const wmMotion = dolphinWiimoteSection({ ...P, motion: true });
+const wmPlain = dolphinWiimoteSection({ ...P, motion: false });
+if (
+  wmMotion.includes("[Wiimote1]") &&
+  wmMotion.includes("IMUGyroscope/Pitch Up = `Gyro Pitch Up`") &&
+  wmMotion.includes("IMUAccelerometer/Up = `Accel Up`")
+)
+  ok("Wiimote section adds IMU gyro/accel keys when motion is on");
+else fail("Wiimote motion keys missing");
+if (!wmPlain.includes("IMUGyroscope"))
+  ok("Wiimote section omits IMU keys when motion is off");
+else fail("Wiimote wrote IMU keys with motion off");
+
+// ── Azahar (qt-config.ini [Controls]) ─────────────────────────────────────────
+console.log("\n[C8] Azahar [Controls] (SDL param packages, GUID + port)");
+const az = azaharControls({ ...P, controllerGuid: "deadbeef", controllerIndex: 0 });
+const azChecks = [
+  "[Controls]",
+  'button_a="engine:sdl,guid:deadbeef,port:0,button:0"',
+  'button_zl="engine:sdl,guid:deadbeef,port:0,axis:2,direction:+,threshold:0.5"',
+  'circle_pad="engine:sdl,guid:deadbeef,port:0,axis_x:0,axis_y:1"',
+];
+const azMiss = azChecks.filter((c) => !az.includes(c));
+if (azMiss.length === 0)
+  ok("Azahar [Controls] has correct SDL param packages");
+else fail("Azahar missing", azMiss.join(" | "));
 
 console.log(`\n${"─".repeat(56)}`);
 console.log(`Controller writers: ${passed} passed, ${failed} failed`);
