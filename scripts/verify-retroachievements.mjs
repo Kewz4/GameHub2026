@@ -84,7 +84,9 @@ const gating = await app.evaluate(async () => {
   };
   return {
     gbLaunchbox: await activeAfter(mk("g1", "launchbox", "Nintendo Game Boy")),
-    ps2Launchbox: await activeAfter(mk("g2", "launchbox", "Sony PlayStation 2")),
+    ps2Launchbox: await activeAfter(
+      mk("g2", "launchbox", "Sony PlayStation 2")
+    ),
     steamGame: await activeAfter(mk("g3", "steam", "Nintendo Game Boy")),
     noPlatform: await activeAfter(mk("g4", "launchbox", null)),
   };
@@ -95,7 +97,8 @@ if (gating.__missing) {
     "expose RaWatcherManager (with isPolling) in dev like __levelSublevels"
   );
 } else {
-  if (gating.gbLaunchbox) ok("Game Boy (RA-capable, launchbox) → polling armed");
+  if (gating.gbLaunchbox)
+    ok("Game Boy (RA-capable, launchbox) → polling armed");
   else fail("Game Boy did not arm polling");
   if (!gating.ps2Launchbox) ok("PS2 (no RA support) → not armed");
   else fail("PS2 armed polling but has no RA support");
