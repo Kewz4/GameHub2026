@@ -257,9 +257,31 @@ export const platformToSystem = (
   return null;
 };
 
-/** Extract a readable error code from a classics launch error. */
+/** The coded launch failures the game-details launch handler branches on. */
+const CLASSICS_LAUNCH_CODES = [
+  "EMULATOR_NOT_CONFIGURED",
+  "BIOS_NOT_CONFIGURED",
+  "NO_DISC",
+  "PLATFORM_UNKNOWN",
+  "EMULATOR_ALREADY_RUNNING",
+] as const;
+
+/**
+ * Extract the coded launch failure from a classics launch error. Electron's IPC
+ * wraps a thrown main-process Error as
+ * `Error invoking remote method 'openClassicsGame': Error: <CODE>: <detail>`
+ * and drops custom own-properties (`.code`), so the code only survives as a
+ * substring of the message — match it out rather than comparing the whole
+ * string. Falls back to the raw message / "unknown".
+ */
 export const getClassicsLaunchErrorCode = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return "unknown";
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  const matched = CLASSICS_LAUNCH_CODES.find((code) => message.includes(code));
+  if (matched) return matched;
+  return message || "unknown";
 };

@@ -121,11 +121,15 @@ export function SettingsContextEmulation() {
     setSetupSystem(system);
   }, []);
 
-  const handleSetupComplete = useCallback(() => {
-    setSetupSystem(null);
-    localStorage.setItem("library-category", "classics");
-    navigate("/library");
-  }, [navigate]);
+  const handleSetupComplete = useCallback(
+    (system: EmulatorSystem) => {
+      setSetupSystem(null);
+      localStorage.setItem("library-category", "classics");
+      // Land the user in the Library filtered to the console they just set up.
+      navigate(`/library?console=${system}`);
+    },
+    [navigate]
+  );
 
   const handleSetupClose = useCallback(async () => {
     setSetupSystem(null);

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 
 import { Button, Modal } from "@renderer/components";
 import { useClassicsScan } from "@renderer/hooks";
@@ -9,6 +10,7 @@ import "./setup/setup-shell.scss";
 
 export function ClassicsScanModal() {
   const { t } = useTranslation("settings");
+  const navigate = useNavigate();
   const { scan, closeModal, cancel } = useClassicsScan();
 
   if (!scan.modalVisible || !scan.system) return null;
@@ -64,9 +66,24 @@ export function ClassicsScanModal() {
               </>
             )}
             {isDone && (
-              <Button theme="primary" onClick={closeModal}>
-                {t("setup_continue")}
-              </Button>
+              <>
+                <Button theme="outline" onClick={closeModal}>
+                  {t("setup_continue")}
+                </Button>
+                <Button
+                  theme="primary"
+                  onClick={() => {
+                    const system = scan.system;
+                    closeModal();
+                    localStorage.setItem("library-category", "classics");
+                    navigate(
+                      system ? `/library?console=${system}` : "/library"
+                    );
+                  }}
+                >
+                  {t("setup_browse_games", { defaultValue: "Browse games" })}
+                </Button>
+              </>
             )}
           </div>
         </div>

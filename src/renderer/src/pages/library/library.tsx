@@ -2,6 +2,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useCallback,
 } from "react";
@@ -550,11 +551,33 @@ export default function Library() {
   }, [storeFilteredLibrary, consoleFilter]);
 
   // Reset the console filter if the selected console no longer has any games.
+  // Guarded on hasGames so it doesn't clear a deep-linked console during the
+  // brief window before the library list has loaded.
   useEffect(() => {
-    if (consoleFilter !== "all" && !availableConsoles.includes(consoleFilter)) {
+    if (
+      library.length > 0 &&
+      consoleFilter !== "all" &&
+      !availableConsoles.includes(consoleFilter)
+    ) {
       setConsoleFilter("all");
     }
-  }, [availableConsoles, consoleFilter]);
+  }, [availableConsoles, consoleFilter, library.length]);
+
+  // Honor a ?console=<system> deep link once, applied when that console's games
+  // have loaded. The emulator setup / ROM-scan flow lands the user here so they
+  // arrive filtered to the console they just set up.
+  const consoleDeepLinkApplied = useRef(false);
+  useEffect(() => {
+    if (consoleDeepLinkApplied.current) return;
+    const requested = searchParams.get("console");
+    if (
+      requested &&
+      availableConsoles.includes(requested as EmulatorSystem)
+    ) {
+      consoleDeepLinkApplied.current = true;
+      setConsoleFilter(requested as EmulatorSystem);
+    }
+  }, [searchParams, availableConsoles]);
 
   const favoritesCount = useMemo(() => {
     return library.filter((game) => game.favorite).length;
