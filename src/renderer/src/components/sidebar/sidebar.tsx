@@ -91,7 +91,7 @@ export function Sidebar() {
 
   const sortedLibrary = useMemo(() => {
     return sortBy(
-      library.filter((game) => !game.objectId.includes("::")),
+      library.filter((game) => !String(game.objectId ?? "").includes("::")),
       (game) => game.title
     );
   }, [library]);

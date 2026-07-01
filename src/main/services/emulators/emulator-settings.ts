@@ -73,7 +73,7 @@ const N64_SETTINGS: SettingDef[] = [
     group: "Video",
     hint: "Upscale factor over native N64 resolution.",
     options: [
-      { value: "0", label: "Use window size" },
+      { value: "0", label: "Disabled" },
       { value: "1", label: "1× (native)" },
       { value: "2", label: "2×" },
       { value: "3", label: "3×" },
@@ -203,11 +203,12 @@ const PS1_SETTINGS: SettingDef[] = [
     label: "Aspect ratio",
     type: "enum",
     group: "Video",
+    hint: "For 16:9, turn on the Widescreen hack instead.",
     options: [
       { value: "corrected", label: "Corrected" },
       { value: "uncorrected", label: "Uncorrected" },
       { value: "4:3", label: "4:3" },
-      { value: "16:9", label: "16:9" },
+      { value: "ntsc", label: "NTSC" },
     ],
   },
   {
@@ -243,9 +244,10 @@ const PSP_SETTINGS: SettingDef[] = [
     type: "enum",
     group: "Performance",
     options: [
-      { value: "0", label: "Off" },
+      { value: "disabled", label: "Off" },
       { value: "1", label: "1" },
       { value: "2", label: "2" },
+      { value: "3", label: "3" },
     ],
   },
   {
@@ -254,10 +256,11 @@ const PSP_SETTINGS: SettingDef[] = [
     type: "enum",
     group: "Enhancements",
     options: [
-      { value: "1", label: "Off" },
-      { value: "2", label: "2×" },
-      { value: "3", label: "3×" },
-      { value: "4", label: "4×" },
+      { value: "disabled", label: "Off" },
+      { value: "2x", label: "2×" },
+      { value: "3x", label: "3×" },
+      { value: "4x", label: "4×" },
+      { value: "5x", label: "5×" },
     ],
   },
 ];
@@ -265,13 +268,16 @@ const PSP_SETTINGS: SettingDef[] = [
 /** GBA (mGBA core) options. */
 const GBA_SETTINGS: SettingDef[] = [
   {
-    key: "mgba_gb_colors",
-    label: "GB palette",
+    key: "mgba_color_correction",
+    label: "Color correction",
     type: "enum",
     group: "Video",
+    hint: "Emulate the washed-out GBA/GBC LCD colors.",
     options: [
-      { value: "Grayscale", label: "Grayscale" },
-      { value: "Green", label: "Green (DMG)" },
+      { value: "OFF", label: "Off" },
+      { value: "GBA", label: "Game Boy Advance" },
+      { value: "GBC", label: "Game Boy Color" },
+      { value: "Auto", label: "Auto" },
     ],
   },
   {
@@ -279,10 +285,25 @@ const GBA_SETTINGS: SettingDef[] = [
     label: "Frameskip",
     type: "enum",
     group: "Performance",
+    hint: "Fixed interval uses the frameskip amount below.",
     options: [
       { value: "disabled", label: "Off" },
+      { value: "auto", label: "Auto" },
+      { value: "auto_threshold", label: "Auto (threshold)" },
+      { value: "fixed_interval", label: "Fixed interval" },
+    ],
+  },
+  {
+    key: "mgba_frameskip_interval",
+    label: "Frameskip amount",
+    type: "enum",
+    group: "Performance",
+    options: [
+      { value: "0", label: "0" },
       { value: "1", label: "1" },
       { value: "2", label: "2" },
+      { value: "3", label: "3" },
+      { value: "4", label: "4" },
     ],
   },
   {
@@ -293,7 +314,9 @@ const GBA_SETTINGS: SettingDef[] = [
     options: [
       { value: "OFF", label: "Off" },
       { value: "mix", label: "Mix" },
+      { value: "mix_smart", label: "Mix (smart)" },
       { value: "lcd_ghosting", label: "LCD ghosting" },
+      { value: "lcd_ghosting_fast", label: "LCD ghosting (fast)" },
     ],
   },
 ];
@@ -301,7 +324,7 @@ const GBA_SETTINGS: SettingDef[] = [
 /** DS / DSi (melonDS core) options. */
 const DS_SETTINGS: SettingDef[] = [
   {
-    key: "melonds_ds_render_mode",
+    key: "melonds_render_mode",
     label: "Renderer",
     type: "enum",
     group: "Video",
@@ -311,26 +334,26 @@ const DS_SETTINGS: SettingDef[] = [
     ],
   },
   {
-    key: "melonds_ds_opengl_resolution",
+    key: "melonds_opengl_resolution",
     label: "Internal resolution (OpenGL)",
     type: "enum",
     group: "Video",
     options: [
-      { value: "1x native", label: "1× (native)" },
-      { value: "2x native", label: "2×" },
-      { value: "4x native", label: "4×" },
-      { value: "8x native", label: "8×" },
+      { value: "1", label: "1× (native)" },
+      { value: "2", label: "2×" },
+      { value: "4", label: "4×" },
+      { value: "8", label: "8×" },
     ],
   },
   {
-    key: "melonds_ds_screen_layout1",
+    key: "melonds_screen_layout1",
     label: "Screen layout",
     type: "enum",
     group: "Video",
     options: [
-      { value: "Top/Bottom", label: "Top / Bottom" },
-      { value: "Left/Right", label: "Left / Right" },
-      { value: "Top Only", label: "Top only" },
+      { value: "top-bottom", label: "Top / Bottom" },
+      { value: "left-right", label: "Left / Right" },
+      { value: "top", label: "Top only" },
     ],
   },
 ];
