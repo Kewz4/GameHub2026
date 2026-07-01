@@ -72,14 +72,27 @@ jobs:
             dist/*.zip
           retention-days: 30
 
-      - name: Create GitHub release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Resolve release tag
+        id: reltag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${{ github.event.inputs.version }}"
+            if [ -z "$V" ]; then V=$(node -p "require('./package.json').version"); fi
+            echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: true
-          name: GameHub ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
+          name: GameHub ${{ steps.reltag.outputs.tag }}
+          tag_name: ${{ steps.reltag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: |
             dist/*.exe
