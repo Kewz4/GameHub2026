@@ -101,7 +101,7 @@ await new Promise((r) => setTimeout(r, 500));
 
 // ── T1: in-app toast (the RALibretro/Linux path) actually renders ──────────────
 console.log("[T1] sendAchievementToFocusedWindow renders the in-app toast");
-const sent = await app.evaluate(({}) => {
+const sent = await app.evaluate(() => {
   const wm = globalThis.__windowManager;
   if (!wm) return { __missing: true };
   return wm.sendAchievementToFocusedWindow("top-left", [
