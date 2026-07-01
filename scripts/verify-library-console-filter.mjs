@@ -27,7 +27,7 @@ const fail = (l, d = "") => {
 
 const app = await electron.launch({
   executablePath: path.resolve("node_modules/electron/dist/electron"),
-  args: [path.resolve("out/main/index.js"), "--no-sandbox"],
+  args: [path.resolve("out/main/index.js"), "--no-sandbox", "--force-device-scale-factor=1", "--high-dpi-support=1"],
   cwd: process.cwd(),
   timeout: 60_000,
 });
@@ -66,16 +66,8 @@ if (!win) {
   process.exit(1);
 }
 
-await app.evaluate(async ({ BrowserWindow }) => {
-  for (const w of BrowserWindow.getAllWindows()) {
-    try {
-      w.setSize(1440, 960);
-      w.center();
-    } catch {
-      /* ignore */
-    }
-  }
-});
+await win.setViewportSize({ width: 1920, height: 1080 }).catch(() => {});
+await new Promise((r) => setTimeout(r, 400));
 
 // Seed a mixed library: three consoles + one Steam game.
 await app.evaluate(async () => {

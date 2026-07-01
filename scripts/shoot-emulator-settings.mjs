@@ -27,7 +27,7 @@ fs.writeFileSync(path.join(dolphinDir, "Dolphin.exe"), "x");
 
 const app = await electron.launch({
   executablePath: path.resolve("node_modules/electron/dist/electron"),
-  args: [path.resolve("out/main/index.js"), "--no-sandbox"],
+  args: [path.resolve("out/main/index.js"), "--no-sandbox", "--force-device-scale-factor=1", "--high-dpi-support=1"],
   cwd: process.cwd(),
   timeout: 60_000,
 });
@@ -71,17 +71,8 @@ if (!win) {
   process.exit(1);
 }
 
-// Widen the window so the settings columns render at desktop size.
-await app.evaluate(async ({ BrowserWindow }) => {
-  for (const w of BrowserWindow.getAllWindows()) {
-    try {
-      w.setSize(1440, 960);
-      w.center();
-    } catch {
-      /* ignore */
-    }
-  }
-});
+// Force a 1920x1080 screenshot viewport (via CDP) so shots are desktop-sized.
+await win.setViewportSize({ width: 1920, height: 1080 }).catch(() => {});
 
 // Seed installed emulator configs so the Settings/Controls tabs render.
 await app.evaluate(
@@ -155,16 +146,8 @@ const shoot = async (system, tab, name) => {
   await new Promise((r) => setTimeout(r, 800));
   await clickTab(tab);
   const file = path.join(OUT, `${name}.png`);
-  // Prefer an element-level shot of the settings/controls panel so the full
-  // (inner-scrolling) list is captured, not just the viewport.
-  const panel = win.locator(".emulator-settings, .controller-mapping").first();
-  if (await panel.count().catch(() => 0)) {
-    await panel.screenshot({ path: file }).catch(async () => {
-      await win.screenshot({ path: file, fullPage: true });
-    });
-  } else {
-    await win.screenshot({ path: file, fullPage: true });
-  }
+  // Full 1920x1080 viewport shot.
+  await win.screenshot({ path: file });
   console.log("  📸", file);
 };
 

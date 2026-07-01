@@ -571,6 +571,20 @@ export default function Library() {
     ];
   }, [collections, favoritesCount, t]);
 
+  // Shared filter-pill style: active pills invert to a solid white chip with
+  // black text; inactive pills are a subtle outline.
+  const pillStyle = (active: boolean): React.CSSProperties => ({
+    padding: "4px 10px",
+    borderRadius: "12px",
+    border: active ? "1px solid #ffffff" : "1px solid rgba(255,255,255,0.2)",
+    background: active ? "#ffffff" : "transparent",
+    color: active ? "#000000" : "inherit",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    fontWeight: active ? 600 : 400,
+    opacity: active ? 1 : 0.7,
+  });
+
   const hasGames = library.length > 0;
   const hasNoFilteredGames = consoleFilteredLibrary.length === 0;
   const isFavoritesCollectionSelected =
@@ -631,22 +645,7 @@ export default function Library() {
                 key={value}
                 type="button"
                 onClick={() => setStoreFilter(value)}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: "12px",
-                  border:
-                    storeFilter === value
-                      ? "1px solid var(--color-primary, #8b5cf6)"
-                      : "1px solid rgba(255,255,255,0.2)",
-                  background:
-                    storeFilter === value
-                      ? "var(--color-primary, #8b5cf6)"
-                      : "transparent",
-                  color: "inherit",
-                  cursor: "pointer",
-                  fontSize: "0.8rem",
-                  opacity: storeFilter === value ? 1 : 0.7,
-                }}
+                style={pillStyle(storeFilter === value)}
               >
                 {label}
               </button>
@@ -660,20 +659,11 @@ export default function Library() {
                   setConsoleFilter(e.target.value as EmulatorSystem | "all")
                 }
                 style={{
-                  padding: "4px 10px",
-                  borderRadius: "12px",
-                  border:
-                    consoleFilter !== "all"
-                      ? "1px solid var(--color-primary, #8b5cf6)"
-                      : "1px solid rgba(255,255,255,0.2)",
-                  background:
-                    consoleFilter !== "all"
-                      ? "var(--color-primary, #8b5cf6)"
-                      : "transparent",
-                  color: "inherit",
-                  cursor: "pointer",
-                  fontSize: "0.8rem",
-                  opacity: consoleFilter !== "all" ? 1 : 0.7,
+                  ...pillStyle(consoleFilter !== "all"),
+                  // Tighten the native select so it reads as a pill, not a
+                  // full-width form control.
+                  paddingRight: "6px",
+                  maxWidth: "160px",
                 }}
               >
                 <option value="all">Console</option>
