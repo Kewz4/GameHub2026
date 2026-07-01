@@ -323,9 +323,9 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
           onChange={(e) => setMotion(e.target.checked)}
         />
         <span>
-          Enable motion (gyro/accel) — needs a controller with motion
-          (DualShock 4, DualSense, Switch Pro) and an emulator that supports it
-          (Dolphin, Cemu).
+          Enable motion (gyro/accel) — needs a controller with motion (DualShock
+          4, DualSense, Switch Pro) and an emulator that supports it (Dolphin,
+          Cemu).
         </span>
       </label>
 

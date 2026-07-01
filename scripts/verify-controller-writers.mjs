@@ -203,7 +203,11 @@ else fail("Wiimote wrote IMU keys with motion off");
 
 // ── Azahar (qt-config.ini [Controls]) ─────────────────────────────────────────
 console.log("\n[C8] Azahar [Controls] (SDL param packages, GUID + port)");
-const az = azaharControls({ ...P, controllerGuid: "deadbeef", controllerIndex: 0 });
+const az = azaharControls({
+  ...P,
+  controllerGuid: "deadbeef",
+  controllerIndex: 0,
+});
 const azChecks = [
   "[Controls]",
   'button_a="engine:sdl,guid:deadbeef,port:0,button:0"',
@@ -211,8 +215,7 @@ const azChecks = [
   'circle_pad="engine:sdl,guid:deadbeef,port:0,axis_x:0,axis_y:1"',
 ];
 const azMiss = azChecks.filter((c) => !az.includes(c));
-if (azMiss.length === 0)
-  ok("Azahar [Controls] has correct SDL param packages");
+if (azMiss.length === 0) ok("Azahar [Controls] has correct SDL param packages");
 else fail("Azahar missing", azMiss.join(" | "));
 
 console.log(`\n${"─".repeat(56)}`);

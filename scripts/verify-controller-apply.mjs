@@ -26,7 +26,10 @@ const fail = (l, d = "") => {
 const raDir = fs.mkdtempSync(path.join(os.tmpdir(), "ra-"));
 const pcDir = fs.mkdtempSync(path.join(os.tmpdir(), "pc-"));
 fs.writeFileSync(path.join(raDir, "RALibretro.exe"), "x");
-fs.writeFileSync(path.join(raDir, "RALibretro.json"), JSON.stringify({ bindings: {} }));
+fs.writeFileSync(
+  path.join(raDir, "RALibretro.json"),
+  JSON.stringify({ bindings: {} })
+);
 fs.writeFileSync(path.join(pcDir, "pcsx2-qt.exe"), "x");
 
 const app = await electron.launch({
@@ -93,9 +96,16 @@ const raJson = JSON.parse(
 );
 if (raJson.bindings?.J0_A === "J0 b" && raJson.bindings?.J0_B === "J0 a")
   ok("RALibretro.json written with the mapping");
-else fail("RALibretro.json not written correctly", JSON.stringify(raJson.bindings));
+else
+  fail(
+    "RALibretro.json not written correctly",
+    JSON.stringify(raJson.bindings)
+  );
 const pcIni = path.join(pcDir, "inis", "PCSX2.ini");
-if (fs.existsSync(pcIni) && fs.readFileSync(pcIni, "utf8").includes("Cross = SDL-0/A"))
+if (
+  fs.existsSync(pcIni) &&
+  fs.readFileSync(pcIni, "utf8").includes("Cross = SDL-0/A")
+)
   ok("PCSX2.ini [Pad1] written (portable inis/ + Cross=SDL-0/A)");
 else fail("PCSX2.ini not written");
 if (fs.existsSync(path.join(pcDir, "portable.ini")))
@@ -111,7 +121,11 @@ await win
 const pcIni2 = fs.readFileSync(pcIni, "utf8");
 if (pcIni2.includes("Cross = SDL-0/Y"))
   ok("PCSX2 custom override wrote Cross=SDL-0/Y (remapped)");
-else fail("PCSX2 override not applied", pcIni2.split("\n").find((l) => l.startsWith("Cross")));
+else
+  fail(
+    "PCSX2 override not applied",
+    pcIni2.split("\n").find((l) => l.startsWith("Cross"))
+  );
 // RALibretro (global) unchanged.
 const raJson2 = JSON.parse(
   fs.readFileSync(path.join(raDir, "RALibretro.json"), "utf8")
@@ -123,7 +137,8 @@ else fail("global leaked into RALibretro", raJson2.bindings.J0_B);
 const isCustom = await win
   .evaluate(() => window.electron.getControllerProfile("pcsx2"))
   .then((r) => r.isCustom);
-if (isCustom === true) ok("getControllerProfile('pcsx2') reports isCustom=true");
+if (isCustom === true)
+  ok("getControllerProfile('pcsx2') reports isCustom=true");
 else fail("override not persisted as custom");
 
 // ── A3: settings write to the core option file ────────────────────────────────

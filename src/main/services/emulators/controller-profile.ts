@@ -36,11 +36,7 @@ const write = (file: string, content: string) => {
 };
 
 /** Replace (or append) a `[Section]` block in an INI string. */
-function replaceIniSection(
-  ini: string,
-  section: string,
-  body: string
-): string {
+function replaceIniSection(ini: string, section: string, body: string): string {
   const header = `[${section}]`;
   const lines = ini.split(/\r?\n/);
   const start = lines.findIndex((l) => l.trim() === header);
