@@ -142,6 +142,11 @@ export class RaWatcherManager {
     }
   }
 
+  /** Whether the given game currently has an armed poll. (Used by tests.) */
+  public static isPolling(game: Game): boolean {
+    return this.active.has(levelKeys.game(game.shop, game.objectId));
+  }
+
   /** Called on onCloseGame. */
   public static stopPolling(game: Game) {
     const gameKey = levelKeys.game(game.shop, game.objectId);

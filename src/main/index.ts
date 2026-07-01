@@ -363,6 +363,11 @@ app.whenReady().then(async () => {
       downloadsSublevel,
       emulatorsSublevel,
     };
+    const { RaWatcherManager } = await import(
+      "./services/achievements/retroachievements/ra-watcher-manager"
+    );
+    (globalThis as Record<string, unknown>).__raWatcherManager =
+      RaWatcherManager;
   }
 
   await import("./events")
