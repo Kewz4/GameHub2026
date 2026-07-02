@@ -28,11 +28,26 @@ function buildRepackTitle(entry: MinervaCatalogueEntry): string {
       : `Update${regionSuffix}`;
   }
   if (entry.contentType === "dlc") {
-    const stem = entry.filename.replace(/\.[a-z0-9]{1,5}$/i, ""); // strip ext
-    const m = stem.match(/[-–]\s*(.+?)\s*(?:\(\w+\))?$/);
+    // Strip the extension and EVERY trailing parenthetical tag ("(USA) (DLC)")
+    // so a tag never leaks into the DLC name (which then had the region
+    // appended twice: "Breath of the Wild (Europe) (Europe)").
+    let stem = entry.filename.replace(/\.[a-z0-9]{1,5}$/i, "");
+    while (/\s*\([^()]*\)\s*$/.test(stem)) {
+      stem = stem.replace(/\s*\([^()]*\)\s*$/, "");
+    }
+    const m = stem.match(/[-–]\s*([^-–]+?)\s*$/);
     if (m) {
       const candidate = m[1].trim();
-      if (candidate.length > 4 && !/^\w{2,4}$/.test(candidate)) {
+      // A real DLC name, not just the tail of the game's own title.
+      const isGameTitleTail = entry.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "")
+        .endsWith(candidate.toLowerCase().replace(/[^a-z0-9]/g, ""));
+      if (
+        candidate.length > 4 &&
+        !/^\w{2,4}$/.test(candidate) &&
+        !isGameTitleTail
+      ) {
         return `${candidate}${regionSuffix}`;
       }
     }
