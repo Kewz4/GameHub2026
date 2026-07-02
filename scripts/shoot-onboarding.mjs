@@ -81,9 +81,6 @@ const activeStep = () =>
     )
     .catch(() => "");
 
-const bodyText = () =>
-  win.evaluate(() => document.body.innerText).catch(() => "");
-
 // Playwright injects a translucent highlight overlay (<x-pw-glass>, plus the
 // "body 960×680" size badge) when locators run; it tints the whole capture.
 // Strip it right before each screenshot so shots reflect the real UI.
@@ -133,15 +130,16 @@ let shotEmulators = false;
 for (let step = 0; step < 22; step++) {
   await new Promise((r) => setTimeout(r, 2500));
   const label = (await activeStep()) || `step${step}`;
-  const body = await bodyText();
 
   const safe =
     label.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || `step${step}`;
   const file = path.join(OUT, `${String(step).padStart(2, "0")}-${safe}.png`);
   await shoot(file);
 
-  const isEmu = /RALibretro/i.test(body);
-  const isAch = /Exophase|RetroAchievements/i.test(body) && !isEmu;
+  // Classify by the active nav label — the RA card's copy mentions
+  // "RALibretro", so body-text matching would misflag the Achievements step.
+  const isEmu = label === "Emulators";
+  const isAch = label === "Achievements";
   if (isAch && !shotAchievements) {
     await shoot(path.join(OUT, "STEP-achievements.png"));
     shotAchievements = true;

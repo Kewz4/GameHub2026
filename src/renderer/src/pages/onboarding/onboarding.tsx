@@ -250,6 +250,70 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     phase?: string;
   } | null>(null);
 
+  // RetroAchievements (emulator) onboarding state. RA sign-in lets emulators
+  // like RALibretro/PCSX2 unlock achievements automatically; the web API key
+  // powers in-app unlock notifications + achievement lists.
+  const [raUsername, setRaUsername] = useState(
+    userPreferences?.retroAchievementsUsername ?? ""
+  );
+  const [raApiKey, setRaApiKey] = useState(
+    userPreferences?.retroAchievementsApiKey ?? ""
+  );
+  const [raPassword, setRaPassword] = useState("");
+  const [raConnecting, setRaConnecting] = useState(false);
+  const [raStatus, setRaStatus] = useState("");
+  const [raConnected, setRaConnected] = useState(
+    Boolean(userPreferences?.retroAchievementsToken)
+  );
+
+  // Seed the RA fields once preferences load (without clobbering typing).
+  useEffect(() => {
+    if (userPreferences?.retroAchievementsUsername)
+      setRaUsername((v) => v || userPreferences.retroAchievementsUsername!);
+    if (userPreferences?.retroAchievementsApiKey)
+      setRaApiKey((v) => v || userPreferences.retroAchievementsApiKey!);
+    if (userPreferences?.retroAchievementsToken) setRaConnected(true);
+  }, [
+    userPreferences?.retroAchievementsUsername,
+    userPreferences?.retroAchievementsApiKey,
+    userPreferences?.retroAchievementsToken,
+  ]);
+
+  const handleRaConnect = async () => {
+    if (!raUsername.trim() || !raPassword) {
+      setRaStatus("Enter your RetroAchievements username and password.");
+      return;
+    }
+    setRaConnecting(true);
+    setRaStatus("");
+    try {
+      const result = await window.electron.loginRetroAchievements(
+        raUsername.trim(),
+        raPassword
+      );
+      if (result.success && result.token) {
+        await window.electron.updateUserPreferences({
+          retroAchievementsUsername: raUsername.trim(),
+          retroAchievementsToken: result.token,
+          ...(raApiKey.trim()
+            ? { retroAchievementsApiKey: raApiKey.trim() }
+            : {}),
+        });
+        // Push the login into an already-installed RALibretro immediately.
+        await window.electron.syncRalibretroLogin().catch(() => {});
+        setRaPassword("");
+        setRaConnected(true);
+        setRaStatus("Connected — your emulator will sign in automatically.");
+      } else {
+        setRaStatus(result.error ?? "Sign-in failed.");
+      }
+    } catch {
+      setRaStatus("Couldn't reach RetroAchievements.");
+    } finally {
+      setRaConnecting(false);
+    }
+  };
+
   // Tools step state
   const [ludusaviResult, setLudusaviResult] = useState<string>("");
   const [ludusaviBusy, setLudusaviBusy] = useState(false);
@@ -905,6 +969,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     });
     if (!result || result.canceled || !result.filePaths[0]) return;
     handlePlayniteImport(result.filePaths[0]);
+  };
+
+  const raInputStyle: React.CSSProperties = {
+    flex: 1,
+    padding: "8px 10px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(255,255,255,0.04)",
+    color: "inherit",
+    fontSize: "0.875em",
   };
 
   const isWelcome = currentStep === "welcome";
@@ -2159,6 +2233,111 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     </Button>
                   </div>
                 )}
+
+                {/* RetroAchievements — emulator sign-in. Retro/console games
+                    ship with no achievements; RA adds them, and the emulator
+                    needs to be logged in to actually earn them. */}
+                <div className="onboarding-tool-card">
+                  <div className="onboarding-tool-card__header">
+                    <TrophyIcon size={16} />
+                    <span className="onboarding-tool-card__title">
+                      RetroAchievements — retro &amp; console games
+                    </span>
+                    {raConnected && <CheckCircleFillIcon size={14} />}
+                  </div>
+                  <p className="onboarding-tool-card__desc">
+                    Emulated games (RALibretro, PCSX2 and more) normally have no
+                    achievements at all. RetroAchievements adds them — this is
+                    what makes N64, PS1/PS2, Game Boy and the rest earnable.
+                    Sign in so your emulator logs in automatically and unlocks
+                    them as you play, and add your web API key so unlocks pop as
+                    notifications and appear on each game&apos;s page. Your
+                    password is exchanged for a login token and never stored.
+                  </p>
+                  {raConnected && (
+                    <div
+                      className="onboarding-connected-badge"
+                      style={{ fontSize: "0.82rem" }}
+                    >
+                      <CheckCircleFillIcon size={14} />
+                      Connected as{" "}
+                      {raUsername || userPreferences?.retroAchievementsUsername}
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                      marginTop: 8,
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={raUsername}
+                      onChange={(e) => setRaUsername(e.target.value)}
+                      placeholder="RetroAchievements username"
+                      spellCheck={false}
+                      autoComplete="off"
+                      style={raInputStyle}
+                    />
+                    <input
+                      type="password"
+                      value={raPassword}
+                      onChange={(e) => setRaPassword(e.target.value)}
+                      placeholder="Password — for automatic emulator sign-in"
+                      spellCheck={false}
+                      autoComplete="off"
+                      style={raInputStyle}
+                    />
+                    <input
+                      type="password"
+                      value={raApiKey}
+                      onChange={(e) => setRaApiKey(e.target.value)}
+                      placeholder="Web API key — for notifications & lists"
+                      spellCheck={false}
+                      autoComplete="off"
+                      style={raInputStyle}
+                    />
+                  </div>
+                  <div className="onboarding-tool-card__actions">
+                    <button
+                      type="button"
+                      className="onboarding-skip"
+                      onClick={() =>
+                        window.electron.openExternal(
+                          "https://retroachievements.org/settings"
+                        )
+                      }
+                    >
+                      Get API key
+                    </button>
+                    <Button
+                      type="button"
+                      onClick={handleRaConnect}
+                      disabled={
+                        raConnecting || !raUsername.trim() || !raPassword
+                      }
+                    >
+                      {raConnecting
+                        ? "Connecting…"
+                        : raConnected
+                          ? "Reconnect"
+                          : "Connect"}
+                    </Button>
+                  </div>
+                  {raStatus && (
+                    <p
+                      style={{
+                        fontSize: "0.82rem",
+                        opacity: 0.7,
+                        margin: "8px 0 0",
+                      }}
+                    >
+                      {raStatus}
+                    </p>
+                  )}
+                </div>
 
                 {/* Add public Exophase profiles by URL — works with or without
                     a login; the profile just needs to be public. */}
