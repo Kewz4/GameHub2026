@@ -7,6 +7,7 @@ import { normalizeTitle } from "@main/services/rom-sources/minerva-source";
 import {
   parseRomFilename,
   isAllowedRomRegion,
+  romRegionFamilies,
 } from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem, GameRepack } from "@types";
 
@@ -36,6 +37,65 @@ function buildRepackTitle(entry: MinervaCatalogueEntry): string {
   }
   // base game — append region so regional variants are distinguishable
   return `${entry.title}${regionSuffix}`;
+}
+
+/** Revision ordinal from a No-Intro filename: "(Rev 1)" → 1, "(Rev A)" → 1,
+ *  "(Rev B)" → 2, no tag → 0. Higher revisions are bugfix reissues. */
+export function revisionOf(filename: string): number {
+  const m = filename.match(/\(rev\s*([0-9]+|[a-z])\)/i);
+  if (!m) return 0;
+  const raw = m[1].toLowerCase();
+  return /^[0-9]+$/.test(raw)
+    ? parseInt(raw, 10)
+    : raw.charCodeAt(0) - "a".charCodeAt(0) + 1;
+}
+
+/**
+ * Collapse base-game entries to ONE download per game+region family,
+ * preferring the highest revision (tie-break: longest filename — usually the
+ * fuller language set). A multi-region file ("(USA, Europe)") competes in
+ * every region it covers, so it supersedes single-country variants (e.g. a
+ * "(Germany)" cart) instead of leaving them as duplicate options.
+ * Updates/DLC are distinct content and pass through.
+ */
+export function dedupeRegionalVariants(
+  entries: MinervaCatalogueEntry[]
+): MinervaCatalogueEntry[] {
+  const best = new Map<string, MinervaCatalogueEntry>();
+  const rest: MinervaCatalogueEntry[] = [];
+
+  const beats = (a: MinervaCatalogueEntry, b: MinervaCatalogueEntry) =>
+    revisionOf(a.filename) > revisionOf(b.filename) ||
+    (revisionOf(a.filename) === revisionOf(b.filename) &&
+      a.filename.length > b.filename.length);
+
+  for (const entry of entries) {
+    if ((entry.contentType ?? "game") !== "game") {
+      rest.push(entry);
+      continue;
+    }
+    const families = romRegionFamilies(entry.filename);
+    const groups = families.length > 0 ? families : ["unknown"];
+    for (const family of groups) {
+      const key = `${entry.system}:${normalizeTitle(entry.title)}:${family}`;
+      const current = best.get(key);
+      if (!current || beats(entry, current)) {
+        best.set(key, entry);
+      }
+    }
+  }
+
+  // A winner of several region groups appears once.
+  const seen = new Set<string>();
+  const winners: MinervaCatalogueEntry[] = [];
+  for (const entry of best.values()) {
+    const id = `${entry.system}:${entry.filename}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    winners.push(entry);
+  }
+
+  return [...winners, ...rest];
 }
 
 async function scanAllVariants(
@@ -70,7 +130,8 @@ const getMinervaDownloadOptions = async (
 ): Promise<GameRepack[]> => {
   try {
     const norm = normalizeTitle(title);
-    const entries = await scanAllVariants(system, norm);
+    // One download per region: highest revision wins over the base release.
+    const entries = dedupeRegionalVariants(await scanAllVariants(system, norm));
 
     if (entries.length === 0) return [];
 

@@ -131,6 +131,35 @@ const DENIED_REGION_TOKENS = new Set([
   "hongkong",
 ]);
 
+/** Canonical region family per allowed token (European countries → Europe). */
+const REGION_FAMILY: Record<string, string> = {
+  usa: "USA",
+  us: "USA",
+  u: "USA",
+  canada: "USA",
+  world: "World",
+  w: "World",
+};
+for (const token of ALLOWED_REGION_TOKENS) {
+  REGION_FAMILY[token] ??= "Europe";
+}
+
+/**
+ * All allowed region families a ROM covers ("(USA, Europe)" → ["USA","Europe"];
+ * "(Germany)" → ["Europe"]). Empty when no allowed region tag is present.
+ */
+export function romRegionFamilies(fileName: string): string[] {
+  const withoutExt = stripExtension(fileName);
+  const families = new Set<string>();
+  for (const match of withoutExt.matchAll(TAG_REGEX)) {
+    for (const raw of match[0].slice(1, -1).split(",")) {
+      const family = REGION_FAMILY[raw.trim().toLowerCase()];
+      if (family) families.add(family);
+    }
+  }
+  return [...families];
+}
+
 /**
  * Whether a ROM belongs to the allowed regions (USA/Europe families).
  * Policy: any allowed region tag → keep (covers "(Japan, USA)" combos);
