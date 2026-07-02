@@ -14,6 +14,7 @@ import { isNonGameEntry } from "./non-game-filter";
 import {
   parseRomFilename,
   isAllowedRomRegion,
+  displayRomTitle,
 } from "@main/services/emulators/parse-rom-filename";
 
 /**
@@ -21,8 +22,10 @@ import {
  * non-game filtering, region tagging, key format) so existing installs purge
  * and re-sync instead of keeping stale/polluted data.
  * v4: USA/Europe-only region filtering (Japan/Korea/Taiwan/Asia excluded).
+ * v5: natural display titles ("The Legend of Zelda - …") + article-insensitive
+ *     normalization for keys.
  */
-const CATALOGUE_VERSION = 4;
+const CATALOGUE_VERSION = 5;
 const CATALOGUE_VERSION_KEY = "minervaCatalogueVersion";
 
 /** Bundled catalogue dir (extraResource in packaged builds; repo in dev). */
@@ -200,7 +203,7 @@ export async function syncMinervaSource(
     const region = parseRomFilename(download.fileName ?? download.title).region;
     const entry: MinervaCatalogueEntry = {
       system,
-      title: download.title,
+      title: displayRomTitle(download.title),
       region,
       filename: download.fileName ?? download.title,
       romPath: "",
@@ -266,7 +269,7 @@ async function syncSupplementalSource(opts: {
     const ct = download.contentType ?? opts.defaultContentType;
     const entry: MinervaCatalogueEntry = {
       system: opts.system,
-      title: download.title,
+      title: displayRomTitle(download.title),
       region: parseRomFilename(download.fileName ?? download.title).region,
       filename: download.fileName ?? download.title,
       romPath: "",

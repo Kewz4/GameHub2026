@@ -3,11 +3,22 @@ import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import type { EmulatorSystem } from "@types";
+import { db } from "@main/level";
 import {
   gamehubMetaSublevel,
   gamehubMetaKey,
+  normalizeMetaTitle,
   type GameHubMetaEntry,
 } from "@main/level/sublevels/gamehub-meta";
+
+/**
+ * Metadata store schema version. Bump when the key normalization changes so
+ * existing installs purge and re-seed instead of keeping unreachable keys.
+ * v2: article-insensitive keys (re-derived from each entry's raw title —
+ *     the JSON's own keys were generated with the old normalization).
+ */
+const META_VERSION = 2;
+const META_VERSION_KEY = "gamehubMetaVersion";
 
 /**
  * Directory holding the bundled metadata JSON. Packaged builds ship it as an
@@ -89,7 +100,12 @@ export async function syncGameHubMeta(system: EmulatorSystem): Promise<number> {
 
   const batch = gamehubMetaSublevel.batch();
   let count = 0;
-  for (const [normalizedTitle, entry] of Object.entries(games)) {
+  for (const [jsonKey, entry] of Object.entries(games)) {
+    // Re-derive the key from the raw title with the CURRENT normalization —
+    // the JSON's own keys were generated with an older scheme.
+    const normalizedTitle = entry.title
+      ? normalizeMetaTitle(entry.title)
+      : jsonKey;
     batch.put(gamehubMetaKey(system, normalizedTitle), entry);
     count += 1;
   }
@@ -128,6 +144,20 @@ async function systemHasEntries(system: EmulatorSystem): Promise<boolean> {
  * works offline.
  */
 export async function ensureGameHubMeta(): Promise<void> {
+  // Key-scheme change → purge everything once so stale, unreachable keys
+  // don't shadow the re-seed.
+  try {
+    const stored = await db
+      .get<string, number>(META_VERSION_KEY, { valueEncoding: "json" })
+      .catch(() => 0);
+    if (stored !== META_VERSION) {
+      await gamehubMetaSublevel.clear();
+      await db.put(META_VERSION_KEY, META_VERSION, { valueEncoding: "json" });
+    }
+  } catch (err) {
+    console.warn("[gamehub-meta] version check failed:", err);
+  }
+
   for (const system of META_SYSTEMS) {
     try {
       if (await systemHasEntries(system)) continue;

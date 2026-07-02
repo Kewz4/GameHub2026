@@ -1,6 +1,9 @@
 import axios from "axios";
 import type { EmulatorSystem } from "@types";
-import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
+import {
+  parseRomFilename,
+  normalizeRomTitle,
+} from "@main/services/emulators/parse-rom-filename";
 import {
   minervaCatalogueSublevel,
   MINERVA_CACHE_TTL_MS,
@@ -166,9 +169,9 @@ export async function scrapeRomPage(
   }
 }
 
-export function normalizeTitle(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+// Article-insensitive canonical form shared with gamehub-meta and the
+// catalogue index — see normalizeRomTitle for the rules.
+export const normalizeTitle = normalizeRomTitle;
 
 /**
  * Scrape all listing pages for a system, store every ROM in LevelDB (without

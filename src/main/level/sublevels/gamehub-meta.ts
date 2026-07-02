@@ -1,4 +1,5 @@
 import { db } from "../level";
+import { normalizeRomTitle } from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem } from "@types";
 
 /**
@@ -32,10 +33,8 @@ export function gamehubMetaKey(
   return `${system}:${normalizedTitle}`;
 }
 
-/** Same normalization the minerva catalogue and generator use. */
-export function normalizeMetaTitle(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+/** Same article-insensitive normalization the minerva catalogue uses. */
+export const normalizeMetaTitle = normalizeRomTitle;
 
 /** Look up metadata for a single game by system + (raw) title. */
 export async function getGameHubMeta(

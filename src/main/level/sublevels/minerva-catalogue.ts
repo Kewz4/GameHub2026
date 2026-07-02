@@ -1,4 +1,5 @@
 import { db } from "../level";
+import { normalizeRomTitle } from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem } from "@types";
 
 export interface MinervaCatalogueEntry {
@@ -27,9 +28,7 @@ export const minervaCatalogueSublevel = db.sublevel<string, MinervaCacheRecord>(
 
 export const MINERVA_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-function normalizeTitle(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
+const normalizeTitle = normalizeRomTitle;
 
 /**
  * Split a query into normalized tokens ("Zelda Ocarina" → ["zelda","ocarina"]).

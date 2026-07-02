@@ -16,6 +16,7 @@ import {
   getGameHubMeta,
 } from "@main/level";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import { displayRomTitle } from "@main/services/emulators/parse-rom-filename";
 import { platformToSystem, systemFromObjectId } from "@main/helpers";
 import {
   isCuratedRiotGame,
@@ -75,7 +76,11 @@ const getGameShopDetails = async (
     // library yet the only title we have is the normalized objectId slug
     // (e.g. "supersmashbrosforwiiu") — the meta's proper title wins over it.
     const displayTitle =
-      gameAssets?.title ?? gameEntry?.title ?? meta?.title ?? title ?? objectId;
+      gameAssets?.title ??
+      gameEntry?.title ??
+      (meta?.title ? displayRomTitle(meta.title) : null) ??
+      title ??
+      objectId;
 
     const description = meta?.description ?? "";
     const assets: ShopDetailsWithAssets["assets"] = {

@@ -55,6 +55,35 @@ const deriveRegion = (tags: string[]): string | null => {
   return null;
 };
 
+/**
+ * Turn a No-Intro/Redump-style title into its natural display form by moving
+ * the FIRST segment's trailing article back to the front (No-Intro only
+ * shifts the leading article of a title, never subtitles):
+ *   "Legend of Zelda, The - The Minish Cap" → "The Legend of Zelda - The Minish Cap"
+ *   "Bug's Life, A" → "A Bug's Life"
+ */
+export function displayRomTitle(title: string): string {
+  const segments = title.split(" - ");
+  const m = segments[0].match(/^(.*?),\s+(The|A|An)$/i);
+  if (m) segments[0] = `${m[2]} ${m[1]}`;
+  return segments.join(" - ");
+}
+
+/**
+ * Canonical, article-insensitive normalization shared by every ROM-title key
+ * and lookup (minerva catalogue, gamehub-meta, objectIds). Comma-shifted
+ * articles ("Zelda, The - …") and a leading article ("The Zelda - …") are
+ * dropped BEFORE squashing, so the No-Intro form and the natural display
+ * form normalize to the SAME key — lookups work with either.
+ */
+export function normalizeRomTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/,\s*(the|an|a)\b/g, "")
+    .replace(/^(the|an|a)\s+/, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 export function parseRomFilename(fileName: string): ParsedRomFilename {
   const withoutExt = stripExtension(fileName);
 
@@ -74,7 +103,7 @@ export function parseRomFilename(fileName: string): ParsedRomFilename {
     .replace(/\s*-\s*$/, "")
     .trim();
 
-  return { title: title || withoutExt.trim(), region };
+  return { title: displayRomTitle(title || withoutExt.trim()), region };
 }
 
 // ── Region allowlist ─────────────────────────────────────────────────────────
