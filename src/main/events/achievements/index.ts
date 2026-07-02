@@ -10,3 +10,5 @@ import "./get-hydra-cloud-achievements";
 import "./run-exophase-background-sync";
 import "./lookup-game-achievements";
 import "./load-retroachievements-list";
+import "./login-retroachievements";
+import "./sync-ralibretro-login";

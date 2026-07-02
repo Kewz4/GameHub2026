@@ -6,9 +6,11 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
@@ -19,13 +21,19 @@ import type {
   EmulatorInstallProgress,
   EmulatorInstallResult,
   EmulatorSystem,
+  UserPreferences,
 } from "@types";
 import { emulatorsInstallPath } from "@main/constants";
+import { db, levelKeys } from "@main/level";
 import { logger } from "../logger";
+
+/** Official RetroAchievements integration DLL for the x64 RALibretro build. */
+const RA_INTEGRATION_URL =
+  "https://retroachievements.org/bin/RA_Integration-x64.dll";
 import { SevenZip } from "../7zip";
 import { ALL_SYSTEMS, KNOWN_BINARIES } from "./known-binaries";
 import { resolveInstallOptionById } from "./emulator-install-sources";
-import { updateEmulatorConfig } from "./emulators-repository";
+import { getEmulatorConfig, updateEmulatorConfig } from "./emulators-repository";
 
 const isWindows = process.platform === "win32";
 
@@ -43,7 +51,97 @@ const ralibretroAssetsDir = (): string =>
  * achievement overlay is used). Never overwrites an existing RAPrefs so a user
  * who already logged into RetroAchievements keeps their account.
  */
-function preSetupRalibretro(installDir: string): void {
+/**
+ * Write RALibretro's RAPrefs (JSON). Starts from our template (RA overlay
+ * notifications OFF, so GameHub's own overlay is used) and, if the user has
+ * logged into RetroAchievements through GameHub, injects their Username + login
+ * Token so RALibretro is authenticated without ever prompting. If GameHub has
+ * no login but a prefs file already carries a token (the user logged in inside
+ * RALibretro), that existing login is preserved.
+ */
+async function writeRalibretroPrefs(
+  assets: string,
+  installDir: string
+): Promise<void> {
+  const prefsSrc = path.join(assets, "config", "RAPrefs_RALibRetro.cfg");
+  const prefsDest = path.join(installDir, "RAPrefs_RALibRetro.cfg");
+
+  const userPreferences = await db
+    .get<string, UserPreferences | null>(levelKeys.userPreferences, {
+      valueEncoding: "json",
+    })
+    .catch(() => null);
+  const username = userPreferences?.retroAchievementsUsername?.trim();
+  const token = userPreferences?.retroAchievementsToken?.trim();
+  const haveLogin = Boolean(username && token);
+
+  // Preserve an existing RALibretro-side login when GameHub has none.
+  if (!haveLogin && existsSync(prefsDest)) {
+    try {
+      const existing = JSON.parse(readFileSync(prefsDest, "utf-8"));
+      if (existing?.Token) return;
+    } catch {
+      /* fall through and rewrite from the template */
+    }
+  }
+
+  let prefs: Record<string, unknown> = {};
+  if (existsSync(prefsSrc)) {
+    try {
+      prefs = JSON.parse(readFileSync(prefsSrc, "utf-8"));
+    } catch {
+      prefs = {};
+    }
+  }
+  if (haveLogin) {
+    prefs.Username = username;
+    prefs.Token = token;
+  }
+  writeFileSync(prefsDest, JSON.stringify(prefs));
+}
+
+/**
+ * Fetch RALibretro's RetroAchievements integration DLL from the official
+ * RetroAchievements URL (the same source RALibretro itself uses) and place it
+ * next to the executable, so RALibretro doesn't prompt to download it on first
+ * run. Best-effort: on failure RALibretro will fetch it itself. We fetch rather
+ * than bundle it — it's RetroAchievements' binary, not ours to redistribute.
+ */
+async function ensureRaIntegration(installDir: string): Promise<void> {
+  const dest = path.join(installDir, "RA_Integration-x64.dll");
+  if (existsSync(dest)) return;
+  try {
+    await downloadToFile(RA_INTEGRATION_URL, dest, () => {});
+    logger.log("RA_Integration-x64.dll fetched into RALibretro install");
+  } catch (err) {
+    logger.warn(
+      "RA_Integration download failed (RALibretro will fetch it on first run):",
+      err
+    );
+  }
+}
+
+/**
+ * Push the currently-stored RetroAchievements login into an already-installed
+ * RALibretro's RAPrefs, so signing in through GameHub takes effect immediately
+ * (not only on a fresh install). No-op if RALibretro isn't installed.
+ */
+export async function syncRalibretroLogin(): Promise<boolean> {
+  const config = await getEmulatorConfig("n64").catch(() => null);
+  const exe = config?.executablePath;
+  if (config?.binary !== "ralibretro" || !exe || !existsSync(exe)) return false;
+  const assets = ralibretroAssetsDir();
+  try {
+    await writeRalibretroPrefs(assets, path.dirname(exe));
+    logger.log("RALibretro login synced to install");
+    return true;
+  } catch (err) {
+    logger.error("Failed to sync RALibretro login", err);
+    return false;
+  }
+}
+
+async function preSetupRalibretro(installDir: string): Promise<void> {
   const assets = ralibretroAssetsDir();
   if (!existsSync(assets)) {
     logger.warn(`RALibretro assets not found at ${assets}`);
@@ -71,13 +169,9 @@ function preSetupRalibretro(installDir: string): void {
     copyFileSync(cfgSrc, path.join(installDir, "RALibretro.json"));
   }
 
-  // RA prefs (notifications OFF). Only write if absent so we never clobber an
-  // existing RetroAchievements login.
-  const prefsSrc = path.join(assets, "config", "RAPrefs_RALibRetro.cfg");
-  const prefsDest = path.join(installDir, "RAPrefs_RALibRetro.cfg");
-  if (existsSync(prefsSrc) && !existsSync(prefsDest)) {
-    copyFileSync(prefsSrc, prefsDest);
-  }
+  // RA prefs (notifications OFF + injected login) and the RA integration DLL.
+  await writeRalibretroPrefs(assets, installDir);
+  await ensureRaIntegration(installDir);
 
   logger.log(`RALibretro pre-setup complete at ${installDir}`);
 }
@@ -222,7 +316,7 @@ export const installEmulator = async (
     // it's playable immediately (no manual core download / RA overlay setup).
     if (binary === "ralibretro") {
       try {
-        preSetupRalibretro(path.dirname(executablePath));
+        await preSetupRalibretro(path.dirname(executablePath));
       } catch (err) {
         logger.error("RALibretro pre-setup failed", err);
       }

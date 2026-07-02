@@ -219,6 +219,12 @@ export interface UserPreferences {
   enableSteamAchievements?: boolean;
   retroAchievementsUsername?: string;
   retroAchievementsApiKey?: string;
+  /**
+   * RetroAchievements login token, obtained by exchanging the user's password
+   * once (the password itself is never stored). Injected into RALibretro's
+   * RAPrefs during setup so the emulator is signed in without prompting.
+   */
+  retroAchievementsToken?: string;
   autoplayGameTrailers?: boolean;
   hideToTrayOnGameStart?: boolean;
   enableNewDownloadOptionsBadges?: boolean;

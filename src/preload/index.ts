@@ -1181,6 +1181,9 @@ contextBridge.exposeInMainWorld("electron", {
       system,
       title
     ),
+  loginRetroAchievements: (username: string, password: string) =>
+    ipcRenderer.invoke("loginRetroAchievements", username, password),
+  syncRalibretroLogin: () => ipcRenderer.invoke("syncRalibretroLogin"),
 
   /* Auth */
   getAuth: () => ipcRenderer.invoke("getAuth"),

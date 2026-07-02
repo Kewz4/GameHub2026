@@ -1220,6 +1220,11 @@ declare global {
       system: EmulatorSystem,
       title: string
     ) => Promise<UserAchievement[]>;
+    loginRetroAchievements: (
+      username: string,
+      password: string
+    ) => Promise<{ success: boolean; token?: string; error?: string }>;
+    syncRalibretroLogin: () => Promise<boolean>;
 
     /* Profile */
     getMe: () => Promise<UserDetails | null>;

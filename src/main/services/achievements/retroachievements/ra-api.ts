@@ -70,6 +70,55 @@ interface RaGameProgressResponse {
   Achievements: Record<string, RaGameAchievementResponse>;
 }
 
+interface RaLoginResponse {
+  Success: boolean;
+  Token?: string;
+  User?: string;
+  Error?: string;
+  Code?: string;
+}
+
+/**
+ * Exchange a RetroAchievements username + password for a login token. This is
+ * the same request RALibretro makes to sign in; we do it once so the token can
+ * be written into RALibretro's RAPrefs (the password is never stored). Returns
+ * the token on success, or an error message.
+ */
+export async function loginRetroAchievements(
+  username: string,
+  password: string
+): Promise<{ success: true; token: string } | { success: false; error: string }> {
+  if (!username || !password) {
+    return { success: false, error: "Enter your username and password." };
+  }
+  try {
+    const { data } = await axios.get<RaLoginResponse>(
+      "https://retroachievements.org/dorequest.php",
+      {
+        params: { r: "login2", u: username, p: password },
+        timeout: 15000,
+        // RA returns HTTP 401 (with a JSON error body) for a wrong password;
+        // don't let axios throw on it or we'd report "couldn't reach" instead
+        // of the real "invalid credentials" message. Read the body ourselves.
+        validateStatus: () => true,
+      }
+    );
+    if (data?.Success && data.Token) {
+      return { success: true, token: data.Token };
+    }
+    return {
+      success: false,
+      error: data?.Error ?? "Invalid username or password.",
+    };
+  } catch (err) {
+    achievementsLogger.warn(
+      "RetroAchievements login failed",
+      err instanceof Error ? err.message : err
+    );
+    return { success: false, error: "Couldn't reach RetroAchievements." };
+  }
+}
+
 export async function getRecentAchievements(
   username: string,
   apiKey: string,

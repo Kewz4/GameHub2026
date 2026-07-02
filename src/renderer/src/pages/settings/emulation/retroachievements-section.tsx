@@ -16,14 +16,16 @@ const inputStyle: React.CSSProperties = {
 
 export function RetroAchievementsSection() {
   const { updateUserPreferences } = useContext(settingsContext);
-  const { showSuccessToast } = useToast();
+  const { showSuccessToast, showErrorToast } = useToast();
   const userPreferences = useAppSelector(
     (state) => state.userPreferences.value
   );
 
   const [username, setUsername] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [password, setPassword] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
     setUsername(userPreferences?.retroAchievementsUsername ?? "");
@@ -36,6 +38,10 @@ export function RetroAchievementsSection() {
   const isConnected =
     Boolean(userPreferences?.retroAchievementsUsername) &&
     Boolean(userPreferences?.retroAchievementsApiKey);
+
+  // Whether the emulator itself is signed in (a login token is stored), so
+  // RALibretro is authenticated without prompting.
+  const emulatorSignedIn = Boolean(userPreferences?.retroAchievementsToken);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -50,12 +56,49 @@ export function RetroAchievementsSection() {
     }
   };
 
+  // Exchange the password for a login token (the password is never stored) and
+  // save it, so setup can inject it into RALibretro's config silently.
+  const handleEmulatorSignIn = async () => {
+    if (!username.trim() || !password) {
+      showErrorToast("Enter your RetroAchievements username and password.");
+      return;
+    }
+    setIsSigningIn(true);
+    try {
+      const result = await window.electron.loginRetroAchievements(
+        username.trim(),
+        password
+      );
+      if (result.success && result.token) {
+        await updateUserPreferences({
+          retroAchievementsUsername: username.trim(),
+          retroAchievementsToken: result.token,
+        });
+        // Push the login straight into an already-installed RALibretro so it
+        // takes effect now, not only on the next install.
+        await window.electron.syncRalibretroLogin().catch(() => {});
+        setPassword("");
+        showSuccessToast(
+          "Signed in to RetroAchievements — the emulator will log in automatically."
+        );
+      } else {
+        showErrorToast(result.error ?? "Sign-in failed.");
+      }
+    } catch {
+      showErrorToast("Couldn't reach RetroAchievements.");
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   const handleDisconnect = async () => {
     setUsername("");
     setApiKey("");
+    setPassword("");
     await updateUserPreferences({
       retroAchievementsUsername: undefined,
       retroAchievementsApiKey: undefined,
+      retroAchievementsToken: undefined,
     });
     showSuccessToast("RetroAchievements disconnected");
   };
@@ -138,7 +181,7 @@ export function RetroAchievementsSection() {
         />
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <Button
           type="button"
           onClick={handleSave}
@@ -151,6 +194,41 @@ export function RetroAchievementsSection() {
             Disconnect
           </Button>
         )}
+      </div>
+
+      <div
+        style={{
+          borderTop: "1px solid rgba(255,255,255,0.1)",
+          paddingTop: 16,
+        }}
+      >
+        <h4 style={{ margin: "0 0 4px", display: "flex", gap: 8 }}>
+          Emulator sign-in
+          {emulatorSignedIn && <CheckCircleFillIcon size={14} />}
+        </h4>
+        <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
+          {emulatorSignedIn
+            ? "The emulator is signed in — RALibretro logs into RetroAchievements automatically, no prompt. Re-enter your password to refresh it."
+            : "Enter your password once so the emulator (RALibretro) signs in to RetroAchievements automatically and never prompts you. Your password is exchanged for a login token and is not stored."}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="RetroAchievements password"
+            spellCheck={false}
+            autoComplete="off"
+            style={inputStyle}
+          />
+          <Button
+            type="button"
+            onClick={handleEmulatorSignIn}
+            disabled={isSigningIn || !username.trim() || !password}
+          >
+            {isSigningIn ? "Signing in…" : "Sign in"}
+          </Button>
+        </div>
       </div>
     </section>
   );
