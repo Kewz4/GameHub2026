@@ -4,6 +4,7 @@ import { AppUpdaterEvent, UserPreferences } from "@types";
 import { app } from "electron";
 import { publishNotificationUpdateReadyToInstall } from "@main/services/notifications";
 import { db, levelKeys } from "@main/level";
+import { UpdateCheckerManager } from "./update-checker-manager";
 
 const { autoUpdater } = updater;
 const sendEventsForDebug = false;
@@ -44,6 +45,15 @@ export class UpdateManager {
   }
 
   public static async checkForUpdates() {
+    // The startup splash (UpdateCheckerManager) shares this same global
+    // autoUpdater. While it's actively checking, stand down — calling
+    // removeAllListeners()/checkForUpdates() here would stomp its in-flight
+    // check (the cause of the splash timing out with "no response from GitHub"
+    // while this periodic check happily reported "up to date").
+    if (UpdateCheckerManager.splashInProgress) {
+      return this.isAutoInstallEnabled();
+    }
+
     autoUpdater
       .removeAllListeners()
       .on("update-available", (info: UpdateInfo) => {

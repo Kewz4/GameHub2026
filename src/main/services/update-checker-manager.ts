@@ -1,4 +1,8 @@
-import updater, { UpdateInfo, ProgressInfo } from "electron-updater";
+import updater, {
+  UpdateInfo,
+  ProgressInfo,
+  UpdateCheckResult,
+} from "electron-updater";
 import { app } from "electron";
 import path from "node:path";
 import fs from "node:fs";
@@ -27,6 +31,24 @@ export class UpdateCheckerManager {
   private static sendEventFn: ((event: UpdateCheckerEvent) => void) | null =
     null;
   private static portableExtractDir = "";
+
+  /**
+   * True while the startup splash is actively checking. The periodic
+   * UpdateManager check (main-loop) shares the same global autoUpdater and calls
+   * removeAllListeners(); it stands down while this is set so it can't stomp the
+   * splash's in-flight check.
+   */
+  static splashInProgress = false;
+
+  /** Reject a promise if it hasn't settled within `ms`. */
+  private static withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error("Update check timed out")), ms)
+      ),
+    ]);
+  }
 
   static readonly isPortable = (() => {
     if (
@@ -81,16 +103,14 @@ export class UpdateCheckerManager {
     }
 
     autoUpdater.autoDownload = false;
-    autoUpdater.removeAllListeners();
 
     // electron-updater reaches GitHub through Electron's own `net` stack on a
     // dedicated session — NOT the path a browser or PowerShell uses. That
     // session honours the Windows "Automatically detect settings" proxy option
     // (WPAD), which is on by default. On a network where WPAD discovery stalls,
-    // the request hangs with no response and no error (exactly the silent
-    // timeout users hit) while every other app works. Force a direct
-    // connection so the check never waits on proxy auto-detection. (General app
-    // traffic uses the default session and is unaffected.)
+    // the request hangs while every other app works. Force a direct connection
+    // so the check never waits on proxy auto-detection. (General app traffic
+    // uses the default session and is unaffected.)
     try {
       await autoUpdater.netSession.setProxy({ mode: "direct" });
     } catch (err) {
@@ -98,8 +118,7 @@ export class UpdateCheckerManager {
     }
 
     // Route electron-updater's own verbose logs into our logger so the in-app
-    // Console shows exactly where a check stalls (DNS / connect / redirect)
-    // instead of leaving us to guess from a silent timeout.
+    // Console shows exactly where a check stalls.
     autoUpdater.logger = {
       info: (m?: unknown) => logger.log("[updater:eu]", m),
       warn: (m?: unknown) => logger.warn("[updater:eu]", m),
@@ -107,50 +126,61 @@ export class UpdateCheckerManager {
       debug: (m?: unknown) => logger.log("[updater:eu:debug]", m),
     };
 
-    // If GitHub doesn't respond within 20 s, assume no update and proceed.
-    // Also remove all listeners so a late-arriving response doesn't fire
-    // after the UI has already advanced.
-    const fallbackTimer = setTimeout(() => {
-      autoUpdater.removeAllListeners();
-      logger.warn("[updater] no response within 20s — proceeding");
+    // CRITICAL: decide from the *promise result* of checkForUpdates(), not from
+    // event listeners. The periodic UpdateManager check (main-loop) shares this
+    // same global autoUpdater and calls removeAllListeners(), so if we relied on
+    // the update-not-available/update-available events it would steal them — the
+    // splash would then never hear back and hit its timeout, showing "no
+    // response from GitHub" even though the shared check actually succeeded in a
+    // couple of seconds (logged as "in-app check: up to date"). The promise
+    // resolves for THIS call regardless of listener churn. We also flag that the
+    // splash owns the updater so the periodic check stands down meanwhile.
+    this.splashInProgress = true;
+
+    let result: UpdateCheckResult | null = null;
+    try {
+      result = await this.withTimeout(autoUpdater.checkForUpdates(), 15_000);
+    } catch (err) {
+      logger.error("[updater] check failed:", err);
       this.sendEvent({
         type: "error",
-        message: "Update check timed out (no response from GitHub).",
+        message:
+          "Couldn't reach GitHub to check for updates — continuing without checking.",
       });
-    }, 20_000);
-    const clearFallback = () => clearTimeout(fallbackTimer);
+      return;
+    } finally {
+      this.splashInProgress = false;
+    }
 
+    const latestVersion = result?.updateInfo?.version ?? null;
+    const updateAvailable =
+      (result?.isUpdateAvailable ?? false) &&
+      latestVersion != null &&
+      latestVersion !== app.getVersion();
+
+    if (!updateAvailable) {
+      logger.log(`[updater] up to date (v${app.getVersion()})`);
+      this.sendEvent({
+        type: "not-available",
+        currentVersion: app.getVersion(),
+      });
+      return;
+    }
+
+    logger.log(`[updater] update available: v${latestVersion}`);
+    this.sendEvent({ type: "available", version: latestVersion! });
+
+    if (this.isPortable && process.platform === "win32") {
+      this.downloadPortableUpdate(latestVersion!).catch((err) => {
+        logger.error("Portable update download failed:", err);
+        this.sendEvent({ type: "error", message: String(err) });
+      });
+      return;
+    }
+
+    // NSIS install path — attach transient listeners just for the download.
+    autoUpdater.removeAllListeners();
     autoUpdater
-      .on("update-not-available", () => {
-        clearFallback();
-        logger.log(`[updater] up to date (v${app.getVersion()})`);
-        this.sendEvent({
-          type: "not-available",
-          currentVersion: app.getVersion(),
-        });
-      })
-      .on("update-available", (info: UpdateInfo) => {
-        clearFallback();
-        if (info.version === app.getVersion()) {
-          this.sendEvent({
-            type: "not-available",
-            currentVersion: app.getVersion(),
-          });
-          return;
-        }
-        this.sendEvent({ type: "available", version: info.version });
-        if (this.isPortable && process.platform === "win32") {
-          this.downloadPortableUpdate(info.version).catch((err) => {
-            logger.error("Portable update download failed:", err);
-            this.sendEvent({ type: "error", message: String(err) });
-          });
-        } else {
-          autoUpdater.downloadUpdate().catch((err) => {
-            logger.error("downloadUpdate failed:", err);
-            this.sendEvent({ type: "error", message: String(err) });
-          });
-        }
-      })
       .on("download-progress", (progress: ProgressInfo) => {
         this.sendEvent({
           type: "downloading",
@@ -160,28 +190,16 @@ export class UpdateCheckerManager {
           total: progress.total,
         });
       })
-      .on("update-downloaded", (_info: UpdateInfo) => {
-        this.sendEvent({ type: "downloaded", version: _info.version });
+      .on("update-downloaded", (info: UpdateInfo) => {
+        this.sendEvent({ type: "downloaded", version: info.version });
       })
       .on("error", (err: Error) => {
-        clearFallback();
-        // Surface the real failure instead of masking it as "up to date" — a
-        // silently-failing check is exactly why updates looked broken. The
-        // splash auto-proceeds after showing it, so startup isn't blocked.
-        logger.error("[updater] auto-updater error:", err);
-        this.sendEvent({
-          type: "error",
-          message: `Update check failed: ${err?.message ?? String(err)}`,
-        });
+        logger.error("[updater] download error:", err);
+        this.sendEvent({ type: "error", message: String(err) });
       });
-
-    autoUpdater.checkForUpdates().catch((err) => {
-      clearFallback();
-      logger.error("[updater] checkForUpdates failed:", err);
-      this.sendEvent({
-        type: "error",
-        message: `Update check failed: ${err?.message ?? String(err)}`,
-      });
+    autoUpdater.downloadUpdate().catch((err) => {
+      logger.error("downloadUpdate failed:", err);
+      this.sendEvent({ type: "error", message: String(err) });
     });
   }
 
