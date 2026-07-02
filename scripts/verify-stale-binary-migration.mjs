@@ -124,7 +124,9 @@ if (n64.binary === "ralibretro")
 else fail(`n64 binary NOT migrated`, `still "${n64.binary}"`);
 
 if (n64.executablePath === null)
-  ok("n64 stale executablePath cleared (RAProject64's exe doesn't apply to RALibretro)");
+  ok(
+    "n64 stale executablePath cleared (RAProject64's exe doesn't apply to RALibretro)"
+  );
 else fail("n64 executablePath not cleared", n64.executablePath);
 
 if (n64.romFolders.length === 1 && n64.romFolders[0].fileCount === 12)
@@ -137,7 +139,9 @@ if (gba.binary === "ralibretro")
 else fail(`gba binary NOT migrated`, `still "${gba.binary}"`);
 
 // ── M3: an orphaned binary no longer crashes or cross-resolves ─────────────
-console.log("\n[M3] getEmulatorInstallOptions('raproject64') fails clean, not crash");
+console.log(
+  "\n[M3] getEmulatorInstallOptions('raproject64') fails clean, not crash"
+);
 const orphanOptions = await win
   .evaluate(() => window.electron.getEmulatorInstallOptions("raproject64"))
   .catch((e) => ({ __threw: String(e) }));
