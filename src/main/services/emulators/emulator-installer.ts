@@ -86,7 +86,12 @@ const systemsForBinary = (binary: EmulatorBinary): EmulatorSystem[] =>
   ALL_SYSTEMS.filter((system) => KNOWN_BINARIES[system].binary === binary);
 
 const executableNamesFor = (binary: EmulatorBinary): string[] => {
-  const known = KNOWN_BINARIES[systemsForBinary(binary)[0]];
+  const primarySystem = systemsForBinary(binary)[0];
+  // An orphaned binary (no system maps to it, e.g. a stale config predating a
+  // registry change) has no known executable names — fail with an empty list
+  // rather than crashing on `KNOWN_BINARIES[undefined]`.
+  if (!primarySystem) return [];
+  const known = KNOWN_BINARIES[primarySystem];
   return isWindows ? known.windowsNames : known.linuxNames;
 };
 
@@ -231,11 +236,16 @@ export const installEmulator = async (
       }
     }
 
-    // Persist the executable for every system this binary serves.
+    // Persist the executable for every system this binary serves. `binary` is
+    // set explicitly (not just spread from `current`) so a stale persisted
+    // config — from before this system's registry mapping changed — is
+    // corrected the moment a fresh install succeeds, not left pointing at
+    // whatever binary it used to target.
     const now = Date.now();
     for (const system of systemsForBinary(binary)) {
       await updateEmulatorConfig(system, (current) => ({
         ...current,
+        binary,
         executablePath,
         detectedVersion: option.version ?? current.detectedVersion,
         detectedAt: now,

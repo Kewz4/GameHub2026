@@ -296,9 +296,16 @@ export const isKnownEmulatorBinary = (
   typeof value === "string" &&
   (EMULATOR_BINARIES as readonly string[]).includes(value);
 
-/** First system served by a binary (used to resolve detection metadata). */
+/**
+ * First system served by a binary (used to resolve detection metadata), or
+ * null when no system currently maps to this binary (e.g. a stale/orphaned
+ * binary from a persisted config that predates a registry change). Callers
+ * MUST handle null explicitly — silently falling back to an arbitrary system
+ * would resolve a *different* binary's install source under the orphaned
+ * binary's name, masking the mismatch instead of surfacing it.
+ */
 export const primarySystemForBinary = (
   binary: EmulatorBinary
-): EmulatorSystem =>
+): EmulatorSystem | null =>
   ALL_SYSTEMS.find((system) => KNOWN_BINARIES[system].binary === binary) ??
-  "ps1";
+  null;

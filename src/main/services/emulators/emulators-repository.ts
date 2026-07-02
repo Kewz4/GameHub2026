@@ -20,7 +20,31 @@ export const getEmulatorConfig = async (
   system: EmulatorSystem
 ): Promise<EmulatorConfig> => {
   const existing = await emulatorsSublevel.get(system);
-  return existing ?? emptyConfig(system);
+  if (!existing) return emptyConfig(system);
+
+  // A system's target binary can change between app versions (e.g. N64 moved
+  // from a standalone RAProject64 install to the shared RALibretro build).
+  // A config saved under the old mapping still carries the old `binary` and
+  // executablePath; if we returned it as-is, the UI would show the old
+  // emulator's name and any re-install/launch would target a binary the
+  // registry no longer recognizes. Detect the mismatch and migrate: adopt the
+  // current binary, drop the now-irrelevant executablePath/version (they
+  // belong to a different program), but keep romFolders — the ROMs themselves
+  // don't care which emulator plays them.
+  const currentBinary = KNOWN_BINARIES[system].binary;
+  if (existing.binary !== currentBinary) {
+    const migrated: EmulatorConfig = {
+      ...existing,
+      binary: currentBinary,
+      executablePath: null,
+      detectedVersion: null,
+      detectedAt: null,
+    };
+    await emulatorsSublevel.put(system, migrated);
+    return migrated;
+  }
+
+  return existing;
 };
 
 export const getAllEmulatorConfigs = async (): Promise<EmulatorConfigMap> => {

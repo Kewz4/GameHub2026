@@ -183,7 +183,16 @@ const linkOption = (
 export const getEmulatorInstallOptions = async (
   binary: EmulatorBinary
 ): Promise<ResolvedInstallOption[]> => {
-  const source = KNOWN_BINARIES[primarySystemForBinary(binary)].install;
+  const primarySystem = primarySystemForBinary(binary);
+  // No system currently maps to this binary (a stale config from before a
+  // registry change, e.g. old "raproject64"/"ravba" entries now served by
+  // RALibretro). There is nothing valid to install under this name — return
+  // no options rather than silently resolving a different binary's source.
+  if (!primarySystem) {
+    logger.warn(`No system maps to emulator binary "${binary}" — orphaned`);
+    return [];
+  }
+  const source = KNOWN_BINARIES[primarySystem].install;
 
   // Serve a fresh cached result without touching the API.
   const cached = optionsCache.get(binary);
