@@ -26,16 +26,19 @@ import type {
 import { emulatorsInstallPath } from "@main/constants";
 import { db, levelKeys } from "@main/level";
 import { logger } from "../logger";
+import { SevenZip } from "../7zip";
+import { ALL_SYSTEMS, KNOWN_BINARIES } from "./known-binaries";
+import { resolveInstallOptionById } from "./emulator-install-sources";
+import {
+  getEmulatorConfig,
+  updateEmulatorConfig,
+} from "./emulators-repository";
+
+const isWindows = process.platform === "win32";
 
 /** Official RetroAchievements integration DLL for the x64 RALibretro build. */
 const RA_INTEGRATION_URL =
   "https://retroachievements.org/bin/RA_Integration-x64.dll";
-import { SevenZip } from "../7zip";
-import { ALL_SYSTEMS, KNOWN_BINARIES } from "./known-binaries";
-import { resolveInstallOptionById } from "./emulator-install-sources";
-import { getEmulatorConfig, updateEmulatorConfig } from "./emulators-repository";
-
-const isWindows = process.platform === "win32";
 
 /** Bundled RALibretro assets (cores + default configs + N64 system files). */
 const ralibretroAssetsDir = (): string =>
@@ -43,14 +46,6 @@ const ralibretroAssetsDir = (): string =>
     ? path.join(process.resourcesPath, "ralibretro")
     : path.join(__dirname, "..", "..", "resources", "ralibretro");
 
-/**
- * Seed a fresh RALibretro install with the bundled cores and default configs so
- * it runs games out of the box: copies the 5 libretro cores + their option
- * files, the N64 system catalog, and writes our default RALibretro.json
- * (F11 = fullscreen) and RAPrefs (RA overlay notifications OFF so GameHub's own
- * achievement overlay is used). Never overwrites an existing RAPrefs so a user
- * who already logged into RetroAchievements keeps their account.
- */
 /**
  * Write RALibretro's RAPrefs (JSON). Starts from our template (RA overlay
  * notifications OFF, so GameHub's own overlay is used) and, if the user has

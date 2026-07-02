@@ -87,7 +87,9 @@ interface RaLoginResponse {
 export async function loginRetroAchievements(
   username: string,
   password: string
-): Promise<{ success: true; token: string } | { success: false; error: string }> {
+): Promise<
+  { success: true; token: string } | { success: false; error: string }
+> {
   if (!username || !password) {
     return { success: false, error: "Enter your username and password." };
   }
