@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { cleanGameFolderName } from "./clean-game-folder-name";
+import { getExeGameTitle } from "./exe-metadata";
 import { logger } from "@main/services/logger";
 
 /**
@@ -250,14 +251,33 @@ export async function discoverUnknownGames(
     }
   }
 
-  const results: DiscoveredGame[] = [];
+  const candidates: { name: string; exe: string }[] = [];
   let i = 0;
   for (const { folder, name } of gameFolders) {
     i++;
     onProgress?.(i, gameFolders.length, name);
     const exe = await bestExeForFolder(folder, name);
-    if (exe)
-      results.push({ title: cleanGameFolderName(name), executablePath: exe });
+    if (exe) candidates.push({ name, exe });
+  }
+
+  // Prefer the game name from the exe's version info (file Properties →
+  // Details) — download-site folders rename the FOLDER ("Death Must Die
+  // -SteamGG.NET") but not the exe metadata. Fall back to the cleaned folder
+  // name. Fetched in small batches so the per-exe PowerShell call doesn't
+  // serialize the scan.
+  const results: DiscoveredGame[] = [];
+  const BATCH = 5;
+  for (let start = 0; start < candidates.length; start += BATCH) {
+    const batch = candidates.slice(start, start + BATCH);
+    const titles = await Promise.all(
+      batch.map(({ exe }) => getExeGameTitle(exe, 3_000).catch(() => null))
+    );
+    batch.forEach(({ name, exe }, idx) => {
+      results.push({
+        title: titles[idx] ?? cleanGameFolderName(name),
+        executablePath: exe,
+      });
+    });
   }
   return results;
 }

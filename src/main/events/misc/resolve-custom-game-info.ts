@@ -1,9 +1,9 @@
 import { registerEvent } from "../register-event";
 import { HydraApi } from "@main/services";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
-import cp from "node:child_process";
 import path from "node:path";
 import { cleanGameFolderName } from "@main/helpers/clean-game-folder-name";
+import { getExeGameTitle } from "@main/helpers/exe-metadata";
 import type { CatalogueSearchResult, GameShop, ShopAssets } from "@types";
 
 export interface CustomGameInfo {
@@ -19,41 +19,7 @@ export interface CustomGameInfo {
 
 // ─── Step 1: Windows exe version info ────────────────────────────────────────
 
-function getExeVersionField(
-  exePath: string,
-  field: string
-): Promise<string | null> {
-  return new Promise((resolve) => {
-    if (process.platform !== "win32") return resolve(null);
-    const script = `[Console]::OutputEncoding = [Text.Encoding]::UTF8; (Get-Item "${exePath.replace(/"/g, '\\"')}").VersionInfo.${field}`;
-    cp.execFile(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", script],
-      { timeout: 5_000 },
-      (err, stdout) => {
-        if (err) return resolve(null);
-        const val = stdout.trim();
-        resolve(
-          val && val.toLowerCase() !== "n/a" && val.length > 1 ? val : null
-        );
-      }
-    );
-  });
-}
-
-async function getExeDescription(exePath: string): Promise<string | null> {
-  const filename = path.basename(exePath, path.extname(exePath));
-
-  for (const field of ["FileDescription", "ProductName"]) {
-    const val = await getExeVersionField(exePath, field);
-    if (!val) continue;
-    if (/\.exe$/i.test(val)) continue; // skip if it's literally "GameName.exe"
-    if (val.toLowerCase() === filename.toLowerCase()) continue; // same as filename, no gain
-    if (val.toLowerCase() === "application") continue;
-    return val;
-  }
-  return null;
-}
+const getExeDescription = getExeGameTitle;
 
 // ─── Step 2: extract from path ───────────────────────────────────────────────
 
