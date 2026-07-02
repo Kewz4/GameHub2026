@@ -83,6 +83,30 @@ export class UpdateCheckerManager {
     autoUpdater.autoDownload = false;
     autoUpdater.removeAllListeners();
 
+    // electron-updater reaches GitHub through Electron's own `net` stack on a
+    // dedicated session — NOT the path a browser or PowerShell uses. That
+    // session honours the Windows "Automatically detect settings" proxy option
+    // (WPAD), which is on by default. On a network where WPAD discovery stalls,
+    // the request hangs with no response and no error (exactly the silent
+    // timeout users hit) while every other app works. Force a direct
+    // connection so the check never waits on proxy auto-detection. (General app
+    // traffic uses the default session and is unaffected.)
+    try {
+      await autoUpdater.netSession.setProxy({ mode: "direct" });
+    } catch (err) {
+      logger.warn("[updater] could not force direct proxy:", err);
+    }
+
+    // Route electron-updater's own verbose logs into our logger so the in-app
+    // Console shows exactly where a check stalls (DNS / connect / redirect)
+    // instead of leaving us to guess from a silent timeout.
+    autoUpdater.logger = {
+      info: (m?: unknown) => logger.log("[updater:eu]", m),
+      warn: (m?: unknown) => logger.warn("[updater:eu]", m),
+      error: (m?: unknown) => logger.error("[updater:eu]", m),
+      debug: (m?: unknown) => logger.log("[updater:eu:debug]", m),
+    };
+
     // If GitHub doesn't respond within 20 s, assume no update and proceed.
     // Also remove all listeners so a late-arriving response doesn't fire
     // after the UI has already advanced.
