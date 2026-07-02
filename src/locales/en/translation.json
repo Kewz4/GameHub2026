@@ -687,6 +687,18 @@
     "move_up": "Move up",
     "move_down": "Move down"
   },
+  "classics_onboarding": {
+    "title": "Play your console classics",
+    "step1_heading": "Your consoles, in GameHub",
+    "step1_body": "Play PlayStation, Nintendo 64, PSP, DS and more right alongside your PC library — all from one place.",
+    "step2_heading": "One-click emulator setup",
+    "step2_body": "GameHub downloads and configures the right emulator for each console automatically. No manual setup, no juggling cores.",
+    "step3_heading": "Add your games and play",
+    "step3_body": "Point GameHub at your ROM folders, scan them in, and hit Play. RetroAchievements are tracked as you go.",
+    "dont_show_again": "Don't show this again",
+    "next": "Next",
+    "explore": "Get started"
+  },
   "settings": {
     "current_username": "Username:",
     "downloads_path": "Downloads path",
@@ -1124,9 +1136,12 @@
     "cancel_remove": "Cancel",
     "back_to_emulation": "Back to emulation",
     "tab_emulator": "Emulator",
+    "tab_settings": "Settings",
+    "tab_controls": "Controls",
     "tab_library": "Library",
     "tab_rom_folders": "ROM folders",
     "tab_memory_card_backups": "Memory cards",
+    "setup_browse_games": "Browse games",
     "rom_folders_section_title": "Game folders",
     "rom_folders_section_description": "Add folders containing your game files.",
     "roms_detected_title": "Detected games",

@@ -38,9 +38,30 @@ export interface LaunchClassicsGameOptions {
   system: EmulatorSystem;
 }
 
+/**
+ * RALibretro launches straight into a game when given the core, the
+ * RetroAchievements system id and the ROM:
+ *   RALibretro -c <coreFilenameBase> -s <systemId> -g <rom>
+ * (-c is the Cores\<name>.dll basename, verified against RALibretro's
+ * handleArgs/loadCore). Without these it just opens the GUI and the user has to
+ * pick the core and load the ROM by hand. Core basenames match the DLLs we
+ * bundle; system ids are the RetroAchievements console ids.
+ */
+const RALIBRETRO_LAUNCH: Partial<
+  Record<EmulatorSystem, { core: string; systemId: number }>
+> = {
+  ps1: { core: "mednafen_psx_libretro", systemId: 12 },
+  psp: { core: "ppsspp_libretro", systemId: 41 },
+  gba: { core: "mgba_libretro", systemId: 5 },
+  n64: { core: "mupen64plus_next_libretro", systemId: 2 },
+  nds: { core: "melondsds_libretro", systemId: 18 },
+  dsi: { core: "melondsds_libretro", systemId: 78 },
+};
+
 const buildEmulatorArgs = (
   binary: EmulatorBinary,
-  discPath: string
+  discPath: string,
+  system: EmulatorSystem
 ): string[] => {
   switch (binary) {
     case "duckstation":
@@ -62,9 +83,14 @@ const buildEmulatorArgs = (
       return [discPath];
     case "ravba":
       return [discPath];
-    case "ralibretro":
-      // RALibretro launches the ROM directly; the user picks the core in-app.
-      return [discPath];
+    case "ralibretro": {
+      const launch = RALIBRETRO_LAUNCH[system];
+      // Boot directly into the game with the right core; fall back to just the
+      // ROM (GUI picks the core) only if the system isn't mapped.
+      return launch
+        ? ["-c", launch.core, "-s", String(launch.systemId), "-g", discPath]
+        : [discPath];
+    }
   }
 };
 
@@ -120,7 +146,7 @@ export const launchClassicsGame = async (
     });
   }
 
-  const baseArgs = buildEmulatorArgs(config.binary, discPath);
+  const baseArgs = buildEmulatorArgs(config.binary, discPath, system);
   const executablePath = path.normalize(config.executablePath);
   const executableTarget =
     emulators.resolveEmulatorExecutableTarget(executablePath);
