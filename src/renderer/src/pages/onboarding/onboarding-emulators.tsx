@@ -10,13 +10,9 @@ import type {
 } from "@types";
 
 import gamehubIcon from "@renderer/assets/icons/gamehub.png";
-import ps1Art from "@renderer/assets/emulation/ps1.png";
 import ps2Art from "@renderer/assets/emulation/ps2.png";
 import ps3Art from "@renderer/assets/emulation/ps3.png";
-import pspArt from "@renderer/assets/emulation/psp.png";
 import n3dsArt from "@renderer/assets/emulation/n3ds.png";
-import ndsArt from "@renderer/assets/emulation/nds.png";
-import n64Art from "@renderer/assets/emulation/n64.png";
 import gbArt from "@renderer/assets/emulation/gb.png";
 import wiiuArt from "@renderer/assets/emulation/wiiu.png";
 import wiiArt from "@renderer/assets/emulation/wii.png";
@@ -92,12 +88,14 @@ interface EmulatorSetup {
 /** One entry per emulator binary; a single install covers all its systems. */
 const EMULATORS: EmulatorSetup[] = [
   {
-    binary: "duckstation",
-    name: "DuckStation",
-    systems: ["ps1"],
-    consoleLabel: "PlayStation",
-    art: ps1Art,
-    hasRetroAchievements: false,
+    // One RALibretro install serves all six of these consoles (it's downloaded
+    // and pre-set-up with the bundled cores + configs automatically).
+    binary: "ralibretro",
+    name: "RALibretro",
+    systems: ["ps1", "n64", "psp", "nds", "dsi", "gba"],
+    consoleLabel: "PS1 · N64 · PSP · DS · DSi · GBA",
+    art: raLogo,
+    hasRetroAchievements: true,
   },
   {
     binary: "pcsx2",
@@ -116,14 +114,6 @@ const EMULATORS: EmulatorSetup[] = [
     hasRetroAchievements: false,
   },
   {
-    binary: "ppsspp",
-    name: "PPSSPP",
-    systems: ["psp"],
-    consoleLabel: "PSP",
-    art: pspArt,
-    hasRetroAchievements: true,
-  },
-  {
     binary: "azahar",
     name: "Azahar",
     systems: ["n3ds"],
@@ -132,26 +122,10 @@ const EMULATORS: EmulatorSetup[] = [
     hasRetroAchievements: false,
   },
   {
-    binary: "ralibretro",
-    name: "RALibretro",
-    systems: ["nds", "dsi"],
-    consoleLabel: "Nintendo DS / DSi",
-    art: ndsArt,
-    hasRetroAchievements: true,
-  },
-  {
-    binary: "raproject64",
-    name: "RAProject64",
-    systems: ["n64"],
-    consoleLabel: "Nintendo 64",
-    art: n64Art,
-    hasRetroAchievements: true,
-  },
-  {
     binary: "ravba",
     name: "RAVBA",
-    systems: ["gb", "gbc", "gba"],
-    consoleLabel: "Game Boy / Color / Advance",
+    systems: ["gb", "gbc"],
+    consoleLabel: "Game Boy / Color",
     art: gbArt,
     hasRetroAchievements: true,
   },

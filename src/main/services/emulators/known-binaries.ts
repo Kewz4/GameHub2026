@@ -54,8 +54,12 @@ export const RALIBRETRO_SYSTEMS: EmulatorSystem[] = [
 ];
 const RALIBRETRO_INSTALL: EmulatorInstallSource = {
   githubRepo: null,
+  // The x64 build — its RALibretro.exe is 64-bit and matches the 64-bit
+  // libretro cores we bundle. The non-x64 (RALibretro.zip) frontend is 32-bit
+  // and CANNOT load those cores, so it must not be used here.
   directDownloadUrl: "https://retroachievements.org/bin/RALibretro-x64.zip",
-  releasePageUrl: "https://retroachievements.org/download.php",
+  // No releasePageUrl: RALibretro installs automatically (bundled cores +
+  // configs); we never fall back to opening a downloads page for it.
 };
 const RALIBRETRO_WIN_NAMES = ["RALibretro.exe", "RALibretro-x64.exe"];
 const RALIBRETRO_LINUX_NAMES = ["RALibretro", "ralibretro"];
