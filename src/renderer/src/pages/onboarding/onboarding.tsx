@@ -2132,14 +2132,14 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                       )}
                     </div>
 
-                    <div className="onboarding-actions">
+                    <div className="onboarding-actions onboarding-actions--inline">
                       <Button type="button" onClick={next}>
                         Continue
                       </Button>
                     </div>
                   </>
                 ) : (
-                  <div className="onboarding-actions">
+                  <div className="onboarding-actions onboarding-actions--inline">
                     <button
                       type="button"
                       className="onboarding-skip"

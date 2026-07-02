@@ -72,6 +72,12 @@
     filter: brightness(0) invert(1);
   }
 
+  // Full-colour, filled logos (RPCS3, Cemu, Azahar) that would become solid
+  // white blobs under the white-force filter — keep their real colours.
+  &__emu--color {
+    filter: none;
+  }
+
   &__wordmark {
     font-size: 0.95rem;
     font-weight: 700;

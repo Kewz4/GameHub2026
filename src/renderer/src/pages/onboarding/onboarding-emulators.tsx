@@ -50,6 +50,11 @@ const EMULATOR_LOGOS: Record<EmulatorBinary, string | undefined> = {
   dolphin: dolphinLogo,
 };
 
+// Logos that are already full-colour, filled icons (not dark line-art on
+// transparent). The white-force filter turns these into solid white blobs, so
+// they render in their natural colours instead.
+const FULL_COLOR_LOGOS = new Set<EmulatorBinary>(["rpcs3", "cemu", "azahar"]);
+
 function EmulatorLogo({
   binary,
   name,
@@ -66,11 +71,15 @@ function EmulatorLogo({
     );
   }
 
+  const logoClassName = FULL_COLOR_LOGOS.has(binary)
+    ? `${className ?? ""} onboarding-emu-card__emu--color`
+    : className;
+
   return (
     <img
       src={src}
       alt={name}
-      className={className}
+      className={logoClassName}
       onError={() => setFailed(true)}
     />
   );
@@ -81,7 +90,10 @@ interface EmulatorSetup {
   name: string;
   systems: EmulatorSystem[];
   consoleLabel: string;
-  art: string;
+  // Console art shown on the right of the card. Omitted for multi-console
+  // binaries (e.g. RALibretro) where no single console image fits — and where
+  // reusing the emulator logo would just duplicate it.
+  art?: string;
   hasRetroAchievements: boolean;
 }
 
@@ -94,7 +106,6 @@ const EMULATORS: EmulatorSetup[] = [
     name: "RALibretro",
     systems: ["ps1", "n64", "psp", "nds", "dsi", "gba"],
     consoleLabel: "PS1 · N64 · PSP · DS · DSi · GBA",
-    art: raLogo,
     hasRetroAchievements: true,
   },
   {
@@ -326,12 +337,16 @@ export function OnboardingEmulators() {
                   name={emu.name}
                   className="onboarding-emu-card__emu"
                 />
-                <span className="onboarding-emu-card__x">×</span>
-                <img
-                  src={emu.art}
-                  alt={emu.consoleLabel}
-                  className="onboarding-emu-card__platform"
-                />
+                {emu.art && (
+                  <>
+                    <span className="onboarding-emu-card__x">×</span>
+                    <img
+                      src={emu.art}
+                      alt={emu.consoleLabel}
+                      className="onboarding-emu-card__platform"
+                    />
+                  </>
+                )}
               </div>
 
               <div className="onboarding-emu-card__info">

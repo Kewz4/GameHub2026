@@ -477,6 +477,12 @@
     margin-top: 0;
   }
 
+  // Inline actions that flow with the content instead of being pushed to the
+  // bottom of the step. Use when more content (e.g. a card) follows the row.
+  &--inline {
+    margin-top: 0;
+  }
+
   // Extra separation from the block above.
   &--spaced {
     margin-top: globals.$spacing-unit * 2;
