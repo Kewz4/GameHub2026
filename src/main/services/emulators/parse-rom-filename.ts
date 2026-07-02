@@ -76,3 +76,80 @@ export function parseRomFilename(fileName: string): ParsedRomFilename {
 
   return { title: title || withoutExt.trim(), region };
 }
+
+// ── Region allowlist ─────────────────────────────────────────────────────────
+// The catalogue is limited to USA/Europe releases for now. European releases
+// are often tagged with a single country ("(France)", "(Germany)"), so those
+// count as Europe; Australia/Canada are English-language PAL/NTSC releases in
+// the same families. Asian releases (romanized Japanese/Korean titles like
+// "Zelda no Densetsu …" / "Zelda-ui Jeonseol …") are excluded.
+
+const ALLOWED_REGION_TOKENS = new Set([
+  "usa",
+  "us",
+  "u",
+  "world",
+  "w",
+  "europe",
+  "eur",
+  "e",
+  "australia",
+  "canada",
+  "uk",
+  "united kingdom",
+  "france",
+  "germany",
+  "italy",
+  "spain",
+  "netherlands",
+  "holland",
+  "sweden",
+  "denmark",
+  "norway",
+  "finland",
+  "portugal",
+  "poland",
+  "austria",
+  "switzerland",
+  "belgium",
+  "ireland",
+  "greece",
+  "scandinavia",
+]);
+
+const DENIED_REGION_TOKENS = new Set([
+  "japan",
+  "jpn",
+  "jap",
+  "j",
+  "korea",
+  "kor",
+  "taiwan",
+  "china",
+  "asia",
+  "hong kong",
+  "hongkong",
+]);
+
+/**
+ * Whether a ROM belongs to the allowed regions (USA/Europe families).
+ * Policy: any allowed region tag → keep (covers "(Japan, USA)" combos);
+ * otherwise any denied region tag → drop; no region tag at all → keep
+ * (homebrew/unlabelled entries shouldn't vanish).
+ */
+export function isAllowedRomRegion(fileName: string): boolean {
+  const withoutExt = stripExtension(fileName);
+
+  let sawDenied = false;
+  for (const match of withoutExt.matchAll(TAG_REGEX)) {
+    const tag = match[0].slice(1, -1);
+    for (const raw of tag.split(",")) {
+      const token = raw.trim().toLowerCase();
+      if (!token) continue;
+      if (ALLOWED_REGION_TOKENS.has(token)) return true;
+      if (DENIED_REGION_TOKENS.has(token)) sawDenied = true;
+    }
+  }
+
+  return !sawDenied;
+}

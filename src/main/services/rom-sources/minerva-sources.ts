@@ -6,18 +6,23 @@ import type { EmulatorSystem } from "@types";
 import { db } from "@main/level";
 import {
   minervaCatalogueSublevel,
+  invalidateMinervaSearchIndex,
   type MinervaCatalogueEntry,
 } from "@main/level/sublevels/minerva-catalogue";
 import { normalizeTitle } from "./minerva-source";
 import { isNonGameEntry } from "./non-game-filter";
-import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
+import {
+  parseRomFilename,
+  isAllowedRomRegion,
+} from "@main/services/emulators/parse-rom-filename";
 
 /**
  * Catalogue schema version. Bump when the way entries are built changes (e.g.
  * non-game filtering, region tagging, key format) so existing installs purge
  * and re-sync instead of keeping stale/polluted data.
+ * v4: USA/Europe-only region filtering (Japan/Korea/Taiwan/Asia excluded).
  */
-const CATALOGUE_VERSION = 3;
+const CATALOGUE_VERSION = 4;
 const CATALOGUE_VERSION_KEY = "minervaCatalogueVersion";
 
 /** Bundled catalogue dir (extraResource in packaged builds; repo in dev). */
@@ -180,6 +185,8 @@ export async function syncMinervaSource(
     // Skip cheat carts (Action Replay/GameShark), demo/kiosk discs, trailers —
     // they pollute the catalogue and aren't playable games.
     if (isNonGameEntry(download.title, download.fileName)) continue;
+    // USA/Europe releases only (for now) — drop Japan/Korea/Taiwan/Asia.
+    if (!isAllowedRomRegion(download.fileName ?? download.title)) continue;
 
     const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
     const ct = download.contentType ?? "game";
@@ -216,6 +223,7 @@ export async function syncMinervaSource(
   }
 
   await batch.write();
+  invalidateMinervaSearchIndex();
   return count;
 }
 
@@ -253,6 +261,7 @@ async function syncSupplementalSource(opts: {
 
   for (const download of data.downloads) {
     if (isNonGameEntry(download.title, download.fileName)) continue;
+    if (!isAllowedRomRegion(download.fileName ?? download.title)) continue;
     const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
     const ct = download.contentType ?? opts.defaultContentType;
     const entry: MinervaCatalogueEntry = {
@@ -280,6 +289,7 @@ async function syncSupplementalSource(opts: {
   }
 
   await batch.write();
+  invalidateMinervaSearchIndex();
   return count;
 }
 
@@ -337,6 +347,7 @@ export async function ensureMinervaCatalogue(): Promise<void> {
     // Stale schema (or partial) — purge and rebuild with current logic.
     if (hasEntries && storedVersion !== CATALOGUE_VERSION) {
       await minervaCatalogueSublevel.clear();
+      invalidateMinervaSearchIndex();
     }
 
     await syncAllMinervaSources();

@@ -4,7 +4,10 @@ import {
   type MinervaCatalogueEntry,
 } from "@main/level/sublevels/minerva-catalogue";
 import { normalizeTitle } from "@main/services/rom-sources/minerva-source";
-import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
+import {
+  parseRomFilename,
+  isAllowedRomRegion,
+} from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem, GameRepack } from "@types";
 
 function buildRepackTitle(entry: MinervaCatalogueEntry): string {
@@ -75,6 +78,9 @@ const getMinervaDownloadOptions = async (
     for (const entry of entries) {
       const uri = entry.magnet ?? entry.torrentUrl;
       if (!uri) continue;
+      // USA/Europe only — belt-and-braces on top of the sync-time filter, so
+      // stale pre-v4 catalogues can't offer Japanese/Korean variants.
+      if (!isAllowedRomRegion(entry.filename)) continue;
 
       repacks.push({
         id: `minerva:${system}:${entry.filename}`,
@@ -89,6 +95,7 @@ const getMinervaDownloadOptions = async (
         contentType: entry.contentType ?? "game",
         region: entry.region ?? parseRomFilename(entry.filename).region,
         emulatorSystem: system,
+        fileName: entry.filename,
       });
     }
 

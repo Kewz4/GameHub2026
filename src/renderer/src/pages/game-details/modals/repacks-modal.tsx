@@ -54,6 +54,7 @@ import { clearNewDownloadOptions } from "@renderer/features";
 import { levelDBService } from "@renderer/services/leveldb.service";
 import { getGameKey } from "@renderer/helpers";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
+import { resolveRepackFileSelection } from "@renderer/helpers/resolve-repack-file-selection";
 import "./repacks-modal.scss";
 
 export interface RepacksModalProps {
@@ -418,27 +419,59 @@ export function RepacksModal({
   ) => {
     if (!objectId || !shop) return;
 
+    // Minerva update/DLC repacks live inside a shared collection torrent —
+    // resolve the repack's exact file so the queued download doesn't pull the
+    // whole archive (or a wrong-region file). Skip queuing when the file
+    // can't be resolved rather than start an unbounded download.
+    const selectionFor = async (
+      rp: GameRepack,
+      uri: string
+    ): Promise<{
+      fileIndices: number[] | undefined;
+      selectedFilesSize: number | null;
+    } | null> => {
+      if (!rp.fileName || !uri?.startsWith("magnet:")) {
+        return { fileIndices: undefined, selectedFilesSize: null };
+      }
+      try {
+        const selection = await resolveRepackFileSelection(rp, uri);
+        return selection
+          ? {
+              fileIndices: selection.fileIndices,
+              selectedFilesSize: selection.selectedFilesSize,
+            }
+          : { fileIndices: undefined, selectedFilesSize: null };
+      } catch (err) {
+        console.error("[minerva] Skipping queue — file not resolved:", err);
+        return null;
+      }
+    };
+
     if (applyUpdate && pendingUpdates.length > 0) {
       const updateRepack = pendingUpdates[0];
+      const updateUri =
+        updateRepack.uris.find((u) => u.startsWith("magnet:")) ??
+        updateRepack.uris[0];
+      const updateSelection = await selectionFor(updateRepack, updateUri);
       // updateRepack.title is now already "Update v208" (enriched in IPC handler)
-      await addGameToQueue({
-        objectId: `${objectId}::update`,
-        title: gameTitle
-          ? `${gameTitle} — ${updateRepack.title}`
-          : updateRepack.title,
-        shop,
-        downloader,
-        downloadPath,
-        uri:
-          updateRepack.uris.find((u) => u.startsWith("magnet:")) ??
-          updateRepack.uris[0],
-        automaticallyExtract,
-        automaticallyDeleteArchiveFiles:
-          automaticallyDeleteArchiveFiles ?? false,
-        fileSize: updateRepack.fileSize,
-        fileIndices: undefined,
-        selectedFilesSize: null,
-      }).catch(() => {});
+      if (updateSelection) {
+        await addGameToQueue({
+          objectId: `${objectId}::update`,
+          title: gameTitle
+            ? `${gameTitle} — ${updateRepack.title}`
+            : updateRepack.title,
+          shop,
+          downloader,
+          downloadPath,
+          uri: updateUri,
+          automaticallyExtract,
+          automaticallyDeleteArchiveFiles:
+            automaticallyDeleteArchiveFiles ?? false,
+          fileSize: updateRepack.fileSize,
+          fileIndices: updateSelection.fileIndices,
+          selectedFilesSize: updateSelection.selectedFilesSize,
+        }).catch(() => {});
+      }
     }
 
     if (applyDLC && pendingDLCs.length > 0) {
@@ -447,6 +480,11 @@ export function RepacksModal({
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "-")
           .slice(0, 40);
+        const dlcUri =
+          dlcRepack.uris.find((u) => u.startsWith("magnet:")) ??
+          dlcRepack.uris[0];
+        const dlcSelection = await selectionFor(dlcRepack, dlcUri);
+        if (!dlcSelection) continue;
         await addGameToQueue({
           objectId: `${objectId}::dlc::${dlcSlug}`,
           // dlcRepack.title is now the DLC name (e.g. "DLC Pack 2") from IPC handler
@@ -456,15 +494,13 @@ export function RepacksModal({
           shop,
           downloader,
           downloadPath,
-          uri:
-            dlcRepack.uris.find((u) => u.startsWith("magnet:")) ??
-            dlcRepack.uris[0],
+          uri: dlcUri,
           automaticallyExtract,
           automaticallyDeleteArchiveFiles:
             automaticallyDeleteArchiveFiles ?? false,
           fileSize: dlcRepack.fileSize,
-          fileIndices: undefined,
-          selectedFilesSize: null,
+          fileIndices: dlcSelection.fileIndices,
+          selectedFilesSize: dlcSelection.selectedFilesSize,
         }).catch(() => {});
       }
     }

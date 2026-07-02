@@ -169,7 +169,9 @@ export function useSearchSuggestions(
   );
 
   const debouncedFetchCatalogue = useRef(
-    debounce(fetchCatalogueSuggestions, 300)
+    // Short debounce — the console-game lookup is an in-memory index sweep in
+    // the main process, so suggestions can afford to feel instant.
+    debounce(fetchCatalogueSuggestions, 200)
   ).current;
 
   useEffect(() => {

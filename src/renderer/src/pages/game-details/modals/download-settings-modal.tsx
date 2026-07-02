@@ -31,6 +31,7 @@ import {
   getDownloadersForUri,
 } from "@shared";
 import type { GameRepack, TorrentFile, TorrentFilesResponse } from "@types";
+import { resolveRepackFileSelection } from "@renderer/helpers/resolve-repack-file-selection";
 import { motion } from "framer-motion";
 import {
   type ReactNode,
@@ -718,6 +719,25 @@ export function DownloadSettingsModal({
     setShowTorrentStepModal(false);
   }, []);
 
+  // Default file selection for the torrent step: minerva/console repacks live
+  // inside a shared collection torrent, so preselect ONLY the repack's own
+  // file; regular repacks keep the select-everything default.
+  const defaultTorrentSelection = useCallback(
+    (files: TorrentFile[]): Set<number> => {
+      const wanted = repack?.fileName?.trim().toLowerCase();
+      if (wanted) {
+        const match =
+          files.find(
+            (f) =>
+              (f.path.split(/[\\/]/).pop() ?? f.path).toLowerCase() === wanted
+          ) ?? files.find((f) => f.path.toLowerCase().endsWith(`/${wanted}`));
+        if (match) return new Set([match.index]);
+      }
+      return new Set(files.map((file) => file.index));
+    },
+    [repack?.fileName]
+  );
+
   const fetchTorrentFiles = useCallback(async () => {
     if (!selectedMagnetUri) {
       return;
@@ -733,9 +753,7 @@ export function DownloadSettingsModal({
     if (cached) {
       if (isRequestOutdated()) return;
       setTorrentFiles(cached.files);
-      setSelectedTorrentIndices(
-        new Set(cached.files.map((file) => file.index))
-      );
+      setSelectedTorrentIndices(defaultTorrentSelection(cached.files));
       setExpandedFolderIds(new Set());
       setTorrentFilesError(null);
       setTorrentFilesLoading(false);
@@ -784,13 +802,11 @@ export function DownloadSettingsModal({
 
     torrentFilesCache.current.set(selectedMagnetUri, response.data);
     setTorrentFiles(response.data.files);
-    setSelectedTorrentIndices(
-      new Set(response.data.files.map((file) => file.index))
-    );
+    setSelectedTorrentIndices(defaultTorrentSelection(response.data.files));
     setExpandedFolderIds(new Set());
     setTorrentFilesError(null);
     setTorrentFilesLoading(false);
-  }, [selectedMagnetUri, shouldShowTorrentFiles]);
+  }, [selectedMagnetUri, shouldShowTorrentFiles, defaultTorrentSelection]);
 
   useEffect(() => {
     if (!shouldShowTorrentFiles) {
@@ -942,6 +958,22 @@ export function DownloadSettingsModal({
       setDownloadStarting(true);
 
       try {
+        // Console/minerva repacks point at a shared collection torrent — pin
+        // the download to the repack's exact file so the right regional rom
+        // (and ONLY that rom) is fetched. Explicit user selections from the
+        // torrent step are respected as-is.
+        if (!selectedFileIndices && repack.fileName && selectedMagnetUri) {
+          const selection = await resolveRepackFileSelection(
+            repack,
+            selectedMagnetUri
+          );
+          if (abortController.signal.aborted) return;
+          if (selection) {
+            selectedFileIndices = selection.fileIndices;
+            totalSelectedSize = selection.selectedFilesSize;
+          }
+        }
+
         const response = await startDownload(
           repack,
           selectedDownloader!,

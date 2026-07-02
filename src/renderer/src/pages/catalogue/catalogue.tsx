@@ -187,7 +187,9 @@ export default function Catalogue() {
             }),
             wantClassics
               ? window.electron
-                  .searchClassicsCatalogue(filters.title, 12)
+                  // High cap so a franchise search ("zelda") lists EVERY
+                  // matching console game, not an arbitrary first dozen.
+                  .searchClassicsCatalogue(filters.title, 100)
                   .catch(() => [])
               : Promise.resolve([] as CatalogueSearchResult[]),
           ]);
@@ -203,7 +205,9 @@ export default function Catalogue() {
           }
         }
       },
-      500
+      // Header input already debounces 250ms before the filter reaches redux;
+      // keep this second stage short so results feel immediate.
+      300
     )
   ).current;
 

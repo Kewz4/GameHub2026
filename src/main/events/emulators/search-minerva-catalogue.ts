@@ -3,7 +3,10 @@ import {
   searchMinervaCatalogue,
   type MinervaCatalogueEntry,
 } from "@main/level/sublevels/minerva-catalogue";
-import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
+import {
+  parseRomFilename,
+  isAllowedRomRegion,
+} from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem, GameRepack } from "@types";
 
 /** Build a descriptive, region-tagged repack title: for updates extract the
@@ -45,19 +48,22 @@ registerEvent(
     system?: EmulatorSystem
   ): Promise<GameRepack[]> => {
     const entries = await searchMinervaCatalogue(title, system);
-    return entries.map((entry) => ({
-      id: `minerva:${entry.system}:${entry.filename}`,
-      title: buildRepackTitle(entry),
-      uris: entry.magnet ? [entry.magnet] : [],
-      fileSize: entry.fileSize ?? null,
-      uploadDate: null,
-      downloadSourceId: "minerva",
-      downloadSourceName: "Minerva Archive",
-      unavailableUris: [],
-      createdAt: new Date().toISOString(),
-      contentType: entry.contentType ?? "game",
-      region: entry.region ?? parseRomFilename(entry.filename).region,
-      emulatorSystem: entry.system,
-    }));
+    return entries
+      .filter((entry) => isAllowedRomRegion(entry.filename))
+      .map((entry) => ({
+        id: `minerva:${entry.system}:${entry.filename}`,
+        title: buildRepackTitle(entry),
+        uris: entry.magnet ? [entry.magnet] : [],
+        fileSize: entry.fileSize ?? null,
+        uploadDate: null,
+        downloadSourceId: "minerva",
+        downloadSourceName: "Minerva Archive",
+        unavailableUris: [],
+        createdAt: new Date().toISOString(),
+        contentType: entry.contentType ?? "game",
+        region: entry.region ?? parseRomFilename(entry.filename).region,
+        emulatorSystem: entry.system,
+        fileName: entry.filename,
+      }));
   }
 );

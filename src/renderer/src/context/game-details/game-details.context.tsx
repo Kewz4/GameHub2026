@@ -679,8 +679,10 @@ export function GameDetailsContextProvider({
   // For RA-capable console games, resolve the RetroAchievements set by title so
   // the full achievement list (e.g. 0/34) shows before the first in-emulator
   // unlock. Main returns [] for non-RA systems or when no credentials are set.
+  // Deliberately NOT gated on a GameHub account login — RetroAchievements only
+  // needs the RA credentials configured in Settings → Emulation.
   useEffect(() => {
-    if (!gameTitle || !userDetails) return;
+    if (!gameTitle) return;
     if (game && game.shop !== "launchbox") return;
 
     const systemFromObjectId = objectId?.startsWith("minerva:")
@@ -710,15 +712,7 @@ export function GameDetailsContextProvider({
     return () => {
       cancelled = true;
     };
-  }, [
-    game?.objectId,
-    game?.platform,
-    gameTitle,
-    platform,
-    objectId,
-    shop,
-    userDetails,
-  ]);
+  }, [game?.objectId, game?.platform, gameTitle, platform, objectId, shop]);
 
   const getDownloadsPath = async () => {
     if (userPreferences?.downloadsPath) return userPreferences.downloadsPath;

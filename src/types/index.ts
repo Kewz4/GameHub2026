@@ -37,6 +37,11 @@ export interface GameRepack {
   region?: string | null;
   /** EmulatorSystem this repack belongs to (minerva/console games only). */
   emulatorSystem?: string | null;
+  /** Exact source filename inside the (collection) torrent. Minerva magnets
+   *  all point at one shared archive torrent, so the download must select
+   *  exactly this file — otherwise the whole collection (or a wrong-region
+   *  rom) gets downloaded. */
+  fileName?: string | null;
 }
 
 export interface DownloadSource {
