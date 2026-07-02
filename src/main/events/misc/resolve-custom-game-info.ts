@@ -3,6 +3,7 @@ import { HydraApi } from "@main/services";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 import cp from "node:child_process";
 import path from "node:path";
+import { cleanGameFolderName } from "@main/helpers/clean-game-folder-name";
 import type { CatalogueSearchResult, GameShop, ShopAssets } from "@types";
 
 export interface CustomGameInfo {
@@ -56,14 +57,7 @@ async function getExeDescription(exePath: string): Promise<string | null> {
 
 // ─── Step 2: extract from path ───────────────────────────────────────────────
 
-function cleanFolderName(name: string): string {
-  return name
-    .replace(/[_]/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2") // NeonAbyss → Neon Abyss
-    .replace(/\s*v?\d+\.\d+[\d.]*\s*$/i, "") // strip trailing version like v1.2.3
-    .replace(/\s+/g, " ")
-    .trim();
-}
+const cleanFolderName = cleanGameFolderName;
 
 function extractNameFromPath(exePath: string): string {
   const parts = exePath.replace(/\\/g, "/").split("/");
