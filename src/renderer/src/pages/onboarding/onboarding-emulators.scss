@@ -24,6 +24,8 @@
 }
 
 .onboarding-emu-card {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -37,6 +39,31 @@
 
   &:hover {
     border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  // Faint console-name watermark in the bottom-right of the card, giving each
+  // single-console emulator a subtle platform identity. Sits behind the
+  // content (which is z-indexed above it).
+  &__platform-bg {
+    position: absolute;
+    right: 12px;
+    bottom: 6px;
+    font-size: 2.1rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.06);
+    pointer-events: none;
+    user-select: none;
+  }
+
+  // Keep the real content above the watermark.
+  &__logos,
+  &__info,
+  &__action {
+    position: relative;
+    z-index: 1;
   }
 
   &--done {
@@ -84,14 +111,6 @@
     color: #fff;
     white-space: nowrap;
     letter-spacing: 0.01em;
-  }
-
-  &__platform {
-    height: 36px;
-    max-width: 64px;
-    object-fit: contain;
-    flex-shrink: 0;
-    margin-left: auto;
   }
 
   &__info {

@@ -53,6 +53,8 @@ const RALIBRETRO_LAUNCH: Partial<
   ps1: { core: "mednafen_psx_libretro", systemId: 12 },
   psp: { core: "ppsspp_libretro", systemId: 41 },
   gba: { core: "mgba_libretro", systemId: 5 },
+  gb: { core: "mgba_libretro", systemId: 4 },
+  gbc: { core: "mgba_libretro", systemId: 6 },
   n64: { core: "mupen64plus_next_libretro", systemId: 2 },
   nds: { core: "melondsds_libretro", systemId: 18 },
   dsi: { core: "melondsds_libretro", systemId: 78 },

@@ -39,6 +39,8 @@ const CORE_FILE: Partial<Record<EmulatorSystem, string>> = {
   ps1: "mednafen_psx_libretro.json",
   psp: "ppsspp_libretro.json",
   gba: "mgba_libretro.json",
+  gb: "mgba_libretro.json",
+  gbc: "mgba_libretro.json",
   nds: "melondsds_libretro.json",
   dsi: "melondsds_libretro.json",
 };
@@ -363,6 +365,8 @@ const SETTINGS_BY_SYSTEM: Partial<Record<EmulatorSystem, SettingDef[]>> = {
   ps1: PS1_SETTINGS,
   psp: PSP_SETTINGS,
   gba: GBA_SETTINGS,
+  gb: GBA_SETTINGS,
+  gbc: GBA_SETTINGS,
   nds: DS_SETTINGS,
   dsi: DS_SETTINGS,
 };

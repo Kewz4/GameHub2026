@@ -69,15 +69,37 @@ await win.evaluate(() => {
 await win.reload();
 await new Promise((r) => setTimeout(r, 6000));
 
+// Use evaluate (not a Playwright locator) so no highlight overlay is injected
+// into the page before we screenshot it.
 const activeStep = () =>
   win
-    .locator(".onboarding-nav-item--active .onboarding-nav-item__label")
-    .first()
-    .innerText()
+    .evaluate(
+      () =>
+        document.querySelector(
+          ".onboarding-nav-item--active .onboarding-nav-item__label"
+        )?.textContent ?? ""
+    )
     .catch(() => "");
 
 const bodyText = () =>
   win.evaluate(() => document.body.innerText).catch(() => "");
+
+// Playwright injects a translucent highlight overlay (<x-pw-glass>, plus the
+// "body 960×680" size badge) when locators run; it tints the whole capture.
+// Strip it right before each screenshot so shots reflect the real UI.
+const clearHighlight = () =>
+  win
+    .evaluate(() => {
+      document
+        .querySelectorAll("x-pw-glass, x-pw-tooltip, x-pw-highlight")
+        .forEach((el) => el.remove());
+    })
+    .catch(() => {});
+
+const shoot = async (file) => {
+  await clearHighlight();
+  await win.screenshot({ path: file }).catch(() => {});
+};
 
 // The primary advance control varies per step (Get started / Next / Skip /
 // Continue). Click the first visible one that matches.
@@ -116,17 +138,17 @@ for (let step = 0; step < 22; step++) {
   const safe =
     label.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || `step${step}`;
   const file = path.join(OUT, `${String(step).padStart(2, "0")}-${safe}.png`);
-  await win.screenshot({ path: file }).catch(() => {});
+  await shoot(file);
 
   const isEmu = /RALibretro/i.test(body);
   const isAch = /Exophase|RetroAchievements/i.test(body) && !isEmu;
   if (isAch && !shotAchievements) {
-    await win.screenshot({ path: path.join(OUT, "STEP-achievements.png") });
+    await shoot(path.join(OUT, "STEP-achievements.png"));
     shotAchievements = true;
     console.log(`  📸 achievements/exophase (nav="${label}")`);
   }
   if (isEmu && !shotEmulators) {
-    await win.screenshot({ path: path.join(OUT, "STEP-emulators.png") });
+    await shoot(path.join(OUT, "STEP-emulators.png"));
     shotEmulators = true;
     console.log(`  📸 emulators logos (nav="${label}")`);
   }

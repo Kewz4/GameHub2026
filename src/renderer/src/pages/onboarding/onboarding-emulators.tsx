@@ -10,12 +10,6 @@ import type {
 } from "@types";
 
 import gamehubIcon from "@renderer/assets/icons/gamehub.png";
-import ps2Art from "@renderer/assets/emulation/ps2.png";
-import ps3Art from "@renderer/assets/emulation/ps3.png";
-import n3dsArt from "@renderer/assets/emulation/n3ds.png";
-import gbArt from "@renderer/assets/emulation/gb.png";
-import wiiuArt from "@renderer/assets/emulation/wiiu.png";
-import wiiArt from "@renderer/assets/emulation/wii.png";
 
 // Official emulator logos, bundled locally (downloaded from each project's
 // GitHub repo) so they always render — no runtime hotlinking, CSP issues or
@@ -90,10 +84,10 @@ interface EmulatorSetup {
   name: string;
   systems: EmulatorSystem[];
   consoleLabel: string;
-  // Console art shown on the right of the card. Omitted for multi-console
-  // binaries (e.g. RALibretro) where no single console image fits — and where
-  // reusing the emulator logo would just duplicate it.
-  art?: string;
+  // Short console tag rendered as a faint watermark behind the card, giving
+  // each single-console emulator a subtle platform identity. Omitted for
+  // multi-console binaries (e.g. RALibretro) where no single tag fits.
+  watermark?: string;
   hasRetroAchievements: boolean;
 }
 
@@ -104,8 +98,8 @@ const EMULATORS: EmulatorSetup[] = [
     // and pre-set-up with the bundled cores + configs automatically).
     binary: "ralibretro",
     name: "RALibretro",
-    systems: ["ps1", "n64", "psp", "nds", "dsi", "gba"],
-    consoleLabel: "PS1 · N64 · PSP · DS · DSi · GBA",
+    systems: ["ps1", "n64", "psp", "nds", "dsi", "gba", "gb", "gbc"],
+    consoleLabel: "PS1 · N64 · PSP · DS/DSi · GB/GBC/GBA",
     hasRetroAchievements: true,
   },
   {
@@ -113,15 +107,15 @@ const EMULATORS: EmulatorSetup[] = [
     name: "PCSX2",
     systems: ["ps2"],
     consoleLabel: "PlayStation 2",
-    art: ps2Art,
-    hasRetroAchievements: false,
+    watermark: "PS2",
+    hasRetroAchievements: true,
   },
   {
     binary: "rpcs3",
     name: "RPCS3",
     systems: ["ps3"],
     consoleLabel: "PlayStation 3",
-    art: ps3Art,
+    watermark: "PS3",
     hasRetroAchievements: false,
   },
   {
@@ -129,23 +123,15 @@ const EMULATORS: EmulatorSetup[] = [
     name: "Azahar",
     systems: ["n3ds"],
     consoleLabel: "Nintendo 3DS",
-    art: n3dsArt,
+    watermark: "3DS",
     hasRetroAchievements: false,
-  },
-  {
-    binary: "ravba",
-    name: "RAVBA",
-    systems: ["gb", "gbc"],
-    consoleLabel: "Game Boy / Color",
-    art: gbArt,
-    hasRetroAchievements: true,
   },
   {
     binary: "cemu",
     name: "Cemu",
     systems: ["wiiu"],
     consoleLabel: "Wii U",
-    art: wiiuArt,
+    watermark: "Wii U",
     hasRetroAchievements: false,
   },
   {
@@ -153,7 +139,7 @@ const EMULATORS: EmulatorSetup[] = [
     name: "Dolphin",
     systems: ["wii", "gc"],
     consoleLabel: "Wii / GameCube",
-    art: wiiArt,
+    watermark: "GC · Wii",
     hasRetroAchievements: true,
   },
 ];
@@ -325,6 +311,17 @@ export function OnboardingEmulators() {
               key={emu.binary}
               className={`onboarding-emu-card${installed ? " onboarding-emu-card--done" : ""}`}
             >
+              {/* Faint console-name watermark behind the card content, giving
+                  each single-console emulator a subtle platform identity.
+                  Multi-console binaries (RALibretro) have no single tag. */}
+              {emu.watermark && (
+                <span
+                  aria-hidden="true"
+                  className="onboarding-emu-card__platform-bg"
+                >
+                  {emu.watermark}
+                </span>
+              )}
               <div className="onboarding-emu-card__logos">
                 <img
                   src={gamehubIcon}
@@ -337,16 +334,6 @@ export function OnboardingEmulators() {
                   name={emu.name}
                   className="onboarding-emu-card__emu"
                 />
-                {emu.art && (
-                  <>
-                    <span className="onboarding-emu-card__x">×</span>
-                    <img
-                      src={emu.art}
-                      alt={emu.consoleLabel}
-                      className="onboarding-emu-card__platform"
-                    />
-                  </>
-                )}
               </div>
 
               <div className="onboarding-emu-card__info">

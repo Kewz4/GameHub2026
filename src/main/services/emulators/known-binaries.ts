@@ -40,14 +40,18 @@ export interface KnownBinary {
 
 /**
  * RALibretro is the RetroAchievements libretro front-end. One install serves
- * PS1, PSP, GBA, N64, DS and DSi via the bundled cores (mednafen_psx, ppsspp,
- * mgba, mupen64plus_next, melondsds). It ships a stable direct-download zip on
+ * PS1, PSP, the whole Game Boy family (GB/GBC/GBA), N64, DS and DSi via the
+ * bundled cores (mednafen_psx, ppsspp, mgba, mupen64plus_next, melondsds) —
+ * the mGBA core handles GB and GBC as well as GBA, so there's no separate
+ * emulator for them. It ships a stable direct-download zip on
  * retroachievements.org rather than a GitHub release. Windows-only.
  */
 export const RALIBRETRO_SYSTEMS: EmulatorSystem[] = [
   "ps1",
   "psp",
   "gba",
+  "gb",
+  "gbc",
   "n64",
   "nds",
   "dsi",
@@ -100,7 +104,8 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
     binary: "pcsx2",
     displayName: "PCSX2",
     systems: ["ps2"],
-    hasRetroAchievements: false,
+    // PCSX2 has built-in RetroAchievements support (Achievements settings).
+    hasRetroAchievements: true,
     linuxNames: ["pcsx2-qt", "pcsx2", "PCSX2"],
     windowsNames: ["pcsx2-qt.exe", "pcsx2-qtx64-avx2.exe", "pcsx2.exe"],
     flatpakIds: ["net.pcsx2.PCSX2"],
@@ -178,43 +183,11 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
   dsi: ralibretro("dsi", [".nds", ".dsi", ".srl", ".ids"]),
   // N64 via mupen64plus_next.
   n64: ralibretro("n64", [".z64", ".n64", ".v64", ".ndd"]),
-  gb: {
-    system: "gb",
-    binary: "ravba",
-    displayName: "RAVBA",
-    systems: ["gb", "gbc", "gba"],
-    hasRetroAchievements: true,
-    linuxNames: ["RAVBA", "visualboyadvance-m"],
-    windowsNames: ["RAVBA.exe", "visualboyadvance-m.exe"],
-    flatpakIds: [],
-    versionFlags: ["--version"],
-    romExtensions: [".gb"],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "RetroAchievements/RAVBA",
-      windowsAssetPattern: "\\.(zip|7z)$",
-      releasePageUrl: "https://github.com/RetroAchievements/RAVBA/releases",
-    },
-  },
-  gbc: {
-    system: "gbc",
-    binary: "ravba",
-    displayName: "RAVBA",
-    systems: ["gb", "gbc", "gba"],
-    hasRetroAchievements: true,
-    linuxNames: ["RAVBA", "visualboyadvance-m"],
-    windowsNames: ["RAVBA.exe", "visualboyadvance-m.exe"],
-    flatpakIds: [],
-    versionFlags: ["--version"],
-    romExtensions: [".gbc", ".cgb", ".sgb"],
-    romDirectoryMarkers: [],
-    install: {
-      githubRepo: "RetroAchievements/RAVBA",
-      windowsAssetPattern: "\\.(zip|7z)$",
-      releasePageUrl: "https://github.com/RetroAchievements/RAVBA/releases",
-    },
-  },
-  // GBA via the mGBA libretro core (gb/gbc stay on RAVBA).
+  // Game Boy / Game Boy Color via the same mGBA libretro core as GBA — served
+  // by RALibretro, not a separate emulator.
+  gb: ralibretro("gb", [".gb"]),
+  gbc: ralibretro("gbc", [".gbc", ".cgb", ".sgb"]),
+  // GBA via the mGBA libretro core.
   gba: ralibretro("gba", [".gba", ".agb"]),
   wiiu: {
     system: "wiiu",
