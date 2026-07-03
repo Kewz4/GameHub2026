@@ -103,9 +103,15 @@ class IgdbService {
     try {
       const creds = resolveCredentials(clientId, clientSecret);
       const token = await this.getToken(creds.clientId, creds.clientSecret);
-      const platformClause = platformId ? ` & platforms = [${platformId}]` : "";
-      const query = `fields name,summary,first_release_date,genres.name,cover.url,screenshots.url,platforms.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher;
-where name ~ *"${title.replace(/"/g, "")}"*${platformClause};
+      // Use IGDB's full-text `search` operator (accent- and token-aware) rather
+      // than a `name ~ *"..."*` wildcard: the wildcard misses accented titles
+      // like "Pokémon Dash" when queried as "Pokemon Dash", `search` matches
+      // them. Platform stays as a `where` filter.
+      const platformClause = platformId
+        ? `\nwhere platforms = [${platformId}];`
+        : "";
+      const query = `search "${title.replace(/"/g, "")}";
+fields name,summary,first_release_date,genres.name,cover.url,screenshots.url,platforms.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher;${platformClause}
 limit 5;`;
 
       const resp = await axios.post<IgdbGame[]>(

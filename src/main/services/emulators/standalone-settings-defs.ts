@@ -98,7 +98,24 @@ const RPCS3_SETTINGS: SettingDef[] = [
 ];
 
 // ── Azahar (3DS) — user/config/qt-config.ini [Renderer] ──────────────────────
+// Keys verified against azahar-emu/azahar config.cpp.
+const onOffTrue = [
+  { value: "true", label: "On" },
+  { value: "false", label: "Off" },
+];
 const AZAHAR_SETTINGS: SettingDef[] = [
+  {
+    key: "graphics_api",
+    label: "Renderer",
+    type: "enum",
+    group: "Video",
+    hint: "Vulkan is fastest on most GPUs; OpenGL is the fallback.",
+    options: [
+      { value: "2", label: "Vulkan" },
+      { value: "1", label: "OpenGL" },
+      { value: "0", label: "Software" },
+    ],
+  },
   {
     key: "resolution_factor",
     label: "Internal resolution",
@@ -116,25 +133,35 @@ const AZAHAR_SETTINGS: SettingDef[] = [
     ],
   },
   {
+    key: "shaders_accurate_mul",
+    label: "Accurate shader multiplication",
+    type: "enum",
+    group: "Video",
+    hint: "Fixes graphical glitches in some games; slightly slower.",
+    options: onOffTrue,
+  },
+  {
     key: "async_shader_compilation",
     label: "Async shader compilation",
     type: "enum",
     group: "Performance",
     hint: "Reduces shader-compilation stutter.",
-    options: [
-      { value: "true", label: "On" },
-      { value: "false", label: "Off" },
-    ],
+    options: onOffTrue,
   },
   {
-    key: "use_vsync_new",
+    key: "use_disk_shader_cache",
+    label: "Disk shader cache",
+    type: "enum",
+    group: "Performance",
+    hint: "Reuses compiled shaders across sessions.",
+    options: onOffTrue,
+  },
+  {
+    key: "use_vsync",
     label: "V-Sync",
     type: "enum",
     group: "Performance",
-    options: [
-      { value: "true", label: "On" },
-      { value: "false", label: "Off" },
-    ],
+    options: onOffTrue,
   },
 ];
 
@@ -222,11 +249,53 @@ const CEMU_SETTINGS: SettingDef[] = [
     ],
   },
   {
+    key: "DownscaleFilter",
+    label: "Downscale filter",
+    type: "enum",
+    group: "Video",
+    options: [
+      { value: "0", label: "Bilinear" },
+      { value: "1", label: "Point" },
+    ],
+  },
+  {
+    key: "FullscreenScaling",
+    label: "Fullscreen scaling",
+    type: "enum",
+    group: "Video",
+    options: [
+      { value: "0", label: "Keep aspect ratio" },
+      { value: "1", label: "Stretch" },
+    ],
+  },
+  {
     key: "AsyncCompile",
     label: "Async shader compile",
     type: "enum",
     group: "Performance",
-    hint: "Compiles shaders in the background to reduce stutter.",
+    hint: "Compiles shaders in the background to reduce stutter (Vulkan).",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "vkAccurateBarriers",
+    label: "Accurate barriers (Vulkan)",
+    type: "enum",
+    group: "Performance",
+    hint: "More accurate rendering; disable only for a small speed gain.",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "GX2DrawdoneSync",
+    label: "Full sync at GX2DrawDone",
+    type: "enum",
+    group: "Performance",
+    hint: "Improves stability in some games; may reduce performance.",
     options: [
       { value: "true", label: "On" },
       { value: "false", label: "Off" },

@@ -168,6 +168,10 @@ function tokenize(name) {
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
   const base = camelExpanded
+    // Fold accents so "Pokémon" tokenizes to "pokemon" (not "pok"+"mon"),
+    // otherwise the coverage check wrongly rejects accented IGDB matches.
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .split(/\s+/)

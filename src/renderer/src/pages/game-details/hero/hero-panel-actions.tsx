@@ -23,6 +23,8 @@ import { useNavigate } from "react-router-dom";
 import { gameDetailsContext } from "@renderer/context";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
 import { getClassicsLaunchErrorCode } from "@renderer/helpers";
+import { systemForGame } from "@renderer/pages/library/console-filter";
+import type { EmulatorSystem } from "@types";
 
 import "./hero-panel-actions.scss";
 import { useEffect } from "react";
@@ -72,6 +74,17 @@ export function HeroPanelActions() {
     game?.shop === "launchbox" ||
     shop === "launchbox" ||
     Boolean(objectId?.startsWith("minerva:"));
+
+  // The console this game runs on, so "Set up emulator" can deep-link straight
+  // to that emulator in the emulation manager (not just general settings).
+  const consoleSystem =
+    (game ? systemForGame(game) : null) ??
+    (objectId?.startsWith("minerva:")
+      ? (objectId.split(":")[1] as EmulatorSystem)
+      : null);
+  const emulatorSetupPath = consoleSystem
+    ? `/settings?tab=emulation&system=${consoleSystem}`
+    : "/settings?tab=emulation";
 
   const [emulatorReady, setEmulatorReady] = useState<boolean | null>(null);
   const [showEmulatorSetupPrompt, setShowEmulatorSetupPrompt] = useState(false);
@@ -258,7 +271,7 @@ export function HeroPanelActions() {
               "Configure the emulator for this console in Settings before playing.",
           })
         );
-        navigate("/settings");
+        navigate(emulatorSetupPath);
         return;
       }
 
@@ -410,7 +423,7 @@ export function HeroPanelActions() {
       if (emulatorReady === false) {
         return (
           <Button
-            onClick={() => navigate("/settings")}
+            onClick={() => navigate(emulatorSetupPath)}
             theme="outline"
             disabled={deleting}
             className="hero-panel-actions__action"
@@ -488,7 +501,7 @@ export function HeroPanelActions() {
           theme="outline"
           onClick={() => {
             setShowEmulatorSetupPrompt(false);
-            navigate("/settings");
+            navigate(emulatorSetupPath);
           }}
         >
           <GearIcon />

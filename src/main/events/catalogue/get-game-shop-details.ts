@@ -15,14 +15,81 @@ import {
   levelKeys,
   getGameHubMeta,
 } from "@main/level";
+import {
+  gamehubMetaSublevel,
+  gamehubMetaKey,
+  normalizeMetaTitle,
+} from "@main/level/sublevels/gamehub-meta";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
 import { displayRomTitle } from "@main/services/emulators/parse-rom-filename";
 import { platformToSystem, systemFromObjectId } from "@main/helpers";
+import { igdb, IGDB_PLATFORM_IDS } from "@main/services/igdb";
 import {
   isCuratedRiotGame,
   buildRiotShopDetails,
 } from "@main/helpers/riot-metadata";
 import type { EmulatorSystem } from "@types";
+
+/**
+ * Convert a console game's display title into the form IGDB indexes: drop a
+ * trailing/leading article, collapse the " - subtitle" separator to a space,
+ * and strip parenthetical/edition/region noise, so "The Legend of Zelda -
+ * Ocarina of Time 3D" queries as "Legend of Zelda Ocarina of Time 3D".
+ */
+const igdbQueryTitle = (title: string): string =>
+  title
+    .replace(/,\s*(the|a|an)\b/gi, "")
+    .replace(/^(the|a|an)\s+/i, "")
+    .replace(/\s+-\s+/g, " ")
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+/**
+ * Console/emulated games aren't on Steam, so fetch their description straight
+ * from IGDB (same source the offline metadata generator uses) when the bundled
+ * dataset has no summary. Also fills genres/release year when absent. Persists
+ * the result back into the local gamehub-meta so it's cached for next time.
+ */
+const fetchConsoleMetaFromIgdb = async (
+  system: EmulatorSystem,
+  title: string
+): Promise<{
+  description: string;
+  genres: string[];
+  releaseYear: number | null;
+} | null> => {
+  const platformId = IGDB_PLATFORM_IDS[system];
+  const game = await igdb
+    .searchGame(igdbQueryTitle(title), platformId)
+    .catch(() => null);
+  if (!game?.summary) return null;
+
+  const releaseYear = game.first_release_date
+    ? new Date(game.first_release_date * 1000).getUTCFullYear()
+    : null;
+  const genres = (game.genres ?? []).map((g) => g.name).filter(Boolean);
+
+  // Cache back into the local dataset (best-effort) so we don't hit IGDB again.
+  const key = gamehubMetaKey(system, normalizeMetaTitle(title));
+  const existing = await gamehubMetaSublevel.get(key).catch(() => null);
+  await gamehubMetaSublevel
+    .put(key, {
+      title,
+      coverImageUrl: null,
+      libraryImageUrl: null,
+      libraryHeroImageUrl: null,
+      logoImageUrl: null,
+      iconUrl: null,
+      ...existing,
+      description: game.summary,
+      genres: existing?.genres?.length ? existing.genres : genres,
+      releaseYear: existing?.releaseYear ?? releaseYear,
+    })
+    .catch(() => {});
+
+  return { description: game.summary, genres, releaseYear };
+};
 
 const getLocalizedSteamAppDetails = async (
   objectId: string,
@@ -33,58 +100,6 @@ const getLocalizedSteamAppDetails = async (
   }
 
   return getSteamAppDetails(objectId, language);
-};
-
-/**
- * Best-effort description for a console game with no local IGDB summary: search
- * the Hydra catalogue for the same title on Steam and return its (cached or
- * freshly-fetched) description. Returns "" when there's no confident match.
- */
-const fetchDescriptionByTitle = async (
-  title: string,
-  language: string
-): Promise<string> => {
-  const titleNorm = normalizeGameTitle(title);
-  const resp = await HydraApi.post<{
-    edges: CatalogueSearchResult[];
-    count: number;
-  }>(
-    "/catalogue/search",
-    {
-      title,
-      sortBy: "popularity",
-      sortOrder: "desc",
-      downloadSourceFingerprints: [],
-      tags: [],
-      publishers: [],
-      genres: [],
-      developers: [],
-      protondbSupportBadges: [],
-      deckCompatibility: [],
-      take: 5,
-      skip: 0,
-    },
-    { needsAuth: false }
-  ).catch(() => null);
-
-  const match =
-    resp?.edges?.find(
-      (r) => r.shop === "steam" && normalizeGameTitle(r.title) === titleNorm
-    ) ?? resp?.edges?.find((r) => r.shop === "steam");
-  if (!match) return "";
-
-  const cached = await gamesShopCacheSublevel
-    .get(levelKeys.gameShopCacheItem("steam", match.objectId, language))
-    .catch(() => null);
-  const details =
-    cached ??
-    (await getSteamAppDetails(match.objectId, language).catch(() => null));
-  return (
-    details?.about_the_game ||
-    details?.detailed_description ||
-    details?.short_description ||
-    ""
-  );
 };
 
 const getGameShopDetails = async (
@@ -135,13 +150,21 @@ const getGameShopDetails = async (
       objectId;
 
     // The bundled metadata has no IGDB summary for some titles (e.g. Pokemon
-    // Dash). Fall back to the Hydra catalogue: find the Steam equivalent by
-    // title and borrow its description, so the details page isn't left blank.
+    // Dash). Fetch it straight from IGDB (console games aren't on Steam), and
+    // borrow genres/release year too when the local dataset lacks them.
     let description = meta?.description ?? "";
-    if (!description.trim()) {
-      description = await fetchDescriptionByTitle(displayTitle, language).catch(
-        () => ""
-      );
+    let genres = meta?.genres ?? [];
+    let releaseYear = meta?.releaseYear ?? null;
+    if (!description.trim() && system) {
+      const fetched = await fetchConsoleMetaFromIgdb(
+        system,
+        displayTitle
+      ).catch(() => null);
+      if (fetched) {
+        description = fetched.description;
+        if (genres.length === 0) genres = fetched.genres;
+        releaseYear = releaseYear ?? fetched.releaseYear;
+      }
     }
     const assets: ShopDetailsWithAssets["assets"] = {
       objectId,
@@ -167,7 +190,7 @@ const getGameShopDetails = async (
       short_description: description,
       developers: [],
       publishers: [],
-      genres: (meta?.genres ?? []).map((g, i) => ({
+      genres: genres.map((g, i) => ({
         id: String(i + 1),
         name: g,
       })),
@@ -179,7 +202,7 @@ const getGameShopDetails = async (
       linux_requirements: { minimum: "", recommended: "" },
       release_date: {
         coming_soon: false,
-        date: meta?.releaseYear ? String(meta.releaseYear) : "",
+        date: releaseYear ? String(releaseYear) : "",
       },
       content_descriptors: { ids: [] },
       assets,
