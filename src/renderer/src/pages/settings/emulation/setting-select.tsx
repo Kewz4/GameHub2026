@@ -14,18 +14,29 @@ interface Props {
   options: SettingSelectOption[];
   disabled?: boolean;
   onChange: (value: string) => void;
+  /** "field" = form-control look (default); "pill" = compact filter pill. */
+  variant?: "field" | "pill";
+  /** Highlight the trigger as active (pill variant, non-default selection). */
+  active?: boolean;
+  className?: string;
+  ariaLabel?: string;
 }
 
 /**
- * Branded replacement for the native <select> in emulator settings — a styled
- * trigger + a portalled, keyboard-navigable menu (Radix), so the dropdown looks
- * like the app instead of an OS control and its open state is fully wired.
+ * Branded replacement for the native <select> — a styled trigger + a portalled,
+ * keyboard-navigable menu (Radix), so the dropdown looks like the app instead
+ * of an OS control and its open state is fully wired. Used for emulator
+ * settings and the library console filter pill.
  */
 export function SettingSelect({
   value,
   options,
   disabled,
   onChange,
+  variant = "field",
+  active,
+  className,
+  ariaLabel,
 }: Readonly<Props>) {
   const current = options.find((o) => o.value === value) ?? options[0];
 
@@ -34,9 +45,16 @@ export function SettingSelect({
       <DropdownMenuPrimitive.Trigger asChild disabled={disabled}>
         <button
           type="button"
-          className={cn("setting-select__trigger", {
-            "setting-select__trigger--disabled": disabled,
-          })}
+          aria-label={ariaLabel}
+          className={cn(
+            "setting-select__trigger",
+            `setting-select__trigger--${variant}`,
+            {
+              "setting-select__trigger--disabled": disabled,
+              "setting-select__trigger--active": active,
+            },
+            className
+          )}
         >
           <span className="setting-select__value">
             {current?.label ?? value}

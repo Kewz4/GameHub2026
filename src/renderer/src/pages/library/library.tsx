@@ -48,6 +48,7 @@ import {
   CONSOLE_LABELS,
   systemForGame,
 } from "./console-filter";
+import { SettingSelect } from "@renderer/pages/settings/emulation/setting-select";
 import type { EmulatorSystem } from "@types";
 import "./library.scss";
 
@@ -672,27 +673,22 @@ export default function Library() {
             ))}
 
             {availableConsoles.length > 0 && (
-              <select
-                aria-label="Filter by console"
+              <SettingSelect
+                variant="pill"
+                ariaLabel="Filter by console"
+                active={consoleFilter !== "all"}
                 value={consoleFilter}
-                onChange={(e) =>
-                  setConsoleFilter(e.target.value as EmulatorSystem | "all")
+                onChange={(v) =>
+                  setConsoleFilter(v as EmulatorSystem | "all")
                 }
-                style={{
-                  ...pillStyle(consoleFilter !== "all"),
-                  // Tighten the native select so it reads as a pill, not a
-                  // full-width form control.
-                  paddingRight: "6px",
-                  maxWidth: "160px",
-                }}
-              >
-                <option value="all">Console</option>
-                {availableConsoles.map((system) => (
-                  <option key={system} value={system}>
-                    {CONSOLE_LABELS[system] ?? system}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "all", label: "Console" },
+                  ...availableConsoles.map((system) => ({
+                    value: system,
+                    label: CONSOLE_LABELS[system] ?? system,
+                  })),
+                ]}
+              />
             )}
           </div>
 

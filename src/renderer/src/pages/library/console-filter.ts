@@ -1,27 +1,42 @@
 import type { EmulatorSystem, Game } from "@types";
 
 /**
- * The consoles offered in the Library "Console" filter pill. For now this is the
- * RALibretro set the user asked for (PS1, N64, GBA, PSP, DS, DSi); expanding it
- * later is just adding entries here.
+ * Every console offered in the Library "Console" filter pill — the full set of
+ * systems GameHub emulates.
  */
 export const CONSOLE_FILTER_SYSTEMS: EmulatorSystem[] = [
   "ps1",
-  "n64",
-  "gba",
+  "ps2",
+  "ps3",
   "psp",
+  "n64",
+  "gc",
+  "wii",
+  "wiiu",
+  "n3ds",
   "nds",
   "dsi",
+  "gba",
+  "gb",
+  "gbc",
 ];
 
 /** Display labels for the console options. */
 export const CONSOLE_LABELS: Partial<Record<EmulatorSystem, string>> = {
   ps1: "PlayStation",
-  n64: "Nintendo 64",
-  gba: "Game Boy Advance",
+  ps2: "PlayStation 2",
+  ps3: "PlayStation 3",
   psp: "PSP",
+  n64: "Nintendo 64",
+  gc: "GameCube",
+  wii: "Wii",
+  wiiu: "Wii U",
+  n3ds: "Nintendo 3DS",
   nds: "Nintendo DS",
   dsi: "Nintendo DSi",
+  gba: "Game Boy Advance",
+  gb: "Game Boy",
+  gbc: "Game Boy Color",
 };
 
 /**
