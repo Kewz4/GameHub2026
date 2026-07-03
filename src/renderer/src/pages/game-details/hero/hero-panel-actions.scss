@@ -20,3 +20,11 @@
     opacity: 0.2;
   }
 }
+
+.hero-panel-actions__prompt-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}

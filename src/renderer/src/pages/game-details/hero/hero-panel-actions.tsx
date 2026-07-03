@@ -9,7 +9,7 @@ import {
   PlusCircleIcon,
   ShareAndroidIcon,
 } from "@primer/octicons-react";
-import { Button } from "@renderer/components";
+import { Button, Modal } from "@renderer/components";
 import { XCircle } from "lucide-react";
 import {
   useDownload,
@@ -63,18 +63,27 @@ export function HeroPanelActions() {
 
   const { t } = useTranslation("game_details");
 
-  // For console/emulated (launchbox) games, track whether the emulator is
-  // installed so the action button can say "Set up emulator" instead of
-  // offering a Play that fails.
+  // For console/emulated games, track whether the emulator is installed so the
+  // action button can say "Set up emulator" and the download can warn first.
+  // This must run for CATALOGUE console games too (objectId "minerva:…"), not
+  // only games already in the library — otherwise the gate is skipped exactly
+  // when the user is about to download a ROM whose emulator isn't set up.
+  const isConsoleGame =
+    game?.shop === "launchbox" ||
+    shop === "launchbox" ||
+    Boolean(objectId?.startsWith("minerva:"));
+
   const [emulatorReady, setEmulatorReady] = useState<boolean | null>(null);
+  const [showEmulatorSetupPrompt, setShowEmulatorSetupPrompt] = useState(false);
   useEffect(() => {
-    if (game?.shop !== "launchbox" || !game?.objectId) {
+    const consoleObjectId = game?.objectId ?? objectId;
+    if (!isConsoleGame || !consoleObjectId) {
       setEmulatorReady(null);
       return;
     }
     let cancelled = false;
     window.electron
-      .isEmulatorReady(game.shop, game.objectId)
+      .isEmulatorReady("launchbox", consoleObjectId)
       .then((ready) => {
         if (!cancelled) setEmulatorReady(ready);
       })
@@ -84,7 +93,17 @@ export function HeroPanelActions() {
     return () => {
       cancelled = true;
     };
-  }, [game?.shop, game?.objectId, isGameRunning]);
+  }, [isConsoleGame, game?.objectId, objectId, isGameRunning]);
+
+  // Open the download options — but for a console game whose emulator isn't
+  // installed, warn first so the user knows they'll need to set it up to play.
+  const openDownloadOptions = () => {
+    if (isConsoleGame && emulatorReady === false) {
+      setShowEmulatorSetupPrompt(true);
+      return;
+    }
+    setShowRepacksModal(true);
+  };
 
   useEffect(() => {
     const onFavoriteToggled = () => {
@@ -311,7 +330,7 @@ export function HeroPanelActions() {
 
   const showDownloadOptionsButton = (
     <Button
-      onClick={() => setShowRepacksModal(true)}
+      onClick={openDownloadOptions}
       theme="outline"
       disabled={deleting}
       className="hero-panel-actions__action"
@@ -438,7 +457,7 @@ export function HeroPanelActions() {
     // <platform>" button would be redundant.
     return (
       <Button
-        onClick={() => setShowRepacksModal(true)}
+        onClick={openDownloadOptions}
         theme="outline"
         disabled={isGameDownloading || deleting}
         className={`hero-panel-actions__action ${!hasDownloadOptions ? "hero-panel-actions__action--disabled" : ""}`}
@@ -449,9 +468,50 @@ export function HeroPanelActions() {
     );
   };
 
+  // Warns before downloading a console ROM whose emulator isn't set up yet.
+  // Included in every return branch so it works whether or not the game is in
+  // the library.
+  const emulatorSetupPrompt = (
+    <Modal
+      visible={showEmulatorSetupPrompt}
+      title={t("emulator_setup_required_title", {
+        defaultValue: "Emulator not set up",
+      })}
+      description={t("emulator_setup_required_description", {
+        defaultValue:
+          "You'll need to set up the emulator for this console before you can play. You can download the game now and set it up anytime from Settings → Emulation.",
+      })}
+      onClose={() => setShowEmulatorSetupPrompt(false)}
+    >
+      <div className="hero-panel-actions__prompt-actions">
+        <Button
+          theme="outline"
+          onClick={() => {
+            setShowEmulatorSetupPrompt(false);
+            navigate("/settings");
+          }}
+        >
+          <GearIcon />
+          {t("setup_emulator", { defaultValue: "Set up emulator" })}
+        </Button>
+        <Button
+          theme="primary"
+          onClick={() => {
+            setShowEmulatorSetupPrompt(false);
+            setShowRepacksModal(true);
+          }}
+        >
+          <DownloadIcon />
+          {t("download_anyway", { defaultValue: "Download anyway" })}
+        </Button>
+      </div>
+    </Modal>
+  );
+
   if (repacks.length && !game) {
     return (
       <>
+        {emulatorSetupPrompt}
         {addGameToLibraryButton}
         {showDownloadOptionsButton}
       </>
@@ -506,6 +566,7 @@ export function HeroPanelActions() {
 
     return (
       <div className="hero-panel-actions__container">
+        {emulatorSetupPrompt}
         {gameActionButton()}
         {showRepackDownloadForLibraryGame && showDownloadOptionsButton}
         {alternativeShopLaunchButtons}

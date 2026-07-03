@@ -14,6 +14,7 @@ import { GallerySlider } from "./gallery-slider/gallery-slider";
 import { Sidebar } from "./sidebar/sidebar";
 import { GameReviews } from "./game-reviews";
 import { GameLogo } from "./game-logo";
+import { PlatformBadge } from "./platform-badge";
 
 import { AuthPage } from "@shared";
 import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
@@ -199,6 +200,8 @@ export function GameDetailsContent() {
               <GameLogo game={game} shopDetails={shopDetails} />
 
               <div className="game-details__hero-buttons game-details__hero-buttons--right">
+                <PlatformBadge objectId={objectId} game={game} />
+
                 {showInLibraryBadge && (
                   <span className="game-details__in-library-badge">
                     {t("already_in_library")}
