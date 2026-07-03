@@ -1,0 +1,88 @@
+[13:47:32.988] ------- Init Cemu 2.6 -------
+[13:47:32.990] Init Wii U memory space (base: 0x00000214b0060000)
+[13:47:32.990] mlc01 path: C:/Users/Kenneth Rodas/Documents/Emulators/Cemu_2.0-66/mlc01
+[13:47:32.990] CPU: Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz
+[13:47:32.990] RAM: 32582MB
+[13:47:32.990] Platform: Windows 10 Pro (Build 9200)
+[13:47:32.991] Used CPU extensions: SSSE3, SSE4.1, AVX, AVX2, LZCNT, MOVBE, BMI2, AES-NI, INVARIANT-TSC
+[13:47:33.000] IOSU_CRYPTO: No otp.bin found. Online mode cannot be used
+[13:47:33.000] IOSU_CRYPTO: No Seeprom.bin found. Online mode cannot be used
+[13:47:33.033] Title has missing meta .xml files. Title path: C:/Users/Kenneth Rodas/Documents/Emulators/Cemu_2.0-66/mlc01/usr/title/0005000e/101c9400
+[13:49:11.723] Mounting title 0005000010143500
+[13:49:11.723] Base: C:/Users/Kenneth Rodas/Documents/Emulators/Cemu_2.0-66/mlc01/usr/title/00050000/10143500 [Folder]
+[13:49:11.723] Update: Not present
+[13:49:11.723] DLC: Not present
+[13:49:11.725] Shared font CafeCn.ttf is not present
+[13:49:11.732] Recompiler initialized
+[13:49:11.963] ------- Init Vulkan graphics backend -------
+[13:49:12.264] Vulkan instance version: 1.4
+[13:49:12.488] Using GPU: NVIDIA GeForce RTX 2070 Super
+[13:49:12.488] Driver version: 591.86
+[13:49:12.488] Vulkan: present_wait extension: supported
+[13:49:12.488] VulkanLimits: UBAlignment 64 nonCoherentAtomSize 64
+[13:49:12.557] Using available debug function: vkCreateDebugUtilsMessengerEXT()
+[13:49:12.557] Vulkan device memory info:
+[13:49:12.557] Heap 0 - Size 7989MB Flags 0x00000001
+[13:49:12.557] Heap 1 - Size 16291MB Flags 0x00000000
+[13:49:12.557] Heap 2 - Size 214MB Flags 0x00000001
+[13:49:12.557] Memory 0 - HeapIndex 1 Flags 0x00000000
+[13:49:12.557] Memory 1 - HeapIndex 0 Flags 0x00000001
+[13:49:12.557] Memory 2 - HeapIndex 0 Flags 0x00000001
+[13:49:12.557] Memory 3 - HeapIndex 1 Flags 0x00000006
+[13:49:12.557] Memory 4 - HeapIndex 1 Flags 0x0000000e
+[13:49:12.557] Memory 5 - HeapIndex 2 Flags 0x00000007
+[13:49:13.391] ------- Loaded title -------
+[13:49:13.391] TitleId: 00050000-10143500
+[13:49:13.391] TitleVersion: v0
+[13:49:13.391] TitleRegion: US
+[13:49:13.391] Save path:   C:/Users/Kenneth Rodas/Documents/Emulators/Cemu_2.0-66/mlc01/usr/save/00050000/10143500/user/
+[13:49:13.391] Shader cache file: shaderCache/transferable/0005000010143500.bin
+[13:49:13.391] gameprofile path: gameProfiles/0005000010143500.ini
+[13:49:13.391] RPX hash (updated): b1c033dd
+[13:49:13.391] RPX hash (base): b1c033dd
+[13:49:13.429] nsyshid::BackendLibusb::CheckAndCreateDevice(): failed to find default endpoints for device: 5986:1160
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 10de:1ad8
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 3142:5060
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 1038:1132
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 8086:06ed
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 2dc8:3106
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 1038:1122
+[13:49:13.429] Failed to make config descriptor 1 for 0bda:8153: LIBUSB_ERROR_NOT_FOUND
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 0bda:8153
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 05e3:0610
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 4c4a:4155
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 05e3:0626
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 8087:0026
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 1b21:3242
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 1d57:fa65
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 1908:0226
+[13:49:13.429] nsyshid::BackendLibusb: device not on whitelist: 214b:7250
+[13:49:13.487] Loaded module 'cking' with checksum 0x475bd29f
+[13:49:13.487] RPL link time: 62ms
+[13:49:13.538] Patching TWW race conditon at: 0x027f9994
+[13:49:13.538] HLE scan time: 47ms
+[13:49:13.538] ------- Active settings -------
+[13:49:13.538] CPU-Mode: 3 (gameprofile)
+[13:49:13.538] Load shared libraries: true (gameprofile)
+[13:49:13.538] Use precompiled shaders: 0 (gameprofile)
+[13:49:13.538] Full sync at GX2DrawDone: true
+[13:49:13.538] Strict shader mul: true
+[13:49:13.538] Async compile: true
+[13:49:13.538] Console language: 1
+[13:49:13.781] ------- Activate graphic packs -------
+[13:49:13.796] Activate graphic pack: The Legend of Zelda: The Wind Waker HD/Enhancements/Contrasty v1.1 [Presets: Default]
+[13:49:13.801] Applying patch group 'WWHDAspectUSA'
+[13:49:13.801] Activate graphic pack: The Legend of Zelda: The Wind Waker HD/Graphics/Resolution [Presets: 2560x1440]
+[13:49:13.802] Activate graphic pack: The Legend of Zelda: The Wind Waker HD/Graphics/Shadow Resolution [Presets: High (200%)]
+[13:49:13.802] ------- Init Audio backend -------
+[13:49:13.802] DirectSound: available
+[13:49:13.802] XAudio 2.8: available
+[13:49:13.802] Cubeb: available
+[13:49:13.802] ------- Init Audio input backend -------
+[13:49:13.802] Cubeb: available
+[13:49:13.802] ------- Run title -------
+[13:49:13.964] Graphic pack "Resolution" prevents rendertarget size optimization. This warning can be ignored and is intended for graphic pack developers
+[13:49:13.964] Graphic pack "Shadow Resolution" prevents rendertarget size optimization. This warning can be ignored and is intended for graphic pack developers
+[13:49:14.493] Shader cache loaded with 1055 shaders. Commited mem 83MB. Took 528ms
+[13:49:14.773] IOSU_ACT: using account default in first slot
+[13:49:15.434] OSGetSharedData() called by game but no shareddata fonts loaded. Use placeholder font

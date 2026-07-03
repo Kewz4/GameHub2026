@@ -1,0 +1,7 @@
+[   0.153394] Input <Info> input_common\udp\client.cpp:InputCommon::CemuhookUDP::Client::StartCommunication:206: Starting communication with UDP input server on 127.0.0.1:26760
+[   0.318266] Frontend <Info> citra_qt\citra_qt.cpp:GMainWindow::GMainWindow:455: Azahar Version: 2125.1.3 | HEAD-b42d091
+[   0.318274] Frontend <Info> citra_qt\citra_qt.cpp:GMainWindow::GMainWindow:470: Host CPU: Intel(R) Core(TM) i7-10750H CPU @ 2.60GHz | AVX2 | FMA
+[   0.318457] Frontend <Info> citra_qt\citra_qt.cpp:GMainWindow::GMainWindow:472: Host OS: Windows 11 Version 25H2 (Build 26200.8737)
+[   0.318475] Frontend <Info> citra_qt\citra_qt.cpp:GMainWindow::GMainWindow:475: Host RAM: 31.82 GiB
+[   0.318476] Frontend <Info> citra_qt\citra_qt.cpp:GMainWindow::GMainWindow:476: Host Swap: 36.09 GiB
+[   0.318476] Frontend <Info> citra_qt\citra_qt.cpp:GMainWindow::GMainWindow:476: Host Swap: 36.09 GiB

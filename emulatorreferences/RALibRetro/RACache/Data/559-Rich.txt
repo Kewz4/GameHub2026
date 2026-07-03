@@ -1,0 +1,33 @@
+Lookup:Hearts
+0x0=Not Playing
+0xff=Not Playing
+0x8=1 Heart Container
+0x10=2 Heart Containers
+0x18=3 Heart Containers
+0x20=4 Heart Containers
+0x28=5 Heart Containers
+0x30=6 Heart Containers
+0x38=7 Heart Containers
+0x40=8 Heart Containers
+0x48=9 Heart Containers
+0x50=10 Heart Containers
+0x58=11 Heart Containers
+0x60=12 Heart Containers
+0x68=13 Heart Containers
+0x70=14 Heart Containers
+0x78=15 Heart Containers
+0x80=16 Heart Containers
+0x88=17 Heart Containers
+0x90=18 Heart Containers
+0x98=19 Heart Containers
+0xa0=20(all) Heart Containers
+
+Format:Figurines
+FormatType=VALUE
+
+Format:Fusions
+FormatType=VALUE
+
+Display:
+?S0xHaaeb=0_p0xHaaeb=0S0xHaaeb=255S0xaac0=0_0xaac2=0?In the Titlescreen
+Link [❤️@Hearts(0xhaaeb)] [🗽@Figurines(0xhaaf0)] [🧿@Fusions(0xhab57)]

@@ -1,0 +1,914 @@
+211504.311 [INFO ] [APP] RALibretro version 1.8.3.0-x64 starting
+211504.311 [INFO ] [APP] RALibretro commit hash is 8ab61f745ab753a70b5482f2a0ccb6a4ced5193f
+211504.311 [INFO ] [APP] Current time is 07/02/26 21:15:04 Central America Standard Time
+211504.312 [INFO ] [CFG] Root folder:        C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\
+211504.312 [INFO ] [CFG] Assets folder:      C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Assets\
+211504.312 [INFO ] [CFG] Save folder:        C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Saves\
+211504.312 [INFO ] [CFG] System folder:      C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\System\
+211504.312 [INFO ] [CFG] Screenshots folder: C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Screenshots\
+211504.537 [INFO ] [UTL] Read 3598 bytes from "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\RALibretro.json"
+211504.716 [INFO ] [APP] Initialized audio device. 2 channels@44100Hz (format:8010, silence:0, samples:1024, padding:0, size:4096)
+211504.719 [INFO ] [INP] Controller Keyboard (Keyboard) added
+211504.750 [INFO ] [OGL] Initializing OpenGL 4.6.0 - Build 26.20.100.7642
+211504.758 [INFO ] [UTL] Read 17360 bytes from "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Cores\cores.json"
+211505.226 [INFO ] [APP] cli argument core: melondsds_libretro
+211505.226 [INFO ] [APP] cli argument system: 18
+211505.226 [INFO ] [APP] cli argument game: C:\Games\Emulator Games\DS Games\Pokemon Dash (USA).nds
+211505.512 [INFO ] [BCR] Loading core C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Cores\melondsds_libretro.dll
+211505.515 [INFO ] [BCR] Found libretro API retro_init
+211505.515 [INFO ] [BCR] Found libretro API retro_deinit
+211505.515 [INFO ] [BCR] Found libretro API retro_api_version
+211505.515 [INFO ] [BCR] Found libretro API retro_get_system_info
+211505.515 [INFO ] [BCR] Found libretro API retro_get_system_av_info
+211505.515 [INFO ] [BCR] Found libretro API retro_set_environment
+211505.516 [INFO ] [BCR] Found libretro API retro_set_video_refresh
+211505.516 [INFO ] [BCR] Found libretro API retro_set_audio_sample
+211505.516 [INFO ] [BCR] Found libretro API retro_set_audio_sample_batch
+211505.516 [INFO ] [BCR] Found libretro API retro_set_input_poll
+211505.516 [INFO ] [BCR] Found libretro API retro_set_input_state
+211505.516 [INFO ] [BCR] Found libretro API retro_set_controller_port_device
+211505.516 [INFO ] [BCR] Found libretro API retro_reset
+211505.516 [INFO ] [BCR] Found libretro API retro_run
+211505.516 [INFO ] [BCR] Found libretro API retro_serialize_size
+211505.516 [INFO ] [BCR] Found libretro API retro_serialize
+211505.516 [INFO ] [BCR] Found libretro API retro_unserialize
+211505.516 [INFO ] [BCR] Found libretro API retro_cheat_reset
+211505.516 [INFO ] [BCR] Found libretro API retro_cheat_set
+211505.516 [INFO ] [BCR] Found libretro API retro_load_game
+211505.516 [INFO ] [BCR] Found libretro API retro_load_game_special
+211505.516 [INFO ] [BCR] Found libretro API retro_unload_game
+211505.516 [INFO ] [BCR] Found libretro API retro_get_region
+211505.516 [INFO ] [BCR] Found libretro API retro_get_memory_data
+211505.516 [INFO ] [BCR] Found libretro API retro_get_memory_size
+211505.516 [INFO ] [BCR] Core successfully loaded
+211505.516 [INFO ] [UTL] Read 2998 bytes from "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Cores\melondsds_libretro.json"
+211505.516 [INFO ] [CFG] Selection melonds_firmware_wfc_dns deserialized as "178.62.43.212"
+211505.516 [INFO ] [CFG] Selection melonds_mic_input deserialized as "microphone"
+211505.516 [INFO ] [CFG] Selection melonds_sysfile_mode deserialized as "native"
+211505.516 [INFO ] [CFG] Selection melonds_audio_interpolation deserialized as "disabled"
+211505.516 [INFO ] [CFG] Selection melonds_audio_bitdepth deserialized as "auto"
+211505.516 [INFO ] [CFG] Selection melonds_screen_layout2 deserialized as "hybrid-top"
+211505.516 [INFO ] [CFG] Selection melonds_mic_input_active deserialized as "hold"
+211505.516 [INFO ] [CFG] Selection melonds_screen_gap deserialized as "0"
+211505.516 [INFO ] [CFG] Selection melonds_touch_mode deserialized as "auto"
+211505.516 [INFO ] [CFG] Selection melonds_jit_block_size deserialized as "32"
+211505.516 [INFO ] [CFG] Selection melonds_jit_enable deserialized as "enabled"
+211505.516 [INFO ] [CFG] Selection melonds_screen_layout6 deserialized as "hybrid-bottom"
+211505.516 [INFO ] [CFG] Selection melonds_opengl_filtering deserialized as "nearest"
+211505.516 [INFO ] [CFG] Selection melonds_boot_mode deserialized as "direct"
+211505.516 [INFO ] [CFG] Selection melonds_jit_branch_optimisations deserialized as "enabled"
+211505.516 [INFO ] [CFG] Selection melonds_jit_literal_optimisations deserialized as "enabled"
+211505.516 [INFO ] [CFG] Selection melonds_show_cursor deserialized as "timeout"
+211505.516 [INFO ] [CFG] Selection melonds_network_mode deserialized as "indirect"
+211505.516 [INFO ] [CFG] Selection melonds_jit_fast_memory deserialized as "enabled"
+211505.516 [INFO ] [CFG] Selection melonds_mac_address_mode deserialized as "firmware"
+211505.516 [INFO ] [CFG] Selection melonds_opengl_resolution deserialized as "8"
+211505.517 [INFO ] [CFG] Selection melonds_cursor_timeout deserialized as "3"
+211505.517 [INFO ] [CFG] Selection melonds_number_of_screen_layouts deserialized as "1"
+211505.517 [INFO ] [CFG] Selection melonds_screen_layout1 deserialized as "hybrid-bottom"
+211505.517 [INFO ] [CFG] Selection melonds_dsi_nand_path deserialized as "/notfound"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_language deserialized as "auto"
+211505.517 [INFO ] [CFG] Selection melonds_screen_layout5 deserialized as "hybrid-top"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_username deserialized as "guess_username"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_favorite_color deserialized as "0"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_birth_month deserialized as "default"
+211505.517 [INFO ] [CFG] Selection melonds_render_mode deserialized as "opengl"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_birth_day deserialized as "default"
+211505.517 [INFO ] [CFG] Selection melonds_show_sensor_reading deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_enable_alarm deserialized as "default"
+211505.517 [INFO ] [CFG] Selection melonds_show_lid_state deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_absolute_day deserialized as "1"
+211505.517 [INFO ] [CFG] Selection melonds_console_mode deserialized as "ds"
+211505.517 [INFO ] [CFG] Selection melonds_show_unsupported_features deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_slot2_device deserialized as "auto"
+211505.517 [INFO ] [CFG] Selection melonds_solar_sensor_host_sensor deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_nds_path deserialized as "/notfound"
+211505.517 [INFO ] [CFG] Selection melonds_hybrid_small_screen deserialized as "one"
+211505.517 [INFO ] [CFG] Selection melonds_dsi_sdcard_readonly deserialized as "disabled"
+211505.517 [INFO ] [CFG] Selection melonds_dsi_sdcard_sync_sdcard_to_host deserialized as "disabled"
+211505.517 [INFO ] [CFG] Selection melonds_homebrew_sdcard deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_homebrew_sync_sdcard_to_host deserialized as "disabled"
+211505.517 [INFO ] [CFG] Selection melonds_homebrew_readonly deserialized as "disabled"
+211505.517 [INFO ] [CFG] Selection melonds_battery_update_interval deserialized as "15"
+211505.517 [INFO ] [CFG] Selection melonds_ds_battery_ok_threshold deserialized as "20"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_mode deserialized as "real"
+211505.517 [INFO ] [CFG] Selection melonds_threaded_renderer deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_show_bios_warnings deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_show_current_layout deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_show_mic_state deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_show_camera_state deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_hybrid_ratio deserialized as "3"
+211505.517 [INFO ] [CFG] Selection melonds_screen_layout7 deserialized as "bottom-top"
+211505.517 [INFO ] [CFG] Selection melonds_opengl_better_polygons deserialized as "disabled"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_dsi_path deserialized as "/notfound"
+211505.517 [INFO ] [CFG] Selection melonds_screen_layout3 deserialized as "top"
+211505.517 [INFO ] [CFG] Selection melonds_direct_network_interface deserialized as "auto"
+211505.517 [INFO ] [CFG] Selection melonds_screen_layout4 deserialized as "bottom"
+211505.517 [INFO ] [CFG] Selection melonds_screen_layout8 deserialized as "right-left"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_alarm_hour deserialized as "default"
+211505.517 [INFO ] [CFG] Selection melonds_firmware_alarm_minute deserialized as "default"
+211505.517 [INFO ] [CFG] Selection melonds_dsi_sdcard deserialized as "enabled"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_relative_year_offset deserialized as "0"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_relative_day_offset deserialized as "0"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_relative_hour_offset deserialized as "0"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_relative_minute_offset deserialized as "0"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_absolute_year deserialized as "2004"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_absolute_month deserialized as "1"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_absolute_hour deserialized as "0"
+211505.517 [INFO ] [CFG] Selection melonds_start_time_absolute_minute deserialized as "0"
+211505.518 [WARN ] [COR] Unimplemented env call: 78
+211505.518 [INFO ] [COR] retro_system_content_info_override
+211505.518 [INFO ] [COR]   srm|sav need_fullpath=1 persistent_data=0
+211505.518 [WARN ] [COR] Unimplemented env call: GET_SENSOR_INTERFACE (25)
+211505.519 [WARN ] [COR] Unimplemented env call: SET_FRAME_TIME_CALLBACK (21)
+211505.519 [WARN ] [COR] Unimplemented env call: SET_PROC_ADDRESS_CALLBACK (33)
+211505.519 [WARN ] [COR] Unimplemented env call: GET_DEVICE_POWER (77)
+211505.519 [WARN ] [COR] Unimplemented env call: GET_MESSAGE_INTERFACE_VERSION (59)
+211505.519 [INFO ] Save directory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves"
+211505.521 [INFO ] melonDS DS save subdirectory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS"
+211505.521 [INFO ] System directory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/System"
+211505.521 [INFO ] melonDS DS system subdirectory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/System/melonDS DS"
+211505.521 [WARN ] [COR] GET_VFS_INTERFACE: requested version 3, only have version 2
+211505.521 [WARN ] [COR] Called  GET_VFS_INTERFACE (45) -> 0
+211505.521 [WARN ] Could not get VFS interface 3, falling back to libretro-common defaults
+211505.521 [INFO ] melonDS DS 1.2.0
+211505.522 [ERROR] [melonDS] PCap: init failed
+211505.535 [INFO ] [UTL] Read 16777216 bytes from "C:\Games\Emulator Games\DS Games\Pokemon Dash (USA).nds"
+211505.542 [ERROR] [melonDS] PCap: init failed
+211505.542 [WARN ] Failed to enumerate Wi-fi adapters
+211505.542 [INFO ] [CFG] Variable melonds_mic_input found in selections, set to "microphone"
+211505.542 [INFO ] [CFG] Variable melonds_mic_input_active found in selections, set to "hold"
+211505.542 [INFO ] [CFG] Variable melonds_audio_bitdepth found in selections, set to "auto"
+211505.542 [INFO ] [CFG] Variable melonds_audio_interpolation found in selections, set to "disabled"
+211505.542 [INFO ] [CFG] Variable melonds_jit_enable found in selections, set to "enabled"
+211505.542 [INFO ] [CFG] Variable melonds_jit_block_size found in selections, set to "32"
+211505.542 [INFO ] [CFG] Variable melonds_jit_branch_optimisations found in selections, set to "enabled"
+211505.542 [INFO ] [CFG] Variable melonds_jit_literal_optimisations found in selections, set to "enabled"
+211505.542 [INFO ] [CFG] Variable melonds_jit_fast_memory found in selections, set to "enabled"
+211505.542 [INFO ] [CFG] Variable melonds_mac_address_mode found in selections, set to "firmware"
+211505.542 [INFO ] [CFG] Variable melonds_network_mode found in selections, set to "indirect"
+211505.542 [INFO ] [CFG] Variable melonds_direct_network_interface found in selections, set to "auto"
+211505.542 [INFO ] [CFG] Variable melonds_show_cursor found in selections, set to "timeout"
+211505.542 [INFO ] [CFG] Variable melonds_cursor_timeout found in selections, set to "3"
+211505.543 [INFO ] [CFG] Variable melonds_touch_mode found in selections, set to "auto"
+211505.543 [INFO ] [CFG] Variable melonds_number_of_screen_layouts found in selections, set to "1"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout1 found in selections, set to "hybrid-bottom"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout2 found in selections, set to "hybrid-top"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout3 found in selections, set to "top"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout4 found in selections, set to "bottom"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout5 found in selections, set to "hybrid-top"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout6 found in selections, set to "hybrid-bottom"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout7 found in selections, set to "bottom-top"
+211505.543 [INFO ] [CFG] Variable melonds_screen_layout8 found in selections, set to "right-left"
+211505.543 [INFO ] [CFG] Variable melonds_hybrid_ratio found in selections, set to "3"
+211505.543 [INFO ] [CFG] Variable melonds_hybrid_small_screen found in selections, set to "one"
+211505.543 [INFO ] [CFG] Variable melonds_opengl_filtering found in selections, set to "nearest"
+211505.543 [INFO ] [CFG] Variable melonds_screen_gap found in selections, set to "0"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_wfc_dns found in selections, set to "178.62.43.212"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_language found in selections, set to "auto"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_username found in selections, set to "guess_username"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_favorite_color found in selections, set to "0"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_birth_month found in selections, set to "default"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_birth_day found in selections, set to "default"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_enable_alarm found in selections, set to "default"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_alarm_hour found in selections, set to "default"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_alarm_minute found in selections, set to "default"
+211505.544 [INFO ] [CFG] Variable melonds_console_mode found in selections, set to "ds"
+211505.544 [INFO ] [CFG] Variable melonds_slot2_device found in selections, set to "auto"
+211505.544 [INFO ] [CFG] Variable melonds_solar_sensor_host_sensor found in selections, set to "enabled"
+211505.544 [INFO ] [CFG] Variable melonds_sysfile_mode found in selections, set to "native"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_nds_path found in selections, set to "/notfound"
+211505.544 [INFO ] [CFG] Variable melonds_firmware_dsi_path found in selections, set to "/notfound"
+211505.544 [INFO ] [CFG] Variable melonds_dsi_nand_path found in selections, set to "/notfound"
+211505.544 [INFO ] [CFG] Variable melonds_boot_mode found in selections, set to "direct"
+211505.544 [INFO ] [CFG] Variable melonds_dsi_sdcard found in selections, set to "enabled"
+211505.544 [INFO ] [CFG] Variable melonds_dsi_sdcard_readonly found in selections, set to "disabled"
+211505.544 [INFO ] [CFG] Variable melonds_dsi_sdcard_sync_sdcard_to_host found in selections, set to "disabled"
+211505.545 [INFO ] [CFG] Variable melonds_homebrew_sdcard found in selections, set to "enabled"
+211505.545 [INFO ] [CFG] Variable melonds_homebrew_readonly found in selections, set to "disabled"
+211505.545 [INFO ] [CFG] Variable melonds_homebrew_sync_sdcard_to_host found in selections, set to "disabled"
+211505.545 [INFO ] [CFG] Variable melonds_battery_update_interval found in selections, set to "15"
+211505.545 [INFO ] [CFG] Variable melonds_ds_battery_ok_threshold found in selections, set to "20"
+211505.545 [INFO ] [CFG] Variable melonds_start_time_mode found in selections, set to "real"
+211505.545 [INFO ] [CFG] Variable melonds_start_time_relative_year_offset found in selections, set to "0"
+211505.545 [INFO ] [CFG] Variable melonds_start_time_relative_day_offset found in selections, set to "0"
+211505.545 [INFO ] [CFG] Variable melonds_start_time_relative_hour_offset found in selections, set to "0"
+211505.546 [INFO ] [CFG] Variable melonds_start_time_relative_minute_offset found in selections, set to "0"
+211505.546 [INFO ] [CFG] Variable melonds_start_time_absolute_year found in selections, set to "2004"
+211505.546 [INFO ] [CFG] Variable melonds_start_time_absolute_month found in selections, set to "1"
+211505.546 [INFO ] [CFG] Variable melonds_start_time_absolute_day found in selections, set to "1"
+211505.546 [INFO ] [CFG] Variable melonds_start_time_absolute_hour found in selections, set to "0"
+211505.546 [INFO ] [CFG] Variable melonds_start_time_absolute_minute found in selections, set to "0"
+211505.546 [INFO ] [CFG] Variable melonds_render_mode found in selections, set to "opengl"
+211505.546 [INFO ] [CFG] Variable melonds_opengl_resolution found in selections, set to "8"
+211505.546 [INFO ] [CFG] Variable melonds_opengl_better_polygons found in selections, set to "disabled"
+211505.546 [INFO ] [CFG] Variable melonds_threaded_renderer found in selections, set to "enabled"
+211505.546 [INFO ] [CFG] Variable melonds_show_unsupported_features found in selections, set to "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_bios_warnings found in selections, set to "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_current_layout found in selections, set to "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_mic_state found in selections, set to "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_camera_state found in selections, set to "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_lid_state found in selections, set to "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_sensor_reading found in selections, set to "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_console_mode is "ds"
+211505.547 [INFO ] [CFG] Variable melonds_slot2_device is "auto"
+211505.547 [INFO ] [CFG] Variable melonds_boot_mode is "direct"
+211505.547 [INFO ] [CFG] Variable melonds_sysfile_mode is "native"
+211505.547 [INFO ] [CFG] Variable melonds_solar_sensor_host_sensor is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_ds_battery_ok_threshold is "20"
+211505.547 [INFO ] [CFG] Variable melonds_battery_update_interval is "15"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_mode is "real"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_relative_year_offset is "0"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_relative_day_offset is "0"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_relative_hour_offset is "0"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_relative_minute_offset is "0"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_absolute_year is "2004"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_absolute_month is "1"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_absolute_day is "1"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_absolute_hour is "0"
+211505.547 [INFO ] [CFG] Variable melonds_start_time_absolute_minute is "0"
+211505.547 [INFO ] [CFG] Variable melonds_show_unsupported_features is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_mic_state is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_camera_state is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_bios_warnings is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_current_layout is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_lid_state is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_show_sensor_reading is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_jit_enable is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_jit_block_size is "32"
+211505.547 [INFO ] [CFG] Variable melonds_jit_branch_optimisations is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_jit_literal_optimisations is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_jit_fast_memory is "enabled"
+211505.547 [INFO ] [CFG] Variable melonds_homebrew_readonly is "disabled"
+211505.547 [INFO ] [CFG] Variable melonds_homebrew_sync_sdcard_to_host is "disabled"
+211505.547 [INFO ] [CFG] Variable melonds_homebrew_sdcard is "enabled"
+211505.547 [INFO ] No homebrew SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dldi_sd_card.bin"; will create an image.
+211505.547 [INFO ] [CFG] Variable melonds_dsi_sdcard_readonly is "disabled"
+211505.547 [INFO ] [CFG] Variable melonds_dsi_sdcard_sync_sdcard_to_host is "disabled"
+211505.547 [INFO ] [CFG] Variable melonds_dsi_sdcard is "enabled"
+211505.547 [INFO ] No DSi SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dsi_sd_card.bin"; will create an image.
+211505.547 [INFO ] [CFG] Variable melonds_dsi_nand_path is "/notfound"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_nds_path is "/notfound"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_dsi_path is "/notfound"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_language is "auto"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_favorite_color is "0"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_username is "guess_username"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_enable_alarm is "default"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_alarm_hour is "default"
+211505.547 [INFO ] [CFG] Variable melonds_firmware_alarm_minute is "default"
+211505.548 [INFO ] [CFG] Variable melonds_firmware_birth_month is "default"
+211505.548 [INFO ] [CFG] Variable melonds_firmware_birth_day is "default"
+211505.548 [INFO ] [CFG] Variable melonds_firmware_wfc_dns is "178.62.43.212"
+211505.548 [INFO ] [CFG] Variable melonds_mic_input_active is "hold"
+211505.548 [INFO ] [CFG] Variable melonds_mic_input is "microphone"
+211505.548 [INFO ] [CFG] Variable melonds_audio_bitdepth is "auto"
+211505.548 [INFO ] [CFG] Variable melonds_audio_interpolation is "disabled"
+211505.548 [INFO ] [CFG] Variable melonds_network_mode is "indirect"
+211505.548 [INFO ] [CFG] Variable melonds_direct_network_interface is "auto"
+211505.548 [INFO ] [CFG] Variable melonds_mac_address_mode is "firmware"
+211505.548 [INFO ] [CFG] Variable melonds_screen_gap is "0"
+211505.548 [INFO ] [CFG] Variable melonds_cursor_timeout is "3"
+211505.548 [INFO ] [CFG] Variable melonds_touch_mode is "auto"
+211505.548 [INFO ] [CFG] Variable melonds_show_cursor is "timeout"
+211505.548 [INFO ] [CFG] Variable melonds_hybrid_ratio is "3"
+211505.548 [INFO ] [CFG] Variable melonds_hybrid_small_screen is "one"
+211505.548 [INFO ] [CFG] Variable melonds_number_of_screen_layouts is "1"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout1 is "hybrid-bottom"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout2 is "hybrid-top"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout3 is "top"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout4 is "bottom"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout5 is "hybrid-top"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout6 is "hybrid-bottom"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout7 is "bottom-top"
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout8 is "right-left"
+211505.548 [INFO ] [CFG] Variable melonds_opengl_filtering is "nearest"
+211505.548 [INFO ] [CFG] Variable melonds_threaded_renderer is "enabled"
+211505.548 [INFO ] [CFG] Variable melonds_render_mode is "opengl"
+211505.548 [INFO ] [CFG] Variable melonds_opengl_resolution is "8"
+211505.548 [INFO ] [CFG] Variable melonds_opengl_better_polygons is "disabled"
+211505.548 [INFO ] [CFG] Variable melonds_mic_input is "microphone"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_mic_input_active to visible
+211505.548 [INFO ] [CFG] Variable melonds_render_mode is "opengl"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_opengl_resolution to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_opengl_better_polygons to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_threaded_renderer to hidden
+211505.548 [INFO ] [CFG] Variable melonds_console_mode is "ds"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_firmware_dsi_path to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_dsi_nand_path to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard to hidden
+211505.548 [INFO ] [CFG] Variable melonds_dsi_sdcard is "enabled"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard_readonly to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard_sync_sdcard_to_host to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_sysfile_mode to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_firmware_nds_path to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_ds_battery_ok_threshold to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_slot2_device to visible
+211505.548 [INFO ] [CFG] Variable melonds_homebrew_sdcard is "enabled"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_homebrew_readonly to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_homebrew_sync_sdcard_to_host to visible
+211505.548 [INFO ] [CFG] Variable melonds_show_cursor is "timeout"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_cursor_timeout to visible
+211505.548 [INFO ] [CFG] Variable melonds_number_of_screen_layouts is "1"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout1 to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout2 to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout3 to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout4 to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout5 to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout6 to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout7 to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout8 to hidden
+211505.548 [INFO ] [CFG] Variable melonds_screen_layout1 is "hybrid-bottom"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_hybrid_small_screen to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_hybrid_ratio to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_opengl_filtering to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_screen_gap to hidden
+211505.548 [INFO ] [CFG] Variable melonds_firmware_enable_alarm is "default"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_firmware_alarm_hour to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_firmware_alarm_minute to hidden
+211505.548 [INFO ] [CFG] Variable melonds_jit_enable is "enabled"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_jit_block_size to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_jit_branch_optimisations to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_jit_literal_optimisations to visible
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_jit_fast_memory to visible
+211505.548 [INFO ] [CFG] Variable melonds_network_mode is "indirect"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_direct_network_interface to hidden
+211505.548 [INFO ] [CFG] Variable melonds_start_time_mode is "real"
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_year_offset to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_day_offset to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_hour_offset to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_minute_offset to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_year to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_month to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_day to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_hour to hidden
+211505.548 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_minute to hidden
+211505.576 [INFO ] [MIC] Opened microphone with ID 3 (frequency 48000 [requested 44100])
+211505.576 [INFO ] [MIC] Microphone audio format: 16-bit signed integer little endian
+211505.578 [ERROR] Failed to open firmware file "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/System//notfound" for reading
+211505.578 [WARN ] Falling back to built-in firmware
+211505.579 [WARN ] Falling back to FreeBIOS
+211505.611 [INFO ] [melonDS] Inserted cart with game code: APDE
+211505.611 [INFO ] [melonDS] Inserted cart with ID: 00000FC2
+211505.611 [INFO ] [melonDS] ROM entry: 01000000 00000002
+211505.613 [INFO ] No GBA SRAM was provided.
+211505.613 [INFO ] Deferring initialization until the OpenGL context is ready
+211505.613 [INFO ] [COR] Content "C:\Games\Emulator Games\DS Games\Pokemon Dash (USA).nds" loaded
+211505.621 [INFO ] OpenGL version: 4.6.0 - Build 26.20.100.7642
+211505.621 [INFO ] OpenGL vendor: Intel
+211505.621 [INFO ] OpenGL renderer: Intel(R) UHD Graphics
+211506.065 [INFO ] [AUD] Resampler initialized to convert from 32728.498047 to 44100.000000
+211527.375 [INFO ] [MEM] Registered 0x400000 bytes of SYSTEM RAM at $000000 (offset 0x000000)
+211527.375 [INFO ] [MEM] Registered 0x800000 bytes of UNUSED at $400000 (null filler)
+211527.375 [INFO ] [MEM] Registered 0x400000 bytes of UNUSED at $C00000 (null filler)
+211527.375 [INFO ] [MEM] Could not map region starting at $1000000
+211527.375 [INFO ] [MEM] Registered 0x4000 bytes of SYSTEM RAM at $1000000 (null filler)
+211527.375 [INFO ] [MEM] installing memory banks
+211527.378 [WARN ] [UTL] File not found: C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Saves\Pokemon Dash (USA).nds.sram
+211527.436 [INFO ] [melonDS] MAC: 00:09:BF:11:22:33
+211527.437 [INFO ] [melonDS] Secure area decryption OK
+211527.477 [INFO ] [melonDS] Game is now booting
+211527.477 [INFO ] Started emulated console
+211527.477 [INFO ] [CFG] Variable melonds_console_mode is "ds"
+211527.477 [INFO ] [CFG] Variable melonds_slot2_device is "auto"
+211527.477 [INFO ] [CFG] Variable melonds_boot_mode is "direct"
+211527.477 [INFO ] [CFG] Variable melonds_sysfile_mode is "native"
+211527.477 [INFO ] [CFG] Variable melonds_solar_sensor_host_sensor is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_ds_battery_ok_threshold is "20"
+211527.477 [INFO ] [CFG] Variable melonds_battery_update_interval is "15"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_mode is "real"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_relative_year_offset is "0"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_relative_day_offset is "0"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_relative_hour_offset is "0"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_relative_minute_offset is "0"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_absolute_year is "2004"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_absolute_month is "1"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_absolute_day is "1"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_absolute_hour is "0"
+211527.477 [INFO ] [CFG] Variable melonds_start_time_absolute_minute is "0"
+211527.477 [INFO ] [CFG] Variable melonds_show_unsupported_features is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_show_mic_state is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_show_camera_state is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_show_bios_warnings is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_show_current_layout is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_show_lid_state is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_show_sensor_reading is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_jit_enable is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_jit_block_size is "32"
+211527.477 [INFO ] [CFG] Variable melonds_jit_branch_optimisations is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_jit_literal_optimisations is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_jit_fast_memory is "enabled"
+211527.477 [INFO ] [CFG] Variable melonds_homebrew_readonly is "disabled"
+211527.477 [INFO ] [CFG] Variable melonds_homebrew_sync_sdcard_to_host is "disabled"
+211527.477 [INFO ] [CFG] Variable melonds_homebrew_sdcard is "enabled"
+211527.477 [INFO ] No homebrew SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dldi_sd_card.bin"; will create an image.
+211527.477 [INFO ] [CFG] Variable melonds_dsi_sdcard_readonly is "disabled"
+211527.477 [INFO ] [CFG] Variable melonds_dsi_sdcard_sync_sdcard_to_host is "disabled"
+211527.477 [INFO ] [CFG] Variable melonds_dsi_sdcard is "enabled"
+211527.478 [INFO ] No DSi SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dsi_sd_card.bin"; will create an image.
+211527.478 [INFO ] [CFG] Variable melonds_dsi_nand_path is "/notfound"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_nds_path is "/notfound"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_dsi_path is "/notfound"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_language is "auto"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_favorite_color is "0"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_username is "guess_username"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_enable_alarm is "default"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_alarm_hour is "default"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_alarm_minute is "default"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_birth_month is "default"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_birth_day is "default"
+211527.478 [INFO ] [CFG] Variable melonds_firmware_wfc_dns is "178.62.43.212"
+211527.478 [INFO ] [CFG] Variable melonds_mic_input_active is "hold"
+211527.478 [INFO ] [CFG] Variable melonds_mic_input is "microphone"
+211527.478 [INFO ] [CFG] Variable melonds_audio_bitdepth is "auto"
+211527.478 [INFO ] [CFG] Variable melonds_audio_interpolation is "disabled"
+211527.478 [INFO ] [CFG] Variable melonds_network_mode is "indirect"
+211527.478 [INFO ] [CFG] Variable melonds_direct_network_interface is "auto"
+211527.478 [INFO ] [CFG] Variable melonds_mac_address_mode is "firmware"
+211527.478 [INFO ] [CFG] Variable melonds_screen_gap is "0"
+211527.478 [INFO ] [CFG] Variable melonds_cursor_timeout is "3"
+211527.478 [INFO ] [CFG] Variable melonds_touch_mode is "auto"
+211527.478 [INFO ] [CFG] Variable melonds_show_cursor is "timeout"
+211527.478 [INFO ] [CFG] Variable melonds_hybrid_ratio is "3"
+211527.478 [INFO ] [CFG] Variable melonds_hybrid_small_screen is "one"
+211527.478 [INFO ] [CFG] Variable melonds_number_of_screen_layouts is "1"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout1 is "hybrid-bottom"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout2 is "hybrid-top"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout3 is "top"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout4 is "bottom"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout5 is "hybrid-top"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout6 is "hybrid-bottom"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout7 is "bottom-top"
+211527.478 [INFO ] [CFG] Variable melonds_screen_layout8 is "right-left"
+211527.478 [INFO ] [CFG] Variable melonds_opengl_filtering is "nearest"
+211527.478 [INFO ] [CFG] Variable melonds_threaded_renderer is "enabled"
+211527.478 [INFO ] [CFG] Variable melonds_render_mode is "opengl"
+211527.478 [INFO ] [CFG] Variable melonds_opengl_resolution is "8"
+211527.478 [INFO ] [CFG] Variable melonds_opengl_better_polygons is "disabled"
+211547.921 [INFO ] [CFG] Variable melonds_mic_input is "microphone"
+211547.921 [INFO ] [CFG] Variable melonds_render_mode is "opengl"
+211547.921 [INFO ] [CFG] Variable melonds_console_mode is "ds"
+211547.921 [INFO ] [CFG] Variable melonds_dsi_sdcard is "enabled"
+211547.921 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard_readonly to visible
+211547.921 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard_sync_sdcard_to_host to visible
+211547.921 [INFO ] [CFG] Variable melonds_homebrew_sdcard is "enabled"
+211547.921 [INFO ] [CFG] Variable melonds_show_cursor is "timeout"
+211547.921 [INFO ] [CFG] Variable melonds_number_of_screen_layouts is "1"
+211547.921 [INFO ] [CFG] Variable melonds_screen_layout1 is "hybrid-bottom"
+211547.921 [INFO ] [CFG] Variable melonds_firmware_enable_alarm is "default"
+211547.921 [INFO ] [CFG] Variable melonds_jit_enable is "enabled"
+211547.921 [INFO ] [CFG] Variable melonds_network_mode is "indirect"
+211547.921 [INFO ] [CFG] Variable melonds_start_time_mode is "real"
+211547.921 [INFO ] [MEM] Registered 0x400000 bytes of SYSTEM RAM at $000000 (offset 0x000000)
+211547.921 [INFO ] [MEM] Registered 0x800000 bytes of UNUSED at $400000 (null filler)
+211547.921 [INFO ] [MEM] Registered 0x400000 bytes of UNUSED at $C00000 (null filler)
+211547.921 [INFO ] [MEM] Could not map region starting at $1000000
+211547.921 [INFO ] [MEM] Registered 0x4000 bytes of SYSTEM RAM at $1000000 (null filler)
+211547.921 [INFO ] [MEM] no change detected. using existing memory map
+211553.472 [INFO ] [UTL] Wrote 8192 bytes to "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Saves\Pokemon Dash (USA).nds.sram"
+211553.510 [INFO ] [UTL] Wrote 2998 bytes to "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Cores\melondsds_libretro.json"
+211553.510 [INFO ] [melonDS] Stopping emulated console (Reason: External)
+211553.527 [ERROR] [COR] Context type not supported: RETRO_HW_CONTEXT_NONE
+211553.527 [WARN ] [COR] Called  SET_HW_RENDER (14) -> 0
+211553.543 [INFO ] [BCR] Core destroyed
+211553.573 [INFO ] [BCR] Loading core C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Cores\melondsds_libretro.dll
+211553.574 [INFO ] [BCR] Found libretro API retro_init
+211553.574 [INFO ] [BCR] Found libretro API retro_deinit
+211553.574 [INFO ] [BCR] Found libretro API retro_api_version
+211553.574 [INFO ] [BCR] Found libretro API retro_get_system_info
+211553.574 [INFO ] [BCR] Found libretro API retro_get_system_av_info
+211553.574 [INFO ] [BCR] Found libretro API retro_set_environment
+211553.574 [INFO ] [BCR] Found libretro API retro_set_video_refresh
+211553.574 [INFO ] [BCR] Found libretro API retro_set_audio_sample
+211553.574 [INFO ] [BCR] Found libretro API retro_set_audio_sample_batch
+211553.574 [INFO ] [BCR] Found libretro API retro_set_input_poll
+211553.574 [INFO ] [BCR] Found libretro API retro_set_input_state
+211553.574 [INFO ] [BCR] Found libretro API retro_set_controller_port_device
+211553.574 [INFO ] [BCR] Found libretro API retro_reset
+211553.574 [INFO ] [BCR] Found libretro API retro_run
+211553.574 [INFO ] [BCR] Found libretro API retro_serialize_size
+211553.574 [INFO ] [BCR] Found libretro API retro_serialize
+211553.574 [INFO ] [BCR] Found libretro API retro_unserialize
+211553.574 [INFO ] [BCR] Found libretro API retro_cheat_reset
+211553.574 [INFO ] [BCR] Found libretro API retro_cheat_set
+211553.575 [INFO ] [BCR] Found libretro API retro_load_game
+211553.575 [INFO ] [BCR] Found libretro API retro_load_game_special
+211553.575 [INFO ] [BCR] Found libretro API retro_unload_game
+211553.575 [INFO ] [BCR] Found libretro API retro_get_region
+211553.575 [INFO ] [BCR] Found libretro API retro_get_memory_data
+211553.575 [INFO ] [BCR] Found libretro API retro_get_memory_size
+211553.575 [INFO ] [BCR] Core successfully loaded
+211553.575 [INFO ] [UTL] Read 2998 bytes from "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Cores\melondsds_libretro.json"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_wfc_dns deserialized as "178.62.43.212"
+211553.575 [INFO ] [CFG] Selection melonds_mic_input deserialized as "microphone"
+211553.575 [INFO ] [CFG] Selection melonds_screen_layout2 deserialized as "hybrid-top"
+211553.575 [INFO ] [CFG] Selection melonds_mic_input_active deserialized as "hold"
+211553.575 [INFO ] [CFG] Selection melonds_sysfile_mode deserialized as "native"
+211553.575 [INFO ] [CFG] Selection melonds_audio_bitdepth deserialized as "auto"
+211553.575 [INFO ] [CFG] Selection melonds_audio_interpolation deserialized as "disabled"
+211553.575 [INFO ] [CFG] Selection melonds_jit_block_size deserialized as "32"
+211553.575 [INFO ] [CFG] Selection melonds_touch_mode deserialized as "auto"
+211553.575 [INFO ] [CFG] Selection melonds_screen_gap deserialized as "0"
+211553.575 [INFO ] [CFG] Selection melonds_jit_enable deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_screen_layout6 deserialized as "hybrid-bottom"
+211553.575 [INFO ] [CFG] Selection melonds_jit_branch_optimisations deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_boot_mode deserialized as "direct"
+211553.575 [INFO ] [CFG] Selection melonds_opengl_filtering deserialized as "nearest"
+211553.575 [INFO ] [CFG] Selection melonds_jit_literal_optimisations deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_jit_fast_memory deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_network_mode deserialized as "indirect"
+211553.575 [INFO ] [CFG] Selection melonds_show_cursor deserialized as "timeout"
+211553.575 [INFO ] [CFG] Selection melonds_mac_address_mode deserialized as "firmware"
+211553.575 [INFO ] [CFG] Selection melonds_cursor_timeout deserialized as "3"
+211553.575 [INFO ] [CFG] Selection melonds_opengl_resolution deserialized as "2"
+211553.575 [INFO ] [CFG] Selection melonds_number_of_screen_layouts deserialized as "1"
+211553.575 [INFO ] [CFG] Selection melonds_screen_layout1 deserialized as "hybrid-bottom"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_language deserialized as "auto"
+211553.575 [INFO ] [CFG] Selection melonds_dsi_nand_path deserialized as "/notfound"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_username deserialized as "guess_username"
+211553.575 [INFO ] [CFG] Selection melonds_screen_layout5 deserialized as "hybrid-top"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_favorite_color deserialized as "0"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_birth_month deserialized as "default"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_birth_day deserialized as "default"
+211553.575 [INFO ] [CFG] Selection melonds_render_mode deserialized as "opengl"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_enable_alarm deserialized as "default"
+211553.575 [INFO ] [CFG] Selection melonds_show_sensor_reading deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_start_time_absolute_day deserialized as "1"
+211553.575 [INFO ] [CFG] Selection melonds_console_mode deserialized as "ds"
+211553.575 [INFO ] [CFG] Selection melonds_show_unsupported_features deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_show_lid_state deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_slot2_device deserialized as "auto"
+211553.575 [INFO ] [CFG] Selection melonds_solar_sensor_host_sensor deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_firmware_nds_path deserialized as "/notfound"
+211553.575 [INFO ] [CFG] Selection melonds_dsi_sdcard_readonly deserialized as "disabled"
+211553.575 [INFO ] [CFG] Selection melonds_hybrid_small_screen deserialized as "one"
+211553.575 [INFO ] [CFG] Selection melonds_dsi_sdcard_sync_sdcard_to_host deserialized as "disabled"
+211553.575 [INFO ] [CFG] Selection melonds_homebrew_sdcard deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_homebrew_readonly deserialized as "disabled"
+211553.575 [INFO ] [CFG] Selection melonds_homebrew_sync_sdcard_to_host deserialized as "disabled"
+211553.575 [INFO ] [CFG] Selection melonds_battery_update_interval deserialized as "15"
+211553.575 [INFO ] [CFG] Selection melonds_ds_battery_ok_threshold deserialized as "20"
+211553.575 [INFO ] [CFG] Selection melonds_start_time_mode deserialized as "real"
+211553.575 [INFO ] [CFG] Selection melonds_threaded_renderer deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_show_bios_warnings deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_show_current_layout deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_show_mic_state deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_show_camera_state deserialized as "enabled"
+211553.575 [INFO ] [CFG] Selection melonds_hybrid_ratio deserialized as "3"
+211553.575 [INFO ] [CFG] Selection melonds_opengl_better_polygons deserialized as "disabled"
+211553.575 [INFO ] [CFG] Selection melonds_screen_layout7 deserialized as "bottom-top"
+211553.575 [INFO ] [CFG] Selection melonds_direct_network_interface deserialized as "auto"
+211553.575 [INFO ] [CFG] Selection melonds_screen_layout3 deserialized as "top"
+211553.576 [INFO ] [CFG] Selection melonds_firmware_dsi_path deserialized as "/notfound"
+211553.576 [INFO ] [CFG] Selection melonds_screen_layout4 deserialized as "bottom"
+211553.576 [INFO ] [CFG] Selection melonds_screen_layout8 deserialized as "right-left"
+211553.576 [INFO ] [CFG] Selection melonds_firmware_alarm_hour deserialized as "default"
+211553.576 [INFO ] [CFG] Selection melonds_firmware_alarm_minute deserialized as "default"
+211553.576 [INFO ] [CFG] Selection melonds_dsi_sdcard deserialized as "enabled"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_relative_year_offset deserialized as "0"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_relative_day_offset deserialized as "0"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_relative_hour_offset deserialized as "0"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_relative_minute_offset deserialized as "0"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_absolute_year deserialized as "2004"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_absolute_month deserialized as "1"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_absolute_hour deserialized as "0"
+211553.576 [INFO ] [CFG] Selection melonds_start_time_absolute_minute deserialized as "0"
+211553.576 [WARN ] [COR] Unimplemented env call: 78
+211553.576 [INFO ] [COR] retro_system_content_info_override
+211553.576 [INFO ] [COR]   srm|sav need_fullpath=1 persistent_data=0
+211553.576 [WARN ] [COR] Unimplemented env call: GET_SENSOR_INTERFACE (25)
+211553.576 [WARN ] [COR] Unimplemented env call: SET_FRAME_TIME_CALLBACK (21)
+211553.576 [WARN ] [COR] Unimplemented env call: SET_PROC_ADDRESS_CALLBACK (33)
+211553.576 [WARN ] [COR] Unimplemented env call: GET_DEVICE_POWER (77)
+211553.576 [WARN ] [COR] Unimplemented env call: GET_MESSAGE_INTERFACE_VERSION (59)
+211553.576 [INFO ] Save directory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves"
+211553.576 [INFO ] melonDS DS save subdirectory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS"
+211553.576 [INFO ] System directory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/System"
+211553.577 [INFO ] melonDS DS system subdirectory: "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/System/melonDS DS"
+211553.577 [WARN ] [COR] GET_VFS_INTERFACE: requested version 3, only have version 2
+211553.577 [WARN ] [COR] Called  GET_VFS_INTERFACE (45) -> 0
+211553.577 [WARN ] Could not get VFS interface 3, falling back to libretro-common defaults
+211553.577 [INFO ] melonDS DS 1.2.0
+211553.578 [ERROR] [melonDS] PCap: init failed
+211553.586 [INFO ] [UTL] Read 16777216 bytes from "C:\Games\Emulator Games\DS Games\Pokemon Dash (USA).nds"
+211553.591 [ERROR] [melonDS] PCap: init failed
+211553.591 [WARN ] Failed to enumerate Wi-fi adapters
+211553.591 [INFO ] [CFG] Variable melonds_mic_input found in selections, set to "microphone"
+211553.591 [INFO ] [CFG] Variable melonds_mic_input_active found in selections, set to "hold"
+211553.591 [INFO ] [CFG] Variable melonds_audio_bitdepth found in selections, set to "auto"
+211553.591 [INFO ] [CFG] Variable melonds_audio_interpolation found in selections, set to "disabled"
+211553.591 [INFO ] [CFG] Variable melonds_jit_enable found in selections, set to "enabled"
+211553.591 [INFO ] [CFG] Variable melonds_jit_block_size found in selections, set to "32"
+211553.591 [INFO ] [CFG] Variable melonds_jit_branch_optimisations found in selections, set to "enabled"
+211553.591 [INFO ] [CFG] Variable melonds_jit_literal_optimisations found in selections, set to "enabled"
+211553.591 [INFO ] [CFG] Variable melonds_jit_fast_memory found in selections, set to "enabled"
+211553.591 [INFO ] [CFG] Variable melonds_mac_address_mode found in selections, set to "firmware"
+211553.591 [INFO ] [CFG] Variable melonds_network_mode found in selections, set to "indirect"
+211553.591 [INFO ] [CFG] Variable melonds_direct_network_interface found in selections, set to "auto"
+211553.592 [INFO ] [CFG] Variable melonds_show_cursor found in selections, set to "timeout"
+211553.592 [INFO ] [CFG] Variable melonds_cursor_timeout found in selections, set to "3"
+211553.592 [INFO ] [CFG] Variable melonds_touch_mode found in selections, set to "auto"
+211553.592 [INFO ] [CFG] Variable melonds_number_of_screen_layouts found in selections, set to "1"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout1 found in selections, set to "hybrid-bottom"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout2 found in selections, set to "hybrid-top"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout3 found in selections, set to "top"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout4 found in selections, set to "bottom"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout5 found in selections, set to "hybrid-top"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout6 found in selections, set to "hybrid-bottom"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout7 found in selections, set to "bottom-top"
+211553.592 [INFO ] [CFG] Variable melonds_screen_layout8 found in selections, set to "right-left"
+211553.592 [INFO ] [CFG] Variable melonds_hybrid_ratio found in selections, set to "3"
+211553.592 [INFO ] [CFG] Variable melonds_hybrid_small_screen found in selections, set to "one"
+211553.592 [INFO ] [CFG] Variable melonds_opengl_filtering found in selections, set to "nearest"
+211553.593 [INFO ] [CFG] Variable melonds_screen_gap found in selections, set to "0"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_wfc_dns found in selections, set to "178.62.43.212"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_language found in selections, set to "auto"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_username found in selections, set to "guess_username"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_favorite_color found in selections, set to "0"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_birth_month found in selections, set to "default"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_birth_day found in selections, set to "default"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_enable_alarm found in selections, set to "default"
+211553.593 [INFO ] [CFG] Variable melonds_firmware_alarm_hour found in selections, set to "default"
+211553.594 [INFO ] [CFG] Variable melonds_firmware_alarm_minute found in selections, set to "default"
+211553.594 [INFO ] [CFG] Variable melonds_console_mode found in selections, set to "ds"
+211553.594 [INFO ] [CFG] Variable melonds_slot2_device found in selections, set to "auto"
+211553.594 [INFO ] [CFG] Variable melonds_solar_sensor_host_sensor found in selections, set to "enabled"
+211553.594 [INFO ] [CFG] Variable melonds_sysfile_mode found in selections, set to "native"
+211553.594 [INFO ] [CFG] Variable melonds_firmware_nds_path found in selections, set to "/notfound"
+211553.594 [INFO ] [CFG] Variable melonds_firmware_dsi_path found in selections, set to "/notfound"
+211553.594 [INFO ] [CFG] Variable melonds_dsi_nand_path found in selections, set to "/notfound"
+211553.594 [INFO ] [CFG] Variable melonds_boot_mode found in selections, set to "direct"
+211553.594 [INFO ] [CFG] Variable melonds_dsi_sdcard found in selections, set to "enabled"
+211553.594 [INFO ] [CFG] Variable melonds_dsi_sdcard_readonly found in selections, set to "disabled"
+211553.594 [INFO ] [CFG] Variable melonds_dsi_sdcard_sync_sdcard_to_host found in selections, set to "disabled"
+211553.594 [INFO ] [CFG] Variable melonds_homebrew_sdcard found in selections, set to "enabled"
+211553.594 [INFO ] [CFG] Variable melonds_homebrew_readonly found in selections, set to "disabled"
+211553.594 [INFO ] [CFG] Variable melonds_homebrew_sync_sdcard_to_host found in selections, set to "disabled"
+211553.594 [INFO ] [CFG] Variable melonds_battery_update_interval found in selections, set to "15"
+211553.594 [INFO ] [CFG] Variable melonds_ds_battery_ok_threshold found in selections, set to "20"
+211553.594 [INFO ] [CFG] Variable melonds_start_time_mode found in selections, set to "real"
+211553.594 [INFO ] [CFG] Variable melonds_start_time_relative_year_offset found in selections, set to "0"
+211553.594 [INFO ] [CFG] Variable melonds_start_time_relative_day_offset found in selections, set to "0"
+211553.594 [INFO ] [CFG] Variable melonds_start_time_relative_hour_offset found in selections, set to "0"
+211553.595 [INFO ] [CFG] Variable melonds_start_time_relative_minute_offset found in selections, set to "0"
+211553.595 [INFO ] [CFG] Variable melonds_start_time_absolute_year found in selections, set to "2004"
+211553.595 [INFO ] [CFG] Variable melonds_start_time_absolute_month found in selections, set to "1"
+211553.595 [INFO ] [CFG] Variable melonds_start_time_absolute_day found in selections, set to "1"
+211553.595 [INFO ] [CFG] Variable melonds_start_time_absolute_hour found in selections, set to "0"
+211553.595 [INFO ] [CFG] Variable melonds_start_time_absolute_minute found in selections, set to "0"
+211553.595 [INFO ] [CFG] Variable melonds_render_mode found in selections, set to "opengl"
+211553.595 [INFO ] [CFG] Variable melonds_opengl_resolution found in selections, set to "2"
+211553.596 [INFO ] [CFG] Variable melonds_opengl_better_polygons found in selections, set to "disabled"
+211553.596 [INFO ] [CFG] Variable melonds_threaded_renderer found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_unsupported_features found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_bios_warnings found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_current_layout found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_mic_state found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_camera_state found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_lid_state found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_sensor_reading found in selections, set to "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_console_mode is "ds"
+211553.596 [INFO ] [CFG] Variable melonds_slot2_device is "auto"
+211553.596 [INFO ] [CFG] Variable melonds_boot_mode is "direct"
+211553.596 [INFO ] [CFG] Variable melonds_sysfile_mode is "native"
+211553.596 [INFO ] [CFG] Variable melonds_solar_sensor_host_sensor is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_ds_battery_ok_threshold is "20"
+211553.596 [INFO ] [CFG] Variable melonds_battery_update_interval is "15"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_mode is "real"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_relative_year_offset is "0"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_relative_day_offset is "0"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_relative_hour_offset is "0"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_relative_minute_offset is "0"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_absolute_year is "2004"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_absolute_month is "1"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_absolute_day is "1"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_absolute_hour is "0"
+211553.596 [INFO ] [CFG] Variable melonds_start_time_absolute_minute is "0"
+211553.596 [INFO ] [CFG] Variable melonds_show_unsupported_features is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_mic_state is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_camera_state is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_bios_warnings is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_current_layout is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_lid_state is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_show_sensor_reading is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_jit_enable is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_jit_block_size is "32"
+211553.596 [INFO ] [CFG] Variable melonds_jit_branch_optimisations is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_jit_literal_optimisations is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_jit_fast_memory is "enabled"
+211553.596 [INFO ] [CFG] Variable melonds_homebrew_readonly is "disabled"
+211553.596 [INFO ] [CFG] Variable melonds_homebrew_sync_sdcard_to_host is "disabled"
+211553.596 [INFO ] [CFG] Variable melonds_homebrew_sdcard is "enabled"
+211553.596 [INFO ] No homebrew SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dldi_sd_card.bin"; will create an image.
+211553.596 [INFO ] [CFG] Variable melonds_dsi_sdcard_readonly is "disabled"
+211553.596 [INFO ] [CFG] Variable melonds_dsi_sdcard_sync_sdcard_to_host is "disabled"
+211553.596 [INFO ] [CFG] Variable melonds_dsi_sdcard is "enabled"
+211553.596 [INFO ] No DSi SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dsi_sd_card.bin"; will create an image.
+211553.596 [INFO ] [CFG] Variable melonds_dsi_nand_path is "/notfound"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_nds_path is "/notfound"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_dsi_path is "/notfound"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_language is "auto"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_favorite_color is "0"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_username is "guess_username"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_enable_alarm is "default"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_alarm_hour is "default"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_alarm_minute is "default"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_birth_month is "default"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_birth_day is "default"
+211553.596 [INFO ] [CFG] Variable melonds_firmware_wfc_dns is "178.62.43.212"
+211553.596 [INFO ] [CFG] Variable melonds_mic_input_active is "hold"
+211553.596 [INFO ] [CFG] Variable melonds_mic_input is "microphone"
+211553.596 [INFO ] [CFG] Variable melonds_audio_bitdepth is "auto"
+211553.596 [INFO ] [CFG] Variable melonds_audio_interpolation is "disabled"
+211553.596 [INFO ] [CFG] Variable melonds_network_mode is "indirect"
+211553.596 [INFO ] [CFG] Variable melonds_direct_network_interface is "auto"
+211553.596 [INFO ] [CFG] Variable melonds_mac_address_mode is "firmware"
+211553.596 [INFO ] [CFG] Variable melonds_screen_gap is "0"
+211553.596 [INFO ] [CFG] Variable melonds_cursor_timeout is "3"
+211553.596 [INFO ] [CFG] Variable melonds_touch_mode is "auto"
+211553.596 [INFO ] [CFG] Variable melonds_show_cursor is "timeout"
+211553.596 [INFO ] [CFG] Variable melonds_hybrid_ratio is "3"
+211553.596 [INFO ] [CFG] Variable melonds_hybrid_small_screen is "one"
+211553.596 [INFO ] [CFG] Variable melonds_number_of_screen_layouts is "1"
+211553.596 [INFO ] [CFG] Variable melonds_screen_layout1 is "hybrid-bottom"
+211553.596 [INFO ] [CFG] Variable melonds_screen_layout2 is "hybrid-top"
+211553.596 [INFO ] [CFG] Variable melonds_screen_layout3 is "top"
+211553.596 [INFO ] [CFG] Variable melonds_screen_layout4 is "bottom"
+211553.597 [INFO ] [CFG] Variable melonds_screen_layout5 is "hybrid-top"
+211553.597 [INFO ] [CFG] Variable melonds_screen_layout6 is "hybrid-bottom"
+211553.597 [INFO ] [CFG] Variable melonds_screen_layout7 is "bottom-top"
+211553.597 [INFO ] [CFG] Variable melonds_screen_layout8 is "right-left"
+211553.597 [INFO ] [CFG] Variable melonds_opengl_filtering is "nearest"
+211553.597 [INFO ] [CFG] Variable melonds_threaded_renderer is "enabled"
+211553.597 [INFO ] [CFG] Variable melonds_render_mode is "opengl"
+211553.597 [INFO ] [CFG] Variable melonds_opengl_resolution is "2"
+211553.597 [INFO ] [CFG] Variable melonds_opengl_better_polygons is "disabled"
+211553.597 [INFO ] [CFG] Variable melonds_mic_input is "microphone"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_mic_input_active to visible
+211553.597 [INFO ] [CFG] Variable melonds_render_mode is "opengl"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_opengl_resolution to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_opengl_better_polygons to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_threaded_renderer to hidden
+211553.597 [INFO ] [CFG] Variable melonds_console_mode is "ds"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_firmware_dsi_path to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_dsi_nand_path to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard to hidden
+211553.597 [INFO ] [CFG] Variable melonds_dsi_sdcard is "enabled"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard_readonly to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_dsi_sdcard_sync_sdcard_to_host to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_sysfile_mode to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_firmware_nds_path to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_ds_battery_ok_threshold to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_slot2_device to visible
+211553.597 [INFO ] [CFG] Variable melonds_homebrew_sdcard is "enabled"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_homebrew_readonly to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_homebrew_sync_sdcard_to_host to visible
+211553.597 [INFO ] [CFG] Variable melonds_show_cursor is "timeout"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_cursor_timeout to visible
+211553.597 [INFO ] [CFG] Variable melonds_number_of_screen_layouts is "1"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout1 to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout2 to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout3 to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout4 to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout5 to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout6 to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout7 to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_layout8 to hidden
+211553.597 [INFO ] [CFG] Variable melonds_screen_layout1 is "hybrid-bottom"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_hybrid_small_screen to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_hybrid_ratio to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_opengl_filtering to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_screen_gap to hidden
+211553.597 [INFO ] [CFG] Variable melonds_firmware_enable_alarm is "default"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_firmware_alarm_hour to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_firmware_alarm_minute to hidden
+211553.597 [INFO ] [CFG] Variable melonds_jit_enable is "enabled"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_jit_block_size to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_jit_branch_optimisations to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_jit_literal_optimisations to visible
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_jit_fast_memory to visible
+211553.597 [INFO ] [CFG] Variable melonds_network_mode is "indirect"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_direct_network_interface to hidden
+211553.597 [INFO ] [CFG] Variable melonds_start_time_mode is "real"
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_year_offset to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_day_offset to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_hour_offset to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_relative_minute_offset to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_year to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_month to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_day to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_hour to hidden
+211553.597 [INFO ] [CFG] Setting visibility on variable melonds_start_time_absolute_minute to hidden
+211553.614 [INFO ] [MIC] Opened microphone with ID 3 (frequency 48000 [requested 44100])
+211553.614 [INFO ] [MIC] Microphone audio format: 16-bit signed integer little endian
+211553.614 [ERROR] Failed to open firmware file "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/System//notfound" for reading
+211553.614 [WARN ] Falling back to built-in firmware
+211553.614 [WARN ] Falling back to FreeBIOS
+211553.645 [INFO ] [melonDS] Inserted cart with game code: APDE
+211553.645 [INFO ] [melonDS] Inserted cart with ID: 00000FC2
+211553.645 [INFO ] [melonDS] ROM entry: 01000000 00000002
+211553.646 [INFO ] No GBA SRAM was provided.
+211553.646 [INFO ] Deferring initialization until the OpenGL context is ready
+211553.646 [INFO ] [COR] Content "C:\Games\Emulator Games\DS Games\Pokemon Dash (USA).nds" loaded
+211553.647 [INFO ] OpenGL version: 4.6.0 - Build 26.20.100.7642
+211553.647 [INFO ] OpenGL vendor: Intel
+211553.647 [INFO ] OpenGL renderer: Intel(R) UHD Graphics
+211554.016 [INFO ] [AUD] Resampler initialized to convert from 32728.498047 to 44100.000000
+211611.642 [INFO ] [MEM] Registered 0x400000 bytes of SYSTEM RAM at $000000 (offset 0x000000)
+211611.642 [INFO ] [MEM] Registered 0x800000 bytes of UNUSED at $400000 (null filler)
+211611.642 [INFO ] [MEM] Registered 0x400000 bytes of UNUSED at $C00000 (null filler)
+211611.642 [INFO ] [MEM] Could not map region starting at $1000000
+211611.642 [INFO ] [MEM] Registered 0x4000 bytes of SYSTEM RAM at $1000000 (null filler)
+211611.642 [INFO ] [MEM] installing memory banks
+211611.644 [INFO ] [UTL] Read 8192 bytes from "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Saves\Pokemon Dash (USA).nds.sram"
+211611.645 [INFO ] [SAV] Loaded 8192 bytes of Save RAM from disk
+211611.661 [INFO ] [melonDS] MAC: 00:09:BF:11:22:33
+211611.661 [INFO ] [melonDS] Secure area decryption OK
+211611.698 [INFO ] [melonDS] Game is now booting
+211611.698 [INFO ] Started emulated console
+211611.698 [INFO ] [CFG] Variable melonds_console_mode is "ds"
+211611.698 [INFO ] [CFG] Variable melonds_slot2_device is "auto"
+211611.698 [INFO ] [CFG] Variable melonds_boot_mode is "direct"
+211611.698 [INFO ] [CFG] Variable melonds_sysfile_mode is "native"
+211611.698 [INFO ] [CFG] Variable melonds_solar_sensor_host_sensor is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_ds_battery_ok_threshold is "20"
+211611.698 [INFO ] [CFG] Variable melonds_battery_update_interval is "15"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_mode is "real"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_relative_year_offset is "0"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_relative_day_offset is "0"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_relative_hour_offset is "0"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_relative_minute_offset is "0"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_absolute_year is "2004"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_absolute_month is "1"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_absolute_day is "1"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_absolute_hour is "0"
+211611.698 [INFO ] [CFG] Variable melonds_start_time_absolute_minute is "0"
+211611.698 [INFO ] [CFG] Variable melonds_show_unsupported_features is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_show_mic_state is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_show_camera_state is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_show_bios_warnings is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_show_current_layout is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_show_lid_state is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_show_sensor_reading is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_jit_enable is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_jit_block_size is "32"
+211611.698 [INFO ] [CFG] Variable melonds_jit_branch_optimisations is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_jit_literal_optimisations is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_jit_fast_memory is "enabled"
+211611.698 [INFO ] [CFG] Variable melonds_homebrew_readonly is "disabled"
+211611.698 [INFO ] [CFG] Variable melonds_homebrew_sync_sdcard_to_host is "disabled"
+211611.698 [INFO ] [CFG] Variable melonds_homebrew_sdcard is "enabled"
+211611.698 [INFO ] No homebrew SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dldi_sd_card.bin"; will create an image.
+211611.698 [INFO ] [CFG] Variable melonds_dsi_sdcard_readonly is "disabled"
+211611.698 [INFO ] [CFG] Variable melonds_dsi_sdcard_sync_sdcard_to_host is "disabled"
+211611.698 [INFO ] [CFG] Variable melonds_dsi_sdcard is "enabled"
+211611.698 [INFO ] No DSi SD card image found at "C:/Users/Kenneth Rodas/Downloads/Archives/GameHub-1.0.11-win/data/emulators/ralibretro/Saves/melonDS DS/dsi_sd_card.bin"; will create an image.
+211611.698 [INFO ] [CFG] Variable melonds_dsi_nand_path is "/notfound"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_nds_path is "/notfound"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_dsi_path is "/notfound"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_language is "auto"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_favorite_color is "0"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_username is "guess_username"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_enable_alarm is "default"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_alarm_hour is "default"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_alarm_minute is "default"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_birth_month is "default"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_birth_day is "default"
+211611.698 [INFO ] [CFG] Variable melonds_firmware_wfc_dns is "178.62.43.212"
+211611.698 [INFO ] [CFG] Variable melonds_mic_input_active is "hold"
+211611.698 [INFO ] [CFG] Variable melonds_mic_input is "microphone"
+211611.698 [INFO ] [CFG] Variable melonds_audio_bitdepth is "auto"
+211611.698 [INFO ] [CFG] Variable melonds_audio_interpolation is "disabled"
+211611.698 [INFO ] [CFG] Variable melonds_network_mode is "indirect"
+211611.698 [INFO ] [CFG] Variable melonds_direct_network_interface is "auto"
+211611.698 [INFO ] [CFG] Variable melonds_mac_address_mode is "firmware"
+211611.698 [INFO ] [CFG] Variable melonds_screen_gap is "0"
+211611.698 [INFO ] [CFG] Variable melonds_cursor_timeout is "3"
+211611.698 [INFO ] [CFG] Variable melonds_touch_mode is "auto"
+211611.698 [INFO ] [CFG] Variable melonds_show_cursor is "timeout"
+211611.698 [INFO ] [CFG] Variable melonds_hybrid_ratio is "3"
+211611.698 [INFO ] [CFG] Variable melonds_hybrid_small_screen is "one"
+211611.698 [INFO ] [CFG] Variable melonds_number_of_screen_layouts is "1"
+211611.698 [INFO ] [CFG] Variable melonds_screen_layout1 is "hybrid-bottom"
+211611.698 [INFO ] [CFG] Variable melonds_screen_layout2 is "hybrid-top"
+211611.699 [INFO ] [CFG] Variable melonds_screen_layout3 is "top"
+211611.699 [INFO ] [CFG] Variable melonds_screen_layout4 is "bottom"
+211611.699 [INFO ] [CFG] Variable melonds_screen_layout5 is "hybrid-top"
+211611.699 [INFO ] [CFG] Variable melonds_screen_layout6 is "hybrid-bottom"
+211611.699 [INFO ] [CFG] Variable melonds_screen_layout7 is "bottom-top"
+211611.699 [INFO ] [CFG] Variable melonds_screen_layout8 is "right-left"
+211611.699 [INFO ] [CFG] Variable melonds_opengl_filtering is "nearest"
+211611.699 [INFO ] [CFG] Variable melonds_threaded_renderer is "enabled"
+211611.699 [INFO ] [CFG] Variable melonds_render_mode is "opengl"
+211611.699 [INFO ] [CFG] Variable melonds_opengl_resolution is "2"
+211611.699 [INFO ] [CFG] Variable melonds_opengl_better_polygons is "disabled"
+211638.313 [INFO ] [INP] Controller XInput Controller (XInput Controller #1) added
+211638.313 [INFO ] [VID] OSD message (200): XInput Controller connected
+211656.879 [INFO ] [UTL] Wrote 8192 bytes to "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Saves\Pokemon Dash (USA).nds.sram"
+211656.880 [INFO ] [UTL] Wrote 2998 bytes to "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\Cores\melondsds_libretro.json"
+211656.880 [INFO ] [melonDS] Stopping emulated console (Reason: External)
+211656.901 [ERROR] [COR] Context type not supported: RETRO_HW_CONTEXT_NONE
+211656.901 [WARN ] [COR] Called  SET_HW_RENDER (14) -> 0
+211656.924 [INFO ] [BCR] Core destroyed
+211656.955 [INFO ] [APP] begin shutdown
+211656.956 [INFO ] [UTL] Wrote 3667 bytes to "C:\Users\Kenneth Rodas\Downloads\Archives\GameHub-1.0.11-win\data\emulators\ralibretro\RALibretro.json"
+211657.117 [INFO ] [APP] shutdown complete

@@ -1,0 +1,63 @@
+Format:Lives
+FormatType=VALUE
+
+Format:Stars
+FormatType=VALUE
+
+Lookup:Pause
+2=▌▌
+
+Lookup:Map
+0x00=Starting the game
+0x01=File Select
+0x04=in Course 5 'Big Boo's Haunt'
+0x05=in Course 4 'Cool, Cool Mountain'
+0x06=inside the Castle
+0x07=in Course 6 'Hazy Maze Cave'
+0x08=in Course 8 'Shifting Sand Land'
+0x09=in Course 1 'Bob-omb Battlefield'
+0x0a=in Course 10 'Snowman's Land'
+0x0b=in Course 11 'Wet-Dry World'
+0x0c=in Course 3 'Jolly Roger Bay'
+0x0d=in Course 13 'Tiny-Huge Island'
+0x0e=in Course 14 'Tick Tock Clock'
+0x0f=in Course 15 'Rainbow Ride'
+0x10=outside the Castle
+0x11=in 'Bowser in the Dark World'
+0x12=in 'Vanish Cap Under the Moat'
+0x13=in 'Bowser in the Fire Sea'
+0x14=in 'Secret Aquarium'
+0x15=in 'Bowser in the Sky'
+0x16=in Course 7 'Lethal Lava Land'
+0x17=in Course 9 'Dire, Dire Docks'
+0x18=in Course 2 'Whomp's Fortress'
+0x19=in the Credits
+0x1a=in the Castle Courtyard
+0x1b=in 'Princess's Secret Slide'
+0x1c=in 'Cavern of the Metal Cap'
+0x1d=in 'Tower of the Wing Cap'
+0x1e=in Bowser's Dark Arena
+0x1f=in 'Wing Mario Over the Rainbow'
+0x21=in Bowser's Sea Arena
+0x22=in Bowser's Sky Arena
+0x24=in Course 12 'Tall, Tall Mountain'
+
+Lookup:switch
+0=▢
+1=▣
+
+Display:
+?0xHf0892=0?Titlescreen
+?0xHf0892=22?@Map(v1)
+?0xH1ab958=1S0xHf0892=128?Demo Mode
+?0xH1ab958=1S0xHf0892=22?@Map(v1)
+?0x33b17c=4865?Welcome to a new Journey
+?0x33b17c=0?Load Game
+?0xL32ddf6=1?@Pause(0xh33b23a)Mario is @Map(0xh32ddfa) [🚶@Lives(0xh33b21e)] [⭐@Stars(0xh33b266)/120] [🔴@switch(0xN207708)] [🟢@switch(0xO207708)] [🔵@switch(0xP207708)]
+?0xL32ddf6=2?@Pause(0xh33b23a)Mario is @Map(0xh32ddfa) [🚶@Lives(0xh33b21e)] [⭐@Stars(0xh33b266)/120] [🔴@switch(0xN207778)] [🟢@switch(0xO207778)] [🔵@switch(0xP207778)]
+?0xL32ddf6=3?@Pause(0xh33b23a)Mario is @Map(0xh32ddfa) [🚶@Lives(0xh33b21e)] [⭐@Stars(0xh33b266)/120] [🔴@switch(0xN2077e8)] [🟢@switch(0xO2077e8)] [🔵@switch(0xP2077e8)]
+?0xL32ddf6=4?@Pause(0xh33b23a)Mario is @Map(0xh32ddfa) [🚶@Lives(0xh33b21e)] [⭐@Stars(0xh33b266)/120] [🔴@switch(0xN207858)] [🟢@switch(0xO207858)] [🔵@switch(0xP207858)]
+Mario
+
+//RP created by unknown
+//RP improved by stfN1337

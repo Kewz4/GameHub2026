@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<title_list>
+ <title titleId="0005000010143500" version="0" sdk_version="20911" group_id="00001435" app_type="80000000">
+  <region>2</region>
+  <name>THE LEGEND OF ZELDA The Wind Waker HD</name>
+  <format>1</format>
+  <path>C:/Users/Kenneth Rodas/Documents/Emulators/Cemu_2.0-66/mlc01/usr/title/00050000/10143500</path>
+ </title>
+ <title titleId="00050000101c9400" version="0" sdk_version="21301" group_id="00001c94" app_type="80000000">
+  <region>2</region>
+  <name>The Legend of Zelda Breath of the Wild</name>
+  <format>1</format>
+  <path>C:/Users/Kenneth Rodas/Documents/Emulators/Cemu_2.0-66/mlc01/usr/title/00050000/101c9400</path>
+ </title>
+ <title titleId="0005000c101c9400" version="80" sdk_version="21301" group_id="00001c94" app_type="0800000e">
+  <region>2</region>
+  <name>The Legend of Zelda Breath of the Wild</name>
+  <format>1</format>
+  <path>C:/Users/Kenneth Rodas/Documents/Emulators/Cemu_2.0-66/mlc01/usr/title/0005000c/101c9400</path>
+ </title>
+</title_list>
