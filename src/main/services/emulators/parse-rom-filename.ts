@@ -107,13 +107,16 @@ export function parseRomFilename(fileName: string): ParsedRomFilename {
 }
 
 // ── Region allowlist ─────────────────────────────────────────────────────────
-// The catalogue is limited to USA/Europe releases for now. European releases
-// are often tagged with a single country ("(France)", "(Germany)"), so those
-// count as Europe; Australia/Canada are English-language PAL/NTSC releases in
-// the same families. Asian releases (romanized Japanese/Korean titles like
-// "Zelda no Densetsu …" / "Zelda-ui Jeonseol …") are excluded.
+// The catalogue is limited to ENGLISH releases (USA + pan-European English).
+// No-Intro tags the pan-European English release as "(Europe)" (it bundles
+// En,Fr,De,Es,It), then ALSO ships per-country localized dumps: "(Spain)",
+// "(France)", "(Germany)", "(Italy)"… whose titles are translated
+// ("Pokemon - Edicion Rubi", "Versione Rubino"). Those are foreign-language
+// duplicates of the same game, so only English-family regions are allowed;
+// every other country (and Japan/Korea/Taiwan/Asia) is excluded.
 
-const ALLOWED_REGION_TOKENS = new Set([
+/** Regions whose releases are in English (kept). */
+const ENGLISH_REGION_TOKENS = new Set([
   "usa",
   "us",
   "u",
@@ -122,10 +125,22 @@ const ALLOWED_REGION_TOKENS = new Set([
   "europe",
   "eur",
   "e",
-  "australia",
-  "canada",
   "uk",
   "united kingdom",
+  "australia",
+  "new zealand",
+  "canada",
+  "ireland",
+]);
+
+/**
+ * Every token we recognize AS a region (English or not). Used to tell a real
+ * region tag apart from an unrelated tag like "(SGB Enhanced)" so an untagged
+ * homebrew entry is kept while a localized "(Spain)" release is dropped.
+ */
+const KNOWN_REGION_TOKENS = new Set([
+  ...ENGLISH_REGION_TOKENS,
+  // Non-English European / other countries — excluded (localized dupes).
   "france",
   "germany",
   "italy",
@@ -141,12 +156,13 @@ const ALLOWED_REGION_TOKENS = new Set([
   "austria",
   "switzerland",
   "belgium",
-  "ireland",
   "greece",
   "scandinavia",
-]);
-
-const DENIED_REGION_TOKENS = new Set([
+  "russia",
+  "brazil",
+  "mexico",
+  "latin america",
+  // Asia — excluded.
   "japan",
   "jpn",
   "jap",
@@ -160,54 +176,48 @@ const DENIED_REGION_TOKENS = new Set([
   "hongkong",
 ]);
 
-/** Canonical region family per allowed token (European countries → Europe). */
-const REGION_FAMILY: Record<string, string> = {
-  usa: "USA",
-  us: "USA",
-  u: "USA",
-  canada: "USA",
-  world: "World",
-  w: "World",
-};
-for (const token of ALLOWED_REGION_TOKENS) {
-  REGION_FAMILY[token] ??= "Europe";
-}
-
 /**
- * All allowed region families a ROM covers ("(USA, Europe)" → ["USA","Europe"];
- * "(Germany)" → ["Europe"]). Empty when no allowed region tag is present.
+ * The English region families a ROM covers ("(USA, Europe)" → ["USA","Europe"];
+ * "(Europe)" → ["Europe"]). Empty when the ROM has no English region tag.
  */
 export function romRegionFamilies(fileName: string): string[] {
   const withoutExt = stripExtension(fileName);
   const families = new Set<string>();
   for (const match of withoutExt.matchAll(TAG_REGEX)) {
     for (const raw of match[0].slice(1, -1).split(",")) {
-      const family = REGION_FAMILY[raw.trim().toLowerCase()];
-      if (family) families.add(family);
+      const token = raw.trim().toLowerCase();
+      if (!ENGLISH_REGION_TOKENS.has(token)) continue;
+      families.add(
+        token === "usa" || token === "us" || token === "u" || token === "canada"
+          ? "USA"
+          : token === "world" || token === "w"
+            ? "World"
+            : "Europe"
+      );
     }
   }
   return [...families];
 }
 
 /**
- * Whether a ROM belongs to the allowed regions (USA/Europe families).
- * Policy: any allowed region tag → keep (covers "(Japan, USA)" combos);
- * otherwise any denied region tag → drop; no region tag at all → keep
- * (homebrew/unlabelled entries shouldn't vanish).
+ * Whether a ROM is an English (USA/Europe-family) release.
+ * Policy: if any recognized region tag is English → keep (covers combos like
+ * "(USA, Europe)"); if it carries region tags but none are English → drop
+ * (localized "(Spain)"/"(Japan)"/… dupes); if it has NO recognized region tag
+ * at all → keep (untagged homebrew shouldn't vanish).
  */
 export function isAllowedRomRegion(fileName: string): boolean {
   const withoutExt = stripExtension(fileName);
 
-  let sawDenied = false;
+  let sawRegion = false;
   for (const match of withoutExt.matchAll(TAG_REGEX)) {
-    const tag = match[0].slice(1, -1);
-    for (const raw of tag.split(",")) {
+    for (const raw of match[0].slice(1, -1).split(",")) {
       const token = raw.trim().toLowerCase();
       if (!token) continue;
-      if (ALLOWED_REGION_TOKENS.has(token)) return true;
-      if (DENIED_REGION_TOKENS.has(token)) sawDenied = true;
+      if (ENGLISH_REGION_TOKENS.has(token)) return true;
+      if (KNOWN_REGION_TOKENS.has(token)) sawRegion = true;
     }
   }
 
-  return !sawDenied;
+  return !sawRegion;
 }

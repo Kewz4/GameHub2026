@@ -24,8 +24,11 @@ import {
  * v4: USA/Europe-only region filtering (Japan/Korea/Taiwan/Asia excluded).
  * v5: natural display titles ("The Legend of Zelda - …") + article-insensitive
  *     normalization for keys.
+ * v6: English-only regions (drop localized country editions) + Virtual
+ *     Console/LodgeNet re-release filtering.
+ * v7: filter unlicensed/pirate/bootleg dumps.
  */
-const CATALOGUE_VERSION = 5;
+const CATALOGUE_VERSION = 7;
 const CATALOGUE_VERSION_KEY = "minervaCatalogueVersion";
 
 /** Bundled catalogue dir (extraResource in packaged builds; repo in dev). */

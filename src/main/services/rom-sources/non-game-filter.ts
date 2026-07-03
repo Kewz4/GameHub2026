@@ -17,9 +17,21 @@ const NON_GAME_TEXT =
 // store/kiosk demos AND unfinished builds (beta/proto/sample/debug). The user
 // wants only finished, real games — none of these.
 const NON_GAME_TAG =
-  /\((Demo|Kiosk|Trade Demo|Tech Demo|Promo|Beta|Proto|Prototype|Sample|Debug|Dev|Test Program|Pre-Release|Preview)\b[^)]*\)/i;
+  /\((Demo|Kiosk|Trade Demo|Tech Demo|Promo|Beta|Proto|Prototype|Sample|Debug|Dev|Test Program|Pre-Release|Preview|Unl|Pirate|Bootleg)\b[^)]*\)/i;
 
-/** True when a catalogue entry is a cheat device, demo/kiosk disc, trailer, etc. */
+// Re-releases that duplicate a game already present on its native platform.
+// The Wii U / 3DS eShops re-hosted games from OTHER consoles (Virtual Console),
+// which No-Intro tags with the source console — "Pokemon Snap (USA) (N64)
+// (Virtual Console)", "Skyward Sword (Europe) (Wii)" — so those entries pollute
+// the Wii U set with duplicates of the native N64/Wii dumps. A bare source-
+// console tag only appears in these cross-console collections (a native GBA
+// dump is never tagged "(GBA)"), so it's a safe re-release marker. Also drops
+// LodgeNet hotel-rental variants.
+const RE_RELEASE_TAG =
+  /\bVirtual Console\b|\bLodgeNet\b|\((?:Wii(?: U)?|N64|Nintendo 64|NES|Famicom|SNES|Super Famicom|GB|GBC|GBA|Game Boy(?: Color| Advance)?|DS|Genesis|Mega Drive|Master System|Game Gear|TurboGrafx-16|TG-?16|PC Engine|MSX|Neo Geo|Arcade|C64|Commodore 64)\)/i;
+
+/** True when a catalogue entry is a cheat device, demo/kiosk disc, trailer,
+ *  or a Virtual Console / LodgeNet re-release of a native-platform game. */
 export function isNonGameEntry(
   title: string | null | undefined,
   fileName: string | null | undefined
@@ -30,6 +42,7 @@ export function isNonGameEntry(
     NON_GAME_TEXT.test(t) ||
     NON_GAME_TEXT.test(f) ||
     NON_GAME_TAG.test(f) ||
-    NON_GAME_TAG.test(t)
+    NON_GAME_TAG.test(t) ||
+    RE_RELEASE_TAG.test(f)
   );
 }
