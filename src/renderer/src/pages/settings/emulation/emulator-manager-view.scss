@@ -1,0 +1,250 @@
+.emulator-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  &__breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    align-self: flex-start;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0;
+    &:hover {
+      color: #fff;
+    }
+  }
+
+  &__hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  &__hero-logo {
+    height: 40px;
+    max-width: 160px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    &--color {
+      filter: none;
+    }
+  }
+  &__hero-title {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+  &__hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    font-size: 0.85rem;
+    opacity: 0.85;
+  }
+  &__ok {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #4ade80;
+  }
+  &__warn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #fbbf24;
+  }
+  &__version {
+    opacity: 0.6;
+  }
+  &__platforms-label {
+    opacity: 0.5;
+    font-size: 0.8rem;
+  }
+
+  &__general {
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__section-header {
+    h3 {
+      margin: 0 0 2px;
+      font-size: 1rem;
+    }
+    p {
+      margin: 0;
+      font-size: 0.8rem;
+      opacity: 0.6;
+    }
+
+    &--row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+  }
+
+  &__exec-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  &__exec-box {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    cursor: pointer;
+  }
+  &__exec-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.82rem;
+    &--placeholder {
+      opacity: 0.5;
+    }
+  }
+  &__remove {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: #f87171;
+    font-size: 0.82rem;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  &__platform-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  &__platform-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.82rem;
+    cursor: pointer;
+    &:hover {
+      color: #fff;
+    }
+    &--active {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+  }
+  &__platform-tab-logo {
+    height: 14px;
+    max-width: 70px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    font-size: 0.7rem;
+  }
+
+  &__subtabs {
+    display: flex;
+    gap: 4px;
+  }
+  &__subtab {
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    &:hover {
+      color: #fff;
+    }
+    &--active {
+      color: #fff;
+      border-bottom-color: var(--color-text-bright, #fff);
+    }
+  }
+
+  &__panel {
+    min-height: 200px;
+  }
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__folders {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  &__empty {
+    opacity: 0.5;
+    font-size: 0.85rem;
+  }
+  &__folder-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  &__folder-info {
+    flex: 1;
+    min-width: 0;
+  }
+  &__folder-path {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.85rem;
+  }
+  &__folder-meta {
+    font-size: 0.75rem;
+    opacity: 0.55;
+  }
+  &__folder-remove {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    &:hover {
+      color: #f87171;
+    }
+  }
+
+  &__lib-stat {
+    font-size: 0.85rem;
+    opacity: 0.7;
+    margin: 0;
+  }
+}

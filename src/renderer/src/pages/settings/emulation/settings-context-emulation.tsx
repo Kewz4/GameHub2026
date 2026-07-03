@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
+import { DeviceDesktopIcon } from "@primer/octicons-react";
 
-import type { EmulatorConfigMap, EmulatorSystem } from "@types";
+import type { EmulatorSystem } from "@types";
 
-import { ConsoleCard } from "./console-card";
+import { Button } from "@renderer/components";
 import { RetroAchievementsSection } from "./retroachievements-section";
 import { MinervaCatalogueSection } from "./minerva-catalogue-section";
-import { EmulatorDetail } from "./emulator-detail";
-import { EmulatorSetupModal } from "./setup/emulator-setup-modal";
+import { EmulationManagerModal } from "./emulation-manager-modal";
 import {
   ClassicsOnboardingModal,
   hasDismissedClassicsOnboarding,
@@ -16,50 +16,14 @@ import {
 
 import "./settings-context-emulation.scss";
 
-const SYSTEMS: EmulatorSystem[] = [
-  "ps1",
-  "ps2",
-  "ps3",
-  "psp",
-  "n3ds",
-  "nds",
-  "dsi",
-  "n64",
-  "gb",
-  "gbc",
-  "gba",
-  "wiiu",
-  "wii",
-  "gc",
-];
-
-const SYSTEM_LABELS: Record<EmulatorSystem, string> = {
-  ps1: "PlayStation",
-  ps2: "PlayStation 2",
-  ps3: "PlayStation 3",
-  psp: "PSP",
-  n3ds: "Nintendo 3DS",
-  nds: "Nintendo DS",
-  dsi: "Nintendo DSi",
-  n64: "Nintendo 64",
-  gb: "Game Boy",
-  gbc: "Game Boy Color",
-  gba: "Game Boy Advance",
-  wiiu: "Wii U",
-  wii: "Wii",
-  gc: "GameCube",
-};
-
 export function SettingsContextEmulation() {
   const { t } = useTranslation("settings");
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [configs, setConfigs] = useState<EmulatorConfigMap | null>(null);
-  const [view, setView] = useState<
-    { kind: "grid" } | { kind: "detail"; system: EmulatorSystem }
-  >({ kind: "grid" });
-  const [setupSystem, setSetupSystem] = useState<EmulatorSystem | null>(null);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [deepLinkSystem, setDeepLinkSystem] = useState<EmulatorSystem | null>(
+    null
+  );
   const deepLinkAppliedRef = useRef(false);
 
   const [showClassicsOnboarding, setShowClassicsOnboarding] = useState(false);
@@ -75,93 +39,16 @@ export function SettingsContextEmulation() {
     }
   }, []);
 
-  const refresh = useCallback(async () => {
-    const next = await window.electron.getEmulatorConfigs();
-    setConfigs(next);
-    return next;
-  }, []);
-
+  // Deep-link (?system=n64) opens the manager on that console's emulator.
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      const initial = await window.electron.getEmulatorConfigs();
-      if (cancelled) return;
-
-      const anyDetected = SYSTEMS.some((s) => initial[s].detectedAt !== null);
-      if (!anyDetected) {
-        const detected = await window.electron.detectEmulators();
-        if (cancelled) return;
-        setConfigs(detected);
-        return;
-      }
-
-      setConfigs(initial);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (deepLinkAppliedRef.current || !configs) return;
+    if (deepLinkAppliedRef.current) return;
     const system = searchParams.get("system");
-    if (system && SYSTEMS.includes(system as EmulatorSystem)) {
+    if (system) {
       deepLinkAppliedRef.current = true;
-      setView({ kind: "detail", system: system as EmulatorSystem });
+      setDeepLinkSystem(system as EmulatorSystem);
+      setManagerOpen(true);
     }
-  }, [configs, searchParams]);
-
-  const handleConfigure = useCallback((system: EmulatorSystem) => {
-    setView({ kind: "detail", system });
-  }, []);
-
-  const handleStartSetup = useCallback((system: EmulatorSystem) => {
-    setSetupSystem(system);
-  }, []);
-
-  const handleSetupComplete = useCallback(
-    (system: EmulatorSystem) => {
-      setSetupSystem(null);
-      localStorage.setItem("library-category", "classics");
-      // Land the user in the Library filtered to the console they just set up.
-      navigate(`/library?console=${system}`);
-    },
-    [navigate]
-  );
-
-  const handleSetupClose = useCallback(async () => {
-    setSetupSystem(null);
-    await refresh();
-  }, [refresh]);
-
-  const handleBack = useCallback(() => {
-    setView({ kind: "grid" });
-  }, []);
-
-  const detailConfig = useMemo(() => {
-    if (view.kind !== "detail" || !configs) return null;
-    return configs[view.system];
-  }, [configs, view]);
-
-  if (!configs) {
-    return <div className="settings-emulation__loading">…</div>;
-  }
-
-  if (view.kind === "detail" && detailConfig) {
-    return (
-      <EmulatorDetail
-        config={detailConfig}
-        systemLabel={SYSTEM_LABELS[view.system]}
-        onBack={handleBack}
-        onChange={(next) =>
-          setConfigs((prev) => (prev ? { ...prev, [next.system]: next } : prev))
-        }
-        refresh={refresh}
-      />
-    );
-  }
+  }, [searchParams]);
 
   return (
     <div className="settings-emulation">
@@ -169,6 +56,7 @@ export function SettingsContextEmulation() {
         visible={showClassicsOnboarding}
         onClose={() => setShowClassicsOnboarding(false)}
       />
+
       <header className="settings-emulation__header">
         <div className="settings-emulation__title-row">
           <h2 className="settings-emulation__title">{t("emulation")}</h2>
@@ -184,28 +72,37 @@ export function SettingsContextEmulation() {
         </p>
       </header>
 
+      <div className="settings-emulation__manager-launcher">
+        <div className="settings-emulation__manager-text">
+          <h3>{t("emulation_manager_title", { defaultValue: "Emulators" })}</h3>
+          <p>
+            {t("emulation_manager_launcher_description", {
+              defaultValue:
+                "Manage every emulator, its platforms, controls, ROM folders and library in one place.",
+            })}
+          </p>
+        </div>
+        <Button
+          theme="primary"
+          onClick={() => {
+            setDeepLinkSystem(null);
+            setManagerOpen(true);
+          }}
+        >
+          <DeviceDesktopIcon size={16} />
+          {t("open_emulation_manager", {
+            defaultValue: "Open emulator manager",
+          })}
+        </Button>
+      </div>
+
       <RetroAchievementsSection />
       <MinervaCatalogueSection />
 
-      <div className="settings-emulation__cards">
-        {SYSTEMS.map((system) => (
-          <ConsoleCard
-            key={system}
-            config={configs[system]}
-            systemLabel={SYSTEM_LABELS[system]}
-            onConfigure={() => handleConfigure(system)}
-            onStartSetup={() => handleStartSetup(system)}
-          />
-        ))}
-      </div>
-
-      <EmulatorSetupModal
-        visible={setupSystem !== null}
-        system={setupSystem}
-        systemLabel={setupSystem ? SYSTEM_LABELS[setupSystem] : ""}
-        initialConfig={setupSystem ? configs[setupSystem] : null}
-        onClose={handleSetupClose}
-        onComplete={handleSetupComplete}
+      <EmulationManagerModal
+        visible={managerOpen}
+        initialSystem={deepLinkSystem}
+        onClose={() => setManagerOpen(false)}
       />
     </div>
   );

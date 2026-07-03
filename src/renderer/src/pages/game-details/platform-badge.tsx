@@ -1,26 +1,11 @@
-import type { EmulatorSystem } from "@types";
+import { useState } from "react";
+import type { EmulatorSystem, Game } from "@types";
 import { systemForGame } from "@renderer/pages/library/console-filter";
-import type { Game } from "@types";
+import {
+  PLATFORM_LOGOS,
+  PLATFORM_LABELS,
+} from "@renderer/assets/emulation/platform-logos";
 import "./platform-badge.scss";
-
-/** Short console name + a brand accent for the game-details banner badge. */
-const PLATFORM_BADGE: Record<EmulatorSystem, { label: string; color: string }> =
-  {
-    ps1: { label: "PlayStation", color: "#2e6db4" },
-    ps2: { label: "PlayStation 2", color: "#2e6db4" },
-    ps3: { label: "PlayStation 3", color: "#2e6db4" },
-    psp: { label: "PSP", color: "#2e6db4" },
-    n3ds: { label: "Nintendo 3DS", color: "#c8102e" },
-    nds: { label: "Nintendo DS", color: "#c8102e" },
-    dsi: { label: "Nintendo DSi", color: "#c8102e" },
-    n64: { label: "Nintendo 64", color: "#0aad4b" },
-    gb: { label: "Game Boy", color: "#7b57a6" },
-    gbc: { label: "Game Boy Color", color: "#7b57a6" },
-    gba: { label: "Game Boy Advance", color: "#5a3aa6" },
-    wii: { label: "Wii", color: "#1aa3d6" },
-    wiiu: { label: "Wii U", color: "#1aa3d6" },
-    gc: { label: "GameCube", color: "#4a3a8a" },
-  };
 
 /**
  * Resolve the console for a game from its objectId ("minerva:<system>:…") or
@@ -32,19 +17,20 @@ function resolveSystem(
 ): EmulatorSystem | null {
   if (objectId?.startsWith("minerva:")) {
     const seg = objectId.split(":")[1] as EmulatorSystem;
-    if (seg in PLATFORM_BADGE) return seg;
+    if (seg in PLATFORM_LABELS) return seg;
   }
   if (game) {
     const s = systemForGame(game);
-    if (s && s in PLATFORM_BADGE) return s;
+    if (s && s in PLATFORM_LABELS) return s;
   }
   return null;
 }
 
 /**
- * Platform badge shown top-right of the game-details banner for console games,
- * so e.g. Skyward Sword is clearly tagged "Wii" (and the GameCube vs Wii
- * versions of a cross-platform title are distinguishable). Renders nothing for
+ * Platform logo shown top-right of the game-details banner for console games,
+ * so e.g. Skyward Sword shows the Wii logo (and the GameCube vs Wii versions
+ * of a cross-platform title are distinguishable). Falls back to a text label
+ * when no logo art exists (PSP) or the SVG fails to load. Renders nothing for
  * PC games.
  */
 export function PlatformBadge({
@@ -55,13 +41,28 @@ export function PlatformBadge({
   game: Game | null | undefined;
 }>) {
   const system = resolveSystem(objectId, game);
+  const [failed, setFailed] = useState(false);
   if (!system) return null;
-  const { label, color } = PLATFORM_BADGE[system];
+
+  const label = PLATFORM_LABELS[system];
+  const logo = PLATFORM_LOGOS[system];
+
+  if (logo && !failed) {
+    return (
+      <span className="game-details__platform-badge" title={label}>
+        <img
+          src={logo}
+          alt={label}
+          className="game-details__platform-badge-logo"
+          onError={() => setFailed(true)}
+        />
+      </span>
+    );
+  }
 
   return (
     <span
-      className="game-details__platform-badge"
-      style={{ ["--platform-accent" as string]: color }}
+      className="game-details__platform-badge game-details__platform-badge--text"
       title={label}
     >
       {label}

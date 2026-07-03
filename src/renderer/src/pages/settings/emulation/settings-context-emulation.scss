@@ -69,3 +69,28 @@
     border-radius: 8px;
   }
 }
+
+.settings-emulation__manager-launcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+
+  .settings-emulation__manager-text {
+    h3 {
+      margin: 0 0 4px;
+      font-size: 1.05rem;
+    }
+    p {
+      margin: 0;
+      font-size: 0.85rem;
+      opacity: 0.65;
+      max-width: 620px;
+    }
+  }
+}
