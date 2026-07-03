@@ -1,8 +1,8 @@
 import type { EmulatorSystem } from "@types";
 
-// White platform wordmark/logo SVGs (user-provided). PSP has no logo in the
-// set, so it falls back to a text label wherever these are used.
+// White platform wordmark/logo SVGs (user-provided).
 import ps1 from "./platforms/ps1.svg?url";
+import psp from "./platforms/psp.svg?url";
 import ps2 from "./platforms/ps2.svg?url";
 import ps3 from "./platforms/ps3.svg?url";
 import n3ds from "./platforms/n3ds.svg?url";
@@ -16,9 +16,10 @@ import wiiu from "./platforms/wiiu.svg?url";
 import wii from "./platforms/wii.svg?url";
 import gc from "./platforms/gc.svg?url";
 
-/** White logo per console, or undefined when no logo art exists (PSP). */
+/** White logo per console. */
 export const PLATFORM_LOGOS: Partial<Record<EmulatorSystem, string>> = {
   ps1,
+  psp,
   ps2,
   ps3,
   n3ds,

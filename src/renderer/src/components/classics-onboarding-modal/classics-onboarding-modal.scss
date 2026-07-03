@@ -106,3 +106,45 @@
     pointer-events: none;
   }
 }
+
+.console-logos-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 220px;
+  padding: 28px 24px;
+  background:
+    radial-gradient(
+      120% 90% at 50% 0%,
+      rgba(96, 165, 250, 0.14),
+      transparent 70%
+    ),
+    rgba(255, 255, 255, 0.02);
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px 20px;
+    width: 100%;
+    max-width: 440px;
+  }
+
+  &__cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  &__logo {
+    max-height: 22px;
+    max-width: 100%;
+    object-fit: contain;
+    opacity: 0.92;
+  }
+}

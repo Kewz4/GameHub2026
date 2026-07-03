@@ -3,11 +3,8 @@ import { useTranslation } from "react-i18next";
 
 import { Modal } from "../modal/modal";
 import { CheckboxField } from "../checkbox-field/checkbox-field";
-import {
-  StepOneIllustration,
-  StepThreeIllustration,
-  StepTwoIllustration,
-} from "./illustrations";
+import { StepThreeIllustration, StepTwoIllustration } from "./illustrations";
+import { ConsoleLogosHero } from "./console-logos-hero";
 
 import "./classics-onboarding-modal.scss";
 
@@ -58,7 +55,7 @@ export function ClassicsOnboardingModal({
 
   const steps: StepContent[] = [
     {
-      illustration: <StepOneIllustration />,
+      illustration: <ConsoleLogosHero />,
       headingKey: "step1_heading",
       bodyKey: "step1_body",
     },

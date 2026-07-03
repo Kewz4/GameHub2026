@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { InfoIcon } from "@primer/octicons-react";
 import type { EmulatorSystem } from "@types";
 import { useToast } from "@renderer/hooks";
+import { SettingSelect } from "./setting-select";
+import "./emulator-settings-section.scss";
 
 interface SettingDef {
   key: string;
@@ -80,36 +83,38 @@ export function EmulatorSettingsSection({ system }: Readonly<Props>) {
   return (
     <div className="emulator-settings">
       <p className="emulator-settings__notice">
-        Changes are saved instantly, but the emulator only reads them when a
-        game starts — close and relaunch the game for new video/resolution
-        settings to take effect.
+        <InfoIcon size={14} />
+        <span>
+          Changes are saved instantly, but the emulator only reads them when a
+          game starts — close and relaunch the game for new settings to take
+          effect.
+        </span>
       </p>
+
       {Object.entries(groups).map(([group, list]) => (
-        <div key={group} className="emulator-settings__group">
+        <section key={group} className="emulator-settings__group">
           <h4 className="emulator-settings__group-title">{group}</h4>
-          {list.map((def) => (
-            <label key={def.key} className="emulator-settings__row">
-              <span className="emulator-settings__label">
-                {def.label}
-                {def.hint && (
-                  <span className="emulator-settings__hint">{def.hint}</span>
-                )}
-              </span>
-              <select
-                className="emulator-settings__select"
-                value={values[def.key] ?? def.options?.[0]?.value ?? ""}
-                disabled={saving}
-                onChange={(e) => onChange(def.key, e.target.value)}
-              >
-                {(def.options ?? []).map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
+          <div className="emulator-settings__rows">
+            {list.map((def) => (
+              <div key={def.key} className="emulator-settings__row">
+                <div className="emulator-settings__label">
+                  <span className="emulator-settings__label-text">
+                    {def.label}
+                  </span>
+                  {def.hint && (
+                    <span className="emulator-settings__hint">{def.hint}</span>
+                  )}
+                </div>
+                <SettingSelect
+                  value={values[def.key] ?? def.options?.[0]?.value ?? ""}
+                  options={def.options ?? []}
+                  disabled={saving}
+                  onChange={(v) => onChange(def.key, v)}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   );
