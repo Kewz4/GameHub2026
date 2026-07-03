@@ -8,7 +8,9 @@ import {
   gameAchievementsSublevel,
   gamesShopAssetsSublevel,
   gamesSublevel,
+  getGameHubMeta,
 } from "@main/level";
+import { systemFromObjectId, platformToSystem } from "@main/helpers";
 
 const getLibrary = async (): Promise<LibraryGame[]> => {
   return gamesSublevel
@@ -21,6 +23,28 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
           .map(async ([key, game]) => {
             const download = await downloadsSublevel.get(key);
             const gameAssets = await gamesShopAssetsSublevel.get(key);
+
+            // Console/emulated (launchbox) games rarely have stored shop assets
+            // — their art lives in the local gamehub-meta dataset (same source
+            // the game-details page uses). Resolve it here so the library grid
+            // and downloads hero show real cover/hero art instead of a broken
+            // placeholder.
+            let meta: Awaited<ReturnType<typeof getGameHubMeta>> = null;
+            if (
+              game.shop === "launchbox" &&
+              (!gameAssets?.coverImageUrl ||
+                !gameAssets?.libraryImageUrl ||
+                !gameAssets?.libraryHeroImageUrl)
+            ) {
+              const system =
+                systemFromObjectId(game.objectId) ??
+                platformToSystem(game.platform);
+              if (system) {
+                meta = await getGameHubMeta(system, game.title).catch(
+                  () => null
+                );
+              }
+            }
             const achievements = await gameAchievementsSublevel
               .get(key)
               .catch(() => null);
@@ -122,19 +146,28 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
                 game.customIconUrl ||
                 gameAssets?.iconUrl ||
                 game.iconUrl ||
+                meta?.iconUrl ||
                 null,
               libraryHeroImageUrl:
                 game.customHeroImageUrl ||
                 gameAssets?.libraryHeroImageUrl ||
                 game.libraryHeroImageUrl ||
+                meta?.libraryHeroImageUrl ||
+                meta?.coverImageUrl ||
                 null,
               logoImageUrl:
                 game.customLogoImageUrl ||
                 gameAssets?.logoImageUrl ||
                 game.logoImageUrl ||
+                meta?.logoImageUrl ||
                 null,
-              libraryImageUrl: gameAssets?.libraryImageUrl || null,
-              coverImageUrl: gameAssets?.coverImageUrl || null,
+              libraryImageUrl:
+                gameAssets?.libraryImageUrl ||
+                meta?.libraryImageUrl ||
+                meta?.coverImageUrl ||
+                null,
+              coverImageUrl:
+                gameAssets?.coverImageUrl || meta?.coverImageUrl || null,
               customIconUrl: game.customIconUrl,
               customLogoImageUrl: game.customLogoImageUrl,
               customHeroImageUrl: game.customHeroImageUrl,

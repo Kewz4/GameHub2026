@@ -678,9 +678,7 @@ export default function Library() {
                 ariaLabel="Filter by console"
                 active={consoleFilter !== "all"}
                 value={consoleFilter}
-                onChange={(v) =>
-                  setConsoleFilter(v as EmulatorSystem | "all")
-                }
+                onChange={(v) => setConsoleFilter(v as EmulatorSystem | "all")}
                 options={[
                   { value: "all", label: "Console" },
                   ...availableConsoles.map((system) => ({

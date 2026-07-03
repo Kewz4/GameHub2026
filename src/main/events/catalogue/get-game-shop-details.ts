@@ -35,6 +35,58 @@ const getLocalizedSteamAppDetails = async (
   return getSteamAppDetails(objectId, language);
 };
 
+/**
+ * Best-effort description for a console game with no local IGDB summary: search
+ * the Hydra catalogue for the same title on Steam and return its (cached or
+ * freshly-fetched) description. Returns "" when there's no confident match.
+ */
+const fetchDescriptionByTitle = async (
+  title: string,
+  language: string
+): Promise<string> => {
+  const titleNorm = normalizeGameTitle(title);
+  const resp = await HydraApi.post<{
+    edges: CatalogueSearchResult[];
+    count: number;
+  }>(
+    "/catalogue/search",
+    {
+      title,
+      sortBy: "popularity",
+      sortOrder: "desc",
+      downloadSourceFingerprints: [],
+      tags: [],
+      publishers: [],
+      genres: [],
+      developers: [],
+      protondbSupportBadges: [],
+      deckCompatibility: [],
+      take: 5,
+      skip: 0,
+    },
+    { needsAuth: false }
+  ).catch(() => null);
+
+  const match =
+    resp?.edges?.find(
+      (r) => r.shop === "steam" && normalizeGameTitle(r.title) === titleNorm
+    ) ?? resp?.edges?.find((r) => r.shop === "steam");
+  if (!match) return "";
+
+  const cached = await gamesShopCacheSublevel
+    .get(levelKeys.gameShopCacheItem("steam", match.objectId, language))
+    .catch(() => null);
+  const details =
+    cached ??
+    (await getSteamAppDetails(match.objectId, language).catch(() => null));
+  return (
+    details?.about_the_game ||
+    details?.detailed_description ||
+    details?.short_description ||
+    ""
+  );
+};
+
 const getGameShopDetails = async (
   _event: Electron.IpcMainInvokeEvent,
   objectId: string,
@@ -82,7 +134,15 @@ const getGameShopDetails = async (
       title ??
       objectId;
 
-    const description = meta?.description ?? "";
+    // The bundled metadata has no IGDB summary for some titles (e.g. Pokemon
+    // Dash). Fall back to the Hydra catalogue: find the Steam equivalent by
+    // title and borrow its description, so the details page isn't left blank.
+    let description = meta?.description ?? "";
+    if (!description.trim()) {
+      description = await fetchDescriptionByTitle(displayTitle, language).catch(
+        () => ""
+      );
+    }
     const assets: ShopDetailsWithAssets["assets"] = {
       objectId,
       shop,

@@ -4,34 +4,23 @@ import type { EmulatorSystem } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { getEmulatorConfig } from "./emulators-repository";
 import { logger } from "../logger";
+import type { SettingDef, SettingValue, SettingType } from "./setting-types";
+import { STANDALONE_SETTINGS_BY_SYSTEM } from "./standalone-settings-defs";
+import {
+  isStandaloneSettingsSystem,
+  readStandaloneSettings,
+  writeStandaloneSettings,
+} from "./emulator-standalone-settings";
+
+export type { SettingDef, SettingValue, SettingType };
 
 /**
  * User-facing emulator settings (video / performance / core options), exposed
- * per system and persisted into the emulator's own config files. For the
- * RALibretro systems this means editing the libretro core option JSON
- * (`<install>/Cores/<core>.json`, a `{ "core": { key: value } }` map).
+ * per system and persisted into the emulator's own config files. RALibretro
+ * systems edit the libretro core option JSON (`<install>/Cores/<core>.json`);
+ * standalone emulators (PCSX2/RPCS3/Dolphin/Azahar/Cemu) edit their own native
+ * config (INI/YAML/XML) via emulator-standalone-settings.
  */
-
-export type SettingType = "enum" | "toggle";
-
-export interface SettingDef {
-  /** The raw config key written to the emulator/core config. */
-  key: string;
-  /** Human label shown in the UI. */
-  label: string;
-  type: SettingType;
-  /** For enum settings: the allowed values (raw) + their display labels. */
-  options?: { value: string; label: string }[];
-  /** Group heading (e.g. "Video", "Performance", "Enhancements"). */
-  group: string;
-  /** Short help text. */
-  hint?: string;
-}
-
-export interface SettingValue {
-  key: string;
-  value: string;
-}
 
 /** Which libretro core file backs each RALibretro system. */
 const CORE_FILE: Partial<Record<EmulatorSystem, string>> = {
@@ -373,7 +362,9 @@ const SETTINGS_BY_SYSTEM: Partial<Record<EmulatorSystem, SettingDef[]>> = {
 
 /** The settings schema exposed for a system (empty if none defined yet). */
 export function getSettingDefs(system: EmulatorSystem): SettingDef[] {
-  return SETTINGS_BY_SYSTEM[system] ?? [];
+  return (
+    SETTINGS_BY_SYSTEM[system] ?? STANDALONE_SETTINGS_BY_SYSTEM[system] ?? []
+  );
 }
 
 /** Resolve the core option file path for a RALibretro system, or null. */
@@ -392,6 +383,12 @@ export async function readEmulatorSettings(
 ): Promise<SettingValue[]> {
   const defs = getSettingDefs(system);
   if (defs.length === 0) return [];
+
+  // Standalone emulators (PCSX2/RPCS3/Dolphin/Azahar/Cemu) read from their own
+  // native config files.
+  if (isStandaloneSettingsSystem(system)) {
+    return readStandaloneSettings(system, defs);
+  }
 
   const file = await coreFilePath(system);
   let core: Record<string, string> = {};
@@ -414,6 +411,10 @@ export async function writeEmulatorSettings(
   system: EmulatorSystem,
   values: SettingValue[]
 ): Promise<boolean> {
+  if (isStandaloneSettingsSystem(system)) {
+    return writeStandaloneSettings(system, values);
+  }
+
   const file = await coreFilePath(system);
   if (!file) return false;
 
