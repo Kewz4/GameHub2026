@@ -49,6 +49,8 @@ import { CompatibilitySettingsSection } from "./game-options-modal/compatibility
 import { DownloadsSettingsSection } from "./game-options-modal/downloads-section";
 import { DangerZoneSection } from "./game-options-modal/danger-zone-section";
 import { HydraCloudSettingsSection } from "./game-options-modal/hydra-cloud-section";
+import { GraphicPacksSection } from "./game-options-modal/graphic-packs-section";
+import { systemForGame } from "@renderer/pages/library/console-filter";
 import type { GameSettingsCategoryId } from "./game-options-modal/types";
 import { CreateSteamShortcutModal } from "./create-steam-shortcut-modal";
 
@@ -119,6 +121,9 @@ export function GameOptionsModal({
   const [winetricksAvailable, setWinetricksAvailable] = useState(false);
   const [selectedCategory, setSelectedCategory] =
     useState<GameSettingsCategoryId>("general");
+
+  // Cemu graphic packs are a Wii U-only feature.
+  const isWiiUGame = useMemo(() => systemForGame(game) === "wiiu", [game]);
   const [defaultWinePrefixPath, setDefaultWinePrefixPath] = useState<
     string | null
   >(null);
@@ -725,6 +730,15 @@ export function GameOptionsModal({
             },
           ]
         : []),
+      ...(isWiiUGame
+        ? [
+            {
+              id: "graphic_packs" as const,
+              label: "Graphic packs",
+              icon: <ImageIcon size={16} />,
+            },
+          ]
+        : []),
       {
         id: "downloads" as const,
         label: t("settings_category_downloads"),
@@ -736,7 +750,7 @@ export function GameOptionsModal({
         icon: <AlertIcon size={16} />,
       },
     ],
-    [shouldShowWinePrefixConfiguration, t]
+    [shouldShowWinePrefixConfiguration, isWiiUGame, t]
   );
 
   useEffect(() => {
@@ -981,6 +995,9 @@ export function GameOptionsModal({
                   onChangeProtonVersion={handleChangeProtonVersion}
                 />
               )}
+            {selectedCategory === "graphic_packs" && isWiiUGame && (
+              <GraphicPacksSection game={game} />
+            )}
             {selectedCategory === "downloads" && (
               <DownloadsSettingsSection
                 game={game}

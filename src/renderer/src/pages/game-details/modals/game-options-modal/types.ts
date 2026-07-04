@@ -4,5 +4,6 @@ export type GameSettingsCategoryId =
   | "assets"
   | "hydra_cloud"
   | "compatibility"
+  | "graphic_packs"
   | "downloads"
   | "danger_zone";

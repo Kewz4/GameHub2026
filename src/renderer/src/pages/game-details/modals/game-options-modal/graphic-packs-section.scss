@@ -1,0 +1,135 @@
+.graphic-packs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  &__subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    max-width: 460px;
+  }
+
+  &__download {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+
+  &__muted {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+  }
+
+  &__search {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.25);
+    color: inherit;
+    font-size: 13px;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+  }
+
+  &__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+
+  &__item {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+
+    &--on {
+      border-color: rgba(120, 170, 255, 0.4);
+      background: rgba(120, 170, 255, 0.06);
+    }
+  }
+
+  &__item-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+
+    input {
+      cursor: pointer;
+    }
+  }
+
+  &__item-path {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  &__item-desc {
+    margin: 6px 0 0 24px;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  &__presets {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0 2px 24px;
+  }
+
+  &__preset-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__preset-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}

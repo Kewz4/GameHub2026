@@ -42,6 +42,7 @@ import type {
   DownloadLayoutState,
   ExcludedGame,
   EmulatorSystem,
+  CemuGraphicPack,
   EmulatorConfig,
   EmulatorConfigMap,
   ControllerProfile,
@@ -936,6 +937,23 @@ declare global {
     setEmulatorSettings: (
       system: EmulatorSystem,
       values: { key: string; value: string }[]
+    ) => Promise<boolean>;
+    listCemuGraphicPacks: (
+      titleId?: string | null
+    ) => Promise<{ hasLibrary: boolean; packs: CemuGraphicPack[] }>;
+    downloadCemuGraphicPacks: () => Promise<{
+      ok: boolean;
+      count: number;
+      reason?: string;
+    }>;
+    setCemuGraphicPackEnabled: (
+      id: string,
+      enabled: boolean
+    ) => Promise<boolean>;
+    setCemuGraphicPackPreset: (
+      id: string,
+      category: string,
+      preset: string
     ) => Promise<boolean>;
     getControllerProfile: (binary?: EmulatorBinary) => Promise<{
       profile: ControllerProfile;

@@ -295,6 +295,34 @@ export interface ResolvedInstallOption {
   linkKind: EmulatorInstallLinkKind | null;
 }
 
+/** A selectable preset option within one category of a Cemu graphic pack. */
+export interface CemuGraphicPackPresetCategory {
+  /** Category name (empty string for a pack's default, uncategorised preset). */
+  category: string;
+  /** The available preset names in this category. */
+  options: string[];
+  /** The currently-active preset for this category (from settings.xml). */
+  active: string | null;
+}
+
+/** A Cemu graphic pack parsed from a downloaded rules.txt. */
+export interface CemuGraphicPack {
+  /** Stable id — the rules.txt path relative to the Cemu data dir. */
+  id: string;
+  /** Display name (rules.txt `name`, falling back to the path leaf). */
+  name: string;
+  /** The Cemu tree path, e.g. "Zelda BOTW/Mods/FPS++". */
+  path: string;
+  /** Wii U title ids this pack applies to (lowercased hex). */
+  titleIds: string[];
+  /** Optional description from rules.txt. */
+  description: string | null;
+  /** Whether this pack is currently enabled in settings.xml. */
+  enabled: boolean;
+  /** Preset categories the user can choose from. */
+  presets: CemuGraphicPackPresetCategory[];
+}
+
 export type EmulatorInstallPhase =
   | "downloading"
   | "extracting"

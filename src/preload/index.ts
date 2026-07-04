@@ -778,6 +778,14 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("getEmulatorSettings", system),
   setEmulatorSettings: (system: EmulatorSystem, values: any) =>
     ipcRenderer.invoke("setEmulatorSettings", system, values),
+  listCemuGraphicPacks: (titleId?: string | null) =>
+    ipcRenderer.invoke("listCemuGraphicPacks", titleId),
+  downloadCemuGraphicPacks: () =>
+    ipcRenderer.invoke("downloadCemuGraphicPacks"),
+  setCemuGraphicPackEnabled: (id: string, enabled: boolean) =>
+    ipcRenderer.invoke("setCemuGraphicPackEnabled", id, enabled),
+  setCemuGraphicPackPreset: (id: string, category: string, preset: string) =>
+    ipcRenderer.invoke("setCemuGraphicPackPreset", id, category, preset),
   getControllerProfile: (binary?: any) =>
     ipcRenderer.invoke("getControllerProfile", binary),
   saveControllerProfile: (profile: any, binary?: any, type?: any) =>
