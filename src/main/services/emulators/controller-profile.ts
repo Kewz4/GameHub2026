@@ -8,6 +8,7 @@ import type {
 } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { getEmulatorConfig } from "./emulators-repository";
+import { cemuDataDir } from "./emulator-portable";
 import { logger } from "../logger";
 import {
   writeRalibretro,
@@ -120,7 +121,11 @@ function writeForBinary(
         const t =
           type && type.startsWith("wiiu") ? type : ("wiiu_gamepad" as const);
         write(
-          path.join(installDir, "controllerProfiles", "controller0.xml"),
+          path.join(
+            cemuDataDir(installDir),
+            "controllerProfiles",
+            "controller0.xml"
+          ),
           cemuControllerXml(
             profile,
             t as "wiiu_gamepad" | "wiiu_pro" | "wiiu_classic"

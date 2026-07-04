@@ -6,6 +6,7 @@ import type { EmulatorBinary, EmulatorSystem } from "@types";
 import { logger } from "../logger";
 import { getEmulatorConfig } from "./emulators-repository";
 import { KNOWN_BINARIES } from "./known-binaries";
+import { cemuDataDir } from "./emulator-portable";
 import type { SettingDef, SettingValue } from "./setting-types";
 
 /**
@@ -86,8 +87,10 @@ const writeFileEnsuring = (file: string, content: string) => {
 
 interface IniSpec {
   format: "ini";
-  file: (installDir: string) => string;
-  section: string;
+  /** Config file for a given key (some emulators split keys across files). */
+  file: (installDir: string, key: string) => string;
+  /** INI section for a given key. */
+  section: (key: string) => string;
   /** Extra keys written verbatim when this key changes (Citra `\default`). */
   companions?: (key: string) => Record<string, string>;
   /** Portable-mode marker files to ensure exist. */
@@ -102,32 +105,76 @@ interface YamlSpec {
 interface XmlSpec {
   format: "xml";
   file: (installDir: string) => string;
-  parent: string;
+  /** XML parent element for a given key (root-level keys use "content"). */
+  parent: (key: string) => string;
 }
 
 type ConfigSpec = IniSpec | YamlSpec | XmlSpec;
 
-// Settings whose config file differs from the emulator's primary one (Dolphin
-// keeps the backend in Dolphin.ini, everything else in GFX.ini). Maps a setting
-// key to the spec that owns it; falls back to the binary's default spec.
+// ── Per-key routing tables (which INI section / XML element owns a key) ───────
+
+// Azahar (qt-config.ini) groups keys into typed sections; unknown keys default
+// to [Renderer]. Keys verified against azahar-emu/azahar config source.
+const AZAHAR_SECTION: Record<string, string> = {
+  layout_option: "Layout",
+  swap_screen: "Layout",
+  upright_screen: "Layout",
+  filter_mode: "Layout",
+  render_3d: "Layout",
+  large_screen_proportion: "Layout",
+  mono_render_option: "Layout",
+  is_new_3ds: "System",
+  region_value: "System",
+  audio_emulation: "Audio",
+  enable_audio_stretching: "Audio",
+  dump_textures: "Utility",
+  custom_textures: "Utility",
+  preload_textures: "Utility",
+  cpu_clock_percentage: "Core",
+};
+
+// Dolphin splits its config: the video backend lives in Dolphin.ini [Core];
+// everything else is in GFX.ini under [Settings] or [Enhancements].
+const DOLPHIN_CORE_KEYS = new Set(["GFXBackend"]);
+const DOLPHIN_GFX_SECTION: Record<string, string> = {
+  MaxAnisotropy: "Enhancements",
+  ForceTextureFiltering: "Enhancements",
+};
+const dolphinSectionFor = (key: string): string => {
+  if (DOLPHIN_CORE_KEYS.has(key)) return "Core";
+  return DOLPHIN_GFX_SECTION[key] ?? "Settings";
+};
+const dolphinFileFor = (installDir: string, key: string): string =>
+  path.join(
+    installDir,
+    "User",
+    "Config",
+    DOLPHIN_CORE_KEYS.has(key) ? "Dolphin.ini" : "GFX.ini"
+  );
+
+// Cemu graphic keys live under <Graphic>; a few live at the <content> root.
+const CEMU_ROOT_KEYS = new Set(["console_language", "fullscreen"]);
+const cemuParentFor = (key: string): string =>
+  CEMU_ROOT_KEYS.has(key) ? "content" : "Graphic";
+
 const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
   pcsx2: {
     format: "ini",
     file: (d) => path.join(d, "inis", "PCSX2.ini"),
-    section: "EmuCore/GS",
+    section: () => "EmuCore/GS",
     markers: (d) => [path.join(d, "portable.ini")],
   },
   azahar: {
     format: "ini",
     file: (d) => path.join(d, "user", "config", "qt-config.ini"),
-    section: "Renderer",
+    section: (key) => AZAHAR_SECTION[key] ?? "Renderer",
     // Citra/Azahar only honour a value when its `\default` twin is false.
     companions: (key) => ({ [`${key}\\default`]: "false" }),
   },
   dolphin: {
     format: "ini",
-    file: (d) => path.join(d, "User", "Config", "GFX.ini"),
-    section: "Settings",
+    file: dolphinFileFor,
+    section: dolphinSectionFor,
     markers: (d) => [path.join(d, "portable.txt")],
   },
   rpcs3: {
@@ -137,24 +184,12 @@ const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
   },
   cemu: {
     format: "xml",
-    file: (d) => path.join(d, "settings.xml"),
-    parent: "Graphic",
+    file: (d) => path.join(cemuDataDir(d), "settings.xml"),
+    parent: cemuParentFor,
   },
 };
 
-// Dolphin's video backend lives in Dolphin.ini [Core], not GFX.ini.
-const DOLPHIN_CORE_KEYS = new Set(["GFXBackend"]);
-const dolphinCoreSpec = (installDir: string): IniSpec => ({
-  format: "ini",
-  file: () => path.join(installDir, "User", "Config", "Dolphin.ini"),
-  section: "Core",
-  markers: (d) => [path.join(d, "portable.txt")],
-});
-
-function specFor(binary: EmulatorBinary, key: string): ConfigSpec | null {
-  if (binary === "dolphin" && DOLPHIN_CORE_KEYS.has(key)) {
-    return dolphinCoreSpec("");
-  }
+function specFor(binary: EmulatorBinary): ConfigSpec | null {
   return CONFIG[binary] ?? null;
 }
 
@@ -258,12 +293,12 @@ export async function readStandaloneSettings(
     const fallback = def.options?.[0]?.value ?? "";
     if (!installDir) return { key: def.key, value: fallback };
     try {
-      const spec = specFor(binary, def.key);
+      const spec = specFor(binary);
       if (!spec) return { key: def.key, value: fallback };
       if (spec.format === "ini") {
         const val = getIniValue(
-          readFile(spec.file(installDir)),
-          spec.section,
+          readFile(spec.file(installDir, def.key)),
+          spec.section(def.key),
           def.key
         );
         return { key: def.key, value: val ?? fallback };
@@ -275,7 +310,7 @@ export async function readStandaloneSettings(
       // xml
       const val = getXmlValue(
         readFile(spec.file(installDir)),
-        spec.parent,
+        spec.parent(def.key),
         def.key
       );
       return { key: def.key, value: val ?? fallback };
@@ -298,28 +333,26 @@ export async function writeStandaloneSettings(
 
   try {
     for (const { key, value } of values) {
-      const spec = specFor(binary, key);
+      const spec = specFor(binary);
       if (!spec) continue;
 
       if (spec.format === "ini") {
         for (const marker of spec.markers?.(installDir) ?? []) {
           if (!fs.existsSync(marker)) writeFileEnsuring(marker, "");
         }
-        const file =
-          binary === "dolphin" && DOLPHIN_CORE_KEYS.has(key)
-            ? dolphinCoreSpec(installDir).file(installDir)
-            : spec.file(installDir);
+        const file = spec.file(installDir, key);
+        const section = spec.section(key);
         let ini = readFile(file);
-        ini = setIniValue(ini, spec.section, key, value);
+        ini = setIniValue(ini, section, key, value);
         for (const [ck, cv] of Object.entries(spec.companions?.(key) ?? {})) {
-          ini = setIniValue(ini, spec.section, ck, cv);
+          ini = setIniValue(ini, section, ck, cv);
         }
         writeFileEnsuring(file, ini);
       } else if (spec.format === "yaml") {
         setYamlValue(spec.file(installDir), spec.pathOf(key), value);
       } else {
         const file = spec.file(installDir);
-        const xml = setXmlValue(readFile(file), spec.parent, key, value);
+        const xml = setXmlValue(readFile(file), spec.parent(key), key, value);
         writeFileEnsuring(file, xml);
       }
     }

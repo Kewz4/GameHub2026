@@ -29,6 +29,7 @@ import { logger } from "../logger";
 import { SevenZip } from "../7zip";
 import { ALL_SYSTEMS, KNOWN_BINARIES } from "./known-binaries";
 import { resolveInstallOptionById } from "./emulator-install-sources";
+import { writePortableSetup } from "./emulator-portable";
 import {
   getEmulatorConfig,
   updateEmulatorConfig,
@@ -306,6 +307,10 @@ export const installEmulator = async (
     if (!executablePath || !existsSync(executablePath)) {
       return { ok: false, reason: "Could not locate the emulator executable" };
     }
+
+    // Make the install TRULY portable: drop the portable-mode marker + data
+    // tree so config/saves/NAND never leak into AppData/Documents.
+    writePortableSetup(binary, path.dirname(executablePath));
 
     // RALibretro ships as a bare exe — pre-seed the cores + default configs so
     // it's playable immediately (no manual core download / RA overlay setup).

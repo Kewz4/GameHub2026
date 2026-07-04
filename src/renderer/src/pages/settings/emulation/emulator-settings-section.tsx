@@ -50,7 +50,22 @@ export function EmulatorSettingsSection({ system }: Readonly<Props>) {
   const groups = useMemo(() => {
     const g: Record<string, SettingDef[]> = {};
     for (const d of defs) (g[d.group] ??= []).push(d);
-    return g;
+    // Present groups in a stable, intentional order rather than whatever order
+    // the setting keys happen to appear in. Unknown groups sort to the end.
+    const order = [
+      "Video",
+      "Enhancements",
+      "Performance",
+      "Screen",
+      "Audio",
+      "System",
+      "Advanced",
+    ];
+    const rank = (name: string) => {
+      const i = order.indexOf(name);
+      return i === -1 ? order.length : i;
+    };
+    return Object.entries(g).sort((a, b) => rank(a[0]) - rank(b[0]));
   }, [defs]);
 
   const onChange = async (key: string, value: string) => {
@@ -91,7 +106,7 @@ export function EmulatorSettingsSection({ system }: Readonly<Props>) {
         </span>
       </p>
 
-      {Object.entries(groups).map(([group, list]) => (
+      {groups.map(([group, list]) => (
         <section key={group} className="emulator-settings__group">
           <h4 className="emulator-settings__group-title">{group}</h4>
           <div className="emulator-settings__rows">
