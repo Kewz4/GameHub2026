@@ -3,7 +3,23 @@ import { InfoIcon } from "@primer/octicons-react";
 import type { EmulatorSystem } from "@types";
 import { useToast } from "@renderer/hooks";
 import { SettingSelect } from "./setting-select";
+import { SettingToggle } from "./setting-toggle";
 import "./emulator-settings-section.scss";
+
+/**
+ * A boolean setting is any two-option enum whose choices read as On/Off — those
+ * render as a switch instead of a dropdown. `options[0]` is the "on" value
+ * (works across the true/True/enabled casings the configs use).
+ */
+const asToggle = (def: SettingDef): { on: string; off: string } | null => {
+  const opts = def.options ?? [];
+  if (opts.length !== 2) return null;
+  const labels = opts.map((o) => o.label.trim().toLowerCase());
+  if (labels[0] === "on" && labels[1] === "off") {
+    return { on: opts[0].value, off: opts[1].value };
+  }
+  return null;
+};
 
 interface SettingDef {
   key: string;
@@ -120,12 +136,28 @@ export function EmulatorSettingsSection({ system }: Readonly<Props>) {
                     <span className="emulator-settings__hint">{def.hint}</span>
                   )}
                 </div>
-                <SettingSelect
-                  value={values[def.key] ?? def.options?.[0]?.value ?? ""}
-                  options={def.options ?? []}
-                  disabled={saving}
-                  onChange={(v) => onChange(def.key, v)}
-                />
+                {(() => {
+                  const toggle = asToggle(def);
+                  const current =
+                    values[def.key] ?? def.options?.[0]?.value ?? "";
+                  return toggle ? (
+                    <SettingToggle
+                      checked={current === toggle.on}
+                      disabled={saving}
+                      ariaLabel={def.label}
+                      onChange={(on) =>
+                        onChange(def.key, on ? toggle.on : toggle.off)
+                      }
+                    />
+                  ) : (
+                    <SettingSelect
+                      value={current}
+                      options={def.options ?? []}
+                      disabled={saving}
+                      onChange={(v) => onChange(def.key, v)}
+                    />
+                  );
+                })()}
               </div>
             ))}
           </div>

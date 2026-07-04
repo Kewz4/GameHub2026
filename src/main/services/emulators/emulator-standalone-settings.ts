@@ -116,6 +116,7 @@ type ConfigSpec = IniSpec | YamlSpec | XmlSpec;
 // Azahar (qt-config.ini) groups keys into typed sections; unknown keys default
 // to [Renderer]. Keys verified against azahar-emu/azahar config source.
 const AZAHAR_SECTION: Record<string, string> = {
+  // [Renderer] is the default; only non-Renderer keys are listed here.
   layout_option: "Layout",
   swap_screen: "Layout",
   upright_screen: "Layout",
@@ -123,22 +124,38 @@ const AZAHAR_SECTION: Record<string, string> = {
   render_3d: "Layout",
   large_screen_proportion: "Layout",
   mono_render_option: "Layout",
+  swap_eyes_3d: "Layout",
   is_new_3ds: "System",
   region_value: "System",
+  apply_region_free_patch: "System",
+  plugin_loader: "System",
+  init_clock: "System",
   audio_emulation: "Audio",
   enable_audio_stretching: "Audio",
+  enable_realtime_audio: "Audio",
   dump_textures: "Utility",
   custom_textures: "Utility",
   preload_textures: "Utility",
+  async_custom_loading: "Utility",
   cpu_clock_percentage: "Core",
+  use_cpu_jit: "Core",
 };
 
 // Dolphin splits its config: the video backend lives in Dolphin.ini [Core];
 // everything else is in GFX.ini under [Settings] or [Enhancements].
 const DOLPHIN_CORE_KEYS = new Set(["GFXBackend"]);
 const DOLPHIN_GFX_SECTION: Record<string, string> = {
+  // GFX.ini [Enhancements]
   MaxAnisotropy: "Enhancements",
   ForceTextureFiltering: "Enhancements",
+  ForceTrueColor: "Enhancements",
+  DisableCopyFilter: "Enhancements",
+  ArbitraryMipmapDetection: "Enhancements",
+  // GFX.ini [Hacks]
+  EFBToTextureEnable: "Hacks",
+  XFBToTextureEnable: "Hacks",
+  EFBAccessEnable: "Hacks",
+  // everything else falls through to [Settings]
 };
 const dolphinSectionFor = (key: string): string => {
   if (DOLPHIN_CORE_KEYS.has(key)) return "Core";
