@@ -15,6 +15,7 @@ import { UploadcareSync } from "./uploadcare-sync";
 import i18next, { t } from "i18next";
 import { SystemPath } from "./system-path";
 import { Wine } from "./wine";
+import { resolveEmulatorSaveLocation } from "./emulators/emulator-save-dirs";
 
 export class CloudSync {
   public static getWindowsLikeUserProfilePath(winePrefixPath?: string | null) {
@@ -106,6 +107,23 @@ export class CloudSync {
     const canonicalName =
       (await Ludusavi.findCanonicalName(shop, gameTitle, objectId)) ??
       gameTitle;
+
+    // Console/emulated games aren't in Ludusavi's manifest — their saves live in
+    // the (portable) emulator's save tree. Register those folders as a Ludusavi
+    // custom game keyed by the same name we back up under, so the existing
+    // backup → tar → cloud pipeline captures and restores them unchanged.
+    try {
+      const location = await resolveEmulatorSaveLocation(shop, objectId);
+      if (location) {
+        await Ludusavi.addCustomGame(canonicalName, location.folders);
+      }
+    } catch (error) {
+      logger.error("Failed to register emulator save folders", {
+        shop,
+        objectId,
+        error,
+      });
+    }
 
     await Ludusavi.backupGame(shop, canonicalName, backupPath, winePrefix);
 

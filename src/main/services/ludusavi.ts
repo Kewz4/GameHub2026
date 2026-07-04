@@ -658,16 +658,24 @@ export class Ludusavi {
     };
   }
 
-  static async addCustomGame(title: string, savePath: string | null) {
+  static async addCustomGame(
+    title: string,
+    savePath: string | string[] | null
+  ) {
     const config = await this.getConfig();
     const filteredGames = config.customGames.filter(
       (game) => game.name !== title
     );
 
-    if (savePath) {
+    const files = Array.isArray(savePath)
+      ? savePath.filter(Boolean)
+      : savePath
+        ? [savePath]
+        : [];
+    if (files.length > 0) {
       filteredGames.push({
         name: title,
-        files: [savePath],
+        files,
         registry: [],
       });
     }
