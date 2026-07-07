@@ -25,6 +25,22 @@ export const gamesPlaytime = new Map<
   { lastTick: number; firstTick: number; lastSyncTick: number }
 >();
 
+/**
+ * Emulator games run inside a shared emulator process (Cemu.exe, etc.), so the
+ * executable-path process scan never matches them. The emulator launcher
+ * registers them here instead, and they're merged into the `on-games-running`
+ * broadcast so the Play button flips to Close while the emulator is open.
+ */
+const emulatorRunningGames = new Map<string, number>();
+
+export const setEmulatorGameRunning = (
+  gameKey: string,
+  running: boolean
+): void => {
+  if (running) emulatorRunningGames.set(gameKey, performance.now());
+  else emulatorRunningGames.delete(gameKey);
+};
+
 interface ExecutableInfo {
   name: string;
   os: string;
@@ -288,6 +304,15 @@ export const watchProcesses = async () => {
         sessionDurationInMillis: performance.now() - entry[1].firstTick,
       } as Pick<GameRunning, "id" | "sessionDurationInMillis">;
     });
+
+    // Merge emulator games (tracked by their spawned child, not a process scan).
+    for (const [id, startedAt] of emulatorRunningGames) {
+      if (gamesPlaytime.has(id)) continue;
+      gamesRunning.push({
+        id,
+        sessionDurationInMillis: performance.now() - startedAt,
+      } as Pick<GameRunning, "id" | "sessionDurationInMillis">);
+    }
 
     WindowManager.mainWindow.webContents.send("on-games-running", gamesRunning);
   }

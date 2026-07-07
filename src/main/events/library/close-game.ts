@@ -1,5 +1,5 @@
 import { registerEvent } from "../register-event";
-import { launchedGamePids, logger, Wine } from "@main/services";
+import { launchedGamePids, logger, Wine, emulators } from "@main/services";
 import sudo from "sudo-prompt";
 import { app } from "electron";
 import { gamesSublevel, levelKeys } from "@main/level";
@@ -22,6 +22,9 @@ const closeGame = async (
   shop: GameShop,
   objectId: string
 ) => {
+  // Emulator games run in a child process we track directly — kill that first.
+  if (emulators.closeEmulatorSession(shop, objectId)) return;
+
   const processes = await NativeAddon.listProcesses();
 
   const game = await gamesSublevel.get(levelKeys.game(shop, objectId));
