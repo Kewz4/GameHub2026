@@ -96,11 +96,24 @@ export class Ludusavi {
     });
   }
 
-  /** Make sure the game database (manifest) has been downloaded. */
+  /**
+   * Make sure the game database (manifest, PCGamingWiki-derived) has been
+   * downloaded, and refresh it when it's older than a week so save locations
+   * for new/updated games keep resolving.
+   */
   private static async ensureManifest(): Promise<void> {
     const manifestPath = path.join(this.configPath, "manifest.yaml");
     if (!fs.existsSync(manifestPath)) {
       await this.updateManifest();
+      return;
+    }
+    try {
+      const ageMs = Date.now() - fs.statSync(manifestPath).mtimeMs;
+      if (ageMs > 7 * 24 * 60 * 60 * 1000) {
+        await this.updateManifest();
+      }
+    } catch {
+      // stat failed — keep the existing manifest
     }
   }
 

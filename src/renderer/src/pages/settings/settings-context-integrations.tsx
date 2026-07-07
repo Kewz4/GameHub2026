@@ -13,7 +13,7 @@ import { SettingsExclusionList } from "./settings-exclusion-list";
 import { SettingsRiot } from "./settings-riot";
 import { SettingsUbisoft } from "./settings-ubisoft";
 import { SettingsEa } from "./settings-ea";
-import { useAppSelector, useUserDetails } from "@renderer/hooks";
+import { useAppSelector } from "@renderer/hooks";
 import { HelperText, SectionHeading } from "@renderer/components";
 
 interface IntegrationItemProps {
@@ -64,7 +64,6 @@ function IntegrationItem({
 
 export function SettingsContextIntegrations() {
   const { t } = useTranslation("settings");
-  const { userDetails } = useUserDetails();
   const userPreferences = useAppSelector(
     (state) => state.userPreferences.value
   );
@@ -80,15 +79,9 @@ export function SettingsContextIntegrations() {
     });
   };
 
-  if (!userDetails) {
-    return (
-      <div className="settings-context-panel">
-        <div className="settings-context-panel__group">
-          <HelperText>{t("integrations_sign_in_required")}</HelperText>
-        </div>
-      </div>
-    );
-  }
+  // NOTE: no Hydra sign-in gate here. Library sync talks to each store
+  // directly (Steam/Epic/GOG/...) and never needs a Hydra account — gating on
+  // userDetails made every "Sync Library" unreachable for signed-out users.
 
   // Wait for preferences to load from LevelDB before rendering — avoids the
   // brief "not connected" flash on every account section

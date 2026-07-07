@@ -107,9 +107,17 @@ export function App() {
       updateLibrary(),
     ])
       .then(([preferences]) => {
-        dispatch(setUserPreferences(preferences as UserPreferences | null));
+        // A fresh profile has no stored preferences — dispatch an empty object
+        // rather than null so consumers gated on "preferences loaded" unblock.
+        dispatch(
+          setUserPreferences(
+            (preferences as UserPreferences | null) ?? ({} as UserPreferences)
+          )
+        );
       })
-      .catch(() => {})
+      .catch(() => {
+        dispatch(setUserPreferences({} as UserPreferences));
+      })
       .finally(() => {
         setPrefsChecked(true);
       });

@@ -546,6 +546,13 @@ contextBridge.exposeInMainWorld("electron", {
     return () =>
       ipcRenderer.removeListener("on-library-batch-complete", listener);
   },
+  onCloudArtifactsUpdated: (cb: (artifacts: any[]) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, artifacts: any[]) =>
+      cb(artifacts);
+    ipcRenderer.on("on-cloud-artifacts-updated", listener);
+    return () =>
+      ipcRenderer.removeListener("on-cloud-artifacts-updated", listener);
+  },
   onDownloadsUpdated: (cb: () => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => cb();
     ipcRenderer.on("on-downloads-updated", listener);

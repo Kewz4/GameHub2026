@@ -61,6 +61,17 @@ export default function CloudSaves() {
     loadArtifacts();
   }, [loadArtifacts]);
 
+  // The first response may be a cached list (served instantly); the main
+  // process recomputes in the background and pushes the fresh list here.
+  useEffect(() => {
+    const unsubscribe = window.electron.onCloudArtifactsUpdated((fresh) => {
+      setArtifacts(fresh);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   const grouped = useMemo<GroupedSaves>(() => {
     const map: GroupedSaves = {};
     for (const a of artifacts) {

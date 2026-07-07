@@ -183,7 +183,12 @@ export function SettingsContextProvider({
     levelDBService
       .get("userPreferences", null, "json")
       .then((userPreferences) => {
-        dispatch(setUserPreferences(userPreferences as UserPreferences | null));
+        dispatch(
+          setUserPreferences(
+            (userPreferences as UserPreferences | null) ??
+              ({} as UserPreferences)
+          )
+        );
       });
   };
 

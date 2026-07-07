@@ -10,6 +10,7 @@ import {
   ListObjectsV2Command,
   HeadObjectCommand,
   CopyObjectCommand,
+  type HeadObjectCommandOutput,
 } from "@aws-sdk/client-s3";
 import { app } from "electron";
 import type { GameArtifact, GameArtifactWithGame, GameShop } from "@types";
@@ -173,14 +174,23 @@ export class R2Sync {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key })
     );
+    this.headCache.delete(key);
     logger.log(`R2: deleted ${key}`);
   }
 
+  /** Uploaded artifacts are immutable, so HEAD metadata can be memoized —
+   * listing N artifacts then costs one round-trip instead of N+1 on repeat
+   * loads. Entries are dropped on delete. */
+  private static headCache = new Map<string, HeadObjectCommandOutput>();
+
   private static async headArtifact(key: string) {
+    const cached = this.headCache.get(key);
+    if (cached) return cached;
     try {
       const head = await this.client.send(
         new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key })
       );
+      this.headCache.set(key, head);
       return head;
     } catch {
       return null;

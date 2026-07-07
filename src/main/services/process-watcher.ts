@@ -351,15 +351,10 @@ function onOpenGame(game: Game) {
     })
     .catch(() => {});
 
-  // Cloud sync runs for all shops including custom games
-  if (game.automaticCloudSync) {
-    CloudSync.uploadSaveGame(
-      game.objectId,
-      game.shop,
-      null,
-      CloudSync.getBackupLabel(true)
-    ).catch(() => {});
-  }
+  // NOTE: no cloud upload here. Automatic sync restores the newest cloud save
+  // BEFORE launch (open-game.ts) and uploads on close (onCloseGame below).
+  // Uploading at open would push a stale local save over the cloud copy and
+  // race the pre-launch restore.
 
   if (game.shop === "custom") return;
 
@@ -516,14 +511,20 @@ const onCloseGame = (game: Game) => {
 
   gamesSublevel.put(gameKey, updatedGame);
 
-  // Cloud sync runs for all shops including custom games
+  // Automatic cloud sync: back up + upload the save on game close (runs for
+  // all shops including custom games). Failures are logged, not silent.
   if (game.automaticCloudSync) {
     CloudSync.uploadSaveGame(
       game.objectId,
       game.shop,
       null,
       CloudSync.getBackupLabel(true)
-    ).catch(() => {});
+    ).catch((err) => {
+      logger.error(
+        `[cloud-sync] automatic upload on close failed for ${game.shop}:${game.objectId}`,
+        err
+      );
+    });
   }
 
   if (game.shop === "custom") return;

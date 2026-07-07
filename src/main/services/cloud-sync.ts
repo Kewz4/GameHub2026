@@ -1,4 +1,10 @@
-import { levelKeys, gamesSublevel, gamesShopAssetsSublevel } from "@main/level";
+import {
+  db,
+  levelKeys,
+  gamesSublevel,
+  gamesShopAssetsSublevel,
+} from "@main/level";
+import type { UserPreferences } from "@types";
 import path from "node:path";
 import * as tar from "tar";
 import crypto from "node:crypto";
@@ -16,6 +22,7 @@ import i18next, { t } from "i18next";
 import { SystemPath } from "./system-path";
 import { Wine } from "./wine";
 import { resolveEmulatorSaveLocation } from "./emulators/emulator-save-dirs";
+import { invalidateCachedArtifacts } from "./cloud-artifacts-cache";
 
 export class CloudSync {
   public static getWindowsLikeUserProfilePath(winePrefixPath?: string | null) {
@@ -141,6 +148,31 @@ export class CloudSync {
     return tarLocation;
   }
 
+  /**
+   * The stable per-install cloud-sync user id (created on first use). All
+   * upload paths — manual and automatic — must use this so artifacts land
+   * under the same user prefix and are visible in the cloud-saves UI.
+   */
+  public static async getOrCreateUserId(): Promise<string> {
+    const prefs = await db
+      .get<
+        string,
+        UserPreferences
+      >(levelKeys.userPreferences, { valueEncoding: "json" })
+      .catch(() => ({}) as UserPreferences);
+
+    let userId = prefs?.cloudSyncUserId;
+    if (!userId) {
+      userId = UploadcareSync.generateUserId();
+      await db.put(
+        levelKeys.userPreferences,
+        { ...prefs, cloudSyncUserId: userId },
+        { valueEncoding: "json" }
+      );
+    }
+    return userId;
+  }
+
   public static async uploadSaveGame(
     objectId: string,
     shop: GameShop,
@@ -148,6 +180,9 @@ export class CloudSync {
     label?: string,
     userId?: string
   ) {
+    // Automatic (watcher-triggered) uploads don't pass a userId — resolve the
+    // same stable id manual uploads use, so the artifact is visible in the UI.
+    const effectiveUserId = userId ?? (await this.getOrCreateUserId());
     const game = await gamesSublevel.get(levelKeys.game(shop, objectId));
     const effectiveWinePrefixPath = Wine.getEffectivePrefixPath(
       game?.winePrefixPath,
@@ -162,7 +197,7 @@ export class CloudSync {
 
     try {
       await UploadcareSync.uploadFile(bundleLocation, {
-        userId: userId ?? "anonymous",
+        userId: effectiveUserId,
         shop,
         objectId,
         ...(game?.title ? { gameName: game.title } : {}),
@@ -187,6 +222,9 @@ export class CloudSync {
           lastCloudSaveAt: new Date(),
         });
       }
+
+      // New artifact exists — drop the cached sidebar list so it recomputes.
+      await invalidateCachedArtifacts();
 
       WindowManager.mainWindow?.webContents.send(
         `on-upload-complete-${objectId}-${shop}`,

@@ -1,3 +1,4 @@
+import axios from "axios";
 import { registerEvent } from "../register-event";
 import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
@@ -25,6 +26,31 @@ const isLandscapeCoverUrl = (url: string | null | undefined): boolean => {
   if (!url) return false;
   const lower = url.toLowerCase();
   return LANDSCAPE_URL_HINTS.some((hint) => lower.includes(hint));
+};
+
+/**
+ * A stored cover can be a non-null URL that 404s (store CDNs rotate/expire
+ * assets) — the card then shows the broken-image placeholder and the presence
+ * check above would skip it forever. HEAD-check the URL: 2xx/3xx = alive,
+ * 4xx/5xx = dead (re-fetch). Network errors count as alive so an offline run
+ * doesn't wipe every game's artwork.
+ */
+const isCoverUrlAlive = async (
+  url: string | null | undefined
+): Promise<boolean> => {
+  if (!url || !/^https?:\/\//i.test(url)) return Boolean(url);
+  try {
+    const res = await axios.head(url, {
+      timeout: 5_000,
+      maxRedirects: 5,
+      validateStatus: () => true,
+    });
+    // Some CDNs reject HEAD (405) while serving GET fine — treat as alive.
+    if (res.status === 405 || res.status === 501) return true;
+    return res.status < 400;
+  } catch {
+    return true;
+  }
 };
 
 const generateMissingMetadata = async (
@@ -72,9 +98,17 @@ const generateMissingMetadata = async (
       assets?.coverImageUrl != null &&
       !assets.coverImageUrl.includes("library_600x900");
 
+    // A stored cover URL that 404s counts as missing — otherwise the game is
+    // skipped forever while its card shows the broken-image placeholder.
+    const coverIsDead =
+      Boolean(assets?.coverImageUrl) &&
+      !coverIsWrongRatio &&
+      !(await isCoverUrlAlive(assets?.coverImageUrl));
+
     // Only skip if we have an actual cover or hero image — icon alone is not sufficient
     const hasCover =
       !isSteamButNotCdn &&
+      !coverIsDead &&
       ((assets?.coverImageUrl && !coverIsWrongRatio) ||
         (!assets?.coverImageUrl && assets?.libraryHeroImageUrl));
 
@@ -86,10 +120,12 @@ const generateMissingMetadata = async (
     try {
       const best = await fetchBestAssets(game.shop, game.objectId, game.title, {
         iconUrl: assets?.iconUrl ?? null,
-        // Never feed the wrong-ratio cover back in as a fallback
-        coverImageUrl: coverIsWrongRatio
-          ? null
-          : (assets?.coverImageUrl ?? null),
+        // Never feed the wrong-ratio or dead cover back in as a fallback —
+        // fetchBestAssets would just return it verbatim on a total miss.
+        coverImageUrl:
+          coverIsWrongRatio || coverIsDead
+            ? null
+            : (assets?.coverImageUrl ?? null),
         libraryImageUrl: assets?.libraryImageUrl ?? null,
         libraryHeroImageUrl: assets?.libraryHeroImageUrl ?? null,
         logoImageUrl: assets?.logoImageUrl ?? null,

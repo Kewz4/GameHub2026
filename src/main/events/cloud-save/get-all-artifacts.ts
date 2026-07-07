@@ -6,7 +6,11 @@ import {
   gamesShopAssetsSublevel,
   levelKeys,
 } from "@main/level";
-import { HydraApi } from "@main/services";
+import { HydraApi, WindowManager } from "@main/services";
+import {
+  getCachedArtifacts,
+  setCachedArtifacts,
+} from "@main/services/cloud-artifacts-cache";
 import {
   compactGameTitle,
   normalizeGameTitle,
@@ -54,7 +58,7 @@ const resolveFromCatalogue = async (
   }
 };
 
-const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
+const computeAllArtifacts = async () => {
   const prefs = await db
     .get<
       string,
@@ -207,6 +211,41 @@ const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
     })
   );
 
+  return { userId, enriched };
+};
+
+let refreshing = false;
+
+/**
+ * Stale-while-revalidate: serve the cached artifact list instantly (the R2
+ * listing + per-artifact metadata + catalogue enrichment is slow), then
+ * recompute in the background and push the fresh list to the renderer via
+ * `on-cloud-artifacts-updated`.
+ */
+const getAllArtifacts = async (_event: Electron.IpcMainInvokeEvent) => {
+  const cached = await getCachedArtifacts();
+
+  if (cached) {
+    if (!refreshing) {
+      refreshing = true;
+      computeAllArtifacts()
+        .then(async ({ userId, enriched }) => {
+          await setCachedArtifacts(userId, enriched);
+          WindowManager.mainWindow?.webContents.send(
+            "on-cloud-artifacts-updated",
+            enriched
+          );
+        })
+        .catch(() => {})
+        .finally(() => {
+          refreshing = false;
+        });
+    }
+    return cached.artifacts;
+  }
+
+  const { userId, enriched } = await computeAllArtifacts();
+  await setCachedArtifacts(userId, enriched);
   return enriched;
 };
 

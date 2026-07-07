@@ -50,10 +50,18 @@ async function findSgdbGameId(title: string): Promise<number | null> {
   if (searchCache.has(key)) return searchCache.get(key)!;
 
   // Persistent cache: survives restarts so we don't re-query SGDB each scan.
+  // Positive hits are cached forever; NEGATIVE results expire after a day so a
+  // title SGDB didn't know yet gets retried instead of staying broken forever.
+  const NEGATIVE_TTL_MS = 24 * 60 * 60 * 1000;
   const cached = await sgdbSearchCacheSublevel.get(key).catch(() => undefined);
   if (cached) {
-    searchCache.set(key, cached.gameId);
-    return cached.gameId;
+    const expiredNegative =
+      cached.gameId === null &&
+      Date.now() - (cached.cachedAt ?? 0) > NEGATIVE_TTL_MS;
+    if (!expiredNegative) {
+      searchCache.set(key, cached.gameId);
+      return cached.gameId;
+    }
   }
 
   const remember = (id: number | null) => {
@@ -78,8 +86,10 @@ async function findSgdbGameId(title: string): Promise<number | null> {
     remember(id);
     return id;
   } catch (err) {
+    // Network/API error is NOT "this game doesn't exist" — don't poison the
+    // cache; only in-memory for this session so the scan doesn't hammer SGDB.
     logger.warn(`SteamGridDB: search failed for "${title}"`, err);
-    remember(null);
+    searchCache.set(key, null);
     return null;
   }
 }

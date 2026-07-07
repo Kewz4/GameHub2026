@@ -167,12 +167,16 @@ const restoreLudusaviBackup = (
   });
 };
 
-const downloadGameArtifact = async (
-  _event: Electron.IpcMainInvokeEvent,
+/**
+ * Download + restore a cloud save artifact into the game's save locations.
+ * Shared by the manual restore IPC and the automatic pre-launch restore.
+ * Returns true on success.
+ */
+export const restoreGameArtifact = async (
   objectId: string,
   shop: GameShop,
-  gameArtifactId: string // Uploadcare UUID
-) => {
+  gameArtifactId: string // R2 object key
+): Promise<boolean> => {
   try {
     const game = await gamesSublevel.get(levelKeys.game(shop, objectId));
     const effectiveWinePrefixPath = Wine.getEffectivePrefixPath(
@@ -245,13 +249,22 @@ const downloadGameArtifact = async (
       `on-backup-download-complete-${objectId}-${shop}`,
       true
     );
+    return true;
   } catch (err) {
     logger.error("Failed to download game artifact", err);
     WindowManager.mainWindow?.webContents.send(
       `on-backup-download-complete-${objectId}-${shop}`,
       false
     );
+    return false;
   }
 };
+
+const downloadGameArtifact = async (
+  _event: Electron.IpcMainInvokeEvent,
+  objectId: string,
+  shop: GameShop,
+  gameArtifactId: string
+) => restoreGameArtifact(objectId, shop, gameArtifactId);
 
 registerEvent("downloadGameArtifact", downloadGameArtifact);
