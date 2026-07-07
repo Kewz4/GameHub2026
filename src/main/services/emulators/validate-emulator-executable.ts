@@ -69,7 +69,11 @@ export const isValidEmulatorExecutable = (executablePath: string): boolean => {
   }
   if (NON_EXECUTABLE_EXTENSIONS.has(ext)) return false;
   if (process.platform === "win32") {
-    return ext === ".exe" || ext === ".bat" || ext === ".cmd";
+    // Accept any file that isn't obviously a non-executable (blocked above).
+    // Emulators usually ship as .exe, but some launchers are .bat/.cmd/.com or
+    // an unusually named binary — the blocklist already excludes ROMs, media,
+    // archives and configs, so anything left is a plausible launcher.
+    return true;
   }
   try {
     accessSync(normalizedPath, constants.X_OK);

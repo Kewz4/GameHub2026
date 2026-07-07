@@ -67,7 +67,6 @@ export function App() {
   const { clearDownload, setLastPacket, lastPacket } = useDownload();
 
   const {
-    hasActiveSubscription,
     fetchUserDetails,
     updateUserDetails,
     clearUserDetails,
@@ -503,12 +502,7 @@ export function App() {
               flexShrink: 0,
             }}
           />
-          <h4>
-            GameHub
-            {hasActiveSubscription && (
-              <span className="title-bar__cloud-text"> Cloud</span>
-            )}
-          </h4>
+          <h4>GameHub</h4>
 
           <button
             type="button"

@@ -149,10 +149,16 @@ export function EmulatorManagerView({
       defaultPath: primaryConfig.executablePath ?? undefined,
       filters:
         window.electron.platform === "win32"
-          ? [{ name: "Executable", extensions: ["exe"] }]
+          ? [
+              { name: "Executable", extensions: ["exe", "bat", "cmd", "com"] },
+              { name: "All files", extensions: ["*"] },
+            ]
           : isMac
-            ? [{ name: "Application", extensions: ["app"] }]
-            : undefined,
+            ? [
+                { name: "Application", extensions: ["app"] },
+                { name: "All files", extensions: ["*"] },
+              ]
+            : [{ name: "All files", extensions: ["*"] }],
     });
     if (result.canceled || result.filePaths.length === 0) return;
     setBusy(true);
