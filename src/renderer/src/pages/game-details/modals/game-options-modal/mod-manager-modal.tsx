@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DownloadIcon,
+  UploadIcon,
   TrashIcon,
   EyeIcon,
   HeartIcon,
@@ -405,6 +406,40 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
           </>
         ) : (
           <div className="mod-manager__scroll">
+            <div className="mod-manager__modpack-actions">
+              <button
+                type="button"
+                className="mod-manager__pack-btn"
+                onClick={async () => {
+                  const res = await window.electron.exportModpack(
+                    game.shop,
+                    game.objectId
+                  );
+                  if (res.ok) showSuccessToast("Modpack exported");
+                  else if (!res.canceled)
+                    showErrorToast(res.reason ?? "Export failed");
+                }}
+              >
+                <UploadIcon size={13} /> Export modpack
+              </button>
+              <button
+                type="button"
+                className="mod-manager__pack-btn"
+                onClick={async () => {
+                  const res = await window.electron.importModpack(
+                    game.shop,
+                    game.objectId
+                  );
+                  if (res.ok) {
+                    showSuccessToast("Modpack imported");
+                    await loadInstalled();
+                  } else if (!res.canceled)
+                    showErrorToast(res.reason ?? "Import failed");
+                }}
+              >
+                <DownloadIcon size={13} /> Import modpack
+              </button>
+            </div>
             {installed.length === 0 ? (
               <p className="mod-manager__muted">
                 No mods installed yet — install some from the Browse tab.

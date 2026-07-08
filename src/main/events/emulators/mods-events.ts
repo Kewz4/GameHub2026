@@ -1,5 +1,7 @@
 import { registerEvent } from "../register-event";
+import { dialog } from "electron";
 import { emulators, gamebanana } from "@main/services";
+import { WindowManager } from "@main/services/window-manager";
 import { ukmmPaths } from "@main/services/emulators/ukmm";
 import type {
   GameBananaMod,
@@ -119,6 +121,38 @@ const uninstallMod = async (
 ): Promise<{ ok: boolean; reason?: string }> =>
   emulators.uninstallMod(shop, objectId, index);
 
+const exportModpack = async (
+  _e: Electron.IpcMainInvokeEvent,
+  shop: GameShop,
+  objectId: string
+): Promise<{ ok: boolean; reason?: string; canceled?: boolean }> => {
+  const win = WindowManager.mainWindow;
+  const result = await dialog.showSaveDialog(win!, {
+    title: "Export modpack",
+    defaultPath: "botw-modpack.ghmods",
+    filters: [{ name: "GameHub modpack", extensions: ["ghmods"] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+  return emulators.exportModpack(shop, objectId, result.filePath);
+};
+
+const importModpack = async (
+  _e: Electron.IpcMainInvokeEvent,
+  shop: GameShop,
+  objectId: string
+): Promise<{ ok: boolean; reason?: string; canceled?: boolean }> => {
+  const win = WindowManager.mainWindow;
+  const result = await dialog.showOpenDialog(win!, {
+    title: "Import modpack",
+    properties: ["openFile"],
+    filters: [{ name: "GameHub modpack", extensions: ["ghmods"] }],
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return { ok: false, canceled: true };
+  }
+  return emulators.importModpack(shop, objectId, result.filePaths[0]);
+};
+
 registerEvent("getModStatus", getModStatus);
 registerEvent("installUkmm", installUkmm);
 registerEvent("setModsEnabled", setModsEnabled);
@@ -128,3 +162,5 @@ registerEvent("getGameBananaMod", getGameBananaMod);
 registerEvent("installMod", installMod);
 registerEvent("installModFromBcmlUri", installModFromBcmlUri);
 registerEvent("uninstallMod", uninstallMod);
+registerEvent("exportModpack", exportModpack);
+registerEvent("importModpack", importModpack);

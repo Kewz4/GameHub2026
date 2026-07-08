@@ -3,17 +3,20 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  unlinkSync,
   writeFileSync,
   createWriteStream,
 } from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import * as tar from "tar";
 
 import type { GameShop, InstalledMod, ModManagerStatus } from "@types";
 import { emulatorsInstallPath } from "@main/constants";
@@ -526,17 +529,45 @@ export const installModFromFile = async (
   meta: { gbModId: number; name: string; thumbnailUrl: string | null }
 ): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
   await configureUkmm(shop, objectId);
-  const res = await runUkmm(["install", filePath], true);
+
+  // A .bnp is just a 7z archive with a RomFS/graphic-pack structure
+  // (content/ + rules.txt). UKMM's CLI rejects the `.bnp` EXTENSION but accepts
+  // the identical archive as `.7z` (convert_gfx reads the content + rules.txt),
+  // so install a .7z copy — fully headless, no GUI. Everything else installs
+  // as-is.
+  let installPath = filePath;
+  let tempCopy: string | null = null;
+  if (filePath.toLowerCase().endsWith(".bnp")) {
+    tempCopy = filePath.replace(/\.bnp$/i, "") + ".7z";
+    try {
+      copyFileSync(filePath, tempCopy);
+      installPath = tempCopy;
+      logger.log(`[ukmm] installing .bnp as .7z: ${path.basename(tempCopy)}`);
+    } catch (err) {
+      logger.warn("[ukmm] couldn't copy .bnp to .7z, using original", err);
+      tempCopy = null;
+    }
+  }
+
+  const res = await runUkmm(["install", installPath], true);
+  if (tempCopy) {
+    try {
+      unlinkSync(tempCopy);
+    } catch {
+      /* best effort */
+    }
+  }
+
   if (!res.ok) {
-    // Legacy .bnp mods and mods with configuration options can't be installed
-    // headlessly — hand off to UKMM's GUI so the user can finish there.
+    // Mods with configuration options (or anything else the CLI can't take)
+    // still need UKMM's GUI — hand off so the user can finish there.
     if (needsGuiInstall(res.stderr)) {
       const opened = openInUkmmGui(filePath);
       return {
         ok: false,
         guiHandoff: opened,
         reason: opened
-          ? "This mod needs UKMM's installer — it's been opened in UKMM to finish."
+          ? "This mod has selectable options — opened in UKMM to choose them."
           : "This mod must be installed via the UKMM app.",
       };
     }
@@ -583,6 +614,91 @@ export const setModsEnabled = async (
     () => false
   );
   return { ok };
+};
+
+// ── Export / import a modpack ────────────────────────────────────────────────
+
+/**
+ * Export the whole UKMM mod set (storage: installed mods + load order) plus our
+ * GameBanana tracking into a single `.ghmods` archive the user can share. A
+ * friend imports it to reproduce the exact modpack.
+ */
+export const exportModpack = async (
+  shop: GameShop,
+  objectId: string,
+  destPath: string
+): Promise<{ ok: boolean; reason?: string }> => {
+  const paths = ukmmPaths();
+  const configDir = path.join(paths.installDir, "config");
+  const storage = path.join(configDir, "storage");
+  if (!existsSync(storage)) {
+    return { ok: false, reason: "No mods installed to export" };
+  }
+  try {
+    const installed = await getInstalled(shop, objectId);
+    const manifest = path.join(configDir, "gamehub-modpack.json");
+    writeFileSync(manifest, JSON.stringify({ installed }), "utf-8");
+    await tar.create(
+      { gzip: true, file: destPath, cwd: configDir },
+      ["storage", "gamehub-modpack.json"]
+    );
+    try {
+      unlinkSync(manifest);
+    } catch {
+      /* ignore */
+    }
+    logger.log(`[ukmm] exported modpack → ${destPath}`);
+    return { ok: true };
+  } catch (err) {
+    logger.error("[ukmm] export failed", err);
+    return { ok: false, reason: String(err) };
+  }
+};
+
+/** Import a `.ghmods` modpack: replace the mod set, then remerge + deploy. */
+export const importModpack = async (
+  shop: GameShop,
+  objectId: string,
+  srcPath: string
+): Promise<{ ok: boolean; reason?: string }> => {
+  const paths = ukmmPaths();
+  const configDir = path.join(paths.installDir, "config");
+  try {
+    mkdirSync(configDir, { recursive: true });
+    // Replace the existing storage so the modpack is reproduced exactly.
+    const storage = path.join(configDir, "storage");
+    if (existsSync(storage)) rmSync(storage, { recursive: true, force: true });
+    await tar.x({ file: srcPath, cwd: configDir });
+
+    const manifest = path.join(configDir, "gamehub-modpack.json");
+    if (existsSync(manifest)) {
+      try {
+        const parsed = JSON.parse(readFileSync(manifest, "utf-8"));
+        if (Array.isArray(parsed?.installed)) {
+          await installedModsSublevel.put(
+            modsKey(shop, objectId),
+            parsed.installed
+          );
+        }
+      } catch {
+        /* ignore malformed manifest */
+      }
+      try {
+        unlinkSync(manifest);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    await configureUkmm(shop, objectId);
+    await runUkmm(["remerge"], true); // rebuild the merge + deploy to Cemu
+    await setGraphicPackEnabled(ukmmPackRulesId(), true).catch(() => {});
+    logger.log("[ukmm] imported modpack + redeployed");
+    return { ok: true };
+  } catch (err) {
+    logger.error("[ukmm] import failed", err);
+    return { ok: false, reason: String(err) };
+  }
 };
 
 export const getModStatus = async (

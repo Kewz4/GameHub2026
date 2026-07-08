@@ -373,4 +373,26 @@
     color: rgba(255, 255, 255, 0.75);
     white-space: pre-wrap;
   }
+  &__modpack-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  &__pack-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+  }
 }

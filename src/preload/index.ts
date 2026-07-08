@@ -820,6 +820,10 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("installModFromBcmlUri", shop, objectId, uri),
   uninstallMod: (shop: string, objectId: string, index: number) =>
     ipcRenderer.invoke("uninstallMod", shop, objectId, index),
+  exportModpack: (shop: string, objectId: string) =>
+    ipcRenderer.invoke("exportModpack", shop, objectId),
+  importModpack: (shop: string, objectId: string) =>
+    ipcRenderer.invoke("importModpack", shop, objectId),
   getControllerProfile: (binary?: any) =>
     ipcRenderer.invoke("getControllerProfile", binary),
   saveControllerProfile: (profile: any, binary?: any, type?: any) =>

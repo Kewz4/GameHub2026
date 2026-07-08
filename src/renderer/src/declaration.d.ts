@@ -995,6 +995,14 @@ declare global {
       objectId: string,
       index: number
     ) => Promise<{ ok: boolean; reason?: string }>;
+    exportModpack: (
+      shop: string,
+      objectId: string
+    ) => Promise<{ ok: boolean; reason?: string; canceled?: boolean }>;
+    importModpack: (
+      shop: string,
+      objectId: string
+    ) => Promise<{ ok: boolean; reason?: string; canceled?: boolean }>;
     getControllerProfile: (binary?: EmulatorBinary) => Promise<{
       profile: ControllerProfile;
       isCustom: boolean;
