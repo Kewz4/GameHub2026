@@ -7,9 +7,11 @@ import type {
   GameBananaMod,
   GameBananaModDetail,
   GameShop,
+  ModInstallPrep,
   ModManagerStatus,
 } from "@types";
 import fs from "node:fs";
+import path from "node:path";
 
 const getModStatus = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -22,8 +24,11 @@ const installUkmm = async (): Promise<{ ok: boolean; reason?: string }> =>
 
 const setModsEnabled = async (
   _e: Electron.IpcMainInvokeEvent,
+  shop: GameShop,
+  objectId: string,
   enabled: boolean
-): Promise<{ ok: boolean }> => emulators.setModsEnabled(enabled);
+): Promise<{ ok: boolean }> =>
+  emulators.setNativeModsEnabled(shop, objectId, enabled);
 
 const browseGameBananaMods = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -35,9 +40,8 @@ const browseGameBananaMods = async (
   }
 ): Promise<GameBananaMod[]> => gamebanana.listBotwMods(opts ?? {});
 
-const listModCategories = async (): Promise<
-  { id: number; name: string }[]
-> => gamebanana.listCategories();
+const listModCategories = async (): Promise<{ id: number; name: string }[]> =>
+  gamebanana.listCategories();
 
 const getGameBananaMod = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -45,8 +49,10 @@ const getGameBananaMod = async (
 ): Promise<GameBananaModDetail | null> => gamebanana.getModDetail(modId);
 
 /**
- * Install a mod: download the GameBanana file, then hand it to UKMM. `fileId`
- * is optional — when omitted the mod's first (usually only) file is used.
+ * Install a mod fully headlessly: download the GameBanana file, extract + stage
+ * it, and either finalize immediately or — when the mod has selectable options —
+ * return them so the renderer can show the chooser and call `finalizeModInstall`.
+ * No UKMM CLI, no GUI: the mod is deployed straight into Cemu as a graphic pack.
  */
 const installMod = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -54,13 +60,12 @@ const installMod = async (
   objectId: string,
   modId: number,
   fileId?: number
-): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
+): Promise<ModInstallPrep> => {
   const detail = await gamebanana.getModDetail(modId);
   if (!detail || detail.files.length === 0) {
     return { ok: false, reason: "This mod has no downloadable files" };
   }
-  const file =
-    detail.files.find((f) => f.id === fileId) ?? detail.files[0];
+  const file = detail.files.find((f) => f.id === fileId) ?? detail.files[0];
 
   const downloadDir = ukmmPaths().downloadDir;
   fs.mkdirSync(downloadDir, { recursive: true });
@@ -75,42 +80,97 @@ const installMod = async (
     return { ok: false, reason: `Download failed: ${err}` };
   }
 
-  const res = await emulators.installModFromFile(shop, objectId, filePath, {
-    gbModId: modId,
-    name: detail.name,
-    thumbnailUrl: detail.gallery[0] ?? null,
-  });
-  // Keep the file when we've handed off to the UKMM GUI (it reads it there).
-  if (!res.guiHandoff) {
+  try {
+    const prep = await emulators.prepareModInstall(filePath, {
+      gbModId: modId,
+      name: detail.name,
+      thumbnailUrl: detail.gallery[0] ?? null,
+    });
+    if (!prep.ok) return prep;
+    if (prep.needsOptions) return prep; // renderer will show the chooser
+    // No options — deploy now.
+    const res = await emulators.finalizeModInstall(
+      shop,
+      objectId,
+      prep.stagingId!,
+      []
+    );
+    return res.ok ? { ok: true } : { ok: false, reason: res.reason };
+  } finally {
     try {
       fs.unlinkSync(filePath);
     } catch {
       /* best effort */
     }
   }
-  return res;
 };
 
-/** Install a mod from a bcml: 1-click URI (bcml:https://…/mmdl/<id>,Mod,<id>). */
+/** Finalize a staged install with the user's chosen option folders. */
+const finalizeModInstall = async (
+  _e: Electron.IpcMainInvokeEvent,
+  shop: GameShop,
+  objectId: string,
+  stagingId: string,
+  selectedFolders: string[]
+): Promise<{ ok: boolean; reason?: string }> =>
+  emulators.finalizeModInstall(shop, objectId, stagingId, selectedFolders ?? []);
+
+/** Discard a staged install the user backed out of (frees temp files). */
+const cancelModInstall = async (
+  _e: Electron.IpcMainInvokeEvent,
+  stagingId: string
+): Promise<void> => emulators.cancelModInstall(stagingId);
+
+/**
+ * Install a mod from a `bcml:` 1-click URI, fully headlessly: resolve the URI to
+ * a GameBanana download, fetch it, and route it through the same native staging
+ * pipeline as a normal install.
+ */
 const installModFromBcmlUri = async (
   _e: Electron.IpcMainInvokeEvent,
   shop: GameShop,
   objectId: string,
   uri: string
-): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
+): Promise<ModInstallPrep> => {
   if (!/^bcml:/i.test(uri)) return { ok: false, reason: "Invalid bcml link" };
-  // bcml: links are UKMM's native 1-click format — hand the URI straight to
-  // UKMM's oneclick handler (it downloads + installs in the GUI). This is the
-  // reliable path for legacy BNP mods the CLI can't install.
-  await emulators.configureUkmm(shop, objectId);
-  const opened = emulators.oneClickInstall(uri);
-  return opened
-    ? {
-        ok: false,
-        guiHandoff: true,
-        reason: "Opening in UKMM to install this mod…",
-      }
-    : { ok: false, reason: "UKMM isn't installed" };
+  const url = gamebanana.resolveBcmlUri(uri);
+  if (!url) return { ok: false, reason: "Couldn't parse the bcml link" };
+
+  const downloadDir = ukmmPaths().downloadDir;
+  fs.mkdirSync(downloadDir, { recursive: true });
+  let filePath: string;
+  try {
+    filePath = await gamebanana.downloadModFile(
+      url,
+      downloadDir,
+      `oneclick-${Date.now()}.bnp`
+    );
+  } catch (err) {
+    return { ok: false, reason: `Download failed: ${err}` };
+  }
+
+  try {
+    const prep = await emulators.prepareModInstall(filePath, {
+      gbModId: 0,
+      name: path.basename(uri).slice(0, 40) || "BOTW mod",
+      thumbnailUrl: null,
+    });
+    if (!prep.ok) return prep;
+    if (prep.needsOptions) return prep;
+    const res = await emulators.finalizeModInstall(
+      shop,
+      objectId,
+      prep.stagingId!,
+      []
+    );
+    return res.ok ? { ok: true } : { ok: false, reason: res.reason };
+  } finally {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      /* best effort */
+    }
+  }
 };
 
 const uninstallMod = async (
@@ -119,7 +179,7 @@ const uninstallMod = async (
   objectId: string,
   index: number
 ): Promise<{ ok: boolean; reason?: string }> =>
-  emulators.uninstallMod(shop, objectId, index);
+  emulators.uninstallNativeMod(shop, objectId, index);
 
 const exportModpack = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -160,6 +220,8 @@ registerEvent("browseGameBananaMods", browseGameBananaMods);
 registerEvent("listModCategories", listModCategories);
 registerEvent("getGameBananaMod", getGameBananaMod);
 registerEvent("installMod", installMod);
+registerEvent("finalizeModInstall", finalizeModInstall);
+registerEvent("cancelModInstall", cancelModInstall);
 registerEvent("installModFromBcmlUri", installModFromBcmlUri);
 registerEvent("uninstallMod", uninstallMod);
 registerEvent("exportModpack", exportModpack);

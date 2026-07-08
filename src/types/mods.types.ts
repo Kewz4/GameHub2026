@@ -33,7 +33,7 @@ export interface GameBananaModDetail {
   }[];
 }
 
-/** A mod we've installed through UKMM for a specific game. */
+/** A mod we've installed for a specific game. */
 export interface InstalledMod {
   /** GameBanana mod id (or 0 for a local/bcml install). */
   gbModId: number;
@@ -41,6 +41,43 @@ export interface InstalledMod {
   fileName: string;
   thumbnailUrl: string | null;
   installedAt: string;
+  /** The Cemu graphic-pack rules.txt path this mod deploys to (for
+   * enable/remove), when installed via the native graphic-pack deployer. */
+  packRulesId?: string;
+}
+
+/** One choosable option within a BNP mod's option group. */
+export interface ModOption {
+  /** Display name. */
+  name: string;
+  description: string;
+  /** The `options/<folder>` inside the BNP this option maps to. */
+  folder: string;
+}
+
+/** A group of options from a BNP's info.json (`single` = radio, `multi` =
+ * checkboxes). */
+export interface ModOptionGroup {
+  name: string;
+  description: string;
+  type: "single" | "multi";
+  required: boolean;
+  options: ModOption[];
+}
+
+/**
+ * Result of preparing a mod for install. When `needsOptions` is set the caller
+ * must show the option chooser and call back with the selected folders.
+ */
+export interface ModInstallPrep {
+  ok: boolean;
+  reason?: string;
+  /** Set when the mod has configurable options to choose before installing. */
+  needsOptions?: boolean;
+  /** Opaque staging token to pass to the finalize step. */
+  stagingId?: string;
+  name?: string;
+  optionGroups?: ModOptionGroup[];
 }
 
 /** UKMM + mod state for a game's Mods tab. */

@@ -14,8 +14,11 @@ import type {
   GameBananaModDetail,
   InstalledMod,
   LibraryGame,
+  ModInstallPrep,
+  ModOptionGroup,
 } from "@types";
-import { Modal } from "@renderer/components";
+import { Modal, Button } from "@renderer/components";
+import { SettingSelect } from "@renderer/pages/settings/emulation/setting-select";
 import { useToast } from "@renderer/hooks";
 import "./mod-manager-modal.scss";
 
@@ -61,6 +64,15 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
   const [detail, setDetail] = useState<GameBananaModDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
+  // Headless option chooser: when a mod exposes configurable options we stage it
+  // and let the user pick, then finalize — no UKMM GUI ever opens.
+  const [optionPrep, setOptionPrep] = useState<{
+    stagingId: string;
+    name: string;
+    groups: ModOptionGroup[];
+  } | null>(null);
+  const [optionSel, setOptionSel] = useState<Record<number, string[]>>({});
+  const [finalizing, setFinalizing] = useState(false);
 
   // Debounce the search box.
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -131,6 +143,25 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
     }
   };
 
+  /** Open the option chooser for a staged mod, seeding required defaults. */
+  const beginOptions = (prep: ModInstallPrep) => {
+    const groups = prep.optionGroups ?? [];
+    const seed: Record<number, string[]> = {};
+    groups.forEach((g, i) => {
+      // Required single-choice groups default to the first option.
+      seed[i] =
+        g.type === "single" && g.required && g.options[0]
+          ? [g.options[0].folder]
+          : [];
+    });
+    setOptionSel(seed);
+    setOptionPrep({
+      stagingId: prep.stagingId!,
+      name: prep.name ?? "Mod",
+      groups,
+    });
+  };
+
   const runInstall = async (modId: number, name: string) => {
     setInstallingId(modId);
     try {
@@ -139,17 +170,70 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
         game.objectId,
         modId
       );
-      if (res.ok) {
+      if (res.needsOptions) {
+        beginOptions(res);
+      } else if (res.ok) {
         showSuccessToast(`Installed ${name}`);
         await loadInstalled();
-      } else if (res.guiHandoff) {
-        showSuccessToast(res.reason ?? "Opened in UKMM to finish install");
       } else {
         showErrorToast(res.reason ?? "Install failed");
       }
     } finally {
       setInstallingId(null);
     }
+  };
+
+  const confirmOptions = async () => {
+    if (!optionPrep) return;
+    setFinalizing(true);
+    try {
+      const folders = optionPrep.groups.flatMap((_, i) => optionSel[i] ?? []);
+      const res = await window.electron.finalizeModInstall(
+        game.shop,
+        game.objectId,
+        optionPrep.stagingId,
+        folders
+      );
+      if (res.ok) {
+        showSuccessToast(`Installed ${optionPrep.name}`);
+        setOptionPrep(null);
+        setDetail(null);
+        await loadInstalled();
+      } else {
+        showErrorToast(res.reason ?? "Install failed");
+      }
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  const cancelOptions = async () => {
+    if (optionPrep) {
+      await window.electron.cancelModInstall(optionPrep.stagingId).catch(() => {});
+    }
+    setOptionPrep(null);
+  };
+
+  const toggleOption = (groupIndex: number, folder: string) => {
+    const group = optionPrep?.groups[groupIndex];
+    if (!group) return;
+    setOptionSel((prev) => {
+      const cur = prev[groupIndex] ?? [];
+      if (group.type === "single") {
+        // Radio: replace (allow clearing an optional group by re-clicking).
+        return {
+          ...prev,
+          [groupIndex]: cur.includes(folder) && !group.required ? [] : [folder],
+        };
+      }
+      // Checkbox: toggle membership.
+      return {
+        ...prev,
+        [groupIndex]: cur.includes(folder)
+          ? cur.filter((f) => f !== folder)
+          : [...cur, folder],
+      };
+    });
   };
 
   const handleUninstall = async (index: number) => {
@@ -175,6 +259,84 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
     () => new Set(installed.map((m) => m.gbModId)),
     [installed]
   );
+
+  // ── Option chooser (headless) ────────────────────────────────────────────────
+  if (optionPrep) {
+    const canConfirm = optionPrep.groups.every(
+      (g, i) => !g.required || (optionSel[i]?.length ?? 0) > 0
+    );
+    return (
+      <Modal
+        visible
+        title={`Options — ${optionPrep.name}`}
+        onClose={cancelOptions}
+        large
+      >
+        <div className="mod-manager mod-manager--options">
+          <p className="mod-manager__muted" style={{ padding: "0 0 4px" }}>
+            This mod has configurable options. Choose what to install — it all
+            happens in the background, no external app opens.
+          </p>
+          <div className="mod-manager__scroll">
+            {optionPrep.groups.map((group, gi) => (
+              <div className="mod-manager__opt-group" key={`${group.name}-${gi}`}>
+                <div className="mod-manager__opt-title">
+                  {group.name}
+                  {group.required && (
+                    <span className="mod-manager__opt-req"> (required)</span>
+                  )}
+                </div>
+                {group.description && (
+                  <div className="mod-manager__opt-desc">
+                    {group.description}
+                  </div>
+                )}
+                <ul className="mod-manager__opt-list">
+                  {group.options.map((opt) => {
+                    const checked = (optionSel[gi] ?? []).includes(opt.folder);
+                    return (
+                      <li key={opt.folder}>
+                        <label className="mod-manager__opt-item">
+                          <input
+                            type={group.type === "single" ? "radio" : "checkbox"}
+                            name={`group-${gi}`}
+                            checked={checked}
+                            onChange={() => toggleOption(gi, opt.folder)}
+                          />
+                          <span>
+                            <span className="mod-manager__opt-name">
+                              {opt.name}
+                            </span>
+                            {opt.description && (
+                              <span className="mod-manager__opt-sub">
+                                {opt.description}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="mod-manager__opt-actions">
+            <Button theme="outline" onClick={cancelOptions} disabled={finalizing}>
+              Cancel
+            </Button>
+            <Button
+              theme="primary"
+              onClick={confirmOptions}
+              disabled={!canConfirm || finalizing}
+            >
+              {finalizing ? "Installing…" : "Install"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   // ── Detail view ────────────────────────────────────────────────────────────
   if (detail) {
@@ -286,36 +448,37 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
                   onChange={(e) => setSearchInput(e.target.value)}
                 />
               </div>
-              <select
-                className="mod-manager__select"
+              <SettingSelect
+                ariaLabel="Sort mods"
                 value={sort}
-                onChange={(e) => {
-                  setPage(1);
-                  setSort(e.target.value as Sort);
-                }}
                 disabled={Boolean(search)}
-              >
-                <option value="likes">Most liked</option>
-                <option value="downloads">Most downloaded</option>
-                <option value="newest">Newest</option>
-                <option value="updated">Recently updated</option>
-              </select>
-              <select
-                className="mod-manager__select"
-                value={categoryId ?? ""}
-                onChange={(e) => {
+                options={[
+                  { value: "likes", label: "Most liked" },
+                  { value: "downloads", label: "Most downloaded" },
+                  { value: "newest", label: "Newest" },
+                  { value: "updated", label: "Recently updated" },
+                ]}
+                onChange={(v) => {
                   setPage(1);
-                  setCategoryId(e.target.value ? Number(e.target.value) : null);
+                  setSort(v as Sort);
                 }}
+              />
+              <SettingSelect
+                ariaLabel="Filter by category"
+                value={categoryId != null ? String(categoryId) : ""}
                 disabled={Boolean(search)}
-              >
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "All categories" },
+                  ...categories.map((c) => ({
+                    value: String(c.id),
+                    label: c.name,
+                  })),
+                ]}
+                onChange={(v) => {
+                  setPage(1);
+                  setCategoryId(v ? Number(v) : null);
+                }}
+              />
             </div>
 
             <div className="mod-manager__scroll">

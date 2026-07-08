@@ -51,7 +51,11 @@ export function ModsSection({ game }: Readonly<Props>) {
 
   const handleToggle = async (enabled: boolean) => {
     setStatus((s) => (s ? { ...s, modsEnabled: enabled } : s));
-    const res = await window.electron.setModsEnabled(enabled);
+    const res = await window.electron.setModsEnabled(
+      game.shop,
+      game.objectId,
+      enabled
+    );
     if (!res.ok) {
       showErrorToast("Couldn't change mods state");
       refresh();
@@ -77,8 +81,9 @@ export function ModsSection({ game }: Readonly<Props>) {
         <div>
           <h3 className="mods-section__title">Mods</h3>
           <p className="mods-section__subtitle">
-            Install and manage {game.title} mods with UKMM. Enable mods and press
-            Play to launch the game modded.
+            Install and manage {game.title} mods from GameBanana. Enable mods and
+            press Play to launch the game modded — everything runs in the
+            background through Cemu.
           </p>
         </div>
       </div>

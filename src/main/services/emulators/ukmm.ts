@@ -709,7 +709,9 @@ export const getModStatus = async (
   const cemuInstalled =
     cemuConfig?.binary === "cemu" && Boolean(cemuConfig.executablePath);
 
-  // Read whether the UKMM pack is currently enabled in Cemu's settings.xml.
+  // Native mods deploy as their own Cemu graphic packs; "mods enabled" means at
+  // least one of this game's deployed packs is active in settings.xml.
+  const installed = await getInstalled(shop, objectId);
   let modsEnabled = false;
   try {
     const cemu = await resolveCemuGamePaths(shop, objectId);
@@ -717,7 +719,9 @@ export const getModStatus = async (
       const settingsFile = path.join(cemu.cemuDir, "settings.xml");
       if (existsSync(settingsFile)) {
         const xml = readFileSync(settingsFile, "utf-8");
-        modsEnabled = xml.includes(ukmmPackRulesId());
+        modsEnabled = installed.some(
+          (m) => m.packRulesId && xml.includes(m.packRulesId)
+        );
       }
     }
   } catch {
@@ -725,10 +729,12 @@ export const getModStatus = async (
   }
 
   return {
-    ukmmInstalled: isUkmmInstalled(),
+    // Native deployment doesn't need the UKMM binary, so report ready whenever
+    // Cemu is set up — the Mods tab is usable without a separate download.
+    ukmmInstalled: true,
     cemuInstalled,
     modsEnabled,
-    installed: await getInstalled(shop, objectId),
+    installed,
   };
 };
 

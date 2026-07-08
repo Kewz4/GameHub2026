@@ -799,8 +799,8 @@ contextBridge.exposeInMainWorld("electron", {
   getModStatus: (shop: string, objectId: string) =>
     ipcRenderer.invoke("getModStatus", shop, objectId),
   installUkmm: () => ipcRenderer.invoke("installUkmm"),
-  setModsEnabled: (enabled: boolean) =>
-    ipcRenderer.invoke("setModsEnabled", enabled),
+  setModsEnabled: (shop: string, objectId: string, enabled: boolean) =>
+    ipcRenderer.invoke("setModsEnabled", shop, objectId, enabled),
   browseGameBananaMods: (opts: {
     page?: number;
     sort?: string;
@@ -816,6 +816,21 @@ contextBridge.exposeInMainWorld("electron", {
     modId: number,
     fileId?: number
   ) => ipcRenderer.invoke("installMod", shop, objectId, modId, fileId),
+  finalizeModInstall: (
+    shop: string,
+    objectId: string,
+    stagingId: string,
+    selectedFolders: string[]
+  ) =>
+    ipcRenderer.invoke(
+      "finalizeModInstall",
+      shop,
+      objectId,
+      stagingId,
+      selectedFolders
+    ),
+  cancelModInstall: (stagingId: string) =>
+    ipcRenderer.invoke("cancelModInstall", stagingId),
   installModFromBcmlUri: (shop: string, objectId: string, uri: string) =>
     ipcRenderer.invoke("installModFromBcmlUri", shop, objectId, uri),
   uninstallMod: (shop: string, objectId: string, index: number) =>

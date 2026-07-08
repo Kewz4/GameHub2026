@@ -44,6 +44,7 @@ import type {
   EmulatorSystem,
   CemuGraphicPack,
   ModManagerStatus,
+  ModInstallPrep,
   GameBananaMod,
   GameBananaModDetail,
   EmulatorConfig,
@@ -970,7 +971,11 @@ declare global {
     ) => Promise<boolean>;
     getModStatus: (shop: string, objectId: string) => Promise<ModManagerStatus>;
     installUkmm: () => Promise<{ ok: boolean; reason?: string }>;
-    setModsEnabled: (enabled: boolean) => Promise<{ ok: boolean }>;
+    setModsEnabled: (
+      shop: string,
+      objectId: string,
+      enabled: boolean
+    ) => Promise<{ ok: boolean }>;
     browseGameBananaMods: (opts: {
       page?: number;
       sort?: "newest" | "updated" | "likes" | "downloads";
@@ -984,12 +989,19 @@ declare global {
       objectId: string,
       modId: number,
       fileId?: number
-    ) => Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }>;
+    ) => Promise<ModInstallPrep>;
+    finalizeModInstall: (
+      shop: string,
+      objectId: string,
+      stagingId: string,
+      selectedFolders: string[]
+    ) => Promise<{ ok: boolean; reason?: string }>;
+    cancelModInstall: (stagingId: string) => Promise<void>;
     installModFromBcmlUri: (
       shop: string,
       objectId: string,
       uri: string
-    ) => Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }>;
+    ) => Promise<ModInstallPrep>;
     uninstallMod: (
       shop: string,
       objectId: string,
