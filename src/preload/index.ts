@@ -801,8 +801,13 @@ contextBridge.exposeInMainWorld("electron", {
   installUkmm: () => ipcRenderer.invoke("installUkmm"),
   setModsEnabled: (enabled: boolean) =>
     ipcRenderer.invoke("setModsEnabled", enabled),
-  browseGameBananaMods: (page: number) =>
-    ipcRenderer.invoke("browseGameBananaMods", page),
+  browseGameBananaMods: (opts: {
+    page?: number;
+    sort?: string;
+    categoryId?: number | null;
+    search?: string;
+  }) => ipcRenderer.invoke("browseGameBananaMods", opts),
+  listModCategories: () => ipcRenderer.invoke("listModCategories"),
   getGameBananaMod: (modId: number) =>
     ipcRenderer.invoke("getGameBananaMod", modId),
   installMod: (

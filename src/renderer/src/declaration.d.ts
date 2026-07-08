@@ -971,19 +971,25 @@ declare global {
     getModStatus: (shop: string, objectId: string) => Promise<ModManagerStatus>;
     installUkmm: () => Promise<{ ok: boolean; reason?: string }>;
     setModsEnabled: (enabled: boolean) => Promise<{ ok: boolean }>;
-    browseGameBananaMods: (page: number) => Promise<GameBananaMod[]>;
+    browseGameBananaMods: (opts: {
+      page?: number;
+      sort?: "newest" | "updated" | "likes" | "downloads";
+      categoryId?: number | null;
+      search?: string;
+    }) => Promise<GameBananaMod[]>;
+    listModCategories: () => Promise<{ id: number; name: string }[]>;
     getGameBananaMod: (modId: number) => Promise<GameBananaModDetail | null>;
     installMod: (
       shop: string,
       objectId: string,
       modId: number,
       fileId?: number
-    ) => Promise<{ ok: boolean; reason?: string }>;
+    ) => Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }>;
     installModFromBcmlUri: (
       shop: string,
       objectId: string,
       uri: string
-    ) => Promise<{ ok: boolean; reason?: string }>;
+    ) => Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }>;
     uninstallMod: (
       shop: string,
       objectId: string,

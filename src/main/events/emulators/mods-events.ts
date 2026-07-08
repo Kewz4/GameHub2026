@@ -26,8 +26,17 @@ const setModsEnabled = async (
 
 const browseGameBananaMods = async (
   _e: Electron.IpcMainInvokeEvent,
-  page: number
-): Promise<GameBananaMod[]> => gamebanana.listBotwMods(page);
+  opts: {
+    page?: number;
+    sort?: "newest" | "updated" | "likes" | "downloads";
+    categoryId?: number | null;
+    search?: string;
+  }
+): Promise<GameBananaMod[]> => gamebanana.listBotwMods(opts ?? {});
+
+const listModCategories = async (): Promise<
+  { id: number; name: string }[]
+> => gamebanana.listCategories();
 
 const getGameBananaMod = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -44,7 +53,7 @@ const installMod = async (
   objectId: string,
   modId: number,
   fileId?: number
-): Promise<{ ok: boolean; reason?: string }> => {
+): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
   const detail = await gamebanana.getModDetail(modId);
   if (!detail || detail.files.length === 0) {
     return { ok: false, reason: "This mod has no downloadable files" };
@@ -70,10 +79,13 @@ const installMod = async (
     name: detail.name,
     thumbnailUrl: detail.gallery[0] ?? null,
   });
-  try {
-    fs.unlinkSync(filePath);
-  } catch {
-    /* best effort */
+  // Keep the file when we've handed off to the UKMM GUI (it reads it there).
+  if (!res.guiHandoff) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      /* best effort */
+    }
   }
   return res;
 };
@@ -84,7 +96,7 @@ const installModFromBcmlUri = async (
   shop: GameShop,
   objectId: string,
   uri: string
-): Promise<{ ok: boolean; reason?: string }> => {
+): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
   const url = gamebanana.resolveBcmlUri(uri);
   if (!url) return { ok: false, reason: "Invalid bcml install link" };
   const downloadDir = ukmmPaths().downloadDir;
@@ -101,10 +113,13 @@ const installModFromBcmlUri = async (
     name: path.basename(fileName),
     thumbnailUrl: null,
   });
-  try {
-    fs.unlinkSync(filePath);
-  } catch {
-    /* best effort */
+  // Keep the file when we've handed off to the UKMM GUI (it reads it there).
+  if (!res.guiHandoff) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      /* best effort */
+    }
   }
   return res;
 };
@@ -121,6 +136,7 @@ registerEvent("getModStatus", getModStatus);
 registerEvent("installUkmm", installUkmm);
 registerEvent("setModsEnabled", setModsEnabled);
 registerEvent("browseGameBananaMods", browseGameBananaMods);
+registerEvent("listModCategories", listModCategories);
 registerEvent("getGameBananaMod", getGameBananaMod);
 registerEvent("installMod", installMod);
 registerEvent("installModFromBcmlUri", installModFromBcmlUri);

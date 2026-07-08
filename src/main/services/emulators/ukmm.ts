@@ -1,5 +1,5 @@
 import axios from "axios";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import {
   chmodSync,
@@ -38,8 +38,56 @@ const execFileAsync = promisify(execFile);
  */
 
 const isWindows = process.platform === "win32";
+const isMac = process.platform === "darwin";
+const isArm = process.arch === "arm64";
 const UKMM_RELEASE_API =
   "https://api.github.com/repos/NiceneNerd/ukmm/releases/latest";
+
+/**
+ * Pick the correct release asset for THIS OS + arch. UKMM ships per-target
+ * archives (e.g. `ukmm-x86_64-pc-windows-msvc.zip`,
+ * `ukmm-x86_64-unknown-linux-gnu.tar.xz`, `ukmm-aarch64-apple-darwin`) plus
+ * `-update` binaries (raw PE/Mach-O auto-updater files — NOT archives; feeding
+ * one to 7-Zip dumps its binary sections). We score by target triple and hard-
+ * exclude `-update`. NB: the naive /win/ test matched "dar-WIN", which is how
+ * the macOS updater got downloaded before.
+ */
+const pickUkmmAsset = (
+  assets: { name: string; browser_download_url: string }[]
+): { name: string; browser_download_url: string } | null => {
+  const score = (name: string): number => {
+    const n = name.toLowerCase();
+    if (n.includes("-update")) return -1; // never the updater binary
+    if (isWindows) {
+      if (n.includes("pc-windows") && n.endsWith(".zip")) return 100;
+      if (n.includes("windows") && n.endsWith(".zip")) return 80;
+      if (n.endsWith(".zip") && !n.includes("darwin") && !n.includes("linux"))
+        return 40;
+      return -1;
+    }
+    if (isMac) {
+      if (!n.includes("apple-darwin")) return -1;
+      return n.includes(isArm ? "aarch64" : "x86_64") ? 100 : 70;
+    }
+    // linux
+    if (n.includes("linux")) {
+      const archOk = n.includes(isArm ? "aarch64" : "x86_64");
+      if (/\.(tar\.\w+|tar|zip|7z)$/i.test(n)) return archOk ? 100 : 70;
+      if (n.endsWith(".appimage")) return archOk ? 60 : 40;
+    }
+    return -1;
+  };
+  let best: { name: string; browser_download_url: string } | null = null;
+  let bestScore = 0;
+  for (const a of assets) {
+    const s = score(a.name);
+    if (s > bestScore) {
+      best = a;
+      bestScore = s;
+    }
+  }
+  return best;
+};
 
 // The deployed Cemu graphic-pack folder + the rules.txt path (relative to the
 // Cemu data dir) that acts as the master "mods enabled" switch.
@@ -82,14 +130,23 @@ export const installUkmm = async (): Promise<{
       timeout: 30_000,
     });
     const assets = release.data.assets ?? [];
-    const pattern = isWindows
-      ? /windows|win|\.zip$/i
-      : /linux|\.tar|\.appimage$/i;
-    const asset =
-      assets.find((a) => pattern.test(a.name)) ??
-      assets.find((a) => /\.(zip|7z|tar\.\w+|tar)$/i.test(a.name));
-    if (!asset) return { ok: false, reason: "No UKMM asset for this platform" };
+    const asset = pickUkmmAsset(assets);
+    if (!asset) {
+      logger.error(
+        "[ukmm] no matching asset. Available:",
+        assets.map((a) => a.name)
+      );
+      return { ok: false, reason: "No UKMM asset for this platform" };
+    }
+    logger.log(
+      `[ukmm] selected asset ${asset.name} for ${process.platform}/${process.arch}`
+    );
 
+    // Clean slate — a previous failed install may have left junk (e.g. the
+    // Mach-O sections 7-Zip dumps from a raw `-update` binary).
+    if (existsSync(paths.installDir)) {
+      rmSync(paths.installDir, { recursive: true, force: true });
+    }
     mkdirSync(paths.installDir, { recursive: true });
     const archive = path.join(paths.installDir, asset.name);
     const resp = await axios.get<NodeJS.ReadableStream>(
@@ -185,20 +242,49 @@ const runUkmm = async (
   const exe = resolveExe();
   if (!exe) return { ok: false, stdout: "", stderr: "UKMM not installed" };
   const full = ["--portable", ...(deploy ? ["--deploy"] : []), ...args];
+  logger.log(`[ukmm] run: ukmm ${full.join(" ")}`);
   try {
     const { stdout, stderr } = await execFileAsync(exe, full, {
       cwd: path.dirname(exe),
       timeout: 300_000,
       windowsHide: true,
     });
+    if (stdout?.trim()) logger.log(`[ukmm] stdout: ${stdout.trim()}`);
+    if (stderr?.trim()) logger.warn(`[ukmm] stderr: ${stderr.trim()}`);
     return { ok: true, stdout, stderr };
   } catch (err: any) {
-    logger.error(`[ukmm] command failed: ${full.join(" ")}`, err);
-    return {
-      ok: false,
-      stdout: err?.stdout ?? "",
-      stderr: err?.stderr ?? String(err),
-    };
+    const stderr = err?.stderr ?? String(err);
+    logger.error(`[ukmm] command failed: ukmm ${full.join(" ")}\n${stderr}`);
+    return { ok: false, stdout: err?.stdout ?? "", stderr };
+  }
+};
+
+/**
+ * Some mods can't be installed by the CLI: `.bnp` (legacy BCML) archives, and
+ * mods that expose configuration options — both require UKMM's GUI. When we hit
+ * those, open the file in UKMM's GUI so the user can finish the (one-click)
+ * install there, and report a friendly message.
+ */
+const needsGuiInstall = (stderr: string): boolean =>
+  /bnp files are not supported/i.test(stderr) ||
+  /install(ed)? via the gui/i.test(stderr) ||
+  /configuration options/i.test(stderr);
+
+const openInUkmmGui = (filePath: string): boolean => {
+  const exe = resolveExe();
+  if (!exe) return false;
+  try {
+    const child = spawn(exe, ["--portable", filePath], {
+      cwd: path.dirname(exe),
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+    logger.log(`[ukmm] opened GUI to install ${path.basename(filePath)}`);
+    return true;
+  } catch (err) {
+    logger.error("[ukmm] failed to open GUI", err);
+    return false;
   }
 };
 
@@ -358,10 +444,22 @@ export const installModFromFile = async (
   objectId: string,
   filePath: string,
   meta: { gbModId: number; name: string; thumbnailUrl: string | null }
-): Promise<{ ok: boolean; reason?: string }> => {
+): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
   await configureUkmm(shop, objectId);
   const res = await runUkmm(["install", filePath], true);
   if (!res.ok) {
+    // Legacy .bnp mods and mods with configuration options can't be installed
+    // headlessly — hand off to UKMM's GUI so the user can finish there.
+    if (needsGuiInstall(res.stderr)) {
+      const opened = openInUkmmGui(filePath);
+      return {
+        ok: false,
+        guiHandoff: opened,
+        reason: opened
+          ? "This mod needs UKMM's installer — it's been opened in UKMM to finish."
+          : "This mod must be installed via the UKMM app.",
+      };
+    }
     return {
       ok: false,
       reason: res.stderr || "UKMM failed to install the mod",

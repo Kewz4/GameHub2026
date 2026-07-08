@@ -26,36 +26,99 @@ const firstImage = (record: any): string | null => {
   return null;
 };
 
-/** List BOTW mods, newest first, paginated. */
+const mapRecord = (r: any): GameBananaMod => ({
+  id: Number(r._idRow),
+  name: String(r._sName ?? "Unknown"),
+  category: r?._aRootCategory?._sName ?? null,
+  submitter: r?._aSubmitter?._sName ?? null,
+  imageUrl: firstImage(r),
+  likes: Number(r._nLikeCount ?? 0),
+  views: Number(r._nViewCount ?? 0),
+  profileUrl: String(r._sProfileUrl ?? ""),
+});
+
+export type ModSort = "newest" | "updated" | "likes" | "downloads";
+
+const SORT_ALIAS: Record<ModSort, string> = {
+  newest: "Generic_Newest",
+  updated: "Generic_LatestModified",
+  likes: "Generic_MostLiked",
+  downloads: "Generic_MostDownloaded",
+};
+
+export interface BrowseOptions {
+  page?: number;
+  perPage?: number;
+  sort?: ModSort;
+  /** GameBanana category row id (from listCategories), or null for all. */
+  categoryId?: number | null;
+  /** Free-text search query. */
+  search?: string;
+}
+
+/** List/search BOTW mods with sorting + category filtering. */
 export const listBotwMods = async (
-  page = 1,
-  perPage = 15
+  opts: BrowseOptions = {}
 ): Promise<GameBananaMod[]> => {
+  const { page = 1, perPage = 15, sort = "newest", categoryId, search } = opts;
   try {
+    // Free-text search goes through the search endpoint; browse/filter uses the
+    // index endpoint (which supports sort + category filters).
+    if (search && search.trim()) {
+      const resp = await axios.get(`${GB_API}/Util/Search/Results`, {
+        params: {
+          _sSearchString: search.trim(),
+          _idGameRow: BOTW_GAME_ID,
+          _sModelName: "Mod",
+          _nPage: page,
+          _nPerpage: perPage,
+        },
+        timeout: 15_000,
+        headers: { "User-Agent": "GameHub" },
+      });
+      const records: any[] = resp.data?._aRecords ?? [];
+      return records.map(mapRecord);
+    }
+
+    const params: Record<string, unknown> = {
+      _nPage: page,
+      _nPerpage: perPage,
+      "_aFilters[Generic_Game]": BOTW_GAME_ID,
+      _sSort: SORT_ALIAS[sort],
+    };
+    if (categoryId) params["_aFilters[Generic_Category]"] = categoryId;
+
     const resp = await axios.get(`${GB_API}/Mod/Index`, {
-      params: {
-        _nPage: page,
-        _nPerpage: perPage,
-        "_aFilters[Generic_Game]": BOTW_GAME_ID,
-      },
+      params,
       timeout: 15_000,
       headers: { "User-Agent": "GameHub" },
     });
     const records: any[] = resp.data?._aRecords ?? [];
-    return records
-      .filter((r) => !r?._bIsObsolete)
-      .map((r) => ({
-        id: Number(r._idRow),
-        name: String(r._sName ?? "Unknown"),
-        category: r?._aRootCategory?._sName ?? null,
-        submitter: r?._aSubmitter?._sName ?? null,
-        imageUrl: firstImage(r),
-        likes: Number(r._nLikeCount ?? 0),
-        views: Number(r._nViewCount ?? 0),
-        profileUrl: String(r._sProfileUrl ?? ""),
-      }));
+    return records.filter((r) => !r?._bIsObsolete).map(mapRecord);
   } catch (err) {
     logger.warn("[gamebanana] listBotwMods failed", err);
+    return [];
+  }
+};
+
+/** BOTW mod categories (id + name), for the filter dropdown. */
+export const listCategories = async (): Promise<
+  { id: number; name: string }[]
+> => {
+  try {
+    const resp = await axios.get(`${GB_API}/Mod/Categories`, {
+      params: { _idGameRow: BOTW_GAME_ID, _sSort: "a_to_z", _bShowEmpty: true },
+      timeout: 15_000,
+      headers: { "User-Agent": "GameHub" },
+    });
+    const recs: any[] = Array.isArray(resp.data)
+      ? resp.data
+      : (resp.data?._aRecords ?? []);
+    return recs
+      .map((c) => ({ id: Number(c._idRow), name: String(c._sName ?? "") }))
+      .filter((c) => c.id && c.name);
+  } catch (err) {
+    logger.warn("[gamebanana] listCategories failed", err);
     return [];
   }
 };
