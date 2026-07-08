@@ -270,23 +270,34 @@ const needsGuiInstall = (stderr: string): boolean =>
   /install(ed)? via the gui/i.test(stderr) ||
   /configuration options/i.test(stderr);
 
-const openInUkmmGui = (filePath: string): boolean => {
+const openInUkmmGui = (fileOrUri: string): boolean => {
   const exe = resolveExe();
   if (!exe) return false;
   try {
-    const child = spawn(exe, ["--portable", filePath], {
+    // UKMM's GUI fallback reads the mod path from std::env::args().nth(1) — the
+    // FIRST arg — so the path (or bcml: URI) must come first. `--portable` is
+    // detected by scanning ALL args, so it can safely follow.
+    const child = spawn(exe, [fileOrUri, "--portable"], {
       cwd: path.dirname(exe),
       detached: true,
       stdio: "ignore",
     });
     child.unref();
-    logger.log(`[ukmm] opened GUI to install ${path.basename(filePath)}`);
+    logger.log(`[ukmm] opened GUI to install ${path.basename(fileOrUri)}`);
     return true;
   } catch (err) {
     logger.error("[ukmm] failed to open GUI", err);
     return false;
   }
 };
+
+/**
+ * Install a mod straight from a `bcml:` 1-click URI using UKMM's native
+ * one-click handler (downloads + installs in the GUI). This is the most
+ * reliable path for legacy BNP mods, which the CLI can't install.
+ */
+export const oneClickInstall = (bcmlUri: string): boolean =>
+  openInUkmmGui(bcmlUri);
 
 // ── Cemu / game path resolution ──────────────────────────────────────────────
 

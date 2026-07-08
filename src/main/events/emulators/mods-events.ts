@@ -7,7 +7,6 @@ import type {
   GameShop,
   ModManagerStatus,
 } from "@types";
-import path from "node:path";
 import fs from "node:fs";
 
 const getModStatus = async (
@@ -97,31 +96,19 @@ const installModFromBcmlUri = async (
   objectId: string,
   uri: string
 ): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
-  const url = gamebanana.resolveBcmlUri(uri);
-  if (!url) return { ok: false, reason: "Invalid bcml install link" };
-  const downloadDir = ukmmPaths().downloadDir;
-  fs.mkdirSync(downloadDir, { recursive: true });
-  const fileName = `bcml-${Date.now()}.bnp`;
-  let filePath: string;
-  try {
-    filePath = await gamebanana.downloadModFile(url, downloadDir, fileName);
-  } catch (err) {
-    return { ok: false, reason: `Download failed: ${err}` };
-  }
-  const res = await emulators.installModFromFile(shop, objectId, filePath, {
-    gbModId: 0,
-    name: path.basename(fileName),
-    thumbnailUrl: null,
-  });
-  // Keep the file when we've handed off to the UKMM GUI (it reads it there).
-  if (!res.guiHandoff) {
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      /* best effort */
-    }
-  }
-  return res;
+  if (!/^bcml:/i.test(uri)) return { ok: false, reason: "Invalid bcml link" };
+  // bcml: links are UKMM's native 1-click format — hand the URI straight to
+  // UKMM's oneclick handler (it downloads + installs in the GUI). This is the
+  // reliable path for legacy BNP mods the CLI can't install.
+  await emulators.configureUkmm(shop, objectId);
+  const opened = emulators.oneClickInstall(uri);
+  return opened
+    ? {
+        ok: false,
+        guiHandoff: true,
+        reason: "Opening in UKMM to install this mod…",
+      }
+    : { ok: false, reason: "UKMM isn't installed" };
 };
 
 const uninstallMod = async (
