@@ -1,6 +1,7 @@
 import { registerEvent } from "../register-event";
 import type { GameShop } from "@types";
 import { Ludusavi, logger } from "@main/services";
+import { resolveEmulatorGameSaveFolder } from "@main/services/emulators/emulator-save-dirs";
 import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
 import path from "node:path";
 import fs from "node:fs";
@@ -35,6 +36,16 @@ const getGameSaveFolder = async (
   objectId: string
 ): Promise<string | null> => {
   try {
+    // Console/emulator games keep their saves in the emulator's save tree, not
+    // in the Ludusavi PC manifest — resolve that first (per-title for Cemu).
+    const emulatorSave = await resolveEmulatorGameSaveFolder(
+      shop,
+      objectId
+    ).catch(() => null);
+    if (emulatorSave && fs.existsSync(emulatorSave)) {
+      return emulatorSave;
+    }
+
     const gameKey = levelKeys.game(shop, objectId);
 
     const game = await gamesSublevel.get(gameKey).catch(() => null);

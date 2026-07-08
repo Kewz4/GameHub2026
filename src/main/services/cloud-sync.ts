@@ -21,7 +21,7 @@ import { UploadcareSync } from "./uploadcare-sync";
 import i18next, { t } from "i18next";
 import { SystemPath } from "./system-path";
 import { Wine } from "./wine";
-import { resolveEmulatorSaveLocation } from "./emulators/emulator-save-dirs";
+import { resolveEmulatorBackupFolders } from "./emulators/emulator-save-dirs";
 import { invalidateCachedArtifacts } from "./cloud-artifacts-cache";
 
 export class CloudSync {
@@ -120,9 +120,9 @@ export class CloudSync {
     // custom game keyed by the same name we back up under, so the existing
     // backup → tar → cloud pipeline captures and restores them unchanged.
     try {
-      const location = await resolveEmulatorSaveLocation(shop, objectId);
-      if (location) {
-        await Ludusavi.addCustomGame(canonicalName, location.folders);
+      const folders = await resolveEmulatorBackupFolders(shop, objectId);
+      if (folders.length > 0) {
+        await Ludusavi.addCustomGame(canonicalName, folders);
       }
     } catch (error) {
       logger.error("Failed to register emulator save folders", {

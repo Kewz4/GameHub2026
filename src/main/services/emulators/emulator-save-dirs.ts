@@ -7,6 +7,7 @@ import { levelKeys, gamesSublevel } from "@main/level";
 import { getEmulatorConfig } from "./emulators-repository";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { cemuDataDir } from "./emulator-portable";
+import { resolveWiiuTitleId } from "./cemu-graphic-packs";
 
 /**
  * Resolves the on-disk save-data folders for the folder-based standalone
@@ -106,4 +107,54 @@ export const resolveEmulatorSaveLocation = async (
     binary: KNOWN_BINARIES[system].binary,
     folders,
   };
+};
+
+/**
+ * Resolve the single best save folder to OPEN for a specific game. For Cemu we
+ * narrow to the exact per-title folder (mlc01/usr/save/<high>/<low>/user) when
+ * the game's title id is readable; otherwise (and for other emulators, whose
+ * per-title id can't be derived without header parsing) we return the
+ * console-wide save root, which still lands the user in the right place.
+ */
+export const resolveEmulatorGameSaveFolder = async (
+  shop: GameShop,
+  objectId: string
+): Promise<string | null> => {
+  const loc = await resolveEmulatorSaveLocation(shop, objectId);
+  if (!loc) return null;
+
+  if (loc.system === "wiiu") {
+    const titleId = await resolveWiiuTitleId(shop, objectId);
+    if (titleId && titleId.length === 16) {
+      const high = titleId.slice(0, 8);
+      const low = titleId.slice(8);
+      const withUser = path.join(loc.folders[0], high, low, "user");
+      if (fs.existsSync(withUser)) return withUser;
+      const withoutUser = path.join(loc.folders[0], high, low);
+      if (fs.existsSync(withoutUser)) return withoutUser;
+    }
+  }
+
+  return loc.folders[0] ?? null;
+};
+
+/**
+ * Folders to register with Ludusavi for a console game's backup. Cemu narrows
+ * to the per-title folder (so a restore doesn't clobber every game's saves);
+ * other emulators back up their whole save root (their per-title layout can't
+ * be resolved reliably yet).
+ */
+export const resolveEmulatorBackupFolders = async (
+  shop: GameShop,
+  objectId: string
+): Promise<string[]> => {
+  const loc = await resolveEmulatorSaveLocation(shop, objectId);
+  if (!loc) return [];
+
+  if (loc.system === "wiiu") {
+    const specific = await resolveEmulatorGameSaveFolder(shop, objectId);
+    if (specific && specific !== loc.folders[0]) return [specific];
+  }
+
+  return loc.folders;
 };

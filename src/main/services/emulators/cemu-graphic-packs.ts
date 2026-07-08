@@ -15,10 +15,54 @@ import os from "node:os";
 import { pipeline } from "node:stream/promises";
 
 import type { CemuGraphicPack, CemuGraphicPackPresetCategory } from "@types";
+import type { GameShop } from "@types";
+import { gamesSublevel, levelKeys } from "@main/level";
 import { logger } from "../logger";
 import { SevenZip } from "../7zip";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
+
+/**
+ * Resolve the 16-hex Wii U title id for a library game by reading the title's
+ * meta/meta.xml (Cemu folder games), so graphic packs can be scoped to the game
+ * you actually opened instead of listing every downloaded pack. Returns the
+ * lowercased id, or null for disc-image games where no loose meta.xml exists.
+ */
+export const resolveWiiuTitleId = async (
+  shop: GameShop,
+  objectId: string
+): Promise<string | null> => {
+  const game = await gamesSublevel
+    .get(levelKeys.game(shop, objectId))
+    .catch(() => null);
+  if (!game) return null;
+
+  const roots = [
+    game.selectedDiscPath,
+    ...(game.discs?.map((d) => d.path) ?? []),
+    game.executablePath,
+  ].filter((p): p is string => Boolean(p));
+
+  // meta.xml lives at <gameDir>/meta/meta.xml. The stored path may point at the
+  // game folder, at code/<name>.rpx, or a disc file — probe a few parents.
+  for (const root of roots) {
+    const bases = [root, path.dirname(root), path.dirname(path.dirname(root))];
+    for (const base of bases) {
+      const metaPath = path.join(base, "meta", "meta.xml");
+      try {
+        if (!existsSync(metaPath)) continue;
+        const xml = readFileSync(metaPath, "utf-8");
+        const m = xml.match(
+          /<title_id[^>]*>\s*([0-9a-fA-F]{16})\s*<\/title_id>/
+        );
+        if (m) return m[1].toLowerCase();
+      } catch {
+        // keep probing
+      }
+    }
+  }
+  return null;
+};
 
 /**
  * Cemu graphic-pack manager. Cemu's graphic packs are community-maintained in

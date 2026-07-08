@@ -6,7 +6,7 @@ import {
   AlertFillIcon,
   TrophyIcon,
   ImageIcon,
-  CloudIcon,
+  HistoryIcon,
   DownloadIcon,
 } from "@primer/octicons-react";
 import "./library-game-card.scss";
@@ -54,10 +54,14 @@ export const LibraryGameCard = memo(function LibraryGameCard({
   const { formatPlayTime, handleCardClick, handleContextMenuClick } =
     useGameCard(game, onContextMenu);
 
-  const lastSaveLabel = (() => {
-    if (!game.lastCloudSaveAt) return null;
-    const date = new Date(game.lastCloudSaveAt);
-    const diffMs = Date.now() - date.getTime();
+  const lastPlayedLabel = (() => {
+    if (!game.lastTimePlayed) return null;
+    const date = new Date(game.lastTimePlayed);
+    const time = date.getTime();
+    if (Number.isNaN(time)) return null;
+    const diffMs = Date.now() - time;
+    // A last-played timestamp in the future is bad data — don't show it.
+    if (diffMs < 0) return null;
     const diffMin = Math.floor(diffMs / 60_000);
     const diffHr = Math.floor(diffMin / 60);
     const diffDay = Math.floor(diffHr / 24);
@@ -180,13 +184,13 @@ export const LibraryGameCard = memo(function LibraryGameCard({
           </div>
         </div>
 
-        {lastSaveLabel && (
+        {lastPlayedLabel && (
           <div
             className="library-game-card__cloud-save"
-            title={`Last cloud save: ${new Date(game.lastCloudSaveAt!).toLocaleString()}`}
+            title={`Last played: ${new Date(game.lastTimePlayed!).toLocaleString()}`}
           >
-            <CloudIcon size={10} />
-            <span>{lastSaveLabel}</span>
+            <HistoryIcon size={10} />
+            <span>{lastPlayedLabel}</span>
           </div>
         )}
 

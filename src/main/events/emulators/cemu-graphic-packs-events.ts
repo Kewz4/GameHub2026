@@ -1,16 +1,34 @@
 import { registerEvent } from "../register-event";
 import { emulators } from "@main/services";
-import type { CemuGraphicPack } from "@types";
+import type { CemuGraphicPack, GameShop } from "@types";
 
 const listCemuGraphicPacks = async (
   _event: Electron.IpcMainInvokeEvent,
-  titleId?: string | null
-): Promise<{ hasLibrary: boolean; packs: CemuGraphicPack[] }> => {
+  shop?: GameShop | null,
+  objectId?: string | null,
+  showAll?: boolean
+): Promise<{
+  hasLibrary: boolean;
+  packs: CemuGraphicPack[];
+  titleId: string | null;
+  scoped: boolean;
+}> => {
+  // Resolve the specific game's Wii U title id so only its packs are listed.
+  const titleId =
+    shop && objectId
+      ? await emulators.resolveWiiuTitleId(shop, objectId)
+      : null;
+
+  // Scope to the game's title id unless the caller explicitly wants everything
+  // (or we couldn't identify the game, in which case listing all is the only
+  // useful fallback).
+  const filterId = showAll ? null : titleId;
+
   const [hasLibrary, packs] = await Promise.all([
     emulators.hasGraphicPacksLibrary(),
-    emulators.listGraphicPacks(titleId ?? null),
+    emulators.listGraphicPacks(filterId),
   ]);
-  return { hasLibrary, packs };
+  return { hasLibrary, packs, titleId, scoped: Boolean(filterId) };
 };
 
 const downloadCemuGraphicPacks = async (): Promise<{

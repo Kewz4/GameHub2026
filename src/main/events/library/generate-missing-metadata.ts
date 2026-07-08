@@ -1,8 +1,14 @@
 import axios from "axios";
 import { registerEvent } from "../register-event";
-import { gamesSublevel, gamesShopAssetsSublevel, levelKeys } from "@main/level";
+import {
+  gamesSublevel,
+  gamesShopAssetsSublevel,
+  levelKeys,
+  getGameHubMeta,
+} from "@main/level";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { logger, WindowManager } from "@main/services";
+import { systemFromObjectId, platformToSystem } from "@main/helpers";
 
 export interface MetadataGameResult {
   title: string;
@@ -86,6 +92,67 @@ const generateMissingMetadata = async (
     const assets = await gamesShopAssetsSublevel
       .get(cacheKey)
       .catch(() => null);
+
+    // Console/emulated games (shop === "launchbox"): their full artwork lives
+    // in the bundled gamehub-meta dataset (cover + hero + logo + icon). Import
+    // only writes a cover via a live SGDB lookup, so hero/logo are usually
+    // missing — which left the game-details page bare and made this button a
+    // no-op (it skipped anything that already had a cover). Merge the dataset's
+    // richer art in directly; it's the authoritative source and needs no
+    // network call.
+    if (game.shop === "launchbox") {
+      const system =
+        systemFromObjectId(game.objectId) ?? platformToSystem(game.platform);
+      const meta = system
+        ? await getGameHubMeta(system, game.title).catch(() => null)
+        : null;
+
+      if (meta) {
+        const merged = {
+          coverImageUrl: assets?.coverImageUrl ?? meta.coverImageUrl ?? null,
+          libraryImageUrl:
+            assets?.libraryImageUrl ?? meta.libraryImageUrl ?? null,
+          libraryHeroImageUrl:
+            assets?.libraryHeroImageUrl ?? meta.libraryHeroImageUrl ?? null,
+          logoImageUrl: assets?.logoImageUrl ?? meta.logoImageUrl ?? null,
+          iconUrl: assets?.iconUrl ?? meta.iconUrl ?? null,
+        };
+        const filledSomething =
+          merged.coverImageUrl !== (assets?.coverImageUrl ?? null) ||
+          merged.libraryHeroImageUrl !==
+            (assets?.libraryHeroImageUrl ?? null) ||
+          merged.logoImageUrl !== (assets?.logoImageUrl ?? null) ||
+          merged.libraryImageUrl !== (assets?.libraryImageUrl ?? null) ||
+          merged.iconUrl !== (assets?.iconUrl ?? null);
+
+        if (filledSomething) {
+          await gamesShopAssetsSublevel.put(cacheKey, {
+            ...(assets ?? {}),
+            objectId: game.objectId,
+            shop: game.shop,
+            title: game.title,
+            ...merged,
+            logoPosition: assets?.logoPosition ?? null,
+            downloadSources: assets?.downloadSources ?? [],
+            updatedAt: Date.now(),
+          });
+          const found: string[] = [];
+          if (merged.coverImageUrl) found.push("cover");
+          if (merged.libraryHeroImageUrl) found.push("hero image");
+          if (merged.logoImageUrl) found.push("logo");
+          results.push({
+            title: game.title,
+            coverUrl: merged.coverImageUrl ?? merged.libraryHeroImageUrl ?? null,
+            what: found.length ? `Found: ${found.join(", ")}` : "Updated art",
+          });
+          updated++;
+        } else {
+          skipped++;
+        }
+        continue;
+      }
+      // No dataset entry — fall through to the generic SGDB/catalogue path.
+    }
 
     // A landscape image stored as the portrait cover is as bad as no cover —
     // re-fetch so the card gets a proper 600x900 grid

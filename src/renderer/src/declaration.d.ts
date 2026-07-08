@@ -942,8 +942,15 @@ declare global {
       values: { key: string; value: string }[]
     ) => Promise<boolean>;
     listCemuGraphicPacks: (
-      titleId?: string | null
-    ) => Promise<{ hasLibrary: boolean; packs: CemuGraphicPack[] }>;
+      shop?: string | null,
+      objectId?: string | null,
+      showAll?: boolean
+    ) => Promise<{
+      hasLibrary: boolean;
+      packs: CemuGraphicPack[];
+      titleId: string | null;
+      scoped: boolean;
+    }>;
     downloadCemuGraphicPacks: () => Promise<{
       ok: boolean;
       count: number;
