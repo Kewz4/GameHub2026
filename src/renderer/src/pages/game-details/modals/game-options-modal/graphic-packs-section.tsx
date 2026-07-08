@@ -21,36 +21,29 @@ export function GraphicPacksSection({ game }: Readonly<Props>) {
   const [hasLibrary, setHasLibrary] = useState(false);
   const [packs, setPacks] = useState<CemuGraphicPack[]>([]);
   const [filter, setFilter] = useState("");
-  // Scoped = we identified this game's title id and are showing only its packs.
-  const [scoped, setScoped] = useState(false);
+  // Whether we identified this game's title id (packs are always scoped to it).
   const [couldIdentify, setCouldIdentify] = useState(true);
-  const [showAll, setShowAll] = useState(false);
 
-  const load = useCallback(
-    async (all: boolean) => {
-      setLoading(true);
-      try {
-        const res = await window.electron.listCemuGraphicPacks(
-          game.shop,
-          game.objectId,
-          all
-        );
-        setHasLibrary(res.hasLibrary);
-        setPacks(res.packs);
-        setScoped(res.scoped);
-        setCouldIdentify(res.titleId != null);
-      } catch {
-        showErrorToast("Couldn't load graphic packs");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [showErrorToast, game.shop, game.objectId]
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await window.electron.listCemuGraphicPacks(
+        game.shop,
+        game.objectId
+      );
+      setHasLibrary(res.hasLibrary);
+      setPacks(res.packs);
+      setCouldIdentify(res.titleId != null);
+    } catch {
+      showErrorToast("Couldn't load graphic packs");
+    } finally {
+      setLoading(false);
+    }
+  }, [showErrorToast, game.shop, game.objectId]);
 
   useEffect(() => {
-    load(showAll);
-  }, [load, showAll]);
+    load();
+  }, [load]);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -58,7 +51,7 @@ export function GraphicPacksSection({ game }: Readonly<Props>) {
       const res = await window.electron.downloadCemuGraphicPacks();
       if (res.ok) {
         showSuccessToast(`Downloaded ${res.count} graphic packs`);
-        await load(showAll);
+        await load();
       } else {
         showErrorToast(res.reason ?? "Download failed");
       }
@@ -79,7 +72,7 @@ export function GraphicPacksSection({ game }: Readonly<Props>) {
     );
     if (!ok) {
       showErrorToast("Couldn't update graphic pack");
-      load(showAll);
+      load();
     }
   };
 
@@ -108,7 +101,7 @@ export function GraphicPacksSection({ game }: Readonly<Props>) {
     );
     if (!ok) {
       showErrorToast("Couldn't update preset");
-      load(showAll);
+      load();
     }
   };
 
@@ -164,25 +157,12 @@ export function GraphicPacksSection({ game }: Readonly<Props>) {
         </p>
       ) : (
         <>
-          <div className="graphic-packs__scope">
-            <span className="graphic-packs__muted">
-              {scoped
-                ? `Showing packs for ${game.title}.`
-                : couldIdentify
-                  ? "Showing packs for all games."
-                  : "Couldn't identify this game — showing all packs."}
-            </span>
-            {couldIdentify && (
-              <label className="graphic-packs__scope-toggle">
-                <input
-                  type="checkbox"
-                  checked={showAll}
-                  onChange={(e) => setShowAll(e.target.checked)}
-                />
-                <span>Show all games&apos; packs</span>
-              </label>
-            )}
-          </div>
+          {!couldIdentify && (
+            <p className="graphic-packs__muted">
+              <InfoIcon size={14} /> Couldn&apos;t identify this game from its
+              files — showing all packs.
+            </p>
+          )}
           <input
             className="graphic-packs__search"
             placeholder="Search packs (try the game name)…"

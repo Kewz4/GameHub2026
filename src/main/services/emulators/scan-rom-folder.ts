@@ -47,6 +47,26 @@ const matchesExtension = (name: string, extensions: string[]): boolean => {
 const isDirectoryMarker = (name: string, markers: string[]): boolean =>
   markers.length > 0 && markers.includes(name);
 
+/**
+ * Cemu's own data directories. If a user's Wii U ROM folder is (or contains) a
+ * Cemu install, these hold installed titles (mlc01/usr/title/<high>/<low>),
+ * graphic packs and BCML output — all of which expose code/content/meta and
+ * would otherwise be scanned as bogus "games". Never descend into them.
+ */
+const CEMU_INTERNAL_DIRS = new Set([
+  "mlc01",
+  "graphicpacks",
+  "shadercache",
+  "controllerprofiles",
+  "gameprofiles",
+  "cafelibs",
+]);
+
+/** A pure 8-hex folder name is a Wii U title-id segment (e.g. "101c9400"), a
+ * Cemu internal path component — never a real game folder name. */
+const isTitleIdFolderName = (name: string): boolean =>
+  /^[0-9a-f]{8}$/i.test(name);
+
 const extOf = (name: string): string => {
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(dot).toLowerCase() : "";
@@ -298,10 +318,14 @@ const dedupGames = (binary: KnownBinary, files: Candidate[]): GameGroup[] => {
   const markerParents = new Map<string, Candidate>();
   for (const m of markerDirs) {
     const parent = path.dirname(m.fullPath);
+    const parentName = path.basename(parent);
+    // A title-id-named parent (e.g. "101c9400") is a Cemu title folder, not a
+    // real game — drop it so installed titles don't show up as games.
+    if (isTitleIdFolderName(parentName)) continue;
     if (!markerParents.has(parent)) {
       markerParents.set(parent, {
         fullPath: parent,
-        name: path.basename(parent),
+        name: parentName,
         isMarkerDir: true,
       });
     }
@@ -343,6 +367,9 @@ const collectEntry = (
 ): void => {
   const full = path.join(dir, entry.name);
   if (entry.isDirectory()) {
+    // Never recurse into Cemu's own data dirs — their installed titles /
+    // graphic packs / BCML output masquerade as code/content/meta games.
+    if (CEMU_INTERNAL_DIRS.has(entry.name.toLowerCase())) return;
     if (isDirectoryMarker(entry.name, binary.romDirectoryMarkers)) {
       candidates.push({ fullPath: full, name: entry.name, isMarkerDir: true });
     } else if (scanSubfolders) {

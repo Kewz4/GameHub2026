@@ -92,8 +92,13 @@ export function Modal({
         if (!isTopMostModal()) return;
         const target = e.target as Element | null;
 
+        // Any portalled dropdown menu (the generic one OR the branded
+        // SettingSelect used in emulator/graphic-pack options) renders outside
+        // the modal DOM — clicking one must not count as an outside click.
         const hasOpenDropdownMenu =
-          document.querySelector(".dropdown-menu__content") !== null;
+          document.querySelector(
+            ".dropdown-menu__content, .setting-select__content"
+          ) !== null;
 
         if (hasOpenDropdownMenu && !modalContentRef.current?.contains(target)) {
           return;
