@@ -43,6 +43,9 @@ import type {
   ExcludedGame,
   EmulatorSystem,
   CemuGraphicPack,
+  ModManagerStatus,
+  GameBananaMod,
+  GameBananaModDetail,
   EmulatorConfig,
   EmulatorConfigMap,
   ControllerProfile,
@@ -965,6 +968,27 @@ declare global {
       category: string,
       preset: string
     ) => Promise<boolean>;
+    getModStatus: (shop: string, objectId: string) => Promise<ModManagerStatus>;
+    installUkmm: () => Promise<{ ok: boolean; reason?: string }>;
+    setModsEnabled: (enabled: boolean) => Promise<{ ok: boolean }>;
+    browseGameBananaMods: (page: number) => Promise<GameBananaMod[]>;
+    getGameBananaMod: (modId: number) => Promise<GameBananaModDetail | null>;
+    installMod: (
+      shop: string,
+      objectId: string,
+      modId: number,
+      fileId?: number
+    ) => Promise<{ ok: boolean; reason?: string }>;
+    installModFromBcmlUri: (
+      shop: string,
+      objectId: string,
+      uri: string
+    ) => Promise<{ ok: boolean; reason?: string }>;
+    uninstallMod: (
+      shop: string,
+      objectId: string,
+      index: number
+    ) => Promise<{ ok: boolean; reason?: string }>;
     getControllerProfile: (binary?: EmulatorBinary) => Promise<{
       profile: ControllerProfile;
       isCustom: boolean;

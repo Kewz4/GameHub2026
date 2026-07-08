@@ -1,0 +1,85 @@
+.mods-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  &__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  &__subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    max-width: 480px;
+  }
+
+  &__muted {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+  }
+
+  &__setup {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  &__row-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  &__row-hint {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  &__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.12);
+    }
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    &--primary {
+      border-color: var(--color-primary, #7aa2ff);
+      background: rgba(120, 162, 255, 0.15);
+    }
+  }
+}

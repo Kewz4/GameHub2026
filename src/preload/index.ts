@@ -796,6 +796,25 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("setCemuGraphicPackEnabled", id, enabled),
   setCemuGraphicPackPreset: (id: string, category: string, preset: string) =>
     ipcRenderer.invoke("setCemuGraphicPackPreset", id, category, preset),
+  getModStatus: (shop: string, objectId: string) =>
+    ipcRenderer.invoke("getModStatus", shop, objectId),
+  installUkmm: () => ipcRenderer.invoke("installUkmm"),
+  setModsEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke("setModsEnabled", enabled),
+  browseGameBananaMods: (page: number) =>
+    ipcRenderer.invoke("browseGameBananaMods", page),
+  getGameBananaMod: (modId: number) =>
+    ipcRenderer.invoke("getGameBananaMod", modId),
+  installMod: (
+    shop: string,
+    objectId: string,
+    modId: number,
+    fileId?: number
+  ) => ipcRenderer.invoke("installMod", shop, objectId, modId, fileId),
+  installModFromBcmlUri: (shop: string, objectId: string, uri: string) =>
+    ipcRenderer.invoke("installModFromBcmlUri", shop, objectId, uri),
+  uninstallMod: (shop: string, objectId: string, index: number) =>
+    ipcRenderer.invoke("uninstallMod", shop, objectId, index),
   getControllerProfile: (binary?: any) =>
     ipcRenderer.invoke("getControllerProfile", binary),
   saveControllerProfile: (profile: any, binary?: any, type?: any) =>

@@ -50,6 +50,7 @@ import { DownloadsSettingsSection } from "./game-options-modal/downloads-section
 import { DangerZoneSection } from "./game-options-modal/danger-zone-section";
 import { HydraCloudSettingsSection } from "./game-options-modal/hydra-cloud-section";
 import { GraphicPacksSection } from "./game-options-modal/graphic-packs-section";
+import { ModsSection } from "./game-options-modal/mods-section";
 import { systemForGame } from "@renderer/pages/library/console-filter";
 import type { GameSettingsCategoryId } from "./game-options-modal/types";
 import { CreateSteamShortcutModal } from "./create-steam-shortcut-modal";
@@ -737,6 +738,11 @@ export function GameOptionsModal({
               label: "Graphic packs",
               icon: <ImageIcon size={16} />,
             },
+            {
+              id: "mods" as const,
+              label: "Mods",
+              icon: <Wrench size={16} />,
+            },
           ]
         : []),
       {
@@ -997,6 +1003,9 @@ export function GameOptionsModal({
               )}
             {selectedCategory === "graphic_packs" && isWiiUGame && (
               <GraphicPacksSection game={game} />
+            )}
+            {selectedCategory === "mods" && isWiiUGame && (
+              <ModsSection game={game} />
             )}
             {selectedCategory === "downloads" && (
               <DownloadsSettingsSection

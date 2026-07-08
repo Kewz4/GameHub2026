@@ -32,6 +32,7 @@ import "./upload-emulation-save";
 import "./restore-emulation-save";
 import "./emulation-saves";
 import "./cemu-graphic-packs-events";
+import "./mods-events";
 import "./get-minerva-download-options";
 import "./build-minerva-catalogue";
 import "./search-minerva-catalogue";

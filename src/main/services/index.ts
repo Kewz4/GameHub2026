@@ -29,3 +29,4 @@ export * from "./native-addon";
 export * from "./launched-game-pids";
 export * from "./uploadcare-sync";
 export * as emulators from "./emulators";
+export * as gamebanana from "./gamebanana";
