@@ -321,15 +321,25 @@ const resolveCemuGamePaths = async (
   const titleId = await resolveWiiuTitleId(shop, objectId);
   const titleLow = titleId ? titleId.slice(8) : "101c9400"; // BOTW default
 
+  const low = titleLow.toLowerCase();
+  const BASE = "00050000";
+  const UPDATE = "0005000e";
+  const DLC = "0005000c";
+
   const game = await gamesSublevel
     .get(levelKeys.game(shop, objectId))
     .catch(() => null);
-  // The base game folder: the parent of its content/code/meta.
+
+  // ── Base game: the loose folder we launch, else Cemu's mlc01 install ────────
   const disc = game?.selectedDiscPath ?? game?.discs?.[0]?.path ?? null;
   let gameDir: string | null = null;
   let gameContentDir: string | null = null;
   if (disc) {
-    for (const base of [disc, path.dirname(disc), path.dirname(path.dirname(disc))]) {
+    for (const base of [
+      disc,
+      path.dirname(disc),
+      path.dirname(path.dirname(disc)),
+    ]) {
       if (existsSync(path.join(base, "content"))) {
         gameDir = base;
         gameContentDir = path.join(base, "content");
@@ -337,32 +347,91 @@ const resolveCemuGamePaths = async (
       }
     }
   }
+  const mlcContent = (high: string) =>
+    path.join(cemuDir, "mlc01", "usr", "title", high, low, "content");
+  if (!gameContentDir && existsSync(mlcContent(BASE))) {
+    gameContentDir = mlcContent(BASE);
+    gameDir = path.dirname(gameContentDir);
+  }
 
-  // Update + DLC live in Cemu's mlc01 under the version-family title ids.
-  const mlcTitle = (high: string) =>
-    path.join(cemuDir, "mlc01", "usr", "title", high, titleLow, "content");
-  const updateDir = existsSync(mlcTitle("0005000e"))
-    ? mlcTitle("0005000e")
-    : null;
-  const aocBase = path.join(
-    cemuDir,
-    "mlc01",
-    "usr",
-    "title",
-    "0005000c",
-    titleLow,
-    "content"
+  // ── Update + DLC: Cemu's mlc01 install first, then loose sibling folders ─────
+  // (e.g. a Minerva download of base + update + DLC that hasn't been installed
+  // into Cemu — the update/DLC sit next to the base game on disk).
+  const searchRoots = Array.from(
+    new Set(
+      [
+        gameDir ? path.dirname(gameDir) : null,
+        gameDir ? path.dirname(path.dirname(gameDir)) : null,
+        disc ? path.dirname(disc) : null,
+      ].filter((r): r is string => Boolean(r))
+    )
   );
-  const aocDir = existsSync(aocBase) ? aocBase : null;
 
-  return {
-    cemuDir,
-    gameContentDir,
-    updateDir,
-    aocDir,
-    titleLow,
-    gameDir,
+  // Bounded BFS over the search roots (depth 2, capped) so a Minerva download
+  // whose update/DLC folder is nested one level deep is still found — without
+  // walking an entire drive.
+  const findLooseContent = (high: string): string | null => {
+    const queue: { dir: string; depth: number }[] = searchRoots.map((dir) => ({
+      dir,
+      depth: 0,
+    }));
+    const seen = new Set<string>();
+    let visited = 0;
+    while (queue.length && visited < 400) {
+      const { dir, depth } = queue.shift()!;
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      visited++;
+      let names: string[];
+      try {
+        names = readdirSync(dir);
+      } catch {
+        continue;
+      }
+      for (const name of names) {
+        const child = path.join(dir, name);
+        try {
+          if (!statSync(child).isDirectory()) continue;
+        } catch {
+          continue;
+        }
+        const tid = readMetaTitleId(child);
+        if (tid && tid.startsWith(high) && tid.endsWith(low)) {
+          const c = path.join(child, "content");
+          if (existsSync(c)) return c;
+        }
+        if (depth < 1) queue.push({ dir: child, depth: depth + 1 });
+      }
+    }
+    return null;
   };
+
+  const updateDir = existsSync(mlcContent(UPDATE))
+    ? mlcContent(UPDATE)
+    : findLooseContent(UPDATE);
+  const aocDir = existsSync(mlcContent(DLC))
+    ? mlcContent(DLC)
+    : findLooseContent(DLC);
+
+  logger.log(
+    `[ukmm] BOTW dump for ${shop}:${objectId} (title ${BASE}${low}) — ` +
+      `base=${gameContentDir ?? "MISSING"} update=${updateDir ?? "MISSING"} dlc=${aocDir ?? "none"}`
+  );
+
+  return { cemuDir, gameContentDir, updateDir, aocDir, titleLow, gameDir };
+};
+
+/** Read the 16-hex Wii U title id from a folder's meta/meta.xml, lowercased. */
+const readMetaTitleId = (dir: string): string | null => {
+  try {
+    const metaPath = path.join(dir, "meta", "meta.xml");
+    if (!existsSync(metaPath)) return null;
+    const xml = readFileSync(metaPath, "utf-8");
+    const m = xml.match(/<title_id[^>]*>\s*([0-9a-fA-F]{16})\s*<\/title_id>/);
+    return m ? m[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
 };
 
 const yamlPath = (p: string): string => JSON.stringify(p.replace(/\\/g, "/"));
