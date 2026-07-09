@@ -295,10 +295,20 @@ const resolveCemuGamePaths = async (
     }
   }
   // Cemu can keep its mlc01 in several places: next to the exe (portable), a
-  // custom <mlc_path> set in settings.xml, or the default user-data location
-  // (%APPDATA%/Cemu) for a non-portable install. Check them all so a title the
-  // user INSTALLED into Cemu (update/DLC) is found wherever Cemu actually put it.
-  const mlcRoots = resolveCemuMlcRoots(cemuDir);
+  // custom <mlc_path> in settings.xml, or the default %APPDATA%/Cemu. CRUCIALLY
+  // the user's game often lives under a DIFFERENT Cemu than the one GameHub has
+  // configured (e.g. game in "Cemu_2.0-66\Games", GameHub's Cemu is elsewhere),
+  // so also derive candidate Cemu roots from the game's own folder — the update
+  // is usually installed into THAT Cemu's mlc01, which we'd otherwise miss.
+  const gameCemuDirs: string[] = [];
+  if (gameDir) {
+    let a = path.dirname(gameDir);
+    for (let i = 0; i < 3 && a && path.dirname(a) !== a; i++) {
+      gameCemuDirs.push(a);
+      a = path.dirname(a);
+    }
+  }
+  const mlcRoots = resolveCemuMlcRoots([cemuDir, ...gameCemuDirs]);
   const mlcContent = (high: string): string | null => {
     for (const root of mlcRoots) {
       const c = path.join(root, "usr", "title", high, low, "content");
@@ -431,23 +441,31 @@ const resolveCemuGamePaths = async (
  * Returns existing roots so a title installed IN Cemu (update/DLC) is found
  * wherever Cemu actually put it.
  */
-const resolveCemuMlcRoots = (cemuDir: string): string[] => {
+const resolveCemuMlcRoots = (cemuDirs: string[]): string[] => {
   const roots: string[] = [];
-  // 1. custom mlc_path from settings.xml
-  try {
-    const settingsFile = path.join(cemuDir, "settings.xml");
-    if (existsSync(settingsFile)) {
-      const xml = readFileSync(settingsFile, "utf-8");
-      const m = xml.match(/<mlc_path>\s*([^<]+?)\s*<\/mlc_path>/i);
-      const custom = m?.[1]?.trim();
-      if (custom) roots.push(custom);
+  for (const cemuDir of cemuDirs) {
+    if (!cemuDir) continue;
+    // custom mlc_path from settings.xml (this Cemu's, and its portable/ copy)
+    for (const settingsFile of [
+      path.join(cemuDir, "settings.xml"),
+      path.join(cemuDir, "portable", "settings.xml"),
+    ]) {
+      try {
+        if (existsSync(settingsFile)) {
+          const xml = readFileSync(settingsFile, "utf-8");
+          const m = xml.match(/<mlc_path>\s*([^<]+?)\s*<\/mlc_path>/i);
+          const custom = m?.[1]?.trim();
+          if (custom) roots.push(custom);
+        }
+      } catch {
+        /* ignore */
+      }
     }
-  } catch {
-    /* ignore */
+    // portable / install dir, and a portable/ subfolder
+    roots.push(path.join(cemuDir, "mlc01"));
+    roots.push(path.join(cemuDir, "portable", "mlc01"));
   }
-  // 2. portable / install dir
-  roots.push(path.join(cemuDir, "mlc01"));
-  // 3. non-portable default
+  // non-portable default
   const appData = process.env.APPDATA;
   if (appData) roots.push(path.join(appData, "Cemu", "mlc01"));
 

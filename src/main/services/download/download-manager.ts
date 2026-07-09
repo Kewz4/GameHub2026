@@ -1179,8 +1179,9 @@ export class DownloadManager {
     this.torboxPrepareStatus = { progress: 0, downloadSpeed: 0, eta: -1 };
 
     // Multi-host racing: when this repack offers several hoster mirrors (and the
-    // primary isn't a magnet), probe each through TorBox and pick the fastest —
-    // all behind the scenes. Magnets (one torrent) skip this.
+    // primary isn't a magnet), add each to TorBox, sample throughput for ~10s,
+    // keep the fastest, and DELETE the losers from TorBox — all behind the
+    // scenes. Magnets (one torrent) skip this.
     let chosenUri = download.uri;
     const mirrors = (download.alternateUris ?? []).filter(
       (u) => u && u !== download.uri && /^https?:\/\//i.test(u)
@@ -1188,21 +1189,31 @@ export class DownloadManager {
     if (!download.uri.startsWith("magnet:") && mirrors.length > 0) {
       const candidates = [download.uri, ...mirrors];
       logger.log(
-        `[torbox] racing ${candidates.length} mirrors to pick the fastest…`
+        `[torbox] racing ${candidates.length} mirrors (10s) to pick the fastest…`
       );
-      const speeds = await Promise.all(
+      const results = await Promise.all(
         candidates.map(async (u) => ({
           uri: u,
-          speed: await TorBoxClient.probeWebSpeed(u).catch(() => 0),
+          ...(await TorBoxClient.probeWebSpeed(u).catch(() => ({
+            id: null as number | null,
+            speed: 0,
+          }))),
         }))
       );
-      speeds.sort((a, b) => b.speed - a.speed);
-      if (speeds[0] && speeds[0].speed > 0) {
-        chosenUri = speeds[0].uri;
+      results.sort((a, b) => b.speed - a.speed);
+      const winner = results[0];
+      if (winner && winner.speed > 0) {
+        chosenUri = winner.uri;
         logger.log(
-          `[torbox] fastest mirror @ ${Math.round(speeds[0].speed / 1024)} KB/s`
+          `[torbox] fastest mirror @ ${Math.round(winner.speed / 1024)} KB/s — dropping ${results.length - 1} slower`
         );
       }
+      // Delete every non-winning candidate from TorBox to free the account.
+      await Promise.all(
+        results
+          .filter((r) => r !== winner && r.id != null)
+          .map((r) => TorBoxClient.deleteWebDownload(r.id as number))
+      );
     }
 
     const { name, url } = await TorBoxClient.getDownloadInfo(
@@ -1518,6 +1529,46 @@ export class DownloadManager {
           );
           this.isPreparingDownload = false;
           void this.runAllDebridBatch();
+        } else if (download.downloader === Downloader.TorBox) {
+          // TorBox may need to cache the content first, which can take a while.
+          // Prepare + start in the BACKGROUND so the UI returns to the download
+          // manager immediately and shows a live "Preparing download" state
+          // (progress/ETA fed from TorBox), then flips to the normal download.
+          this.allDebridBatch = null;
+          void (async () => {
+            try {
+              const options = await this.getJsDownloadOptions(download);
+              if (!options) {
+                logger.error(
+                  "[DownloadManager] TorBox returned no download options"
+                );
+                this.isPreparingDownload = false;
+                this.usingJsDownloader = false;
+                this.downloadingGameId = null;
+                WindowManager.sendDownloadsUpdated?.();
+                return;
+              }
+              this.jsDownloader = new JsHttpDownloader();
+              this.jsDownloader.setMaxDownloadSpeedBytesPerSecond(
+                this.maxDownloadSpeedBytesPerSecond
+              );
+              this.isPreparingDownload = false;
+              this.logResolvedUrl(options.url);
+              this.jsDownloader.startDownload(options).catch((err) => {
+                logger.error("[DownloadManager] JS download error:", err);
+                this.usingJsDownloader = false;
+                this.jsDownloader = null;
+                this.allDebridBatch = null;
+              });
+            } catch (err) {
+              logger.error("[DownloadManager] TorBox prepare error:", err);
+              this.isPreparingDownload = false;
+              this.usingJsDownloader = false;
+              this.downloadingGameId = null;
+              this.allDebridBatch = null;
+              WindowManager.sendDownloadsUpdated?.();
+            }
+          })();
         } else {
           this.allDebridBatch = null;
           const options = await this.getJsDownloadOptions(download);

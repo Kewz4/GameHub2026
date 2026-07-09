@@ -319,13 +319,27 @@ export class TorBoxClient {
     return { url, name };
   }
 
+  /** Remove a web download from TorBox (used to drop losing race candidates). */
+  static async deleteWebDownload(id: number): Promise<void> {
+    try {
+      const form = new FormData();
+      form.append("web_id", id.toString());
+      form.append("operation", "delete");
+      await this.instance.post("/webdl/controlwebdownload", form);
+    } catch (err) {
+      logger.warn(`[torbox] failed to delete web download ${id}`, err);
+    }
+  }
+
   /**
-   * Quickly probe how fast TorBox can serve a given hoster link, for picking the
-   * fastest of several mirrors. Adds the link as a web download, samples its
-   * cache speed for a few seconds, then returns bytes/sec (0 on failure). The
-   * job stays in TorBox so the winning link resolves instantly afterwards.
+   * Add a hoster link to TorBox and sample how fast it's being served, for
+   * racing several mirrors. Returns the TorBox web-download id (so the winner
+   * resolves instantly and losers can be deleted) plus the best observed speed.
    */
-  static async probeWebSpeed(uri: string, sampleMs = 6000): Promise<number> {
+  static async probeWebSpeed(
+    uri: string,
+    sampleMs = 10000
+  ): Promise<{ id: number | null; speed: number }> {
     try {
       const web = await this.addWebDownload(uri);
       let best = 0;
@@ -336,14 +350,14 @@ export class TorBoxClient {
         if (speed > best) best = speed;
         // Already fully cached → effectively "instant", rank it highest.
         if (info?.download_finished || (info?.progress ?? 0) >= 1) {
-          return Number.MAX_SAFE_INTEGER;
+          return { id: web.id, speed: Number.MAX_SAFE_INTEGER };
         }
         await this.sleep(1500);
       }
-      return best;
+      return { id: web.id, speed: best };
     } catch (err) {
       logger.warn(`[torbox] speed probe failed for ${uri}`, err);
-      return 0;
+      return { id: null, speed: 0 };
     }
   }
 }
