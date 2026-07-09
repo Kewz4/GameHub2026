@@ -254,12 +254,28 @@ const resolveCemuGamePaths = async (
     )
   );
 
+  // Cemu's own data dirs must NEVER be treated as game dumps — a mod deployed
+  // to graphicPacks/GameHubMods (e.g. "Linkle Bikini _updated_") otherwise got
+  // picked up as the "update" because its name contains "updated".
+  const EXCLUDED_DIRS = new Set([
+    "graphicpacks",
+    "mlc01",
+    "shadercache",
+    "gamehubmods",
+    "gameprofiles",
+    "controllerprofiles",
+    "cafe",
+    "bin",
+  ]);
+
   // Bounded BFS over the search roots (depth 2, capped) so a Minerva download
   // whose update/DLC folder is nested is still found — without walking a drive.
-  // A folder matches if its meta.xml title id matches, OR (fallback) its NAME
-  // hints at the content type — loose Minerva/No-Intro dumps are named like
-  // "...(Update) (v208)" / "...(DLC)" and may lack a meta.xml.
-  const findLooseContent = (high: string, nameHints: string[]): string | null => {
+  // A folder matches by meta.xml title id (strong), or by a STRICT name pattern
+  // for loose Minerva dumps named like "...(Update) (v208)..." / "...(DLC)...".
+  const findLooseContent = (
+    high: string,
+    namePattern: RegExp
+  ): string | null => {
     const queue: { dir: string; depth: number }[] = searchRoots.map((dir) => ({
       dir,
       depth: 0,
@@ -279,6 +295,7 @@ const resolveCemuGamePaths = async (
         continue;
       }
       for (const name of names) {
+        if (EXCLUDED_DIRS.has(name.toLowerCase())) continue;
         const child = path.join(dir, name);
         try {
           if (!statSync(child).isDirectory()) continue;
@@ -291,14 +308,14 @@ const resolveCemuGamePaths = async (
         if (tid && tid.startsWith(high) && tid.endsWith(low) && existsSync(c)) {
           return c;
         }
-        // Fallback: name hint (only when the folder has no conflicting title id
-        // and actually holds a content dir). Remember but keep searching for a
-        // title-id match, which wins.
+        // Fallback: STRICT name pattern, and only when the folder isn't some
+        // OTHER title (a base/other-id meta would make tid truthy but not match
+        // `high`). Require a content dir. A title-id match still wins overall.
         if (
           !nameMatch &&
-          !tid &&
+          (!tid || tid.startsWith(high)) &&
           existsSync(c) &&
-          nameHints.some((h) => name.toLowerCase().includes(h))
+          namePattern.test(name)
         ) {
           nameMatch = c;
         }
@@ -308,12 +325,17 @@ const resolveCemuGamePaths = async (
     return nameMatch;
   };
 
+  // Strict patterns: only parenthesised/bracketed tags or explicit version tags,
+  // so a mod folder that merely contains the word "updated" never matches.
   const updateDir = existsSync(mlcContent(UPDATE))
     ? mlcContent(UPDATE)
-    : findLooseContent(UPDATE, ["update", "(upd", " upd", "v208", "v1.5", "v1_5"]);
+    : findLooseContent(
+        UPDATE,
+        /[([]\s*(update|upd|patch|v?\s*208|v?\s*1[._]5[._]0)\s*[)\]]|\bv208\b/i
+      );
   const aocContent = existsSync(mlcContent(DLC))
     ? mlcContent(DLC)
-    : findLooseContent(DLC, ["(dlc", " dlc", "aoc"]);
+    : findLooseContent(DLC, /[([]\s*(dlc|aoc|add[\s-]?on)\s*[)\]]/i);
   // UKMM's Unpacked dump expects aoc_dir to hold Pack/AocMainField.pack, which
   // on a Cemu dump lives under content/0010 — append it when present.
   const aocDir =
@@ -597,8 +619,15 @@ export const finalizeBnpInstall = async (
     return configured;
   }
 
-  const args = ["install-bnp", staging.bnpPath];
-  if (selectedFolders.length > 0) {
+  // Route by format: a BCML `.bnp` goes through our headless `install-bnp`
+  // (convert_bnp). Anything else (a native UKMM `.zip`, or a graphic-pack
+  // zip/7z/rar) uses UKMM's regular `install`, which handles those via
+  // convert_gfx — `install-bnp` on a non-BNP fails looking for BNP metadata.
+  const isBnp = staging.bnpPath.toLowerCase().endsWith(".bnp");
+  const args = isBnp
+    ? ["install-bnp", staging.bnpPath]
+    : ["install", staging.bnpPath];
+  if (isBnp && selectedFolders.length > 0) {
     args.push("--options", JSON.stringify(selectedFolders));
   }
   const res = await runUkmm(args, true); // -D deploy so Cemu loads it

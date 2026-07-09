@@ -63,8 +63,9 @@ export const listBotwMods = async (
   const { page = 1, perPage = 15, sort = "newest", categoryId, search } = opts;
   try {
     // Free-text search goes through the search endpoint; browse/filter uses the
-    // index endpoint (which supports sort + category filters).
-    if (search && search.trim()) {
+    // index endpoint (which supports sort + category filters). GameBanana's
+    // search 400s on a single character, so only search with 2+ chars.
+    if (search && search.trim().length >= 2) {
       const resp = await axios.get(`${GB_API}/Util/Search/Results`, {
         params: {
           _sSearchString: search.trim(),
