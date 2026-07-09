@@ -31,6 +31,7 @@ const startGameDownload = async (
     automaticallyDeleteArchiveFiles,
     fileIndices,
     selectedFilesSize,
+    alternateUris,
     emulatorSystem,
   } = payload;
 
@@ -72,6 +73,7 @@ const startGameDownload = async (
     automaticallyDeleteArchiveFiles,
     fileIndices,
     selectedFilesSize,
+    alternateUris,
     fileSize: selectedFilesSize ?? null,
     emulatorSystem: emulatorSystem ?? null,
   };

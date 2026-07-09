@@ -9,6 +9,16 @@ import type {
 import { appVersion } from "@main/constants";
 import { logger } from "../logger";
 
+/** Caching-phase progress TorBox reports while preparing a download. */
+export interface TorBoxPrepareProgress {
+  /** 0–1 fraction cached on TorBox's side. */
+  progress: number;
+  /** Bytes/sec TorBox is fetching at (for an ETA + live bar). */
+  downloadSpeed: number;
+  /** Seconds remaining per TorBox, or -1 if unknown. */
+  eta: number;
+}
+
 /**
  * TorBox client. Handles BOTH torrents/magnets AND direct hoster links (via
  * TorBox's "web download" API), so every download in the app can be routed
@@ -121,22 +131,47 @@ export class TorBoxClient {
     return { id: torrent.torrent_id, name: torrent.name };
   }
 
-  /** Poll a torrent until TorBox has finished fetching it (or we time out). */
-  private static async waitForTorrentReady(id: number) {
+  /**
+   * Poll a torrent until TorBox has finished fetching it to their servers (or we
+   * time out). Reports caching progress/speed/ETA via `onProgress` so the app
+   * can show a real "preparing download" bar instead of a static spinner.
+   */
+  private static async waitForTorrentReady(
+    id: number,
+    onProgress?: (p: TorBoxPrepareProgress) => void
+  ) {
     const deadline = Date.now() + this.READY_TIMEOUT_MS;
-    // Date.now-based polling loop; the download can be retried if it times out.
     for (;;) {
       const info = await this.getTorrentInfo(id);
+      const progress = info?.progress ?? 0;
+      // Ready when TorBox has the FULL torrent: progress complete, a terminal
+      // state, or it's in TorBox's instant cache (cached === true means fully
+      // available — a mid-fetch torrent reports download_present, not cached).
+      // This prevents grabbing a partial file while not stalling cached ones.
       const ready =
-        info &&
-        (info.cached ||
+        info != null &&
+        (progress >= 1 ||
+          info.cached === true ||
           info.download_state === "completed" ||
           info.download_state === "cached" ||
-          info.progress >= 1);
+          info.download_state === "uploading");
+      if (info) {
+        logger.log(
+          `[torbox] torrent ${id} state=${info.download_state} ` +
+            `progress=${(progress * 100).toFixed(1)}% cached=${info.cached} ` +
+            `speed=${info.download_speed} eta=${info.eta} files=${info.files?.length ?? 0}`
+        );
+        onProgress?.({
+          progress,
+          downloadSpeed: info.download_speed ?? 0,
+          eta: info.eta ?? -1,
+        });
+      }
       if (ready) return info;
       if (Date.now() > deadline) {
         logger.warn(
-          `[torbox] torrent ${id} not ready after wait (state=${info?.download_state}, progress=${info?.progress})`
+          `[torbox] torrent ${id} NOT fully cached after ${this.READY_TIMEOUT_MS / 1000}s ` +
+            `(state=${info?.download_state}, progress=${progress}); proceeding anyway`
         );
         return info;
       }
@@ -175,25 +210,37 @@ export class TorBoxClient {
         download_finished?: boolean;
         download_state?: string;
         progress?: number;
+        download_speed?: number;
+        eta?: number;
       }>;
     }>("/webdl/mylist");
     return response.data.data?.find((item) => item.id === id) ?? null;
   }
 
-  private static async waitForWebReady(id: number) {
+  private static async waitForWebReady(
+    id: number,
+    onProgress?: (p: TorBoxPrepareProgress) => void
+  ) {
     const deadline = Date.now() + this.READY_TIMEOUT_MS;
     for (;;) {
       const info = await this.getWebDownloadInfo(id);
+      const progress = info?.progress ?? 0;
       const ready =
-        info &&
-        (info.cached ||
-          info.download_present ||
-          info.download_finished ||
+        info != null &&
+        (info.download_finished ||
           info.download_state === "completed" ||
-          (info.progress ?? 0) >= 1);
+          progress >= 1 ||
+          (info.download_present && progress >= 1));
+      if (info) {
+        onProgress?.({
+          progress,
+          downloadSpeed: info.download_speed ?? 0,
+          eta: info.eta ?? -1,
+        });
+      }
       if (ready) return info;
       if (Date.now() > deadline) {
-        logger.warn(`[torbox] web download ${id} not ready after wait`);
+        logger.warn(`[torbox] web download ${id} not fully ready after wait`);
         return info;
       }
       await this.sleep(this.POLL_INTERVAL_MS);
@@ -221,12 +268,16 @@ export class TorBoxClient {
    * collection torrent), we request just that file instead of a whole-torrent
    * zip — so a base-game download doesn't drag in the update + DLC.
    */
-  static async getDownloadInfo(uri: string, fileIndices?: number[]) {
+  static async getDownloadInfo(
+    uri: string,
+    fileIndices?: number[],
+    onProgress?: (p: TorBoxPrepareProgress) => void
+  ) {
     const isMagnet = uri.startsWith("magnet:");
 
     if (isMagnet) {
       const torrentData = await this.getTorrentIdAndName(uri);
-      const info = await this.waitForTorrentReady(torrentData.id);
+      const info = await this.waitForTorrentReady(torrentData.id, onProgress);
 
       // Map a single selected index to the TorBox file id (prefer id match,
       // fall back to positional). Multiple files still fall back to the zip.
@@ -240,20 +291,59 @@ export class TorBoxClient {
           fileId = file.id;
           fileName = file.short_name || file.name;
         }
+        logger.log(
+          `[torbox] selecting file idx=${idx} → id=${file?.id} ` +
+            `name=${file?.name} size=${file?.size}`
+        );
+      }
+      if (info?.files?.length) {
+        logger.log(
+          `[torbox] torrent "${torrentData.name}" has ${info.files.length} file(s), ` +
+            `total=${info.size} bytes; fileIndices=${JSON.stringify(fileIndices ?? null)}`
+        );
       }
 
       const url = await this.requestLink(torrentData.id, fileId);
       const name =
         fileName ??
         (torrentData.name ? `${torrentData.name}.zip` : undefined);
+      logger.log(`[torbox] resolved download url (fileId=${fileId ?? "zip"})`);
       return { url, name };
     }
 
     // Any other http(s) hoster link → TorBox web download.
     const web = await this.addWebDownload(uri);
-    const info = await this.waitForWebReady(web.id);
+    const info = await this.waitForWebReady(web.id, onProgress);
     const url = await this.requestWebLink(web.id);
     const name = (info?.name ?? web.name) ?? undefined;
     return { url, name };
+  }
+
+  /**
+   * Quickly probe how fast TorBox can serve a given hoster link, for picking the
+   * fastest of several mirrors. Adds the link as a web download, samples its
+   * cache speed for a few seconds, then returns bytes/sec (0 on failure). The
+   * job stays in TorBox so the winning link resolves instantly afterwards.
+   */
+  static async probeWebSpeed(uri: string, sampleMs = 6000): Promise<number> {
+    try {
+      const web = await this.addWebDownload(uri);
+      let best = 0;
+      const deadline = Date.now() + sampleMs;
+      while (Date.now() < deadline) {
+        const info = await this.getWebDownloadInfo(web.id);
+        const speed = info?.download_speed ?? 0;
+        if (speed > best) best = speed;
+        // Already fully cached → effectively "instant", rank it highest.
+        if (info?.download_finished || (info?.progress ?? 0) >= 1) {
+          return Number.MAX_SAFE_INTEGER;
+        }
+        await this.sleep(1500);
+      }
+      return best;
+    } catch (err) {
+      logger.warn(`[torbox] speed probe failed for ${uri}`, err);
+      return 0;
+    }
   }
 }

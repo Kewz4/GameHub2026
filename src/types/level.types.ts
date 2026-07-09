@@ -127,6 +127,8 @@ export interface Download {
   automaticallyDeleteArchiveFiles: boolean;
   fileIndices?: number[];
   selectedFilesSize?: number | null;
+  /** Alternate hoster mirrors TorBox can also fetch (raced for the fastest). */
+  alternateUris?: string[];
   /** Console system for minerva/emulator downloads — drives the post-download
    *  ROM bind so the library entry becomes launchable. */
   emulatorSystem?: string | null;

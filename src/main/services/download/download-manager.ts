@@ -61,6 +61,13 @@ export class DownloadManager {
   private static isPreparingDownload = false;
   private static allDebridBatch: AllDebridBatchState | null = null;
   private static maxDownloadSpeedBytesPerSecond: number | null = null;
+  // Live caching progress reported by TorBox during the "preparing" phase, so
+  // the UI can show a real bar + ETA while TorBox fetches the content.
+  private static torboxPrepareStatus: {
+    progress: number;
+    downloadSpeed: number;
+    eta: number;
+  } | null = null;
 
   public static hasActiveDownload() {
     return this.downloadingGameId !== null;
@@ -290,20 +297,23 @@ export class DownloadManager {
 
     const downloadId = this.downloadingGameId;
 
-    // Return a "preparing" status while fetching download options
+    // Return a "preparing" status while fetching download options. For TorBox we
+    // surface the live caching progress/speed/ETA it reports, so the user sees a
+    // real bar during the "waiting for TorBox to cache" phase.
     if (this.isPreparingDownload) {
       try {
         const download = await downloadsSublevel.get(downloadId);
         if (!download) return null;
 
+        const prep = this.torboxPrepareStatus;
         return {
           numPeers: 0,
           numSeeds: 0,
-          downloadSpeed: 0,
-          timeRemaining: -1,
+          downloadSpeed: prep?.downloadSpeed ?? 0,
+          timeRemaining: prep?.eta != null && prep.eta > 0 ? prep.eta : -1,
           isDownloadingMetadata: true, // Use this to indicate "preparing"
           isCheckingFiles: false,
-          progress: 0,
+          progress: prep?.progress ?? 0,
           gameId: downloadId,
           download,
         };
@@ -1166,10 +1176,43 @@ export class DownloadManager {
     download: Download,
     resumingFilename?: string
   ) {
-    const { name, url } = await TorBoxClient.getDownloadInfo(
-      download.uri,
-      download.fileIndices
+    this.torboxPrepareStatus = { progress: 0, downloadSpeed: 0, eta: -1 };
+
+    // Multi-host racing: when this repack offers several hoster mirrors (and the
+    // primary isn't a magnet), probe each through TorBox and pick the fastest —
+    // all behind the scenes. Magnets (one torrent) skip this.
+    let chosenUri = download.uri;
+    const mirrors = (download.alternateUris ?? []).filter(
+      (u) => u && u !== download.uri && /^https?:\/\//i.test(u)
     );
+    if (!download.uri.startsWith("magnet:") && mirrors.length > 0) {
+      const candidates = [download.uri, ...mirrors];
+      logger.log(
+        `[torbox] racing ${candidates.length} mirrors to pick the fastest…`
+      );
+      const speeds = await Promise.all(
+        candidates.map(async (u) => ({
+          uri: u,
+          speed: await TorBoxClient.probeWebSpeed(u).catch(() => 0),
+        }))
+      );
+      speeds.sort((a, b) => b.speed - a.speed);
+      if (speeds[0] && speeds[0].speed > 0) {
+        chosenUri = speeds[0].uri;
+        logger.log(
+          `[torbox] fastest mirror @ ${Math.round(speeds[0].speed / 1024)} KB/s`
+        );
+      }
+    }
+
+    const { name, url } = await TorBoxClient.getDownloadInfo(
+      chosenUri,
+      download.fileIndices,
+      (p) => {
+        this.torboxPrepareStatus = p;
+      }
+    );
+    this.torboxPrepareStatus = null;
     if (!url) return null;
     return this.buildDownloadOptions(
       url,

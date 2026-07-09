@@ -163,6 +163,9 @@ export interface StartGameDownloadPayload {
   fileSize?: string | null;
   fileIndices?: number[];
   selectedFilesSize?: number | null;
+  /** Other hoster mirrors for this repack that TorBox can also fetch. When
+   *  downloading via TorBox we race these to pick the fastest one. */
+  alternateUris?: string[];
   /** Set for minerva/console downloads so main routes them into
    *  "Emulator Games/<platform>" and binds them to the right emulator. */
   emulatorSystem?: string | null;

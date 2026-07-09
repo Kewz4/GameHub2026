@@ -116,41 +116,39 @@ export default function GameDetails() {
             automaticallyDeleteArchiveFiles = false,
             signal?: AbortSignal
           ) => {
+            const chosenUri = selectRepackUri(repack, downloader);
+            // For TorBox, collect the repack's OTHER hoster mirrors so main can
+            // race them and pick the fastest (magnets excluded — one torrent).
+            const alternateUris =
+              downloader === Downloader.TorBox
+                ? repack.uris.filter(
+                    (u) =>
+                      u !== chosenUri &&
+                      /^https?:\/\//i.test(u) &&
+                      getDownloadersForUri(u).includes(Downloader.TorBox)
+                  )
+                : undefined;
+            const payload = {
+              objectId: objectId!,
+              title: gameTitle,
+              downloader,
+              shop,
+              downloadPath,
+              uri: chosenUri,
+              automaticallyExtract,
+              automaticallyDeleteArchiveFiles,
+              fileSize: repack.fileSize,
+              fileIndices,
+              selectedFilesSize,
+              alternateUris:
+                alternateUris && alternateUris.length > 0
+                  ? alternateUris
+                  : undefined,
+              emulatorSystem: repack.emulatorSystem ?? null,
+            };
             const response = addToQueueOnly
-              ? await addGameToQueue(
-                  {
-                    objectId: objectId!,
-                    title: gameTitle,
-                    downloader,
-                    shop,
-                    downloadPath,
-                    uri: selectRepackUri(repack, downloader),
-                    automaticallyExtract,
-                    automaticallyDeleteArchiveFiles,
-                    fileSize: repack.fileSize,
-                    fileIndices,
-                    selectedFilesSize,
-                    emulatorSystem: repack.emulatorSystem ?? null,
-                  },
-                  signal
-                )
-              : await startDownload(
-                  {
-                    objectId: objectId!,
-                    title: gameTitle,
-                    downloader,
-                    shop,
-                    downloadPath,
-                    uri: selectRepackUri(repack, downloader),
-                    automaticallyExtract,
-                    automaticallyDeleteArchiveFiles,
-                    fileSize: repack.fileSize,
-                    fileIndices,
-                    selectedFilesSize,
-                    emulatorSystem: repack.emulatorSystem ?? null,
-                  },
-                  signal
-                );
+              ? await addGameToQueue(payload, signal)
+              : await startDownload(payload, signal);
 
             if (response.ok) {
               await updateGame();
