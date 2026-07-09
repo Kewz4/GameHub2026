@@ -615,6 +615,25 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
               >
                 <DownloadIcon size={13} /> Import modpack
               </button>
+              <button
+                type="button"
+                className="mod-manager__pack-btn mod-manager__pack-btn--danger"
+                title="Clear all installed mods and reset UKMM (use if the list is stuck or out of sync)"
+                onClick={async () => {
+                  const res = await window.electron.resetMods(
+                    game.shop,
+                    game.objectId
+                  );
+                  if (res.ok) {
+                    showSuccessToast("Mods reset");
+                    await loadInstalled();
+                  } else {
+                    showErrorToast(res.reason ?? "Reset failed");
+                  }
+                }}
+              >
+                <TrashIcon size={13} /> Reset all
+              </button>
             </div>
             {installed.length === 0 ? (
               <p className="mod-manager__muted">

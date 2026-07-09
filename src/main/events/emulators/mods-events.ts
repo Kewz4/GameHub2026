@@ -182,6 +182,13 @@ const uninstallMod = async (
 ): Promise<{ ok: boolean; reason?: string }> =>
   emulators.uninstallMod(shop, objectId, index);
 
+const resetMods = async (
+  _e: Electron.IpcMainInvokeEvent,
+  shop: GameShop,
+  objectId: string
+): Promise<{ ok: boolean; reason?: string }> =>
+  emulators.resetMods(shop, objectId);
+
 const exportModpack = async (
   _e: Electron.IpcMainInvokeEvent,
   shop: GameShop,
@@ -225,5 +232,6 @@ registerEvent("finalizeModInstall", finalizeModInstall);
 registerEvent("cancelModInstall", cancelModInstall);
 registerEvent("installModFromBcmlUri", installModFromBcmlUri);
 registerEvent("uninstallMod", uninstallMod);
+registerEvent("resetMods", resetMods);
 registerEvent("exportModpack", exportModpack);
 registerEvent("importModpack", importModpack);

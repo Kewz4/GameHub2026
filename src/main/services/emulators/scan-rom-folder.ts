@@ -205,8 +205,21 @@ const classifyForSystem = async (
     // those so the scan lists only base games (Cemu installs them as separate
     // code/content/meta titles that would otherwise each look like a game).
     if (system === "wiiu") {
-      const ct = await wiiuContentType(candidate.fullPath);
-      if (ct !== "game") return "skip";
+      // The marker candidate is usually the `content`/`code`/`meta` subdir; the
+      // title's meta.xml lives in the SIBLING `meta` folder, i.e. one level up.
+      // Read from the title folder, not from inside `content`.
+      const markerNames = new Set(["content", "code", "meta"]);
+      const titleDir = markerNames.has(candidate.name.toLowerCase())
+        ? path.dirname(candidate.fullPath)
+        : candidate.fullPath;
+      const ct = await wiiuContentType(titleDir);
+      // Fallback for loose dumps with no meta.xml: the folder name itself flags
+      // it as an update/DLC (e.g. "…(DLC)…", "…(Update) (v208)…").
+      const titleName = path.basename(titleDir).toLowerCase();
+      const nameFlagsExtra =
+        /\((dlc|update|upd|aoc|v\d[\d._]*)\)/.test(titleName) ||
+        /\b(dlc|update)\b/.test(titleName);
+      if (ct !== "game" || nameFlagsExtra) return "skip";
     }
     return "ok";
   }

@@ -80,28 +80,64 @@ const bundledUkmmPath = (): string => {
 };
 
 /**
- * Make sure a WRITABLE copy of the bundled UKMM binary exists. UKMM runs in
- * `--portable` mode (config + data next to the exe), which can't live in the
- * read-only resources dir, so we copy the bundled binary into the writable
- * emulators install path on first use. Returns true when the binary is ready.
+ * Make sure a WRITABLE copy of the *patched* bundled UKMM binary is in place.
+ *
+ * UKMM runs in `--portable` mode (config + data next to the exe), which can't
+ * live in the read-only resources dir, so we copy the bundled binary into the
+ * writable emulators dir. Crucially we OVERWRITE any binary already there whose
+ * size differs from the bundled one: older builds *downloaded* the stock,
+ * unpatched UKMM (which has no `install-bnp` subcommand and falls back to its
+ * GUI), and that stale copy must be replaced with our patched build. A stamp
+ * file records the provisioned size so we only re-copy when it actually changes.
  */
 export const ensureUkmm = (): boolean => {
   const paths = ukmmPaths();
-  if (existsSync(paths.exe)) return true;
   const bundled = bundledUkmmPath();
   if (!existsSync(bundled)) {
+    // No bundled binary (non-Windows, or a build where the Rust compile was
+    // skipped). Fall back to whatever is already provisioned, if anything.
+    if (existsSync(paths.exe)) return true;
     logger.warn(`[ukmm] bundled binary missing at ${bundled}`);
     return false;
   }
+
+  const bundledSize = (() => {
+    try {
+      return statSync(bundled).size;
+    } catch {
+      return -1;
+    }
+  })();
+  const stampFile = path.join(paths.installDir, ".ukmm-stamp");
+  const currentStamp = (() => {
+    try {
+      return Number(readFileSync(stampFile, "utf-8").trim());
+    } catch {
+      return NaN;
+    }
+  })();
+
+  // Already the right (patched) binary? Nothing to do.
+  if (existsSync(paths.exe) && currentStamp === bundledSize) return true;
+
   try {
     mkdirSync(paths.installDir, { recursive: true });
+    // Overwrite any stale/unpatched binary with the bundled patched one.
     copyFileSync(bundled, paths.exe);
     if (!isWindows) chmodSync(paths.exe, 0o755);
+    writeFileSync(stampFile, String(bundledSize), "utf-8");
     mkdirSync(paths.configDir, { recursive: true });
     mkdirSync(paths.downloadDir, { recursive: true });
-    logger.log(`[ukmm] provisioned bundled binary → ${paths.exe}`);
+    logger.log(
+      `[ukmm] provisioned patched binary → ${paths.exe} (size ${bundledSize})`
+    );
     return true;
   } catch (err) {
+    // If the copy failed because the old exe is locked/running, fall back to it.
+    if (existsSync(paths.exe)) {
+      logger.warn("[ukmm] couldn't replace existing binary, using current", err);
+      return true;
+    }
     logger.error("[ukmm] couldn't provision bundled binary", err);
     return false;
   }
@@ -219,16 +255,19 @@ const resolveCemuGamePaths = async (
   );
 
   // Bounded BFS over the search roots (depth 2, capped) so a Minerva download
-  // whose update/DLC folder is nested one level deep is still found — without
-  // walking an entire drive.
-  const findLooseContent = (high: string): string | null => {
+  // whose update/DLC folder is nested is still found — without walking a drive.
+  // A folder matches if its meta.xml title id matches, OR (fallback) its NAME
+  // hints at the content type — loose Minerva/No-Intro dumps are named like
+  // "...(Update) (v208)" / "...(DLC)" and may lack a meta.xml.
+  const findLooseContent = (high: string, nameHints: string[]): string | null => {
     const queue: { dir: string; depth: number }[] = searchRoots.map((dir) => ({
       dir,
       depth: 0,
     }));
     const seen = new Set<string>();
     let visited = 0;
-    while (queue.length && visited < 400) {
+    let nameMatch: string | null = null;
+    while (queue.length && visited < 800) {
       const { dir, depth } = queue.shift()!;
       if (seen.has(dir)) continue;
       seen.add(dir);
@@ -246,23 +285,35 @@ const resolveCemuGamePaths = async (
         } catch {
           continue;
         }
+        const c = path.join(child, "content");
         const tid = readMetaTitleId(child);
-        if (tid && tid.startsWith(high) && tid.endsWith(low)) {
-          const c = path.join(child, "content");
-          if (existsSync(c)) return c;
+        // Strongest signal: matching title id in meta.xml.
+        if (tid && tid.startsWith(high) && tid.endsWith(low) && existsSync(c)) {
+          return c;
         }
-        if (depth < 1) queue.push({ dir: child, depth: depth + 1 });
+        // Fallback: name hint (only when the folder has no conflicting title id
+        // and actually holds a content dir). Remember but keep searching for a
+        // title-id match, which wins.
+        if (
+          !nameMatch &&
+          !tid &&
+          existsSync(c) &&
+          nameHints.some((h) => name.toLowerCase().includes(h))
+        ) {
+          nameMatch = c;
+        }
+        if (depth < 2) queue.push({ dir: child, depth: depth + 1 });
       }
     }
-    return null;
+    return nameMatch;
   };
 
   const updateDir = existsSync(mlcContent(UPDATE))
     ? mlcContent(UPDATE)
-    : findLooseContent(UPDATE);
+    : findLooseContent(UPDATE, ["update", "(upd", " upd", "v208", "v1.5", "v1_5"]);
   const aocContent = existsSync(mlcContent(DLC))
     ? mlcContent(DLC)
-    : findLooseContent(DLC);
+    : findLooseContent(DLC, ["(dlc", " dlc", "aoc"]);
   // UKMM's Unpacked dump expects aoc_dir to hold Pack/AocMainField.pack, which
   // on a Cemu dump lives under content/0010 — append it when present.
   const aocDir =
@@ -526,6 +577,25 @@ export const finalizeBnpInstall = async (
     cleanupBnpStaging(stagingId);
     return { ok: false, reason: "UKMM isn't available in this build" };
   }
+
+  // UKMM's BOTW dump requires the game UPDATE (v1.5.0 / v208) — without it the
+  // dump is invalid and every install fails with a confusing "no settings"
+  // error. Check up front and tell the user exactly what's wrong.
+  const cemu = await resolveCemuGamePaths(shop, objectId);
+  if (!cemu || !cemu.gameContentDir) {
+    cleanupBnpStaging(stagingId);
+    return { ok: false, reason: "Couldn't locate this game's files in Cemu." };
+  }
+  if (!cemu.updateDir) {
+    cleanupBnpStaging(stagingId);
+    return {
+      ok: false,
+      reason:
+        "BOTW mods require the game Update (v1.5.0 / v208). Install the update " +
+        "in Cemu (or place the update folder next to the game) and try again.",
+    };
+  }
+
   const configured = await configureUkmm(shop, objectId);
   if (!configured.ok) {
     cleanupBnpStaging(stagingId);
@@ -567,13 +637,40 @@ export const uninstallMod = async (
   if (!ensureUkmm()) return { ok: false, reason: "UKMM isn't available" };
   await configureUkmm(shop, objectId);
   const res = await runUkmm(["uninstall", String(index)], true);
-  if (!res.ok) {
+
+  const list = await getInstalled(shop, objectId);
+  // "Mod N does not exist" means our tracking is out of sync with UKMM's actual
+  // storage (e.g. entries left over from an older build whose install never
+  // reached UKMM). Treat it as already-gone and drop the phantom entry so the
+  // user can clear the list instead of hitting the same error forever.
+  if (!res.ok && !/does not exist/i.test(res.stderr)) {
     return { ok: false, reason: res.stderr || "UKMM failed to uninstall" };
   }
-  const list = await getInstalled(shop, objectId);
   if (index >= 0 && index < list.length) list.splice(index, 1);
   await installedModsSublevel.put(modsKey(shop, objectId), list);
   return { ok: true };
+};
+
+/**
+ * Reset all mod tracking + UKMM storage for a clean slate — clears our tracked
+ * list, wipes UKMM's installed mods/profiles, and disables the deployed pack.
+ * Used to recover from a corrupt/desynced state.
+ */
+export const resetMods = async (
+  shop: GameShop,
+  objectId: string
+): Promise<{ ok: boolean; reason?: string }> => {
+  try {
+    const paths = ukmmPaths();
+    const storage = path.join(paths.installDir, "config", "storage");
+    if (existsSync(storage)) rmSync(storage, { recursive: true, force: true });
+    await installedModsSublevel.put(modsKey(shop, objectId), []);
+    await setGraphicPackEnabled(ukmmPackRulesId(), false).catch(() => {});
+    logger.log("[ukmm] reset mods (cleared storage + tracking)");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: String(err) };
+  }
 };
 
 /** The master mods switch: enable/disable the deployed UKMM Cemu graphic pack. */

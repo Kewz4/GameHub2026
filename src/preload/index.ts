@@ -835,6 +835,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("installModFromBcmlUri", shop, objectId, uri),
   uninstallMod: (shop: string, objectId: string, index: number) =>
     ipcRenderer.invoke("uninstallMod", shop, objectId, index),
+  resetMods: (shop: string, objectId: string) =>
+    ipcRenderer.invoke("resetMods", shop, objectId),
   exportModpack: (shop: string, objectId: string) =>
     ipcRenderer.invoke("exportModpack", shop, objectId),
   importModpack: (shop: string, objectId: string) =>

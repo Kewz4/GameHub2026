@@ -412,6 +412,15 @@
     &:hover {
       background: rgba(255, 255, 255, 0.12);
     }
+
+    &--danger {
+      margin-left: auto;
+      background: rgba(255, 90, 90, 0.12);
+
+      &:hover {
+        background: rgba(255, 90, 90, 0.22);
+      }
+    }
   }
 
   // ── Option chooser ───────────────────────────────────────────────────────────

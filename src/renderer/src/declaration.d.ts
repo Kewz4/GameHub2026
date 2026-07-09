@@ -1007,6 +1007,10 @@ declare global {
       objectId: string,
       index: number
     ) => Promise<{ ok: boolean; reason?: string }>;
+    resetMods: (
+      shop: string,
+      objectId: string
+    ) => Promise<{ ok: boolean; reason?: string }>;
     exportModpack: (
       shop: string,
       objectId: string

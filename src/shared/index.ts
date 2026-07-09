@@ -130,27 +130,32 @@ export const formatName = pipe<string>(
 const realDebridHosts = ["https://1fichier.com", "https://mediafire.com"];
 
 export const getDownloadersForUri = (uri: string) => {
-  if (uri.startsWith("https://gofile.io")) return [Downloader.Gofile];
+  // TorBox can fetch any hoster link via its web-download API, so it's offered
+  // for every URI type alongside the host's native downloader.
+  if (uri.startsWith("https://gofile.io"))
+    return [Downloader.Gofile, Downloader.TorBox];
 
-  if (uri.startsWith("https://pixeldrain.com")) return [Downloader.PixelDrain];
-  if (uri.startsWith("https://datanodes.to")) return [Downloader.Datanodes];
+  if (uri.startsWith("https://pixeldrain.com"))
+    return [Downloader.PixelDrain, Downloader.TorBox];
+  if (uri.startsWith("https://datanodes.to"))
+    return [Downloader.Datanodes, Downloader.TorBox];
   if (uri.startsWith("https://www.mediafire.com"))
-    return [Downloader.Mediafire];
+    return [Downloader.Mediafire, Downloader.TorBox];
   if (uri.startsWith("https://fuckingfast.co")) {
-    return [Downloader.FuckingFast];
+    return [Downloader.FuckingFast, Downloader.TorBox];
   }
   if (
     uri.startsWith("https://vikingfile.com") ||
     uri.startsWith("https://vik1ngfile.site")
   ) {
-    return [Downloader.VikingFile];
+    return [Downloader.VikingFile, Downloader.TorBox];
   }
   if (uri.startsWith("https://www.rootz.so")) {
-    return [Downloader.Rootz];
+    return [Downloader.Rootz, Downloader.TorBox];
   }
 
   if (realDebridHosts.some((host) => uri.startsWith(host)))
-    return [Downloader.RealDebrid];
+    return [Downloader.RealDebrid, Downloader.TorBox];
 
   if (uri.startsWith("magnet:")) {
     return [
@@ -162,6 +167,9 @@ export const getDownloadersForUri = (uri: string) => {
       Downloader.AllDebrid,
     ];
   }
+
+  // Any other http(s) link — TorBox can still fetch it as a web download.
+  if (/^https?:\/\//i.test(uri)) return [Downloader.TorBox];
 
   return [];
 };
