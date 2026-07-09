@@ -447,7 +447,9 @@ const writeUkmmSettings = (paths: UkmmPaths, cemu: CemuGamePaths): void => {
 
   const yaml = [
     "current_mode: WiiU",
-    "system_7z: true",
+    // Use UKMM's INTERNAL 7z (not the system binary) so it never spawns an
+    // external 7-Zip console that flashes a terminal window on Windows.
+    "system_7z: false",
     `storage_dir: ${yamlPath(storage)}`,
     // enum is None|Stable|Beta — "Never" silently resets settings to default.
     "check_updates: None",

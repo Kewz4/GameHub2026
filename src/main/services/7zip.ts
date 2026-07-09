@@ -84,7 +84,14 @@ export class SevenZip {
 
         const stream = Seven.extractFull(filePath, outputPath || cwd || ".", {
           ...options,
-          $spawnOptions: cwd ? { cwd } : undefined,
+          // windowsHide stops the 7-Zip child from flashing a console window on
+          // Windows (e.g. during headless mod extraction). node-7z forwards
+          // $spawnOptions to child_process.spawn, whose types are wider than
+          // node-7z declares — hence the cast.
+          $spawnOptions: {
+            windowsHide: true,
+            ...(cwd ? { cwd } : {}),
+          } as { cwd?: string },
         });
 
         stream.on("progress", (progress) => {
@@ -158,6 +165,7 @@ export class SevenZip {
       const options: CommandLineSwitches = {
         $bin: this.binaryPath,
         password: password || undefined,
+        $spawnOptions: { windowsHide: true } as { cwd?: string },
       };
 
       const stream = Seven.list(filePath, options);
