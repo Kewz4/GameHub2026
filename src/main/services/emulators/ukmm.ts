@@ -367,8 +367,10 @@ const writeUkmmSettings = (paths: UkmmPaths, cemu: CemuGamePaths): void => {
       ? `      update_dir: ${yamlPath(cemu.updateDir)}`
       : "      update_dir: null",
     cemu.aocDir ? `      aoc_dir: ${yamlPath(cemu.aocDir)}` : "      aoc_dir: null",
-    // WiiU dumps are big-endian; the ResourceReader requires this field.
-    "    endian: Big",
+    // CRITICAL: the Endian enum is serde-renamed — Wii U => "Wii U" (NOT "Big").
+    // Any other value fails to deserialize and silently voids the ENTIRE
+    // wiiu_config, which is exactly the "No config for current platform" error.
+    '    endian: "Wii U"',
   ];
 
   const yaml = [
@@ -378,6 +380,7 @@ const writeUkmmSettings = (paths: UkmmPaths, cemu: CemuGamePaths): void => {
     // enum is None|Stable|Beta — "Never" silently resets settings to default.
     "check_updates: None",
     "show_changelog: false",
+    "last_version: null",
     "wiiu_config:",
     "  language: USen",
     "  profile: Default",
@@ -387,7 +390,9 @@ const writeUkmmSettings = (paths: UkmmPaths, cemu: CemuGamePaths): void => {
     "    method: HardLink",
     "    auto: true",
     "    cemu_rules: true",
+    "    executable: null",
     "    layout: WithName",
+    "switch_config: null",
     "lang: English",
     "",
   ].join("\n");
@@ -397,8 +402,11 @@ const writeUkmmSettings = (paths: UkmmPaths, cemu: CemuGamePaths): void => {
 };
 
 /**
- * One-time (idempotent) setup: write settings.yml for this BOTW game + Cemu,
- * and set UKMM to Wii U mode. Safe to call before each install.
+ * One-time (idempotent) setup: write settings.yml for this BOTW game + Cemu.
+ * We deliberately do NOT run `ukmm mode wiiu` — that command re-serializes the
+ * settings from whatever UKMM parsed, so if the file has ANY unparseable field
+ * UKMM overwrites it with stripped defaults (dropping wiiu_config). We set
+ * `current_mode: WiiU` directly in the file instead.
  */
 export const configureUkmm = async (
   shop: GameShop,
@@ -412,7 +420,6 @@ export const configureUkmm = async (
   } catch (err) {
     return { ok: false, reason: `Couldn't write UKMM settings: ${err}` };
   }
-  await runUkmm(["mode", "wiiu"]);
   return { ok: true };
 };
 
@@ -578,22 +585,10 @@ export const finalizeBnpInstall = async (
     return { ok: false, reason: "UKMM isn't available in this build" };
   }
 
-  // UKMM's BOTW dump requires the game UPDATE (v1.5.0 / v208) — without it the
-  // dump is invalid and every install fails with a confusing "no settings"
-  // error. Check up front and tell the user exactly what's wrong.
   const cemu = await resolveCemuGamePaths(shop, objectId);
   if (!cemu || !cemu.gameContentDir) {
     cleanupBnpStaging(stagingId);
     return { ok: false, reason: "Couldn't locate this game's files in Cemu." };
-  }
-  if (!cemu.updateDir) {
-    cleanupBnpStaging(stagingId);
-    return {
-      ok: false,
-      reason:
-        "BOTW mods require the game Update (v1.5.0 / v208). Install the update " +
-        "in Cemu (or place the update folder next to the game) and try again.",
-    };
   }
 
   const configured = await configureUkmm(shop, objectId);
@@ -610,7 +605,16 @@ export const finalizeBnpInstall = async (
 
   cleanupBnpStaging(stagingId);
   if (!res.ok) {
-    return { ok: false, reason: res.stderr || "UKMM failed to install the mod" };
+    // Many BOTW mods reference update-layer files; if the update dump is absent
+    // that's the usual cause of a conversion/merge failure — point the user to it.
+    const hint = !cemu.updateDir
+      ? " This mod likely needs the game Update (v1.5.0 / v208) — install it in " +
+        "Cemu or place the update folder next to the game."
+      : "";
+    return {
+      ok: false,
+      reason: (res.stderr || "UKMM failed to install the mod") + hint,
+    };
   }
 
   const list = await getInstalled(shop, objectId);
