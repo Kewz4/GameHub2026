@@ -837,6 +837,13 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("uninstallMod", shop, objectId, index),
   resetMods: (shop: string, objectId: string) =>
     ipcRenderer.invoke("resetMods", shop, objectId),
+  onModInstallProgress: (cb: (phase: string) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, phase: string) =>
+      cb(phase);
+    ipcRenderer.on("on-mod-install-progress", listener);
+    return () =>
+      ipcRenderer.removeListener("on-mod-install-progress", listener);
+  },
   exportModpack: (shop: string, objectId: string) =>
     ipcRenderer.invoke("exportModpack", shop, objectId),
   importModpack: (shop: string, objectId: string) =>

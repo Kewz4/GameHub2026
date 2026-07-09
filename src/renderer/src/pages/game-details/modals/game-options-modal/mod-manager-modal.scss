@@ -1,3 +1,37 @@
+// Small, wide install-progress modal: a spinner + the current phase.
+.modal.modal--mod-progress {
+  width: min(420px, 90vw);
+  max-width: min(420px, 90vw);
+}
+
+.mod-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 2px;
+
+  &__spinner {
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    border-top-color: var(--color-primary, #7aa2ff);
+    animation: mod-progress-spin 0.8s linear infinite;
+  }
+
+  &__phase {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+}
+
+@keyframes mod-progress-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 // Widen the hosting modal itself — the mod manager fills it, so its width must
 // come from the modal (a plain `large` modal is capped at 800px, which made the
 // wide grid overflow and show a horizontal scrollbar).

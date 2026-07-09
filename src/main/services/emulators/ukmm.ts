@@ -1,6 +1,5 @@
 import { app } from "electron";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -31,8 +30,24 @@ import { SevenZip } from "../7zip";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
 import { resolveWiiuTitleId, setGraphicPackEnabled } from "./cemu-graphic-packs";
+import { WindowManager } from "../window-manager";
 
-const execFileAsync = promisify(execFile);
+/** Push a mod-install phase to the renderer for the progress modal. */
+const emitModPhase = (phase: string): void => {
+  WindowManager.mainWindow?.webContents.send("on-mod-install-progress", phase);
+};
+
+/** Map a UKMM stdout line to a friendly install phase (or null to ignore). */
+const phaseFromUkmmLine = (line: string): string | null => {
+  const l = line.toLowerCase();
+  if (l.startsWith("converting bnp")) return "Converting mod…";
+  if (l.startsWith("installing")) return "Installing…";
+  if (l.startsWith("applying")) return "Merging into load order…";
+  if (l.startsWith("deploying")) return "Deploying to Cemu…";
+  if (l.startsWith("deployment complete") || l.startsWith("done"))
+    return "Finishing up…";
+  return null;
+};
 
 /**
  * Headless UKMM (U-King Mod Manager) integration for Breath of the Wild on
@@ -161,29 +176,74 @@ const resolveExe = (): string | null => {
   return existsSync(paths.exe) ? paths.exe : null;
 };
 
-/** Run a UKMM CLI command in portable mode. `-D` auto-deploys after. */
-const runUkmm = async (
+/**
+ * Run a UKMM CLI command in portable mode. `-D` auto-deploys after. Streams
+ * stdout so `onLine` sees each line live (used to drive the install-progress
+ * modal), while still returning the full captured output.
+ */
+const runUkmm = (
   args: string[],
-  deploy = false
+  deploy = false,
+  onLine?: (line: string) => void
 ): Promise<{ ok: boolean; stdout: string; stderr: string }> => {
   const exe = resolveExe();
-  if (!exe) return { ok: false, stdout: "", stderr: "UKMM not installed" };
+  if (!exe) {
+    return Promise.resolve({ ok: false, stdout: "", stderr: "UKMM not installed" });
+  }
   const full = ["--portable", ...(deploy ? ["--deploy"] : []), ...args];
   logger.log(`[ukmm] run: ukmm ${full.join(" ")}`);
-  try {
-    const { stdout, stderr } = await execFileAsync(exe, full, {
+
+  return new Promise((resolve) => {
+    const child = spawn(exe, full, {
       cwd: path.dirname(exe),
-      timeout: 300_000,
       windowsHide: true,
     });
-    if (stdout?.trim()) logger.log(`[ukmm] stdout: ${stdout.trim()}`);
-    if (stderr?.trim()) logger.warn(`[ukmm] stderr: ${stderr.trim()}`);
-    return { ok: true, stdout, stderr };
-  } catch (err: any) {
-    const stderr = err?.stderr ?? String(err);
-    logger.error(`[ukmm] command failed: ukmm ${full.join(" ")}\n${stderr}`);
-    return { ok: false, stdout: err?.stdout ?? "", stderr };
-  }
+    let stdout = "";
+    let stderr = "";
+    let carry = "";
+
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+    }, 300_000);
+
+    child.stdout?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      stdout += text;
+      carry += text;
+      const lines = carry.split(/\r?\n/);
+      carry = lines.pop() ?? "";
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) onLine?.(trimmed);
+      }
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      logger.error(`[ukmm] spawn error: ukmm ${full.join(" ")}`, err);
+      resolve({ ok: false, stdout, stderr: stderr || String(err) });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (carry.trim()) onLine?.(carry.trim());
+      if (stdout.trim()) logger.log(`[ukmm] stdout: ${stdout.trim()}`);
+      if (stderr.trim()) logger.warn(`[ukmm] stderr: ${stderr.trim()}`);
+      if (code === 0) resolve({ ok: true, stdout, stderr });
+      else {
+        logger.error(
+          `[ukmm] command failed (code ${code}): ukmm ${full.join(" ")}\n${stderr}`
+        );
+        resolve({ ok: false, stdout, stderr });
+      }
+    });
+  });
 };
 
 // ── Cemu / game path resolution ──────────────────────────────────────────────
@@ -659,12 +719,14 @@ export const finalizeBnpInstall = async (
     return { ok: false, reason: "UKMM isn't available in this build" };
   }
 
+  emitModPhase("Locating game files…");
   const cemu = await resolveCemuGamePaths(shop, objectId);
   if (!cemu || !cemu.gameContentDir) {
     cleanupBnpStaging(stagingId);
     return { ok: false, reason: "Couldn't locate this game's files in Cemu." };
   }
 
+  emitModPhase("Configuring UKMM…");
   const configured = await configureUkmm(shop, objectId);
   if (!configured.ok) {
     cleanupBnpStaging(stagingId);
@@ -682,7 +744,11 @@ export const finalizeBnpInstall = async (
   if (isBnp && selectedFolders.length > 0) {
     args.push("--options", JSON.stringify(selectedFolders));
   }
-  const res = await runUkmm(args, true); // -D deploy so Cemu loads it
+  emitModPhase("Converting mod…");
+  const res = await runUkmm(args, true, (line) => {
+    const phase = phaseFromUkmmLine(line);
+    if (phase) emitModPhase(phase);
+  }); // -D deploy so Cemu loads it
 
   cleanupBnpStaging(stagingId);
   if (!res.ok) {

@@ -13,6 +13,11 @@ import type {
 import fs from "node:fs";
 import path from "node:path";
 
+/** Push a mod-install phase to the renderer for the progress modal. */
+const emitModPhase = (phase: string): void => {
+  WindowManager.mainWindow?.webContents.send("on-mod-install-progress", phase);
+};
+
 const getModStatus = async (
   _e: Electron.IpcMainInvokeEvent,
   shop: GameShop,
@@ -71,6 +76,7 @@ const installMod = async (
   fs.mkdirSync(downloadDir, { recursive: true });
   let filePath: string;
   try {
+    emitModPhase("Downloading mod…");
     filePath = await gamebanana.downloadModFile(
       file.downloadUrl,
       downloadDir,
@@ -80,6 +86,7 @@ const installMod = async (
     return { ok: false, reason: `Download failed: ${err}` };
   }
 
+  emitModPhase("Reading mod…");
   const prep = await emulators.prepareBnpInstall(filePath, {
     gbModId: modId,
     name: detail.name,

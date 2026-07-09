@@ -1011,6 +1011,7 @@ declare global {
       shop: string,
       objectId: string
     ) => Promise<{ ok: boolean; reason?: string }>;
+    onModInstallProgress: (cb: (phase: string) => void) => () => void;
     exportModpack: (
       shop: string,
       objectId: string

@@ -73,6 +73,17 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
   } | null>(null);
   const [optionSel, setOptionSel] = useState<Record<number, string[]>>({});
   const [finalizing, setFinalizing] = useState(false);
+  // Live install-progress overlay: the current phase string (null = hidden).
+  const [installPhase, setInstallPhase] = useState<string | null>(null);
+
+  // Subscribe to install phases pushed from main (Downloading → Converting →
+  // Deploying …) so the progress modal reflects real progress.
+  useEffect(() => {
+    const unsub = window.electron.onModInstallProgress((phase) =>
+      setInstallPhase(phase)
+    );
+    return unsub;
+  }, []);
 
   // Debounce the search box.
   const searchTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -164,6 +175,7 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
 
   const runInstall = async (modId: number, name: string) => {
     setInstallingId(modId);
+    setInstallPhase("Starting…");
     try {
       const res = await window.electron.installMod(
         game.shop,
@@ -171,21 +183,27 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
         modId
       );
       if (res.needsOptions) {
+        setInstallPhase(null); // hand off to the option chooser
         beginOptions(res);
       } else if (res.ok) {
         showSuccessToast(`Installed ${name}`);
         await loadInstalled();
+        setInstallPhase(null);
       } else {
         showErrorToast(res.reason ?? "Install failed");
+        setInstallPhase(null);
       }
     } finally {
       setInstallingId(null);
+      // Safety: never leave the overlay stuck open.
+      setInstallPhase((p) => (p === "Starting…" ? null : p));
     }
   };
 
   const confirmOptions = async () => {
     if (!optionPrep) return;
     setFinalizing(true);
+    setInstallPhase("Starting…");
     try {
       const folders = optionPrep.groups.flatMap((_, i) => optionSel[i] ?? []);
       const res = await window.electron.finalizeModInstall(
@@ -204,6 +222,7 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
       }
     } finally {
       setFinalizing(false);
+      setInstallPhase(null);
     }
   };
 
@@ -260,12 +279,31 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
     [installed]
   );
 
+  // Live install-progress overlay — a small wide modal with a spinner + the
+  // current phase, so the user can see the install is making progress.
+  const progressOverlay =
+    installPhase !== null ? (
+      <Modal
+        visible
+        className="modal--mod-progress"
+        title="Installing mod"
+        clickOutsideToClose={false}
+        onClose={() => {}}
+      >
+        <div className="mod-progress">
+          <span className="mod-progress__spinner" aria-hidden />
+          <span className="mod-progress__phase">{installPhase}</span>
+        </div>
+      </Modal>
+    ) : null;
+
   // ── Option chooser (headless) ────────────────────────────────────────────────
   if (optionPrep) {
     const canConfirm = optionPrep.groups.every(
       (g, i) => !g.required || (optionSel[i]?.length ?? 0) > 0
     );
     return (
+      <>
       <Modal
         visible
         className="modal--mod-manager"
@@ -336,6 +374,8 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
           </div>
         </div>
       </Modal>
+      {progressOverlay}
+      </>
     );
   }
 
@@ -343,6 +383,7 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
   if (detail) {
     const imgs = detail.gallery;
     return (
+      <>
       <Modal
         visible
         className="modal--mod-manager"
@@ -420,11 +461,14 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
           </div>
         </div>
       </Modal>
+      {progressOverlay}
+      </>
     );
   }
 
   // ── Browse / Manage ─────────────────────────────────────────────────────────
   return (
+    <>
     <Modal
       visible
       className="modal--mod-manager"
@@ -677,5 +721,7 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
         )}
       </div>
     </Modal>
+      {progressOverlay}
+    </>
   );
 }
