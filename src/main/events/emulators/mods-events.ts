@@ -28,7 +28,7 @@ const setModsEnabled = async (
   objectId: string,
   enabled: boolean
 ): Promise<{ ok: boolean }> =>
-  emulators.setNativeModsEnabled(shop, objectId, enabled);
+  emulators.setModsEnabled(shop, objectId, enabled);
 
 const browseGameBananaMods = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -80,28 +80,33 @@ const installMod = async (
     return { ok: false, reason: `Download failed: ${err}` };
   }
 
+  const prep = await emulators.prepareBnpInstall(filePath, {
+    gbModId: modId,
+    name: detail.name,
+    thumbnailUrl: detail.gallery[0] ?? null,
+  });
+  if (!prep.ok) {
+    cleanupFile(filePath);
+    return prep;
+  }
+  if (prep.needsOptions) return prep; // renderer will show the chooser
+  // No options — install + deploy now, then clean up the download.
+  const res = await emulators.finalizeBnpInstall(
+    shop,
+    objectId,
+    prep.stagingId!,
+    []
+  );
+  cleanupFile(filePath);
+  return res.ok ? { ok: true } : { ok: false, reason: res.reason };
+};
+
+/** Delete a downloaded mod file once we're done with it (best effort). */
+const cleanupFile = (filePath: string): void => {
   try {
-    const prep = await emulators.prepareModInstall(filePath, {
-      gbModId: modId,
-      name: detail.name,
-      thumbnailUrl: detail.gallery[0] ?? null,
-    });
-    if (!prep.ok) return prep;
-    if (prep.needsOptions) return prep; // renderer will show the chooser
-    // No options — deploy now.
-    const res = await emulators.finalizeModInstall(
-      shop,
-      objectId,
-      prep.stagingId!,
-      []
-    );
-    return res.ok ? { ok: true } : { ok: false, reason: res.reason };
-  } finally {
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      /* best effort */
-    }
+    fs.unlinkSync(filePath);
+  } catch {
+    /* best effort */
   }
 };
 
@@ -113,13 +118,13 @@ const finalizeModInstall = async (
   stagingId: string,
   selectedFolders: string[]
 ): Promise<{ ok: boolean; reason?: string }> =>
-  emulators.finalizeModInstall(shop, objectId, stagingId, selectedFolders ?? []);
+  emulators.finalizeBnpInstall(shop, objectId, stagingId, selectedFolders ?? []);
 
 /** Discard a staged install the user backed out of (frees temp files). */
 const cancelModInstall = async (
   _e: Electron.IpcMainInvokeEvent,
   stagingId: string
-): Promise<void> => emulators.cancelModInstall(stagingId);
+): Promise<void> => emulators.cancelBnpInstall(stagingId);
 
 /**
  * Install a mod from a `bcml:` 1-click URI, fully headlessly: resolve the URI to
@@ -149,28 +154,24 @@ const installModFromBcmlUri = async (
     return { ok: false, reason: `Download failed: ${err}` };
   }
 
-  try {
-    const prep = await emulators.prepareModInstall(filePath, {
-      gbModId: 0,
-      name: path.basename(uri).slice(0, 40) || "BOTW mod",
-      thumbnailUrl: null,
-    });
-    if (!prep.ok) return prep;
-    if (prep.needsOptions) return prep;
-    const res = await emulators.finalizeModInstall(
-      shop,
-      objectId,
-      prep.stagingId!,
-      []
-    );
-    return res.ok ? { ok: true } : { ok: false, reason: res.reason };
-  } finally {
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      /* best effort */
-    }
+  const prep = await emulators.prepareBnpInstall(filePath, {
+    gbModId: 0,
+    name: path.basename(uri).slice(0, 40) || "BOTW mod",
+    thumbnailUrl: null,
+  });
+  if (!prep.ok) {
+    cleanupFile(filePath);
+    return prep;
   }
+  if (prep.needsOptions) return prep;
+  const res = await emulators.finalizeBnpInstall(
+    shop,
+    objectId,
+    prep.stagingId!,
+    []
+  );
+  cleanupFile(filePath);
+  return res.ok ? { ok: true } : { ok: false, reason: res.reason };
 };
 
 const uninstallMod = async (
@@ -179,7 +180,7 @@ const uninstallMod = async (
   objectId: string,
   index: number
 ): Promise<{ ok: boolean; reason?: string }> =>
-  emulators.uninstallNativeMod(shop, objectId, index);
+  emulators.uninstallMod(shop, objectId, index);
 
 const exportModpack = async (
   _e: Electron.IpcMainInvokeEvent,

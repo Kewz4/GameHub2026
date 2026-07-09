@@ -1,0 +1,109 @@
+diff --git a/src/cli.rs b/src/cli.rs
+index 4a0d6fd..c0ee25d 100644
+--- a/src/cli.rs
++++ b/src/cli.rs
+@@ -7,7 +7,7 @@ use std::{
+ use anyhow_ext::{Context, Result};
+ use smartstring::alias::String;
+ use uk_manager::{core, mods::LookupMod, settings::Platform};
+-use uk_mod::{unpack::ModReader, Manifest, Meta};
++use uk_mod::{unpack::ModReader, Manifest, Meta, ModOption, ModOptionGroup};
+ 
+ use crate::gui::{package, tasks};
+ 
+@@ -29,6 +29,15 @@ xflags::xflags! {
+             /// The profile to install the mod in
+             optional profile: String
+         }
++        /// Install a BCML .bnp mod headlessly (no GUI), converting it first
++        cmd install-bnp {
++            /// Path to the .bnp mod to install
++            required path: PathBuf
++            /// JSON array of option folder paths to enable, e.g. ["OptionA","group/OptionB"]
++            optional --options options: String
++            /// The profile to install the mod in
++            optional profile: String
++        }
+         /// Package a mod
+         cmd package {
+             /// Path to the mod root directory
+@@ -73,6 +82,7 @@ pub struct Ukmm {
+ #[derive(Debug)]
+ pub enum UkmmCmd {
+     Install(Install),
++    InstallBnp(InstallBnp),
+     Uninstall(Uninstall),
+     Package(Package),
+     Remerge(Remerge),
+@@ -86,6 +96,13 @@ pub struct Install {
+     pub profile: Option<String>,
+ }
+ 
++#[derive(Debug)]
++pub struct InstallBnp {
++    pub path:    PathBuf,
++    pub options: Option<String>,
++    pub profile: Option<String>,
++}
++
+ #[derive(Debug)]
+ pub struct Package {
+     pub path:   PathBuf,
+@@ -228,6 +245,57 @@ impl Runner {
+                     println!("Done!");
+                 }
+             }
++            UkmmCmd::InstallBnp(InstallBnp {
++                path,
++                options,
++                profile,
++            }) => {
++                println!("Converting BNP {}...", path.display());
++                let converted = uk_manager::bnp::convert_bnp(&self.core, path)
++                    .context("Failed to convert BNP to UKMM mod")?;
++                let mods = self.core.mod_manager();
++                let mod_ = mods.add(&converted, profile.as_ref())?;
++                println!("Installing {}...", mod_.meta.name);
++                let manifest = if let Some(options_json) = options {
++                    let wanted: Vec<std::string::String> = serde_json::from_str(options_json)
++                        .context(
++                            "Failed to parse --options; expected a JSON array of option folder \
++                             paths, e.g. [\"OptionA\",\"group/OptionB\"]",
++                        )?;
++                    let selected: Vec<ModOption> = mod_
++                        .meta
++                        .options
++                        .iter()
++                        .flat_map(|group| group.options().iter())
++                        .filter(|opt| wanted.iter().any(|w| Path::new(w) == opt.path.as_path()))
++                        .cloned()
++                        .collect();
++                    for w in &wanted {
++                        if !selected.iter().any(|o| Path::new(w) == o.path.as_path()) {
++                            anyhow_ext::bail!(
++                                "Option folder '{}' was not found among this mod's options",
++                                w
++                            );
++                        }
++                    }
++                    // Applying options headlessly bypasses the GUI-only bail in `check_mod`.
++                    // NOTE: `set_enabled_options` targets the current profile only.
++                    mods.set_enabled_options(mod_.as_map_id(), selected)?
++                        .as_ref()
++                        .clone()
++                } else {
++                    mod_.manifest()?.as_ref().clone()
++                };
++                mods.set_enabled(mod_.as_map_id(), true, profile.as_ref())?;
++                mods.save()?;
++                println!("Applying mod to load order...");
++                let deployer = self.core.deploy_manager();
++                deployer.apply(Some(manifest))?;
++                if self.cli.deploy {
++                    self.deploy()?;
++                }
++                println!("Done!");
++            }
+             UkmmCmd::Package(pkg) => {
+                 println!("Packaging mod...");
+                 let builder = package::ModPackerBuilder {

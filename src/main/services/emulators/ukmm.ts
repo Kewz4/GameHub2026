@@ -1,5 +1,5 @@
-import axios from "axios";
-import { execFile, spawn } from "node:child_process";
+import { app } from "electron";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   chmodSync,
@@ -12,13 +12,18 @@ import {
   statSync,
   unlinkSync,
   writeFileSync,
-  createWriteStream,
 } from "node:fs";
 import path from "node:path";
-import { pipeline } from "node:stream/promises";
+import os from "node:os";
 import * as tar from "tar";
 
-import type { GameShop, InstalledMod, ModManagerStatus } from "@types";
+import type {
+  GameShop,
+  InstalledMod,
+  ModInstallPrep,
+  ModManagerStatus,
+  ModOptionGroup,
+} from "@types";
 import { emulatorsInstallPath } from "@main/constants";
 import { gamesSublevel, levelKeys, installedModsSublevel } from "@main/level";
 import { logger } from "../logger";
@@ -41,57 +46,6 @@ const execFileAsync = promisify(execFile);
  */
 
 const isWindows = process.platform === "win32";
-const isMac = process.platform === "darwin";
-const isArm = process.arch === "arm64";
-const UKMM_RELEASE_API =
-  "https://api.github.com/repos/NiceneNerd/ukmm/releases/latest";
-
-/**
- * Pick the correct release asset for THIS OS + arch. UKMM ships per-target
- * archives (e.g. `ukmm-x86_64-pc-windows-msvc.zip`,
- * `ukmm-x86_64-unknown-linux-gnu.tar.xz`, `ukmm-aarch64-apple-darwin`) plus
- * `-update` binaries (raw PE/Mach-O auto-updater files — NOT archives; feeding
- * one to 7-Zip dumps its binary sections). We score by target triple and hard-
- * exclude `-update`. NB: the naive /win/ test matched "dar-WIN", which is how
- * the macOS updater got downloaded before.
- */
-const pickUkmmAsset = (
-  assets: { name: string; browser_download_url: string }[]
-): { name: string; browser_download_url: string } | null => {
-  const score = (name: string): number => {
-    const n = name.toLowerCase();
-    if (n.includes("-update")) return -1; // never the updater binary
-    if (isWindows) {
-      if (n.includes("pc-windows") && n.endsWith(".zip")) return 100;
-      if (n.includes("windows") && n.endsWith(".zip")) return 80;
-      if (n.endsWith(".zip") && !n.includes("darwin") && !n.includes("linux"))
-        return 40;
-      return -1;
-    }
-    if (isMac) {
-      if (!n.includes("apple-darwin")) return -1;
-      return n.includes(isArm ? "aarch64" : "x86_64") ? 100 : 70;
-    }
-    // linux
-    if (n.includes("linux")) {
-      const archOk = n.includes(isArm ? "aarch64" : "x86_64");
-      if (/\.(tar\.\w+|tar|zip|7z)$/i.test(n)) return archOk ? 100 : 70;
-      if (n.endsWith(".appimage")) return archOk ? 60 : 40;
-    }
-    return -1;
-  };
-  let best: { name: string; browser_download_url: string } | null = null;
-  let bestScore = 0;
-  for (const a of assets) {
-    const s = score(a.name);
-    if (s > bestScore) {
-      best = a;
-      bestScore = s;
-    }
-  }
-  return best;
-};
-
 // The deployed Cemu graphic-pack folder + the rules.txt path (relative to the
 // Cemu data dir) that acts as the master "mods enabled" switch.
 const UKMM_PACK_DIR = "BreathOfTheWild_UKMM";
@@ -117,124 +71,58 @@ const ukmmPaths = (): UkmmPaths => {
   };
 };
 
-export const isUkmmInstalled = (): boolean => existsSync(ukmmPaths().exe);
+/** Path to the patched UKMM binary bundled with the app (resources dir). */
+const bundledUkmmPath = (): string => {
+  const name = isWindows ? "ukmm.exe" : "ukmm";
+  return app.isPackaged
+    ? path.join(process.resourcesPath, name)
+    : path.join(emulatorsInstallPath, "..", "..", "binaries", name);
+};
 
-/** Download + extract the latest UKMM release for this OS. */
+/**
+ * Make sure a WRITABLE copy of the bundled UKMM binary exists. UKMM runs in
+ * `--portable` mode (config + data next to the exe), which can't live in the
+ * read-only resources dir, so we copy the bundled binary into the writable
+ * emulators install path on first use. Returns true when the binary is ready.
+ */
+export const ensureUkmm = (): boolean => {
+  const paths = ukmmPaths();
+  if (existsSync(paths.exe)) return true;
+  const bundled = bundledUkmmPath();
+  if (!existsSync(bundled)) {
+    logger.warn(`[ukmm] bundled binary missing at ${bundled}`);
+    return false;
+  }
+  try {
+    mkdirSync(paths.installDir, { recursive: true });
+    copyFileSync(bundled, paths.exe);
+    if (!isWindows) chmodSync(paths.exe, 0o755);
+    mkdirSync(paths.configDir, { recursive: true });
+    mkdirSync(paths.downloadDir, { recursive: true });
+    logger.log(`[ukmm] provisioned bundled binary → ${paths.exe}`);
+    return true;
+  } catch (err) {
+    logger.error("[ukmm] couldn't provision bundled binary", err);
+    return false;
+  }
+};
+
+export const isUkmmInstalled = (): boolean =>
+  existsSync(ukmmPaths().exe) || existsSync(bundledUkmmPath());
+
+/** Kept for the existing IPC event: provisions the bundled binary (no download). */
 export const installUkmm = async (): Promise<{
   ok: boolean;
   reason?: string;
-}> => {
-  const paths = ukmmPaths();
-  try {
-    const release = await axios.get<{
-      assets: { name: string; browser_download_url: string }[];
-    }>(UKMM_RELEASE_API, {
-      headers: { "User-Agent": "GameHub", Accept: "application/vnd.github+json" },
-      timeout: 30_000,
-    });
-    const assets = release.data.assets ?? [];
-    const asset = pickUkmmAsset(assets);
-    if (!asset) {
-      logger.error(
-        "[ukmm] no matching asset. Available:",
-        assets.map((a) => a.name)
-      );
-      return { ok: false, reason: "No UKMM asset for this platform" };
-    }
-    logger.log(
-      `[ukmm] selected asset ${asset.name} for ${process.platform}/${process.arch}`
-    );
-
-    // Clean slate — a previous failed install may have left junk (e.g. the
-    // Mach-O sections 7-Zip dumps from a raw `-update` binary).
-    if (existsSync(paths.installDir)) {
-      rmSync(paths.installDir, { recursive: true, force: true });
-    }
-    mkdirSync(paths.installDir, { recursive: true });
-    const archive = path.join(paths.installDir, asset.name);
-    const resp = await axios.get<NodeJS.ReadableStream>(
-      asset.browser_download_url,
-      {
-        responseType: "stream",
-        timeout: 0,
-        maxRedirects: 5,
-        headers: { "User-Agent": "GameHub" },
-      }
-    );
-    await pipeline(resp.data, createWriteStream(archive));
-
-    const extraction = await SevenZip.extractFile({
-      filePath: archive,
-      outputPath: paths.installDir,
-    });
-    rmSync(archive, { force: true });
-    if (!extraction.success) {
-      return { ok: false, reason: "Failed to extract UKMM" };
-    }
-
-    // The archive may nest the exe in a subfolder — locate + hoist a reference.
-    if (!existsSync(paths.exe)) {
-      const found = findExe(paths.installDir);
-      if (!found) return { ok: false, reason: "UKMM executable not found" };
-      // Symlink/copy the found exe to the expected path isn't reliable across
-      // platforms; instead remember its dir by writing a tiny pointer.
-      writeFileSync(
-        path.join(paths.installDir, ".ukmm-exe"),
-        found,
-        "utf-8"
-      );
-    }
-    if (!isWindows && existsSync(paths.exe)) chmodSync(paths.exe, 0o755);
-
-    mkdirSync(paths.configDir, { recursive: true });
-    mkdirSync(paths.downloadDir, { recursive: true });
-    logger.log("[ukmm] installed");
-    return { ok: true };
-  } catch (err) {
-    logger.error("[ukmm] install failed", err);
-    return { ok: false, reason: String(err) };
-  }
-};
-
-const findExe = (root: string): string | null => {
-  const target = isWindows ? "ukmm.exe" : "ukmm";
-  const stack = [root];
-  while (stack.length) {
-    const dir = stack.pop()!;
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const e of entries) {
-      const full = path.join(dir, e);
-      let isDir = false;
-      try {
-        isDir = statSync(full).isDirectory();
-      } catch {
-        continue;
-      }
-      if (isDir) stack.push(full);
-      else if (e.toLowerCase() === target) return full;
-    }
-  }
-  return null;
-};
+}> =>
+  ensureUkmm()
+    ? { ok: true }
+    : { ok: false, reason: "UKMM binary isn't bundled with this build" };
 
 const resolveExe = (): string | null => {
+  ensureUkmm();
   const paths = ukmmPaths();
-  if (existsSync(paths.exe)) return paths.exe;
-  const pointer = path.join(paths.installDir, ".ukmm-exe");
-  if (existsSync(pointer)) {
-    try {
-      const p = readFileSync(pointer, "utf-8").trim();
-      if (p && existsSync(p)) return p;
-    } catch {
-      /* ignore */
-    }
-  }
-  return null;
+  return existsSync(paths.exe) ? paths.exe : null;
 };
 
 /** Run a UKMM CLI command in portable mode. `-D` auto-deploys after. */
@@ -261,46 +149,6 @@ const runUkmm = async (
     return { ok: false, stdout: err?.stdout ?? "", stderr };
   }
 };
-
-/**
- * Some mods can't be installed by the CLI: `.bnp` (legacy BCML) archives, and
- * mods that expose configuration options — both require UKMM's GUI. When we hit
- * those, open the file in UKMM's GUI so the user can finish the (one-click)
- * install there, and report a friendly message.
- */
-const needsGuiInstall = (stderr: string): boolean =>
-  /bnp files are not supported/i.test(stderr) ||
-  /install(ed)? via the gui/i.test(stderr) ||
-  /configuration options/i.test(stderr);
-
-const openInUkmmGui = (fileOrUri: string): boolean => {
-  const exe = resolveExe();
-  if (!exe) return false;
-  try {
-    // UKMM's GUI fallback reads the mod path from std::env::args().nth(1) — the
-    // FIRST arg — so the path (or bcml: URI) must come first. `--portable` is
-    // detected by scanning ALL args, so it can safely follow.
-    const child = spawn(exe, [fileOrUri, "--portable"], {
-      cwd: path.dirname(exe),
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-    logger.log(`[ukmm] opened GUI to install ${path.basename(fileOrUri)}`);
-    return true;
-  } catch (err) {
-    logger.error("[ukmm] failed to open GUI", err);
-    return false;
-  }
-};
-
-/**
- * Install a mod straight from a `bcml:` 1-click URI using UKMM's native
- * one-click handler (downloads + installs in the GUI). This is the most
- * reliable path for legacy BNP mods, which the CLI can't install.
- */
-export const oneClickInstall = (bcmlUri: string): boolean =>
-  openInUkmmGui(bcmlUri);
 
 // ── Cemu / game path resolution ──────────────────────────────────────────────
 
@@ -530,71 +378,182 @@ const getInstalled = async (
     .get(modsKey(shop, objectId))
     .catch(() => null)) ?? [];
 
-/** Install a mod from an already-downloaded file (.bnp/.zip) via UKMM. */
-export const installModFromFile = async (
-  shop: GameShop,
-  objectId: string,
+// ── Headless BNP install (extract → choose options → UKMM install-bnp) ────────
+
+interface BnpStaging {
+  bnpPath: string;
+  tempDir: string;
+  meta: { gbModId: number; name: string; thumbnailUrl: string | null };
+}
+const bnpStagings = new Map<string, BnpStaging>();
+let bnpStagingSeq = 0;
+
+/** Locate the archive subtree that holds the mod (content/aoc/rules/info). */
+const findBnpRoot = (extractDir: string): string => {
+  const isRoot = (dir: string): boolean =>
+    existsSync(path.join(dir, "content")) ||
+    existsSync(path.join(dir, "aoc")) ||
+    existsSync(path.join(dir, "rules.txt")) ||
+    existsSync(path.join(dir, "info.json"));
+  if (isRoot(extractDir)) return extractDir;
+  let cur = extractDir;
+  for (let depth = 0; depth < 4; depth++) {
+    let dirs: string[];
+    try {
+      dirs = readdirSync(cur).filter((e) => {
+        try {
+          return statSync(path.join(cur, e)).isDirectory();
+        } catch {
+          return false;
+        }
+      });
+    } catch {
+      break;
+    }
+    if (dirs.length === 1) {
+      cur = path.join(cur, dirs[0]);
+      if (isRoot(cur)) return cur;
+    } else break;
+  }
+  return extractDir;
+};
+
+/** Parse a BNP's info.json options into ModOptionGroup[] (single/multi). */
+const parseBnpOptions = (root: string): ModOptionGroup[] => {
+  const infoPath = path.join(root, "info.json");
+  if (!existsSync(infoPath)) return [];
+  let info: any;
+  try {
+    info = JSON.parse(readFileSync(infoPath, "utf-8"));
+  } catch {
+    return [];
+  }
+  const opts = info?.options;
+  if (!opts) return [];
+  const mapGroup = (g: any, type: "single" | "multi"): ModOptionGroup => ({
+    name: g?.name ?? "Options",
+    description: g?.desc ?? "",
+    type,
+    required: Boolean(g?.required),
+    options: (g?.options ?? [])
+      .filter((o: any) => o?.folder)
+      .map((o: any) => ({
+        name: o?.name ?? o?.folder,
+        description: o?.desc ?? "",
+        folder: o.folder as string,
+      })),
+  });
+  const groups: ModOptionGroup[] = [];
+  for (const g of opts.single ?? []) groups.push(mapGroup(g, "single"));
+  for (const g of opts.multi ?? []) groups.push(mapGroup(g, "multi"));
+  return groups.filter((g) => g.options.length > 0);
+};
+
+/**
+ * Stage a downloaded mod for install: extract it just enough to read its
+ * info.json options, and report whether the user must choose options. The
+ * caller either finalizes immediately (no options) or shows the chooser and
+ * calls `finalizeBnpInstall` with the picked option folders.
+ */
+export const prepareBnpInstall = async (
   filePath: string,
   meta: { gbModId: number; name: string; thumbnailUrl: string | null }
-): Promise<{ ok: boolean; reason?: string; guiHandoff?: boolean }> => {
-  await configureUkmm(shop, objectId);
-
-  // A .bnp is just a 7z archive with a RomFS/graphic-pack structure
-  // (content/ + rules.txt). UKMM's CLI rejects the `.bnp` EXTENSION but accepts
-  // the identical archive as `.7z` (convert_gfx reads the content + rules.txt),
-  // so install a .7z copy — fully headless, no GUI. Everything else installs
-  // as-is.
-  let installPath = filePath;
-  let tempCopy: string | null = null;
-  if (filePath.toLowerCase().endsWith(".bnp")) {
-    tempCopy = filePath.replace(/\.bnp$/i, "") + ".7z";
-    try {
-      copyFileSync(filePath, tempCopy);
-      installPath = tempCopy;
-      logger.log(`[ukmm] installing .bnp as .7z: ${path.basename(tempCopy)}`);
-    } catch (err) {
-      logger.warn("[ukmm] couldn't copy .bnp to .7z, using original", err);
-      tempCopy = null;
+): Promise<ModInstallPrep> => {
+  const tempDir = path.join(os.tmpdir(), `gh-bnp-${Date.now()}-${++bnpStagingSeq}`);
+  mkdirSync(tempDir, { recursive: true });
+  try {
+    const extraction = await SevenZip.extractFile({ filePath, outputPath: tempDir });
+    if (!extraction.success) {
+      rmSync(tempDir, { recursive: true, force: true });
+      return { ok: false, reason: "Couldn't read the mod archive" };
     }
+  } catch (err) {
+    rmSync(tempDir, { recursive: true, force: true });
+    return { ok: false, reason: `Couldn't read the mod: ${err}` };
   }
 
-  const res = await runUkmm(["install", installPath], true);
-  if (tempCopy) {
+  const root = findBnpRoot(tempDir);
+  const stagingId = `bnp-${Date.now()}-${bnpStagingSeq}`;
+  bnpStagings.set(stagingId, { bnpPath: filePath, tempDir, meta });
+
+  const optionGroups = parseBnpOptions(root);
+  if (optionGroups.length > 0) {
+    return { ok: true, needsOptions: true, stagingId, name: meta.name, optionGroups };
+  }
+  return { ok: true, stagingId };
+};
+
+const cleanupBnpStaging = (stagingId: string): void => {
+  const s = bnpStagings.get(stagingId);
+  if (s) {
     try {
-      unlinkSync(tempCopy);
+      rmSync(s.tempDir, { recursive: true, force: true });
     } catch {
-      /* best effort */
+      /* ignore */
     }
+    // Remove the downloaded .bnp too (UKMM has already consumed it by now).
+    try {
+      if (existsSync(s.bnpPath)) unlinkSync(s.bnpPath);
+    } catch {
+      /* ignore */
+    }
+    bnpStagings.delete(stagingId);
+  }
+};
+
+/** Discard a staged install the user backed out of. */
+export const cancelBnpInstall = (stagingId: string): void =>
+  cleanupBnpStaging(stagingId);
+
+/**
+ * Finalize a staged install: configure UKMM for this game + Cemu, then run the
+ * patched `install-bnp` headlessly (converting the .bnp, applying the chosen
+ * options, merging + rebuilding the RSTB, and deploying into Cemu's
+ * graphicPacks). `selectedFolders` are the info.json option folders the user
+ * picked (empty for optionless mods).
+ */
+export const finalizeBnpInstall = async (
+  shop: GameShop,
+  objectId: string,
+  stagingId: string,
+  selectedFolders: string[]
+): Promise<{ ok: boolean; reason?: string }> => {
+  const staging = bnpStagings.get(stagingId);
+  if (!staging) {
+    return { ok: false, reason: "This install session expired — try again." };
+  }
+  if (!ensureUkmm()) {
+    cleanupBnpStaging(stagingId);
+    return { ok: false, reason: "UKMM isn't available in this build" };
+  }
+  const configured = await configureUkmm(shop, objectId);
+  if (!configured.ok) {
+    cleanupBnpStaging(stagingId);
+    return configured;
   }
 
-  if (!res.ok) {
-    // Mods with configuration options (or anything else the CLI can't take)
-    // still need UKMM's GUI — hand off so the user can finish there.
-    if (needsGuiInstall(res.stderr)) {
-      const opened = openInUkmmGui(filePath);
-      return {
-        ok: false,
-        guiHandoff: opened,
-        reason: opened
-          ? "This mod has selectable options — opened in UKMM to choose them."
-          : "This mod must be installed via the UKMM app.",
-      };
-    }
-    return {
-      ok: false,
-      reason: res.stderr || "UKMM failed to install the mod",
-    };
+  const args = ["install-bnp", staging.bnpPath];
+  if (selectedFolders.length > 0) {
+    args.push("--options", JSON.stringify(selectedFolders));
   }
+  const res = await runUkmm(args, true); // -D deploy so Cemu loads it
+
+  cleanupBnpStaging(stagingId);
+  if (!res.ok) {
+    return { ok: false, reason: res.stderr || "UKMM failed to install the mod" };
+  }
+
   const list = await getInstalled(shop, objectId);
   list.push({
-    gbModId: meta.gbModId,
-    name: meta.name,
-    fileName: path.basename(filePath),
-    thumbnailUrl: meta.thumbnailUrl,
+    gbModId: staging.meta.gbModId,
+    name: staging.meta.name,
+    fileName: path.basename(staging.bnpPath),
+    thumbnailUrl: staging.meta.thumbnailUrl,
     installedAt: new Date().toISOString(),
+    packRulesId: ukmmPackRulesId(),
   });
   await installedModsSublevel.put(modsKey(shop, objectId), list);
-  // Ensure the deployed pack is active so Cemu loads it.
+  // Ensure the merged UKMM pack is active so Cemu loads it.
   await setGraphicPackEnabled(ukmmPackRulesId(), true).catch(() => {});
   return { ok: true };
 };
@@ -605,6 +564,8 @@ export const uninstallMod = async (
   objectId: string,
   index: number
 ): Promise<{ ok: boolean; reason?: string }> => {
+  if (!ensureUkmm()) return { ok: false, reason: "UKMM isn't available" };
+  await configureUkmm(shop, objectId);
   const res = await runUkmm(["uninstall", String(index)], true);
   if (!res.ok) {
     return { ok: false, reason: res.stderr || "UKMM failed to uninstall" };
@@ -617,6 +578,8 @@ export const uninstallMod = async (
 
 /** The master mods switch: enable/disable the deployed UKMM Cemu graphic pack. */
 export const setModsEnabled = async (
+  _shop: GameShop,
+  _objectId: string,
   enabled: boolean
 ): Promise<{ ok: boolean }> => {
   const ok = await setGraphicPackEnabled(ukmmPackRulesId(), enabled).catch(
@@ -718,8 +681,9 @@ export const getModStatus = async (
   const cemuInstalled =
     cemuConfig?.binary === "cemu" && Boolean(cemuConfig.executablePath);
 
-  // Native mods deploy as their own Cemu graphic packs; "mods enabled" means at
-  // least one of this game's deployed packs is active in settings.xml.
+  // UKMM merges every installed mod into ONE deployed Cemu graphic pack
+  // (BreathOfTheWild_UKMM); "mods enabled" means that pack is active in
+  // settings.xml.
   const installed = await getInstalled(shop, objectId);
   let modsEnabled = false;
   try {
@@ -728,9 +692,7 @@ export const getModStatus = async (
       const settingsFile = path.join(cemu.cemuDir, "settings.xml");
       if (existsSync(settingsFile)) {
         const xml = readFileSync(settingsFile, "utf-8");
-        modsEnabled = installed.some(
-          (m) => m.packRulesId && xml.includes(m.packRulesId)
-        );
+        modsEnabled = xml.includes(ukmmPackRulesId());
       }
     }
   } catch {
@@ -738,9 +700,9 @@ export const getModStatus = async (
   }
 
   return {
-    // Native deployment doesn't need the UKMM binary, so report ready whenever
-    // Cemu is set up — the Mods tab is usable without a separate download.
-    ukmmInstalled: true,
+    // The patched UKMM binary is bundled with the app, so mod support is ready
+    // whenever Cemu is set up — no separate download step.
+    ukmmInstalled: ensureUkmm(),
     cemuInstalled,
     modsEnabled,
     installed,
