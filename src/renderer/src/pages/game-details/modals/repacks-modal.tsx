@@ -324,9 +324,22 @@ export function RepacksModal({
       return;
     }
 
-    // For base game repacks, check if there are updates/DLC to prompt about
-    const updates = sortedRepacks.filter((r) => r.contentType === "update");
-    const dlcs = sortedRepacks.filter((r) => r.contentType === "dlc");
+    // For base game repacks, check if there are updates/DLC to prompt about —
+    // but ONLY for the SAME region as the base the user picked. Otherwise a USA
+    // download would also offer (and total the size of) the European update+DLC,
+    // and vice-versa. Region-free update/DLC ("World") always apply.
+    const baseRegion = regionOf(repack);
+    const sameRegion = (r: GameRepack) => {
+      const region = regionOf(r);
+      if (!region || !baseRegion) return true;
+      return region.toLowerCase() === baseRegion.toLowerCase();
+    };
+    const updates = sortedRepacks.filter(
+      (r) => r.contentType === "update" && sameRegion(r)
+    );
+    const dlcs = sortedRepacks.filter(
+      (r) => r.contentType === "dlc" && sameRegion(r)
+    );
 
     if (updates.length === 0 && dlcs.length === 0) {
       openDownloadSettings(repack);

@@ -47,7 +47,10 @@
   }
 
   &__content {
-    z-index: 1200;
+    // Above the modal backdrop (z-index 10000) so the menu is visible when the
+    // select is hosted inside a Modal (e.g. the mod manager); still fine on
+    // plain settings pages where there's no backdrop.
+    z-index: 10001;
     min-width: 200px;
     max-height: 320px;
     overflow-y: auto;

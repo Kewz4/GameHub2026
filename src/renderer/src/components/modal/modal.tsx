@@ -20,6 +20,8 @@ export interface ModalProps {
   noAnimation?: boolean;
   children: React.ReactNode;
   clickOutsideToClose?: boolean;
+  /** Extra class on the `.modal` element (e.g. to widen a specific modal). */
+  className?: string;
 }
 
 export function Modal({
@@ -32,6 +34,7 @@ export function Modal({
   noAnimation,
   children,
   clickOutsideToClose = true,
+  className,
 }: ModalProps) {
   const [isClosing, setIsClosing] = useState(false);
   const modalContentRef = useRef<HTMLDivElement | null>(null);
@@ -130,11 +133,15 @@ export function Modal({
   return createPortal(
     <Backdrop isClosing={isClosing}>
       <div
-        className={cn("modal", {
-          "modal--closing": isClosing,
-          "modal--large": large,
-          "modal--no-animation": noAnimation,
-        })}
+        className={cn(
+          "modal",
+          {
+            "modal--closing": isClosing,
+            "modal--large": large,
+            "modal--no-animation": noAnimation,
+          },
+          className
+        )}
         role="dialog"
         aria-describedby={description}
         ref={modalContentRef}

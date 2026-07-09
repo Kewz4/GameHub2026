@@ -268,6 +268,7 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
     return (
       <Modal
         visible
+        className="modal--mod-manager"
         title={`Options — ${optionPrep.name}`}
         onClose={cancelOptions}
         large
@@ -342,7 +343,13 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
   if (detail) {
     const imgs = detail.gallery;
     return (
-      <Modal visible title={detail.name} onClose={onClose} large>
+      <Modal
+        visible
+        className="modal--mod-manager"
+        title={detail.name}
+        onClose={onClose}
+        large
+      >
         <div className="mod-manager mod-manager--detail">
           <button
             type="button"
@@ -418,7 +425,13 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
 
   // ── Browse / Manage ─────────────────────────────────────────────────────────
   return (
-    <Modal visible title="Mod manager" onClose={onClose} large>
+    <Modal
+      visible
+      className="modal--mod-manager"
+      title="Mod manager"
+      onClose={onClose}
+      large
+    >
       <div className="mod-manager">
         <div className="mod-manager__tabs">
           <button

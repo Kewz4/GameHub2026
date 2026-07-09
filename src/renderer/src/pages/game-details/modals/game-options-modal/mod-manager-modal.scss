@@ -1,9 +1,17 @@
+// Widen the hosting modal itself — the mod manager fills it, so its width must
+// come from the modal (a plain `large` modal is capped at 800px, which made the
+// wide grid overflow and show a horizontal scrollbar).
+.modal.modal--mod-manager {
+  width: min(1100px, 94vw);
+  max-width: min(1100px, 94vw);
+}
+
 .mod-manager {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  // Wide enough that cards never trigger a horizontal scrollbar.
-  width: min(1100px, 92vw);
+  // Fill the (widened) modal exactly — never wider, so no horizontal scrollbar.
+  width: 100%;
   // Bound the height so the grid scrolls internally instead of the modal
   // overflowing the viewport (which cut the bottom cards off).
   max-height: 78vh;
@@ -106,6 +114,10 @@
   &__card {
     display: flex;
     flex-direction: column;
+    // Grid items default to min-width:auto, so a long unbreakable title would
+    // stretch its track wider than its siblings (uneven cards + overflow). Pin
+    // to 0 so every track stays exactly 1fr and all cards are identical width.
+    min-width: 0;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     overflow: hidden;
@@ -140,6 +152,7 @@
     gap: 3px;
     padding: 8px 10px;
     height: 74px;
+    min-width: 0;
     box-sizing: border-box;
   }
 
@@ -152,6 +165,7 @@
     color: inherit;
     font-size: 13px;
     font-weight: 600;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
