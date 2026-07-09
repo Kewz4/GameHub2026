@@ -278,36 +278,44 @@ export class TorBoxClient {
     if (isMagnet) {
       const torrentData = await this.getTorrentIdAndName(uri);
       const info = await this.waitForTorrentReady(torrentData.id, onProgress);
+      const files = info?.files ?? [];
 
-      // Map a single selected index to the TorBox file id (prefer id match,
-      // fall back to positional). Multiple files still fall back to the zip.
-      let fileId: number | undefined;
-      let fileName: string | undefined;
-      if (fileIndices && fileIndices.length === 1 && info?.files?.length) {
+      if (files.length) {
+        logger.log(
+          `[torbox] torrent "${torrentData.name}" has ${files.length} file(s), ` +
+            `total=${info?.size} bytes; fileIndices=${JSON.stringify(fileIndices ?? null)}`
+        );
+      }
+
+      // Pick the ONE file to download directly (never the whole-torrent zip —
+      // TorBox's zip endpoint has proven unreliable, returning truncated data).
+      // Prefer a valid caller-selected index; otherwise the largest file, which
+      // for a game torrent is the game itself (skipping tiny .nfo/.txt sidecars).
+      let target: (typeof files)[number] | null = null;
+      if (fileIndices && fileIndices.length === 1) {
         const idx = fileIndices[0];
-        const file =
-          info.files.find((f) => f.id === idx) ?? info.files[idx] ?? null;
-        if (file) {
-          fileId = file.id;
-          fileName = file.short_name || file.name;
-        }
-        logger.log(
-          `[torbox] selecting file idx=${idx} → id=${file?.id} ` +
-            `name=${file?.name} size=${file?.size}`
-        );
+        target =
+          files.find((f) => f.id === idx) ??
+          (idx >= 0 && idx < files.length ? files[idx] : null);
       }
-      if (info?.files?.length) {
-        logger.log(
-          `[torbox] torrent "${torrentData.name}" has ${info.files.length} file(s), ` +
-            `total=${info.size} bytes; fileIndices=${JSON.stringify(fileIndices ?? null)}`
-        );
+      if (!target && files.length) {
+        target = files.reduce((a, b) => ((b.size ?? 0) > (a.size ?? 0) ? b : a));
       }
 
-      const url = await this.requestLink(torrentData.id, fileId);
+      logger.log(
+        `[torbox] selected file id=${target?.id} name=${target?.name} size=${target?.size}`
+      );
+
+      // Direct single-file link when we have a target; only zip as a last resort
+      // (e.g. no file metadata at all).
+      const url = await this.requestLink(torrentData.id, target?.id);
       const name =
-        fileName ??
+        target?.short_name ||
+        target?.name ||
         (torrentData.name ? `${torrentData.name}.zip` : undefined);
-      logger.log(`[torbox] resolved download url (fileId=${fileId ?? "zip"})`);
+      logger.log(
+        `[torbox] resolved download url (fileId=${target?.id ?? "zip"})`
+      );
       return { url, name };
     }
 
