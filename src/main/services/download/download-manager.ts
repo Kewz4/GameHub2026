@@ -1166,7 +1166,10 @@ export class DownloadManager {
     download: Download,
     resumingFilename?: string
   ) {
-    const { name, url } = await TorBoxClient.getDownloadInfo(download.uri);
+    const { name, url } = await TorBoxClient.getDownloadInfo(
+      download.uri,
+      download.fileIndices
+    );
     if (!url) return null;
     return this.buildDownloadOptions(
       url,

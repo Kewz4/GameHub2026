@@ -78,12 +78,20 @@ export class TorBoxClient {
     return response.data.data;
   }
 
-  static async requestLink(id: number) {
-    const searchParams = new URLSearchParams({
+  static async requestLink(id: number, fileId?: number) {
+    const params: Record<string, string> = {
       token: this.apiToken,
       torrent_id: id.toString(),
-      zip_link: "true",
-    });
+    };
+    // A specific file → download just that file (no giant all-files zip). This
+    // is what fixes Minerva collection torrents dumping game+update+DLC into one
+    // "Minerva_Myrient" zip: we ask only for the file this repack targets.
+    if (fileId != null) {
+      params.file_id = fileId.toString();
+    } else {
+      params.zip_link = "true";
+    }
+    const searchParams = new URLSearchParams(params);
 
     const response = await this.instance.get<TorBoxRequestLinkRequest>(
       "/torrents/requestdl?" + searchParams.toString()
@@ -208,16 +216,36 @@ export class TorBoxClient {
 
   /**
    * Resolve a URI (magnet OR hoster link) into a direct TorBox download link,
-   * waiting for TorBox to finish caching it first when necessary.
+   * waiting for TorBox to finish caching it first when necessary. When
+   * `fileIndices` selects a single file (e.g. one game inside a Minerva
+   * collection torrent), we request just that file instead of a whole-torrent
+   * zip — so a base-game download doesn't drag in the update + DLC.
    */
-  static async getDownloadInfo(uri: string) {
+  static async getDownloadInfo(uri: string, fileIndices?: number[]) {
     const isMagnet = uri.startsWith("magnet:");
 
     if (isMagnet) {
       const torrentData = await this.getTorrentIdAndName(uri);
-      await this.waitForTorrentReady(torrentData.id);
-      const url = await this.requestLink(torrentData.id);
-      const name = torrentData.name ? `${torrentData.name}.zip` : undefined;
+      const info = await this.waitForTorrentReady(torrentData.id);
+
+      // Map a single selected index to the TorBox file id (prefer id match,
+      // fall back to positional). Multiple files still fall back to the zip.
+      let fileId: number | undefined;
+      let fileName: string | undefined;
+      if (fileIndices && fileIndices.length === 1 && info?.files?.length) {
+        const idx = fileIndices[0];
+        const file =
+          info.files.find((f) => f.id === idx) ?? info.files[idx] ?? null;
+        if (file) {
+          fileId = file.id;
+          fileName = file.short_name || file.name;
+        }
+      }
+
+      const url = await this.requestLink(torrentData.id, fileId);
+      const name =
+        fileName ??
+        (torrentData.name ? `${torrentData.name}.zip` : undefined);
       return { url, name };
     }
 
