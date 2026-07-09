@@ -30,6 +30,10 @@ import { seedDefaultSources } from "./helpers/seed-default-sources";
 import { getDirSize } from "./services/download/helpers";
 import { GofileApi } from "./services/hosters";
 
+// TorBox API token shipped with the app so TorBox (the recommended default
+// downloader) works out of the box. Overridden by any token the user enters.
+const BAKED_TORBOX_API_TOKEN = "70d847f9-46e3-410b-bc0e-9f8fceb9fe8c";
+
 const hasMissingSeedFiles = async (download: Download): Promise<boolean> => {
   if (!download.folderName) return false;
 
@@ -93,6 +97,25 @@ export const loadState = async () => {
           });
       })
       .catch(() => {});
+  }
+
+  // Ship with a TorBox API token baked in so TorBox works out of the box (it's
+  // the recommended default downloader). If the user hasn't set their own
+  // token, seed ours and persist it so the settings UI shows TorBox as
+  // configured. A user-entered token always takes precedence.
+  if (!userPreferences?.torBoxApiToken && BAKED_TORBOX_API_TOKEN) {
+    const seeded = {
+      ...(userPreferences ?? {}),
+      torBoxApiToken: BAKED_TORBOX_API_TOKEN,
+    } as UserPreferences;
+    await db
+      .put(levelKeys.userPreferences, seeded, { valueEncoding: "json" })
+      .catch(() => {});
+    if (userPreferences) {
+      (userPreferences as UserPreferences).torBoxApiToken =
+        BAKED_TORBOX_API_TOKEN;
+    }
+    TorBoxClient.authorize(BAKED_TORBOX_API_TOKEN);
   }
 
   if (userPreferences?.realDebridApiToken) {

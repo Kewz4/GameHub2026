@@ -440,6 +440,11 @@ export function DownloadSettingsModal({
     (availableDownloaders: Downloader[]) => {
       if (availableDownloaders.length === 0) return null;
 
+      // TorBox is the recommended default — always prefer it when available.
+      if (availableDownloaders.includes(Downloader.TorBox)) {
+        return Downloader.TorBox;
+      }
+
       if (availableDownloaders.includes(Downloader.RealDebrid)) {
         return Downloader.RealDebrid;
       }
@@ -450,10 +455,6 @@ export function DownloadSettingsModal({
 
       if (availableDownloaders.includes(Downloader.AllDebrid)) {
         return Downloader.AllDebrid;
-      }
-
-      if (availableDownloaders.includes(Downloader.TorBox)) {
-        return Downloader.TorBox;
       }
 
       return availableDownloaders[0];
@@ -1316,7 +1317,7 @@ export function DownloadSettingsModal({
                   }
 
                   if (
-                    option.downloader === Downloader.RealDebrid &&
+                    option.downloader === Downloader.TorBox &&
                     option.canHandle
                   ) {
                     return (
