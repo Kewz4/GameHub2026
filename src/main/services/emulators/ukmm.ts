@@ -234,10 +234,21 @@ const resolveCemuGamePaths = async (
       }
     }
   }
-  const mlcContent = (high: string) =>
-    path.join(cemuDir, "mlc01", "usr", "title", high, low, "content");
-  if (!gameContentDir && existsSync(mlcContent(BASE))) {
-    gameContentDir = mlcContent(BASE);
+  // Cemu can keep its mlc01 in several places: next to the exe (portable), a
+  // custom <mlc_path> set in settings.xml, or the default user-data location
+  // (%APPDATA%/Cemu) for a non-portable install. Check them all so a title the
+  // user INSTALLED into Cemu (update/DLC) is found wherever Cemu actually put it.
+  const mlcRoots = resolveCemuMlcRoots(cemuDir);
+  const mlcContent = (high: string): string | null => {
+    for (const root of mlcRoots) {
+      const c = path.join(root, "usr", "title", high, low, "content");
+      if (existsSync(c)) return c;
+    }
+    return null;
+  };
+  const baseMlc = mlcContent(BASE);
+  if (!gameContentDir && baseMlc) {
+    gameContentDir = baseMlc;
     gameDir = path.dirname(gameContentDir);
   }
 
@@ -327,15 +338,15 @@ const resolveCemuGamePaths = async (
 
   // Strict patterns: only parenthesised/bracketed tags or explicit version tags,
   // so a mod folder that merely contains the word "updated" never matches.
-  const updateDir = existsSync(mlcContent(UPDATE))
-    ? mlcContent(UPDATE)
-    : findLooseContent(
-        UPDATE,
-        /[([]\s*(update|upd|patch|v?\s*208|v?\s*1[._]5[._]0)\s*[)\]]|\bv208\b/i
-      );
-  const aocContent = existsSync(mlcContent(DLC))
-    ? mlcContent(DLC)
-    : findLooseContent(DLC, /[([]\s*(dlc|aoc|add[\s-]?on)\s*[)\]]/i);
+  const updateDir =
+    mlcContent(UPDATE) ??
+    findLooseContent(
+      UPDATE,
+      /[([]\s*(update|upd|patch|v?\s*208|v?\s*1[._]5[._]0)\s*[)\]]|\bv208\b/i
+    );
+  const aocContent =
+    mlcContent(DLC) ??
+    findLooseContent(DLC, /[([]\s*(dlc|aoc|add[\s-]?on)\s*[)\]]/i);
   // UKMM's Unpacked dump expects aoc_dir to hold Pack/AocMainField.pack, which
   // on a Cemu dump lives under content/0010 — append it when present.
   const aocDir =
@@ -345,10 +356,49 @@ const resolveCemuGamePaths = async (
 
   logger.log(
     `[ukmm] BOTW dump for ${shop}:${objectId} (title ${BASE}${low}) — ` +
-      `base=${gameContentDir ?? "MISSING"} update=${updateDir ?? "MISSING"} dlc=${aocDir ?? "none"}`
+      `base=${gameContentDir ?? "MISSING"} update=${updateDir ?? "MISSING"} dlc=${aocDir ?? "none"} ` +
+      `| mlcRoots=[${mlcRoots.join(", ") || "none"}] searchRoots=[${searchRoots.join(", ")}]`
   );
 
   return { cemuDir, gameContentDir, updateDir, aocDir, titleLow, gameDir };
+};
+
+/**
+ * All the places Cemu might keep its `mlc01`, most-authoritative first:
+ *   1. a custom `<mlc_path>` in settings.xml,
+ *   2. `<cemuDir>/mlc01` (portable / install dir),
+ *   3. the non-portable default `%APPDATA%/Cemu/mlc01`.
+ * Returns existing roots so a title installed IN Cemu (update/DLC) is found
+ * wherever Cemu actually put it.
+ */
+const resolveCemuMlcRoots = (cemuDir: string): string[] => {
+  const roots: string[] = [];
+  // 1. custom mlc_path from settings.xml
+  try {
+    const settingsFile = path.join(cemuDir, "settings.xml");
+    if (existsSync(settingsFile)) {
+      const xml = readFileSync(settingsFile, "utf-8");
+      const m = xml.match(/<mlc_path>\s*([^<]+?)\s*<\/mlc_path>/i);
+      const custom = m?.[1]?.trim();
+      if (custom) roots.push(custom);
+    }
+  } catch {
+    /* ignore */
+  }
+  // 2. portable / install dir
+  roots.push(path.join(cemuDir, "mlc01"));
+  // 3. non-portable default
+  const appData = process.env.APPDATA;
+  if (appData) roots.push(path.join(appData, "Cemu", "mlc01"));
+
+  // De-dupe + keep only ones that exist.
+  return Array.from(new Set(roots)).filter((r) => {
+    try {
+      return existsSync(r);
+    } catch {
+      return false;
+    }
+  });
 };
 
 /** Read the 16-hex Wii U title id from a folder's meta/meta.xml, lowercased. */
