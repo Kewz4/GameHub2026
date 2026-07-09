@@ -412,9 +412,15 @@ const resolveCemuGamePaths = async (
   const updateDir = existsSync(mlcContent(UPDATE))
     ? mlcContent(UPDATE)
     : findLooseContent(UPDATE);
-  const aocDir = existsSync(mlcContent(DLC))
+  const aocContent = existsSync(mlcContent(DLC))
     ? mlcContent(DLC)
     : findLooseContent(DLC);
+  // UKMM's Unpacked dump expects aoc_dir to hold Pack/AocMainField.pack, which
+  // on a Cemu dump lives under content/0010 — append it when present.
+  const aocDir =
+    aocContent && existsSync(path.join(aocContent, "0010"))
+      ? path.join(aocContent, "0010")
+      : aocContent;
 
   logger.log(
     `[ukmm] BOTW dump for ${shop}:${objectId} (title ${BASE}${low}) — ` +
@@ -462,13 +468,16 @@ const writeUkmmSettings = (paths: UkmmPaths, cemu: CemuGamePaths): void => {
       ? `      update_dir: ${yamlPath(cemu.updateDir)}`
       : "      update_dir: null",
     cemu.aocDir ? `      aoc_dir: ${yamlPath(cemu.aocDir)}` : "      aoc_dir: null",
+    // WiiU dumps are big-endian; the ResourceReader requires this field.
+    "    endian: Big",
   ];
 
   const yaml = [
     "current_mode: WiiU",
     "system_7z: true",
     `storage_dir: ${yamlPath(storage)}`,
-    "check_updates: Never",
+    // enum is None|Stable|Beta — "Never" silently resets settings to default.
+    "check_updates: None",
     "show_changelog: false",
     "wiiu_config:",
     "  language: USen",
