@@ -448,7 +448,7 @@ export default function Library() {
         }
 
         case "title_desc": {
-          return b.title.localeCompare(a.title, undefined, {
+          return (b.title ?? "").localeCompare(a.title ?? "", undefined, {
             sensitivity: "base",
           });
         }
@@ -458,7 +458,7 @@ export default function Library() {
           break;
       }
 
-      return a.title.localeCompare(b.title, undefined, {
+      return (a.title ?? "").localeCompare(b.title ?? "", undefined, {
         sensitivity: "base",
       });
     });
