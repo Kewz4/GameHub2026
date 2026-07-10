@@ -465,7 +465,11 @@ export default function Library() {
   }, [library, sortBy]);
 
   const filteredLibrary = useMemo(() => {
-    let filtered = sortedLibrary;
+    // Companion download entries (::update / ::dlc) are download tracking, not
+    // games — never show them as library cards.
+    let filtered = sortedLibrary.filter(
+      (game) => !game.objectId.includes("::")
+    );
 
     if (selectedCollectionId) {
       if (selectedCollectionId === FAVORITES_COLLECTION_ID) {

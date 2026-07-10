@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type { KnownBinary } from "./known-binaries";
 import { resolveSniffTarget, sniffDiscImage } from "./sniff-disc-platform";
+import { romContentType } from "./parse-rom-filename";
 import type { EmulatorSystem } from "@types";
 
 const MAX_ENTRIES_PER_DIR = 5000;
@@ -62,10 +63,12 @@ const CEMU_INTERNAL_DIRS = new Set([
   "cafelibs",
 ]);
 
-/** A pure 8-hex folder name is a Wii U title-id segment (e.g. "101c9400"), a
- * Cemu internal path component — never a real game folder name. */
+/** A pure 8-hex folder name is a Wii U title-id segment (e.g. "101c9400"), and
+ * a 16-hex one is a FULL title id (CDecrypt/NUSPacker output like
+ * "0005000e10143600") — Cemu-internal path components, never real game folder
+ * names. Dropping 16-hex also stops meta-less update/DLC dumps from leaking. */
 const isTitleIdFolderName = (name: string): boolean =>
-  /^[0-9a-f]{8}$/i.test(name);
+  /^[0-9a-f]{8}$/i.test(name) || /^[0-9a-f]{16}$/i.test(name);
 
 const extOf = (name: string): string => {
   const dot = name.lastIndexOf(".");
@@ -214,16 +217,35 @@ const classifyForSystem = async (
         : candidate.fullPath;
       const ct = await wiiuContentType(titleDir);
       // Fallback for loose dumps with no meta.xml: the folder name itself flags
-      // it as an update/DLC (e.g. "…(DLC)…", "…(Update) (v208)…").
-      const titleName = path.basename(titleDir).toLowerCase();
-      const nameFlagsExtra =
-        /\((dlc|update|upd|aoc|v\d[\d._]*)\)/.test(titleName) ||
-        /\b(dlc|update)\b/.test(titleName);
-      if (ct !== "game" || nameFlagsExtra) return "skip";
+      // it as an update/DLC (shared classifier: "(Update)"/"(DLC)"/embedded
+      // 0005000E/0005000C title ids).
+      const titleName = path.basename(titleDir);
+      if (ct !== "game" || romContentType(titleName) !== "game") return "skip";
     }
     return "ok";
   }
   const ext = extOf(candidate.name);
+
+  // Single-FILE update/DLC leak guard for consoles that ship updates/DLC as
+  // ordinary rom-extension files ("...(Update).wua", "...(DLC) (v1.1).cia",
+  // update .pkg): never list them as standalone games.
+  if (
+    (system === "wiiu" || system === "n3ds" || system === "ps3") &&
+    romContentType(candidate.name) !== "game"
+  ) {
+    return "skip";
+  }
+
+  // 3DS extracted-title layouts (GodMode9/NAND dumps) produce hex-named
+  // .app/.cia files ("00000000.app", "0004000e....cia") — internal title
+  // pieces, not games.
+  if (
+    system === "n3ds" &&
+    (ext === ".app" || ext === ".cia") &&
+    /^[0-9a-f]{8,16}$/i.test(basenameNoExt(candidate.name))
+  ) {
+    return "skip";
+  }
 
   if (system === "ps3") {
     if (PS3_INTERNAL_FILES.has(candidate.name.toLowerCase())) return "skip";

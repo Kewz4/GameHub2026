@@ -117,6 +117,19 @@ export default function GameDetails() {
             signal?: AbortSignal
           ) => {
             const chosenUri = selectRepackUri(repack, downloader);
+            // Updates/DLC download under a suffixed companion id so they never
+            // clobber the base game's download record or disc binding; main
+            // routes them into placement (not ROM binding) after download.
+            const contentType = repack.contentType ?? "game";
+            const downloadObjectId =
+              contentType === "update"
+                ? `${objectId}::update`
+                : contentType === "dlc"
+                  ? `${objectId}::dlc::${repack.title
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]/g, "-")
+                      .slice(0, 40)}`
+                  : objectId!;
             // For TorBox, collect the repack's OTHER hoster mirrors so main can
             // race them and pick the fastest (magnets excluded — one torrent).
             const alternateUris =
@@ -129,8 +142,11 @@ export default function GameDetails() {
                   )
                 : undefined;
             const payload = {
-              objectId: objectId!,
-              title: gameTitle,
+              objectId: downloadObjectId,
+              title:
+                contentType !== "game"
+                  ? `${gameTitle} — ${repack.title}`
+                  : gameTitle,
               downloader,
               shop,
               downloadPath,

@@ -184,6 +184,10 @@ export const LibraryGameCard = memo(function LibraryGameCard({
           </div>
         </div>
 
+        {/* Group the badge + achievements so the overlay's space-between always
+            sees exactly two children — otherwise the badge gets centered in the
+            leftover space whenever the achievements bar is also rendered. */}
+        <div className="library-game-card__bottom-section">
         {lastPlayedLabel && (
           <div
             className="library-game-card__cloud-save"
@@ -233,6 +237,7 @@ export const LibraryGameCard = memo(function LibraryGameCard({
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {imageError || !activeImageSource ? (

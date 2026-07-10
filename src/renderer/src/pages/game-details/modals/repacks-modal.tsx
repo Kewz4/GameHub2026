@@ -483,6 +483,9 @@ export function RepacksModal({
           fileSize: updateRepack.fileSize,
           fileIndices: updateSelection.fileIndices,
           selectedFilesSize: updateSelection.selectedFilesSize,
+          // Route the update into the same "Emulator Games/<platform>" folder
+          // as the base game so the post-download hook can place it correctly.
+          emulatorSystem: updateRepack.emulatorSystem ?? null,
         }).catch(() => {});
       }
     }
@@ -514,6 +517,7 @@ export function RepacksModal({
           fileSize: dlcRepack.fileSize,
           fileIndices: dlcSelection.fileIndices,
           selectedFilesSize: dlcSelection.selectedFilesSize,
+          emulatorSystem: dlcRepack.emulatorSystem ?? null,
         }).catch(() => {});
       }
     }

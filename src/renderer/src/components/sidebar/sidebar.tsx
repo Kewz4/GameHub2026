@@ -61,7 +61,11 @@ const PROTOCOL_URI_RE =
 const isGamePlayable = (game: LibraryGame) =>
   game.isInstalledLocally === true ||
   (Boolean(game.executablePath) &&
-    !PROTOCOL_URI_RE.test(game.executablePath ?? ""));
+    !PROTOCOL_URI_RE.test(game.executablePath ?? "")) ||
+  // Emulated games: a bound ROM (disc) makes them launchable even though they
+  // have no executablePath.
+  Boolean(game.selectedDiscPath) ||
+  (game.discs?.length ?? 0) > 0;
 
 export function Sidebar() {
   const filterRef = useRef<HTMLInputElement>(null);
@@ -807,6 +811,8 @@ export function Sidebar() {
 
                 <ul className="sidebar__menu">
                   {filteredLibrary
+                    // Companion download entries (::update/::dlc) aren't games.
+                    .filter((game) => !game.objectId.includes("::"))
                     .filter((game) => !showPlayableOnly || isGamePlayable(game))
                     .map((game) => (
                       <SidebarGameItem

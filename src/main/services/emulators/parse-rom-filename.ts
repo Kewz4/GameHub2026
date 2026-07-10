@@ -56,6 +56,32 @@ const deriveRegion = (tags: string[]): string | null => {
 };
 
 /**
+ * Classify a ROM file/folder name as base game vs update vs DLC — the shared
+ * notion used by the scan (to keep updates/DLC out of the game list) and the
+ * download bind (to place them next to the base game instead).
+ *
+ * Signals:
+ *  - explicit tags: "(Update)"/"(Patch)"/"(Upd)" → update; "(DLC)"/"(AOC)"/
+ *    "(Add-on…)" → dlc. A bare version tag "(v1.01)"/"(Rev 1)" alone does NOT
+ *    classify — No-Intro cart revisions and Cemu merged .wua archives
+ *    ("Game (v208).wua") are legitimate base games; real update dumps always
+ *    carry an explicit tag too.
+ *  - embedded 16-hex title ids (GodMode9/NUS-style dumps with no tags):
+ *    Wii U 0005000E…/3DS 0004000E… → update; 0005000C…/0004008C… → dlc.
+ */
+export function romContentType(fileName: string): "game" | "update" | "dlc" {
+  const withoutExt = stripExtension(fileName);
+  for (const match of withoutExt.matchAll(TAG_REGEX)) {
+    const tag = match[0].slice(1, -1).trim().toLowerCase();
+    if (/^(update|patch|upd)\b/.test(tag)) return "update";
+    if (/^(dlc|aoc|add-?on( content)?)\b/.test(tag)) return "dlc";
+  }
+  if (/\b(0005000e|0004000e)[0-9a-f]{8}\b/i.test(withoutExt)) return "update";
+  if (/\b(0005000c|0004008c)[0-9a-f]{8}\b/i.test(withoutExt)) return "dlc";
+  return "game";
+}
+
+/**
  * Turn a No-Intro/Redump-style title into its natural display form by moving
  * the FIRST segment's trailing article back to the front (No-Intro only
  * shifts the leading article of a title, never subtitles):

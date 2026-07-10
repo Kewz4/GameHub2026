@@ -84,12 +84,16 @@ const startGameDownload = async (
 
     const updatedGame = await gamesSublevel.get(gameKey);
 
-    await Promise.all([
-      createGame(updatedGame!).catch(() => {}),
-      HydraApi.post(`/games/${shop}/${objectId}/download`, null, {
-        needsAuth: false,
-      }).catch(() => {}),
-    ]);
+    // Companion downloads (::update / ::dlc) are download-tracking entries, not
+    // real games — never sync them to the remote library.
+    if (!objectId.includes("::")) {
+      await Promise.all([
+        createGame(updatedGame!).catch(() => {}),
+        HydraApi.post(`/games/${shop}/${objectId}/download`, null, {
+          needsAuth: false,
+        }).catch(() => {}),
+      ]);
+    }
 
     return { ok: true };
   } catch (err: unknown) {
