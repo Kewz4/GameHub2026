@@ -156,6 +156,7 @@ export default function GameDetails() {
               fileSize: repack.fileSize,
               fileIndices,
               selectedFilesSize,
+              targetFileName: repack.fileName ?? null,
               alternateUris:
                 alternateUris && alternateUris.length > 0
                   ? alternateUris

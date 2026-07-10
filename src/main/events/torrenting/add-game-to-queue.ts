@@ -33,6 +33,7 @@ const addGameToQueue = async (
     fileSize,
     fileIndices,
     selectedFilesSize,
+    targetFileName,
     alternateUris,
     emulatorSystem,
   } = payload;
@@ -67,6 +68,7 @@ const addGameToQueue = async (
     automaticallyDeleteArchiveFiles,
     fileIndices,
     selectedFilesSize,
+    targetFileName,
     alternateUris,
     emulatorSystem: emulatorSystem ?? null,
   };

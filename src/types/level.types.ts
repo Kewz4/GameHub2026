@@ -130,6 +130,8 @@ export interface Download {
   automaticallyDeleteArchiveFiles: boolean;
   fileIndices?: number[];
   selectedFilesSize?: number | null;
+  /** Exact target file inside a collection torrent (for TorBox name matching). */
+  targetFileName?: string | null;
   /** Alternate hoster mirrors TorBox can also fetch (raced for the fastest). */
   alternateUris?: string[];
   /** Console system for minerva/emulator downloads — drives the post-download

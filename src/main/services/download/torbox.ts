@@ -271,7 +271,8 @@ export class TorBoxClient {
   static async getDownloadInfo(
     uri: string,
     fileIndices?: number[],
-    onProgress?: (p: TorBoxPrepareProgress) => void
+    onProgress?: (p: TorBoxPrepareProgress) => void,
+    targetFileName?: string | null
   ) {
     const isMagnet = uri.startsWith("magnet:");
 
@@ -283,39 +284,70 @@ export class TorBoxClient {
       if (files.length) {
         logger.log(
           `[torbox] torrent "${torrentData.name}" has ${files.length} file(s), ` +
-            `total=${info?.size} bytes; fileIndices=${JSON.stringify(fileIndices ?? null)}`
+            `total=${info?.size} bytes; fileIndices=${JSON.stringify(fileIndices ?? null)}; ` +
+            `target="${targetFileName ?? ""}"`
         );
       }
 
-      // Pick the ONE file to download directly (never the whole-torrent zip —
-      // TorBox's zip endpoint has proven unreliable, returning truncated data).
-      // Prefer a valid caller-selected index; otherwise the largest file, which
-      // for a game torrent is the game itself (skipping tiny .nfo/.txt sidecars).
+      // Select the ONE file to download. Priority:
+      //   1. Match the REQUESTED game's filename — the only reliable signal for a
+      //      shared collection torrent (Minerva). A fileIndex is computed against
+      //      the full collection and is meaningless once TorBox exposes a
+      //      different/partial file list, so it is NOT trusted for multi-file
+      //      torrents.
+      //   2. A caller index that is actually in range (single-file torrents).
+      //   3. The single file, when the torrent has exactly one.
+      // If none of these match, we REFUSE rather than grab the largest file —
+      // guessing "largest" is exactly what downloaded the wrong game (Wind Waker
+      // instead of Twilight Princess).
+      const norm = (s: string) =>
+        s
+          .toLowerCase()
+          .replace(/^.*[\\/]/, "") // basename only
+          .replace(/\.[a-z0-9]{1,5}$/, "") // drop extension
+          .replace(/[^a-z0-9]/g, "");
       let target: (typeof files)[number] | null = null;
-      if (fileIndices && fileIndices.length === 1) {
+
+      if (targetFileName) {
+        const want = norm(targetFileName);
+        target =
+          files.find((f) => norm(f.name) === want) ??
+          files.find(
+            (f) => norm(f.name).includes(want) || want.includes(norm(f.name))
+          ) ??
+          null;
+      }
+      if (!target && fileIndices?.length === 1) {
         const idx = fileIndices[0];
         target =
           files.find((f) => f.id === idx) ??
           (idx >= 0 && idx < files.length ? files[idx] : null);
       }
-      if (!target && files.length) {
-        target = files.reduce((a, b) => ((b.size ?? 0) > (a.size ?? 0) ? b : a));
+      if (!target && files.length === 1) {
+        target = files[0];
+      }
+
+      if (!target) {
+        const available = files
+          .map((f) => f.short_name || f.name)
+          .join(", ");
+        logger.error(
+          `[torbox] no file in torrent "${torrentData.name}" matches requested ` +
+            `"${targetFileName ?? "(unknown)"}". Available: [${available}]. ` +
+            "Refusing to download the wrong file."
+        );
+        throw new Error(
+          `TorBox has the wrong torrent cached for this game (contains: ${available || "nothing"}). ` +
+            "Try a different downloader, or report this game's source."
+        );
       }
 
       logger.log(
-        `[torbox] selected file id=${target?.id} name=${target?.name} size=${target?.size}`
+        `[torbox] selected file id=${target.id} name=${target.name} size=${target.size}`
       );
-
-      // Direct single-file link when we have a target; only zip as a last resort
-      // (e.g. no file metadata at all).
-      const url = await this.requestLink(torrentData.id, target?.id);
-      const name =
-        target?.short_name ||
-        target?.name ||
-        (torrentData.name ? `${torrentData.name}.zip` : undefined);
-      logger.log(
-        `[torbox] resolved download url (fileId=${target?.id ?? "zip"})`
-      );
+      const url = await this.requestLink(torrentData.id, target.id);
+      const name = target.short_name || target.name;
+      logger.log(`[torbox] resolved download url (fileId=${target.id})`);
       return { url, name };
     }
 
@@ -330,12 +362,13 @@ export class TorBoxClient {
   /** Remove a web download from TorBox (used to drop losing race candidates). */
   static async deleteWebDownload(id: number): Promise<void> {
     try {
-      const form = new FormData();
-      form.append("web_id", id.toString());
-      form.append("operation", "delete");
-      await this.instance.post("/webdl/controlwebdownload", form);
-    } catch (err) {
-      logger.warn(`[torbox] failed to delete web download ${id}`, err);
+      // TorBox's control endpoint expects a JSON body with `webdl_id`.
+      await this.instance.post("/webdl/controlwebdownload", {
+        webdl_id: id,
+        operation: "delete",
+      });
+    } catch {
+      // Best-effort cleanup — a leftover web download is harmless; don't spam.
     }
   }
 
@@ -363,8 +396,10 @@ export class TorBoxClient {
         await this.sleep(1500);
       }
       return { id: web.id, speed: best };
-    } catch (err) {
-      logger.warn(`[torbox] speed probe failed for ${uri}`, err);
+    } catch {
+      // TorBox can't fetch some niche hosts (500) — that mirror just loses the
+      // race. Quiet: a failed probe returns 0 and is skipped.
+      logger.log(`[torbox] mirror not usable, skipping: ${uri}`);
       return { id: null, speed: 0 };
     }
   }

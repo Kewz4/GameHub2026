@@ -163,6 +163,9 @@ export interface StartGameDownloadPayload {
   fileSize?: string | null;
   fileIndices?: number[];
   selectedFilesSize?: number | null;
+  /** Exact target file inside a collection torrent (Minerva). Used by TorBox to
+   *  select the RIGHT game file by name instead of guessing by index/size. */
+  targetFileName?: string | null;
   /** Other hoster mirrors for this repack that TorBox can also fetch. When
    *  downloading via TorBox we race these to pick the fastest one. */
   alternateUris?: string[];

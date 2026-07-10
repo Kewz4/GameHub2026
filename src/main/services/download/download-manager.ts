@@ -1221,7 +1221,8 @@ export class DownloadManager {
       download.fileIndices,
       (p) => {
         this.torboxPrepareStatus = p;
-      }
+      },
+      download.targetFileName
     );
     this.torboxPrepareStatus = null;
     if (!url) return null;
