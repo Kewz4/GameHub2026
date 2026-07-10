@@ -514,10 +514,9 @@ const onCloseGame = (game: Game) => {
   // Automatic cloud sync: back up + upload the save on game close (runs for
   // all shops including custom games). Failures are logged, not silent.
   if (game.automaticCloudSync) {
-    CloudSync.uploadSaveGame(
+    CloudSync.uploadSaveGameIfChanged(
       game.objectId,
       game.shop,
-      null,
       CloudSync.getBackupLabel(true)
     ).catch((err) => {
       logger.error(

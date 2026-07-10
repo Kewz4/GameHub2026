@@ -3,6 +3,7 @@ import { gamesSublevel, levelKeys } from "@main/level";
 import type { Game, EmulatorSystem, GameShop } from "@types";
 import { logger } from "../logger";
 import { setEmulatorGameRunning } from "../process-watcher";
+import { CloudSync } from "../cloud-sync";
 
 interface SessionOptions {
   game: Game;
@@ -38,6 +39,22 @@ export const startEmulatorSession = async (
         playTimeInMilliseconds: (stored.playTimeInMilliseconds ?? 0) + elapsed,
         lastTimePlayed: new Date(),
       });
+
+      // Automatic cloud sync: back up the emulator save on close (previously
+      // only scanned PC processes got this — emulator sessions never did).
+      // Skips instantly when the save folders haven't changed.
+      if (stored.automaticCloudSync) {
+        CloudSync.uploadSaveGameIfChanged(
+          stored.objectId,
+          stored.shop,
+          CloudSync.getBackupLabel(true)
+        ).catch((err) => {
+          logger.error(
+            `[cloud-sync] automatic emulator-save upload failed for ${key}`,
+            err
+          );
+        });
+      }
     } catch (err) {
       logger.error("Failed to persist emulator session playtime", err);
     }

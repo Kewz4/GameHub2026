@@ -21,7 +21,10 @@ import { UploadcareSync } from "./uploadcare-sync";
 import i18next, { t } from "i18next";
 import { SystemPath } from "./system-path";
 import { Wine } from "./wine";
-import { resolveEmulatorBackupFolders } from "./emulators/emulator-save-dirs";
+import {
+  resolveEmulatorBackupFolders,
+  fingerprintSaveFolders,
+} from "./emulators/emulator-save-dirs";
 import { invalidateCachedArtifacts } from "./cloud-artifacts-cache";
 
 export class CloudSync {
@@ -136,9 +139,12 @@ export class CloudSync {
 
     const tarLocation = path.join(backupsPath, `${crypto.randomUUID()}.tar`);
 
+    // Fast gzip (level 1): save data compresses well, so uploads shrink
+    // several-fold for near-zero CPU cost. Restore is unaffected — tar.x
+    // auto-detects gzip, and older plain-tar artifacts still extract fine.
     await tar.create(
       {
-        gzip: false,
+        gzip: { level: 1 },
         file: tarLocation,
         cwd: backupPath,
       },
@@ -171,6 +177,51 @@ export class CloudSync {
       );
     }
     return userId;
+  }
+
+  /**
+   * Automatic (close-triggered) upload with a change check: for emulated games
+   * whose save folders we can resolve, a cheap fingerprint (file count + bytes
+   * + newest mtime) is compared against the last uploaded one — when nothing
+   * changed, the entire backup pipeline (ludusavi scan → copy → tar → upload)
+   * is skipped, making the common "closed without new progress" case instant.
+   * PC games (no resolvable folder set pre-ludusavi) always upload, as before.
+   */
+  public static async uploadSaveGameIfChanged(
+    objectId: string,
+    shop: GameShop,
+    label?: string
+  ) {
+    const gameKey = levelKeys.game(shop, objectId);
+    const game = await gamesSublevel.get(gameKey).catch(() => null);
+
+    let fingerprint: string | null = null;
+    try {
+      const folders = await resolveEmulatorBackupFolders(shop, objectId);
+      if (folders.length > 0) {
+        fingerprint = fingerprintSaveFolders(folders);
+        if (fingerprint && fingerprint === game?.lastCloudSaveFingerprint) {
+          logger.info(
+            `[cloud-sync] skipping automatic backup for ${shop}:${objectId} — saves unchanged`
+          );
+          return;
+        }
+      }
+    } catch {
+      /* fingerprinting is best-effort — fall through to a normal upload */
+    }
+
+    await this.uploadSaveGame(objectId, shop, null, label);
+
+    if (fingerprint) {
+      const saved = await gamesSublevel.get(gameKey).catch(() => null);
+      if (saved) {
+        await gamesSublevel.put(gameKey, {
+          ...saved,
+          lastCloudSaveFingerprint: fingerprint,
+        });
+      }
+    }
   }
 
   public static async uploadSaveGame(

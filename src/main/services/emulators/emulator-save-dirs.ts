@@ -8,6 +8,8 @@ import { getEmulatorConfig } from "./emulators-repository";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { cemuDataDir } from "./emulator-portable";
 import { resolveWiiuTitleId } from "./cemu-graphic-packs";
+import { getPs2MemcardDirs } from "./ps2-memcard-dirs";
+import { getPs1MemcardDirs } from "./ps1-memcard-dirs";
 
 /**
  * Resolves the on-disk save-data folders for the folder-based standalone
@@ -36,23 +38,42 @@ const FOLDER_SAVE_SYSTEMS: ReadonlySet<EmulatorSystem> = new Set([
 export const isFolderSaveSystem = (system: EmulatorSystem): boolean =>
   FOLDER_SAVE_SYSTEMS.has(system);
 
-/** Absolute save-root folders for a system given its install directory. */
+/**
+ * Absolute save-root folders, resolved by the EMULATOR BINARY (not the system),
+ * so every console mapped to a known emulator is covered — including the
+ * RALibretro retro systems (gb/gbc/gba/nds/dsi/n64/psp → flat `Saves` dir),
+ * RPCS3 savedata, and the PS1/PS2 memory-card dirs.
+ */
 export const getEmulatorSaveRoots = (
   system: EmulatorSystem,
-  installDir: string
+  installDir: string,
+  binary?: string,
+  executablePath?: string | null
 ): string[] => {
-  switch (system) {
-    case "n3ds":
+  switch (binary ?? KNOWN_BINARIES[system]?.binary) {
+    case "azahar":
       return [
         path.join(installDir, "user", "sdmc"),
         path.join(installDir, "user", "nand"),
       ];
-    case "wiiu":
+    case "cemu":
       return [path.join(cemuDataDir(installDir), "mlc01", "usr", "save")];
-    case "wii":
-      return [path.join(installDir, "User", "Wii")];
-    case "gc":
-      return [path.join(installDir, "User", "GC")];
+    case "dolphin":
+      return system === "gc"
+        ? [path.join(installDir, "User", "GC")]
+        : [path.join(installDir, "User", "Wii")];
+    case "rpcs3":
+      // Per-game savedata folders live under this root; trophies excluded.
+      return [
+        path.join(installDir, "dev_hdd0", "home", "00000001", "savedata"),
+      ];
+    case "pcsx2":
+      return getPs2MemcardDirs(executablePath ?? null);
+    case "duckstation":
+      return getPs1MemcardDirs();
+    case "ralibretro":
+      // Flat per-ROM save files (.srm etc.) — small, backed up as one tree.
+      return [path.join(installDir, "Saves")];
     default:
       return [];
   }
@@ -89,7 +110,7 @@ export const resolveEmulatorSaveLocation = async (
   objectId: string
 ): Promise<EmulatorSaveLocation | null> => {
   const system = await systemForGame(shop, objectId);
-  if (!system || !isFolderSaveSystem(system)) return null;
+  if (!system) return null;
 
   const config = await getEmulatorConfig(system).catch(() => null);
   if (!config?.executablePath || !fs.existsSync(config.executablePath)) {
@@ -97,14 +118,17 @@ export const resolveEmulatorSaveLocation = async (
   }
 
   const installDir = path.dirname(config.executablePath);
-  const folders = getEmulatorSaveRoots(system, installDir).filter((dir) =>
-    fs.existsSync(dir)
-  );
+  const folders = getEmulatorSaveRoots(
+    system,
+    installDir,
+    config.binary,
+    config.executablePath
+  ).filter((dir) => fs.existsSync(dir));
   if (folders.length === 0) return null;
 
   return {
     system,
-    binary: KNOWN_BINARIES[system].binary,
+    binary: config.binary ?? KNOWN_BINARIES[system].binary,
     folders,
   };
 };
@@ -136,6 +160,45 @@ export const resolveEmulatorGameSaveFolder = async (
   }
 
   return loc.folders[0] ?? null;
+};
+
+/**
+ * Cheap fingerprint of a set of save folders: file count + total bytes + newest
+ * mtime, from a bounded walk. Used to SKIP the whole backup pipeline (ludusavi
+ * scan → copy → tar → upload) when nothing changed since the last upload —
+ * the common case when a session ends without new progress.
+ */
+export const fingerprintSaveFolders = (folders: string[]): string => {
+  let files = 0;
+  let bytes = 0;
+  let newest = 0;
+  let visited = 0;
+  const stack = [...folders];
+  while (stack.length && visited < 20_000) {
+    const dir = stack.pop()!;
+    visited++;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(full);
+      else {
+        try {
+          const st = fs.statSync(full);
+          files += 1;
+          bytes += st.size;
+          if (st.mtimeMs > newest) newest = st.mtimeMs;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  return `${files}:${bytes}:${Math.floor(newest)}`;
 };
 
 /**

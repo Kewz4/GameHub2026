@@ -4,6 +4,7 @@ import { registerEvent } from "../register-event";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { launchClassicsGame, platformToSystem } from "@main/helpers";
 import { logger, NativeAddon } from "@main/services";
+import { restoreLatestCloudSave } from "./open-game";
 import type { GameShop } from "@types";
 
 const codedLaunchError = (
@@ -110,6 +111,11 @@ const openClassicsGame = async (
       }
     }
   }
+
+  // Automatic cloud sync: restore the newest cloud save BEFORE the emulator
+  // spawns (awaited — the game can never start ahead of its restored save).
+  // Same helper + skip-when-local-is-newer logic as the PC launch path.
+  await restoreLatestCloudSave(shop, objectId);
 
   try {
     await launchClassicsGame({

@@ -79,6 +79,9 @@ export interface Game {
   unlockedAchievementCount?: number;
   pinnedDate?: Date | null;
   automaticCloudSync?: boolean;
+  /** Fingerprint of the save folders at last successful cloud upload — lets
+   * automatic backups skip when nothing changed (emulated games). */
+  lastCloudSaveFingerprint?: string | null;
   /** How the game entered the library: synced from a platform account,
    * added from the Hydra API catalog, or added manually as a custom game. */
   libraryOrigin?: "sync" | "catalog" | "custom";

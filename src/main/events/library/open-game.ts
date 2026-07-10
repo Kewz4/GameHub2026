@@ -26,7 +26,7 @@ const EXTERNAL_URL_SCHEMES = [
  * start ahead of its restored save. Skips (rather than clobbers) when the
  * local machine played more recently than the newest cloud backup.
  */
-const restoreLatestCloudSave = async (
+export const restoreLatestCloudSave = async (
   shop: GameShop,
   objectId: string
 ): Promise<void> => {
