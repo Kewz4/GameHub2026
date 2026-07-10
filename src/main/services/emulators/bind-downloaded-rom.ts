@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs";
+import { spawn } from "node:child_process";
 import { gamesSublevel, levelKeys } from "@main/level";
 import type { ClassicsDisc, Download, EmulatorSystem } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
@@ -118,6 +119,163 @@ function findContentTitleDir(root: string): string | null {
   return null;
 }
 
+/** Spawn a process and wait for exit, with a hard timeout (then kill). */
+const runWithTimeout = (
+  exe: string,
+  args: string[],
+  timeoutMs: number
+): Promise<{ code: number | null; timedOut: boolean }> =>
+  new Promise((resolve) => {
+    const child = spawn(exe, args, {
+      cwd: path.dirname(exe),
+      windowsHide: true,
+      stdio: "ignore",
+    });
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+    }, timeoutMs);
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve({ code: null, timedOut });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ code, timedOut });
+    });
+  });
+
+/** Newest file mtime under `root` (bounded walk), or 0. */
+const newestMtimeUnder = (root: string): number => {
+  let newest = 0;
+  let visited = 0;
+  const stack = [root];
+  while (stack.length && visited < 5000) {
+    const dir = stack.pop()!;
+    visited++;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(full);
+      else {
+        try {
+          const m = fs.statSync(full).mtimeMs;
+          if (m > newest) newest = m;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  return newest;
+};
+
+/**
+ * Install a 3DS update/DLC .cia into Azahar via its CLI (`azahar --install
+ * <cia>` — verified in azahar's citra_qt.cpp: installs synchronously, then
+ * exit(0)/exit(2+err)). On Windows the result is shown as a message box BEFORE
+ * exit, so we also treat "still running well after the install should be done"
+ * as completion, kill the process, and verify by checking that Azahar's sdmc
+ * tree gained newer files than our start time.
+ */
+async function installCiaIntoAzahar(ciaPath: string): Promise<void> {
+  const config = await getEmulatorConfig("n3ds").catch(() => null);
+  if (config?.binary !== "azahar" || !config.executablePath) {
+    logger.warn(
+      "[bindDownloadedRom] Azahar not configured — .cia left next to the game for manual install"
+    );
+    return;
+  }
+  const exe = config.executablePath;
+  const startedAt = Date.now();
+  // Generous, size-based budget: disk-bound installs run far faster than this.
+  let sizeMb = 200;
+  try {
+    sizeMb = Math.max(1, fs.statSync(ciaPath).size / (1024 * 1024));
+  } catch {
+    /* keep default */
+  }
+  const timeoutMs = Math.min(10 * 60_000, 90_000 + sizeMb * 150);
+
+  logger.log(`[bindDownloadedRom] Installing CIA via Azahar: ${ciaPath}`);
+  const res = await runWithTimeout(exe, ["--install", ciaPath], timeoutMs);
+
+  if (!res.timedOut && res.code === 0) {
+    logger.log("[bindDownloadedRom] Azahar installed the CIA successfully");
+    return;
+  }
+  if (!res.timedOut && res.code != null && res.code !== 0) {
+    // Exit codes are 2 + InstallStatus (e.g. encrypted CIA). Log honestly.
+    logger.warn(
+      `[bindDownloadedRom] Azahar CIA install failed (exit ${res.code}) — the ` +
+        ".cia was left next to the game (if it's encrypted, Azahar can't install it)"
+    );
+    return;
+  }
+  // Timed out — on Windows this usually means the install FINISHED and Azahar
+  // is showing its result message box (which blocks exit). Verify via sdmc.
+  const userDirs = [
+    path.join(path.dirname(exe), "user", "sdmc"),
+    process.env.APPDATA
+      ? path.join(process.env.APPDATA, "Azahar", "sdmc")
+      : null,
+  ].filter((d): d is string => Boolean(d && fs.existsSync(d)));
+  const installedSomething = userDirs.some(
+    (d) => newestMtimeUnder(d) >= startedAt
+  );
+  if (installedSomething) {
+    logger.log(
+      "[bindDownloadedRom] Azahar CIA install verified via sdmc (process was killed after completion)"
+    );
+  } else {
+    logger.warn(
+      "[bindDownloadedRom] Azahar CIA install could not be verified — the .cia was left next to the game"
+    );
+  }
+}
+
+/**
+ * Install a PS3 update/DLC .pkg into RPCS3 headlessly (`rpcs3 --headless
+ * --installpkg <pkg>` — verified in rpcs3.cpp/main_window.cpp: the headless
+ * path builds the package list directly, shows no dialogs, installs, and
+ * exits). Older RPCS3 builds without headless install exit non-zero — the .pkg
+ * is then left next to the game for manual install.
+ */
+async function installPkgIntoRpcs3(pkgPath: string): Promise<void> {
+  const config = await getEmulatorConfig("ps3").catch(() => null);
+  if (config?.binary !== "rpcs3" || !config.executablePath) {
+    logger.warn(
+      "[bindDownloadedRom] RPCS3 not configured — .pkg left next to the game for manual install"
+    );
+    return;
+  }
+  logger.log(`[bindDownloadedRom] Installing PKG via RPCS3: ${pkgPath}`);
+  const res = await runWithTimeout(
+    config.executablePath,
+    ["--headless", "--installpkg", pkgPath],
+    10 * 60_000
+  );
+  if (!res.timedOut && res.code === 0) {
+    logger.log("[bindDownloadedRom] RPCS3 installed the PKG successfully");
+  } else {
+    logger.warn(
+      `[bindDownloadedRom] RPCS3 PKG install didn't complete cleanly ` +
+        `(exit ${res.code}, timedOut=${res.timedOut}) — the .pkg was left ` +
+        "next to the game; it can be installed from RPCS3's File menu"
+    );
+  }
+}
+
 /**
  * Install a Wii U update/DLC title folder into the configured Cemu's mlc01 —
  * the location Cemu actually applies at launch (mirrors Cemu's own "Install
@@ -226,9 +384,12 @@ async function placeCompanionContent(
       );
     }
   } else {
-    // 2) File-format content (e.g. 3DS .cia): flatten to the platform root.
-    const binary = KNOWN_BINARIES[download.emulatorSystem as EmulatorSystem];
+    // 2) File-format content (3DS .cia, PS3 .pkg): flatten to the platform
+    //    root, then auto-install into the emulator via its CLI.
+    const system = download.emulatorSystem as EmulatorSystem;
+    const binary = KNOWN_BINARIES[system];
     const exts = new Set(binary?.romExtensions ?? []);
+    const movedFiles: string[] = [];
     const moveFiles = (dir: string, depth: number): void => {
       if (depth > 4) return;
       let entries: fs.Dirent[];
@@ -241,11 +402,24 @@ async function placeCompanionContent(
         const full = path.join(dir, e.name);
         if (e.isDirectory()) moveFiles(full, depth + 1);
         else if (exts.has(path.extname(e.name).toLowerCase())) {
-          flattenIntoRoot(full, platformRoot);
+          movedFiles.push(flattenIntoRoot(full, platformRoot));
         }
       }
     };
     moveFiles(scanRoot, 0);
+
+    for (const file of movedFiles) {
+      const ext = path.extname(file).toLowerCase();
+      if (system === "n3ds" && ext === ".cia") {
+        await installCiaIntoAzahar(file).catch((err) =>
+          logger.warn("[bindDownloadedRom] Azahar CIA install failed", err)
+        );
+      } else if (system === "ps3" && ext === ".pkg") {
+        await installPkgIntoRpcs3(file).catch((err) =>
+          logger.warn("[bindDownloadedRom] RPCS3 PKG install failed", err)
+        );
+      }
+    }
   }
 
   cleanupDownloadScaffolding(scanRoot, platformRoot);
