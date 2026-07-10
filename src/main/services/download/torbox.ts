@@ -336,9 +336,14 @@ export class TorBoxClient {
             `"${targetFileName ?? "(unknown)"}". Available: [${available}]. ` +
             "Refusing to download the wrong file."
         );
-        throw new Error(
-          `TorBox has the wrong torrent cached for this game (contains: ${available || "nothing"}). ` +
-            "Try a different downloader, or report this game's source."
+        // TorBox's cached copy of this hash only holds OTHER files (a partial
+        // fetched with different file selection). Callers auto-fall back to the
+        // native torrent client on this code.
+        throw Object.assign(
+          new Error(
+            `TorBox has the wrong torrent cached for this game (contains: ${available || "nothing"}).`
+          ),
+          { code: "TORBOX_WRONG_TORRENT" }
         );
       }
 

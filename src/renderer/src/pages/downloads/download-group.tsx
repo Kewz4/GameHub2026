@@ -303,6 +303,14 @@ function HeroDownloadView({
   }, [navigate, game]);
 
   const etaText = calculateETA();
+  // "Preparing" = the pre-download phase (TorBox caching the content on its
+  // side / torrent metadata). The local download hasn't started yet, so byte
+  // counters and network speeds would be misleading — show a dedicated
+  // "Preparing download" state (with an ETA when TorBox reports one) instead.
+  const isPreparing =
+    isGameDownloading &&
+    !isGameExtracting &&
+    Boolean(lastPacket?.isDownloadingMetadata);
   const hasEta =
     isGameDownloading &&
     !isGameExtracting &&
@@ -314,6 +322,7 @@ function HeroDownloadView({
     isGameDownloading &&
     !isGameExtracting &&
     !lastPacket?.isCheckingFiles &&
+    !isPreparing &&
     !hasEta;
   const shouldShowEta = hasEta || shouldShowEtaPlaceholder;
 
@@ -364,20 +373,27 @@ function HeroDownloadView({
                     {t("checking_files")}
                   </span>
                 )}
-                {!isGameExtracting && !lastPacket?.isCheckingFiles && (
-                  <span className="download-group__progress-size">
-                    <DownloadIcon size={14} />
-                    {isGameDownloading && lastPacket
-                      ? `${formatBytes(lastPacket.download.bytesDownloaded)} / ${finalDownloadSize}`
-                      : `${formatBytes(game.download?.bytesDownloaded ?? 0)} / ${finalDownloadSize}`}
+                {isPreparing && (
+                  <span className="download-group__progress-status">
+                    {t("preparing_download")}
                   </span>
                 )}
+                {!isGameExtracting &&
+                  !lastPacket?.isCheckingFiles &&
+                  !isPreparing && (
+                    <span className="download-group__progress-size">
+                      <DownloadIcon size={14} />
+                      {isGameDownloading && lastPacket
+                        ? `${formatBytes(lastPacket.download.bytesDownloaded)} / ${finalDownloadSize}`
+                        : `${formatBytes(game.download?.bytesDownloaded ?? 0)} / ${finalDownloadSize}`}
+                    </span>
+                  )}
                 <span></span>
               </div>
               <div className="download-group__progress-info-row">
                 {!lastPacket?.isCheckingFiles && !isGameExtracting && (
                   <span className="download-group__progress-time">
-                    {shouldShowEta && (
+                    {(shouldShowEta || (isPreparing && hasEta)) && (
                       <>
                         <ClockIcon size={14} />
                         {hasEta ? etaText : tGameDetails("calculating_eta")}
@@ -443,7 +459,13 @@ function HeroDownloadView({
                   {t("network")}:
                 </span>
                 <span className="download-group__stat-value">
-                  {isGameDownloading ? formatSpeed(downloadSpeed) : "0 B/s"}
+                  {/* During "preparing" the only speed is TorBox's server-side
+                      fetch — hiding it avoids reading as YOUR download speed. */}
+                  {isPreparing
+                    ? "—"
+                    : isGameDownloading
+                      ? formatSpeed(downloadSpeed)
+                      : "0 B/s"}
                 </span>
               </div>
             </div>
@@ -455,7 +477,11 @@ function HeroDownloadView({
               <div className="download-group__stat-content">
                 <span className="download-group__stat-label">{t("peak")}:</span>
                 <span className="download-group__stat-value">
-                  {peakSpeed > 0 ? formatSpeed(peakSpeed) : "0 B/s"}
+                  {isPreparing
+                    ? "—"
+                    : peakSpeed > 0
+                      ? formatSpeed(peakSpeed)
+                      : "0 B/s"}
                 </span>
               </div>
             </div>

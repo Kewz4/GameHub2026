@@ -306,11 +306,29 @@ export class DownloadManager {
         if (!download) return null;
 
         const prep = this.torboxPrepareStatus;
+        // ETA for the preparing (TorBox caching) phase: prefer TorBox's own eta
+        // (seconds → ms for the UI); otherwise derive it from the file size and
+        // TorBox's reported fetch speed.
+        let timeRemaining = -1;
+        if (prep?.eta != null && prep.eta > 0) {
+          timeRemaining = prep.eta * 1000;
+        } else if (
+          prep &&
+          prep.downloadSpeed > 0 &&
+          (download.fileSize ?? 0) > 0
+        ) {
+          const remainingBytes =
+            (download.fileSize as number) * (1 - (prep.progress ?? 0));
+          timeRemaining = Math.max(
+            0,
+            Math.round((remainingBytes / prep.downloadSpeed) * 1000)
+          );
+        }
         return {
           numPeers: 0,
           numSeeds: 0,
           downloadSpeed: prep?.downloadSpeed ?? 0,
-          timeRemaining: prep?.eta != null && prep.eta > 0 ? prep.eta : -1,
+          timeRemaining,
           isDownloadingMetadata: true, // Use this to indicate "preparing"
           isCheckingFiles: false,
           progress: prep?.progress ?? 0,
@@ -1475,6 +1493,11 @@ export class DownloadManager {
   static async validateDownloadUrl(download: Download): Promise<void> {
     const isHttp = this.isHttpDownloader(download.downloader);
 
+    // TorBox resolution is heavyweight (adds the torrent + waits for TorBox to
+    // cache it) and has its own start-time error handling with an automatic
+    // torrent-client fallback — don't run it just to enqueue.
+    if (download.downloader === Downloader.TorBox) return;
+
     if (isHttp) {
       const options = await this.getJsDownloadOptions(download);
       if (!options) {
@@ -1562,11 +1585,42 @@ export class DownloadManager {
                 this.allDebridBatch = null;
               });
             } catch (err) {
-              logger.error("[DownloadManager] TorBox prepare error:", err);
               this.isPreparingDownload = false;
               this.usingJsDownloader = false;
               this.downloadingGameId = null;
               this.allDebridBatch = null;
+
+              // TorBox's cached copy of this magnet is the WRONG/partial
+              // torrent (it happens with shared collection magnets fetched
+              // with a different file selection). The native torrent client
+              // selects files against the real torrent, so fall back to it
+              // automatically — the user just sees the download continue.
+              if (
+                (err as { code?: string })?.code === "TORBOX_WRONG_TORRENT" &&
+                download.uri.startsWith("magnet:")
+              ) {
+                logger.warn(
+                  "[DownloadManager] TorBox has the wrong torrent cached — " +
+                    "falling back to the native torrent client"
+                );
+                const fallback: Download = {
+                  ...download,
+                  downloader: Downloader.Torrent,
+                };
+                await downloadsSublevel
+                  .put(levelKeys.game(download.shop, download.objectId), fallback)
+                  .catch(() => {});
+                await this.startDownload(fallback).catch((fallbackErr) => {
+                  logger.error(
+                    "[DownloadManager] torrent fallback failed:",
+                    fallbackErr
+                  );
+                });
+                WindowManager.sendDownloadsUpdated?.();
+                return;
+              }
+
+              logger.error("[DownloadManager] TorBox prepare error:", err);
               WindowManager.sendDownloadsUpdated?.();
             }
           })();
