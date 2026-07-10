@@ -4,6 +4,8 @@ import { gamesSublevel, levelKeys } from "@main/level";
 import type { ClassicsDisc, Download, EmulatorSystem } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { scanRomFolder } from "./scan-rom-folder";
+import { getEmulatorConfig } from "./emulators-repository";
+import { cemuDataDir } from "./emulator-portable";
 import { logger } from "../logger";
 
 /** Display platform label per console (mirrors the launchbox importer). */
@@ -117,6 +119,64 @@ function findContentTitleDir(root: string): string | null {
 }
 
 /**
+ * Install a Wii U update/DLC title folder into the configured Cemu's mlc01 —
+ * the location Cemu actually applies at launch (mirrors Cemu's own "Install
+ * game update or DLC", which is a title-id copy). The title id is read from
+ * the folder's meta/meta.xml; e.g. update 0005000E101C9400 lands at
+ * `mlc01/usr/title/0005000e/101c9400/{content,code,meta}`.
+ */
+async function installWiiuTitleIntoCemu(
+  titleDir: string,
+  kind: "update" | "dlc"
+): Promise<void> {
+  const metaPath = path.join(titleDir, "meta", "meta.xml");
+  let titleId: string | null = null;
+  try {
+    const xml = fs.readFileSync(metaPath, "utf-8");
+    const m = xml.match(/<title_id[^>]*>\s*([0-9a-fA-F]{16})\s*<\/title_id>/);
+    titleId = m ? m[1].toLowerCase() : null;
+  } catch {
+    /* no meta.xml */
+  }
+  if (!titleId) {
+    logger.warn(
+      `[bindDownloadedRom] ${kind} has no meta.xml title id — left as loose folder (${titleDir})`
+    );
+    return;
+  }
+
+  const config = await getEmulatorConfig("wiiu").catch(() => null);
+  if (config?.binary !== "cemu" || !config.executablePath) {
+    logger.warn(
+      `[bindDownloadedRom] Cemu not configured — ${kind} left as loose folder`
+    );
+    return;
+  }
+  const mlcTitleDir = path.join(
+    cemuDataDir(path.dirname(config.executablePath)),
+    "mlc01",
+    "usr",
+    "title",
+    titleId.slice(0, 8),
+    titleId.slice(8)
+  );
+
+  fs.mkdirSync(mlcTitleDir, { recursive: true });
+  for (const sub of ["content", "code", "meta"]) {
+    const src = path.join(titleDir, sub);
+    if (fs.existsSync(src)) {
+      fs.cpSync(src, path.join(mlcTitleDir, sub), {
+        recursive: true,
+        force: true,
+      });
+    }
+  }
+  logger.log(
+    `[bindDownloadedRom] Installed ${kind} (title ${titleId}) into Cemu → ${mlcTitleDir}`
+  );
+}
+
+/**
  * Place a completed UPDATE/DLC download next to its base game instead of
  * binding it as a launchable ROM. The extracted title folder is moved to
  * `<platformRoot>/<Base Title> (Update|DLC) [vTag]` — exactly the loose-sibling
@@ -155,6 +215,15 @@ async function placeCompanionContent(
     } catch (err) {
       logger.warn(`[bindDownloadedRom] Couldn't place ${kind} folder`, err);
       dest = titleDir; // leave in place rather than lose it
+    }
+    // AUTO-INSTALL into Cemu: gameplay only applies updates/DLC that live in
+    // Cemu's mlc01 (the loose sibling folder alone only serves the mod
+    // pipeline). Mirror what Cemu's own "Install game update/DLC" does — copy
+    // the title into mlc01/usr/title/<high>/<low>/.
+    if (download.emulatorSystem === "wiiu") {
+      await installWiiuTitleIntoCemu(dest, kind).catch((err) =>
+        logger.warn(`[bindDownloadedRom] Cemu mlc01 install failed`, err)
+      );
     }
   } else {
     // 2) File-format content (e.g. 3DS .cia): flatten to the platform root.
