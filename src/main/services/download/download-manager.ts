@@ -1,6 +1,9 @@
 import { Downloader, DownloadError, FILE_EXTENSIONS_TO_EXTRACT } from "@shared";
 import { WindowManager } from "../window-manager";
-import { publishDownloadCompleteNotification } from "../notifications";
+import {
+  publishDownloadCompleteNotification,
+  publishNotificationDownloadFailed,
+} from "../notifications";
 import type { Download, DownloadProgress, Game, UserPreferences } from "@types";
 import {
   GofileApi,
@@ -1590,32 +1593,31 @@ export class DownloadManager {
               this.downloadingGameId = null;
               this.allDebridBatch = null;
 
-              // TorBox's cached copy of this magnet is the WRONG/partial
-              // torrent (it happens with shared collection magnets fetched
-              // with a different file selection). The native torrent client
-              // selects files against the real torrent, so fall back to it
-              // automatically — the user just sees the download continue.
+              // TorBox couldn't serve the requested file (the shared collection
+              // torrent's cache only held OTHER games, or TorBox ran out of time
+              // fetching this one). The app is TorBox-only by design — there is
+              // NO torrent-client fallback. Stop the download and tell the user
+              // plainly, with a reason they can act on (usually: retry, which
+              // resumes the same TorBox job where it left off).
               if (
-                (err as { code?: string })?.code === "TORBOX_WRONG_TORRENT" &&
-                download.uri.startsWith("magnet:")
+                (err as { code?: string })?.code === "TORBOX_WRONG_TORRENT"
               ) {
-                logger.warn(
-                  "[DownloadManager] TorBox has the wrong torrent cached — " +
-                    "falling back to the native torrent client"
+                const reason =
+                  (err as { message?: string })?.message ??
+                  "TorBox couldn't serve this game.";
+                logger.error("[DownloadManager] TorBox could not serve download:", reason);
+                const gameKey = levelKeys.game(
+                  download.shop,
+                  download.objectId
                 );
-                const fallback: Download = {
-                  ...download,
-                  downloader: Downloader.Torrent,
-                };
-                await downloadsSublevel
-                  .put(levelKeys.game(download.shop, download.objectId), fallback)
-                  .catch(() => {});
-                await this.startDownload(fallback).catch((fallbackErr) => {
-                  logger.error(
-                    "[DownloadManager] torrent fallback failed:",
-                    fallbackErr
-                  );
-                });
+                await this.cancelDownload(gameKey).catch(() => {});
+                const failedGame = await gamesSublevel
+                  .get(gameKey)
+                  .catch(() => null);
+                await publishNotificationDownloadFailed(
+                  failedGame?.title ?? "Download",
+                  reason
+                ).catch(() => {});
                 WindowManager.sendDownloadsUpdated?.();
                 return;
               }

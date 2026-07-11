@@ -3,6 +3,7 @@ import parseTorrent from "parse-torrent";
 import type {
   TorBoxUserRequest,
   TorBoxTorrentInfoRequest,
+  TorBoxTorrentMetaInfoRequest,
   TorBoxAddTorrentRequest,
   TorBoxRequestLinkRequest,
 } from "@types";
@@ -34,6 +35,10 @@ export class TorBoxClient {
   // How long we'll wait for TorBox to finish caching non-cached content before
   // giving up (the download can be retried, which resumes the same TorBox job).
   private static readonly READY_TIMEOUT_MS = 5 * 60 * 1000;
+  // Waiting for TorBox to pull one specific game out of a shared collection
+  // torrent (from peers) can take longer than the generic cache wait; the user
+  // watches a live "preparing" bar throughout, so allow a wider window.
+  private static readonly TARGET_FILE_TIMEOUT_MS = 20 * 60 * 1000;
   private static readonly POLL_INTERVAL_MS = 4000;
 
   static authorize(apiToken: string) {
@@ -117,6 +122,48 @@ export class TorBoxClient {
     return response.data.data;
   }
 
+  /**
+   * Read the torrent's file list from the BitTorrent metadata itself (NOT from
+   * TorBox's cache). This lists every file in a shared collection torrent even
+   * when TorBox has only cached some of them, so we can confirm the requested
+   * game is really in there and wait for TorBox to fetch it instead of wrongly
+   * refusing. Best-effort: returns null if the metadata can't be read in time.
+   */
+  static async getTorrentMetadata(magnetUri: string) {
+    try {
+      const searchParams = new URLSearchParams({
+        magnet: magnetUri,
+        timeout: "20",
+      });
+      const response = await this.instance.get<TorBoxTorrentMetaInfoRequest>(
+        "/torrents/torrentinfo?" + searchParams.toString()
+      );
+      if (!response.data?.success) return null;
+      return response.data.data ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Nudge a torrent that TorBox has parked. `reannounce` finds fresh peers for a
+   * stalled fetch; `resume` un-pauses one. Used to push TorBox into actually
+   * downloading the requested file of a partially-cached collection torrent.
+   */
+  private static async controlTorrent(
+    id: number,
+    operation: "reannounce" | "resume"
+  ): Promise<void> {
+    try {
+      await this.instance.post("/torrents/controltorrent", {
+        torrent_id: id,
+        operation,
+      });
+    } catch {
+      // Best-effort nudge — failure just means we wait for the next poll.
+    }
+  }
+
   private static async getTorrentIdAndName(magnetUri: string) {
     const userTorrents = await this.getAllTorrentsFromUser();
 
@@ -138,28 +185,46 @@ export class TorBoxClient {
    */
   private static async waitForTorrentReady(
     id: number,
-    onProgress?: (p: TorBoxPrepareProgress) => void
+    onProgress?: (p: TorBoxPrepareProgress) => void,
+    /**
+     * When set, "ready" means THIS specific file is available for download —
+     * not merely that TorBox has some cached portion of the torrent. For shared
+     * Minerva collection torrents TorBox may report `cached === true` while only
+     * holding OTHER games' files; we must keep waiting (and nudging) until the
+     * requested game's file actually lands, or we'd refuse a perfectly valid
+     * download. Returns as soon as the file is present.
+     */
+    isTargetPresent?: (files: TorBoxTorrentInfoRequest["data"][number]["files"]) => boolean
   ) {
-    const deadline = Date.now() + this.READY_TIMEOUT_MS;
+    // A per-file wait can legitimately take a while (TorBox is pulling the game
+    // from peers), and the user sees a live "preparing" bar the whole time, so
+    // give it a generous window before giving up.
+    const timeout = isTargetPresent
+      ? this.TARGET_FILE_TIMEOUT_MS
+      : this.READY_TIMEOUT_MS;
+    const deadline = Date.now() + timeout;
+    let nudgedAt = 0;
     for (;;) {
       const info = await this.getTorrentInfo(id);
       const progress = info?.progress ?? 0;
-      // Ready when TorBox has the FULL torrent: progress complete, a terminal
-      // state, or it's in TorBox's instant cache (cached === true means fully
-      // available — a mid-fetch torrent reports download_present, not cached).
-      // This prevents grabbing a partial file while not stalling cached ones.
-      const ready =
-        info != null &&
-        (progress >= 1 ||
-          info.cached === true ||
-          info.download_state === "completed" ||
-          info.download_state === "cached" ||
-          info.download_state === "uploading");
+      const files = info?.files ?? [];
+      const targetHere = isTargetPresent ? isTargetPresent(files) : false;
+      // With a target file we wait specifically for it; without one we fall back
+      // to the whole-torrent readiness (single-file torrents / web parity).
+      const ready = isTargetPresent
+        ? targetHere
+        : info != null &&
+          (progress >= 1 ||
+            info.cached === true ||
+            info.download_state === "completed" ||
+            info.download_state === "cached" ||
+            info.download_state === "uploading");
       if (info) {
         logger.log(
           `[torbox] torrent ${id} state=${info.download_state} ` +
             `progress=${(progress * 100).toFixed(1)}% cached=${info.cached} ` +
-            `speed=${info.download_speed} eta=${info.eta} files=${info.files?.length ?? 0}`
+            `speed=${info.download_speed} eta=${info.eta} files=${files.length}` +
+            (isTargetPresent ? ` targetPresent=${targetHere}` : "")
         );
         onProgress?.({
           progress,
@@ -168,10 +233,26 @@ export class TorBoxClient {
         });
       }
       if (ready) return info;
+      // Waiting on a specific file that hasn't arrived yet: if TorBox has parked
+      // the fetch (stalled / paused / no active transfer), nudge it every ~20s so
+      // it keeps pulling the requested file instead of sitting on the cache.
+      if (isTargetPresent && info && Date.now() - nudgedAt > 20000) {
+        const stalled =
+          info.download_state === "stalled (no seeds)" ||
+          info.download_state === "paused" ||
+          (info.download_speed ?? 0) === 0;
+        if (stalled) {
+          nudgedAt = Date.now();
+          void this.controlTorrent(
+            id,
+            info.download_state === "paused" ? "resume" : "reannounce"
+          );
+        }
+      }
       if (Date.now() > deadline) {
         logger.warn(
-          `[torbox] torrent ${id} NOT fully cached after ${this.READY_TIMEOUT_MS / 1000}s ` +
-            `(state=${info?.download_state}, progress=${progress}); proceeding anyway`
+          `[torbox] torrent ${id} target not ready after ${timeout / 1000}s ` +
+            `(state=${info?.download_state}, progress=${progress})`
         );
         return info;
       }
@@ -277,8 +358,52 @@ export class TorBoxClient {
     const isMagnet = uri.startsWith("magnet:");
 
     if (isMagnet) {
+      // Match the REQUESTED game's filename — the only reliable signal for a
+      // shared collection torrent (Minerva). A fileIndex is computed against the
+      // full collection and is meaningless once TorBox exposes a different/
+      // partial file list, so it is NOT trusted for multi-file torrents.
+      const norm = (s: string) =>
+        s
+          .toLowerCase()
+          .replace(/^.*[\\/]/, "") // basename only
+          .replace(/\.[a-z0-9]{1,5}$/, "") // drop extension
+          .replace(/[^a-z0-9]/g, "");
+      const want = targetFileName ? norm(targetFileName) : null;
+      const matchTarget = <T extends { name: string }>(
+        list: T[]
+      ): T | null => {
+        if (!want) return null;
+        return (
+          list.find((f) => norm(f.name) === want) ??
+          list.find(
+            (f) => norm(f.name).includes(want) || want.includes(norm(f.name))
+          ) ??
+          null
+        );
+      };
+
       const torrentData = await this.getTorrentIdAndName(uri);
-      const info = await this.waitForTorrentReady(torrentData.id, onProgress);
+
+      // Confirm the requested game is genuinely inside this torrent by reading
+      // the file list from the BitTorrent metadata (independent of TorBox's
+      // cache). If it's there, we KNOW waiting will pay off — TorBox just hasn't
+      // fetched that file out of the shared collection yet.
+      const meta = want ? await this.getTorrentMetadata(uri) : null;
+      const metaHasTarget = meta?.files ? matchTarget(meta.files) != null : false;
+      if (meta?.files?.length) {
+        logger.log(
+          `[torbox] torrent metadata "${meta.name}" lists ${meta.files.length} ` +
+            `file(s); requested "${targetFileName}" present=${metaHasTarget}`
+        );
+      }
+
+      // Wait until the SPECIFIC requested file is available on TorBox (not just
+      // until "some cache" exists), nudging TorBox to keep fetching if it stalls.
+      const info = await this.waitForTorrentReady(
+        torrentData.id,
+        onProgress,
+        want ? (files) => matchTarget(files) != null : undefined
+      );
       const files = info?.files ?? [];
 
       if (files.length) {
@@ -290,33 +415,14 @@ export class TorBoxClient {
       }
 
       // Select the ONE file to download. Priority:
-      //   1. Match the REQUESTED game's filename — the only reliable signal for a
-      //      shared collection torrent (Minerva). A fileIndex is computed against
-      //      the full collection and is meaningless once TorBox exposes a
-      //      different/partial file list, so it is NOT trusted for multi-file
-      //      torrents.
+      //   1. The requested game's filename match.
       //   2. A caller index that is actually in range (single-file torrents).
       //   3. The single file, when the torrent has exactly one.
-      // If none of these match, we REFUSE rather than grab the largest file —
-      // guessing "largest" is exactly what downloaded the wrong game (Wind Waker
-      // instead of Twilight Princess).
-      const norm = (s: string) =>
-        s
-          .toLowerCase()
-          .replace(/^.*[\\/]/, "") // basename only
-          .replace(/\.[a-z0-9]{1,5}$/, "") // drop extension
-          .replace(/[^a-z0-9]/g, "");
-      let target: (typeof files)[number] | null = null;
+      // If none match, we REFUSE rather than grab the largest file — guessing
+      // "largest" is what downloaded the wrong game (Wind Waker not Twilight
+      // Princess).
+      let target: (typeof files)[number] | null = matchTarget(files);
 
-      if (targetFileName) {
-        const want = norm(targetFileName);
-        target =
-          files.find((f) => norm(f.name) === want) ??
-          files.find(
-            (f) => norm(f.name).includes(want) || want.includes(norm(f.name))
-          ) ??
-          null;
-      }
       if (!target && fileIndices?.length === 1) {
         const idx = fileIndices[0];
         target =
@@ -333,18 +439,18 @@ export class TorBoxClient {
           .join(", ");
         logger.error(
           `[torbox] no file in torrent "${torrentData.name}" matches requested ` +
-            `"${targetFileName ?? "(unknown)"}". Available: [${available}]. ` +
-            "Refusing to download the wrong file."
+            `"${targetFileName ?? "(unknown)"}" after waiting. ` +
+            `Available: [${available}]. metaHasTarget=${metaHasTarget}`
         );
-        // TorBox's cached copy of this hash only holds OTHER files (a partial
-        // fetched with different file selection). Callers auto-fall back to the
-        // native torrent client on this code.
-        throw Object.assign(
-          new Error(
-            `TorBox has the wrong torrent cached for this game (contains: ${available || "nothing"}).`
-          ),
-          { code: "TORBOX_WRONG_TORRENT" }
-        );
+        // The requested file never became available on TorBox within the wait.
+        // If the metadata confirms it IS in the torrent, TorBox simply couldn't
+        // fetch it in time (retrying resumes the same job); otherwise the magnet
+        // genuinely doesn't contain this game. Either way we surface a clear
+        // TorBox error — the app is TorBox-only, so there is no fallback.
+        const reason = metaHasTarget
+          ? "TorBox couldn't finish fetching this game in time — please retry the download (it resumes where TorBox left off)."
+          : `TorBox has the wrong torrent for this game (contains: ${available || "nothing"}).`;
+        throw Object.assign(new Error(reason), { code: "TORBOX_WRONG_TORRENT" });
       }
 
       logger.log(

@@ -105,6 +105,30 @@ export const publishDownloadCompleteNotification = async (game: Game) => {
   );
 };
 
+export const publishNotificationDownloadFailed = async (
+  gameTitle: string,
+  reason: string
+) => {
+  const title = t("download_failed", {
+    ns: "notifications",
+    defaultValue: "Download couldn't start",
+  });
+  const body = t("download_failed_description", {
+    ns: "notifications",
+    title: gameTitle,
+    reason,
+    defaultValue: "{{title}}: {{reason}}",
+  });
+
+  new Notification({ title, body, icon: trayIcon }).show();
+
+  await LocalNotificationManager.createNotification(
+    "DOWNLOAD_COMPLETE",
+    title,
+    body
+  );
+};
+
 export const publishNotificationUpdateReadyToInstall = async (
   version: string
 ) => {

@@ -1243,6 +1243,8 @@
   },
   "notifications": {
     "download_complete": "Download complete",
+    "download_failed": "Download couldn't start",
+    "download_failed_description": "{{title}}: {{reason}}",
     "game_ready_to_install": "{{title}} is ready to install",
     "repack_list_updated": "Repack list updated",
     "repack_count_one": "{{count}} repack added",

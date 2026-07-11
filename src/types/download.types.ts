@@ -87,6 +87,29 @@ export interface TorBoxTorrentInfoRequest {
   data: TorBoxTorrentInfo[];
 }
 
+/**
+ * `torrentinfo` reads the file list straight from the BitTorrent metadata, so it
+ * lists EVERY file in the torrent even when TorBox has only cached some of them.
+ * We use it to confirm the requested game really is in a shared collection
+ * torrent (and get its true index) before waiting for TorBox to fetch it.
+ */
+export interface TorBoxTorrentMetaFile {
+  name: string;
+  size: number;
+}
+
+export interface TorBoxTorrentMetaInfoRequest {
+  success: boolean;
+  detail: string;
+  error: string;
+  data: {
+    name: string;
+    hash: string;
+    size: number;
+    files: TorBoxTorrentMetaFile[];
+  };
+}
+
 export interface TorBoxAddTorrentRequest {
   success: boolean;
   detail: string;
