@@ -817,6 +817,10 @@ function DownloadGameOptions({
       automaticallyExtract: automaticExtractionEnabled,
       automaticallyDeleteArchiveFiles: deleteArchiveFilesAfterExtraction,
       fileSize: option.fileSize,
+      // Collection torrents (Minerva) need the exact file pinned or the whole
+      // multi-hundred-GB archive would download; main resolves the index.
+      targetFileName: option.fileName ?? null,
+      emulatorSystem: option.emulatorSystem ?? null,
     } as const;
 
     setIsSubmitting(true);

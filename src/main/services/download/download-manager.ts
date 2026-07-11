@@ -27,6 +27,12 @@ import fs from "node:fs";
 import { logger } from "../logger";
 import { db, downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { TorBoxClient } from "./torbox";
+import {
+  isTorrentFileUri,
+  ensureLocalTorrentFile,
+  parseLocalTorrentFile,
+  resolveTorrentFileIndex,
+} from "./torrent-file";
 import { GameFilesManager } from "../game-files-manager";
 import { HydraDebridClient } from "./hydra-debrid";
 import { PremiumizeClient } from "./premiumize";
@@ -892,10 +898,19 @@ export class DownloadManager {
   }
 
   static async resumeSeeding(download: Download) {
+    let url = download.uri;
+    if (isTorrentFileUri(download.uri)) {
+      try {
+        url = await ensureLocalTorrentFile(download.uri);
+      } catch (err) {
+        logger.error("[DownloadManager] failed to fetch .torrent for seeding", err);
+        return;
+      }
+    }
     await PythonRPC.rpc.call("action", {
       action: "resume_seeding",
       game_id: levelKeys.game(download.shop, download.objectId),
-      url: download.uri,
+      url,
       save_path: download.downloadPath,
     });
   }
@@ -1383,18 +1398,55 @@ export class DownloadManager {
         };
       }
       case Downloader.Torrent: {
+        let url = download.uri;
+        let fileIndices = download.fileIndices;
+
+        // Direct .torrent link (Minerva collection torrents): fetch the
+        // .torrent over HTTPS and resolve the repack's exact file index against
+        // the REAL torrent — no peer metadata exchange, no debrid cache, so the
+        // right game is selected deterministically every time.
+        if (isTorrentFileUri(download.uri)) {
+          const localPath = await ensureLocalTorrentFile(download.uri);
+          url = localPath;
+
+          if (download.targetFileName) {
+            const parsed = await parseLocalTorrentFile(localPath);
+            const match = resolveTorrentFileIndex(
+              parsed.files,
+              download.targetFileName
+            );
+            if (match) {
+              logger.log(
+                `[DownloadManager] torrent file selection: index=${match.index} ` +
+                  `path=${match.path} size=${match.length}`
+              );
+              fileIndices = [match.index];
+            } else if (!fileIndices?.length) {
+              throw new Error(
+                `File "${download.targetFileName}" not found in torrent "${parsed.name}"`
+              );
+            }
+          } else if (!fileIndices?.length) {
+            // A collection .torrent with no file pinned would download the
+            // ENTIRE multi-hundred-GB archive — refuse instead.
+            const parsed = await parseLocalTorrentFile(localPath);
+            if (parsed.files.length > 1) {
+              throw new Error(
+                `Refusing to download all ${parsed.files.length} files of collection torrent "${parsed.name}" — no target file specified`
+              );
+            }
+          }
+        }
+
         const hasSelectedFileIndices =
-          Array.isArray(download.fileIndices) &&
-          download.fileIndices.length > 0;
+          Array.isArray(fileIndices) && fileIndices.length > 0;
 
         return {
           action: "start",
           game_id: downloadId,
-          url: download.uri,
+          url,
           save_path: download.downloadPath,
-          file_indices: hasSelectedFileIndices
-            ? download.fileIndices
-            : undefined,
+          file_indices: hasSelectedFileIndices ? fileIndices : undefined,
           metadata_timeout_ms: hasSelectedFileIndices ? 60_000 : undefined,
         };
       }
@@ -1497,8 +1549,8 @@ export class DownloadManager {
     const isHttp = this.isHttpDownloader(download.downloader);
 
     // TorBox resolution is heavyweight (adds the torrent + waits for TorBox to
-    // cache it) and has its own start-time error handling with an automatic
-    // torrent-client fallback — don't run it just to enqueue.
+    // cache it) and has its own start-time error handling — don't run it just
+    // to enqueue.
     if (download.downloader === Downloader.TorBox) return;
 
     if (isHttp) {

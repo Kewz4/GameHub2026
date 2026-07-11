@@ -222,11 +222,18 @@ class TorrentDownloader:
                 initial_flags |= lt.torrent_flags.auto_managed
 
             params = {
-                "url": magnet,
                 "save_path": save_path,
                 "trackers": self.trackers,
                 "flags": initial_flags,
             }
+
+            # A local .torrent file (fetched over HTTPS by the main process for
+            # collection torrents) carries full metadata — file selection is
+            # immediate, no peer metadata exchange required.
+            if magnet.startswith("magnet:"):
+                params["url"] = magnet
+            else:
+                params["ti"] = lt.torrent_info(magnet)
 
             if self.torrent_handle is None or not self.torrent_handle.is_valid():
                 self.torrent_handle = self.session.add_torrent(params)

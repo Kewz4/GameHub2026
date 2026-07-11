@@ -237,6 +237,7 @@ const nameCol = ["file_name", "name", "filename"].find(has) || "file_name";
 const sizeCol = ["size", "file_size"].find(has);
 const magnetCol = ["magnet"].find(has);
 const soCol = ["so_id", "so"].find(has);
+const torrentsCol = ["torrents"].find(has);
 
 if (!magnetCol) {
   console.error("No magnet column found — aborting.");
@@ -281,10 +282,20 @@ for (const def of PLATFORM_DEFS) {
     let magnet = row[magnetCol];
     if (soCol && row[soCol] != null) magnet += `&so=${row[soCol]}`;
 
+    // Direct .torrent link for the platform collection. Fetching this over
+    // HTTPS gives clients the full file list instantly (no peer metadata
+    // exchange), so the entry's exact file can be selected deterministically.
+    const uris = [magnet];
+    if (torrentsCol && row[torrentsCol]) {
+      uris.unshift(
+        `https://minerva-archive.org/assets/${encodeURI(row[torrentsCol])}`
+      );
+    }
+
     (buckets[contentType] ??= []).push({
       title: cleanTitle(fileName),
       fileSize: sizeCol ? humanSize(row[sizeCol]) : null,
-      uris: [magnet],
+      uris,
       uploadDate: null,
       fileName,
       contentType,

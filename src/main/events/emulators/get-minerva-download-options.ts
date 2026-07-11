@@ -152,7 +152,15 @@ const getMinervaDownloadOptions = async (
 
     const repacks: GameRepack[] = [];
     for (const entry of entries) {
-      const uri = entry.magnet ?? entry.torrentUrl;
+      // Prefer the direct .torrent link: the native torrent client fetches it
+      // over HTTPS and selects exactly this entry's file from the collection
+      // torrent — deterministic, unlike magnets routed through debrid caches.
+      const torrentUrl = entry.torrentUrl
+        ? entry.torrentUrl.startsWith("/")
+          ? `https://minerva-archive.org${entry.torrentUrl}`
+          : entry.torrentUrl
+        : null;
+      const uri = torrentUrl ?? entry.magnet;
       if (!uri) continue;
       // USA/Europe only — belt-and-braces on top of the sync-time filter, so
       // stale pre-v4 catalogues can't offer Japanese/Korean variants.

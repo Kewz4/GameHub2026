@@ -303,8 +303,16 @@ export function DownloadSettingsModal({
 
   const selectedMagnetUri = useMemo(() => {
     if (selectedDownloader !== Downloader.Torrent) return null;
-    if (!selectedUri?.startsWith("magnet:")) return null;
-    return selectedUri;
+    if (!selectedUri) return null;
+    // Magnet OR direct .torrent link — both resolve to a torrent file list
+    // (the .torrent is fetched over HTTPS by main; no peer metadata needed).
+    if (
+      selectedUri.startsWith("magnet:") ||
+      /^https?:\/\/.+\.torrent(\?.*)?$/i.test(selectedUri)
+    ) {
+      return selectedUri;
+    }
+    return null;
   }, [selectedDownloader, selectedUri]);
 
   const getDiskFreeSpace = async (path: string) => {

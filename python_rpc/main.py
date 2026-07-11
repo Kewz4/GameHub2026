@@ -1,5 +1,6 @@
 import hmac
 import json
+import os
 import logging
 import re
 import sys
@@ -306,7 +307,10 @@ def bootstrap_downloads():
         downloading_game_id = initial_download["game_id"]
 
         try:
-            if initial_download["url"].startswith("magnet"):
+            initial_url = initial_download["url"]
+            if initial_url.startswith("magnet") or (
+                initial_url.endswith(".torrent") and os.path.isfile(initial_url)
+            ):
                 file_indices = parse_file_indices(initial_download.get("file_indices"))
                 start_torrent_download(
                     initial_download["game_id"],
@@ -451,7 +455,12 @@ def action(data: Optional[dict] = None):
             if not isinstance(save_path, str):
                 raise RpcError("invalid_save_path")
 
-            if url.startswith("magnet"):
+            # Magnet link, or a LOCAL .torrent file path (the main process
+            # downloads collection .torrents over HTTPS — metadata is then
+            # available instantly, no peer exchange needed).
+            if url.startswith("magnet") or (
+                url.endswith(".torrent") and os.path.isfile(url)
+            ):
                 file_indices = parse_file_indices(data.get("file_indices"))
                 start_torrent_download(
                     game_id,

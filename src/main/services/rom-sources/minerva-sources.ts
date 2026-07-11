@@ -27,8 +27,10 @@ import {
  * v6: English-only regions (drop localized country editions) + Virtual
  *     Console/LodgeNet re-release filtering.
  * v7: filter unlicensed/pirate/bootleg dumps.
+ * v8: store the platform collection's direct .torrent URL so downloads select
+ *     the exact file via the native torrent client (no debrid cache).
  */
-const CATALOGUE_VERSION = 7;
+const CATALOGUE_VERSION = 8;
 const CATALOGUE_VERSION_KEY = "minervaCatalogueVersion";
 
 /** Bundled catalogue dir (extraResource in packaged builds; repo in dev). */
@@ -194,7 +196,11 @@ export async function syncMinervaSource(
     // USA/Europe releases only (for now) — drop Japan/Korea/Taiwan/Asia.
     if (!isAllowedRomRegion(download.fileName ?? download.title)) continue;
 
-    const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
+    const magnetUri = download.uris?.find((u) => u.startsWith("magnet:"));
+    const magnet = magnetUri ? withTrackers(magnetUri) : null;
+    const torrentUrl =
+      download.uris?.find((u) => /^https?:\/\/.+\.torrent(\?.*)?$/i.test(u)) ??
+      null;
     const ct = download.contentType ?? "game";
     const prefix =
       ct === "update"
@@ -211,7 +217,7 @@ export async function syncMinervaSource(
       filename: download.fileName ?? download.title,
       romPath: "",
       magnet,
-      torrentUrl: null,
+      torrentUrl,
       fileSize: download.fileSize,
       contentType: ct,
       titleId: download.titleId ?? null,
@@ -268,7 +274,11 @@ async function syncSupplementalSource(opts: {
   for (const download of data.downloads) {
     if (isNonGameEntry(download.title, download.fileName)) continue;
     if (!isAllowedRomRegion(download.fileName ?? download.title)) continue;
-    const magnet = download.uris?.[0] ? withTrackers(download.uris[0]) : null;
+    const magnetUri = download.uris?.find((u) => u.startsWith("magnet:"));
+    const magnet = magnetUri ? withTrackers(magnetUri) : null;
+    const torrentUrl =
+      download.uris?.find((u) => /^https?:\/\/.+\.torrent(\?.*)?$/i.test(u)) ??
+      null;
     const ct = download.contentType ?? opts.defaultContentType;
     const entry: MinervaCatalogueEntry = {
       system: opts.system,
@@ -277,7 +287,7 @@ async function syncSupplementalSource(opts: {
       filename: download.fileName ?? download.title,
       romPath: "",
       magnet,
-      torrentUrl: null,
+      torrentUrl,
       fileSize: download.fileSize,
       contentType: ct,
       titleId: download.titleId ?? null,

@@ -157,6 +157,14 @@ export const getDownloadersForUri = (uri: string) => {
   if (realDebridHosts.some((host) => uri.startsWith(host)))
     return [Downloader.RealDebrid, Downloader.TorBox];
 
+  // Direct .torrent file link (Minerva collection torrents): only the native
+  // torrent client can select ONE file out of the shared collection — debrid
+  // services (incl. TorBox) treat torrents as all-or-nothing and their shared
+  // caches routinely hold OTHER games' files from the same collection.
+  if (/^https?:\/\/.+\.torrent(\?.*)?$/i.test(uri)) {
+    return [Downloader.Torrent];
+  }
+
   if (uri.startsWith("magnet:")) {
     return [
       Downloader.Torrent,
