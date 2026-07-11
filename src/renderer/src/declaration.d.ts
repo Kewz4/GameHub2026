@@ -34,6 +34,7 @@ import type {
   AchievementNotificationInfo,
   Game,
   DiskUsage,
+  NetworkInterface,
   DownloadSource,
   LocalNotification,
   ProtonVersion,
@@ -65,6 +66,7 @@ import type {
   ResolvedInstallOption,
   EmulationCloudSave,
   EmulationSavePlatform,
+  MemcardFormatState,
   MemcardRestoreResult,
   MemcardRestoreTarget,
 } from "@types";
@@ -1129,6 +1131,10 @@ declare global {
     getMemcardRestoreTargets: (
       platform: EmulationSavePlatform
     ) => Promise<MemcardRestoreTarget[]>;
+    inspectMemcard: (
+      platform: EmulationSavePlatform,
+      cardFilePath: string
+    ) => Promise<MemcardFormatState>;
     restoreEmulationSave: (
       platform: EmulationSavePlatform,
       saveId: string,
@@ -1171,6 +1177,9 @@ declare global {
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;
+    readDirectory: (path: string) => Promise<FileExplorerEntry[]>;
+    getPathInfo: (path: string) => Promise<FileExplorerPathInfo>;
+    listDrives: () => Promise<string[]>;
     showItemInFolder: (path: string) => Promise<void>;
     getImageDataUrl: (imageUrl: string) => Promise<string | null>;
     hydraApi: {

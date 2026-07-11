@@ -14,6 +14,18 @@ export class WSClient {
   private static reconnecting = false;
   private static heartbeatInterval: NodeJS.Timeout | null = null;
 
+  /**
+   * Force an immediate reconnect. Used after OS resume, where the socket can be
+   * silently dead long before the heartbeat notices — drop it and reconnect now.
+   */
+  static reconnectNow() {
+    if (!this.shouldReconnect) return;
+    this.cleanupSocket();
+    this.reconnectInterval = 1000;
+    this.reconnecting = false;
+    void this.connect();
+  }
+
   static async connect() {
     this.shouldReconnect = true;
 

@@ -168,6 +168,7 @@ export interface GameAchievement {
    *  RetroAchievements web API (badge images, RA achievement IDs as names).
    *  When absent/undefined, definitions came from HydraAPI/Steam (with images). */
   source?: "exophase" | "retroachievements";
+  catalogueValidator?: string;
 }
 
 export type AchievementCustomNotificationPosition =
@@ -237,6 +238,7 @@ export interface UserPreferences {
   enableNewDownloadOptionsBadges?: boolean;
   createStartMenuShortcut?: boolean;
   maxDownloadSpeedBytesPerSecond?: number | null;
+  torrentNetworkInterface?: string | null;
   defaultProtonPath?: string | null;
   defaultWinePrefixPath?: string | null;
   autoRunMangohud?: boolean;
@@ -292,6 +294,11 @@ export interface ExcludedGame {
   objectId: string;
   title: string;
   excludedAt: string;
+}
+
+export interface NetworkInterface {
+  name: string;
+  addresses: string[];
 }
 
 export interface ScreenState {

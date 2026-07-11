@@ -10,6 +10,7 @@ import "./friends";
 import "./big-picture";
 import "./catalogue";
 import "./cloud-save";
+import "./connectivity";
 import "./download-sources";
 import "./hardware";
 import "./library";

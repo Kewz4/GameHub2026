@@ -68,6 +68,12 @@ const updateUserPreferences = async (
     );
   }
 
+  if (Object.hasOwn(preferences, "torrentNetworkInterface")) {
+    await DownloadManager.applyNetworkInterface(
+      preferences.torrentNetworkInterface ?? null
+    );
+  }
+
   // Best-effort cloud backup so settings survive reinstalls
   import("./backup-settings-to-cloud")
     .then((m) => m.backupSettingsToCloudInternal())

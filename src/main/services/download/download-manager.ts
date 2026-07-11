@@ -24,6 +24,7 @@ import { calculateETA, getDirSize } from "./helpers";
 import { RealDebridClient } from "./real-debrid";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { logger } from "../logger";
 import { db, downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { TorBoxClient } from "./torbox";
@@ -37,11 +38,19 @@ import { GameFilesManager } from "../game-files-manager";
 import { HydraDebridClient } from "./hydra-debrid";
 import { PremiumizeClient } from "./premiumize";
 import { AllDebridClient } from "./all-debrid";
-import { JsHttpDownloader } from "./js-http-downloader";
+import {
+  DEFAULT_DOWNLOAD_USER_AGENT,
+  JsHttpDownloader,
+} from "./js-http-downloader";
+import {
+  clampProgress,
+  isRetryableHttpStatus,
+} from "./js-http-downloader-helpers";
 import { getDirectorySize } from "@main/events/helpers/get-directory-size";
 import {
   getDownloadLayoutStateRecord,
   getNextQueuedDownloadFromLayout,
+  setDownloadLayoutQueues,
 } from "../download-layout-state";
 
 interface AllDebridBatchEntry {
@@ -77,9 +86,42 @@ export class DownloadManager {
     downloadSpeed: number;
     eta: number;
   } | null = null;
+  private static startGeneration = 0;
 
   public static hasActiveDownload() {
     return this.downloadingGameId !== null;
+  }
+
+  public static get isJsDownloadActive(): boolean {
+    return (
+      this.usingJsDownloader &&
+      this.jsDownloader !== null &&
+      this.downloadingGameId !== null
+    );
+  }
+
+  public static getActiveDownloadId(): string | null {
+    return this.downloadingGameId;
+  }
+
+  public static notifyReconnecting(value: boolean): void {
+    if (this.usingJsDownloader && this.jsDownloader) {
+      this.jsDownloader.setReconnecting(value);
+    }
+  }
+
+  public static reconnectActiveDownload(): void {
+    if (this.usingJsDownloader && this.jsDownloader) {
+      this.jsDownloader.reconnect();
+    }
+  }
+
+  public static isActiveDownloadReconnecting(): boolean {
+    return (
+      this.usingJsDownloader &&
+      this.jsDownloader !== null &&
+      this.jsDownloader.getDownloadStatus()?.isReconnecting === true
+    );
   }
 
   private static extractFilename(
@@ -278,11 +320,59 @@ export class DownloadManager {
       });
   }
 
+  private static async getPersistedNetworkInterface() {
+    const userPreferences = await db.get<string, UserPreferences | null>(
+      levelKeys.userPreferences,
+      { valueEncoding: "json" }
+    );
+
+    return userPreferences?.torrentNetworkInterface ?? null;
+  }
+
+  private static resolveNetworkInterfaceBinding(name: string | null): string {
+    if (!name) return "";
+
+    const addresses = os.networkInterfaces()[name] ?? [];
+    const usable = addresses.filter(
+      (address) =>
+        !address.internal &&
+        !(
+          address.family === "IPv6" &&
+          address.address.toLowerCase().startsWith("fe80")
+        )
+    );
+
+    if (usable.length === 0) return name;
+
+    return usable.map((address) => address.address).join(",");
+  }
+
+  public static async applyNetworkInterface(
+    value?: string | null
+  ): Promise<void> {
+    const networkInterface =
+      value ?? (await this.getPersistedNetworkInterface());
+
+    await PythonRPC.rpc
+      .call("action", {
+        action: "set_network_interface",
+        interface: this.resolveNetworkInterfaceBinding(networkInterface),
+      })
+      .catch((error) => {
+        logger.error(
+          "[DownloadManager] Failed to update RPC network interface:",
+          error
+        );
+      });
+  }
+
   public static async startRPC(
     download?: Download,
     downloadsToSeed?: Download[]
   ) {
     await PythonRPC.spawn();
+
+    await this.applyNetworkInterface();
 
     if (downloadsToSeed?.length) {
       for (const seedDownload of downloadsToSeed) {
@@ -413,6 +503,8 @@ export class DownloadManager {
         }
       }
 
+      progress = clampProgress(progress);
+
       const effectiveFileSize = fileSize > 0 ? fileSize : download.fileSize;
 
       const updatedDownload = {
@@ -442,6 +534,9 @@ export class DownloadManager {
         ),
         isDownloadingMetadata: false,
         isCheckingFiles: false,
+        isReconnecting: status.isReconnecting,
+        isRecovering: status.isRecovering,
+        recoveryProgress: status.recoveryProgress,
         progress,
         gameId: downloadId,
         download: updatedDownload,
@@ -776,6 +871,76 @@ export class DownloadManager {
     }
   }
 
+  private static getErrorMessage(error: unknown) {
+    if (error instanceof Error) return error.message;
+    if (typeof error === "string") return error;
+
+    try {
+      return JSON.stringify(error) ?? "Unknown error";
+    } catch {
+      return "Unknown error";
+    }
+  }
+
+  private static async handleRuntimeDownloadError(
+    downloadId: string,
+    error: unknown
+  ) {
+    if (this.downloadingGameId && this.downloadingGameId !== downloadId) {
+      const message = this.getErrorMessage(error);
+      logger.warn(
+        `[DownloadManager] Ignoring stale download error for ${downloadId}: ${message}`
+      );
+      return;
+    }
+
+    const message = this.getErrorMessage(error);
+    logger.error(
+      `[DownloadManager] Download failed for ${downloadId}: ${message}`,
+      error
+    );
+
+    this.downloadingGameId = null;
+    this.isPreparingDownload = false;
+    this.usingJsDownloader = false;
+    this.jsDownloader = null;
+    this.allDebridBatch = null;
+    WindowManager.mainWindow?.setProgressBar(-1);
+    WindowManager.sendToAppWindows("on-download-progress", null);
+
+    try {
+      const download = await downloadsSublevel.get(downloadId);
+      if (download) {
+        await downloadsSublevel.put(downloadId, {
+          ...download,
+          status: "error",
+          queued: false,
+          pinnedToHero: false,
+          extracting: false,
+        });
+
+        const downloads = await downloadsSublevel.values().all();
+        const layoutState = await getDownloadLayoutStateRecord();
+        await setDownloadLayoutQueues(
+          downloads,
+          layoutState.queueOrder.filter((id) => id !== downloadId),
+          [
+            downloadId,
+            ...layoutState.pausedOrder.filter((id) => id !== downloadId),
+          ]
+        );
+      }
+    } catch (persistError) {
+      logger.error(
+        `[DownloadManager] Failed to persist download error for ${downloadId}`,
+        persistError
+      );
+    }
+
+    WindowManager.sendDownloadsUpdated();
+    await this.processNextQueuedDownload();
+  }
+
   private static async processNextQueuedDownload() {
     const downloads = await downloadsSublevel.values().all();
     const layoutState = await getDownloadLayoutStateRecord();
@@ -872,6 +1037,10 @@ export class DownloadManager {
     const isActiveDownload = downloadKey === this.downloadingGameId;
 
     if (isActiveDownload) {
+      // Invalidate any in-flight startDownload preparation for this slot so a
+      // late-resolving prepare cannot spawn a downloader after cancellation.
+      this.startGeneration += 1;
+
       if (this.usingJsDownloader && this.jsDownloader) {
         logger.log("[DownloadManager] Cancelling JS download");
         this.jsDownloader.cancelDownload();
@@ -1030,18 +1199,30 @@ export class DownloadManager {
               `downloaded=${dlStatus.bytesDownloaded} expected=${expectedSize}. ` +
               `The download URL may have returned an error page.`
           );
+          const mismatchDownloadId = this.allDebridBatch?.downloadId;
           this.cleanupBatch();
+          if (mismatchDownloadId) {
+            await this.handleRuntimeDownloadError(
+              mismatchDownloadId,
+              new Error(
+                "An AllDebrid file returned fewer bytes than expected. The link may have expired."
+              )
+            );
+          }
           return;
         }
 
-        batch.completedBytes += Math.max(
-          entry.size ?? 0,
-          dlStatus.bytesDownloaded
-        );
+        const bankedBytes =
+          entry.size && entry.size > 0 ? entry.size : dlStatus.bytesDownloaded;
+        batch.completedBytes += bankedBytes;
         batch.currentIndex += 1;
       } catch (err) {
         logger.error("[DownloadManager] AllDebrid batch entry error:", err);
+        const failedDownloadId = this.allDebridBatch?.downloadId;
         this.cleanupBatch();
+        if (failedDownloadId) {
+          await this.handleRuntimeDownloadError(failedDownloadId, err);
+        }
         return;
       }
     }
@@ -1558,6 +1739,119 @@ export class DownloadManager {
       if (!options) {
         throw new Error("Failed to validate download URL");
       }
+
+      await this.validateJsDownloadResponse(options);
+    }
+  }
+
+  private static buildPreflightHeaders(
+    base?: Record<string, string>
+  ): Record<string, string> {
+    const headers: Record<string, string> = { ...base };
+
+    const hasUserAgentHeader = Object.keys(headers).some(
+      (key) => key.toLowerCase() === "user-agent"
+    );
+    if (!hasUserAgentHeader) {
+      headers["User-Agent"] = DEFAULT_DOWNLOAD_USER_AGENT;
+    }
+
+    const hasAcceptEncoding = Object.keys(headers).some(
+      (key) => key.toLowerCase() === "accept-encoding"
+    );
+    if (!hasAcceptEncoding) {
+      headers["Accept-Encoding"] = "identity";
+    }
+
+    return headers;
+  }
+
+  private static async runPreflightAttempt(
+    url: string,
+    headers: Record<string, string>,
+    attempt: number,
+    maxAttempts: number
+  ): Promise<"done" | "retry"> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+        signal: controller.signal,
+      });
+      const contentType = response.headers.get("content-type") ?? "unknown";
+      const contentLength = response.headers.get("content-length") ?? "unknown";
+
+      logger.log(
+        `[DownloadManager] Preflight response status=${response.status} content-type=${contentType} content-length=${contentLength}`
+      );
+
+      await response.body?.cancel().catch(() => undefined);
+
+      if (isRetryableHttpStatus(response.status)) {
+        if (attempt < maxAttempts) {
+          logger.log(
+            `[DownloadManager] Preflight got transient HTTP ${response.status}; retrying (${attempt}/${maxAttempts})`
+          );
+          return "retry";
+        }
+
+        logger.warn(
+          `[DownloadManager] Preflight still HTTP ${response.status} after ${maxAttempts} attempts; allowing the download to start and retry`
+        );
+        return "done";
+      }
+
+      if (response.status >= 400) {
+        throw new Error(
+          `The download link is not available (HTTP ${response.status}).`
+        );
+      }
+
+      if (
+        contentType.includes("text/html") ||
+        contentType.includes("application/xhtml")
+      ) {
+        throw new Error(
+          "The download link returned a web page instead of a file. It may have expired or be invalid."
+        );
+      }
+
+      return "done";
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Download URL validation timed out");
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private static async validateJsDownloadResponse(options: {
+    url: string;
+    headers?: Record<string, string>;
+  }) {
+    const headers = this.buildPreflightHeaders(options.headers);
+    const MAX_PREFLIGHT_ATTEMPTS = 3;
+    const PREFLIGHT_RETRY_BASE_DELAY_MS = 1000;
+
+    for (let attempt = 1; attempt <= MAX_PREFLIGHT_ATTEMPTS; attempt++) {
+      const verdict = await this.runPreflightAttempt(
+        options.url,
+        headers,
+        attempt,
+        MAX_PREFLIGHT_ATTEMPTS
+      );
+
+      if (verdict === "done") return;
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, PREFLIGHT_RETRY_BASE_DELAY_MS * attempt)
+      );
     }
   }
 
@@ -1568,7 +1862,10 @@ export class DownloadManager {
     if (isHttp) {
       logger.log("[DownloadManager] Using JS HTTP downloader");
 
-      // Set preparing state immediately so UI knows download is starting
+      // Set preparing state immediately so UI knows download is starting.
+      // The generation token lets a concurrent cancel/restart for the same id
+      // invalidate this in-flight preparation before it spawns a downloader.
+      const myGeneration = ++this.startGeneration;
       this.downloadingGameId = downloadId;
       this.isPreparingDownload = true;
       this.usingJsDownloader = true;
@@ -1585,7 +1882,7 @@ export class DownloadManager {
             throw new Error(DownloadError.NotCachedOnAllDebrid);
           }
 
-          this.allDebridBatch = {
+          const batchState: AllDebridBatchState = {
             downloadId,
             savePath: download.downloadPath,
             entries: entries.map((entry) => ({
@@ -1602,6 +1899,17 @@ export class DownloadManager {
             batchSpeed: 0,
           };
 
+          if (
+            this.downloadingGameId !== downloadId ||
+            this.startGeneration !== myGeneration
+          ) {
+            logger.log(
+              "[DownloadManager] Download was superseded during preparation; aborting start"
+            );
+            return;
+          }
+
+          this.allDebridBatch = batchState;
           this.jsDownloader = new JsHttpDownloader();
           this.jsDownloader.setMaxDownloadSpeedBytesPerSecond(
             this.maxDownloadSpeedBytesPerSecond
@@ -1687,6 +1995,16 @@ export class DownloadManager {
             this.usingJsDownloader = false;
             this.downloadingGameId = null;
             throw new Error("Failed to get download options for JS downloader");
+          }
+
+          if (
+            this.downloadingGameId !== downloadId ||
+            this.startGeneration !== myGeneration
+          ) {
+            logger.log(
+              "[DownloadManager] Download was superseded during preparation; aborting start"
+            );
+            return;
           }
 
           this.jsDownloader = new JsHttpDownloader();

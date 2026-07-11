@@ -274,7 +274,7 @@ interface HeroDownloadViewProps {
   pauseDownload: (shop: GameShop, objectId: string) => void;
   resumeDownload: (shop: GameShop, objectId: string) => void;
   onCancelClick: (shop: GameShop, objectId: string) => void;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 function HeroDownloadView({
@@ -325,6 +325,10 @@ function HeroDownloadView({
     !isPreparing &&
     !hasEta;
   const shouldShowEta = hasEta || shouldShowEtaPlaceholder;
+  const isRecovering = !isGameExtracting && !!lastPacket?.isRecovering;
+  const recoveryPercent = Math.round((lastPacket?.recoveryProgress ?? 0) * 100);
+  const isReconnecting =
+    !isGameExtracting && !isRecovering && !!lastPacket?.isReconnecting;
 
   return (
     <div className="download-group download-group--hero">
@@ -373,14 +377,26 @@ function HeroDownloadView({
                     {t("checking_files")}
                   </span>
                 )}
-                {isPreparing && (
+                {isRecovering && !lastPacket?.isCheckingFiles && (
+                  <span className="download-group__progress-status">
+                    {t("recovering", { percentage: `${recoveryPercent}%` })}
+                  </span>
+                )}
+                {isReconnecting && !isRecovering && !lastPacket?.isCheckingFiles && (
+                  <span className="download-group__progress-status">
+                    {t("reconnecting")}
+                  </span>
+                )}
+                {isPreparing && !isReconnecting && !isRecovering && (
                   <span className="download-group__progress-status">
                     {t("preparing_download")}
                   </span>
                 )}
                 {!isGameExtracting &&
                   !lastPacket?.isCheckingFiles &&
-                  !isPreparing && (
+                  !isPreparing &&
+                  !isReconnecting &&
+                  !isRecovering && (
                     <span className="download-group__progress-size">
                       <DownloadIcon size={14} />
                       {isGameDownloading && lastPacket

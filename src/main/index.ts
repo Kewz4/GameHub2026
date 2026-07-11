@@ -1,4 +1,11 @@
-import { app, BrowserWindow, globalShortcut, net, protocol } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  net,
+  powerMonitor,
+  protocol,
+} from "electron";
 import updater from "electron-updater";
 import i18n from "i18next";
 import path from "node:path";
@@ -190,7 +197,9 @@ import {
   WindowManager,
   Lock,
   PowerSaveBlockerManager,
+  DownloadOrchestrator,
 } from "@main/services";
+import { WSClient } from "@main/services/ws";
 import resources from "@locales";
 import { PythonRPC } from "./services/python-rpc";
 import { db, gamesSublevel, levelKeys } from "./level";
@@ -411,6 +420,15 @@ app.whenReady().then(async () => {
   import("./services/rom-sources/gamehub-meta-sources")
     .then(({ ensureGameHubMeta }) => ensureGameHubMeta())
     .catch((err) => logger.error("gamehub-meta bootstrap failed:", err));
+
+  // Suspend can outlive the 60s stall watchdog; reconnect right away instead
+  powerMonitor.on("resume", () => {
+    WSClient.reconnectNow();
+    DownloadOrchestrator.onNetworkStatusChanged({
+      online: true,
+      switched: true,
+    });
+  });
 
   const language = await db
     .get<string, string>(levelKeys.language, {
