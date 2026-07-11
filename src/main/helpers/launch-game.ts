@@ -25,7 +25,7 @@ import {
 import {
   findAchievementFiles,
   hasAchievementEmulatorSignature,
-} from "@main/services/achievements/find-achivement-files";
+} from "@main/services/achievements/find-achievement-files";
 
 export interface LaunchGameOptions {
   shop: GameShop;
