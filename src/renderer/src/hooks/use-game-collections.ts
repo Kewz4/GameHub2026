@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { GameCollection, LibraryGame } from "@types";
+import { ensureArray } from "@renderer/helpers";
 import { useAppDispatch, useAppSelector } from "./redux";
 import {
   addCollection,
@@ -45,8 +46,13 @@ export function useGameCollections() {
           { needsAuth: true }
         );
 
-        dispatch(setCollections(response));
-        return response;
+        const collections = ensureArray<GameCollection>(
+          response,
+          "/profile/games/collections"
+        );
+
+        dispatch(setCollections(collections));
+        return collections;
       } catch (error) {
         void error;
         return [];

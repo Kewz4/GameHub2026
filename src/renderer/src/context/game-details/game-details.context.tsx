@@ -3,7 +3,7 @@ import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { setHeaderTitle } from "@renderer/features";
 import { levelDBService } from "@renderer/services/leveldb.service";
 import { orderBy } from "lodash-es";
-import { getSteamLanguage } from "@renderer/helpers";
+import { getSteamLanguage, ensureArray } from "@renderer/helpers";
 import {
   useAppDispatch,
   useAppSelector,
@@ -608,7 +608,12 @@ export function GameDetailsContextProvider({
           }
         }
 
-        setRepacks(downloads ?? []);
+        setRepacks(
+          ensureArray<GameRepack>(
+            downloads,
+            `/games/${shop}/${objectId}/download-sources`
+          )
+        );
       } catch (error) {
         console.error("Failed to fetch download sources:", error);
       }
