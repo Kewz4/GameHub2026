@@ -1072,7 +1072,10 @@ export class DownloadManager {
       try {
         url = await ensureLocalTorrentFile(download.uri);
       } catch (err) {
-        logger.error("[DownloadManager] failed to fetch .torrent for seeding", err);
+        logger.error(
+          "[DownloadManager] failed to fetch .torrent for seeding",
+          err
+        );
         return;
       }
     }
@@ -1959,13 +1962,14 @@ export class DownloadManager {
               // NO torrent-client fallback. Stop the download and tell the user
               // plainly, with a reason they can act on (usually: retry, which
               // resumes the same TorBox job where it left off).
-              if (
-                (err as { code?: string })?.code === "TORBOX_WRONG_TORRENT"
-              ) {
+              if ((err as { code?: string })?.code === "TORBOX_WRONG_TORRENT") {
                 const reason =
                   (err as { message?: string })?.message ??
                   "TorBox couldn't serve this game.";
-                logger.error("[DownloadManager] TorBox could not serve download:", reason);
+                logger.error(
+                  "[DownloadManager] TorBox could not serve download:",
+                  reason
+                );
                 const gameKey = levelKeys.game(
                   download.shop,
                   download.objectId

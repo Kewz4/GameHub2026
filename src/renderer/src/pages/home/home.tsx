@@ -63,7 +63,10 @@ export default function Home() {
 
       setCatalogue((prev) => ({
         ...prev,
-        [category]: ensureArray<ShopAssets>(catalogue, `/catalogue/${category}`),
+        [category]: ensureArray<ShopAssets>(
+          catalogue,
+          `/catalogue/${category}`
+        ),
       }));
     } finally {
       setIsLoading(false);

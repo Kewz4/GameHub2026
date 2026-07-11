@@ -382,11 +382,13 @@ function HeroDownloadView({
                     {t("recovering", { percentage: `${recoveryPercent}%` })}
                   </span>
                 )}
-                {isReconnecting && !isRecovering && !lastPacket?.isCheckingFiles && (
-                  <span className="download-group__progress-status">
-                    {t("reconnecting")}
-                  </span>
-                )}
+                {isReconnecting &&
+                  !isRecovering &&
+                  !lastPacket?.isCheckingFiles && (
+                    <span className="download-group__progress-status">
+                      {t("reconnecting")}
+                    </span>
+                  )}
                 {isPreparing && !isReconnecting && !isRecovering && (
                   <span className="download-group__progress-status">
                     {t("preparing_download")}
