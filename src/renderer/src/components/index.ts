@@ -28,5 +28,6 @@ export * from "./scan-approval-modal/scan-approval-modal";
 export * from "./helper-text/helper-text";
 export * from "./progress-bar/progress-bar";
 export * from "./section-heading/section-heading";
+export * from "./error-boundary/error-boundary";
 export * from "./classics-scan-indicator/classics-scan-indicator";
 export * from "./classics-spinner/classics-spinner";

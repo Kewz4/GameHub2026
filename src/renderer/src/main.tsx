@@ -14,6 +14,7 @@ import "react-loading-skeleton/dist/skeleton.css";
 import "react-tooltip/dist/react-tooltip.css";
 
 import { App } from "./app";
+import { ErrorBoundary } from "./components/error-boundary/error-boundary";
 
 import { store } from "./store";
 
@@ -113,49 +114,54 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Provider store={store}>
       <HashRouter>
-        <AchievementNotificationOverlay />
-        <Routes>
-          <Route element={<App />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/catalogue" element={<Catalogue />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/downloads" element={<Downloads />} />
-            <Route path="/game/:shop/:objectId" element={<GameDetails />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/profile/:userId" element={<Profile />} />
-            <Route path="/achievements" element={<Achievements />} />
-            <Route path="/achievements-sync" element={<AchievementsSync />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/cloud-saves" element={<CloudSaves />} />
-          </Route>
+        <ErrorBoundary>
+          <AchievementNotificationOverlay />
+          <Routes>
+            <Route element={<App />}>
+              <Route path="/" element={<Home />} />
+              <Route path="/catalogue" element={<Catalogue />} />
+              <Route path="/library" element={<Library />} />
+              <Route path="/downloads" element={<Downloads />} />
+              <Route path="/game/:shop/:objectId" element={<GameDetails />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/profile/:userId" element={<Profile />} />
+              <Route path="/achievements" element={<Achievements />} />
+              <Route path="/achievements-sync" element={<AchievementsSync />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/cloud-saves" element={<CloudSaves />} />
+            </Route>
 
-          <Route path="/theme-editor" element={<ThemeEditor />} />
-          <Route
-            path="/achievement-notification"
-            element={<AchievementNotification />}
-          />
-          <Route path="/game-launcher" element={<GameLauncher />} />
-          <Route path="/installer" element={<Installer />} />
-          <Route path="/update-checker" element={<UpdateChecker />} />
-          <Route path="/console" element={<ConsolePage />} />
-          <Route path="/friends-window" element={<FriendsWindow />} />
-          <Route path="/auth-window" element={<AuthWindow />} />
-
-          <Route path="/big-picture" element={<BigPictureApp />}>
-            <Route index element={<BigPictureHome />} />
-            <Route path="catalogue" element={<BigPictureCatalogue />} />
-            <Route path="component-lab" element={<BigPictureComponentLab />} />
-            <Route path="downloads" element={<BigPictureDownloads />} />
-            <Route path="settings" element={<BigPictureSettings />} />
-            <Route path="cloud-saves" element={<BigPictureCloudSaves />} />
-            <Route path="library" element={<BigPictureLibrary />} />
-            <Route path="game/:shop/:objectId" element={<BigPictureGame />} />
+            <Route path="/theme-editor" element={<ThemeEditor />} />
             <Route
-              path="game/:shop/:objectId/achievements"
-              element={<BigPictureGameAchievements />}
+              path="/achievement-notification"
+              element={<AchievementNotification />}
             />
-          </Route>
-        </Routes>
+            <Route path="/game-launcher" element={<GameLauncher />} />
+            <Route path="/installer" element={<Installer />} />
+            <Route path="/update-checker" element={<UpdateChecker />} />
+            <Route path="/console" element={<ConsolePage />} />
+            <Route path="/friends-window" element={<FriendsWindow />} />
+            <Route path="/auth-window" element={<AuthWindow />} />
+
+            <Route path="/big-picture" element={<BigPictureApp />}>
+              <Route index element={<BigPictureHome />} />
+              <Route path="catalogue" element={<BigPictureCatalogue />} />
+              <Route
+                path="component-lab"
+                element={<BigPictureComponentLab />}
+              />
+              <Route path="downloads" element={<BigPictureDownloads />} />
+              <Route path="settings" element={<BigPictureSettings />} />
+              <Route path="cloud-saves" element={<BigPictureCloudSaves />} />
+              <Route path="library" element={<BigPictureLibrary />} />
+              <Route path="game/:shop/:objectId" element={<BigPictureGame />} />
+              <Route
+                path="game/:shop/:objectId/achievements"
+                element={<BigPictureGameAchievements />}
+              />
+            </Route>
+          </Routes>
+        </ErrorBoundary>
       </HashRouter>
     </Provider>
   </React.StrictMode>

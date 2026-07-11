@@ -63,6 +63,11 @@ export default defineConfig(({ mode }) => {
       build: {
         sourcemap: true,
       },
+      // Keep function names in the production build so renderer crash stack
+      // traces stay readable over OTA updates.
+      esbuild: {
+        keepNames: true,
+      },
       css: {
         postcss: {
           plugins: [scopeBigPictureCss()],

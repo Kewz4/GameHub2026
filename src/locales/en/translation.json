@@ -1,7 +1,14 @@
 {
   "language_name": "English",
   "app": {
-    "successfully_signed_in": "Successfully signed in"
+    "successfully_signed_in": "Successfully signed in",
+    "error_boundary_title": "Something went wrong",
+    "error_boundary_description": "The app ran into an unexpected error. You can reload to keep using GameHub.",
+    "error_boundary_origin": "Origin",
+    "error_boundary_component_trace": "Component trace",
+    "error_boundary_restart": "Restart",
+    "error_boundary_copy_error": "Copy error",
+    "error_boundary_copied": "Copied"
   },
   "home": {
     "surprise_me": "Surprise me",
@@ -1133,7 +1140,6 @@
     "remove_emulator": "Remove emulator",
     "remove_emulator_title": "Remove emulator",
     "remove_emulator_description": "This will remove {{name}} from GameHub. Your game files will not be deleted.",
-    "remove": "Remove",
     "cancel_remove": "Cancel",
     "back_to_emulation": "Back to emulation",
     "tab_emulator": "Emulator",
