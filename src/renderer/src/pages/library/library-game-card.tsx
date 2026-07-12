@@ -76,10 +76,10 @@ export const LibraryGameCard = memo(function LibraryGameCard({
   })();
 
   const sources = [
-    game.customIconUrl, // Level 0
+    game.customLibraryImageUrl, // Level 0 — dedicated custom cover override
     game.coverImageUrl, // Level 1
     game.libraryImageUrl, // Level 2
-    game.iconUrl, // Level 3
+    game.iconUrl, // Level 3 — last resort (includes a custom icon, if set)
   ].filter((url) => url && url.trim() !== "");
 
   const [fallbackIndex, setFallbackIndex] = useState(0);
