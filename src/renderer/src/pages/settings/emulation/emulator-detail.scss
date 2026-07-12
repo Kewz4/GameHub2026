@@ -125,6 +125,18 @@
     margin: 0;
   }
 
+  &__bios-download {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  &__bios-status {
+    font-size: 12px;
+    color: #8e919b;
+  }
+
   &__section {
     display: flex;
     flex-direction: column;

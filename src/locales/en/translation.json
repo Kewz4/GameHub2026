@@ -1245,7 +1245,16 @@
     "big_picture_enable_sounds": "Enable Big Picture sounds",
     "big_picture_enable_virtual_keyboard": "Enable Big Picture virtual keyboard",
     "big_picture_enable_diagnostics": "Enable navigation diagnostics",
-    "big_picture_diagnostics_position": "Diagnostics position"
+    "big_picture_diagnostics_position": "Diagnostics position",
+    "download_bios": "Download BIOS",
+    "download_firmware": "Download firmware",
+    "bios_download_starting": "Starting…",
+    "bios_download_needs_emulator": "Configure the emulator first",
+    "bios_download_stage_downloading": "Downloading",
+    "bios_download_stage_extracting": "Extracting…",
+    "bios_download_stage_installing": "Installing…",
+    "bios_download_success": "BIOS installed successfully",
+    "bios_download_failed": "Download failed: {{error}}"
   },
   "notifications": {
     "download_complete": "Download complete",

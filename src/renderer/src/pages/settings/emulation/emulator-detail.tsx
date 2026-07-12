@@ -14,6 +14,7 @@ import {
   CheckCircleFillIcon,
   ClockIcon,
   DatabaseIcon,
+  DownloadIcon,
   FileDirectoryIcon,
   InfoIcon,
   PackageIcon,
@@ -106,6 +107,14 @@ export function EmulatorDetail({
   const supportsMemoryCards =
     config.system === "ps2" || config.system === "ps1";
 
+  const supportsBiosDownload =
+    config.system === "ps1" ||
+    config.system === "ps2" ||
+    config.system === "ps3";
+
+  const [biosBusy, setBiosBusy] = useState(false);
+  const [biosStatus, setBiosStatus] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<EmulatorTab>("emulator");
 
   useEffect(() => {
@@ -141,6 +150,38 @@ export function EmulatorDetail({
 
   const binaryName = KNOWN_BINARY_LABELS[config.binary];
   const binaryIcon = EMULATOR_ICONS[config.binary];
+
+  const handleDownloadBios = useCallback(async () => {
+    if (!config.executablePath) {
+      setBiosStatus(t("bios_download_needs_emulator"));
+      return;
+    }
+    setBiosBusy(true);
+    setBiosStatus(t("bios_download_starting"));
+    const unsubscribe = window.electron.onBiosDownloadProgress((payload) => {
+      if (payload.system !== config.system) return;
+      const pct =
+        payload.progress >= 0 ? ` ${Math.round(payload.progress * 100)}%` : "";
+      setBiosStatus(t(`bios_download_stage_${payload.stage}`) + pct);
+    });
+    try {
+      const result = await window.electron.downloadEmulatorBios(config.system);
+      setBiosStatus(
+        result.ok
+          ? t("bios_download_success")
+          : t("bios_download_failed", { error: result.error ?? "" })
+      );
+    } catch (error) {
+      setBiosStatus(
+        t("bios_download_failed", {
+          error: error instanceof Error ? error.message : "",
+        })
+      );
+    } finally {
+      unsubscribe();
+      setBiosBusy(false);
+    }
+  }, [config.executablePath, config.system, t]);
 
   const handleRedetect = useCallback(async () => {
     setBusy(true);
@@ -412,6 +453,34 @@ export function EmulatorDetail({
         <InfoIcon size={14} />
         <span>{t("bios_note", { name: binaryName })}</span>
       </p>
+
+      {supportsBiosDownload && (
+        <div className="emulator-detail__bios-download">
+          <Button
+            type="button"
+            theme="outline"
+            onClick={handleDownloadBios}
+            disabled={busy || biosBusy || !config.executablePath}
+          >
+            {biosBusy ? (
+              <SyncIcon
+                size={16}
+                className="emulator-detail__redetect-icon--spinning"
+              />
+            ) : (
+              <DownloadIcon size={16} />
+            )}
+            <span>
+              {config.system === "ps3"
+                ? t("download_firmware")
+                : t("download_bios")}
+            </span>
+          </Button>
+          {biosStatus && (
+            <span className="emulator-detail__bios-status">{biosStatus}</span>
+          )}
+        </div>
+      )}
 
       <div className="emulator-detail__tabs" role="tablist">
         {tabs.map((tab) => (

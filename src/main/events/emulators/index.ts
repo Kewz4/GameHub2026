@@ -11,6 +11,7 @@ import "./get-classics-import-status";
 import "./get-active-classics-import";
 import "./check-ps3-firmware";
 import "./check-emulator-bios";
+import "./download-emulator-bios";
 import "./get-emulator-install-options";
 import "./install-emulator";
 import "./is-emulator-ready";

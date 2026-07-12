@@ -749,6 +749,28 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("checkEmulatorExecutable", system),
   checkEmulatorBios: (system: EmulatorSystem, executablePath: string | null) =>
     ipcRenderer.invoke("checkEmulatorBios", system, executablePath),
+  downloadEmulatorBios: (system: EmulatorSystem) =>
+    ipcRenderer.invoke("downloadEmulatorBios", system),
+  onBiosDownloadProgress: (
+    cb: (payload: {
+      system: EmulatorSystem;
+      stage: "downloading" | "extracting" | "installing";
+      progress: number;
+    }) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: {
+        system: EmulatorSystem;
+        stage: "downloading" | "extracting" | "installing";
+        progress: number;
+      }
+    ) => cb(payload);
+    ipcRenderer.on("on-bios-download-progress", listener);
+    return () => {
+      ipcRenderer.removeListener("on-bios-download-progress", listener);
+    };
+  },
   checkPs3Firmware: (executablePath: string | null) =>
     ipcRenderer.invoke("checkPs3Firmware", executablePath),
   getEmulatorRomExtensions: (system: EmulatorSystem) =>

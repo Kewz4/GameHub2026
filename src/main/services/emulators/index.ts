@@ -10,6 +10,7 @@ export * from "./import-sgdb-roms";
 export * from "./emulators-repository";
 export * from "./firmware-detection";
 export * from "./bios-detection";
+export * from "./bios-installer";
 export * from "./emulator-install-sources";
 export * from "./emulator-installer";
 export * from "./sniff-disc-platform";

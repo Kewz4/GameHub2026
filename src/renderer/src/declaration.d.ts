@@ -941,6 +941,16 @@ declare global {
       system: EmulatorSystem,
       executablePath: string | null
     ) => Promise<{ installed: boolean }>;
+    downloadEmulatorBios: (
+      system: EmulatorSystem
+    ) => Promise<{ ok: boolean; error?: string }>;
+    onBiosDownloadProgress: (
+      cb: (payload: {
+        system: EmulatorSystem;
+        stage: "downloading" | "extracting" | "installing";
+        progress: number;
+      }) => void
+    ) => () => void;
     checkPs3Firmware: (
       executablePath: string | null
     ) => Promise<{ installed: boolean }>;
