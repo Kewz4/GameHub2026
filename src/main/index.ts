@@ -202,6 +202,7 @@ import {
 import { WSClient } from "@main/services/ws";
 import resources from "@locales";
 import { PythonRPC } from "./services/python-rpc";
+import { controllerTestersPath } from "./constants";
 import { db, gamesSublevel, levelKeys } from "./level";
 import { GameShop, UserPreferences } from "@types";
 import { launchGame } from "./helpers";
@@ -246,6 +247,18 @@ protocol.registerSchemesAsPrivileged([
       stream: true,
     },
   },
+  {
+    // Serves the bundled controller tester/mapper pages. `standard` so the
+    // pages' absolute `/_astro/...` asset paths resolve against the origin root.
+    scheme: "controller-tester",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+      stream: true,
+    },
+  },
 ]);
 
 const PROTOCOL = "hydralauncher";
@@ -274,6 +287,22 @@ app.whenReady().then(async () => {
   protocol.handle("local", (request) => {
     const filePath = request.url.slice("local:".length);
     return net.fetch(url.pathToFileURL(decodeURI(filePath)).toString());
+  });
+
+  protocol.handle("controller-tester", (request) => {
+    // controller-tester://host/<path> → <controllerTestersPath>/<path>.
+    // Path traversal is blocked by resolving and confirming containment.
+    const { pathname } = new URL(request.url);
+    const rel = decodeURIComponent(pathname).replace(/^\/+/, "");
+    const target = path.join(controllerTestersPath, rel || "index.html");
+    const resolved = path.resolve(target);
+    if (
+      resolved !== path.resolve(controllerTestersPath) &&
+      !resolved.startsWith(path.resolve(controllerTestersPath) + path.sep)
+    ) {
+      return new Response("Forbidden", { status: 403 });
+    }
+    return net.fetch(url.pathToFileURL(resolved).toString());
   });
 
   protocol.handle("gradient", (request) => {

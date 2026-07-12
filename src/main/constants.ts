@@ -66,6 +66,12 @@ export const achievementSoundPath = app.isPackaged
   ? path.join(process.resourcesPath, "achievement.wav")
   : path.join(__dirname, "..", "..", "resources", "achievement.wav");
 
+// Standalone controller tester/mapper pages, served via the controller-tester
+// protocol inside the emulation controller tab.
+export const controllerTestersPath = app.isPackaged
+  ? path.join(process.resourcesPath, "controller-testers")
+  : path.join(__dirname, "..", "..", "resources", "controller-testers");
+
 export const backupsPath = path.join(getUserDataPath(), "Backups");
 
 /** Root folder under which portable emulator builds are installed. */

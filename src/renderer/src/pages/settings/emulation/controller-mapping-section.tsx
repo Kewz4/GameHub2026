@@ -7,6 +7,7 @@ import type {
 } from "@types";
 import { Button } from "@renderer/components";
 import { useToast } from "@renderer/hooks";
+import { ControllerVisualTester } from "./controller-visual-tester";
 
 /** Emulated-controller kinds offered per emulator that supports several. */
 const CONTROLLER_TYPES: Partial<
@@ -258,6 +259,8 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
 
   return (
     <div className="controller-mapping">
+      <ControllerVisualTester binary={binary} />
+
       <div className="controller-mapping__toolbar">
         <label className="controller-mapping__pad-select">
           <span>Controller</span>

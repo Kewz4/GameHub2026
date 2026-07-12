@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controller Test Pages</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, "sans-serif";
+    background-color: #fafaf9;
+    color: #1c1917;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .container {
+    max-width: 600px;
+    width: 100%;
+    padding: 2rem;
+    text-align: center;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    color: #1c1917;
+  }
+  p {
+    color: #78716c;
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+  }
+  .grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  a {
+    display: block;
+    padding: 1rem 1.5rem;
+    background: white;
+    border: 1px solid #e7e5e4;
+    border-radius: 1rem;
+    text-decoration: none;
+    color: #1c1917;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  a:hover {
+    border-color: #a8a29e;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+  }
+  a span {
+    display: block;
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: #a8a29e;
+    margin-top: 0.25rem;
+  }
+  .footer {
+    margin-top: 2rem;
+    font-size: 0.75rem;
+    color: #d6d3d1;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Controller Test Pages</h1>
+  <p>Select a controller to test — connect your controller and press any button to begin.</p>
+  <div class="grid">
+    <a href="ps5-controller-test.html">
+      DualSense / PS5 Controller
+      <span>Test DualSense, DualShock 4 &amp; DualShock 3</span>
+    </a>
+    <a href="xbox-controller-test.html">
+      Xbox Controller
+      <span>Test Xbox Series X|S, Elite, One, 360</span>
+    </a>
+    <a href="switch-joycon-test.html">
+      Switch Joy-Cons
+      <span>Test Joy-Con drift, buttons, SL/SR, HD Rumble</span>
+    </a>
+    <a href="switch-pro-controller-test.html">
+      Switch Pro Controller
+      <span>Test Pro Controller stick precision, buttons &amp; more</span>
+    </a>
+    <a href="fight-stick-tester.html">
+      Arcade Stick / Fight Stick
+      <span>Test arcade sticks, hitbox, mixbox &amp; SOCD cleaning</span>
+    </a>
+  </div>
+  <div class="footer">Powered by the Gamepad API</div>
+</div>
+</body>
+</html>
