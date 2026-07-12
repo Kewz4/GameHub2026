@@ -133,3 +133,88 @@ export async function getSteamGridDbArtwork(
   if (!gameId) return null;
   return getSgdbArtwork(gameId);
 }
+
+// ── Artwork picker (multiple variants per asset type) ────────────────────────
+
+/** One selectable artwork variant, as surfaced to the picker UI. */
+export interface ArtworkOption {
+  /** Full-resolution image to apply. */
+  url: string;
+  /** Smaller preview image for the grid (falls back to `url`). */
+  thumbnailUrl: string;
+  width: number | null;
+  height: number | null;
+}
+
+export type ArtworkAssetType = "cover" | "hero" | "logo" | "icon";
+
+interface SgdbListItem {
+  url: string;
+  thumb?: string;
+  width?: number;
+  height?: number;
+}
+
+/** Endpoint + query for each asset type. Covers use the 2:3 grid family. */
+function sgdbEndpointFor(gameId: number, type: ArtworkAssetType): string {
+  switch (type) {
+    case "cover":
+      // Portrait grids (600x900 / 342x482 / 660x930) — the library-cover ratio.
+      return `${SGDB_BASE}/grids/game/${gameId}?dimensions=600x900,342x482,660x930&limit=50`;
+    case "hero":
+      return `${SGDB_BASE}/heroes/game/${gameId}?limit=50`;
+    case "logo":
+      return `${SGDB_BASE}/logos/game/${gameId}?limit=50`;
+    case "icon":
+      return `${SGDB_BASE}/icons/game/${gameId}?limit=50`;
+  }
+}
+
+/**
+ * Fetch every available SteamGridDB variant of one asset type for a game, so
+ * the user can pick a specific cover/hero/logo/icon (Playnite-style).
+ */
+export async function getSteamGridDbArtworkOptions(
+  title: string,
+  type: ArtworkAssetType,
+  steamAppId?: string | null
+): Promise<ArtworkOption[]> {
+  let gameId: number | null = null;
+
+  if (steamAppId) {
+    // Steam titles resolve directly by app id (no fuzzy title matching).
+    try {
+      const res = await axios.get<{ success: boolean; data: { id: number } }>(
+        `${SGDB_BASE}/games/steam/${steamAppId}`,
+        { headers, timeout: 10_000 }
+      );
+      gameId = res.data.data?.id ?? null;
+    } catch {
+      gameId = null;
+    }
+  }
+
+  gameId ??= await findSgdbGameId(title);
+  if (!gameId) return [];
+
+  try {
+    const res = await axios.get<{ success: boolean; data: SgdbListItem[] }>(
+      sgdbEndpointFor(gameId, type),
+      { headers, timeout: 15_000 }
+    );
+    return (res.data.data ?? [])
+      .filter((item) => item.url)
+      .map((item) => ({
+        url: item.url,
+        thumbnailUrl: item.thumb || item.url,
+        width: item.width ?? null,
+        height: item.height ?? null,
+      }));
+  } catch (err) {
+    logger.warn(
+      `SteamGridDB: options fetch failed for "${title}" ${type}`,
+      err
+    );
+    return [];
+  }
+}

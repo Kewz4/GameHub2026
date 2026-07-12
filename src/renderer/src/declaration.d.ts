@@ -491,6 +491,26 @@ declare global {
       customOriginalLogoPath?: string | null;
       customOriginalHeroPath?: string | null;
     }) => Promise<Game>;
+    searchGameArtwork: (params: {
+      shop: GameShop;
+      objectId: string;
+      title: string;
+      assetType: "cover" | "hero" | "logo" | "icon";
+      source: "steamgriddb" | "igdb";
+    }) => Promise<
+      Array<{
+        url: string;
+        thumbnailUrl: string;
+        width: number | null;
+        height: number | null;
+      }>
+    >;
+    applyGameArtwork: (params: {
+      shop: GameShop;
+      objectId: string;
+      assetType: "cover" | "hero" | "logo" | "icon";
+      url: string;
+    }) => Promise<Game>;
     createGameShortcut: (
       shop: GameShop,
       objectId: string,

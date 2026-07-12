@@ -143,6 +143,86 @@ limit 5;`;
     }
   }
 
+  /**
+   * Fetch selectable artwork variants for the picker. IGDB only carries
+   * portrait covers and landscape artwork/screenshots — it has no logos or
+   * icons, so those asset types return []. Images are upscaled from the default
+   * t_thumb to a large size and normalized to absolute https URLs.
+   */
+  async getArtworkOptions(
+    title: string,
+    type: "cover" | "hero" | "logo" | "icon",
+    platformId?: number,
+    clientId?: string,
+    clientSecret?: string
+  ): Promise<Array<{ url: string; thumbnailUrl: string }>> {
+    if (type === "logo" || type === "icon") return [];
+
+    try {
+      const creds = resolveCredentials(clientId, clientSecret);
+      const token = await this.getToken(creds.clientId, creds.clientSecret);
+      const platformClause = platformId
+        ? `\nwhere platforms = [${platformId}];`
+        : "";
+      const query = `search "${title.replace(/"/g, "")}";
+fields name,cover.image_id,artworks.image_id,screenshots.image_id;${platformClause}
+limit 5;`;
+
+      const resp = await axios.post<
+        Array<{
+          name: string;
+          cover?: { image_id: string };
+          artworks?: Array<{ image_id: string }>;
+          screenshots?: Array<{ image_id: string }>;
+        }>
+      >("https://api.igdb.com/v4/games", query, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Client-ID": creds.clientId,
+          "Content-Type": "text/plain",
+        },
+        timeout: 10_000,
+      });
+
+      const normalTitle = title.toLowerCase();
+      const best = (resp.data ?? []).reduce<(typeof resp.data)[number] | null>(
+        (prev, cur) => {
+          if (!prev) return cur;
+          return levenshtein(cur.name.toLowerCase(), normalTitle) <
+            levenshtein(prev.name.toLowerCase(), normalTitle)
+            ? cur
+            : prev;
+        },
+        null
+      );
+      if (!best) return [];
+
+      const img = (imageId: string, size: string) =>
+        `https://images.igdb.com/igdb/image/upload/${size}/${imageId}.jpg`;
+
+      if (type === "cover") {
+        return best.cover
+          ? [
+              {
+                url: img(best.cover.image_id, "t_cover_big_2x"),
+                thumbnailUrl: img(best.cover.image_id, "t_cover_big"),
+              },
+            ]
+          : [];
+      }
+
+      // hero → landscape artworks + screenshots.
+      const landscape = [...(best.artworks ?? []), ...(best.screenshots ?? [])];
+      return landscape.map((a) => ({
+        url: img(a.image_id, "t_1080p"),
+        thumbnailUrl: img(a.image_id, "t_screenshot_med"),
+      }));
+    } catch (err) {
+      console.warn("[igdb] getArtworkOptions failed:", err);
+      return [];
+    }
+  }
+
   async getGameById(
     igdbId: number,
     clientId?: string,

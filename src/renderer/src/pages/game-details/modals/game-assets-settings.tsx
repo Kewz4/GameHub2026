@@ -5,6 +5,7 @@ import { Button, TextField } from "@renderer/components";
 import { useToast } from "@renderer/hooks";
 import { generateRandomGradient } from "@renderer/helpers";
 import type { Game, LibraryGame, ShopDetailsWithAssets } from "@types";
+import { ArtworkSourcePicker } from "./artwork-source-picker";
 
 import "./game-assets-settings.scss";
 
@@ -686,6 +687,22 @@ export function GameAssetsSettings({
       </div>
 
       {renderImageSection(selectedAssetType)}
+
+      {!isCustomGame(game) && (
+        <div className="game-assets-settings__browse-section">
+          <div className="game-assets-settings__asset-label">
+            {t("edit_game_modal_browse_online", {
+              defaultValue: "Browse artwork online",
+            })}
+          </div>
+          <ArtworkSourcePicker
+            shop={game.shop}
+            objectId={game.objectId}
+            title={game.title}
+            onGameUpdated={onGameUpdated}
+          />
+        </div>
+      )}
     </div>
   );
 }

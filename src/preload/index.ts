@@ -367,6 +367,19 @@ contextBridge.exposeInMainWorld("electron", {
     customOriginalLogoPath?: string | null;
     customOriginalHeroPath?: string | null;
   }) => ipcRenderer.invoke("updateGameCustomAssets", params),
+  searchGameArtwork: (params: {
+    shop: GameShop;
+    objectId: string;
+    title: string;
+    assetType: "cover" | "hero" | "logo" | "icon";
+    source: "steamgriddb" | "igdb";
+  }) => ipcRenderer.invoke("searchGameArtwork", params),
+  applyGameArtwork: (params: {
+    shop: GameShop;
+    objectId: string;
+    assetType: "cover" | "hero" | "logo" | "icon";
+    url: string;
+  }) => ipcRenderer.invoke("applyGameArtwork", params),
   createGameShortcut: (
     shop: GameShop,
     objectId: string,

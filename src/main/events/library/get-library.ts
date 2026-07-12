@@ -162,15 +162,20 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
                 meta?.logoImageUrl ||
                 null,
               libraryImageUrl:
+                game.customLibraryImageUrl ||
                 gameAssets?.libraryImageUrl ||
                 meta?.libraryImageUrl ||
                 meta?.coverImageUrl ||
                 null,
               coverImageUrl:
-                gameAssets?.coverImageUrl || meta?.coverImageUrl || null,
+                game.customLibraryImageUrl ||
+                gameAssets?.coverImageUrl ||
+                meta?.coverImageUrl ||
+                null,
               customIconUrl: game.customIconUrl,
               customLogoImageUrl: game.customLogoImageUrl,
               customHeroImageUrl: game.customHeroImageUrl,
+              customLibraryImageUrl: game.customLibraryImageUrl,
             };
           })
       );

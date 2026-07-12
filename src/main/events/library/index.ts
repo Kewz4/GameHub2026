@@ -96,6 +96,7 @@ import "./transfer-game-files";
 import "./update-custom-game";
 import "./update-executable-path";
 import "./update-game-custom-assets";
+import "./game-artwork";
 import "./update-launch-options";
 import "./verify-executable-path";
 import "./enable-experimental-achievements";
