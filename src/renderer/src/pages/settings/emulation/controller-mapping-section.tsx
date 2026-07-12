@@ -7,7 +7,28 @@ import type {
 } from "@types";
 import { Button } from "@renderer/components";
 import { useToast } from "@renderer/hooks";
-import { ControllerVisualTester } from "./controller-visual-tester";
+import { SwitchProDiagram, type DiagramControl } from "./switch-pro-diagram";
+import "./controller-mapper.scss";
+
+/** Diagram control → our PadControl (buttons that map 1:1). */
+const DIAGRAM_TO_CONTROL: Partial<Record<DiagramControl, PadControl>> = {
+  a: "a",
+  b: "b",
+  x: "x",
+  y: "y",
+  l1: "l1",
+  r1: "r1",
+  l2: "l2",
+  r2: "r2",
+  l3: "l3",
+  r3: "r3",
+  select: "select",
+  start: "start",
+  up: "up",
+  down: "down",
+  left: "left",
+  right: "right",
+};
 
 /** Emulated-controller kinds offered per emulator that supports several. */
 const CONTROLLER_TYPES: Partial<
@@ -113,6 +134,12 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   const captureRef = useRef<PadControl | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Live input for the diagram + raw-data readout.
+  const [livePressed, setLivePressed] = useState<boolean[]>([]);
+  const [liveAxes, setLiveAxes] = useState<number[]>([]);
+  const [hovered, setHovered] = useState<DiagramControl | null>(null);
+  const [rumbling, setRumbling] = useState(false);
+
   const typeOptions = CONTROLLER_TYPES[binary];
 
   const loadProfile = useCallback(
@@ -161,6 +188,41 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       window.clearInterval(id);
     };
   }, []);
+
+  // Continuously read the selected pad so the diagram lights up live.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
+      if (gp) {
+        setLivePressed(gp.buttons.map((b) => b.pressed));
+        setLiveAxes(Array.from(gp.axes));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [selectedPad]);
+
+  const testRumble = useCallback(() => {
+    const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
+    const actuator = (
+      gp as (Gamepad & { vibrationActuator?: GamepadHapticActuator }) | null
+    )?.vibrationActuator;
+    if (!actuator || typeof actuator.playEffect !== "function") {
+      showErrorToast("This controller doesn't expose rumble in the browser.");
+      return;
+    }
+    setRumbling(true);
+    actuator
+      .playEffect("dual-rumble", {
+        duration: 600,
+        strongMagnitude: 1,
+        weakMagnitude: 0.6,
+      })
+      .catch(() => {})
+      .finally(() => setRumbling(false));
+  }, [selectedPad, showErrorToast]);
 
   const finishCapture = useCallback((control: PadControl, token: string) => {
     captureRef.current = null;
@@ -257,10 +319,23 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
     return <p className="emulator-detail__muted">Loading controller…</p>;
   }
 
-  return (
-    <div className="controller-mapping">
-      <ControllerVisualTester binary={binary} />
+  const showDiagram = binary === "cemu" || binary === "dolphin";
 
+  // Which diagram control is currently being bound (pulses on the diagram).
+  const activeDiagramControl =
+    (Object.entries(DIAGRAM_TO_CONTROL).find(
+      ([, pad]) => pad === capturing
+    )?.[0] as DiagramControl | undefined) ?? null;
+
+  const hoveredControl = hovered ? DIAGRAM_TO_CONTROL[hovered] : undefined;
+
+  const onDiagramClick = (c: DiagramControl) => {
+    const control = DIAGRAM_TO_CONTROL[c];
+    if (control) setCapturing((cur) => (cur === control ? null : control));
+  };
+
+  return (
+    <div className="controller-mapper">
       <div className="controller-mapping__toolbar">
         <label className="controller-mapping__pad-select">
           <span>Controller</span>
@@ -332,29 +407,116 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
         </span>
       </label>
 
-      <p className="emulator-detail__muted">
-        Press a control&apos;s &quot;Set&quot; button below, then press the
-        button on your controller to bind it. One mapping is written to every
-        installed emulator.
-      </p>
-
-      <div className="controller-mapping__grid">
-        {CONTROLS.map(({ control, label }) => (
-          <div key={control} className="controller-mapping__row">
-            <span className="controller-mapping__control-label">{label}</span>
-            <span className="controller-mapping__binding">
-              {tokenLabel(profile.bindings[control])}
-            </span>
-            <Button
-              theme="outline"
-              onClick={() =>
-                setCapturing((c) => (c === control ? null : control))
-              }
-            >
-              {capturing === control ? "Press a button…" : "Set"}
-            </Button>
+      {/* Top: controller diagram (left) + binding list (right). */}
+      <div className="controller-mapper__main">
+        {showDiagram && (
+          <div className="controller-mapper__diagram-col">
+            <SwitchProDiagram
+              pressed={livePressed}
+              axes={liveAxes}
+              activeControl={activeDiagramControl}
+              onHoverControl={setHovered}
+              onClickControl={onDiagramClick}
+            />
+            <p className="controller-mapper__diagram-hint">
+              {hovered && hoveredControl
+                ? `${hovered.toUpperCase()} → ${tokenLabel(profile.bindings[hoveredControl])}`
+                : "Press a control on your controller — it lights up here. Click a button on the diagram (or “Set”) to bind it."}
+            </p>
           </div>
-        ))}
+        )}
+
+        <div className="controller-mapper__bind-col">
+          <div className="controller-mapper__grid">
+            {CONTROLS.map(({ control, label }) => {
+              const isCapturing = capturing === control;
+              const isHovered = hoveredControl === control;
+              return (
+                <div
+                  key={control}
+                  className={
+                    "controller-mapper__row" +
+                    (isCapturing ? " controller-mapper__row--capturing" : "") +
+                    (isHovered ? " controller-mapper__row--hovered" : "")
+                  }
+                >
+                  <span className="controller-mapper__control-label">
+                    {label}
+                  </span>
+                  <span className="controller-mapper__binding">
+                    {tokenLabel(profile.bindings[control])}
+                  </span>
+                  <Button
+                    theme={isCapturing ? "primary" : "outline"}
+                    onClick={() =>
+                      setCapturing((c) => (c === control ? null : control))
+                    }
+                  >
+                    {isCapturing ? "Press…" : "Set"}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Below: live tester elements — sticks, rumble, raw data. */}
+      <div className="controller-mapper__extras">
+        <div className="controller-mapper__card">
+          <h4>Analog sticks</h4>
+          <div className="controller-mapper__sticks">
+            {[
+              { label: "Left", x: liveAxes[0] ?? 0, y: liveAxes[1] ?? 0 },
+              { label: "Right", x: liveAxes[2] ?? 0, y: liveAxes[3] ?? 0 },
+            ].map((s) => (
+              <div key={s.label} className="controller-mapper__stick">
+                <div className="controller-mapper__stick-well">
+                  <span
+                    className="controller-mapper__stick-dot"
+                    style={{
+                      transform: `translate(${s.x * 26}px, ${s.y * 26}px)`,
+                    }}
+                  />
+                </div>
+                <span className="controller-mapper__stick-label">
+                  {s.label} {s.x.toFixed(2)}, {s.y.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="controller-mapper__card">
+          <h4>Vibration</h4>
+          <Button theme="outline" onClick={testRumble} disabled={rumbling}>
+            {rumbling ? "Rumbling…" : "Test rumble"}
+          </Button>
+        </div>
+
+        <div className="controller-mapper__card controller-mapper__card--raw">
+          <h4>Raw data</h4>
+          <div className="controller-mapper__raw">
+            <div className="controller-mapper__raw-buttons">
+              {livePressed.map((p, i) => (
+                <span
+                  key={i}
+                  className={
+                    "controller-mapper__raw-btn" +
+                    (p ? " controller-mapper__raw-btn--on" : "")
+                  }
+                >
+                  {i}
+                </span>
+              ))}
+              {livePressed.length === 0 && (
+                <span className="emulator-detail__muted">
+                  No controller detected
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
