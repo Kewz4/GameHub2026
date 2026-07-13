@@ -14,11 +14,11 @@ import type { DiagramControl } from "./controller-tokens";
 
 const ACCENT = "var(--color-primary, #7aa2ff)";
 const VIEWBOX = "0 0 3827.6 2672.9";
-// The control stick cap moves within its big static well (well r≈460, cap
-// r≈210 → up to ~230 travel). The C-Stick nub is smaller and moves within the
-// static yellow base, so it gets a shorter travel.
-const MAIN_TRAVEL = 190;
-const C_TRAVEL = 70;
+// Both sticks move only their inner nub within a static socket, so travel is
+// bounded by how much room the nub has (control-stick nub r≈118 in the octagon
+// cap r≈210; C-Stick nub r≈151 in the yellow base r≈206).
+const MAIN_TRAVEL = 80;
+const C_TRAVEL = 50;
 
 // Base palette from the source SVG.
 const C = {
@@ -172,22 +172,25 @@ export function GameCubeDiagram({
         d="M3462.1,420c-348.9-233.1-748.2-92.1-920,140-190.5,257.4-96,604-192,760-74.4,121-148.9,128.8-260,316-72.5,122.2-88,404,136,564,243.8,174.1,489.2,101,644-68,84.2-91.9,87.6-240.2,196-356,133.4-142.5,379.7-117.5,568-400,192-288,190.3-714-172-956Z"
       />
 
-      {/* ── Control stick (well static, cap translates) ─────────────── */}
-      <ellipse cx="753" cy="976" rx="475.3" ry="470.4" fill={C.outerRing} />
-      <ellipse cx="753" cy="976" rx="463.2" ry="458.4" fill={C.innerRing} />
-      <g transform={`translate(${lx} ${ly})`} {...hit("l3")}>
+      {/* ── Control stick: well + octagon cap STATIC, inner nub moves ── */}
+      <g {...hit("l3")}>
+        <ellipse cx="753" cy="976" rx="475.3" ry="470.4" fill={C.outerRing} />
+        <ellipse cx="753" cy="976" rx="463.2" ry="458.4" fill={C.innerRing} />
+        {/* Dark + light octagon cap — stay put as the socket. */}
         <path d="M966.5,775.5c-16.5-16.5-172-88.3-210.8-88.3s-189.9,67.7-210.2,88.1c-21.4,21.4-87.4,180.2-88.4,211.2-1,30.3,63.2,186.7,87,210.5,26.2,26.2,171.7,85.5,210.5,86.5,38.8,1,184.9-64.1,209.8-86.1,25.2-22.3,89.3-181.1,89.3-211.3,0-30.1-68.8-192.3-87.2-210.7Z" />
         <path
           fill={C.stickMid}
           d="M960.1,782c-16-16-166.7-85.6-204.4-85.6s-184.1,65.6-203.8,85.4c-20.7,20.7-84.7,174.7-85.7,204.8-1,29.4,61.3,181,84.4,204.1,25.4,25.4,166.5,82.9,204.1,83.8,37.6.9,179.3-62.2,203.4-83.5,24.5-21.6,86.6-175.6,86.6-204.8s-66.7-186.4-84.6-204.2Z"
         />
-        <ellipse
-          cx="753"
-          cy="995.1"
-          rx="209.7"
-          ry="198"
-          fill={on("l3") ? ACCENT : C.stickBase}
-        />
+        {/* Inner nub — the only part that moves. */}
+        <g transform={`translate(${lx} ${ly})`}>
+          <circle
+            cx="753"
+            cy="988"
+            r="118"
+            fill={on("l3") ? ACCENT : C.stickBase}
+          />
+        </g>
       </g>
 
       {/* ── C-Stick: yellow base STATIC, inner nub translates ───────── */}
