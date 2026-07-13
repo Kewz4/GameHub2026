@@ -8,6 +8,12 @@ import type {
 import { Button } from "@renderer/components";
 import { useToast } from "@renderer/hooks";
 import { SwitchProDiagram, type DiagramControl } from "./switch-pro-diagram";
+import {
+  AXIS_NAME,
+  AXIS_THRESHOLD,
+  BUTTON_TOKEN,
+  tokenActivation,
+} from "./controller-tokens";
 import "./controller-mapper.scss";
 
 /** Diagram control → our PadControl (buttons that map 1:1). */
@@ -78,37 +84,6 @@ const CONTROLS: { control: PadControl; label: string }[] = [
   { control: "rstick_left", label: "Right Stick Left" },
   { control: "rstick_right", label: "Right Stick Right" },
 ];
-
-// Standard Gamepad API button index → SDL GameController token.
-const BUTTON_TOKEN: Record<number, string> = {
-  0: "a",
-  1: "b",
-  2: "x",
-  3: "y",
-  4: "leftshoulder",
-  5: "rightshoulder",
-  6: "lefttrigger",
-  7: "righttrigger",
-  8: "back",
-  9: "start",
-  10: "leftstick",
-  11: "rightstick",
-  12: "dpup",
-  13: "dpdown",
-  14: "dpleft",
-  15: "dpright",
-  16: "guide",
-};
-
-// Standard Gamepad API axis index → SDL axis name.
-const AXIS_NAME: Record<number, string> = {
-  0: "leftx",
-  1: "lefty",
-  2: "rightx",
-  3: "righty",
-};
-
-const AXIS_THRESHOLD = 0.6;
 
 /** Human label for an SDL token, for display. */
 function tokenLabel(token: string): string {
@@ -334,6 +309,33 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
     if (control) setCapturing((cur) => (cur === control ? null : control));
   };
 
+  // Semantic activation for the diagram: resolve each EMULATED control through
+  // the user's bindings, so the diagram lights the control being triggered —
+  // not the physical button that happens to share its name.
+  const diagramActive: Partial<Record<DiagramControl, boolean>> = {};
+  for (const [diagramKey, padControl] of Object.entries(DIAGRAM_TO_CONTROL) as [
+    DiagramControl,
+    PadControl,
+  ][]) {
+    diagramActive[diagramKey] =
+      tokenActivation(profile.bindings[padControl], livePressed, liveAxes) >
+      AXIS_THRESHOLD * 0.5;
+  }
+
+  // Bound stick deflection: each axis from its two direction bindings
+  // (analog magnitude for axis tokens, 0/1 for button tokens).
+  const dir = (control: PadControl) =>
+    Math.min(
+      1,
+      tokenActivation(profile.bindings[control], livePressed, liveAxes)
+    );
+  const stickDeflection: [number, number, number, number] = [
+    dir("lstick_right") - dir("lstick_left"),
+    dir("lstick_down") - dir("lstick_up"),
+    dir("rstick_right") - dir("rstick_left"),
+    dir("rstick_down") - dir("rstick_up"),
+  ];
+
   return (
     <div className="controller-mapper">
       <div className="controller-mapping__toolbar">
@@ -412,8 +414,8 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
         {showDiagram && (
           <div className="controller-mapper__diagram-col">
             <SwitchProDiagram
-              pressed={livePressed}
-              axes={liveAxes}
+              active={diagramActive}
+              stickDeflection={stickDeflection}
               activeControl={activeDiagramControl}
               onHoverControl={setHovered}
               onClickControl={onDiagramClick}

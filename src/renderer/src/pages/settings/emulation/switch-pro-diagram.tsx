@@ -2,13 +2,14 @@ import type { CSSProperties } from "react";
 
 /**
  * Native Switch Pro controller diagram, transcribed from the standalone tester
- * SVG (controllertest.io layout) and re-themed for GameHub's dark UI. Every
- * pressable element lights up with the app accent when its Gamepad API button
- * is down; sticks translate with their axes. Hovering a control fires
- * onHoverControl so the parent can show the current binding.
+ * SVG (controllertest.io layout) and re-themed for GameHub's dark UI.
  *
- * Button index map (Nintendo standard): 0=B 1=A 2=Y 3=X, 4=L 5=R, 6=ZL 7=ZR,
- * 8=minus 9=plus, 10=L3 11=R3, 12–15=dpad, 16=home, 17=capture.
+ * The diagram is purely SEMANTIC: it renders emulated controls ("a", "l2",
+ * "up"…) whose activation the parent resolves through the user's bindings.
+ * It never reads raw Gamepad API indices, so a physical Xbox Y bound to
+ * emulated A correctly lights up the A button here. Sticks translate with the
+ * bound stick-direction deflections. Hovering a control fires onHoverControl
+ * so the parent can show the current binding; clicking starts a rebind.
  */
 
 const STONE = {
@@ -48,10 +49,14 @@ export type DiagramControl =
   | "capture";
 
 export interface SwitchProDiagramProps {
-  /** Gamepad API pressed states, indexed by button number. */
-  pressed: boolean[];
-  /** Gamepad API axes ([lx, ly, rx, ry]). */
-  axes: number[];
+  /**
+   * Semantic activation per EMULATED control (already resolved through the
+   * user's bindings) — the diagram never reads raw button indices, so a
+   * physical Y bound to emulated A lights up A here.
+   */
+  active: Partial<Record<DiagramControl, boolean>>;
+  /** Bound stick deflections, each -1..1: [lx, ly, rx, ry]. */
+  stickDeflection: [number, number, number, number];
   /** Control currently selected for binding (pulses on the diagram). */
   activeControl?: DiagramControl | null;
   onHoverControl?: (control: DiagramControl | null) => void;
@@ -59,20 +64,20 @@ export interface SwitchProDiagramProps {
 }
 
 export function SwitchProDiagram({
-  pressed,
-  axes,
+  active,
+  stickDeflection,
   activeControl,
   onHoverControl,
   onClickControl,
 }: Readonly<SwitchProDiagramProps>) {
-  const down = (i: number) => Boolean(pressed[i]);
-  const fill = (active: boolean) => (active ? ACCENT : STONE.btn);
-  const axis = (i: number) => Math.max(-1, Math.min(1, axes[i] ?? 0));
+  const down = (c: DiagramControl) => Boolean(active[c]);
+  const fill = (isActive: boolean) => (isActive ? ACCENT : STONE.btn);
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v || 0));
 
-  const lx = axis(0) * STICK_TRAVEL;
-  const ly = axis(1) * STICK_TRAVEL;
-  const rx = axis(2) * STICK_TRAVEL;
-  const ry = axis(3) * STICK_TRAVEL;
+  const lx = clamp(stickDeflection[0]) * STICK_TRAVEL;
+  const ly = clamp(stickDeflection[1]) * STICK_TRAVEL;
+  const rx = clamp(stickDeflection[2]) * STICK_TRAVEL;
+  const ry = clamp(stickDeflection[3]) * STICK_TRAVEL;
 
   const hover = (c: DiagramControl | null) => () => onHoverControl?.(c);
   const interactive = (
@@ -119,7 +124,7 @@ export function SwitchProDiagram({
       <g {...interactive("l2")}>
         <path
           d="m152.5,52.97c0,4.61 -3.35,8.36 -7.5,8.36l-13,0c-4.14,0 -7.5,-3.74 -7.5,-8.36l0,-22.86c0,-8.62 6.27,-15.61 14,-15.61c7.73,0 14,6.99 14,15.61l0,22.86z"
-          fill={fill(down(6))}
+          fill={fill(down("l2"))}
           stroke={STONE.btnStroke}
           strokeWidth={2}
         />
@@ -129,7 +134,7 @@ export function SwitchProDiagram({
           textAnchor="middle"
           fontSize={10}
           fontWeight="bold"
-          fill={down(6) ? ACCENT_TEXT : STONE.label}
+          fill={down("l2") ? ACCENT_TEXT : STONE.label}
         >
           ZL
         </text>
@@ -137,7 +142,7 @@ export function SwitchProDiagram({
       <g {...interactive("r2")}>
         <path
           d="m316.83,53.44c0,4.64 -3.44,8.39 -7.68,8.39l-13.31,0c-4.24,0 -7.68,-3.76 -7.68,-8.39l0,-22.94c0,-8.65 6.42,-15.67 14.33,-15.67c7.92,0 14.33,7.01 14.33,15.67l0,22.94z"
-          fill={fill(down(7))}
+          fill={fill(down("r2"))}
           stroke={STONE.btnStroke}
           strokeWidth={2}
         />
@@ -147,7 +152,7 @@ export function SwitchProDiagram({
           textAnchor="middle"
           fontSize={10}
           fontWeight="bold"
-          fill={down(7) ? ACCENT_TEXT : STONE.label}
+          fill={down("r2") ? ACCENT_TEXT : STONE.label}
         >
           ZR
         </text>
@@ -161,7 +166,7 @@ export function SwitchProDiagram({
           width="43.3"
           height="17"
           rx="4"
-          fill={fill(down(4))}
+          fill={fill(down("l1"))}
           stroke={STONE.btnStroke}
           strokeWidth={2}
         />
@@ -171,7 +176,7 @@ export function SwitchProDiagram({
           textAnchor="middle"
           fontSize={10}
           fontWeight="bold"
-          fill={down(4) ? ACCENT_TEXT : STONE.label}
+          fill={down("l1") ? ACCENT_TEXT : STONE.label}
         >
           L
         </text>
@@ -183,7 +188,7 @@ export function SwitchProDiagram({
           width="42.6"
           height="17"
           rx="4"
-          fill={fill(down(5))}
+          fill={fill(down("r1"))}
           stroke={STONE.btnStroke}
           strokeWidth={2}
         />
@@ -193,7 +198,7 @@ export function SwitchProDiagram({
           textAnchor="middle"
           fontSize={10}
           fontWeight="bold"
-          fill={down(5) ? ACCENT_TEXT : STONE.label}
+          fill={down("r1") ? ACCENT_TEXT : STONE.label}
         >
           R
         </text>
@@ -213,7 +218,7 @@ export function SwitchProDiagram({
           cx="113"
           cy="160"
           r="28"
-          fill={down(10) ? ACCENT : STONE.stick}
+          fill={down("l3") ? ACCENT : STONE.stick}
           stroke={activeControl === "l3" ? ACCENT : STONE.body}
           strokeWidth={2}
         />
@@ -241,7 +246,7 @@ export function SwitchProDiagram({
           cx="278"
           cy="238"
           r="28"
-          fill={down(11) ? ACCENT : STONE.stick}
+          fill={down("r3") ? ACCENT : STONE.stick}
           stroke={activeControl === "r3" ? ACCENT : STONE.body}
           strokeWidth={2}
         />
@@ -265,16 +270,28 @@ export function SwitchProDiagram({
         strokeWidth={2}
       />
       <g {...interactive("up")}>
-        <path d="M166 206 L176 228 L166 238 L156 228 Z" fill={fill(down(12))} />
+        <path
+          d="M166 206 L176 228 L166 238 L156 228 Z"
+          fill={fill(down("up"))}
+        />
       </g>
       <g {...interactive("down")}>
-        <path d="M166 270 L156 248 L166 238 L176 248 Z" fill={fill(down(13))} />
+        <path
+          d="M166 270 L156 248 L166 238 L176 248 Z"
+          fill={fill(down("down"))}
+        />
       </g>
       <g {...interactive("left")}>
-        <path d="M134 238 L156 228 L166 238 L156 248 Z" fill={fill(down(14))} />
+        <path
+          d="M134 238 L156 228 L166 238 L156 248 Z"
+          fill={fill(down("left"))}
+        />
       </g>
       <g {...interactive("right")}>
-        <path d="M198 238 L176 248 L166 238 L176 228 Z" fill={fill(down(15))} />
+        <path
+          d="M198 238 L176 248 L166 238 L176 228 Z"
+          fill={fill(down("right"))}
+        />
       </g>
       <circle cx="166" cy="238" r="9" fill={STONE.dpad} />
 
@@ -288,17 +305,17 @@ export function SwitchProDiagram({
         strokeWidth={2}
       />
       {[
-        { c: "x" as const, i: 3, cx: 329, cy: 140, label: "X" },
-        { c: "y" as const, i: 2, cx: 310, cy: 162, label: "Y" },
-        { c: "b" as const, i: 0, cx: 329, cy: 184, label: "B" },
-        { c: "a" as const, i: 1, cx: 348, cy: 162, label: "A" },
-      ].map(({ c, i, cx, cy, label }) => (
+        { c: "x" as const, cx: 329, cy: 140, label: "X" },
+        { c: "y" as const, cx: 310, cy: 162, label: "Y" },
+        { c: "b" as const, cx: 329, cy: 184, label: "B" },
+        { c: "a" as const, cx: 348, cy: 162, label: "A" },
+      ].map(({ c, cx, cy, label }) => (
         <g key={c} {...interactive(c)}>
           <circle
             cx={cx}
             cy={cy}
             r="13"
-            fill={fill(down(i))}
+            fill={fill(down(c))}
             {...ring(activeControl === c)}
           />
           <text
@@ -307,7 +324,7 @@ export function SwitchProDiagram({
             textAnchor="middle"
             fontSize={12}
             fontWeight={900}
-            fill={down(i) ? ACCENT_TEXT : STONE.label}
+            fill={down(c) ? ACCENT_TEXT : STONE.label}
             style={{ pointerEvents: "none" }}
           >
             {label}
@@ -323,12 +340,26 @@ export function SwitchProDiagram({
           width="12"
           height="4"
           rx="1"
-          fill={fill(down(8))}
+          fill={fill(down("select"))}
         />
       </g>
       <g transform="translate(249, 156)" {...interactive("start")}>
-        <rect x="0" y="4" width="12" height="4" rx="1" fill={fill(down(9))} />
-        <rect x="4" y="0" width="4" height="12" rx="1" fill={fill(down(9))} />
+        <rect
+          x="0"
+          y="4"
+          width="12"
+          height="4"
+          rx="1"
+          fill={fill(down("start"))}
+        />
+        <rect
+          x="4"
+          y="0"
+          width="4"
+          height="12"
+          rx="1"
+          fill={fill(down("start"))}
+        />
       </g>
 
       {/* Home / Capture */}
@@ -339,14 +370,14 @@ export function SwitchProDiagram({
           width="14"
           height="14"
           rx="3"
-          fill={fill(down(16))}
+          fill={fill(down("guide"))}
         />
         <circle
           cx="221"
           cy="182"
           r="4"
           fill="none"
-          stroke={down(16) ? ACCENT_TEXT : STONE.label}
+          stroke={down("guide") ? ACCENT_TEXT : STONE.label}
           strokeWidth={1.5}
         />
       </g>
@@ -357,7 +388,7 @@ export function SwitchProDiagram({
           width="12"
           height="12"
           rx="2"
-          fill={fill(down(17))}
+          fill={fill(down("capture"))}
         />
       </g>
     </svg>
