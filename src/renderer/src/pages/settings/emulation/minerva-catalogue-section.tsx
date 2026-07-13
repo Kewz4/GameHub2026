@@ -29,22 +29,22 @@ export function MinervaCatalogueSection() {
       className="settings-emulation__retroachievements"
       style={{ maxWidth: 640, marginBottom: 24 }}
     >
-      <h3 style={{ margin: "0 0 4px" }}>Minerva ROM Catalogue</h3>
+      <h3 style={{ margin: "0 0 4px" }}>GameHub Vault Catalogue</h3>
       <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
-        Pre-fetch all ROM listings from Minerva Archive and store them locally
-        so download options appear instantly when you open a game. This may take
-        a few minutes.
+        The GameHub Vault is our community-dumped USA game library (games,
+        updates and DLC). It&apos;s bundled with the app, so this only rebuilds
+        the local index — useful after an update.
       </p>
 
       {counts && (
         <div style={{ marginBottom: 12, fontSize: "0.875em", opacity: 0.8 }}>
-          Cached {total?.toLocaleString()} ROMs across{" "}
+          Cached {total?.toLocaleString()} entries across{" "}
           {Object.keys(counts).length} systems.
         </div>
       )}
 
       <Button type="button" onClick={handleRefresh} disabled={isBuilding}>
-        {isBuilding ? "Building catalogue..." : "Refresh Minerva Catalogue"}
+        {isBuilding ? "Building catalogue..." : "Rebuild Game Catalogue"}
       </Button>
     </section>
   );

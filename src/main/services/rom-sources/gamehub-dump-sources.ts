@@ -46,10 +46,7 @@ const CONSOLE_MAP: Record<string, EmulatorSystem> = {
 };
 
 /** Consoles that ship update/DLC catalogues + the file names they use. */
-const SUPPLEMENTAL: Record<
-  string,
-  { updates?: string[]; dlc?: string[] }
-> = {
+const SUPPLEMENTAL: Record<string, { updates?: string[]; dlc?: string[] }> = {
   "3ds": { updates: ["updates.json"], dlc: ["dlc.json"] },
   ps3: { updates: ["update.json", "updates.json"], dlc: ["dlc.json"] },
   psp: { dlc: ["dlc.json"] },
@@ -189,7 +186,8 @@ export async function ensureGameHubDumpCatalogue(): Promise<void> {
     .catch(() => 0);
 
   const hasEntries = await (async () => {
-    for await (const _ of minervaCatalogueSublevel.keys({ limit: 1 })) return true;
+    for await (const _ of minervaCatalogueSublevel.keys({ limit: 1 }))
+      return true;
     return false;
   })();
 
