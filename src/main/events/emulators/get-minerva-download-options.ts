@@ -6,7 +6,6 @@ import {
 import { normalizeTitle } from "@main/services/rom-sources/minerva-source";
 import {
   parseRomFilename,
-  isAllowedRomRegion,
   romRegionFamilies,
 } from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem, GameRepack } from "@types";
@@ -152,19 +151,16 @@ const getMinervaDownloadOptions = async (
 
     const repacks: GameRepack[] = [];
     for (const entry of entries) {
-      // Prefer the direct .torrent link: the native torrent client fetches it
-      // over HTTPS and selects exactly this entry's file from the collection
-      // torrent — deterministic, unlike magnets routed through debrid caches.
+      // GameHub Vault dumps are a direct hoster link (VikingFile etc.) routed
+      // through TorBox/the hoster — no torrent. Legacy Minerva magnets/.torrent
+      // are still honoured as a fallback.
       const torrentUrl = entry.torrentUrl
         ? entry.torrentUrl.startsWith("/")
           ? `https://minerva-archive.org${entry.torrentUrl}`
           : entry.torrentUrl
         : null;
-      const uri = torrentUrl ?? entry.magnet;
+      const uri = entry.downloadUrl ?? torrentUrl ?? entry.magnet;
       if (!uri) continue;
-      // USA/Europe only — belt-and-braces on top of the sync-time filter, so
-      // stale pre-v4 catalogues can't offer Japanese/Korean variants.
-      if (!isAllowedRomRegion(entry.filename)) continue;
 
       repacks.push({
         id: `minerva:${system}:${entry.filename}`,
@@ -173,8 +169,8 @@ const getMinervaDownloadOptions = async (
         uris: [uri],
         unavailableUris: [],
         uploadDate: null,
-        downloadSourceId: "minerva-archive",
-        downloadSourceName: "Minerva Archive",
+        downloadSourceId: "gamehub-vault",
+        downloadSourceName: "GameHub Vault",
         createdAt: new Date().toISOString(),
         contentType: entry.contentType ?? "game",
         region: entry.region ?? parseRomFilename(entry.filename).region,

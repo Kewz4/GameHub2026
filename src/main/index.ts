@@ -439,10 +439,11 @@ app.whenReady().then(async () => {
   });
 
   // Populate the console/emulated ROM catalogue on first run so those games are
-  // searchable out of the box. No-ops once cached; never blocks startup.
-  import("./services/rom-sources/minerva-sources")
-    .then(({ ensureMinervaCatalogue }) => ensureMinervaCatalogue())
-    .catch((err) => logger.error("minerva catalogue bootstrap failed:", err));
+  // searchable out of the box. GameHub Vault (community USA dumps) replaces the
+  // Minerva archive. No-ops once cached; never blocks startup.
+  import("./services/rom-sources/gamehub-dump-sources")
+    .then(({ ensureGameHubDumpCatalogue }) => ensureGameHubDumpCatalogue())
+    .catch((err) => logger.error("dump catalogue bootstrap failed:", err));
 
   // Populate the hosted console metadata (art/genres) so emulated games render
   // rich cards in search and the catalogue. No-ops once cached.

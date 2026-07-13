@@ -10,6 +10,8 @@ export interface MinervaCatalogueEntry {
   romPath: string;
   magnet: string | null;
   torrentUrl: string | null;
+  /** Direct hoster download link (GameHub Vault dumps — VikingFile etc.). */
+  downloadUrl?: string | null;
   fileSize?: string | null;
   contentType?: "game" | "update" | "dlc";
   /** PS3/WiiU title ID for cross-referencing updates and DLC to base games. */
