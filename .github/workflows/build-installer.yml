@@ -51,7 +51,7 @@ jobs:
         run: python python_rpc/setup.py build
 
       - name: Build Windows installer
-        run: yarn build:win
+        run: yarn build:win -- --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
@@ -94,7 +94,6 @@ jobs:
           tag_name: ${{ steps.reltag.outputs.tag }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
-          allow_update: true
           files: |
             dist/*.exe
             dist/*.zip
