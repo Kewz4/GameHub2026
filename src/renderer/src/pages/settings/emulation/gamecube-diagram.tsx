@@ -15,9 +15,9 @@ import type { DiagramControl } from "./controller-tokens";
 const ACCENT = "var(--color-primary, #7aa2ff)";
 const VIEWBOX = "0 0 3827.6 2672.9";
 // Both sticks move only their inner nub within a static socket, so travel is
-// bounded by how much room the nub has (control-stick nub r≈118 in the octagon
+// bounded by how much room the nub has (control-stick nub r≈165 in the octagon
 // cap r≈210; C-Stick nub r≈151 in the yellow base r≈206).
-const MAIN_TRAVEL = 80;
+const MAIN_TRAVEL = 42;
 const C_TRAVEL = 50;
 
 // Base palette from the source SVG.
@@ -187,7 +187,7 @@ export function GameCubeDiagram({
           <circle
             cx="753"
             cy="988"
-            r="118"
+            r="165"
             fill={on("l3") ? ACCENT : C.stickBase}
           />
         </g>
