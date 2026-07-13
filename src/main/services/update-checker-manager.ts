@@ -40,6 +40,14 @@ export class UpdateCheckerManager {
    */
   static splashInProgress = false;
 
+  /**
+   * Set to true while an update is being applied (NSIS install or portable
+   * batch). The before-quit handler in index.ts checks this so it doesn't
+   * preventDefault + do async cleanup — which races the NSIS installer and
+   * leaves the old exe locked ("file in use" dialog / old version reopens).
+   */
+  static isApplyingUpdate = false;
+
   /** Reject a promise if it hasn't settled within `ms`. */
   private static withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     return Promise.race([
@@ -205,9 +213,16 @@ export class UpdateCheckerManager {
 
   static applyNsisUpdate(): void {
     this.sendEvent({ type: "applying" });
+    this.isApplyingUpdate = true;
     // Delay before quitting to let the renderer flush — avoids ERROR 32.
     setTimeout(() => {
-      autoUpdater.quitAndInstall(false, true);
+      // Silent install (isSilent=true) so no NSIS UI window appears.
+      // Force run after (isForceRunAfter=true) relaunches the new version.
+      // isApplyingUpdate is set so the before-quit handler in index.ts
+      // doesn't preventDefault + do async cleanup, which races the installer
+      // and leaves the old exe locked (the "old launcher reopens / terminal
+      // asks to close it" bug).
+      autoUpdater.quitAndInstall(true, true);
     }, 1500);
   }
 
@@ -244,6 +259,10 @@ export class UpdateCheckerManager {
     const startTime = Date.now();
     let lastBytes = 0;
     let lastTime = startTime;
+    // Keep the last calculated speed so events between 500ms recalculations
+    // don't send 0 (which made the renderer's speed display flicker to "0 B/s"
+    // every other update).
+    let lastBytesPerSecond = 0;
 
     for (;;) {
       const { done, value } = await reader.read();
@@ -253,16 +272,15 @@ export class UpdateCheckerManager {
       const now = Date.now();
       const elapsedSinceLast = (now - lastTime) / 1000;
       // Recalculate speed at most every 500 ms to smooth the display
-      let bytesPerSecond = 0;
       if (elapsedSinceLast >= 0.5) {
-        bytesPerSecond = (downloaded - lastBytes) / elapsedSinceLast;
+        lastBytesPerSecond = (downloaded - lastBytes) / elapsedSinceLast;
         lastBytes = downloaded;
         lastTime = now;
       }
       this.sendEvent({
         type: "downloading",
         percent: total ? (downloaded / total) * 80 : 0,
-        bytesPerSecond,
+        bytesPerSecond: lastBytesPerSecond,
         transferred: downloaded,
         total,
       });
@@ -302,6 +320,7 @@ export class UpdateCheckerManager {
 
   static applyPortableUpdate(): void {
     this.sendEvent({ type: "applying" });
+    this.isApplyingUpdate = true;
 
     const exeDir =
       process.env.PORTABLE_EXECUTABLE_DIR ?? path.dirname(process.execPath);
@@ -332,6 +351,10 @@ export class UpdateCheckerManager {
       windowsHide: true,
     }).unref();
 
-    app.quit();
+    // Force-exit (bypasses before-quit's preventDefault + async cleanup which
+    // would race the batch file's robocopy — the old exe stays locked and
+    // the "start" command reopens the old version). The batch file waits 6s
+    // before copying, which is plenty for the process to exit.
+    app.exit(0);
   }
 }

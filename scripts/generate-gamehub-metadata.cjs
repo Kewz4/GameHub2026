@@ -421,12 +421,14 @@ async function processSystem(system, opts) {
 
     if (!opts.force && existing) {
       let didWork = false;
+      const backfills = [];
 
       // Icon backfill if this entry predates icons (cheap: 1 SGDB search + 1
       // icon fetch).
       if (!("iconUrl" in existing)) {
         const search = cleanTitle(title) || title;
         existing.iconUrl = await sgdbIconOnly(search).catch(() => null);
+        backfills.push(existing.iconUrl ? "icon" : "icon-miss");
         didWork = true;
       }
 
@@ -452,25 +454,33 @@ async function processSystem(system, opts) {
             ? new Date(igdb.first_release_date * 1000).getUTCFullYear()
             : (existing.releaseYear ?? null);
         }
+        backfills.push(
+          igdb ? `igdb(${(igdb.genres ?? []).length}g)` : "igdb-miss"
+        );
         didWork = true;
       }
 
       if (didWork) {
         resolved++;
-        processed++;
-        if (processed % 25 === 0) {
-          process.stdout.write(
-            `  ${system}: ${processed}/${todo.length} (${resolved} backfilled)\n`
-          );
-          flush(outPath, { system, generatedAt: Date.now(), games });
-        }
-        await sleep(opts.igdbBackfill ? 280 : 120);
+        process.stdout.write(
+          `  ${system} ${processed + 1}/${todo.length}  "${title}" → backfill (${backfills.join(", ")})\n`
+        );
       } else {
-        processed++;
+        process.stdout.write(
+          `  ${system} ${processed + 1}/${todo.length}  "${title}" → skip (cached)\n`
+        );
       }
+      processed++;
+      if (processed % 25 === 0) {
+        flush(outPath, { system, generatedAt: Date.now(), games });
+      }
+      await sleep(opts.igdbBackfill ? 280 : 120);
       continue;
     }
 
+    process.stdout.write(
+      `  ${system} ${processed + 1}/${todo.length}  "${title}" fetching...\n`
+    );
     const [art, igdb] = await Promise.all([
       sgdbArtwork(cleanTitle(title) || title).catch(() => null),
       igdbSearch(igdbTitle(title), platformId).catch(() => null),
@@ -491,13 +501,35 @@ async function processSystem(system, opts) {
         iconUrl: art?.iconUrl ?? null,
       };
       resolved++;
+      const artParts = [];
+      if (art?.coverImageUrl) artParts.push("cover");
+      if (art?.libraryHeroImageUrl) artParts.push("hero");
+      if (art?.logoImageUrl) artParts.push("logo");
+      if (art?.iconUrl) artParts.push("icon");
+      const igdbParts = [];
+      if (igdb?.summary) igdbParts.push("desc");
+      if (igdb?.genres?.length) igdbParts.push(`${igdb.genres.length}g`);
+      if (igdb?.first_release_date)
+        igdbParts.push(
+          new Date(igdb.first_release_date * 1000).getUTCFullYear()
+        );
+      const tag =
+        art && igdb
+          ? `art+igdb (${artParts.join(", ")} | ${igdbParts.join(", ")})`
+          : art
+            ? `art-only (${artParts.join(", ")})`
+            : `igdb-only (${igdbParts.join(", ")})`;
+      process.stdout.write(
+        `  ${system} ${processed + 1}/${todo.length}  "${title}" → ${tag}\n`
+      );
+    } else {
+      process.stdout.write(
+        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB)\n`
+      );
     }
 
     processed++;
     if (processed % 25 === 0) {
-      process.stdout.write(
-        `  ${system}: ${processed}/${todo.length} (${resolved} resolved)\n`
-      );
       // Periodic flush so a long run is crash-safe.
       flush(outPath, { system, generatedAt: Date.now(), games });
     }
@@ -507,7 +539,7 @@ async function processSystem(system, opts) {
 
   flush(outPath, { system, generatedAt: Date.now(), games });
   process.stdout.write(
-    `done ${system}: ${Object.keys(games).length} total, ${resolved} new this run\n`
+    `done ${system}: ${Object.keys(games).length} total, ${resolved} new this run (${todo.length - resolved} skipped/missed)\n`
   );
 }
 

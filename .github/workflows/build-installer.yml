@@ -94,6 +94,7 @@ jobs:
           tag_name: ${{ steps.reltag.outputs.tag }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
+          allow_update: true
           files: |
             dist/*.exe
             dist/*.zip

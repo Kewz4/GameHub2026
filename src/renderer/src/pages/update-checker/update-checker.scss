@@ -77,7 +77,11 @@
     height: 100%;
     background: rgba(var(--fg-rgb), 0.9);
     border-radius: 2px;
-    transition: width 0.15s ease;
+    // Linear transition (ease-in-out caused the bar to "bounce" on rapid
+    // updates — the easing curve slowed at both ends, making chunks of data
+    // arrive faster than the bar could animate to, producing a stuttering
+    // "stepping" artifact). Linear is monotonic so it never overshoots.
+    transition: width 0.3s linear;
   }
 
   &__progress-label {

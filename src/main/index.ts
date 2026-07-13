@@ -623,6 +623,16 @@ let canAppBeClosed = false;
 app.on("before-quit", async (e) => {
   await Lock.releaseLock();
 
+  // Update install in progress — quit immediately so the NSIS installer (or
+  // portable batch file) can overwrite the exe without "file in use" errors.
+  // Still back up auth so NSIS doesn't wipe Epic/GOG sessions, but skip the
+  // async cleanup (PythonRPC kill, playtime flush) that would race the
+  // installer and leave the old process alive.
+  if (UpdateCheckerManager.isApplyingUpdate) {
+    backupAuth();
+    return;
+  }
+
   if (!canAppBeClosed) {
     e.preventDefault();
     PowerSaveBlockerManager.reset();

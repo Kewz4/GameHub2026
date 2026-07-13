@@ -36,6 +36,15 @@ export default function UpdateChecker() {
   const [stats, setStats] = useState<DownloadStats | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const proceedCalled = useRef(false);
+  // Track the highest percent seen so the bar never animates backwards (which
+  // was the main "artifact" — electron-updater can emit a slightly lower
+  // percent on some chunks, and the portable path jumps from 80% download to
+  // 80% extraction start).
+  const maxPercentRef = useRef(0);
+  // Smoothed speed — the portable path only recalculates every 500ms, so
+  // between updates bytesPerSecond drops to 0 and the display flickers.
+  // Keep the last non-zero speed and let it decay gradually instead.
+  const smoothedSpeedRef = useRef(0);
 
   const proceed = () => {
     if (proceedCalled.current) return;
@@ -56,9 +65,25 @@ export default function UpdateChecker() {
         setVersion(event.version);
         setPhase("available");
       } else if (event.type === "downloading") {
+        // Clamp percent so the bar never goes backwards.
+        const percent = Math.max(maxPercentRef.current, event.percent);
+        maxPercentRef.current = percent;
+
+        // Smooth the speed: if the event sends 0 (portable path between
+        // 500ms recalculations, or extraction phase), keep the last known
+        // speed instead of flickering to "0 B/s".
+        const rawSpeed = event.bytesPerSecond;
+        if (rawSpeed > 0) {
+          // Exponential moving average for a steady display.
+          smoothedSpeedRef.current =
+            smoothedSpeedRef.current === 0
+              ? rawSpeed
+              : smoothedSpeedRef.current * 0.7 + rawSpeed * 0.3;
+        }
+
         setStats({
-          percent: event.percent,
-          bytesPerSecond: event.bytesPerSecond,
+          percent,
+          bytesPerSecond: smoothedSpeedRef.current,
           transferred: event.transferred,
           total: event.total,
         });
