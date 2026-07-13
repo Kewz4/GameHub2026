@@ -525,9 +525,15 @@ export default function Library() {
         (g) => g.shop === storeFilter && getGameOrigin(g) === "sync"
       );
 
-    // Retigga = games that came from the Hydra repack catalogue.
+    // Retigga = PC games that came from the Hydra repack catalogue.
+    // Console/emulated games (shop "launchbox") have their own Console
+    // dropdown and must NOT appear here — otherwise after a clear+re-add
+    // they leak into Retigga instead of staying under "All" + the console
+    // dropdown.
     if (storeFilter === "retigga")
-      return filteredLibrary.filter((g) => getGameOrigin(g) === "catalog");
+      return filteredLibrary.filter(
+        (g) => getGameOrigin(g) === "catalog" && g.shop !== "launchbox"
+      );
 
     // Custom = manually added games.
     if (storeFilter === "custom")

@@ -1,12 +1,14 @@
 import { t } from "i18next";
 import { registerEvent } from "../register-event";
-import { gamesSublevel } from "@main/level";
+import { gamesSublevel, levelKeys } from "@main/level";
 import {
   LocalNotificationManager,
   logger,
   WindowManager,
 } from "@main/services";
 import { classifyScannedOrigin } from "@main/helpers/classify-scanned-origin";
+import type { EmulatorSystem } from "@types";
+import { createHash } from "node:crypto";
 
 interface ApprovedGame {
   key: string;
@@ -14,6 +16,41 @@ interface ApprovedGame {
   /** Present for games discovered on disk that aren't yet in the library. */
   title?: string;
   isNew?: boolean;
+  /** Set when the game is a console/emulator ROM. The confirm step creates a
+   *  launchbox entry with the matching platform so it appears under the Console
+   *  dropdown instead of the Custom/Retigga tab. */
+  emulatorSystem?: EmulatorSystem;
+}
+
+/** Platform display string for each system — matches SYSTEM_DISPLAY_PLATFORM
+ *  in import-sgdb-roms.ts so the Console dropdown's `systemForGame` resolves
+ *  the game correctly. */
+const SYSTEM_DISPLAY_PLATFORM: Record<EmulatorSystem, string> = {
+  ps1: "PlayStation",
+  ps2: "PlayStation 2",
+  ps3: "PlayStation 3",
+  psp: "PlayStation Portable",
+  n3ds: "Nintendo 3DS",
+  nds: "Nintendo DS",
+  dsi: "Nintendo DSi",
+  n64: "Nintendo 64",
+  gb: "Game Boy",
+  gbc: "Game Boy Color",
+  gba: "Game Boy Advance",
+  wiiu: "Nintendo Wii U",
+  wii: "Nintendo Wii",
+  gc: "Nintendo GameCube",
+};
+
+/** Build a synthetic objectId for a ROM, matching the `local-<system>-<hash>`
+ *  scheme used by import-sgdb-roms.ts so the game is interchangeable with one
+ *  imported through the ROM folder import flow. */
+function romObjectId(system: EmulatorSystem, title: string): string {
+  const hash = createHash("sha1")
+    .update(`${title.trim().toLowerCase()}::`)
+    .digest("hex")
+    .slice(0, 16);
+  return `local-${system}-${hash}`;
 }
 
 const confirmScanGames = async (
@@ -59,13 +96,63 @@ const confirmScanGames = async (
   let cursor = 0;
   const worker = async () => {
     while (cursor < newGames.length) {
-      const { title, executablePath } = newGames[cursor++];
-      await addCustomGameToLibraryInternal(
-        title ?? "Unknown Game",
-        executablePath
-      ).catch((err) =>
-        logger.error(`[ConfirmScanGames] Failed to add new game ${title}:`, err)
-      );
+      const game = newGames[cursor++];
+
+      if (game.emulatorSystem) {
+        // Console/emulator ROM — create a launchbox entry with the matching
+        // platform so it appears under the Console dropdown. The gamehub-meta
+        // sublevel (loaded at startup from the bundled metadata) will supply
+        // art/description for the game based on the system + normalized title.
+        const system = game.emulatorSystem;
+        const platform = SYSTEM_DISPLAY_PLATFORM[system] ?? system;
+        const objectId = romObjectId(system, game.title ?? "Unknown Game");
+        const gameKey = levelKeys.game("launchbox", objectId);
+
+        const existing = await gamesSublevel.get(gameKey).catch(() => null);
+        if (existing) {
+          // Already in library (maybe soft-deleted) — resurrect.
+          await gamesSublevel.put(gameKey, {
+            ...existing,
+            isDeleted: false,
+            isInstalledLocally: true,
+            executablePath: game.executablePath,
+            addedToLibraryAt: existing.addedToLibraryAt ?? new Date(),
+          });
+        } else {
+          await gamesSublevel.put(gameKey, {
+            title: game.title ?? "Unknown Game",
+            iconUrl: null,
+            libraryHeroImageUrl: null,
+            logoImageUrl: null,
+            objectId,
+            shop: "launchbox" as const,
+            remoteId: null,
+            isDeleted: false,
+            playTimeInMilliseconds: 0,
+            lastTimePlayed: null,
+            addedToLibraryAt: new Date(),
+            platform,
+            executablePath: game.executablePath,
+            isInstalledLocally: true,
+            libraryOrigin: "custom" as const,
+          });
+        }
+        logger.info(
+          `[ConfirmScanGames] Added ROM: ${game.title} (${system}) → ${game.executablePath}`
+        );
+      } else {
+        // PC game — use the existing custom-game import path.
+        await addCustomGameToLibraryInternal(
+          game.title ?? "Unknown Game",
+          game.executablePath
+        ).catch((err) =>
+          logger.error(
+            `[ConfirmScanGames] Failed to add new game ${game.title}:`,
+            err
+          )
+        );
+      }
+
       WindowManager.sendToAppWindows("on-library-batch-complete");
     }
   };

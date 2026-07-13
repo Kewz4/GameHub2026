@@ -3,6 +3,9 @@ import path from "node:path";
 import { cleanGameFolderName } from "./clean-game-folder-name";
 import { getExeGameTitle } from "./exe-metadata";
 import { logger } from "@main/services/logger";
+import { KNOWN_BINARIES } from "@main/services/emulators/known-binaries";
+import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
+import type { EmulatorSystem } from "@types";
 
 /**
  * Steam library `steamapps/common` directories discovered from the local Steam
@@ -352,4 +355,189 @@ export async function indexExecutables(
   }
 
   return found;
+}
+
+// ─── ROM file discovery (emulator/console game scan) ─────────────────────────
+
+/**
+ * ROM extension → the EmulatorSystem(s) that use it. Built from KNOWN_BINARIES
+ * so the scan stays in sync with the emulator definitions. Extensions shared
+ * by multiple systems (e.g. `.iso` → ps2/ps3/psp/wii/gc/wiiu) are resolved by
+ * the parent folder name (see `systemFromFolderName`).
+ */
+const ROM_EXTENSION_MAP: Map<string, EmulatorSystem[]> = (() => {
+  const map = new Map<string, EmulatorSystem[]>();
+  for (const [system, binary] of Object.entries(KNOWN_BINARIES)) {
+    for (const ext of binary.romExtensions) {
+      const lower = ext.toLowerCase();
+      const list = map.get(lower) ?? [];
+      list.push(system as EmulatorSystem);
+      map.set(lower, list);
+    }
+  }
+  return map;
+})();
+
+/** Folder-name fragments → EmulatorSystem, mirrors the download folder layout. */
+const FOLDER_NAME_TO_SYSTEM: Array<[RegExp, EmulatorSystem]> = [
+  [/ps3/i, "ps3"],
+  [/ps2/i, "ps2"],
+  [/ps1|psx|playstation\b/i, "ps1"],
+  [/psp|playstation portable/i, "psp"],
+  [/3ds/i, "n3ds"],
+  [/dsi/i, "dsi"],
+  [/\bnds\b|\bds\b/i, "nds"],
+  [/n64|nintendo 64/i, "n64"],
+  [/gba|game boy advance/i, "gba"],
+  [/gbc|game boy color/i, "gbc"],
+  [/\bgb\b|game boy\b/i, "gb"],
+  [/wii\s*u/i, "wiiu"],
+  [/\bwii\b/i, "wii"],
+  [/gamecube|\bgc\b/i, "gc"],
+];
+
+/** Try to determine the system from a folder name (e.g. "PS3 Games" → ps3). */
+function systemFromFolderName(folderName: string): EmulatorSystem | null {
+  for (const [re, system] of FOLDER_NAME_TO_SYSTEM) {
+    if (re.test(folderName)) return system;
+  }
+  return null;
+}
+
+export interface DiscoveredRom {
+  title: string;
+  romPath: string;
+  system: EmulatorSystem;
+}
+
+/** Common ROM directory names to scan (in addition to "Emulator Games"). */
+const ROM_ROOT_NAMES = [
+  "Emulator Games",
+  "ROMs",
+  "Roms",
+  "Emulator",
+  "Emulators",
+];
+
+/**
+ * Discover emulator/console ROM files on disk. Scans:
+ *   • Per-drive "Emulator Games" folders (where GameHub downloads ROMs to)
+ *   • Per-drive "ROMs" / "Emulator" folders (common user-organized locations)
+ *   • The generic game folders (D:\Games etc.) — ROMs mixed with PC games
+ *
+ * For each ROM found, the system is determined by:
+ *   1. The parent folder name (e.g. "PS3 Games" → ps3) — most reliable
+ *   2. The extension when it's unique to one system (e.g. `.3ds` → n3ds)
+ *   3. Skipped when the extension is shared and the folder gives no clue
+ */
+export async function discoverRomFiles(
+  extraDirs: string[] = [],
+  onProgress?: (current: number, total: number, title: string) => void
+): Promise<DiscoveredRom[]> {
+  if (process.platform !== "win32") return [];
+
+  // Build the list of ROM root directories to scan.
+  const roots = new Set<string>(extraDirs);
+  for (const d of fixedDriveLetters()) {
+    for (const name of ROM_ROOT_NAMES) {
+      roots.add(`${d}:\\${name}`);
+    }
+    // Also scan the generic Games folder for loose ROMs.
+    roots.add(`${d}:\\Games`);
+  }
+
+  const existingRoots = [...roots].filter((dir) => {
+    try {
+      return fs.statSync(dir).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+
+  const results: DiscoveredRom[] = [];
+  const seenPaths = new Set<string>();
+
+  for (const root of existingRoots) {
+    if (isStoreManagedPath(root)) continue;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(root, {
+        withFileTypes: true,
+        recursive: true,
+      });
+    } catch {
+      continue;
+    }
+
+    // Group entries by their immediate parent folder name so we can use it to
+    // disambiguate shared extensions. We process files only.
+    let i = 0;
+    const files = entries.filter((e) => e.isFile());
+    for (const entry of files) {
+      const lower = entry.name.toLowerCase();
+      const ext = path.extname(lower);
+      const systems = ROM_EXTENSION_MAP.get(ext);
+      if (!systems || systems.length === 0) continue;
+
+      const parentPath =
+        "parentPath" in entry
+          ? (entry.parentPath as string)
+          : "path" in entry
+            ? (entry as unknown as { path: string }).path
+            : root;
+      const fullPath = path.join(parentPath, entry.name);
+      const fullPathLower = fullPath.toLowerCase();
+      if (seenPaths.has(fullPathLower)) continue;
+      // Skip files inside store-managed paths (Steam/Epic/etc.).
+      if (isStoreManagedPath(fullPath)) continue;
+
+      // Determine the system: prefer the folder name, fall back to unique ext.
+      const parentFolderName = path.basename(parentPath);
+      let system: EmulatorSystem | null =
+        systemFromFolderName(parentFolderName);
+
+      if (!system && systems.length === 1) {
+        // Unique extension — no ambiguity.
+        system = systems[0];
+      } else if (!system) {
+        // Shared extension and folder name gives no clue — try the grandparent
+        // folder too (e.g. "Emulator Games/PS3 Games/game.iso").
+        const grandparent = path.basename(path.dirname(parentPath));
+        system = systemFromFolderName(grandparent);
+      }
+
+      if (!system) continue; // can't safely categorize — skip
+
+      // Skip multi-file disc images: .bin is a .cue sidecar, .mdf is a .mds
+      // sidecar. The .cue/.mds is the launchable entry point.
+      if (ext === ".bin" || ext === ".mdf" || ext === ".img") {
+        const cue = path.join(
+          parentPath,
+          entry.name.replace(/\.(bin|mdf|img)$/i, ".cue")
+        );
+        const mds = path.join(
+          parentPath,
+          entry.name.replace(/\.(bin|mdf|img)$/i, ".mds")
+        );
+        const ccd = path.join(
+          parentPath,
+          entry.name.replace(/\.(bin|mdf|img)$/i, ".ccd")
+        );
+        if (fs.existsSync(cue) || fs.existsSync(mds) || fs.existsSync(ccd))
+          continue;
+      }
+
+      seenPaths.add(fullPathLower);
+      const { title } = parseRomFilename(entry.name);
+      results.push({ title, romPath: fullPath, system });
+
+      i++;
+      if (i % 10 === 0) {
+        onProgress?.(i, files.length, title);
+      }
+    }
+  }
+
+  return results;
 }
