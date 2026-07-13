@@ -2,8 +2,8 @@
 /**
  * GameHub console metadata generator (offline, run-once / periodic).
  *
- * Walks the hosted Minerva ROM catalogue (sources/minerva/<system>.json) and,
- * for every base game, resolves:
+ * Walks the GameHub Vault dump (Dump/<console>/games.json — the brothers' USA
+ * game dumps) and, for every base game, resolves:
  *   - SteamGridDB artwork (cover / wide grid / hero / logo)
  *   - IGDB metadata (description, genres, release year)
  * and writes a flat, GitHub-hostable dataset to
@@ -13,10 +13,28 @@
  *
  * This is the "GameHubAPI" — a static dataset, not a server.
  *
+ * Dump layout (USA-only, direct hoster links):
+ *   Dump/3ds/games.json        → n3ds
+ *   Dump/ds/games.json         → nds
+ *   Dump/gamecube/games.json   → gc
+ *   Dump/gb_gba_gbc/games.json → gb, gbc AND gba (merged; RALibretro auto-
+ *                                 detects at launch, so one set of titles is
+ *                                 mirrored to all three meta files)
+ *   Dump/n64/games.json        → n64
+ *   Dump/ps1/games.json       → ps1
+ *   Dump/ps2/games.json       → ps2
+ *   Dump/ps3/games.json       → ps3
+ *   Dump/psp/games.json       → psp
+ *   Dump/wii/games.json       → wii
+ *   Dump/wiiu/games.json      → wiiu
+ *   (dsi has no dump folder — DSi games aren't in the brothers' collection, so
+ *   no meta is generated for it; the runtime loader silently skips a missing
+ *   dsi.json.)
+ *
  * Usage:
  *   node scripts/generate-gamehub-metadata.cjs [systems...] [--force] [--limit N]
  *
- *   systems   one or more of ps1 ps2 ps3 psp n3ds nds dsi n64 gb gbc gba
+ *   systems   one or more of ps1 ps2 ps3 psp n3ds nds n64 gb gbc gba
  *             wiiu wii gc   (default: all)
  *   --force   re-resolve titles already present in the output (default: skip)
  *   --limit N only process the first N titles per system (smoke testing)
@@ -36,25 +54,32 @@ const IGDB_CLIENT_SECRET =
 
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
 
-const MINERVA_DIR = path.join(__dirname, "..", "sources", "minerva");
+const DUMP_DIR = path.join(__dirname, "..", "Dump");
 const OUT_DIR = path.join(__dirname, "..", "sources", "gamehub-meta");
 
-const ALL_SYSTEMS = [
-  "ps1",
-  "ps2",
-  "ps3",
-  "psp",
-  "n3ds",
-  "nds",
-  "dsi",
-  "n64",
-  "gb",
-  "gbc",
-  "gba",
-  "wiiu",
-  "wii",
-  "gc",
-];
+/**
+ * EmulatorSystem → Dump folder. Reverse of CONSOLE_MAP in
+ * src/main/services/rom-sources/gamehub-dump-sources.ts. gb/gbc/gba all read
+ * from the merged gb_gba_gbc folder (the dump stores them together because
+ * RALibretro auto-detects the console from the file extension at launch).
+ */
+const SYSTEM_TO_DUMP_FOLDER = {
+  n3ds: "3ds",
+  nds: "ds",
+  gc: "gamecube",
+  gb: "gb_gba_gbc",
+  gbc: "gb_gba_gbc",
+  gba: "gb_gba_gbc",
+  n64: "n64",
+  ps1: "ps1",
+  ps2: "ps2",
+  ps3: "ps3",
+  psp: "psp",
+  wii: "wii",
+  wiiu: "wiiu",
+};
+
+const ALL_SYSTEMS = Object.keys(SYSTEM_TO_DUMP_FOLDER);
 
 /** IGDB platform ids — must match src/main/services/igdb.ts IGDB_PLATFORM_IDS. */
 const IGDB_PLATFORM_IDS = {
@@ -76,9 +101,22 @@ const IGDB_PLATFORM_IDS = {
 
 // ---- helpers ---------------------------------------------------------------
 
-/** MUST match normalizeTitle in src/main/level/sublevels/minerva-catalogue.ts. */
+/**
+ * MUST match normalizeRomTitle in
+ * src/main/services/emulators/parse-rom-filename.ts (re-exported as
+ * normalizeTitle by the old minerva-source.ts and used by the catalogue
+ * sublevel). Folds accents and drops comma-shifted/leading articles BEFORE
+ * squashing non-alphanumerics, so the No-Intro form ("Zelda, The - …") and the
+ * natural display form ("The Legend of Zelda: …") normalize to the SAME key.
+ */
 function normalizeTitle(title) {
-  return title.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/,\s*(the|an|a)\b/g, "")
+    .replace(/^(the|an|a)\s+/, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
 /** Strip edition/region noise to improve IGDB/SGDB match rates. */
@@ -336,13 +374,20 @@ async function sgdbIconOnly(title) {
 // ---- per-system run --------------------------------------------------------
 
 async function processSystem(system, opts) {
-  const srcPath = path.join(MINERVA_DIR, `${system}.json`);
-  if (!fs.existsSync(srcPath)) {
-    process.stderr.write(`skip ${system}: no minerva source\n`);
+  const folder = SYSTEM_TO_DUMP_FOLDER[system];
+  if (!folder) {
+    process.stderr.write(`skip ${system}: no dump folder mapped\n`);
     return;
   }
-  const source = JSON.parse(fs.readFileSync(srcPath, "utf8"));
-  const downloads = source.downloads ?? [];
+  const srcPath = path.join(DUMP_DIR, folder, "games.json");
+  if (!fs.existsSync(srcPath)) {
+    process.stderr.write(`skip ${system}: no dump at ${srcPath}\n`);
+    return;
+  }
+  // Dump games.json is a flat array of { title, fileSize, downloadLink, ... } —
+  // every row is a base game (no contentType field; updates/DLC live in
+  // separate update.json/dlc.json files the metadata generator doesn't need).
+  const gamesRows = JSON.parse(fs.readFileSync(srcPath, "utf8"));
 
   const outPath = path.join(OUT_DIR, `${system}.json`);
   const existing = fs.existsSync(outPath)
@@ -350,15 +395,19 @@ async function processSystem(system, opts) {
     : { system, generatedAt: 0, games: {} };
   const games = existing.games ?? {};
 
-  // Distinct base-game titles (skip updates/DLC).
+  // Distinct base-game titles (dedup by normalized key so the merged
+  // gb_gba_gbc folder doesn't triple-emit a game that ships under all three
+  // consoles — the meta file is per-EmulatorSystem, so gb.json/gbc.json/gba.json
+  // each get their own copy of the same entry, which is correct since the
+  // runtime lookups are per-system too).
   const titles = [];
   const seen = new Set();
-  for (const d of downloads) {
-    if (d.contentType && d.contentType !== "game") continue;
-    const key = normalizeTitle(d.title);
+  for (const row of gamesRows) {
+    if (!row?.title) continue;
+    const key = normalizeTitle(row.title);
     if (seen.has(key)) continue;
     seen.add(key);
-    titles.push(d.title);
+    titles.push(row.title);
   }
 
   const platformId = IGDB_PLATFORM_IDS[system];

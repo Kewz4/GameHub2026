@@ -3,8 +3,8 @@ import {
   minervaCatalogueSublevel,
   type MinervaCatalogueEntry,
 } from "@main/level/sublevels/minerva-catalogue";
-import { normalizeTitle } from "@main/services/rom-sources/minerva-source";
 import {
+  normalizeRomTitle as normalizeTitle,
   parseRomFilename,
   romRegionFamilies,
 } from "@main/services/emulators/parse-rom-filename";

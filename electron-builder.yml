@@ -11,8 +11,6 @@ extraResources:
   # of depending on a live GitHub fetch (which left games with no art/desc).
   - from: sources/gamehub-meta
     to: gamehub-meta
-  - from: sources/minerva
-    to: minerva
   # GameHub Vault — community USA game/update/DLC dumps (direct hoster links).
   - from: Dump
     to: dump

@@ -1,7 +1,7 @@
 out
 dist
 seeds
-sources/minerva
+Dump
 pnpm-lock.yaml
 LICENSE.md
 tsconfig.json

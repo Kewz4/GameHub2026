@@ -8,8 +8,10 @@ import {
   invalidateMinervaSearchIndex,
   type MinervaCatalogueEntry,
 } from "@main/level/sublevels/minerva-catalogue";
-import { normalizeTitle } from "./minerva-source";
-import { displayRomTitle } from "@main/services/emulators/parse-rom-filename";
+import {
+  normalizeRomTitle as normalizeTitle,
+  displayRomTitle,
+} from "@main/services/emulators/parse-rom-filename";
 import { logger } from "../logger";
 
 /**
@@ -21,7 +23,11 @@ import { logger } from "../logger";
  */
 
 // Bump when the Dump layout or parsing changes so installs re-seed.
-const DUMP_VERSION = 1;
+// v2: base-game keys gain a `:stem` suffix so scanAllVariants' tight
+//     `${system}:${title}:` … `${system}:${title}:\xFF` range matches them
+//     (was: base games were keyed without the suffix and fell outside the
+//     range, so download options came back empty for every game).
+const DUMP_VERSION = 2;
 const DUMP_VERSION_KEY = "gamehubDumpVersion";
 
 /** Bundled Dump dir (extraResource in packaged builds; repo root in dev). */
@@ -111,7 +117,15 @@ async function loadConsole(folder: string): Promise<number> {
       contentType: "game",
       titleId: null,
     };
-    batch.put(`${system}:${normalizeTitle(game.title)}`, {
+    // Key MUST carry a `:`-delimited filename stem suffix so the tight
+    // range scan in scanAllVariants (`${system}:${title}:` …
+    // `${system}:${title}:\xFF`) matches. The old Minerva loader always
+    // appended `:normalizeTitle(filenameStem)`; without it, base games
+    // sorted BEFORE the scan's lower bound and download options returned
+    // empty. Dump games have no separate filename, so we reuse the title
+    // itself as the disambiguator.
+    const normTitle = normalizeTitle(game.title);
+    batch.put(`${system}:${normTitle}:${normTitle}`, {
       entry,
       cachedAt: now,
     });

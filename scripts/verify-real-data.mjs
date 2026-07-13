@@ -2,7 +2,7 @@
 /* global globalThis */
 /**
  * Verifies the catalogue/metadata fixes against the ACTUAL bundled data
- * (sources/minerva + sources/gamehub-meta) loaded by the app at startup — not
+ * (Dump/ + sources/gamehub-meta) loaded by the app at startup — not
  * synthetic seeds. Run: xvfb-run -a node scripts/verify-real-data.mjs
  *
  *  R1  Non-games filtered    — "Action Replay"/"Demo Disc" not in catalogue.
@@ -49,8 +49,8 @@ if (!mainWin) {
   process.exit(1);
 }
 
-// Wait for the REAL catalogue to finish loading from the bundled JSON.
-console.log("Waiting for real catalogue to load from bundled data…");
+// Wait for the REAL catalogue to finish loading from the bundled Dump.
+console.log("Waiting for real catalogue to load from bundled Dump…");
 let count = 0;
 for (let i = 0; i < 180; i++) {
   count = await app
@@ -62,12 +62,12 @@ for (let i = 0; i < 180; i++) {
       return n;
     })
     .catch(() => 0);
-  if (count > 20000) break;
+  if (count > 8000) break;
   await new Promise((r) => setTimeout(r, 1000));
 }
 console.log(`Catalogue entries loaded: ${count}\n`);
 if (count < 5000) {
-  fail("catalogue did not load from bundled data", String(count));
+  fail("catalogue did not load from bundled Dump", String(count));
 }
 
 // ── R1: non-games filtered out ────────────────────────────────────────────────
@@ -119,8 +119,11 @@ if (Array.isArray(npOpts)) {
   fail("getMinervaDownloadOptions threw", npOpts.__error);
 }
 
-// ── R3: region tagging on a real multi-region game ────────────────────────────
-console.log("\n[R3] Region tagging on a real multi-region game");
+// ── R3: USA region tagging on a real game ────────────────────────────────────
+// The GameHub Vault dump is USA-only, so we verify the base game resolves with
+// a USA region tag (the dump loader hardcodes region: "USA" since dump titles
+// don't carry No-Intro parenthetical region tags).
+console.log("\n[R3] Region tagging on a real USA game");
 const stOpts = await mainWin
   .evaluate(() =>
     window.electron.getMinervaDownloadOptions(
@@ -138,9 +141,9 @@ if (Array.isArray(stOpts) && stOpts.length > 0) {
       .slice(0, 6)
       .join(" | ")
   );
-  if (regions.includes("USA") && regions.includes("Europe"))
-    ok(`Spirit Tracks variants tagged with regions: ${regions.join(", ")}`);
-  else fail("region tags missing", JSON.stringify(regions));
+  if (regions.includes("USA"))
+    ok(`Spirit Tracks tagged with USA region: ${regions.join(", ")}`);
+  else fail("USA region tag missing", JSON.stringify(regions));
 } else {
   fail(
     "no Spirit Tracks options",
@@ -207,8 +210,11 @@ else
     badTags.samples.join("; ")
   );
 
-// ── R6: Breath of the Wild — each region has base + update + DLC ───────────────
-console.log("\n[R6] Breath of the Wild groups base+update+DLC per region");
+// ── R6: Breath of the Wild — USA has base + update + DLC ──────────────────────
+// The GameHub Vault dump is USA-only, so we verify the USA region has all three
+// content types paired up (base game + update + DLC). The dump loader keys
+// updates/DLC by the base game's normalized title so scanAllVariants pairs them.
+console.log("\n[R6] Breath of the Wild groups base+update+DLC (USA)");
 const botw = await mainWin
   .evaluate(() =>
     window.electron.getMinervaDownloadOptions(
@@ -230,9 +236,6 @@ if (Array.isArray(botw)) {
   if (okRegion("USA"))
     ok("USA has base game + update + DLC (was: no update/DLC)");
   else fail("USA missing base/update/DLC", JSON.stringify(by.USA));
-  if (okRegion("Europe"))
-    ok("Europe has base game + update + DLC (was: no base game)");
-  else fail("Europe missing base/update/DLC", JSON.stringify(by.Europe));
 } else {
   fail("BotW options failed", botw.__error);
 }

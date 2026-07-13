@@ -3,23 +3,27 @@
 Console/emulated games (PS1, PS2, Game Boy, …) are **not** in the PC HydraAPI
 catalogue, so they need their own metadata source for art, descriptions and
 genres. Rather than run a live API server, GameHub uses a **static dataset**
-hosted in this repo — the same pattern as the Minerva ROM catalogue.
+hosted in this repo — fed by the GameHub Vault dump (the brothers' USA game
+dumps), not the retired Minerva archive.
 
 ```
-sources/minerva/<system>.json        ROM download magnets (titles + magnets)
-sources/gamehub-meta/<system>.json   metadata (art + IGDB info) ← this doc
+Dump/<console>/games.json              ROM download links (titles + VikingFile URLs)
+sources/gamehub-meta/<system>.json     metadata (art + IGDB info) ← this doc
 ```
 
-Both are fetched raw from GitHub at runtime. No live SteamGridDB/IGDB calls on
-the user's launch path (those rate-limit and need keys).
+The dump is bundled into the installer and read from disk at runtime. The
+metadata files are fetched raw from GitHub (and bundled as an extraResource so
+offline installs work too). No live SteamGridDB/IGDB calls on the user's launch
+path (those rate-limit and need keys).
 
 ## Data flow
 
 1. **Generate (offline, occasional):**
-   `scripts/generate-gamehub-metadata.cjs` walks `sources/minerva/<system>.json`,
-   resolves SteamGridDB artwork + IGDB metadata for every distinct base game,
-   and writes `sources/gamehub-meta/<system>.json` keyed by the app's normalized
-   title.
+   `scripts/generate-gamehub-metadata.cjs` walks `Dump/<console>/games.json`
+   (mapping each EmulatorSystem to its dump folder — `gb`/`gbc`/`gba` all read
+   the merged `gb_gba_gbc` folder), resolves SteamGridDB artwork + IGDB metadata
+   for every distinct base game, and writes `sources/gamehub-meta/<system>.json`
+   keyed by the app's normalized title.
 2. **Commit** the generated JSON to the `dev` branch.
 3. **Runtime load:** on first launch the app fetches each hosted file into the
    `gamehubMeta` LevelDB sublevel (`ensureGameHubMeta`, background, non-blocking).
@@ -29,7 +33,7 @@ the user's launch path (those rate-limit and need keys).
 ## Generating the dataset
 
 ```bash
-# All systems (long — tens of thousands of titles, rate-limited):
+# All systems (long — ~13k titles, rate-limited):
 node scripts/generate-gamehub-metadata.cjs
 
 # Specific systems:
@@ -78,10 +82,12 @@ entries have art but no description — that's expected.
 }
 ```
 
-The key is `title.toLowerCase().replace(/[^a-z0-9]/g, "")` — identical to
-`normalizeTitle` in `src/main/level/sublevels/minerva-catalogue.ts` and
-`normalizeMetaTitle` in `src/main/level/sublevels/gamehub-meta.ts`. Keep these
-three in sync or runtime lookups will miss.
+The key is produced by `normalizeRomTitle` in
+`src/main/services/emulators/parse-rom-filename.ts` (lowercase, accents folded,
+comma-shifted/leading articles dropped, non-alphanumerics stripped) — identical
+to `normalizeTitle` used by the catalogue sublevel and `normalizeMetaTitle` in
+`src/main/level/sublevels/gamehub-meta.ts`. Keep these three in sync or runtime
+lookups will miss.
 
 ## Hosting
 
