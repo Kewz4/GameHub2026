@@ -1,4 +1,7 @@
 import type { CSSProperties } from "react";
+import type { DiagramControl } from "./controller-tokens";
+
+export type { DiagramControl };
 
 /**
  * Native Switch Pro controller diagram, transcribed from the standalone tester
@@ -27,26 +30,6 @@ const STONE = {
 const ACCENT = "var(--color-primary, #7aa2ff)";
 const ACCENT_TEXT = "#0d0d0d";
 const STICK_TRAVEL = 12; // px the stick cap moves at full deflection
-
-export type DiagramControl =
-  | "a"
-  | "b"
-  | "x"
-  | "y"
-  | "l1"
-  | "r1"
-  | "l2"
-  | "r2"
-  | "l3"
-  | "r3"
-  | "select"
-  | "start"
-  | "up"
-  | "down"
-  | "left"
-  | "right"
-  | "guide"
-  | "capture";
 
 export interface SwitchProDiagramProps {
   /**

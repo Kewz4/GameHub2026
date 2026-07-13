@@ -3,6 +3,28 @@
  * mapper UI and the diagram's binding-resolved highlighting.
  */
 
+/** Emulated controls a diagram can render/highlight (superset across pads). */
+export type DiagramControl =
+  | "a"
+  | "b"
+  | "x"
+  | "y"
+  | "l1"
+  | "r1"
+  | "l2"
+  | "r2"
+  | "l3"
+  | "r3"
+  | "select"
+  | "start"
+  | "up"
+  | "down"
+  | "left"
+  | "right"
+  | "guide"
+  | "capture"
+  | "z";
+
 // Standard Gamepad API button index → SDL GameController token.
 export const BUTTON_TOKEN: Record<number, string> = {
   0: "a",

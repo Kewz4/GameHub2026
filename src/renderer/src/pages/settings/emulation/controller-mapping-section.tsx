@@ -7,13 +7,16 @@ import type {
 } from "@types";
 import { Button } from "@renderer/components";
 import { useToast } from "@renderer/hooks";
-import { SwitchProDiagram, type DiagramControl } from "./switch-pro-diagram";
+import { SwitchProDiagram } from "./switch-pro-diagram";
+import { GameCubeDiagram } from "./gamecube-diagram";
 import {
   AXIS_NAME,
   AXIS_THRESHOLD,
   BUTTON_TOKEN,
   tokenActivation,
+  type DiagramControl,
 } from "./controller-tokens";
+import { layoutFor } from "./controller-layouts";
 import "./controller-mapper.scss";
 
 /** Diagram control → our PadControl (buttons that map 1:1). */
@@ -58,32 +61,7 @@ const CONTROLLER_TYPES: Partial<
  * every installed emulator via saveControllerProfile.
  */
 
-const CONTROLS: { control: PadControl; label: string }[] = [
-  { control: "up", label: "D-Pad Up" },
-  { control: "down", label: "D-Pad Down" },
-  { control: "left", label: "D-Pad Left" },
-  { control: "right", label: "D-Pad Right" },
-  { control: "a", label: "A (bottom face)" },
-  { control: "b", label: "B (right face)" },
-  { control: "x", label: "X (left face)" },
-  { control: "y", label: "Y (top face)" },
-  { control: "l1", label: "L1 (left shoulder)" },
-  { control: "r1", label: "R1 (right shoulder)" },
-  { control: "l2", label: "L2 (left trigger)" },
-  { control: "r2", label: "R2 (right trigger)" },
-  { control: "l3", label: "L3 (left stick click)" },
-  { control: "r3", label: "R3 (right stick click)" },
-  { control: "select", label: "Select / Back" },
-  { control: "start", label: "Start" },
-  { control: "lstick_up", label: "Left Stick Up" },
-  { control: "lstick_down", label: "Left Stick Down" },
-  { control: "lstick_left", label: "Left Stick Left" },
-  { control: "lstick_right", label: "Left Stick Right" },
-  { control: "rstick_up", label: "Right Stick Up" },
-  { control: "rstick_down", label: "Right Stick Down" },
-  { control: "rstick_left", label: "Right Stick Left" },
-  { control: "rstick_right", label: "Right Stick Right" },
-];
+// Control lists now come from controller-layouts (per emulator/type).
 
 /** Human label for an SDL token, for display. */
 function tokenLabel(token: string): string {
@@ -294,7 +272,10 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
     return <p className="emulator-detail__muted">Loading controller…</p>;
   }
 
-  const showDiagram = binary === "cemu" || binary === "dolphin";
+  // Per-emulator layout: only the controls this console actually uses, plus
+  // the diagram that matches it.
+  const layout = layoutFor(binary, controllerType);
+  const showDiagram = layout.diagram !== null;
 
   // Which diagram control is currently being bound (pulses on the diagram).
   const activeDiagramControl =
@@ -405,7 +386,8 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
         <span>
           Enable motion (gyro/accel) — needs a controller with motion (DualShock
           4, DualSense, Switch Pro) and an emulator that supports it (Dolphin,
-          Cemu).
+          Cemu). In Cemu this only works with the <strong>SDLController</strong>{" "}
+          API — motion isn&apos;t exposed by the XInput/DirectInput backends.
         </span>
       </label>
 
@@ -413,13 +395,23 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       <div className="controller-mapper__main">
         {showDiagram && (
           <div className="controller-mapper__diagram-col">
-            <SwitchProDiagram
-              active={diagramActive}
-              stickDeflection={stickDeflection}
-              activeControl={activeDiagramControl}
-              onHoverControl={setHovered}
-              onClickControl={onDiagramClick}
-            />
+            {layout.diagram === "gamecube" ? (
+              <GameCubeDiagram
+                active={diagramActive}
+                stickDeflection={stickDeflection}
+                activeControl={activeDiagramControl}
+                onHoverControl={setHovered}
+                onClickControl={onDiagramClick}
+              />
+            ) : (
+              <SwitchProDiagram
+                active={diagramActive}
+                stickDeflection={stickDeflection}
+                activeControl={activeDiagramControl}
+                onHoverControl={setHovered}
+                onClickControl={onDiagramClick}
+              />
+            )}
             <p className="controller-mapper__diagram-hint">
               {hovered && hoveredControl
                 ? `${hovered.toUpperCase()} → ${tokenLabel(profile.bindings[hoveredControl])}`
@@ -430,7 +422,7 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
 
         <div className="controller-mapper__bind-col">
           <div className="controller-mapper__grid">
-            {CONTROLS.map(({ control, label }) => {
+            {layout.controls.map(({ control, label }) => {
               const isCapturing = capturing === control;
               const isHovered = hoveredControl === control;
               return (
