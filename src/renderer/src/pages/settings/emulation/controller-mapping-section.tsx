@@ -37,6 +37,8 @@ const DIAGRAM_TO_CONTROL: Partial<Record<DiagramControl, PadControl>> = {
   down: "down",
   left: "left",
   right: "right",
+  // GameCube's Z button lives in the R1 slot (see controller-layouts).
+  z: "r1",
 };
 
 /** Emulated-controller kinds offered per emulator that supports several. */

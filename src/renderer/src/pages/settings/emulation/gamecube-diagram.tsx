@@ -14,7 +14,11 @@ import type { DiagramControl } from "./controller-tokens";
 
 const ACCENT = "var(--color-primary, #7aa2ff)";
 const VIEWBOX = "0 0 3827.6 2672.9";
-const STICK_TRAVEL = 90; // svg units the stick cap moves at full deflection
+// The control stick cap moves within its big static well (well r≈460, cap
+// r≈210 → up to ~230 travel). The C-Stick nub is smaller and moves within the
+// static yellow base, so it gets a shorter travel.
+const MAIN_TRAVEL = 190;
+const C_TRAVEL = 70;
 
 // Base palette from the source SVG.
 const C = {
@@ -53,10 +57,10 @@ export function GameCubeDiagram({
 }: Readonly<GameCubeDiagramProps>) {
   const on = (c: DiagramControl) => Boolean(active[c]);
   const clamp = (v: number) => Math.max(-1, Math.min(1, v || 0));
-  const lx = clamp(stickDeflection[0]) * STICK_TRAVEL;
-  const ly = clamp(stickDeflection[1]) * STICK_TRAVEL;
-  const rx = clamp(stickDeflection[2]) * STICK_TRAVEL;
-  const ry = clamp(stickDeflection[3]) * STICK_TRAVEL;
+  const lx = clamp(stickDeflection[0]) * MAIN_TRAVEL;
+  const ly = clamp(stickDeflection[1]) * MAIN_TRAVEL;
+  const rx = clamp(stickDeflection[2]) * C_TRAVEL;
+  const ry = clamp(stickDeflection[3]) * C_TRAVEL;
 
   // Shared handlers for a pressable control group.
   const hit = (c: DiagramControl) => ({
@@ -111,10 +115,23 @@ export function GameCubeDiagram({
           R
         </text>
       </g>
-      <path
-        fill={C.purple}
-        d="M3564.9,397.2c-9.2-20.3-141.3-109.8-313-156.1-171.7-46.4-446-75.9-470.5-66.6-24.4,9.3-20.7,96.1-20.7,96.1l755.1,236.4s58.2-89.4,49.1-109.7Z"
-      />
+      {/* Z trigger (the purple shoulder above R). GameCube maps Z to the R1
+          slot, so it lights when the emulated Z control is active. */}
+      <g {...hit("z")}>
+        <path
+          fill={on("z") ? ACCENT : C.purple}
+          d="M3564.9,397.2c-9.2-20.3-141.3-109.8-313-156.1-171.7-46.4-446-75.9-470.5-66.6-24.4,9.3-20.7,96.1-20.7,96.1l755.1,236.4s58.2-89.4,49.1-109.7Z"
+        />
+        <text
+          transform="translate(3120 360) scale(.6 1)"
+          fontFamily="Arial"
+          fontSize="150"
+          fontWeight="bold"
+          fill={on("z") ? "#0d0d0d" : "#ffffff"}
+        >
+          Z
+        </text>
+      </g>
 
       {/* ── Body shells ─────────────────────────────────────────────── */}
       <path
@@ -173,22 +190,31 @@ export function GameCubeDiagram({
         />
       </g>
 
-      {/* ── C-Stick (cap translates) ────────────────────────────────── */}
-      <g transform={`translate(${rx} ${ry})`} {...hit("r3")}>
+      {/* ── C-Stick: yellow base STATIC, inner nub translates ───────── */}
+      <g {...hit("r3")}>
+        {/* Dark octagon socket + yellow base — stay put. */}
         <path d="M2724.5,1624.5c-16.5-16.5-172-88.3-210.8-88.3s-189.9,67.7-210.2,88.1c-21.4,21.4-87.4,180.2-88.4,211.2-1,30.3,63.2,186.7,87,210.5,26.2,26.2,171.7,85.5,210.5,86.5,38.8,1,184.9-64.1,209.8-86.1,25.2-22.3,89.3-181.1,89.3-211.3,0-30.1-68.8-192.3-87.2-210.7Z" />
         <path
           fill={C.cStickYellow}
           d="M2718.1,1630.9c-16-16-166.7-85.6-204.4-85.6s-184.1,65.6-203.8,85.4c-20.7,20.7-84.7,174.7-85.7,204.8-1,29.4,61.3,181,84.4,204.1,25.4,25.4,166.5,82.9,204.1,83.8,37.6.9,179.3-62.2,203.4-83.5,24.5-21.6,86.6-175.6,86.6-204.8,0-29.1-66.7-186.4-84.6-204.2Z"
         />
-        <circle cx="2513.1" cy="1840" r="151.1" fill={C.cStickDark} />
-        <text
-          transform="translate(2469.5 1899.8) scale(.7382 1)"
-          fontFamily="Arial"
-          fontSize="163.5"
-          fill={C.cStickYellow}
-        >
-          C
-        </text>
+        {/* Inner nub — the part that moves. */}
+        <g transform={`translate(${rx} ${ry})`}>
+          <circle
+            cx="2513.1"
+            cy="1840"
+            r="151.1"
+            fill={on("r3") ? ACCENT : C.cStickDark}
+          />
+          <text
+            transform="translate(2469.5 1899.8) scale(.7382 1)"
+            fontFamily="Arial"
+            fontSize="163.5"
+            fill={C.cStickYellow}
+          >
+            C
+          </text>
+        </g>
       </g>
 
       {/* ── D-pad (base static, triangles react) ────────────────────── */}
