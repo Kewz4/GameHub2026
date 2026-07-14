@@ -180,25 +180,53 @@ export class TorBoxClient {
   private static async addWebDownload(link: string) {
     const form = new FormData();
     form.append("link", link);
-    const response = await this.instance.post<{
-      success: boolean;
-      detail: string;
-      data?: {
-        webdownload_id?: number;
-        id?: number;
-        hash?: string;
-        name?: string;
-      };
-    }>("/webdl/createwebdownload", form);
-    if (!response.data.success) {
-      throw new Error(response.data.detail);
+    // TorBox's /webdl/createwebdownload can transiently 500 (unsupported
+    // hoster, rate limit, brief outage). Retry up to 2 times so a transient
+    // failure doesn't kill the download.
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await this.instance.post<{
+          success: boolean;
+          detail: string;
+          data?: {
+            webdownload_id?: number;
+            id?: number;
+            hash?: string;
+            name?: string;
+          };
+        }>("/webdl/createwebdownload", form);
+        if (!response.data.success) {
+          throw new Error(response.data.detail || "TorBox rejected the link");
+        }
+        const data = response.data.data ?? {};
+        return {
+          id: (data.webdownload_id ?? data.id) as number,
+          name: data.name,
+          hash: data.hash,
+        };
+      } catch (err) {
+        lastErr = err;
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status;
+        // 500 = TorBox can't handle this hoster (e.g. vik1ngfile.site).
+        // No point retrying — throw immediately so the caller can fall back.
+        if (status === 500) {
+          logger.warn(
+            `[torbox] web download rejected for ${link} (500) — hoster not supported`
+          );
+          throw err;
+        }
+        // Other errors (429, network) — retry with backoff.
+        if (attempt < 2) {
+          logger.warn(
+            `[torbox] web download attempt ${attempt + 1}/3 failed, retrying…`
+          );
+          await this.sleep(2000 * (attempt + 1));
+        }
+      }
     }
-    const data = response.data.data ?? {};
-    return {
-      id: (data.webdownload_id ?? data.id) as number,
-      name: data.name,
-      hash: data.hash,
-    };
+    throw lastErr;
   }
 
   private static async getWebDownloadInfo(id: number) {
@@ -349,11 +377,25 @@ export class TorBoxClient {
     }
 
     // Any other http(s) hoster link → TorBox web download.
-    const web = await this.addWebDownload(uri);
-    const info = await this.waitForWebReady(web.id, onProgress);
-    const url = await this.requestWebLink(web.id);
-    const name = info?.name ?? web.name ?? undefined;
-    return { url, name };
+    // If TorBox doesn't support the hoster (500), fall back to downloading
+    // the URL directly — the JS HTTP downloader can fetch any http(s) link.
+    try {
+      const web = await this.addWebDownload(uri);
+      const info = await this.waitForWebReady(web.id, onProgress);
+      const url = await this.requestWebLink(web.id);
+      const name = info?.name ?? web.name ?? undefined;
+      return { url, name };
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
+      if (status === 500) {
+        logger.log(
+          `[torbox] TorBox can't fetch this hoster — falling back to direct download: ${uri}`
+        );
+        return { url: uri, name: undefined };
+      }
+      throw err;
+    }
   }
 
   /** Remove a web download from TorBox (used to drop losing race candidates). */

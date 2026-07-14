@@ -68,11 +68,54 @@ const PLATFORM_TO_SYSTEM: Record<string, EmulatorSystem> = {
   "nintendo game boy advance": "gba",
 };
 
-/** The console a library game belongs to, or null if it isn't a console ROM. */
+/**
+ * Extract the EmulatorSystem from a launchbox objectId. Minerva/catalogue games
+ * use `minerva:<system>:<normalizedTitle>`; imported ROMs use
+ * `local-<system>-<hash>`. This mirrors `systemFromObjectId` in
+ * src/main/helpers/index.ts.
+ */
+function systemFromObjectId(objectId: string): EmulatorSystem | null {
+  if (objectId.startsWith("minerva:")) {
+    const system = objectId.split(":")[1];
+    return (CONSOLE_FILTER_SYSTEMS as string[]).includes(system)
+      ? (system as EmulatorSystem)
+      : null;
+  }
+  const local = objectId.match(/^local-([a-z0-9]+)-/i);
+  if (local) {
+    const system = local[1].toLowerCase();
+    return (CONSOLE_FILTER_SYSTEMS as string[]).includes(system)
+      ? (system as EmulatorSystem)
+      : null;
+  }
+  return null;
+}
+
+/**
+ * The console a library game belongs to, or null if it isn't a console ROM.
+ * Tries `game.platform` first (set by bindDownloadedRom after download
+ * completes); falls back to extracting the system from `game.objectId` (set
+ * at catalogue-add time, before the download finishes) so games that are in
+ * the library but not yet downloaded still appear in the Console dropdown.
+ */
 export const systemForGame = (
-  game: Pick<Game, "shop" | "platform">
+  game: Pick<Game, "shop" | "platform" | "objectId">
 ): EmulatorSystem | null => {
-  if (game.shop !== "launchbox" || !game.platform) return null;
-  const normalized = game.platform.trim().toLowerCase().replace(/\s+/g, " ");
-  return PLATFORM_TO_SYSTEM[normalized] ?? null;
+  if (game.shop !== "launchbox") return null;
+
+  // Primary: platform string (set after download by bindDownloadedRom).
+  if (game.platform) {
+    const normalized = game.platform.trim().toLowerCase().replace(/\s+/g, " ");
+    const fromPlatform = PLATFORM_TO_SYSTEM[normalized];
+    if (fromPlatform) return fromPlatform;
+  }
+
+  // Fallback: extract from objectId (set at catalogue-add time, before
+  // download completes). This is what makes games appear in the Console
+  // dropdown even when they haven't been downloaded yet.
+  if (game.objectId) {
+    return systemFromObjectId(game.objectId);
+  }
+
+  return null;
 };
