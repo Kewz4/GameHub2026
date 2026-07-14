@@ -130,6 +130,7 @@ export const platformToSystem = (
     "wiiu",
     "wii",
     "gc",
+    "switch",
   ];
   if ((EXACT as string[]).includes(p)) return p as EmulatorSystem;
 
@@ -145,6 +146,7 @@ export const platformToSystem = (
   if (p.includes("nintendo dsi") || p.includes("dsi")) return "dsi";
   if (p.includes("nintendo 3ds") || p.includes("3ds")) return "n3ds";
   if (p.includes("nintendo ds") || p.includes("nds")) return "nds";
+  if (p.includes("nintendo switch") || p.includes("switch")) return "switch";
   if (p.includes("wii u") || p.includes("wiiu")) return "wiiu";
   if (p.includes("gamecube") || p.includes("gc")) return "gc";
   if (p.includes("wii")) return "wii";
@@ -168,6 +170,7 @@ const EMULATOR_PLATFORM_FOLDER: Record<EmulatorSystem, string> = {
   wiiu: "Wii U Games",
   wii: "Wii Games",
   gc: "GameCube Games",
+  switch: "Switch Games",
 };
 
 export const EMULATOR_GAMES_ROOT = "Emulator Games";

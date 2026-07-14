@@ -170,6 +170,7 @@ const SYSTEM_DEFAULT_PLATFORM: Record<EmulatorSystem, string> = {
   wiiu: "Nintendo Wii U",
   wii: "Nintendo Wii",
   gc: "Nintendo GameCube",
+  switch: "Nintendo Switch",
 };
 
 const persistEntryLocally = async (
@@ -354,6 +355,7 @@ const SYSTEM_CATALOGUE_PLATFORM: Record<EmulatorSystem, string> = {
   wiiu: "Nintendo Wii U",
   wii: "Nintendo Wii",
   gc: "Nintendo GameCube",
+  switch: "Nintendo Switch",
 };
 
 const normalizePlatformName = (value: string): string =>

@@ -51,7 +51,7 @@ const IGDB_CLIENT_ID =
   process.env.IGDB_CLIENT_ID || "lbccfxg1ie3739dubo4bvlj7bw0sue";
 const IGDB_CLIENT_SECRET =
   process.env.IGDB_CLIENT_SECRET || "e88mbm5snb40ax0n37jpyhearwfikp";
-const RAWG_KEY = process.env.RAWG_API_KEY || "c7078ab3bd194426be249d6dc36a3c40";
+const RAWG_KEY = process.env.RAWG_API_KEY || "ffaf786fda9e4ea29744a31d284fb5c5";
 
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
 const RAWG_BASE = "https://api.rawg.io/api";
@@ -80,6 +80,7 @@ const SYSTEM_TO_DUMP_FOLDER = {
   ps2: "ps2",
   ps3: "ps3",
   psp: "psp",
+  switch: "switch",
   wii: "wii",
   wiiu: "wiiu",
 };
@@ -102,6 +103,7 @@ const IGDB_PLATFORM_IDS = {
   ps1: 7,
   ps2: 8,
   ps3: 9,
+  switch: 130,
 };
 
 /** RAWG platform IDs — from https://api.rawg.io/docs/#operation/games_list.
@@ -120,6 +122,7 @@ const RAWG_PLATFORM_IDS = {
   wii: 10,
   wiiu: 11,
   gc: 2,
+  switch: 7,
 };
 
 // ---- helpers ---------------------------------------------------------------

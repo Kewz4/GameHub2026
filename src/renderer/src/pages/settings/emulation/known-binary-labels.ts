@@ -11,4 +11,5 @@ export const KNOWN_BINARY_LABELS: Record<EmulatorBinary, string> = {
   ravba: "RAVBA",
   cemu: "Cemu",
   dolphin: "Dolphin",
+  eden: "Eden",
 };

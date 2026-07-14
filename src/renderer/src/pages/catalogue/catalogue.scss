@@ -110,6 +110,13 @@
     align-items: start;
   }
 
+  &__platform-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
   &__games-container {
     display: flex;
     flex-direction: column;

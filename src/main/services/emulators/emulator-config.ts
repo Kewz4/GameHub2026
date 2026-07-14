@@ -36,16 +36,28 @@ export const duckstationConfigCandidates = (): string[] => {
 };
 
 export const pcsx2ConfigCandidates = (
-  _executablePath?: string | null
+  executablePath?: string | null
 ): string[] => {
-  if (process.platform === "win32") {
-    return [
-      path.join(os.homedir(), "Documents", "PCSX2", "inis", "PCSX2.ini"),
-      path.join(process.env.APPDATA ?? "", "PCSX2", "inis", "PCSX2.ini"),
-    ];
+  const candidates: string[] = [];
+
+  // Portable mode: if portable.ini exists next to the exe, PCSX2 reads its
+  // config from <exe_dir>/inis/PCSX2.ini and writes memcards to
+  // <exe_dir>/memcards. This MUST be checked first so portable installs
+  // resolve correctly for cloud sync.
+  if (executablePath) {
+    const exeDir = path.dirname(executablePath);
+    if (existsSync(path.join(exeDir, "portable.ini"))) {
+      candidates.push(path.join(exeDir, "inis", "PCSX2.ini"));
+    }
   }
-  if (process.platform === "darwin") {
-    return [
+
+  if (process.platform === "win32") {
+    candidates.push(
+      path.join(os.homedir(), "Documents", "PCSX2", "inis", "PCSX2.ini"),
+      path.join(process.env.APPDATA ?? "", "PCSX2", "inis", "PCSX2.ini")
+    );
+  } else if (process.platform === "darwin") {
+    candidates.push(
       path.join(
         os.homedir(),
         "Library",
@@ -53,13 +65,16 @@ export const pcsx2ConfigCandidates = (
         "PCSX2",
         "inis",
         "PCSX2.ini"
-      ),
-    ];
+      )
+    );
+  } else {
+    candidates.push(
+      path.join(os.homedir(), ".local", "share", "PCSX2", "inis", "PCSX2.ini"),
+      path.join(os.homedir(), ".config", "PCSX2", "inis", "PCSX2.ini")
+    );
   }
-  return [
-    path.join(os.homedir(), ".local", "share", "PCSX2", "inis", "PCSX2.ini"),
-    path.join(os.homedir(), ".config", "PCSX2", "inis", "PCSX2.ini"),
-  ];
+
+  return candidates;
 };
 
 export const findExistingConfig = (candidates: string[]): string | null => {

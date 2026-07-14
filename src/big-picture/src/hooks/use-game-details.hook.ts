@@ -160,17 +160,7 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     updateGame();
 
     if (IS_DESKTOP && shop !== "custom") {
-      if (shop === "launchbox") {
-        // Console/emulated games: fetch HLTB via the local scraper (cached).
-        // Use the game title from the library record or shop details.
-        const title = game?.title ?? shopDetails?.name ?? "";
-        if (title) {
-          globalThis.window.electron
-            .getConsoleHowLongToBeat(title)
-            .then(setHowLongToBeat)
-            .catch(() => setHowLongToBeat(null));
-        }
-      } else {
+      if (shop !== "launchbox") {
         globalThis.window.electron.hydraApi
           .get<HowLongToBeatCategory[] | null>(
             `/games/${shop}/${objectId}/how-long-to-beat`,
@@ -201,6 +191,20 @@ export function useGameDetails(objectId: string, shop: GameShop) {
       setAchievements([]);
     }
   }, [fetchGameDetails, updateGame, objectId, shop]);
+
+  // HLTB for console/emulated games — separate effect because the title
+  // arrives asynchronously (from game record or shop details) and the main
+  // effect above doesn't depend on those values.
+  useEffect(() => {
+    if (!IS_DESKTOP || shop !== "launchbox") return;
+    const title = game?.title ?? shopDetails?.name ?? "";
+    if (!title) return;
+    setHowLongToBeat(null);
+    globalThis.window.electron
+      .getConsoleHowLongToBeat(title)
+      .then(setHowLongToBeat)
+      .catch(() => setHowLongToBeat(null));
+  }, [shop, game?.title, shopDetails?.name]);
 
   useEffect(() => {
     if (!IS_DESKTOP || !game?.id) return;

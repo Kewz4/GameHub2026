@@ -12,7 +12,8 @@ export type EmulatorSystem =
   | "gba"
   | "wiiu"
   | "wii"
-  | "gc";
+  | "gc"
+  | "switch";
 
 export type EmulatorBinary =
   | "duckstation"
@@ -24,7 +25,8 @@ export type EmulatorBinary =
   | "raproject64"
   | "ravba"
   | "cemu"
-  | "dolphin";
+  | "dolphin"
+  | "eden";
 
 export interface RomFolder {
   id: string;
@@ -112,7 +114,9 @@ export type EmulatedControllerType =
   | "wiiu_pro"
   | "wiiu_classic"
   | "gamecube"
-  | "wiimote";
+  | "wiimote"
+  | "switch_pro"
+  | "joycon_pair";
 
 /**
  * Controller profiles keyed by scope. `global` is the one-for-all default;

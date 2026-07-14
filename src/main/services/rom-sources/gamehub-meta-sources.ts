@@ -17,7 +17,7 @@ import {
  * v2: article-insensitive keys (re-derived from each entry's raw title —
  *     the JSON's own keys were generated with the old normalization).
  */
-const META_VERSION = 2;
+const META_VERSION = 3;
 const META_VERSION_KEY = "gamehubMetaVersion";
 
 /**
@@ -64,6 +64,7 @@ const META_SYSTEMS: EmulatorSystem[] = [
   "wiiu",
   "wii",
   "gc",
+  "switch",
 ];
 
 interface HostedMetaFile {

@@ -1189,6 +1189,11 @@ declare global {
     getConsoleHowLongToBeat: (
       title: string
     ) => Promise<import("@types").HowLongToBeatCategory[] | null>;
+    downloadSwitchKeys: () => Promise<{
+      keys: boolean;
+      firmware: boolean;
+      error?: string;
+    }>;
     searchMinervaGames: (
       query: string,
       limit?: number
@@ -1202,7 +1207,8 @@ declare global {
     >;
     searchClassicsCatalogue: (
       query: string,
-      limit?: number
+      limit?: number,
+      system?: import("@types").EmulatorSystem
     ) => Promise<import("@types").CatalogueSearchResult[]>;
     showOpenDialog: (
       options: Electron.OpenDialogOptions

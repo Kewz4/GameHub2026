@@ -19,6 +19,7 @@ export const CONSOLE_FILTER_SYSTEMS: EmulatorSystem[] = [
   "gba",
   "gb",
   "gbc",
+  "switch",
 ];
 
 /** Display labels for the console options. */
@@ -37,6 +38,7 @@ export const CONSOLE_LABELS: Partial<Record<EmulatorSystem, string>> = {
   gba: "Game Boy Advance",
   gb: "Game Boy",
   gbc: "Game Boy Color",
+  switch: "Nintendo Switch",
 };
 
 /**
@@ -59,6 +61,7 @@ const PLATFORM_TO_SYSTEM: Record<string, EmulatorSystem> = {
   "nintendo wii u": "wiiu",
   "nintendo wii": "wii",
   "nintendo gamecube": "gc",
+  "nintendo switch": "switch",
   "sony playstation": "ps1",
   "sony playstation 2": "ps2",
   "sony playstation 3": "ps3",

@@ -384,6 +384,7 @@ const FOLDER_NAME_TO_SYSTEM: Array<[RegExp, EmulatorSystem]> = [
   [/ps2/i, "ps2"],
   [/ps1|psx|playstation\b/i, "ps1"],
   [/psp|playstation portable/i, "psp"],
+  [/switch|nintendo switch/i, "switch"],
   [/3ds/i, "n3ds"],
   [/dsi/i, "dsi"],
   [/\bnds\b|\bds\b/i, "nds"],

@@ -191,4 +191,18 @@
       border-color: var(--color-primary, #7aa2ff);
     }
   }
+
+  &__gyro-cube {
+    display: block;
+    margin: 8px auto;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  &__gyro-hint {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    margin: 4px 0 0;
+    text-align: center;
+  }
 }

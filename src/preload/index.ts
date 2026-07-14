@@ -1663,10 +1663,16 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("searchMinervaCatalogue", title, system),
   getConsoleHowLongToBeat: (title: string) =>
     ipcRenderer.invoke("getConsoleHowLongToBeat", title),
+  downloadSwitchKeys: () =>
+    ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),
-  searchClassicsCatalogue: (query: string, limit?: number) =>
-    ipcRenderer.invoke("searchClassicsCatalogue", query, limit),
+  searchClassicsCatalogue: (
+    query: string,
+    limit?: number,
+    system?: EmulatorSystem
+  ) =>
+    ipcRenderer.invoke("searchClassicsCatalogue", query, limit, system),
 
   // Cloud debugger
   runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),

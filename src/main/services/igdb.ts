@@ -46,6 +46,7 @@ export const IGDB_PLATFORM_IDS: Partial<Record<string, number>> = {
   ps1: 7,
   ps2: 8,
   ps3: 9,
+  switch: 130,
 };
 
 function levenshtein(a: string, b: string): number {

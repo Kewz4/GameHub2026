@@ -1,4 +1,5 @@
 import type { HowLongToBeatCategory } from "@types";
+import { session } from "electron";
 import { logger } from "../logger";
 import { type HltbGame, mapHltbGame, pickBestHltbMatch } from "./hltb-parse";
 
@@ -13,9 +14,14 @@ import { type HltbGame, mapHltbGame, pickBestHltbMatch } from "./hltb-parse";
  * triplet and POSTs the search to `<path>` carrying that triplet as the
  * `x-auth-token` / `x-hp-key` / `x-hp-val` headers. The token embeds the
  * caller's egress IP + User-Agent, so it must be used from the same session
- * that minted it. Runs on the user's machine (residential IP + real app
- * session), where HLTB's anti-bot WAF is lenient — unlike datacenter IPs, which
- * it rejects with "Session expired or invalid fingerprint" (or a soft 404).
+ * that minted it.
+ *
+ * Requests go through Electron's session.fetch (Chromium's network stack)
+ * rather than Node's fetch (undici). This is critical: HLTB uses an Imperva WAF
+ * that fingerprints the TLS connection — undici's TLS fingerprint is
+ * recognisably non-browser and gets 403'd, whereas Chromium's fingerprint
+ * matches a real Chrome browser and passes. Session.fetch also handles cookies
+ * automatically, which the WAF requires.
  *
  * Everything is best-effort: any failure returns null and the UI simply omits
  * the HLTB section, exactly like a PC game with no HLTB data.
@@ -24,6 +30,23 @@ import { type HltbGame, mapHltbGame, pickBestHltbMatch } from "./hltb-parse";
 const BASE = "https://howlongtobeat.com";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+/**
+ * Chromium-backed fetch that shares the default session's cookie jar and TLS
+ * fingerprint. Falls back to global fetch if the session is unavailable (e.g.
+ * during early startup), though in practice IPC handlers always run after the
+ * app is ready.
+ */
+async function hltbFetch(
+  url: string,
+  init?: RequestInit & { headers?: Record<string, string> }
+): Promise<Response> {
+  const ses = session.defaultSession;
+  if (ses && typeof ses.fetch === "function") {
+    return ses.fetch(url, init as RequestInit);
+  }
+  return fetch(url, init as RequestInit);
+}
 
 const browserHeaders = () => ({
   "User-Agent": UA,
@@ -51,7 +74,7 @@ interface BleedSecurity {
  * `_app-*` chunk, fall back to scanning every `<script src>` chunk.
  */
 async function resolveSearchEndpoint(): Promise<string | null> {
-  const html = await fetch(`${BASE}/`, {
+  const html = await hltbFetch(`${BASE}/`, {
     headers: { ...browserHeaders(), Accept: "text/html" },
   }).then((r) => (r.ok ? r.text() : ""));
   if (!html) return null;
@@ -67,21 +90,48 @@ async function resolveSearchEndpoint(): Promise<string | null> {
   ];
 
   // Confirm the endpoint by the POST method so we don't grab the GET init call.
+  // The regex handles nested objects in the fetch options by matching
+  // `method:"POST"` anywhere after the opening brace (the `[^}]*` will
+  // backtrack past nested `}` to find `method:`).
   const postFetch =
     /fetch\s*\(\s*["']\/api\/([a-zA-Z0-9_]+)[^"']*["']\s*,\s*\{[^}]*method:\s*["']POST["']/i;
+
+  // Fallback endpoints to probe if the JS scraper fails (HLTB rotates the
+  // path between deploys). We test each by hitting `<endpoint>/init` and
+  // checking for a 200 with a token in the JSON body.
+  const KNOWN_ENDPOINTS = ["/api/bleed", "/api/search", "/api/seek"];
 
   for (const src of ordered) {
     const url = src.startsWith("http")
       ? src
       : `${BASE}${src.startsWith("/") ? "" : "/"}${src}`;
     try {
-      const js = await fetch(url, { headers: browserHeaders() }).then((r) =>
+      const js = await hltbFetch(url, { headers: browserHeaders() }).then((r) =>
         r.ok ? r.text() : ""
       );
       const m = js.match(postFetch);
       if (m) return `/api/${m[1]}`;
     } catch {
       // try next chunk
+    }
+  }
+
+  // JS scrape failed — probe known endpoints by hitting /init on each.
+  logger.log("HLTB: JS scrape failed, probing known endpoints…");
+  for (const ep of KNOWN_ENDPOINTS) {
+    try {
+      const res = await hltbFetch(`${BASE}${ep}/init?t=${Date.now()}`, {
+        headers: browserHeaders(),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as Partial<BleedSecurity>;
+        if (json.token && json.hpKey && json.hpVal) {
+          logger.log(`HLTB: probe found working endpoint ${ep}`);
+          return ep;
+        }
+      }
+    } catch {
+      // try next
     }
   }
   return null;
@@ -96,7 +146,7 @@ async function initSearchSecurity(
   endpoint: string
 ): Promise<BleedSecurity | null> {
   try {
-    const res = await fetch(`${BASE}${endpoint}/init?t=${Date.now()}`, {
+    const res = await hltbFetch(`${BASE}${endpoint}/init?t=${Date.now()}`, {
       headers: browserHeaders(),
     });
     if (!res.ok) return null;
@@ -141,7 +191,7 @@ async function postSearch(
   title: string,
   security: BleedSecurity
 ): Promise<{ status: number; data: HltbGame[] } | null> {
-  const res = await fetch(`${BASE}${endpoint}`, {
+  const res = await hltbFetch(`${BASE}${endpoint}`, {
     method: "POST",
     headers: {
       ...browserHeaders(),

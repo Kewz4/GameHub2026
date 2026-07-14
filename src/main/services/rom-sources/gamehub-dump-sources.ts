@@ -27,7 +27,7 @@ import { logger } from "../logger";
 //     `${system}:${title}:` … `${system}:${title}:\xFF` range matches them
 //     (was: base games were keyed without the suffix and fell outside the
 //     range, so download options came back empty for every game).
-const DUMP_VERSION = 2;
+const DUMP_VERSION = 3;
 const DUMP_VERSION_KEY = "gamehubDumpVersion";
 
 /** Bundled Dump dir (extraResource in packaged builds; repo root in dev). */
@@ -47,6 +47,7 @@ const CONSOLE_MAP: Record<string, EmulatorSystem> = {
   ps2: "ps2",
   ps3: "ps3",
   psp: "psp",
+  switch: "switch",
   wii: "wii",
   wiiu: "wiiu",
 };
@@ -56,6 +57,7 @@ const SUPPLEMENTAL: Record<string, { updates?: string[]; dlc?: string[] }> = {
   "3ds": { updates: ["updates.json"], dlc: ["dlc.json"] },
   ps3: { updates: ["update.json", "updates.json"], dlc: ["dlc.json"] },
   psp: { dlc: ["dlc.json"] },
+  switch: { updates: ["updates.json"], dlc: ["dlc.json"] },
   wiiu: { updates: ["updates.json"], dlc: ["dlc.json"] },
 };
 

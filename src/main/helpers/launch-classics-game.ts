@@ -80,6 +80,9 @@ const buildEmulatorArgs = (
       return ["-b", "-e", discPath];
     case "cemu":
       return ["-f", "-g", discPath];
+    case "eden":
+      // Eden (Yuzu/Sudachi derivative): -f for fullscreen, -g to load a game.
+      return ["-f", "-g", discPath];
     case "raproject64":
       // RAProject64 takes the ROM path positionally.
       return [discPath];

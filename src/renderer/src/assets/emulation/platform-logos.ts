@@ -15,6 +15,7 @@ import gba from "./platforms/gba.svg?url";
 import wiiu from "./platforms/wiiu.svg?url";
 import wii from "./platforms/wii.svg?url";
 import gc from "./platforms/gc.svg?url";
+import switchLogo from "./platforms/switch.svg?url";
 
 /** White logo per console. */
 export const PLATFORM_LOGOS: Partial<Record<EmulatorSystem, string>> = {
@@ -32,6 +33,7 @@ export const PLATFORM_LOGOS: Partial<Record<EmulatorSystem, string>> = {
   wiiu,
   wii,
   gc,
+  switch: switchLogo,
 };
 
 /** Human-readable console name, used as the logo alt / text fallback. */
@@ -50,4 +52,5 @@ export const PLATFORM_LABELS: Record<EmulatorSystem, string> = {
   wiiu: "Wii U",
   wii: "Wii",
   gc: "GameCube",
+  switch: "Nintendo Switch",
 };

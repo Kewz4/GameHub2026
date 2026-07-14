@@ -109,6 +109,18 @@ export const writePortableSetup = (
         break;
       }
 
+      case "eden": {
+        // Eden (Yuzu/Sudachi derivative): portable.txt makes it use the
+        // install directory for all data instead of AppData.
+        ensureFile(path.join(installDir, "portable.txt"));
+        ensureDir(path.join(installDir, "nand", "user", "save"));
+        ensureDir(path.join(installDir, "nand", "system", "Contents", "registered"));
+        ensureDir(path.join(installDir, "sdmc"));
+        ensureDir(path.join(installDir, "keys"));
+        ensureDir(path.join(installDir, "config"));
+        break;
+      }
+
       default:
         // rpcs3, ralibretro, duckstation: already portable next to the exe.
         break;

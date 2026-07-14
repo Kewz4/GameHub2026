@@ -44,9 +44,22 @@ const memcardDirFromIni = (executablePath?: string | null): string | null => {
 
 export const getPs2MemcardDirs = (executablePath?: string | null): string[] => {
   const dirs: string[] = [];
+
+  // 1. MemcardDirectory from PCSX2.ini (now resolves portable configs too)
   const iniDir = memcardDirFromIni(executablePath);
   if (iniDir) dirs.push(iniDir);
+
+  // 2. Portable mode: <exe_dir>/memcards (created by writePortableSetup)
+  if (executablePath) {
+    const exeDir = path.dirname(executablePath);
+    if (existsSync(path.join(exeDir, "portable.ini"))) {
+      dirs.push(path.join(exeDir, "memcards"));
+    }
+  }
+
+  // 3. Default system paths
   for (const d of DEFAULT_DIRS()) dirs.push(d);
+
   return Array.from(new Set(dirs)).filter((d) => existsSync(d));
 };
 

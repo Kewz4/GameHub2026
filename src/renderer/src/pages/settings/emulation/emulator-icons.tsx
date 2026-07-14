@@ -11,4 +11,5 @@ export const EMULATOR_ICONS: Record<EmulatorBinary, string | undefined> = {
   ravba: undefined,
   cemu: undefined,
   dolphin: undefined,
+  eden: undefined,
 };

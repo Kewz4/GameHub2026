@@ -7,6 +7,7 @@ import { KNOWN_BINARIES } from "./known-binaries";
 import { scanRomFolder } from "./scan-rom-folder";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
+import { installNspIntoEden } from "./nsp-installer";
 import { logger } from "../logger";
 
 /** Display platform label per console (mirrors the launchbox importer). */
@@ -25,6 +26,7 @@ const SYSTEM_PLATFORM_LABEL: Record<EmulatorSystem, string> = {
   wiiu: "Nintendo Wii U",
   wii: "Nintendo Wii",
   gc: "Nintendo GameCube",
+  switch: "Nintendo Switch",
 };
 
 const baseName = (p: string): string => {
@@ -418,6 +420,21 @@ async function placeCompanionContent(
         await installPkgIntoRpcs3(file).catch((err) =>
           logger.warn("[bindDownloadedRom] RPCS3 PKG install failed", err)
         );
+      } else if (system === "switch" && (ext === ".nsp" || ext === ".nsz")) {
+        // Install the NSP into Eden's NAND registered cache headlessly
+        // (parses the PFS0 container, extracts NCAs, places them in
+        // nand/system/Contents/registered/ — Eden picks them up on next
+        // launch). .nsz (compressed) can't be installed directly — left
+        // for manual install via Eden's GUI.
+        if (ext === ".nsz") {
+          logger.log(
+            `[bindDownloadedRom] Switch .nsz ${kind} left for manual install (compressed): ${file}`
+          );
+        } else {
+          await installNspIntoEden(file).catch((err) =>
+            logger.warn("[bindDownloadedRom] Eden NSP install failed", err)
+          );
+        }
       }
     }
   }

@@ -40,3 +40,4 @@ import "./search-minerva-catalogue";
 import "./search-minerva-games";
 import "./search-classics-catalogue";
 import "./get-console-how-long-to-beat";
+import "./download-switch-keys";

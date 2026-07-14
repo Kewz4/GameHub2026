@@ -18,6 +18,7 @@ import {
   dolphinWiimoteSection,
   cemuControllerXml,
   azaharControls,
+  edenControls,
 } from "./controller-writers";
 
 export * from "./controller-writers";
@@ -148,6 +149,19 @@ function writeForBinary(
         write(
           iniFile,
           replaceIniSection(existing, "Controls", azaharControls(profile))
+        );
+        return true;
+      }
+
+      case "eden": {
+        // Portable Eden (Yuzu/Sudachi derivative): portable.txt → config/
+        const iniFile = path.join(installDir, "config", "qt-config.ini");
+        const existing = fs.existsSync(iniFile)
+          ? fs.readFileSync(iniFile, "utf-8")
+          : "";
+        write(
+          iniFile,
+          replaceIniSection(existing, "Controls", edenControls(profile))
         );
         return true;
       }

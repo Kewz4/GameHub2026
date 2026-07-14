@@ -244,6 +244,27 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
       flatpakInstallId: "org.DolphinEmu.dolphin-emu",
     },
   },
+  switch: {
+    system: "switch",
+    binary: "eden",
+    displayName: "Eden",
+    systems: ["switch"],
+    hasRetroAchievements: false,
+    linuxNames: ["eden", "Eden"],
+    windowsNames: ["eden.exe"],
+    flatpakIds: [],
+    versionFlags: ["--version"],
+    romExtensions: [".nsp", ".xci", ".nsz", ".xcz", ".nca"],
+    romDirectoryMarkers: [],
+    install: {
+      githubRepo: null,
+      // Eden publishes on its own Forgejo instance, not GitHub. The stable
+      // channel serves a fixed URL pattern per version.
+      directDownloadUrl:
+        "https://stable.eden-emu.dev/v0.2.0-rc2/Eden-Windows-v0.2.0-rc2-amd64-msvc-standard.zip",
+      releasePageUrl: "https://git.eden-emu.dev/eden-emu/eden/releases",
+    },
+  },
 };
 
 /** Every system key, in display order. */

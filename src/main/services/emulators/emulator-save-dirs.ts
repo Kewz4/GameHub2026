@@ -33,6 +33,7 @@ const FOLDER_SAVE_SYSTEMS: ReadonlySet<EmulatorSystem> = new Set([
   "wiiu",
   "wii",
   "gc",
+  "switch",
 ]);
 
 export const isFolderSaveSystem = (system: EmulatorSystem): boolean =>
@@ -74,6 +75,10 @@ export const getEmulatorSaveRoots = (
     case "ralibretro":
       // Flat per-ROM save files (.srm etc.) — small, backed up as one tree.
       return [path.join(installDir, "Saves")];
+    case "eden":
+      // Eden (Yuzu/Sudachi derivative): save data lives in the NAND under
+      // <install>/nand/user/save in portable mode.
+      return [path.join(installDir, "nand", "user", "save")];
     default:
       return [];
   }

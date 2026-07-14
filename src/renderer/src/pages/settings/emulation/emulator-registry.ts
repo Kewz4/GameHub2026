@@ -5,6 +5,7 @@ import rpcs3Logo from "@renderer/assets/emulation/logos/rpcs3.svg?url";
 import azaharLogo from "@renderer/assets/emulation/logos/azahar.svg?url";
 import cemuLogo from "@renderer/assets/emulation/logos/cemu.png";
 import dolphinLogo from "@renderer/assets/emulation/logos/dolphin.png";
+import edenLogo from "@renderer/assets/emulation/logos/eden.png";
 import raLogo from "@renderer/assets/emulation/logos/retroachievements.svg?url";
 
 export interface EmulatorEntry {
@@ -68,5 +69,13 @@ export const EMULATORS: EmulatorEntry[] = [
     systems: ["wii", "gc"],
     hasRetroAchievements: true,
     logo: dolphinLogo,
+  },
+  {
+    binary: "eden",
+    name: "Eden",
+    systems: ["switch"],
+    hasRetroAchievements: false,
+    logo: edenLogo,
+    colorLogo: true,
   },
 ];

@@ -33,6 +33,7 @@ const OFFICIAL_WEBSITES: Record<EmulatorBinary, string> = {
   ravba: "https://github.com/RetroAchievements/RAVBA/releases",
   cemu: "https://github.com/cemu-project/Cemu/releases",
   dolphin: "https://dolphin-emu.org/download/",
+  eden: "https://git.eden-emu.dev/eden-emu/eden/releases",
 };
 
 const ARTICLE_KEYS: Record<EmulatorBinary, string> = {
@@ -46,6 +47,7 @@ const ARTICLE_KEYS: Record<EmulatorBinary, string> = {
   ravba: "install-ravba",
   cemu: "install-cemu",
   dolphin: "install-dolphin",
+  eden: "install-eden",
 };
 
 const SEMVER_RE = /v?\d{1,9}\.\d{1,9}(?:\.\d{1,9})?/;

@@ -17,6 +17,7 @@ import {
   type DiagramControl,
 } from "./controller-tokens";
 import { layoutFor } from "./controller-layouts";
+import { GyroCube } from "./gyro-cube";
 import "./controller-mapper.scss";
 
 /** Diagram control → our PadControl (buttons that map 1:1). */
@@ -53,6 +54,10 @@ const CONTROLLER_TYPES: Partial<
   dolphin: [
     { value: "gamecube", label: "GameCube Controller" },
     { value: "wiimote", label: "Wii Remote" },
+  ],
+  eden: [
+    { value: "switch_pro", label: "Switch Pro Controller" },
+    { value: "joycon_pair", label: "Joy-Con Pair" },
   ],
 };
 
@@ -489,6 +494,8 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
             {rumbling ? "Rumbling…" : "Test rumble"}
           </Button>
         </div>
+
+        <GyroCube padIndex={selectedPad} enabled={profile?.motion ?? false} />
 
         <div className="controller-mapper__card controller-mapper__card--raw">
           <h4>Raw data</h4>

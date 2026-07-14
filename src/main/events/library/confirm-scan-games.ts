@@ -40,6 +40,7 @@ const SYSTEM_DISPLAY_PLATFORM: Record<EmulatorSystem, string> = {
   wiiu: "Nintendo Wii U",
   wii: "Nintendo Wii",
   gc: "Nintendo GameCube",
+  switch: "Nintendo Switch",
 };
 
 /** Build a synthetic objectId for a ROM, matching the `local-<system>-<hash>`

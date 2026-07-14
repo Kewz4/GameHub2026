@@ -136,6 +136,7 @@ const BASE_GAME_SYSTEMS: EmulatorSystem[] = [
   "wiiu",
   "wii",
   "gc",
+  "switch",
 ];
 
 /** A single console game surfaced in the global search (no download payload). */
@@ -210,14 +211,15 @@ async function getSearchIndex(): Promise<IndexedGame[]> {
 }
 
 /**
- * Search base games across every system for the global search dropdown and
- * catalogue. Every query word must appear in the title (any order), so
- * "zelda" matches every Zelda release. Results are deduped by system+title
- * and ranked best-match first.
+ * Search base games across every system (or a single system when `system` is
+ * provided) for the global search dropdown and catalogue. Every query word
+ * must appear in the title (any order), so "zelda" matches every Zelda
+ * release. Results are deduped by system+title and ranked best-match first.
  */
 export async function searchMinervaGames(
   title: string,
-  limit = 8
+  limit = 8,
+  system?: EmulatorSystem
 ): Promise<MinervaGameSuggestion[]> {
   const tokens = queryTokens(title);
   const normQuery = tokens.join("");
@@ -227,6 +229,7 @@ export async function searchMinervaGames(
 
   const matches: Array<{ game: IndexedGame; score: number }> = [];
   for (const game of index) {
+    if (system && game.system !== system) continue;
     if (tokens.every((t) => game.norm.includes(t))) {
       matches.push({ game, score: matchScore(game.norm, normQuery) });
     }

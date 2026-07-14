@@ -10,6 +10,7 @@ import { SetupStepDownload } from "./setup-step-download";
 import { SetupStepFindEmulator } from "./setup-step-find-emulator";
 import { SetupStepFirmware } from "./setup-step-firmware";
 import { SetupStepBios } from "./setup-step-bios";
+import { SetupStepKeys } from "./setup-step-keys";
 import { SetupStepRomFolder } from "./setup-step-rom-folder";
 import { SetupStepScanning } from "./setup-step-scanning";
 import { SetupStepDone } from "./setup-step-done";
@@ -385,7 +386,7 @@ export function EmulatorSetupModal({
   };
 
   const handleSkip = () => {
-    if (currentStep === "firmware" || currentStep === "bios") {
+    if (currentStep === "firmware" || currentStep === "bios" || currentStep === "keys") {
       goNext();
     } else if (currentStep === "rom_folder") {
       refreshConfig();
@@ -439,6 +440,12 @@ export function EmulatorSetupModal({
               systemLabel={systemShort}
               onBiosStatusChange={setBiosOk}
               onSkip={handleSkip}
+            />
+          )}
+          {currentStep === "keys" && (
+            <SetupStepKeys
+              onSkip={handleSkip}
+              onComplete={() => goNext()}
             />
           )}
           {currentStep === "rom_folder" && (

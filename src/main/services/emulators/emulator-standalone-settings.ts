@@ -169,6 +169,20 @@ const dolphinFileFor = (installDir: string, key: string): string =>
     DOLPHIN_CORE_KEYS.has(key) ? "Dolphin.ini" : "GFX.ini"
   );
 
+// Eden (Yuzu/Sudachi derivative): keys live in different INI sections.
+const EDEN_SECTION: Record<string, string> = {
+  use_speed_limit: "System",
+  use_multi_core: "CPU",
+  use_fastmem: "CPU",
+  resolution_setup: "Renderer",
+  use_disk_shader_cache: "Renderer",
+  use_asynchronous_gpu_emulation: "Renderer",
+  use_vsync: "Renderer",
+  fullscreen: "UI",
+  enable_audio_stretching: "Audio",
+};
+const edenSectionFor = (key: string): string => EDEN_SECTION[key] ?? "Renderer";
+
 // Cemu graphic keys live under <Graphic>; a few live at the <content> root.
 const CEMU_ROOT_KEYS = new Set(["console_language", "fullscreen"]);
 const cemuParentFor = (key: string): string =>
@@ -185,7 +199,7 @@ const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
     format: "ini",
     file: (d) => path.join(d, "user", "config", "qt-config.ini"),
     section: (key) => AZAHAR_SECTION[key] ?? "Renderer",
-    // Citra/Azahar only honour a value when its `\default` twin is false.
+    // Citra/Azahar only honours a value when its `\default` twin is false.
     companions: (key) => ({ [`${key}\\default`]: "false" }),
   },
   dolphin: {
@@ -203,6 +217,13 @@ const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
     format: "xml",
     file: (d) => path.join(cemuDataDir(d), "settings.xml"),
     parent: cemuParentFor,
+  },
+  eden: {
+    // Eden (Yuzu/Sudachi derivative): Qt INI config, portable via portable.txt.
+    format: "ini",
+    file: (d) => path.join(d, "config", "qt-config.ini"),
+    section: edenSectionFor,
+    markers: (d) => [path.join(d, "portable.txt")],
   },
 };
 

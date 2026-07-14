@@ -6,6 +6,7 @@ import type {
   SteamAchievement,
   UnlockedAchievement,
 } from "./game.types";
+import type { EmulatorSystem } from "./emulator.types";
 
 export type FriendRequestAction = "ACCEPTED" | "REFUSED" | "CANCEL";
 export * from "./download-contract";
@@ -627,6 +628,11 @@ export interface CatalogueSearchPayload {
   )[];
   deckCompatibility: ("verified" | "playable" | "unsupported" | "unknown")[];
   releaseYear?: { gte?: number; lte?: number };
+  /** "pc" = PC games only (Hydra API), "console" = emulated only (local
+   *  GameHub Vault), undefined = both (current behaviour). */
+  platform?: "pc" | "console";
+  /** When platform === "console", filter to a specific system. */
+  consoleSystem?: EmulatorSystem;
 }
 
 export interface ProtonDBData {

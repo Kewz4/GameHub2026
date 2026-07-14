@@ -485,3 +485,83 @@ export function azaharControls(p: ControllerProfile): string {
     `profiles\\1\\c_stick=${q(stick(3, 4))}`,
   ].join("\n");
 }
+
+// ─── Eden / Yuzu (qt-config.ini [Controls]) ──────────────────────────────────
+// Eden (Yuzu/Sudachi derivative) uses ParamPackage strings in qt-config.ini
+// [Controls] section, same format as Azahar/Citra but with different key names
+// (player_N_button_a, player_N_lstick, etc.) and SDL3 button indices.
+const EDEN_BUTTON: Record<string, number> = {
+  a: 0,
+  b: 1,
+  x: 2,
+  y: 3,
+  leftshoulder: 4,
+  rightshoulder: 5,
+  lefttrigger: 6,
+  righttrigger: 7,
+  back: 8,
+  start: 9,
+  leftstick: 10,
+  rightstick: 11,
+  dpup: 12,
+  dpdown: 13,
+  dpleft: 14,
+  dpright: 15,
+  guide: 16,
+};
+
+export function edenControls(p: ControllerProfile): string {
+  const guid = p.controllerGuid ?? "0".repeat(32);
+  const port = p.controllerIndex;
+  const q = (v: string) => `"${v}"`;
+
+  const btn = (c: PadControl) => {
+    const tok = bind(p, c);
+    const i = EDEN_BUTTON[tok];
+    return i === undefined
+      ? ""
+      : `engine:sdl,guid:${guid},port:${port},button:${i}`;
+  };
+  const hat = (dir: string) =>
+    `engine:sdl,guid:${guid},port:${port},hat:0,direction:${dir}`;
+  const axisBtn = (axis: number, sign: string) =>
+    `engine:sdl,guid:${guid},port:${port},axis:${axis},direction:${sign},threshold:${sign === "+" ? "0.5" : "-0.5"}`;
+  const stick = (ax: number, ay: number) =>
+    `engine:sdl,guid:${guid},port:${port},axis_x:${ax},axis_y:${ay}`;
+
+  // Motion binding (CemuhookUDP on localhost:26760 for SteamDeckGyroDSU,
+  // or SDL motion if the controller supports it).
+  const motion = p.motion
+    ? `engine:sdl,guid:${guid},port:${port},motion:0`
+    : "engine:sdl,motion:0";
+
+  return [
+    "[Controls]",
+    `player_0_connected=true`,
+    `player_0_type=0`,
+    `player_0_button_a=${q(btn("a"))}`,
+    `player_0_button_b=${q(btn("b"))}`,
+    `player_0_button_x=${q(btn("x"))}`,
+    `player_0_button_y=${q(btn("y"))}`,
+    `player_0_button_up=${q(hat("up"))}`,
+    `player_0_button_down=${q(hat("down"))}`,
+    `player_0_button_left=${q(hat("left"))}`,
+    `player_0_button_right=${q(hat("right"))}`,
+    `player_0_button_l=${q(btn("l1"))}`,
+    `player_0_button_r=${q(btn("r1"))}`,
+    `player_0_button_zl=${q(btn("l2"))}`,
+    `player_0_button_zr=${q(btn("r2"))}`,
+    `player_0_button_plus=${q(btn("start"))}`,
+    `player_0_button_minus=${q(btn("select"))}`,
+    `player_0_button_lstick=${q(btn("l3"))}`,
+    `player_0_button_rstick=${q(btn("r3"))}`,
+    `player_0_button_home=${q(btn("start"))}`,
+    `player_0_button_screenshot=${q(btn("select"))}`,
+    `player_0_lstick=${q(stick(0, 1))}`,
+    `player_0_rstick=${q(stick(2, 3))}`,
+    `player_0_motionleft=${q(motion)}`,
+    `player_0_motionright=${q(motion)}`,
+    `player_0_vibration_enabled=true`,
+    `player_0_vibration_strength=100`,
+  ].join("\n");
+}

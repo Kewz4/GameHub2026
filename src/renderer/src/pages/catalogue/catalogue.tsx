@@ -2,6 +2,7 @@ import type {
   CatalogueSearchPayload,
   CatalogueSearchResult,
   DownloadSource,
+  EmulatorSystem,
 } from "@types";
 
 import { useAppDispatch, useAppSelector, useFormat } from "@renderer/hooks";
@@ -32,6 +33,10 @@ import {
   normalizeGenreList,
 } from "@renderer/helpers/normalize-filter-lists";
 import { Pagination } from "./pagination";
+import {
+  CONSOLE_FILTER_SYSTEMS,
+  CONSOLE_LABELS,
+} from "@renderer/pages/library/console-filter";
 
 const ProtonCompatibilitySection = lazy(async () => {
   const mod = await import("./proton-compatibility-section");
@@ -74,6 +79,8 @@ const clearAllCategoryFilters = {
   protondbSupportBadges: [],
   deckCompatibility: [],
   releaseYear: undefined,
+  platform: undefined,
+  consoleSystem: undefined,
 };
 
 const sortValues = [
@@ -178,30 +185,59 @@ export default function Catalogue() {
             filters.downloadSourceFingerprints.length > 0 ||
             filters.protondbSupportBadges.length > 0 ||
             filters.deckCompatibility.length > 0;
+
+          const platformMode = filters.platform;
+          const isConsoleOnly = platformMode === "console";
+          const isPcOnly = platformMode === "pc";
+
+          // Console games: only on page 1, with a title search, no PC-only
+          // filters, and when not in PC-only mode. When a specific console is
+          // selected, pass it through for system filtering.
           const wantClassics =
-            offset === 0 && !!filters.title?.trim() && !hasPcOnlyFilters;
+            !isPcOnly &&
+            offset === 0 &&
+            !!filters.title?.trim() &&
+            !hasPcOnlyFilters;
+
+          const consoleSystem = filters.consoleSystem;
 
           const [response, classics] = await Promise.all([
-            window.electron.hydraApi.post<{
-              edges: CatalogueSearchResult[];
-              count: number;
-            }>("/catalogue/search", {
-              data: requestData,
-              needsAuth: false,
-            }),
+            isConsoleOnly
+              ? Promise.resolve({
+                  edges: [] as CatalogueSearchResult[],
+                  count: 0,
+                })
+              : window.electron.hydraApi.post<{
+                  edges: CatalogueSearchResult[];
+                  count: number;
+                }>("/catalogue/search", {
+                  data: requestData,
+                  needsAuth: false,
+                }),
             wantClassics
               ? window.electron
                   // High cap so a franchise search ("zelda") lists EVERY
                   // matching console game, not an arbitrary first dozen.
-                  .searchClassicsCatalogue(filters.title, 100)
+                  // When a specific console is selected, pass it for filtering.
+                  .searchClassicsCatalogue(
+                    filters.title,
+                    consoleSystem ? 200 : 100,
+                    consoleSystem
+                  )
                   .catch(() => [])
               : Promise.resolve([] as CatalogueSearchResult[]),
           ]);
 
           if (requestId !== requestSequenceRef.current) return;
 
-          setResults([...classics, ...response.edges]);
-          setItemsCount(response.count + classics.length);
+          if (isConsoleOnly) {
+            // Console-only mode: classics ARE the results (no PC API call).
+            setResults(classics);
+            setItemsCount(classics.length);
+          } else {
+            setResults([...classics, ...response.edges]);
+            setItemsCount(response.count + classics.length);
+          }
           setIsLoading(false);
         } finally {
           if (requestId === requestSequenceRef.current) {
@@ -612,7 +648,44 @@ export default function Catalogue() {
 
         <div className="catalogue__filters-container">
           <div className="catalogue__filters-sections">
-            {shouldShowProtonFeatures && (
+            <div className="catalogue__platform-filter">
+              <SelectField
+                theme="dark"
+                value={filters.platform ?? ""}
+                options={[
+                  { value: "", label: t("platform_all", { defaultValue: "All Platforms" }) },
+                  { value: "pc", label: t("platform_pc", { defaultValue: "PC" }) },
+                  { value: "console", label: t("platform_console", { defaultValue: "Console" }) },
+                ]}
+                onChange={(event) => {
+                  const value = event.target.value as "pc" | "console" | "";
+                  dispatch(setFilters({
+                    platform: value || undefined,
+                    consoleSystem: undefined,
+                  }));
+                }}
+              />
+              {filters.platform === "console" && (
+                <SelectField
+                  theme="dark"
+                  value={filters.consoleSystem ?? ""}
+                  options={[
+                    { value: "", label: t("all_consoles", { defaultValue: "All Consoles" }) },
+                    ...CONSOLE_FILTER_SYSTEMS.map((system) => ({
+                      value: system,
+                      label: CONSOLE_LABELS[system] ?? system,
+                    })),
+                  ]}
+                  onChange={(event) => {
+                    const value = event.target.value as EmulatorSystem | "";
+                    dispatch(setFilters({
+                      consoleSystem: (value || undefined) as EmulatorSystem | undefined,
+                    }));
+                  }}
+                />
+              )}
+            </div>
+            {shouldShowProtonFeatures && filters.platform !== "console" && (
               <Suspense fallback={null}>
                 <ProtonCompatibilitySection
                   title={t("protondb")}
@@ -666,39 +739,40 @@ export default function Catalogue() {
               />
             </Suspense>
 
-            {filterSections.map((section) => (
-              <FilterSection
-                key={section.key}
-                title={section.title}
-                onClear={() => dispatch(setFilters({ [section.key]: [] }))}
-                color={filterCategoryColors[section.key]}
-                onSelect={(value) => {
-                  if (filters[section.key].includes(value)) {
-                    dispatch(
-                      setFilters({
-                        [section.key]: filters[
-                          section.key as
-                            | "genres"
-                            | "tags"
-                            | "downloadSourceFingerprints"
-                            | "developers"
-                            | "publishers"
-                            | "protondbSupportBadges"
-                            | "deckCompatibility"
-                        ].filter((item) => item !== value),
-                      })
-                    );
-                  } else {
-                    dispatch(
-                      setFilters({
-                        [section.key]: [...filters[section.key], value],
-                      })
-                    );
-                  }
-                }}
-                items={section.items}
-              />
-            ))}
+            {filters.platform !== "console" &&
+              filterSections.map((section) => (
+                <FilterSection
+                  key={section.key}
+                  title={section.title}
+                  onClear={() => dispatch(setFilters({ [section.key]: [] }))}
+                  color={filterCategoryColors[section.key]}
+                  onSelect={(value) => {
+                    if (filters[section.key].includes(value)) {
+                      dispatch(
+                        setFilters({
+                          [section.key]: filters[
+                            section.key as
+                              | "genres"
+                              | "tags"
+                              | "downloadSourceFingerprints"
+                              | "developers"
+                              | "publishers"
+                              | "protondbSupportBadges"
+                              | "deckCompatibility"
+                          ].filter((item) => item !== value),
+                        })
+                      );
+                    } else {
+                      dispatch(
+                        setFilters({
+                          [section.key]: [...filters[section.key], value],
+                        })
+                      );
+                    }
+                  }}
+                  items={section.items}
+                />
+              ))}
           </div>
         </div>
       </div>

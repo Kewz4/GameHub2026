@@ -813,6 +813,106 @@ const CEMU_SETTINGS: SettingDef[] = [
   },
 ];
 
+// ── Eden (Switch) — config/qt-config.ini [Sections] ──────────────────────────
+// Eden is a Yuzu/Sudachi derivative; its Qt config uses INI sections.
+const EDEN_SETTINGS: SettingDef[] = [
+  {
+    key: "use_speed_limit",
+    label: "Speed limit",
+    type: "toggle",
+    group: "System",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "use_multi_core",
+    label: "CPU Multi-core",
+    type: "toggle",
+    group: "Performance",
+    hint: "Enables multi-core CPU emulation (recommended).",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "use_fastmem",
+    label: "Host MMU (Fastmem)",
+    type: "toggle",
+    group: "Performance",
+    hint: "Enables fast memory access (recommended).",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "resolution_setup",
+    label: "Resolution scale",
+    type: "enum",
+    group: "Video",
+    options: [
+      { value: "0", label: "0.5× (360p)" },
+      { value: "1", label: "1× (720p, native)" },
+      { value: "2", label: "2× (1440p)" },
+      { value: "3", label: "3× (2160p / 4K)" },
+    ],
+  },
+  {
+    key: "use_disk_shader_cache",
+    label: "Disk shader cache",
+    type: "toggle",
+    group: "Video",
+    hint: "Reduces shader stutter after first play session.",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "use_asynchronous_gpu_emulation",
+    label: "Async GPU emulation",
+    type: "toggle",
+    group: "Performance",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "use_vsync",
+    label: "VSync",
+    type: "toggle",
+    group: "Video",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "fullscreen",
+    label: "Fullscreen on boot",
+    type: "toggle",
+    group: "Screen",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+  {
+    key: "enable_audio_stretching",
+    label: "Audio stretching",
+    type: "toggle",
+    group: "Audio",
+    options: [
+      { value: "true", label: "On" },
+      { value: "false", label: "Off" },
+    ],
+  },
+];
+
 export const STANDALONE_SETTINGS_BY_SYSTEM: Partial<
   Record<EmulatorSystem, SettingDef[]>
 > = {
@@ -822,4 +922,5 @@ export const STANDALONE_SETTINGS_BY_SYSTEM: Partial<
   wii: DOLPHIN_SETTINGS,
   gc: DOLPHIN_SETTINGS,
   wiiu: CEMU_SETTINGS,
+  switch: EDEN_SETTINGS,
 };
