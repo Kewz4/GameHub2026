@@ -1,4 +1,4 @@
-name: Build Windows Installer
+name: Build and Release
 
 on:
   push:
@@ -18,8 +18,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-windows:
-    runs-on: windows-2022
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-2022
+            build_cmd: yarn build:win -- --publish never
+            artifact_name: hydra-windows
+            artifact_glob: |
+              dist/*.exe
+              dist/*.zip
+              dist/latest.yml
+              dist/latest.yml.blockmap
+          - os: ubuntu-latest
+            build_cmd: yarn build:linux -- --publish never
+            artifact_name: hydra-linux
+            artifact_glob: |
+              dist/*.AppImage
+              dist/*.deb
+              dist/*.rpm
+              dist/*.tar.gz
+              dist/latest-linux.yml
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
 
@@ -50,8 +72,8 @@ jobs:
       - name: Build Python RPC
         run: python python_rpc/setup.py build
 
-      - name: Build Windows installer
-        run: yarn build:win -- --publish never
+      - name: Build (${{ matrix.os }})
+        run: ${{ matrix.build_cmd }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
@@ -63,13 +85,11 @@ jobs:
           RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
           MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
 
-      - name: Upload installer artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hydra-windows-installer
-          path: |
-            dist/*.exe
-            dist/*.zip
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
           retention-days: 30
 
       - name: Resolve release tag
@@ -84,18 +104,16 @@ jobs:
             echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create GitHub release
+      - name: Create/update GitHub release
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           draft: false
-          prerelease: true
+          prerelease: false
           name: GameHub ${{ steps.reltag.outputs.tag }}
           tag_name: ${{ steps.reltag.outputs.tag }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
-          files: |
-            dist/*.exe
-            dist/*.zip
+          files: ${{ matrix.artifact_glob }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
