@@ -28,7 +28,7 @@ registerEvent(
           genres: meta?.genres ?? [],
           releaseYear: meta?.releaseYear ?? null,
           libraryImageUrl: meta?.libraryImageUrl ?? meta?.coverImageUrl ?? null,
-          downloadSources: ["Minerva Archive"],
+          downloadSources: ["GameHub Vault"],
         } satisfies CatalogueSearchResult;
       })
     );

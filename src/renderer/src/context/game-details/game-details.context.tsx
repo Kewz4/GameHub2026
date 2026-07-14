@@ -622,7 +622,7 @@ export function GameDetailsContextProvider({
     fetchDownloadSources();
   }, [shop, objectId]);
 
-  // For launchbox (emulated) games, fetch minerva-archive.org ROM sources.
+  // For launchbox (emulated) games, fetch GameHub Vault ROM sources.
   // Works both for library games (system derived from the stored platform) and
   // for games opened straight from search (system from the `platform` param).
   useEffect(() => {

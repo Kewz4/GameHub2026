@@ -178,14 +178,15 @@ export class TorBoxClient {
   // ── Web downloads (any hoster link) ─────────────────────────────────────────
 
   private static async addWebDownload(link: string) {
-    const form = new FormData();
-    form.append("link", link);
-    // TorBox's /webdl/createwebdownload can transiently 500 (unsupported
-    // hoster, rate limit, brief outage). Retry up to 2 times so a transient
-    // failure doesn't kill the download.
+    // TorBox's /webdl/createwebdownload can fail with 500 when their scanner
+    // can't reach the hoster (common with vik1ngfile.site — the API server's
+    // scanner can't access it even though the web client can). Retry up to 3
+    // times with increasing delays — sometimes the scanner succeeds on retry.
     let lastErr: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
+        const form = new FormData();
+        form.append("link", link);
         const response = await this.instance.post<{
           success: boolean;
           detail: string;
@@ -209,21 +210,16 @@ export class TorBoxClient {
         lastErr = err;
         const status = (err as { response?: { status?: number } })?.response
           ?.status;
-        // 500 = TorBox can't handle this hoster (e.g. vik1ngfile.site).
-        // No point retrying — throw immediately so the caller can fall back.
-        if (status === 500) {
-          logger.warn(
-            `[torbox] web download rejected for ${link} (500) — hoster not supported`
+        if (status === 500 && attempt < 2) {
+          // Retry — TorBox's scanner is intermittent for some hosters.
+          const delay = 3000 * (attempt + 1);
+          logger.log(
+            `[torbox] web download attempt ${attempt + 1}/3 failed (500), retrying in ${delay / 1000}s…`
           );
-          throw err;
+          await this.sleep(delay);
+          continue;
         }
-        // Other errors (429, network) — retry with backoff.
-        if (attempt < 2) {
-          logger.warn(
-            `[torbox] web download attempt ${attempt + 1}/3 failed, retrying…`
-          );
-          await this.sleep(2000 * (attempt + 1));
-        }
+        throw err;
       }
     }
     throw lastErr;
@@ -377,8 +373,10 @@ export class TorBoxClient {
     }
 
     // Any other http(s) hoster link → TorBox web download.
-    // If TorBox doesn't support the hoster (500), fall back to downloading
-    // the URL directly — the JS HTTP downloader can fetch any http(s) link.
+    // TorBox's API scanner can't reach some hosters (e.g. vik1ngfile.site)
+    // even though the TorBox web client can. Retry 3 times inside
+    // addWebDownload; if all fail, fall back to downloading the URL directly.
+    // The user still gets their file — just not through TorBox's CDN.
     try {
       const web = await this.addWebDownload(uri);
       const info = await this.waitForWebReady(web.id, onProgress);
@@ -390,8 +388,11 @@ export class TorBoxClient {
         ?.status;
       if (status === 500) {
         logger.log(
-          `[torbox] TorBox can't fetch this hoster — falling back to direct download: ${uri}`
+          `[torbox] TorBox API couldn't scan this hoster after 3 retries — downloading directly from source: ${uri}`
         );
+        // Return the original URL for the JS HTTP downloader to fetch
+        // directly. The download still works — just at the hoster's native
+        // speed instead of TorBox's accelerated CDN.
         return { url: uri, name: undefined };
       }
       throw err;
