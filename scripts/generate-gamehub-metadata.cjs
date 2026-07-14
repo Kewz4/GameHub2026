@@ -56,6 +56,9 @@ const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
 
 const DUMP_DIR = path.join(__dirname, "..", "Dump");
 const OUT_DIR = path.join(__dirname, "..", "sources", "gamehub-meta");
+/** Checkpoint file tracking completed systems so a crash/resume skips them
+ *  entirely instead of re-reading games.json + re-checking every cached entry. */
+const CHECKPOINT_FILE = path.join(OUT_DIR, ".checkpoint.json");
 
 /**
  * EmulatorSystem → Dump folder. Reverse of CONSOLE_MAP in
@@ -117,6 +120,72 @@ function normalizeTitle(title) {
     .replace(/,\s*(the|an|a)\b/g, "")
     .replace(/^(the|an|a)\s+/, "")
     .replace(/[^a-z0-9]/g, "");
+}
+
+// ---- checkpoint + memory management -----------------------------------------
+
+/** RAM threshold (MB available) below which the generator pauses and waits
+ *  for memory to free up before continuing. The VPS has 4 GB; Playwright +
+ *  Chrome from the other scrapers can eat ~1.5 GB, so we pause when available
+ *  drops below 300 MB to avoid OOM kills. */
+const MIN_AVAILABLE_RAM_MB = 300;
+/** How often (ms) to re-check RAM while paused. */
+const RAM_POLL_INTERVAL_MS = 5000;
+
+/** Read available RAM in MB from /proc/meminfo (Linux only). Returns Infinity
+ *  on non-Linux so the check is a no-op there. */
+function availableRamMB() {
+  if (process.platform !== "linux") return Infinity;
+  try {
+    const meminfo = fs.readFileSync("/proc/meminfo", "utf-8");
+    const match = meminfo.match(/^MemAvailable:\s+(\d+)/m);
+    return match ? Math.floor(parseInt(match[1], 10) / 1024) : Infinity;
+  } catch {
+    return Infinity;
+  }
+}
+
+/** If available RAM is below the threshold, block until it recovers. Logs
+ *  pause/resume so the monitor shows what's happening. */
+async function waitForRamIfNeeded() {
+  const avail = availableRamMB();
+  if (avail >= MIN_AVAILABLE_RAM_MB) return;
+
+  process.stdout.write(
+    `⏸  low RAM (${avail} MB available < ${MIN_AVAILABLE_RAM_MB} MB threshold) — pausing until memory frees up…\n`
+  );
+  while (true) {
+    await sleep(RAM_POLL_INTERVAL_MS);
+    const now = availableRamMB();
+    if (now >= MIN_AVAILABLE_RAM_MB) {
+      process.stdout.write(
+        `▶  RAM recovered (${now} MB available) — resuming.\n`
+      );
+      return;
+    }
+  }
+}
+
+/** Load the checkpoint file (systems already completed in a prior run). */
+function loadCheckpoint() {
+  try {
+    const data = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, "utf-8"));
+    return new Set(data.completed ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Mark a system as completed in the checkpoint file. */
+function saveCheckpoint(completed) {
+  try {
+    fs.writeFileSync(
+      CHECKPOINT_FILE,
+      JSON.stringify({ completed, updatedAt: Date.now() }, null, 2)
+    );
+  } catch (err) {
+    process.stderr.write(`checkpoint save failed: ${err}\n`);
+  }
 }
 
 /** Strip edition/region noise to improve IGDB/SGDB match rates. */
@@ -426,6 +495,7 @@ async function processSystem(system, opts) {
       // Icon backfill if this entry predates icons (cheap: 1 SGDB search + 1
       // icon fetch).
       if (!("iconUrl" in existing)) {
+        await waitForRamIfNeeded();
         const search = cleanTitle(title) || title;
         existing.iconUrl = await sgdbIconOnly(search).catch(() => null);
         backfills.push(existing.iconUrl ? "icon" : "icon-miss");
@@ -438,6 +508,7 @@ async function processSystem(system, opts) {
       // substring resolver; otherwise only entries missing a description are
       // filled. Either way the 5 art calls are skipped (one IGDB request each).
       if (opts.igdbBackfill && (opts.revalidate || !existing.description)) {
+        await waitForRamIfNeeded();
         const igdb = await igdbSearch(igdbTitle(title), platformId).catch(
           () => null
         );
@@ -481,6 +552,10 @@ async function processSystem(system, opts) {
     process.stdout.write(
       `  ${system} ${processed + 1}/${todo.length}  "${title}" fetching...\n`
     );
+    // Check available RAM before each network fetch — if the VPS is under
+    // memory pressure (other scrapers, Playwright/Chrome), pause until it
+    // recovers so we don't get OOM-killed mid-run.
+    await waitForRamIfNeeded();
     const [art, igdb] = await Promise.all([
       sgdbArtwork(cleanTitle(title) || title).catch(() => null),
       igdbSearch(igdbTitle(title), platformId).catch(() => null),
@@ -564,8 +639,27 @@ async function main() {
     `Generating metadata for: ${targets.join(", ")}${limit ? ` (limit ${limit}/system)` : ""}\n`
   );
 
+  // Load the checkpoint so a crash/resume skips already-completed systems
+  // entirely (instead of re-reading games.json + re-checking every cached entry).
+  const completed = loadCheckpoint();
+  if (completed.size > 0 && !force) {
+    process.stdout.write(
+      `Checkpoint: ${completed.size} system(s) already completed (${[...completed].join(", ")})\n`
+    );
+  }
+
   for (const system of targets) {
+    // Skip systems already completed in a prior run (checkpoint). --force
+    // ignores the checkpoint so a full re-resolve is still possible.
+    if (!force && completed.has(system)) {
+      process.stdout.write(`skip ${system}: already completed (checkpoint)\n`);
+      continue;
+    }
     await processSystem(system, { force, limit, igdbBackfill, revalidate });
+    // Per-platform checkpoint save — even if the process crashes later,
+    // we know this system's output file is complete and can be skipped.
+    completed.add(system);
+    saveCheckpoint([...completed]);
   }
   process.stdout.write("All done.\n");
 }

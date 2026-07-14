@@ -1,9 +1,6 @@
 import { Downloader, DownloadError, FILE_EXTENSIONS_TO_EXTRACT } from "@shared";
 import { WindowManager } from "../window-manager";
-import {
-  publishDownloadCompleteNotification,
-  publishNotificationDownloadFailed,
-} from "../notifications";
+import { publishDownloadCompleteNotification } from "../notifications";
 import type { Download, DownloadProgress, Game, UserPreferences } from "@types";
 import {
   GofileApi,
@@ -1678,7 +1675,12 @@ export class DownloadManager {
         };
       }
       case Downloader.TorBox: {
-        const { name, url } = await TorBoxClient.getDownloadInfo(download.uri);
+        const { name, url } = await TorBoxClient.getDownloadInfo(
+          download.uri,
+          download.fileIndices,
+          undefined,
+          download.targetFileName
+        );
         if (!url) return;
         return {
           action: "start",
@@ -1955,36 +1957,6 @@ export class DownloadManager {
               this.usingJsDownloader = false;
               this.downloadingGameId = null;
               this.allDebridBatch = null;
-
-              // TorBox couldn't serve the requested file (the shared collection
-              // torrent's cache only held OTHER games, or TorBox ran out of time
-              // fetching this one). The app is TorBox-only by design — there is
-              // NO torrent-client fallback. Stop the download and tell the user
-              // plainly, with a reason they can act on (usually: retry, which
-              // resumes the same TorBox job where it left off).
-              if ((err as { code?: string })?.code === "TORBOX_WRONG_TORRENT") {
-                const reason =
-                  (err as { message?: string })?.message ??
-                  "TorBox couldn't serve this game.";
-                logger.error(
-                  "[DownloadManager] TorBox could not serve download:",
-                  reason
-                );
-                const gameKey = levelKeys.game(
-                  download.shop,
-                  download.objectId
-                );
-                await this.cancelDownload(gameKey).catch(() => {});
-                const failedGame = await gamesSublevel
-                  .get(gameKey)
-                  .catch(() => null);
-                await publishNotificationDownloadFailed(
-                  failedGame?.title ?? "Download",
-                  reason
-                ).catch(() => {});
-                WindowManager.sendDownloadsUpdated?.();
-                return;
-              }
 
               logger.error("[DownloadManager] TorBox prepare error:", err);
               WindowManager.sendDownloadsUpdated?.();
