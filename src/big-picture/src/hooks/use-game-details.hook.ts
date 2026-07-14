@@ -160,13 +160,25 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     updateGame();
 
     if (IS_DESKTOP && shop !== "custom") {
-      globalThis.window.electron.hydraApi
-        .get<HowLongToBeatCategory[] | null>(
-          `/games/${shop}/${objectId}/how-long-to-beat`,
-          { needsAuth: false }
-        )
-        .then(setHowLongToBeat)
-        .catch(() => setHowLongToBeat(null));
+      if (shop === "launchbox") {
+        // Console/emulated games: fetch HLTB via the local scraper (cached).
+        // Use the game title from the library record or shop details.
+        const title = game?.title ?? shopDetails?.name ?? "";
+        if (title) {
+          globalThis.window.electron
+            .getConsoleHowLongToBeat(title)
+            .then(setHowLongToBeat)
+            .catch(() => setHowLongToBeat(null));
+        }
+      } else {
+        globalThis.window.electron.hydraApi
+          .get<HowLongToBeatCategory[] | null>(
+            `/games/${shop}/${objectId}/how-long-to-beat`,
+            { needsAuth: false }
+          )
+          .then(setHowLongToBeat)
+          .catch(() => setHowLongToBeat(null));
+      }
 
       globalThis.window.electron.hydraApi
         .get<ProtonDBData | null>(`/games/${shop}/${objectId}/protondb`, {

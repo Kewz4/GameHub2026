@@ -1317,7 +1317,7 @@ export default function Game() {
                   </section>
                 </FocusItem>
 
-                {!isLaunchboxGame && (howLongToBeat?.length ?? 0) > 0 && (
+                {(howLongToBeat?.length ?? 0) > 0 && (
                   <HowLongToBeatBox
                     howLongToBeat={howLongToBeat ?? []}
                     focusId={GAME_SIDEBAR_HLTB_ID}

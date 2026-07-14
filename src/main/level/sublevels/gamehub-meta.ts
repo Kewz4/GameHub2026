@@ -18,6 +18,14 @@ export interface GameHubMetaEntry {
   logoImageUrl: string | null;
   /** Square game icon (SteamGridDB). Optional: absent in pre-icon datasets. */
   iconUrl?: string | null;
+  /** Screenshots for the game gallery (RAWG). */
+  screenshots?: string[];
+  /** Trailer/video URLs (RAWG). */
+  videos?: string[];
+  /** Developer names (RAWG / IGDB). */
+  developers?: string[];
+  /** Publisher names (RAWG / IGDB). */
+  publishers?: string[];
 }
 
 export const gamehubMetaSublevel = db.sublevel<string, GameHubMetaEntry>(

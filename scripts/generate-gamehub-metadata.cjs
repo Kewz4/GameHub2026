@@ -51,8 +51,10 @@ const IGDB_CLIENT_ID =
   process.env.IGDB_CLIENT_ID || "lbccfxg1ie3739dubo4bvlj7bw0sue";
 const IGDB_CLIENT_SECRET =
   process.env.IGDB_CLIENT_SECRET || "e88mbm5snb40ax0n37jpyhearwfikp";
+const RAWG_KEY = process.env.RAWG_API_KEY || "c7078ab3bd194426be249d6dc36a3c40";
 
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
+const RAWG_BASE = "https://api.rawg.io/api";
 
 const DUMP_DIR = path.join(__dirname, "..", "Dump");
 const OUT_DIR = path.join(__dirname, "..", "sources", "gamehub-meta");
@@ -100,6 +102,24 @@ const IGDB_PLATFORM_IDS = {
   ps1: 7,
   ps2: 8,
   ps3: 9,
+};
+
+/** RAWG platform IDs — from https://api.rawg.io/docs/#operation/games_list.
+ *  Used to filter search results by console for better matching. */
+const RAWG_PLATFORM_IDS = {
+  ps1: 18,
+  ps2: 16,
+  ps3: 15,
+  psp: 14,
+  n3ds: 8,
+  nds: 9,
+  n64: 7,
+  gb: 6,
+  gbc: 6,
+  gba: 5,
+  wii: 10,
+  wiiu: 11,
+  gc: 2,
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -377,6 +397,84 @@ function platformPref(x, platformId) {
     : 1;
 }
 
+// ---- RAWG.io (screenshots, developers, publishers) -------------------------
+
+/**
+ * Search RAWG for a game by title, optionally filtered by platform. Returns
+ * the first result's screenshots + developer/publisher info, or null.
+ *
+ * RAWG's search returns `short_screenshots` inline (no extra request needed).
+ * Developer/publisher info requires a follow-up details call.
+ */
+async function rawgSearch(title, system) {
+  const platformId = RAWG_PLATFORM_IDS[system];
+  const params = new URLSearchParams({
+    key: RAWG_KEY,
+    search: title,
+    page_size: "5",
+  });
+  if (platformId) params.set("platforms", String(platformId));
+
+  const data = await fetchJson(`${RAWG_BASE}/games?${params.toString()}`);
+  const results = data?.results ?? [];
+  if (results.length === 0) return null;
+
+  // Pick the best match: exact name match, then closest by token similarity.
+  const clean = title
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .trim()
+    .toLowerCase();
+  let best = results[0];
+  let bestScore = Infinity;
+  for (const r of results) {
+    const name = (r.name || "").toLowerCase();
+    const score =
+      name === clean
+        ? 0
+        : name.includes(clean) || clean.includes(name)
+          ? 1
+          : tokenSymDiff(tokenize(name), tokenize(clean));
+    const pref = platformId
+      ? (r.parent_platforms ?? []).some((p) => p.platform?.id === platformId)
+        ? 0
+        : 1
+      : 0;
+    if (score + pref * 0.5 < bestScore) {
+      bestScore = score + pref * 0.5;
+      best = r;
+    }
+  }
+
+  // Screenshots are inline in the search response.
+  const screenshots = (best.short_screenshots ?? [])
+    .map((s) => s.image)
+    .filter(Boolean)
+    .slice(0, 10);
+
+  // Fetch game details for developer/publisher info.
+  let developers = [];
+  let publishers = [];
+  let description = null;
+  try {
+    const details = await fetchJson(
+      `${RAWG_BASE}/games/${best.id}?key=${RAWG_KEY}`
+    );
+    developers = (details?.developers ?? []).map((d) => d.name).filter(Boolean);
+    publishers = (details?.publishers ?? []).map((p) => p.name).filter(Boolean);
+    description = details?.description_raw ?? null;
+  } catch {
+    // Best-effort — screenshots are still useful without dev/pub info.
+  }
+
+  return {
+    screenshots: screenshots.length > 0 ? screenshots : undefined,
+    developers: developers.length > 0 ? developers : undefined,
+    publishers: publishers.length > 0 ? publishers : undefined,
+    description: description ?? undefined,
+  };
+}
+
 // ---- SteamGridDB -----------------------------------------------------------
 
 async function sgdbSearchId(title) {
@@ -556,15 +654,16 @@ async function processSystem(system, opts) {
     // memory pressure (other scrapers, Playwright/Chrome), pause until it
     // recovers so we don't get OOM-killed mid-run.
     await waitForRamIfNeeded();
-    const [art, igdb] = await Promise.all([
+    const [art, igdb, rawg] = await Promise.all([
       sgdbArtwork(cleanTitle(title) || title).catch(() => null),
       igdbSearch(igdbTitle(title), platformId).catch(() => null),
+      rawgSearch(cleanTitle(title) || title, system).catch(() => null),
     ]);
 
-    if (art || igdb) {
+    if (art || igdb || rawg) {
       games[key] = {
         title,
-        description: igdb?.summary ?? null,
+        description: igdb?.summary ?? rawg?.description ?? null,
         genres: (igdb?.genres ?? []).map((g) => g.name),
         releaseYear: igdb?.first_release_date
           ? new Date(igdb.first_release_date * 1000).getUTCFullYear()
@@ -574,6 +673,9 @@ async function processSystem(system, opts) {
         libraryHeroImageUrl: art?.libraryHeroImageUrl ?? null,
         logoImageUrl: art?.logoImageUrl ?? null,
         iconUrl: art?.iconUrl ?? null,
+        screenshots: rawg?.screenshots ?? undefined,
+        developers: rawg?.developers ?? undefined,
+        publishers: rawg?.publishers ?? undefined,
       };
       resolved++;
       const artParts = [];
@@ -588,18 +690,25 @@ async function processSystem(system, opts) {
         igdbParts.push(
           new Date(igdb.first_release_date * 1000).getUTCFullYear()
         );
+      const rawgParts = [];
+      if (rawg?.screenshots?.length)
+        rawgParts.push(`${rawg.screenshots.length}ss`);
+      if (rawg?.developers?.length) rawgParts.push("dev");
+      if (rawg?.publishers?.length) rawgParts.push("pub");
       const tag =
-        art && igdb
-          ? `art+igdb (${artParts.join(", ")} | ${igdbParts.join(", ")})`
-          : art
-            ? `art-only (${artParts.join(", ")})`
-            : `igdb-only (${igdbParts.join(", ")})`;
+        [
+          artParts.length ? `art(${artParts.join(",")})` : null,
+          igdbParts.length ? `igdb(${igdbParts.join(",")})` : null,
+          rawgParts.length ? `rawg(${rawgParts.join(",")})` : null,
+        ]
+          .filter(Boolean)
+          .join(" + ") || "partial";
       process.stdout.write(
         `  ${system} ${processed + 1}/${todo.length}  "${title}" → ${tag}\n`
       );
     } else {
       process.stdout.write(
-        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB)\n`
+        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB, no RAWG)\n`
       );
     }
 

@@ -181,6 +181,13 @@ const getGameShopDetails = async (
       downloadSources: [],
     };
 
+    // Map meta screenshots into the SteamScreenshot shape the gallery expects.
+    const screenshots = (meta?.screenshots ?? []).map((url, i) => ({
+      id: i,
+      path_thumbnail: url,
+      path_full: url,
+    }));
+
     return {
       objectId,
       name: displayTitle,
@@ -188,14 +195,14 @@ const getGameShopDetails = async (
       detailed_description: description,
       about_the_game: description,
       short_description: description,
-      developers: [],
-      publishers: [],
+      developers: meta?.developers ?? [],
+      publishers: meta?.publishers ?? [],
       genres: genres.map((g, i) => ({
         id: String(i + 1),
         name: g,
       })),
       supported_languages: "English",
-      screenshots: [],
+      screenshots,
       movies: [],
       pc_requirements: { minimum: "", recommended: "" },
       mac_requirements: { minimum: "", recommended: "" },

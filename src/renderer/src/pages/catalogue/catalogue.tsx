@@ -27,6 +27,10 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { FilterItem } from "./filter-item";
 import { FilterSection } from "./filter-section";
 import { GameItem } from "./game-item";
+import {
+  normalizeCompanyList,
+  normalizeGenreList,
+} from "@renderer/helpers/normalize-filter-lists";
 import { Pagination } from "./pagination";
 
 const ProtonCompatibilitySection = lazy(async () => {
@@ -380,7 +384,7 @@ export default function Catalogue() {
     return [
       {
         title: t("genres"),
-        items: steamGenresFilterItems,
+        items: normalizeGenreList(steamGenresFilterItems),
         key: "genres",
       },
       {
@@ -403,20 +407,16 @@ export default function Catalogue() {
       },
       {
         title: t("developers"),
-        items: steamDevelopers.map((developer) => ({
-          label: developer,
-          value: developer,
-          checked: filters.developers.includes(developer),
-        })),
+        items: normalizeCompanyList(steamDevelopers, filters.developers),
         key: "developers",
       },
       {
         title: t("publishers"),
-        items: steamPublishers.map((publisher) => ({
-          label: decodeHTML(publisher),
-          value: publisher,
-          checked: filters.publishers.includes(publisher),
-        })),
+        items: normalizeCompanyList(
+          steamPublishers,
+          filters.publishers,
+          decodeHTML
+        ),
         key: "publishers",
       },
     ];
@@ -430,6 +430,7 @@ export default function Catalogue() {
     steamPublishers,
     steamUserTagsFilterItems,
     t,
+    decodeHTML,
   ]);
 
   const selectedFiltersCount = groupedFilters.length;

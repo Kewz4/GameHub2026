@@ -20,6 +20,8 @@ export function GallerySlider() {
   const autoplayEnabled = userPreferences?.autoplayGameTrailers !== false;
 
   const hasScreenshots = shopDetails && shopDetails.screenshots?.length;
+  const hasMovies = shopDetails && shopDetails.movies?.length;
+  const hasMedia = hasScreenshots || hasMovies;
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false });
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -185,7 +187,7 @@ export function GallerySlider() {
     [mediaItems]
   );
 
-  if (!hasScreenshots) {
+  if (!hasMedia) {
     return null;
   }
 
