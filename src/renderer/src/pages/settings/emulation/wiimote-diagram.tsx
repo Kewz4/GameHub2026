@@ -86,34 +86,38 @@ export function WiimoteDiagram({
       {/* Arm hit/highlight overlays — transparent until active. */}
       <rect
         {...hit("up")}
-        x="10.043"
-        y="10.04"
-        width="4.538"
-        height="4.063"
+        x="10.65"
+        y="10.65"
+        width="3.32"
+        height="3.45"
+        rx="0.45"
         fill={on("up") ? ACCENT : "transparent"}
       />
       <rect
         {...hit("down")}
-        x="10.043"
-        y="18.642"
-        width="4.538"
-        height="4.063"
+        x="10.65"
+        y="18.65"
+        width="3.32"
+        height="3.45"
+        rx="0.45"
         fill={on("down") ? ACCENT : "transparent"}
       />
       <rect
         {...hit("left")}
-        x="5.98"
-        y="14.103"
-        width="4.063"
-        height="4.539"
+        x="6.6"
+        y="14.75"
+        width="3.45"
+        height="3.32"
+        rx="0.45"
         fill={on("left") ? ACCENT : "transparent"}
       />
       <rect
         {...hit("right")}
-        x="14.581"
-        y="14.103"
-        width="4.063"
-        height="4.539"
+        x="14.58"
+        y="14.75"
+        width="3.45"
+        height="3.32"
+        rx="0.45"
         fill={on("right") ? ACCENT : "transparent"}
       />
 
