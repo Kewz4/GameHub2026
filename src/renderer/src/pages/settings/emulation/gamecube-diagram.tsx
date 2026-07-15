@@ -1,4 +1,5 @@
 import type { DiagramControl } from "./controller-tokens";
+import { DIAGRAM } from "./diagram-theme";
 
 /**
  * Reactive GameCube controller diagram, transcribed from the user's Illustrator
@@ -12,7 +13,7 @@ import type { DiagramControl } from "./controller-tokens";
  * sticks (visualised, not bound as buttons — GameCube has no stick clicks).
  */
 
-const ACCENT = "var(--color-primary, #7aa2ff)";
+const ACCENT = DIAGRAM.accent;
 const VIEWBOX = "0 0 3827.6 2672.9";
 // Both sticks move only their inner nub within a static socket, so travel is
 // bounded by how much room the nub has (control-stick nub r≈165 in the octagon
@@ -20,23 +21,24 @@ const VIEWBOX = "0 0 3827.6 2672.9";
 const MAIN_TRAVEL = 42;
 const C_TRAVEL = 50;
 
-// Base palette from the source SVG.
+// Neutrals resolve through the shared theme palette; console-iconic colours
+// (purple Z, green A, red B, yellow C-stick) stay fixed — they carry meaning.
 const C = {
-  body: "#bababa",
-  bodyDark: "#9e9e9e",
-  outerRing: "#9f9f9f",
-  innerRing: "#bababa",
-  triggerFace: "#c1c1c1",
+  body: DIAGRAM.body,
+  bodyDark: DIAGRAM.bodyRaised,
+  outerRing: DIAGRAM.bodyRaised,
+  innerRing: DIAGRAM.body,
+  triggerFace: DIAGRAM.btn,
   purple: "#490094",
-  stickBase: "#acacac",
-  stickMid: "#d1d1d1",
+  stickBase: DIAGRAM.stick,
+  stickMid: DIAGRAM.btnRaised,
   cStickDark: "#5f5500",
   cStickYellow: "#ffe400",
-  dpad: "#c7c7c7",
-  light: "#eaeaea",
+  dpad: DIAGRAM.btn,
+  light: DIAGRAM.btnRaised,
   aGreen: "#00bc8e",
   bRed: "red",
-  label: "#5f5f5f",
+  label: DIAGRAM.label,
 };
 
 export interface GameCubeDiagramProps {
@@ -93,7 +95,7 @@ export function GameCubeDiagram({
           transform="translate(619.7 248.3) scale(.6 1)"
           fontFamily="Arial"
           fontSize="183.6"
-          fill={on("l2") ? "#0d0d0d" : C.label}
+          fill={on("l2") ? DIAGRAM.accentText : C.label}
         >
           L
         </text>
@@ -110,7 +112,7 @@ export function GameCubeDiagram({
           transform="translate(3159.9 249.3) scale(.5981 1)"
           fontFamily="Arial"
           fontSize="183.6"
-          fill={on("r2") ? "#0d0d0d" : C.label}
+          fill={on("r2") ? DIAGRAM.accentText : C.label}
         >
           R
         </text>
@@ -127,7 +129,7 @@ export function GameCubeDiagram({
           fontFamily="Arial"
           fontSize="150"
           fontWeight="bold"
-          fill={on("z") ? "#0d0d0d" : "#ffffff"}
+          fill={on("z") ? DIAGRAM.accentText : "#ffffff"}
         >
           Z
         </text>
@@ -148,7 +150,7 @@ export function GameCubeDiagram({
       />
       <path
         fill={C.bodyDark}
-        stroke="#000"
+        stroke={DIAGRAM.line}
         d="M3760.3,809.8c-31.2-123.8-671.8,778.1-671.8,778.1,0,0,140.6,605.7,168,711.8,27.3,106.1,43,393.5,277.3,371.4s269.5-375.8,289-725.1c19.5-349.3-31.2-1012.5-62.5-1136.3Z"
       />
       <path
@@ -177,7 +179,10 @@ export function GameCubeDiagram({
         <ellipse cx="753" cy="976" rx="475.3" ry="470.4" fill={C.outerRing} />
         <ellipse cx="753" cy="976" rx="463.2" ry="458.4" fill={C.innerRing} />
         {/* Dark + light octagon cap — stay put as the socket. */}
-        <path d="M966.5,775.5c-16.5-16.5-172-88.3-210.8-88.3s-189.9,67.7-210.2,88.1c-21.4,21.4-87.4,180.2-88.4,211.2-1,30.3,63.2,186.7,87,210.5,26.2,26.2,171.7,85.5,210.5,86.5,38.8,1,184.9-64.1,209.8-86.1,25.2-22.3,89.3-181.1,89.3-211.3,0-30.1-68.8-192.3-87.2-210.7Z" />
+        <path
+          fill={DIAGRAM.well}
+          d="M966.5,775.5c-16.5-16.5-172-88.3-210.8-88.3s-189.9,67.7-210.2,88.1c-21.4,21.4-87.4,180.2-88.4,211.2-1,30.3,63.2,186.7,87,210.5,26.2,26.2,171.7,85.5,210.5,86.5,38.8,1,184.9-64.1,209.8-86.1,25.2-22.3,89.3-181.1,89.3-211.3,0-30.1-68.8-192.3-87.2-210.7Z"
+        />
         <path
           fill={C.stickMid}
           d="M960.1,782c-16-16-166.7-85.6-204.4-85.6s-184.1,65.6-203.8,85.4c-20.7,20.7-84.7,174.7-85.7,204.8-1,29.4,61.3,181,84.4,204.1,25.4,25.4,166.5,82.9,204.1,83.8,37.6.9,179.3-62.2,203.4-83.5,24.5-21.6,86.6-175.6,86.6-204.8s-66.7-186.4-84.6-204.2Z"
@@ -196,7 +201,10 @@ export function GameCubeDiagram({
       {/* ── C-Stick: yellow base STATIC, inner nub translates ───────── */}
       <g {...hit("r3")}>
         {/* Dark octagon socket + yellow base — stay put. */}
-        <path d="M2724.5,1624.5c-16.5-16.5-172-88.3-210.8-88.3s-189.9,67.7-210.2,88.1c-21.4,21.4-87.4,180.2-88.4,211.2-1,30.3,63.2,186.7,87,210.5,26.2,26.2,171.7,85.5,210.5,86.5,38.8,1,184.9-64.1,209.8-86.1,25.2-22.3,89.3-181.1,89.3-211.3,0-30.1-68.8-192.3-87.2-210.7Z" />
+        <path
+          fill={DIAGRAM.well}
+          d="M2724.5,1624.5c-16.5-16.5-172-88.3-210.8-88.3s-189.9,67.7-210.2,88.1c-21.4,21.4-87.4,180.2-88.4,211.2-1,30.3,63.2,186.7,87,210.5,26.2,26.2,171.7,85.5,210.5,86.5,38.8,1,184.9-64.1,209.8-86.1,25.2-22.3,89.3-181.1,89.3-211.3,0-30.1-68.8-192.3-87.2-210.7Z"
+        />
         <path
           fill={C.cStickYellow}
           d="M2718.1,1630.9c-16-16-166.7-85.6-204.4-85.6s-184.1,65.6-203.8,85.4c-20.7,20.7-84.7,174.7-85.7,204.8-1,29.4,61.3,181,84.4,204.1,25.4,25.4,166.5,82.9,204.1,83.8,37.6.9,179.3-62.2,203.4-83.5,24.5-21.6,86.6-175.6,86.6-204.8,0-29.1-66.7-186.4-84.6-204.2Z"
@@ -229,7 +237,10 @@ export function GameCubeDiagram({
         fill={C.bodyDark}
       />
       <ellipse cx="1315.5" cy="1840.9" rx="312.2" ry="309.1" fill={C.body} />
-      <polygon points="1398.6 1765.9 1398.6 1601.1 1234.9 1601.1 1234.9 1763.5 1076.3 1763.5 1076.3 1919.9 1233.8 1921.1 1233.9 2085.9 1396.3 2085.9 1397.5 1918.7 1559.7 1917.5 1559.7 1765.9 1398.6 1765.9" />
+      <polygon
+        fill={DIAGRAM.well}
+        points="1398.6 1765.9 1398.6 1601.1 1234.9 1601.1 1234.9 1763.5 1076.3 1763.5 1076.3 1919.9 1233.8 1921.1 1233.9 2085.9 1396.3 2085.9 1397.5 1918.7 1559.7 1917.5 1559.7 1765.9 1398.6 1765.9"
+      />
       <polygon
         fill={C.light}
         points="1389.9 1775 1389.9 1611.6 1243.3 1611.6 1243.4 1772.7 1085.1 1772.7 1085.1 1911.5 1243.2 1912.7 1243.3 2075.4 1387.2 2075.4 1388.7 1910.4 1549.2 1909.3 1549.2 1775 1389.9 1775"
@@ -258,7 +269,7 @@ export function GameCubeDiagram({
 
       {/* ── Start / Pause ───────────────────────────────────────────── */}
       <g {...hit("start")}>
-        <circle cx="1915.1" cy="1144" r="93" />
+        <circle cx="1915.1" cy="1144" r="93" fill={DIAGRAM.well} />
         <circle
           cx="1915.1"
           cy="1144"

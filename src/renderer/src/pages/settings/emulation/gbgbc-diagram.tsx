@@ -1,4 +1,5 @@
 import type { DiagramControl } from "./controller-tokens";
+import { DIAGRAM } from "./diagram-theme";
 
 /**
  * Reactive Game Boy / Game Boy Color controller diagram, transcribed from the
@@ -10,19 +11,19 @@ import type { DiagramControl } from "./controller-tokens";
  * There is no analog stick, so `stickDeflection` is accepted but ignored.
  */
 
-const ACCENT = "var(--color-primary, #7aa2ff)";
+const ACCENT = DIAGRAM.accent;
 const VIEWBOX = "0 0 612.002 251.924";
 
-// Base palette from the source SVG.
+// Theme-aware palette; only the console-iconic reds stay fixed.
 const C = {
-  body: "#dcdcdc",
-  faceplate: "#1a1a1a",
-  pill: "gray",
-  dpad: "#1a1a1a",
-  arrow: "#fff",
-  buttonWell: "#ddd",
+  body: DIAGRAM.body,
+  faceplate: DIAGRAM.well,
+  pill: DIAGRAM.bodyRaised,
+  dpad: DIAGRAM.btn,
+  arrow: DIAGRAM.label,
+  buttonWell: DIAGRAM.btn,
   red: "red",
-  pillBlack: "#000000",
+  pillBlack: DIAGRAM.well,
   logoRed: "#fe0016",
   labelRed: "red",
 };
@@ -104,7 +105,7 @@ export function GbGbcDiagram({
         id="rect2235"
         d="M87.658,93.193c-2.686,0-4.713,2.216-4.713,4.902v33.746h-33.747c-2.686,0-4.902,2.217-4.902,4.902v27.148c0,2.686,2.216,4.901,4.902,4.901h33.747v33.747c0,2.685,2.028,4.714,4.713,4.714h27.337c2.686,0,4.713-2.027,4.713-4.714v-33.747h33.747c2.685,0,4.902-2.216,4.902-4.901v-27.148c0-2.686-2.216-4.902-4.902-4.902h-33.747v-33.746c0-2.686-2.028-4.902-4.713-4.902h-27.337Z"
         fill={C.dpad}
-        stroke="#fff"
+        stroke={DIAGRAM.line}
         strokeLinecap="round"
         strokeWidth="1.652"
       />
@@ -168,7 +169,7 @@ export function GbGbcDiagram({
         height="56.985"
         rx="10.821"
         ry="10.821"
-        fill={C.buttonWell}
+        fill={DIAGRAM.btnRaised}
       />
       <path
         id="rect12207"

@@ -44,7 +44,11 @@ class MahonyAHRS {
   private readonly ki = 0.005;
 
   /** Process accel (G) + gyro (rad/s) → euler angles (rad). */
-  update(accel: [number, number, number], gyro: [number, number, number], dt: number): [number, number, number] {
+  update(
+    accel: [number, number, number],
+    gyro: [number, number, number],
+    dt: number
+  ): [number, number, number] {
     // Normalize accelerometer
     const aLen = Math.hypot(accel[0], accel[1], accel[2]) || 1;
     const ax = accel[0] / aLen;
@@ -54,7 +58,8 @@ class MahonyAHRS {
     // Estimated gravity direction from quaternion
     const halfvx = this.qx * this.qz - this.qw * this.qy;
     const halfvy = this.qw * this.qx + this.qy * this.qz;
-    const halfvz = this.qw * this.qw - 0.5 * (this.qx * this.qx + this.qy * this.qy);
+    const halfvz =
+      this.qw * this.qw - 0.5 * (this.qx * this.qx + this.qy * this.qy);
 
     // Error is cross product between measured and estimated gravity
     const halfex = ay * halfvz - az * halfvy;
@@ -72,9 +77,9 @@ class MahonyAHRS {
 
     // Integrate quaternion: q' = q + 0.5 * q ⊗ ω * dt
     const dqw = 0.5 * (-this.qx * gx - this.qy * gy - this.qz * gz) * dt;
-    const dqx = 0.5 * ( this.qw * gx + this.qy * gz - this.qz * gy) * dt;
-    const dqy = 0.5 * ( this.qw * gy - this.qx * gz + this.qz * gx) * dt;
-    const dqz = 0.5 * ( this.qw * gz + this.qx * gy - this.qy * gx) * dt;
+    const dqx = 0.5 * (this.qw * gx + this.qy * gz - this.qz * gy) * dt;
+    const dqy = 0.5 * (this.qw * gy - this.qx * gz + this.qz * gx) * dt;
+    const dqz = 0.5 * (this.qw * gz + this.qx * gy - this.qy * gx) * dt;
 
     this.qw += dqw;
     this.qx += dqx;
@@ -93,10 +98,13 @@ class MahonyAHRS {
       2 * (this.qw * this.qx + this.qy * this.qz),
       1 - 2 * (this.qx * this.qx + this.qy * this.qy)
     );
-    const pitch = 2 * Math.atan2(
-      Math.sqrt(1 + 2 * (this.qw * this.qy - this.qx * this.qz)),
-      Math.sqrt(1 - 2 * (this.qw * this.qy - this.qx * this.qz))
-    ) - Math.PI / 2;
+    const pitch =
+      2 *
+        Math.atan2(
+          Math.sqrt(1 + 2 * (this.qw * this.qy - this.qx * this.qz)),
+          Math.sqrt(1 - 2 * (this.qw * this.qy - this.qx * this.qz))
+        ) -
+      Math.PI / 2;
     const yaw = Math.atan2(
       2 * (this.qw * this.qz + this.qx * this.qy),
       1 - 2 * (this.qy * this.qy + this.qz * this.qz)
@@ -206,7 +214,9 @@ export function GyroCube({ padIndex, enabled }: Readonly<Props>) {
     let raf = 0;
 
     const loop = (time: number) => {
-      const dt = lastTimeRef.current ? (time - lastTimeRef.current) / 1000 : 0.016;
+      const dt = lastTimeRef.current
+        ? (time - lastTimeRef.current) / 1000
+        : 0.016;
       lastTimeRef.current = time;
 
       const gp = navigator.getGamepads()?.[padIndex];
@@ -222,10 +232,13 @@ export function GyroCube({ padIndex, enabled }: Readonly<Props>) {
             2 * (q[0] * q[1] + q[2] * q[3]),
             1 - 2 * (q[1] * q[1] + q[2] * q[2])
           );
-          const pitch = 2 * Math.atan2(
-            Math.sqrt(1 + 2 * (q[0] * q[2] - q[1] * q[3])),
-            Math.sqrt(1 - 2 * (q[0] * q[2] - q[1] * q[3]))
-          ) - Math.PI / 2;
+          const pitch =
+            2 *
+              Math.atan2(
+                Math.sqrt(1 + 2 * (q[0] * q[2] - q[1] * q[3])),
+                Math.sqrt(1 - 2 * (q[0] * q[2] - q[1] * q[3]))
+              ) -
+            Math.PI / 2;
           const yaw = Math.atan2(
             2 * (q[0] * q[3] + q[1] * q[2]),
             1 - 2 * (q[2] * q[2] + q[3] * q[3])

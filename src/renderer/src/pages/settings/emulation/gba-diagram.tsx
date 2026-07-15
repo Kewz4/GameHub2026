@@ -1,4 +1,5 @@
 import type { DiagramControl } from "./controller-tokens";
+import { DIAGRAM } from "./diagram-theme";
 
 /**
  * Reactive Game Boy Advance diagram, transcribed from the user's Illustrator
@@ -8,22 +9,12 @@ import type { DiagramControl } from "./controller-tokens";
  *
  * The GBA has no analog stick, so `stickDeflection` is accepted for interface
  * parity but ignored. Reactive controls: up/down/left/right (D-pad arrows),
- * a, b, l1 (L shoulder), r1 (R shoulder), start, select. The purple body, the
- * screen bezel, and the white D-pad cross are static.
+ * a, b, l1 (L shoulder), r1 (R shoulder), start, select. The body shell, the
+ * screen bezel, and the D-pad cross are static, themed via DIAGRAM.
  */
 
-const ACCENT = "var(--color-primary, #7aa2ff)";
+const ACCENT = DIAGRAM.accent;
 const VIEWBOX = "0 0 150.613 86.616";
-
-// Base palette from the source SVG.
-const C = {
-  shell: "#d7d7d7",
-  purple: "#7d00ff",
-  screen: "#353535",
-  white: "#fff",
-  arrow: "#000",
-  label: "#000",
-};
 
 export interface GbaDiagramProps {
   active: Partial<Record<DiagramControl, boolean>>;
@@ -65,71 +56,71 @@ export function GbaDiagram({
       {/* ── Shoulder shells L / R (reactive) ────────────────────────── */}
       <g {...hit("l1")}>
         <path
-          fill={on("l1") ? ACCENT : C.shell}
+          fill={on("l1") ? ACCENT : DIAGRAM.btn}
           d="M38.631,19.558c0,3.728-24.276,1-28.625,1s-7.875-3.022-7.875-6.75,3.526-6.75,7.875-6.75c1.943,0,26.972-3.647,28.346-2.647,1.7,1.238.279,13.084.279,15.147Z"
         />
       </g>
       <g {...hit("r1")}>
         <path
-          fill={on("r1") ? ACCENT : C.shell}
+          fill={on("r1") ? ACCENT : DIAGRAM.btn}
           data-paper-data='{"index":null}'
           d="M110.966,4.162c1.373-1,26.402,2.647,28.346,2.647,4.349,0,7.875,3.022,7.875,6.75s-3.526,6.75-7.875,6.75-28.625,2.728-28.625-1c0-2.062-1.421-13.908.279-15.147Z"
         />
       </g>
 
-      {/* ── Purple body (static) ────────────────────────────────────── */}
+      {/* ── Body shell (static, themed) ─────────────────────────────── */}
       <path
-        fill={C.purple}
+        fill={DIAGRAM.body}
         d="M4.107,15.283c1.239-3.67,11.355-1.162,18-4S30.924,1.748,38.44.95c7.516-.798,66.418-1.94,74.667.667,5.221,1.65,8.738,5.96,15,8.333s17.214,2.128,19.667,8.333c2.452,6.205,3.567,26.971,2.333,47.333-.224,3.697.04,5.312-9,9-4.599,1.876-12.739,5.424-21.333,7.333-8.594,1.91-32.667,4.667-32.667,4.667l-26-1s-15.27-1.078-25.333-2.667c-10.063-1.589-30-8.333-30-8.333l-5-7.333S-2.399,34.549,4.107,15.283ZM39.274,66.95s19.936,6.653,29.873,6.286c13.205-.487,42.377-5.452,42.377-5.452l.5-48.833-71.583-1.917-1.167,49.917Z"
       />
 
       {/* ── START / SELECT buttons (reactive) ───────────────────────── */}
       <g {...hit("start")}>
         <path
-          fill={on("start") ? ACCENT : C.white}
+          fill={on("start") ? ACCENT : DIAGRAM.btnRaised}
           d="M32.427,59.337c0,1.473-1.231,2.667-2.75,2.667s-2.75-1.194-2.75-2.667,1.231-2.667,2.75-2.667,2.75,1.194,2.75,2.667Z"
         />
       </g>
       <g {...hit("select")}>
         <path
-          fill={on("select") ? ACCENT : C.white}
+          fill={on("select") ? ACCENT : DIAGRAM.btnRaised}
           d="M32.427,67.98c0,1.473-1.231,2.667-2.75,2.667s-2.75-1.194-2.75-2.667,1.231-2.667,2.75-2.667,2.75,1.194,2.75,2.667Z"
         />
       </g>
 
       {/* ── Screen bezel (static) ───────────────────────────────────── */}
       <path
-        fill={C.screen}
-        stroke="#000"
+        fill={DIAGRAM.well}
+        stroke={DIAGRAM.line}
         strokeLinecap="round"
         strokeMiterlimit="10"
         strokeWidth=".5"
         d="M36.881,17.558s2.741-3.286,4.25-3.5,32.75-1.75,32.75-1.75c0,0,11.224-1.485,25.75.5s14.5,5,14.5,5l2.25,50s-2.179,5.405-5.25,6.25-34.75,4.75-34.75,4.75c0,0-16.409,1.252-30.25-2.5s-11.25-8.75-11.25-8.75l2-50ZM43.131,62.308l65.75.25.5-42.55-66.9.25.65,42.05Z"
       />
 
-      {/* ── D-pad: white cross static, arrows react ─────────────────── */}
+      {/* ── D-pad: raised cross static, arrows react ────────────────── */}
       <path
-        fill={C.white}
+        fill={DIAGRAM.btnRaised}
         d="M27.816,35.751h-6.637v-6.635c0-.383-.312-.695-.694-.695h-3.782c-.383,0-.695.312-.695.695v6.635h-6.637c-.383,0-.695.312-.695.695v3.782c0,.384.312.695.695.695h6.637v6.635c0,.383.312.694.695.694h3.782c.383,0,.694-.311.694-.694v-6.635h6.637c.383,0,.694-.312.694-.695v-3.782c0-.383-.311-.695-.694-.695Z"
       />
       <polygon
         {...hit("left")}
-        fill={on("left") ? ACCENT : C.arrow}
+        fill={on("left") ? ACCENT : DIAGRAM.well}
         points="10.664 38.342 12.987 39.683 12.987 37.001 10.664 38.342"
       />
       <polygon
         {...hit("right")}
-        fill={on("right") ? ACCENT : C.arrow}
+        fill={on("right") ? ACCENT : DIAGRAM.well}
         points="26.523 38.342 24.2 39.683 24.2 37.001 26.523 38.342"
       />
       <polygon
         {...hit("up")}
-        fill={on("up") ? ACCENT : C.arrow}
+        fill={on("up") ? ACCENT : DIAGRAM.well}
         points="18.575 30.435 19.916 32.758 17.234 32.758 18.575 30.435"
       />
       <polygon
         {...hit("down")}
-        fill={on("down") ? ACCENT : C.arrow}
+        fill={on("down") ? ACCENT : DIAGRAM.well}
         points="18.575 46.365 17.234 44.043 19.916 44.043 18.575 46.365"
       />
 
@@ -139,7 +130,7 @@ export function GbaDiagram({
           cx="125.481"
           cy="40.766"
           r="5.53"
-          fill={on("a") ? ACCENT : C.white}
+          fill={on("a") ? ACCENT : DIAGRAM.btnRaised}
         />
       </g>
       <g {...hit("b")}>
@@ -147,12 +138,12 @@ export function GbaDiagram({
           cx="139.564"
           cy="35.516"
           r="5.53"
-          fill={on("b") ? ACCENT : C.white}
+          fill={on("b") ? ACCENT : DIAGRAM.btnRaised}
         />
       </g>
 
       {/* ── START label glyphs (static) ─────────────────────────────── */}
-      <g fill={C.white}>
+      <g fill={DIAGRAM.label}>
         <path d="M16.648,57.557c.12.117.308.232.521.279.317.069.539-.057.592-.299.049-.225-.05-.382-.348-.576-.361-.226-.559-.481-.484-.82.082-.374.453-.584.919-.481.246.054.412.15.505.233l-.141.234c-.069-.059-.214-.166-.431-.214-.328-.071-.496.097-.531.261-.049.225.073.367.376.567.372.247.535.487.458.841-.081.369-.426.63-.992.506-.231-.051-.469-.174-.579-.287l.135-.244Z" />
         <path d="M19.286,56.291l-.729-.16.058-.263,1.777.39-.058.264-.733-.161-.469,2.138-.313-.068.469-2.139Z" />
         <path d="M20.416,57.988l-.416.701-.32-.071,1.342-2.222.374.082.292,2.581-.332-.073-.09-.812-.852-.187ZM21.255,57.919l-.083-.743c-.019-.168-.023-.318-.029-.465h-.007c-.066.133-.138.271-.216.406l-.388.643.723.159Z" />
@@ -161,7 +152,7 @@ export function GbaDiagram({
       </g>
 
       {/* ── SELECT label glyphs (static) ────────────────────────────── */}
-      <g fill={C.white}>
+      <g fill={DIAGRAM.label}>
         <path d="M14.604,66.086c.12.117.308.232.521.279.316.069.538-.057.592-.299.049-.225-.051-.382-.348-.576-.361-.226-.559-.481-.484-.82.082-.374.453-.584.919-.481.246.054.412.15.505.233l-.141.234c-.069-.059-.214-.166-.431-.214-.328-.071-.496.097-.531.261-.05.225.072.367.376.567.371.247.535.487.457.841-.081.369-.426.63-.992.506-.231-.051-.469-.174-.578-.287l.135-.244Z" />
         <path d="M17.807,66.006l-.934-.205-.19.865,1.041.229-.058.26-1.35-.296.526-2.401,1.297.285-.058.26-.986-.216-.167.758.934.205-.056.257Z" />
         <path d="M18.593,64.842l.31.067-.47,2.141,1.025.226-.057.26-1.336-.293.527-2.4Z" />
@@ -172,18 +163,21 @@ export function GbaDiagram({
 
       {/* ── Face-button labels A / B and shoulder labels L / R (static) */}
       <path
-        fill={C.label}
+        fill={on("a") ? DIAGRAM.accentText : DIAGRAM.label}
         d="M124.504,41.425l-.564,1.711h-.727l1.848-5.44h.848l1.856,5.44h-.75l-.581-1.711h-1.93ZM126.288,40.876l-.533-1.566c-.121-.355-.201-.678-.282-.993h-.017c-.08.323-.169.654-.274.985l-.532,1.574h1.639Z"
       />
       <path
-        fill={C.label}
+        fill={on("b") ? DIAGRAM.accentText : DIAGRAM.label}
         d="M138.303,32.519c.307-.065.791-.113,1.283-.113.703,0,1.154.121,1.494.396.282.21.451.533.451.961,0,.524-.347.984-.92,1.194v.016c.517.129,1.122.557,1.122,1.364,0,.468-.186.823-.46,1.09-.38.347-.993.508-1.881.508-.484,0-.855-.032-1.09-.064v-5.352ZM139.005,34.746h.638c.743,0,1.179-.387,1.179-.912,0-.638-.484-.888-1.194-.888-.323,0-.509.024-.622.048v1.751ZM139.005,37.354c.138.024.339.032.59.032.727,0,1.396-.266,1.396-1.058,0-.742-.638-1.049-1.405-1.049h-.581v2.075Z"
       />
       <path
-        fill={C.label}
+        fill={on("r1") ? DIAGRAM.accentText : DIAGRAM.label}
         d="M142.568,9.788c.188-.039.457-.06.713-.06.397,0,.654.073.833.235.146.128.227.325.227.547,0,.38-.239.632-.542.735v.013c.222.077.354.282.423.581.094.402.162.679.222.791h-.385c-.047-.081-.11-.329-.191-.688-.086-.397-.24-.547-.577-.56h-.351v1.248h-.371v-2.841ZM142.939,11.1h.381c.396,0,.648-.218.648-.547,0-.372-.269-.534-.662-.539-.179,0-.308.017-.367.034v1.051Z"
       />
-      <path fill={C.label} d="M5.64,9.75h.371v2.568h1.23v.312h-1.602v-2.88Z" />
+      <path
+        fill={on("l1") ? DIAGRAM.accentText : DIAGRAM.label}
+        d="M5.64,9.75h.371v2.568h1.23v.312h-1.602v-2.88Z"
+      />
     </svg>
   );
 }

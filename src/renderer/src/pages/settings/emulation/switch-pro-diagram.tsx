@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { DiagramControl } from "./controller-tokens";
+import { DIAGRAM } from "./diagram-theme";
 
 export type { DiagramControl };
 
@@ -16,19 +17,19 @@ export type { DiagramControl };
  */
 
 const STONE = {
-  body: "#26221f",
-  bodyStroke: "#3f3a35",
-  well: "#1c1917",
-  wellStroke: "#3f3a35",
-  btn: "#403a34",
-  btnStroke: "#4f4842",
-  label: "#a8a29e",
-  stick: "#57534e",
-  dpad: "#4f4842",
+  body: DIAGRAM.body,
+  bodyStroke: DIAGRAM.line,
+  well: DIAGRAM.well,
+  wellStroke: DIAGRAM.line,
+  btn: DIAGRAM.btn,
+  btnStroke: DIAGRAM.line,
+  label: DIAGRAM.label,
+  stick: DIAGRAM.stick,
+  dpad: DIAGRAM.btn,
 };
 
-const ACCENT = "var(--color-primary, #7aa2ff)";
-const ACCENT_TEXT = "#0d0d0d";
+const ACCENT = DIAGRAM.accent;
+const ACCENT_TEXT = DIAGRAM.accentText;
 const STICK_TRAVEL = 12; // px the stick cap moves at full deflection
 
 export interface SwitchProDiagramProps {

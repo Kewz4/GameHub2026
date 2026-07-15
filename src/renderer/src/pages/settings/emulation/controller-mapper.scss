@@ -20,9 +20,45 @@
     gap: 12px;
     padding: 20px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(var(--fg-rgb), 0.03);
+    border: 1px solid rgba(var(--fg-rgb), 0.08);
   }
+
+  // ── Shared diagram palette (see diagram-theme.ts) ─────────────────────────
+  // Derived from the theme's fg/bg channels so every controller diagram stays
+  // readable in light AND dark mode and follows custom themes. Console-iconic
+  // button colours are the only fixed colours left in the diagrams.
+  // OPAQUE mixes (not alpha) so diagrams that layer shell paths on top of each
+  // other (GameCube!) don't brighten where subpaths overlap.
+  --diagram-line: color-mix(
+    in srgb,
+    rgb(var(--fg-rgb)) 50%,
+    rgb(var(--bg-rgb))
+  );
+  --diagram-body: color-mix(in srgb, rgb(var(--fg-rgb)) 9%, rgb(var(--bg-rgb)));
+  --diagram-body-raised: color-mix(
+    in srgb,
+    rgb(var(--fg-rgb)) 16%,
+    rgb(var(--bg-rgb))
+  );
+  --diagram-well: color-mix(
+    in srgb,
+    rgb(var(--fg-rgb)) 28%,
+    rgb(var(--bg-rgb))
+  );
+  --diagram-btn: color-mix(in srgb, rgb(var(--fg-rgb)) 32%, rgb(var(--bg-rgb)));
+  --diagram-btn-raised: color-mix(
+    in srgb,
+    rgb(var(--fg-rgb)) 42%,
+    rgb(var(--bg-rgb))
+  );
+  --diagram-stick: color-mix(
+    in srgb,
+    rgb(var(--fg-rgb)) 38%,
+    rgb(var(--bg-rgb))
+  );
+  --diagram-label: var(--color-text-muted);
+  --diagram-btn-label: var(--color-text);
 
   .switch-diagram {
     width: 100%;
