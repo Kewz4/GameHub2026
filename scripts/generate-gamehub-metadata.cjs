@@ -51,7 +51,7 @@ const IGDB_CLIENT_ID =
   process.env.IGDB_CLIENT_ID || "lbccfxg1ie3739dubo4bvlj7bw0sue";
 const IGDB_CLIENT_SECRET =
   process.env.IGDB_CLIENT_SECRET || "e88mbm5snb40ax0n37jpyhearwfikp";
-const RAWG_KEY = process.env.RAWG_API_KEY || "ffaf786fda9e4ea29744a31d284fb5c5";
+const RAWG_KEY = process.env.RAWG_API_KEY || "995d69ec8d474d268f33cf41e6e37f2e";
 
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
 const RAWG_BASE = "https://api.rawg.io/api";
@@ -632,6 +632,43 @@ async function processSystem(system, opts) {
         didWork = true;
       }
 
+      // RAWG backfill: only re-fetch RAWG for entries missing
+      // screenshots/developers/publishers. Skips SGDB + IGDB entirely
+      // (art and description are already resolved). Used to fill gaps
+      // when the previous RAWG API key was rate-limited mid-run.
+      if (opts.rawgBackfill) {
+        const hasRawg =
+          (existing.screenshots && existing.screenshots.length > 0) ||
+          (existing.developers && existing.developers.length > 0) ||
+          (existing.publishers && existing.publishers.length > 0);
+        if (!hasRawg) {
+          await waitForRamIfNeeded();
+          const rawg = await rawgSearch(
+            cleanTitle(title) || title,
+            system
+          ).catch(() => null);
+          if (rawg) {
+            if (rawg.screenshots?.length)
+              existing.screenshots = rawg.screenshots;
+            if (rawg.developers?.length)
+              existing.developers = rawg.developers;
+            if (rawg.publishers?.length)
+              existing.publishers = rawg.publishers;
+            // Don't overwrite description if IGDB already provided one
+            if (!existing.description && rawg.description)
+              existing.description = rawg.description;
+          }
+          backfills.push(
+            rawg
+              ? `rawg(${
+                  rawg.screenshots?.length ?? 0
+                }ss,${rawg.developers?.length ?? 0}dev,pub)`
+              : "rawg-miss"
+          );
+          didWork = true;
+        }
+      }
+
       if (didWork) {
         resolved++;
         process.stdout.write(
@@ -646,7 +683,7 @@ async function processSystem(system, opts) {
       if (processed % 25 === 0) {
         flush(outPath, { system, generatedAt: Date.now(), games });
       }
-      await sleep(opts.igdbBackfill ? 280 : 120);
+      await sleep(opts.rawgBackfill ? 30 : opts.igdbBackfill ? 280 : 120);
       continue;
     }
 
@@ -740,6 +777,7 @@ async function main() {
   const force = args.includes("--force");
   const revalidate = args.includes("--igdb-revalidate");
   const igdbBackfill = args.includes("--igdb-backfill") || revalidate;
+  const rawgBackfill = args.includes("--rawg-backfill");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
@@ -763,11 +801,11 @@ async function main() {
   for (const system of targets) {
     // Skip systems already completed in a prior run (checkpoint). --force
     // ignores the checkpoint so a full re-resolve is still possible.
-    if (!force && completed.has(system)) {
+    if (!force && !rawgBackfill && completed.has(system)) {
       process.stdout.write(`skip ${system}: already completed (checkpoint)\n`);
       continue;
     }
-    await processSystem(system, { force, limit, igdbBackfill, revalidate });
+    await processSystem(system, { force, limit, igdbBackfill, revalidate, rawgBackfill });
     // Per-platform checkpoint save — even if the process crashes later,
     // we know this system's output file is complete and can be skipped.
     completed.add(system);
