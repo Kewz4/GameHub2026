@@ -653,16 +653,30 @@ export default function Catalogue() {
                 theme="dark"
                 value={filters.platform ?? ""}
                 options={[
-                  { value: "", label: t("platform_all", { defaultValue: "All Platforms" }) },
-                  { value: "pc", label: t("platform_pc", { defaultValue: "PC" }) },
-                  { value: "console", label: t("platform_console", { defaultValue: "Console" }) },
+                  {
+                    key: "all",
+                    value: "",
+                    label: t("platform_all", { defaultValue: "All Platforms" }),
+                  },
+                  {
+                    key: "pc",
+                    value: "pc",
+                    label: t("platform_pc", { defaultValue: "PC" }),
+                  },
+                  {
+                    key: "console",
+                    value: "console",
+                    label: t("platform_console", { defaultValue: "Console" }),
+                  },
                 ]}
                 onChange={(event) => {
                   const value = event.target.value as "pc" | "console" | "";
-                  dispatch(setFilters({
-                    platform: value || undefined,
-                    consoleSystem: undefined,
-                  }));
+                  dispatch(
+                    setFilters({
+                      platform: value || undefined,
+                      consoleSystem: undefined,
+                    })
+                  );
                 }}
               />
               {filters.platform === "console" && (
@@ -670,17 +684,28 @@ export default function Catalogue() {
                   theme="dark"
                   value={filters.consoleSystem ?? ""}
                   options={[
-                    { value: "", label: t("all_consoles", { defaultValue: "All Consoles" }) },
+                    {
+                      key: "all",
+                      value: "",
+                      label: t("all_consoles", {
+                        defaultValue: "All Consoles",
+                      }),
+                    },
                     ...CONSOLE_FILTER_SYSTEMS.map((system) => ({
+                      key: system,
                       value: system,
                       label: CONSOLE_LABELS[system] ?? system,
                     })),
                   ]}
                   onChange={(event) => {
                     const value = event.target.value as EmulatorSystem | "";
-                    dispatch(setFilters({
-                      consoleSystem: (value || undefined) as EmulatorSystem | undefined,
-                    }));
+                    dispatch(
+                      setFilters({
+                        consoleSystem: (value || undefined) as
+                          | EmulatorSystem
+                          | undefined,
+                      })
+                    );
                   }}
                 />
               )}

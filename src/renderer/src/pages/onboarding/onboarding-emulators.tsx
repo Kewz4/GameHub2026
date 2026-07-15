@@ -22,6 +22,7 @@ import azaharLogo from "@renderer/assets/emulation/logos/azahar.svg?url";
 import cemuLogo from "@renderer/assets/emulation/logos/cemu.png";
 import dolphinLogo from "@renderer/assets/emulation/logos/dolphin.png";
 import raLogo from "@renderer/assets/emulation/logos/retroachievements.svg?url";
+import edenLogo from "@renderer/assets/emulation/logos/eden.png";
 
 import "./onboarding-emulators.scss";
 
@@ -42,6 +43,7 @@ const EMULATOR_LOGOS: Record<EmulatorBinary, string | undefined> = {
   ravba: raLogo,
   cemu: cemuLogo,
   dolphin: dolphinLogo,
+  eden: edenLogo,
 };
 
 // Logos that are already full-colour, filled icons (not dark line-art on

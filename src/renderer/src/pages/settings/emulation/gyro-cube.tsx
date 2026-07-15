@@ -219,7 +219,18 @@ export function GyroCube({ padIndex, enabled }: Readonly<Props>) {
         : 0.016;
       lastTimeRef.current = time;
 
-      const gp = navigator.getGamepads()?.[padIndex];
+      // The Gamepad pose extension (quaternion/accel/gyro) isn't in the
+      // standard TS lib types yet, so widen the type locally.
+      const gp = navigator.getGamepads()?.[padIndex] as
+        | (Gamepad & {
+            pose?: {
+              quaternion?: number[] | Float32Array | null;
+              acceleration?: number[] | Float32Array | null;
+              angularVelocity?: number[] | Float32Array | null;
+            } | null;
+          })
+        | null
+        | undefined;
 
       let euler: [number, number, number] = [0, 0, 0];
 

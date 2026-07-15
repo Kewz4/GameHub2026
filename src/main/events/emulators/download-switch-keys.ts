@@ -62,7 +62,7 @@ const downloadSwitchKeys = async (
       const keysZip = path.join(tmpDir, "prodkeys.zip");
       logger.log("[switch-keys] Downloading prod.keys…");
       await downloadTo(PROD_KEYS_URL, keysZip);
-      await SevenZip.extractFile(keysZip, keysDir);
+      await SevenZip.extractFile({ filePath: keysZip, outputPath: keysDir });
       keysOk = true;
       logger.log("[switch-keys] prod.keys extracted to", keysDir);
     } catch (err) {
@@ -74,7 +74,7 @@ const downloadSwitchKeys = async (
       const fwZip = path.join(tmpDir, "firmware.zip");
       logger.log("[switch-keys] Downloading firmware…");
       await downloadTo(FIRMWARE_URL, fwZip);
-      await SevenZip.extractFile(fwZip, firmwareDir);
+      await SevenZip.extractFile({ filePath: fwZip, outputPath: firmwareDir });
       firmwareOk = true;
       logger.log("[switch-keys] Firmware extracted to", firmwareDir);
     } catch (err) {

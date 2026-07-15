@@ -55,6 +55,7 @@ const SYSTEM_LABELS: Record<EmulatorSystem, string> = {
   wiiu: "Wii U",
   wii: "Wii",
   gc: "GameCube",
+  switch: "Nintendo Switch",
 };
 
 interface EmulationDetailProps {

@@ -524,8 +524,6 @@ export function edenControls(p: ControllerProfile): string {
   };
   const hat = (dir: string) =>
     `engine:sdl,guid:${guid},port:${port},hat:0,direction:${dir}`;
-  const axisBtn = (axis: number, sign: string) =>
-    `engine:sdl,guid:${guid},port:${port},axis:${axis},direction:${sign},threshold:${sign === "+" ? "0.5" : "-0.5"}`;
   const stick = (ax: number, ay: number) =>
     `engine:sdl,guid:${guid},port:${port},axis_x:${ax},axis_y:${ay}`;
 
