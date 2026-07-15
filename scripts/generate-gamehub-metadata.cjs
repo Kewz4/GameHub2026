@@ -120,19 +120,19 @@ const IGDB_PLATFORM_IDS = {
 /** RAWG platform IDs — from https://api.rawg.io/docs/#operation/games_list.
  *  Used to filter search results by console for better matching. */
 const RAWG_PLATFORM_IDS = {
-  ps1: 18,
-  ps2: 16,
-  ps3: 15,
-  psp: 14,
+  ps1: 27,
+  ps2: 15,
+  ps3: 16,
+  psp: 17,
   n3ds: 8,
   nds: 9,
-  n64: 7,
-  gb: 6,
-  gbc: 6,
-  gba: 5,
-  wii: 10,
-  wiiu: 11,
-  gc: 2,
+  n64: 83,
+  gb: 26,
+  gbc: 43,
+  gba: 24,
+  wii: 11,
+  wiiu: 10,
+  gc: 105,
   switch: 7,
 };
 
@@ -154,6 +154,54 @@ function normalizeTitle(title) {
     .replace(/,\s*(the|an|a)\b/g, "")
     .replace(/^(the|an|a)\s+/, "")
     .replace(/[^a-z0-9]/g, "");
+}
+
+// ---- graceful shutdown ------------------------------------------------------
+let _shuttingDown = false;
+let _currentOutPath = null;
+let _currentData = null;
+
+function setupGracefulShutdown() {
+  const saveAndExit = (signal) => {
+    if (_shuttingDown) return;
+    _shuttingDown = true;
+    process.stderr.write(`\n${signal} received — saving state…\n`);
+    if (_currentOutPath && _currentData) {
+      try {
+        flush(_currentOutPath, _currentData);
+        process.stderr.write(`  saved ${_currentOutPath}\n`);
+      } catch (err) {
+        process.stderr.write(`  flush failed: ${err}\n`);
+      }
+    }
+    process.exit(0);
+  };
+  process.on("SIGINT", () => saveAndExit("SIGINT"));
+  process.on("SIGTERM", () => saveAndExit("SIGTERM"));
+}
+
+// ---- progress tracking -----------------------------------------------------
+let _progressStart = Date.now();
+let _progressTotal = 0;
+let _progressDone = 0;
+
+function progressInit(total) {
+  _progressTotal = total;
+  _progressDone = 0;
+  _progressStart = Date.now();
+}
+
+function progressTick() {
+  _progressDone++;
+  if (_progressDone % 50 === 0 || _progressDone === _progressTotal) {
+    const elapsed = (Date.now() - _progressStart) / 1000;
+    const rate = _progressDone / elapsed;
+    const remaining = (_progressTotal - _progressDone) / rate;
+    const eta = Math.ceil(remaining / 60);
+    process.stdout.write(
+      `  ⏱  ${_progressDone}/${_progressTotal} (${Math.round(100*_progressDone/_progressTotal)}%) — ~${eta}m remaining\n`
+    );
+  }
 }
 
 // ---- checkpoint + memory management -----------------------------------------
