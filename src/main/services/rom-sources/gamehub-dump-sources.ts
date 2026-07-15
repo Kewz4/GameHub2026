@@ -27,7 +27,7 @@ import { logger } from "../logger";
 //     `${system}:${title}:` … `${system}:${title}:\xFF` range matches them
 //     (was: base games were keyed without the suffix and fell outside the
 //     range, so download options came back empty for every game).
-const DUMP_VERSION = 3;
+const DUMP_VERSION = 4;
 const DUMP_VERSION_KEY = "gamehubDumpVersion";
 
 /** Bundled Dump dir (extraResource in packaged builds; repo root in dev). */
