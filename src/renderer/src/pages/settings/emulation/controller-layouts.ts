@@ -14,7 +14,14 @@ import type {
  * which visual diagram to show.
  */
 
-export type DiagramKind = "switch-pro" | "gamecube" | null;
+export type DiagramKind =
+  | "switch-pro"
+  | "gamecube"
+  | "gba"
+  | "n64"
+  | "gb"
+  | "wiimote"
+  | null;
 
 export interface ControlDef {
   control: PadControl;
@@ -91,9 +98,10 @@ const GAMECUBE: ControllerLayout = {
   ],
 };
 
-// Wii Remote (sideways): a distinct layout, no bespoke diagram yet.
+// Wii Remote + Nunchuk. The Nunchuk adds an analog stick and the C/Z buttons,
+// which we route to the left stick and L1/L2 slots.
 const WIIMOTE: ControllerLayout = {
-  diagram: null,
+  diagram: "wiimote",
   controls: [
     ...DPAD,
     { control: "a", label: "A" },
@@ -103,8 +111,81 @@ const WIIMOTE: ControllerLayout = {
     { control: "select", label: "Minus" },
     { control: "start", label: "Plus" },
     { control: "r3", label: "Home" },
+    { control: "l1", label: "Nunchuk C" },
+    { control: "l2", label: "Nunchuk Z" },
+    ...L_STICK.map((c) => ({
+      ...c,
+      label: c.label.replace("Left Stick", "Nunchuk Stick"),
+    })),
   ],
 };
+
+// GameBoy Advance: D-pad, A, B, L/R shoulders, Start, Select. No sticks.
+const GBA: ControllerLayout = {
+  diagram: "gba",
+  controls: [
+    ...DPAD,
+    { control: "a", label: "A" },
+    { control: "b", label: "B" },
+    { control: "l1", label: "L" },
+    { control: "r1", label: "R" },
+    { control: "start", label: "Start" },
+    { control: "select", label: "Select" },
+  ],
+};
+
+// GameBoy / GameBoy Color: D-pad, A, B, Start, Select. No shoulders, no sticks.
+const GBGBC: ControllerLayout = {
+  diagram: "gb",
+  controls: [
+    ...DPAD,
+    { control: "a", label: "A" },
+    { control: "b", label: "B" },
+    { control: "start", label: "Start" },
+    { control: "select", label: "Select" },
+  ],
+};
+
+// Nintendo 64: D-pad, A, B, Start, the analog stick (left stick), the four
+// C-buttons (right stick), and the L/R/Z triggers (not drawn on the face).
+const N64: ControllerLayout = {
+  diagram: "n64",
+  controls: [
+    ...DPAD,
+    { control: "a", label: "A" },
+    { control: "b", label: "B" },
+    { control: "start", label: "Start" },
+    { control: "l1", label: "L" },
+    { control: "r1", label: "R" },
+    { control: "l2", label: "Z (trigger)" },
+    ...L_STICK.map((c) => ({
+      ...c,
+      label: c.label.replace("Left Stick", "Analog Stick"),
+    })),
+    ...R_STICK.map((c) => ({
+      ...c,
+      label: c.label.replace("Right Stick ", "C-"),
+    })),
+  ],
+};
+
+/**
+ * RALibretro is a single install serving many consoles with ONE shared
+ * RetroPad mapping, so the bindings never change — only the picture does. This
+ * lets the user pick which console's diagram to view/test against.
+ */
+export interface DiagramChoice {
+  value: string;
+  label: string;
+  layout: ControllerLayout;
+}
+
+export const RETRO_DIAGRAM_CHOICES: DiagramChoice[] = [
+  { value: "retropad", label: "RetroPad (default)", layout: FULL },
+  { value: "n64", label: "Nintendo 64", layout: N64 },
+  { value: "gba", label: "Game Boy Advance", layout: GBA },
+  { value: "gb", label: "Game Boy / Color", layout: GBGBC },
+];
 
 /** Resolve the layout for an emulator + selected emulated controller type. */
 export function layoutFor(

@@ -36,6 +36,15 @@
     max-height: 360px;
   }
 
+  .gba-diagram-svg,
+  .gbgbc-diagram-svg,
+  .n64-diagram-svg,
+  .wiimote-diagram-svg {
+    width: 100%;
+    height: auto;
+    max-height: 340px;
+  }
+
   &__diagram-hint {
     margin: 0;
     font-size: 12px;

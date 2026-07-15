@@ -9,6 +9,10 @@ import { Button } from "@renderer/components";
 import { useToast } from "@renderer/hooks";
 import { SwitchProDiagram } from "./switch-pro-diagram";
 import { GameCubeDiagram } from "./gamecube-diagram";
+import { GbaDiagram } from "./gba-diagram";
+import { N64Diagram } from "./n64-diagram";
+import { GbGbcDiagram } from "./gbgbc-diagram";
+import { WiimoteDiagram } from "./wiimote-diagram";
 import {
   AXIS_NAME,
   AXIS_THRESHOLD,
@@ -16,7 +20,11 @@ import {
   tokenActivation,
   type DiagramControl,
 } from "./controller-tokens";
-import { layoutFor } from "./controller-layouts";
+import {
+  layoutFor,
+  RETRO_DIAGRAM_CHOICES,
+  type ControllerLayout,
+} from "./controller-layouts";
 import { GyroCube } from "./gyro-cube";
 import "./controller-mapper.scss";
 
@@ -40,6 +48,11 @@ const DIAGRAM_TO_CONTROL: Partial<Record<DiagramControl, PadControl>> = {
   right: "right",
   // GameCube's Z button lives in the R1 slot (see controller-layouts).
   z: "r1",
+  // N64 C-buttons are conventionally the right analog stick on a RetroPad.
+  cup: "rstick_up",
+  cdown: "rstick_down",
+  cleft: "rstick_left",
+  cright: "rstick_right",
 };
 
 /** Emulated-controller kinds offered per emulator that supports several. */
@@ -91,6 +104,9 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   const [scope, setScope] = useState<"global" | "custom">("global");
   const [controllerType, setControllerType] =
     useState<EmulatedControllerType | null>(null);
+  // RALibretro serves many consoles off ONE shared RetroPad mapping, so this
+  // only switches which console diagram is shown — it never changes bindings.
+  const [retroDiagram, setRetroDiagram] = useState<string>("retropad");
   const captureRef = useRef<PadControl | null>(null);
   const rafRef = useRef<number | null>(null);
 
@@ -280,8 +296,13 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   }
 
   // Per-emulator layout: only the controls this console actually uses, plus
-  // the diagram that matches it.
-  const layout = layoutFor(binary, controllerType);
+  // the diagram that matches it. RALibretro is the exception — it serves many
+  // consoles from one RetroPad map, so the user picks the diagram directly.
+  const isRetro = binary === "ralibretro";
+  const layout: ControllerLayout = isRetro
+    ? (RETRO_DIAGRAM_CHOICES.find((c) => c.value === retroDiagram)?.layout ??
+      RETRO_DIAGRAM_CHOICES[0].layout)
+    : layoutFor(binary, controllerType);
   const showDiagram = layout.diagram !== null;
 
   // Which diagram control is currently being bound (pulses on the diagram).
@@ -357,6 +378,22 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
           </select>
         </label>
 
+        {isRetro && (
+          <label className="controller-mapping__pad-select">
+            <span>Console layout</span>
+            <select
+              value={retroDiagram}
+              onChange={(e) => setRetroDiagram(e.target.value)}
+            >
+              {RETRO_DIAGRAM_CHOICES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {typeOptions && (
           <label className="controller-mapping__pad-select">
             <span>Controller type</span>
@@ -402,23 +439,29 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       <div className="controller-mapper__main">
         {showDiagram && (
           <div className="controller-mapper__diagram-col">
-            {layout.diagram === "gamecube" ? (
-              <GameCubeDiagram
-                active={diagramActive}
-                stickDeflection={stickDeflection}
-                activeControl={activeDiagramControl}
-                onHoverControl={setHovered}
-                onClickControl={onDiagramClick}
-              />
-            ) : (
-              <SwitchProDiagram
-                active={diagramActive}
-                stickDeflection={stickDeflection}
-                activeControl={activeDiagramControl}
-                onHoverControl={setHovered}
-                onClickControl={onDiagramClick}
-              />
-            )}
+            {(() => {
+              const diagramProps = {
+                active: diagramActive,
+                stickDeflection,
+                activeControl: activeDiagramControl,
+                onHoverControl: setHovered,
+                onClickControl: onDiagramClick,
+              };
+              switch (layout.diagram) {
+                case "gamecube":
+                  return <GameCubeDiagram {...diagramProps} />;
+                case "gba":
+                  return <GbaDiagram {...diagramProps} />;
+                case "n64":
+                  return <N64Diagram {...diagramProps} />;
+                case "gb":
+                  return <GbGbcDiagram {...diagramProps} />;
+                case "wiimote":
+                  return <WiimoteDiagram {...diagramProps} />;
+                default:
+                  return <SwitchProDiagram {...diagramProps} />;
+              }
+            })()}
             <p className="controller-mapper__diagram-hint">
               {hovered && hoveredControl
                 ? `${hovered.toUpperCase()} → ${tokenLabel(profile.bindings[hoveredControl])}`

@@ -23,7 +23,12 @@ export type DiagramControl =
   | "right"
   | "guide"
   | "capture"
-  | "z";
+  | "z"
+  // N64 C-buttons — conventionally the right analog stick on a RetroPad.
+  | "cup"
+  | "cdown"
+  | "cleft"
+  | "cright";
 
 // Standard Gamepad API button index → SDL GameController token.
 export const BUTTON_TOKEN: Record<number, string> = {
