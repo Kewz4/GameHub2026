@@ -13,6 +13,8 @@ import { GbaDiagram } from "./gba-diagram";
 import { N64Diagram } from "./n64-diagram";
 import { GbGbcDiagram } from "./gbgbc-diagram";
 import { WiimoteDiagram } from "./wiimote-diagram";
+import { Ps1Diagram } from "./ps1-diagram";
+import { DualShockDiagram } from "./dualshock-diagram";
 import {
   AXIS_NAME,
   AXIS_THRESHOLD,
@@ -458,6 +460,10 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
                   return <GbGbcDiagram {...diagramProps} />;
                 case "wiimote":
                   return <WiimoteDiagram {...diagramProps} />;
+                case "ps1":
+                  return <Ps1Diagram {...diagramProps} />;
+                case "dualshock":
+                  return <DualShockDiagram {...diagramProps} />;
                 default:
                   return <SwitchProDiagram {...diagramProps} />;
               }

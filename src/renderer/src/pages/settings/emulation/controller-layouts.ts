@@ -21,6 +21,8 @@ export type DiagramKind =
   | "n64"
   | "gb"
   | "wiimote"
+  | "ps1"
+  | "dualshock"
   | null;
 
 export interface ControlDef {
@@ -169,6 +171,48 @@ const N64: ControllerLayout = {
   ],
 };
 
+// Original PS1 digital pad: D-pad, the four shape buttons, shoulders and
+// triggers, Start/Select. No sticks. PS convention: cross=a, circle=b,
+// square=x, triangle=y.
+const PS1: ControllerLayout = {
+  diagram: "ps1",
+  controls: [
+    ...DPAD,
+    { control: "a", label: "Cross" },
+    { control: "b", label: "Circle" },
+    { control: "x", label: "Square" },
+    { control: "y", label: "Triangle" },
+    { control: "l1", label: "L1" },
+    { control: "r1", label: "R1" },
+    { control: "l2", label: "L2" },
+    { control: "r2", label: "R2" },
+    { control: "start", label: "Start" },
+    { control: "select", label: "Select" },
+  ],
+};
+
+// DualShock 2/3 (PS2/PS3): the full twin-stick PS layout.
+const DUALSHOCK: ControllerLayout = {
+  diagram: "dualshock",
+  controls: [
+    ...DPAD,
+    { control: "a", label: "Cross" },
+    { control: "b", label: "Circle" },
+    { control: "x", label: "Square" },
+    { control: "y", label: "Triangle" },
+    { control: "l1", label: "L1" },
+    { control: "r1", label: "R1" },
+    { control: "l2", label: "L2" },
+    { control: "r2", label: "R2" },
+    { control: "l3", label: "L3 (left stick click)" },
+    { control: "r3", label: "R3 (right stick click)" },
+    { control: "select", label: "Select" },
+    { control: "start", label: "Start" },
+    ...L_STICK,
+    ...R_STICK,
+  ],
+};
+
 /**
  * RALibretro is a single install serving many consoles with ONE shared
  * RetroPad mapping, so the bindings never change — only the picture does. This
@@ -182,6 +226,7 @@ export interface DiagramChoice {
 
 export const RETRO_DIAGRAM_CHOICES: DiagramChoice[] = [
   { value: "retropad", label: "RetroPad (default)", layout: FULL },
+  { value: "ps1", label: "PlayStation", layout: PS1 },
   { value: "n64", label: "Nintendo 64", layout: N64 },
   { value: "gba", label: "Game Boy Advance", layout: GBA },
   { value: "gb", label: "Game Boy / Color", layout: GBGBC },
@@ -196,7 +241,9 @@ export function layoutFor(
     if (type === "wiimote") return WIIMOTE;
     if (type === "gamecube") return GAMECUBE;
   }
-  // Cemu (Wii U GamePad/Pro/Classic), PCSX2, RPCS3, Azahar, RALibretro all use
-  // a full twin-stick layout with the Switch Pro diagram as the closest match.
+  // PS2/PS3 use the DualShock art and PS labels.
+  if (binary === "pcsx2" || binary === "rpcs3") return DUALSHOCK;
+  // Cemu (Wii U GamePad/Pro/Classic), Azahar, Eden and RALibretro's default
+  // use a full twin-stick layout with the Switch Pro diagram.
   return FULL;
 }

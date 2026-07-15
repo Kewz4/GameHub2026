@@ -182,6 +182,24 @@ export class WindowManager {
       this.mainWindow.maximize();
     }
 
+    // WebHID for controller motion (gyro cube): auto-grant known controller
+    // vendors so the renderer can read IMU input reports without a chooser
+    // dialog. Sony 0x054c (DS4/DualSense), Nintendo 0x057e (Switch Pro).
+    const MOTION_HID_VENDORS = [0x054c, 0x057e];
+    const mainSession = this.mainWindow.webContents.session;
+    mainSession.on("select-hid-device", (event, details, callback) => {
+      event.preventDefault();
+      const device = details.deviceList.find((d) =>
+        MOTION_HID_VENDORS.includes(d.vendorId)
+      );
+      callback(device?.deviceId);
+    });
+    mainSession.setDevicePermissionHandler(
+      (details) =>
+        details.deviceType === "hid" &&
+        MOTION_HID_VENDORS.includes(Number(details.device.vendorId ?? -1))
+    );
+
     this.mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
       (details, callback) => {
         if (

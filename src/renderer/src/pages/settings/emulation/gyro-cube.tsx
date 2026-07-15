@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@renderer/components";
+import { HidMotionSource } from "./hid-motion";
 
 /**
  * 3D gyro motion cube — a direct port of Eden's `Draw3dCube` from
@@ -9,9 +11,11 @@ import { useEffect, useRef } from "react";
  * shape) by rotating 8 vertices with Tait-Bryan euler angles (roll, pitch,
  * yaw in radians) and projecting orthographically (dropping Z).
  *
- * Motion data comes from the Web Gamepad API's `pose` property (quaternion
- * orientation) when available (PS4/PS5 controllers via USB). For controllers
- * without pose, the cube stays static.
+ * Motion data comes from WebHID (see hid-motion.ts): Chromium's Gamepad API
+ * never populates motion for game controllers, so — like Eden reading SDL's
+ * sensor streams — we read the gyro/accel straight from the controller's HID
+ * input reports (DualShock 4, DualSense, Switch Pro). The Gamepad `pose`
+ * extension is still tried first for the rare backend that provides it.
  *
  * The Mahony AHRS complementary filter is ported from Eden's
  * `MotionInput::UpdateOrientation` (hid_core/frontend/motion_input.cpp) to
@@ -168,7 +172,10 @@ function drawCube(
   const P = (i: number) => projected[i];
 
   ctx.lineWidth = 2;
-  ctx.strokeStyle = "#7aa2ff";
+  // Follow the app theme (matches the diagrams' accent).
+  ctx.strokeStyle =
+    getComputedStyle(ctx.canvas).getPropertyValue("--color-primary").trim() ||
+    "#7aa2ff";
 
   // Front face
   ctx.beginPath();
@@ -203,6 +210,35 @@ export function GyroCube({ padIndex, enabled }: Readonly<Props>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ahrsRef = useRef<MahonyAHRS>(new MahonyAHRS());
   const lastTimeRef = useRef<number>(0);
+  const hidRef = useRef<HidMotionSource>(new HidMotionSource());
+  const [hidState, setHidState] = useState<"off" | "connecting" | "on">("off");
+  const [deviceName, setDeviceName] = useState<string | null>(null);
+
+  // Auto-reconnect a previously-granted motion device (no chooser needed).
+  useEffect(() => {
+    if (!enabled) return;
+    const hid = hidRef.current;
+    let cancelled = false;
+    hid.connectGranted().then((ok) => {
+      if (cancelled) return;
+      if (ok) {
+        setHidState("on");
+        setDeviceName(hid.deviceName);
+      }
+    });
+    return () => {
+      cancelled = true;
+      hid.disconnect();
+      setHidState("off");
+    };
+  }, [enabled]);
+
+  const connectHid = useCallback(async () => {
+    setHidState("connecting");
+    const ok = await hidRef.current.requestAndConnect();
+    setHidState(ok ? "on" : "off");
+    setDeviceName(hidRef.current.deviceName);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -234,7 +270,12 @@ export function GyroCube({ padIndex, enabled }: Readonly<Props>) {
 
       let euler: [number, number, number] = [0, 0, 0];
 
-      if (gp) {
+      // Primary source: WebHID IMU samples (gyro rad/s + accel g), fused by
+      // the same Mahony filter Eden uses.
+      const hidSample = hidRef.current.read();
+      if (hidSample) {
+        euler = ahrsRef.current.update(hidSample.accel, hidSample.gyro, dt);
+      } else if (gp) {
         // Try quaternion pose first (PS4/PS5 controllers via USB)
         if (gp.pose?.quaternion) {
           const q = gp.pose.quaternion;
@@ -290,9 +331,28 @@ export function GyroCube({ padIndex, enabled }: Readonly<Props>) {
         height={120}
         className="controller-mapper__gyro-cube"
       />
-      <p className="controller-mapper__gyro-hint">
-        Tilt your controller to see the 3D orientation cube rotate.
-      </p>
+      {hidState === "on" ? (
+        <p className="controller-mapper__gyro-hint">
+          Reading motion from {deviceName ?? "controller"} — tilt it and the
+          cube follows.
+        </p>
+      ) : (
+        <>
+          <Button
+            theme="outline"
+            onClick={connectHid}
+            disabled={hidState === "connecting"}
+          >
+            {hidState === "connecting"
+              ? "Connecting…"
+              : "Connect motion sensor"}
+          </Button>
+          <p className="controller-mapper__gyro-hint">
+            Grants direct access to the controller&apos;s gyro (DualShock 4,
+            DualSense, Switch Pro). USB connection works best.
+          </p>
+        </>
+      )}
     </div>
   );
 }
