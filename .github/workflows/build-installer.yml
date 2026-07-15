@@ -96,16 +96,19 @@ jobs:
         id: reltag
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
             V="${{ github.event.inputs.version }}"
             if [ -z "$V" ]; then V=$(node -p "require('./package.json').version"); fi
             echo "tag=v$V" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Create/update GitHub release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        # Tag pushes and manual dispatches always release; branch pushes
+        # release when the head commit message is marked "release:" (the
+        # remote session can't push tags or dispatch workflows).
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
         uses: softprops/action-gh-release@v2
         with:
           draft: false
