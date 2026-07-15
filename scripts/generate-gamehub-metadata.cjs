@@ -51,7 +51,18 @@ const IGDB_CLIENT_ID =
   process.env.IGDB_CLIENT_ID || "lbccfxg1ie3739dubo4bvlj7bw0sue";
 const IGDB_CLIENT_SECRET =
   process.env.IGDB_CLIENT_SECRET || "e88mbm5snb40ax0n37jpyhearwfikp";
-const RAWG_KEY = process.env.RAWG_API_KEY || "995d69ec8d474d268f33cf41e6e37f2e";
+const RAWG_KEYS = [
+  process.env.RAWG_API_KEY,
+  "995d69ec8d474d268f33cf41e6e37f2e",
+  "08e01f201d03418eb70f4fcf541df17d",
+  "5d73ba65ac4f42bbbd67bc8e75913c42",
+].filter(Boolean);
+let _rawgKeyIdx = 0;
+function nextRawgKey() {
+  const key = RAWG_KEYS[_rawgKeyIdx % RAWG_KEYS.length];
+  _rawgKeyIdx++;
+  return key;
+}
 
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
 const RAWG_BASE = "https://api.rawg.io/api";
@@ -411,8 +422,9 @@ function platformPref(x, platformId) {
  */
 async function rawgSearch(title, system) {
   const platformId = RAWG_PLATFORM_IDS[system];
+  const searchKey = nextRawgKey();
   const params = new URLSearchParams({
-    key: RAWG_KEY,
+    key: searchKey,
     search: title,
     page_size: "5",
   });
@@ -455,13 +467,14 @@ async function rawgSearch(title, system) {
     .filter(Boolean)
     .slice(0, 10);
 
-  // Fetch game details for developer/publisher info.
+  // Fetch game details for developer/publisher info (rotate key).
   let developers = [];
   let publishers = [];
   let description = null;
   try {
+    const detailsKey = nextRawgKey();
     const details = await fetchJson(
-      `${RAWG_BASE}/games/${best.id}?key=${RAWG_KEY}`
+      `${RAWG_BASE}/games/${best.id}?key=${detailsKey}`
     );
     developers = (details?.developers ?? []).map((d) => d.name).filter(Boolean);
     publishers = (details?.publishers ?? []).map((p) => p.name).filter(Boolean);
@@ -680,9 +693,8 @@ async function processSystem(system, opts) {
         );
       }
       processed++;
-      if (processed % 25 === 0) {
-        flush(outPath, { system, generatedAt: Date.now(), games });
-      }
+      // In backfill mode, flush after EVERY entry so zero data is lost on crash.
+      flush(outPath, { system, generatedAt: Date.now(), games });
       await sleep(opts.rawgBackfill ? 30 : opts.igdbBackfill ? 280 : 120);
       continue;
     }
