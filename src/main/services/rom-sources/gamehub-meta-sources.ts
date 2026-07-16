@@ -33,7 +33,9 @@ function readLocalMeta(system: EmulatorSystem): HostedMetaFile | null {
   try {
     const file = path.join(LOCAL_META_DIR, `${system}.json`);
     if (!fs.existsSync(file)) return null;
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as HostedMetaFile;
+    let raw = fs.readFileSync(file, "utf-8");
+    raw = raw.replace(/\x1b\[.*$/m, "").trimEnd();
+    return JSON.parse(raw) as HostedMetaFile;
   } catch {
     return null;
   }

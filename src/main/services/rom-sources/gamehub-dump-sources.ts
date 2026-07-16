@@ -83,7 +83,9 @@ function readJson<T>(folder: string, file: string): T | null {
   try {
     const p = path.join(DUMP_DIR, folder, file);
     if (!fs.existsSync(p)) return null;
-    return JSON.parse(fs.readFileSync(p, "utf-8")) as T;
+    let raw = fs.readFileSync(p, "utf-8");
+    raw = raw.replace(/\x1b\[.*$/m, "").trimEnd();
+    return JSON.parse(raw) as T;
   } catch (err) {
     logger.warn(`[dump] failed to read ${folder}/${file}:`, err);
     return null;
