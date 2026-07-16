@@ -1671,6 +1671,8 @@ contextBridge.exposeInMainWorld("electron", {
     system?: EmulatorSystem
   ) =>
     ipcRenderer.invoke("searchClassicsCatalogue", query, limit, system),
+  getRandomClassics: (limit?: number) =>
+    ipcRenderer.invoke("getRandomClassics", limit),
 
   // Cloud debugger
   runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),

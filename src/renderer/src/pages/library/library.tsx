@@ -117,6 +117,10 @@ export default function Library() {
   const [showCreateCollectionModal, setShowCreateCollectionModal] =
     useState(false);
   const [storeFilter, setStoreFilter] = useState<string>("all");
+  // Console mode is a distinct filter mode (not a store): when on, the store
+  // pills are ignored and the list shows console/ROM games — all of them, or a
+  // single system when one is picked from the dropdown.
+  const [consoleMode, setConsoleMode] = useState(false);
   const [consoleFilter, setConsoleFilter] = useState<EmulatorSystem | "all">(
     "all"
   );
@@ -504,6 +508,12 @@ export default function Library() {
   }, [sortedLibrary, deferredSearchQuery, selectedCollectionId]);
 
   const storeFilteredLibrary = useMemo(() => {
+    // Console mode overrides the store pills entirely: show only console/ROM
+    // games (shop "launchbox"), regardless of which store pill was last active.
+    if (consoleMode) {
+      return filteredLibrary.filter((g) => systemForGame(g) !== null);
+    }
+
     if (storeFilter === "all") return filteredLibrary;
 
     // Platform filters — a game shows under its store tab only when it
@@ -540,7 +550,7 @@ export default function Library() {
       return filteredLibrary.filter((g) => getGameOrigin(g) === "custom");
 
     return filteredLibrary.filter((g) => g.shop === storeFilter);
-  }, [filteredLibrary, storeFilter]);
+  }, [filteredLibrary, storeFilter, consoleMode]);
 
   // Consoles that actually have games in the library, so the Console pill only
   // offers relevant options (and hides entirely when there are no ROM games).
@@ -583,6 +593,7 @@ export default function Library() {
     const requested = searchParams.get("console");
     if (requested && availableConsoles.includes(requested as EmulatorSystem)) {
       consoleDeepLinkApplied.current = true;
+      setConsoleMode(true);
       setConsoleFilter(requested as EmulatorSystem);
     }
   }, [searchParams, availableConsoles]);
@@ -675,29 +686,51 @@ export default function Library() {
               <button
                 key={value}
                 type="button"
-                onClick={() => setStoreFilter(value)}
-                style={pillStyle(storeFilter === value)}
+                onClick={() => {
+                  // Selecting a store pill leaves console mode.
+                  setStoreFilter(value);
+                  setConsoleMode(false);
+                  setConsoleFilter("all");
+                }}
+                style={pillStyle(!consoleMode && storeFilter === value)}
               >
                 {label}
               </button>
             ))}
 
-            {availableConsoles.length > 0 && (
-              <SettingSelect
-                variant="pill"
-                ariaLabel="Filter by console"
-                active={consoleFilter !== "all"}
-                value={consoleFilter}
-                onChange={(v) => setConsoleFilter(v as EmulatorSystem | "all")}
-                options={[
-                  { value: "all", label: "Console" },
-                  ...availableConsoles.map((system) => ({
-                    value: system,
-                    label: CONSOLE_LABELS[system] ?? system,
-                  })),
-                ]}
-              />
-            )}
+            {/* Console: first click enters console mode (all console games,
+                pill stays active); once active it's a picker to narrow to one
+                system. Store pills are ignored while it's active. */}
+            {availableConsoles.length > 0 &&
+              (consoleMode ? (
+                <SettingSelect
+                  variant="pill"
+                  ariaLabel="Filter by console"
+                  active
+                  value={consoleFilter}
+                  onChange={(v) =>
+                    setConsoleFilter(v as EmulatorSystem | "all")
+                  }
+                  options={[
+                    { value: "all", label: "All consoles" },
+                    ...availableConsoles.map((system) => ({
+                      value: system,
+                      label: CONSOLE_LABELS[system] ?? system,
+                    })),
+                  ]}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConsoleMode(true);
+                    setConsoleFilter("all");
+                  }}
+                  style={pillStyle(false)}
+                >
+                  {t("console", { defaultValue: "Console" })}
+                </button>
+              ))}
           </div>
 
           <div className="library__collections-section">

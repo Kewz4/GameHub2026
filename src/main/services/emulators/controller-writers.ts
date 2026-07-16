@@ -202,12 +202,48 @@ const RPCS3_XINPUT: Record<string, string> = {
   "+righty": "RS Y-",
 };
 
+// RPCS3's SDL handler works with virtually ANY controller (XInput, DirectInput,
+// DualShock/DualSense, Switch Pro) via SDL2 — unlike the XInput handler, which
+// only sees Xbox pads. Its config keys are identical to XInput's except the
+// face buttons use positional SDL names. Verified against sdl_pad_handler.cpp.
+const RPCS3_SDL: Record<string, string> = {
+  ...RPCS3_XINPUT,
+  a: "South",
+  b: "East",
+  x: "West",
+  y: "North",
+};
+
+/** Whether the Gamepad-API id names an Xbox / XInput device. */
+function isXInputDevice(name: string | null | undefined): boolean {
+  if (!name) return true; // unknown → keep the proven XInput default
+  const n = name.toLowerCase();
+  return (
+    n.includes("xbox") ||
+    n.includes("xinput") ||
+    n.includes("x-box") ||
+    n.includes("045e") // Microsoft vendor id
+  );
+}
+
+/** RPCS3's SDL device string is "<SDL name> <n>" — best-effort from the
+ *  Gamepad-API id (strip the "(STANDARD GAMEPAD …)" suffix). */
+function rpcs3SdlDevice(name: string | null | undefined): string {
+  if (!name) return "Controller 1";
+  const base = name.split("(")[0].trim() || name.trim();
+  return `${base} 1`;
+}
+
 export function rpcs3Yaml(p: ControllerProfile): string {
-  const t = (c: PadControl) => RPCS3_XINPUT[bind(p, c)] ?? "";
+  // Route non-Xbox controllers through the universal SDL handler so DualShock/
+  // DualSense/DirectInput pads work too — not just XInput.
+  const xinput = isXInputDevice(p.controllerName);
+  const map = xinput ? RPCS3_XINPUT : RPCS3_SDL;
+  const t = (c: PadControl) => map[bind(p, c)] ?? "";
   return [
     "Player 1 Input:",
-    "  Handler: XInput",
-    `  Device: XInput Pad #${p.controllerIndex + 1}`,
+    `  Handler: ${xinput ? "XInput" : "SDL"}`,
+    `  Device: ${xinput ? `XInput Pad #${p.controllerIndex + 1}` : rpcs3SdlDevice(p.controllerName)}`,
     "  Config:",
     `    Left Stick Left: ${t("lstick_left")}`,
     `    Left Stick Down: ${t("lstick_down")}`,

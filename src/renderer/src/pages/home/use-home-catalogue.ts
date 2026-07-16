@@ -76,14 +76,13 @@ async function getFeatured(language: string): Promise<TrendingGame[]> {
 }
 
 async function getClassics(): Promise<ShopAssets[]> {
-  // May return [] until a backend browse path lands; the Classics row hides
-  // itself when this is empty (see home.tsx).
-  const response = await window.electron.searchClassicsCatalogue("", 24);
+  // Randomized, mixed-platform, artwork-only console games — a fresh shuffle
+  // each load. The row hides itself when this is empty (see category-row).
+  const response = await window.electron.getRandomClassics(24);
 
-  return ensureArray<CatalogueSearchResult>(
-    response,
-    "searchClassicsCatalogue"
-  ).map(classicsResultToShopAssets);
+  return ensureArray<CatalogueSearchResult>(response, "getRandomClassics").map(
+    classicsResultToShopAssets
+  );
 }
 
 /**

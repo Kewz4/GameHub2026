@@ -1209,6 +1209,9 @@ declare global {
       limit?: number,
       system?: import("@types").EmulatorSystem
     ) => Promise<import("@types").CatalogueSearchResult[]>;
+    getRandomClassics: (
+      limit?: number
+    ) => Promise<import("@types").CatalogueSearchResult[]>;
     showOpenDialog: (
       options: Electron.OpenDialogOptions
     ) => Promise<Electron.OpenDialogReturnValue>;

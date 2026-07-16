@@ -113,35 +113,30 @@
     border-right: 1px solid globals.$border-color;
   }
 
-  // Platform logo badge (console/classics results) — top-left of the cover so
-  // it never collides with the bottom-right ProtonDB badge.
-  &__platform-badge {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    z-index: 1;
+  // Small platform logo chip, inline in the badge row next to the download
+  // source badge (GameHub Vault) — not overlaid on the cover art.
+  &__platform-chip {
     display: inline-flex;
     align-items: center;
-    height: 22px;
-    padding: 0 8px;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    backdrop-filter: blur(4px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-    pointer-events: none;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 4px;
+    // Fixed dark chip in both themes — the platform logos are white wordmarks,
+    // so they need a dark backing to stay legible in light mode too.
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
 
-  &__platform-badge-logo {
+  &__platform-chip-logo {
     display: block;
-    height: 12px;
-    max-width: 82px;
+    height: 10px;
+    max-width: 64px;
     object-fit: contain;
     // Text-label fallback (PlatformLogo renders a <span> when a logo is
-    // missing/fails), so style it to read as a small white pill label too.
-    font-size: 11px;
+    // missing/fails), so it also reads as a compact white label.
+    font-size: 10px;
     font-weight: 600;
-    line-height: 22px;
+    line-height: 20px;
     color: #fff;
     white-space: nowrap;
   }

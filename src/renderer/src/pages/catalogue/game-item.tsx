@@ -162,18 +162,6 @@ export function GameItem({ game }: GameItemProps) {
         <div className="game-item__cover-wrapper">
           {libraryImage}
 
-          {platformSystem && (
-            <span
-              className="game-item__platform-badge"
-              title={PLATFORM_LABELS[platformSystem]}
-            >
-              <PlatformLogo
-                system={platformSystem}
-                className="game-item__platform-badge-logo"
-              />
-            </span>
-          )}
-
           {shouldShowProtonFeatures && protonBadge && (
             <Suspense fallback={null}>
               <ProtonDBBadge badge={protonBadge} />
@@ -195,6 +183,17 @@ export function GameItem({ game }: GameItemProps) {
             {game.downloadSources.map((sourceName) => (
               <Badge key={sourceName}>{sourceName}</Badge>
             ))}
+            {platformSystem && (
+              <span
+                className="game-item__platform-chip"
+                title={PLATFORM_LABELS[platformSystem]}
+              >
+                <PlatformLogo
+                  system={platformSystem}
+                  className="game-item__platform-chip-logo"
+                />
+              </span>
+            )}
           </div>
         </div>
       </Link>

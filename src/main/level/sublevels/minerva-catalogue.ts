@@ -216,6 +216,31 @@ async function getSearchIndex(): Promise<IndexedGame[]> {
  * must appear in the title (any order), so "zelda" matches every Zelda
  * release. Results are deduped by system+title and ranked best-match first.
  */
+/**
+ * A random shuffle of the console catalogue (mixed platforms), for the home
+ * "Console classics" row. Returns up to `count` games; callers filter these
+ * down to ones that actually have artwork. Uses Fisher–Yates on a copy so the
+ * cached index is never mutated, and is re-shuffled on every call so the row is
+ * different each visit.
+ */
+export async function randomMinervaGames(
+  count: number
+): Promise<MinervaGameSuggestion[]> {
+  const index = await getSearchIndex();
+  const pool = index.slice();
+  // Partial Fisher–Yates: only shuffle the prefix we need.
+  const n = Math.min(count, pool.length);
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(Math.random() * (pool.length - i));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, n).map(({ title, system, objectId }) => ({
+    title,
+    system,
+    objectId,
+  }));
+}
+
 export async function searchMinervaGames(
   title: string,
   limit = 8,
