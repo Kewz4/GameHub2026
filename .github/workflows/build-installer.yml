@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "claude/**"
+      - release
     tags:
       - "v*"
   workflow_dispatch:
