@@ -16,6 +16,7 @@ import { GbGbcDiagram } from "./gbgbc-diagram";
 import { WiimoteDiagram } from "./wiimote-diagram";
 import { Ps1Diagram } from "./ps1-diagram";
 import { DualShockDiagram } from "./dualshock-diagram";
+import { JoyConDiagram } from "./joycon-diagram";
 import {
   AXIS_NAME,
   AXIS_THRESHOLD,
@@ -436,6 +437,8 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
                   return <Ps1Diagram {...diagramProps} />;
                 case "dualshock":
                   return <DualShockDiagram {...diagramProps} />;
+                case "joycon":
+                  return <JoyConDiagram {...diagramProps} />;
                 default:
                   return <SwitchProDiagram {...diagramProps} />;
               }

@@ -23,6 +23,7 @@ export type DiagramKind =
   | "wiimote"
   | "ps1"
   | "dualshock"
+  | "joycon"
   | null;
 
 export interface ControlDef {
@@ -104,7 +105,7 @@ const GAMECUBE: ControllerLayout = {
 // Joy-Con face/shoulder labels. SL/SR rail + Capture aren't standard bindable
 // pad controls, so we surface the standard set and reuse the Switch Pro diagram.
 const JOYCON_PAIR: ControllerLayout = {
-  diagram: "switch-pro",
+  diagram: "joycon",
   controls: [
     ...DPAD,
     { control: "a", label: "A (right face)" },
