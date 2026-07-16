@@ -1062,7 +1062,6 @@ declare global {
       binary?: EmulatorBinary,
       type?: EmulatedControllerType
     ) => Promise<{ applied: { binary: string; ok: boolean }[] }>;
-    useGlobalController: (binary: EmulatorBinary) => Promise<boolean>;
     onEmulatorInstallProgress: (
       cb: (payload: EmulatorInstallProgress) => void
     ) => () => void;

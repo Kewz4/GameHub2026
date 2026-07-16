@@ -6,6 +6,7 @@ import type {
   PadControl,
 } from "@types";
 import { Button } from "@renderer/components";
+import { SelectField } from "@renderer/components/select-field/select-field";
 import { useToast } from "@renderer/hooks";
 import { SwitchProDiagram } from "./switch-pro-diagram";
 import { GameCubeDiagram } from "./gamecube-diagram";
@@ -103,7 +104,9 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   const [selectedPad, setSelectedPad] = useState<number>(0);
   const [capturing, setCapturing] = useState<PadControl | null>(null);
   const [applying, setApplying] = useState(false);
-  const [scope, setScope] = useState<"global" | "custom">("global");
+  // The controller name this emulator's saved profile was mapped with, so we
+  // can reselect the same physical pad when it reconnects.
+  const savedPadNameRef = useRef<string | null>(null);
   const [controllerType, setControllerType] =
     useState<EmulatedControllerType | null>(null);
   // RALibretro serves many consoles off ONE shared RetroPad mapping, so this
@@ -120,30 +123,19 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
 
   const typeOptions = CONTROLLER_TYPES[binary];
 
-  const loadProfile = useCallback(
-    (asBinary: EmulatorBinary | undefined) => {
-      window.electron
-        .getControllerProfile(asBinary)
-        .then((res) => {
-          setProfile(res.profile);
-          if (res.type) setControllerType(res.type);
-          else if (typeOptions) setControllerType(typeOptions[0].value);
-        })
-        .catch(() => {});
-    },
-    [typeOptions]
-  );
-
+  // Load this emulator's own saved profile (seeded from the default on first
+  // visit). Each emulator owns its mapping — there is no shared/global scope.
   useEffect(() => {
-    // Discover whether this emulator already has a custom override.
     window.electron
       .getControllerProfile(binary)
       .then((res) => {
-        setScope(res.isCustom ? "custom" : "global");
-        loadProfile(res.isCustom ? binary : undefined);
+        setProfile(res.profile);
+        savedPadNameRef.current = res.profile.controllerName ?? null;
+        if (res.type) setControllerType(res.type);
+        else if (typeOptions) setControllerType(typeOptions[0].value);
       })
-      .catch(() => loadProfile(undefined));
-  }, [binary, loadProfile]);
+      .catch(() => {});
+  }, [binary, typeOptions]);
 
   // Poll connected controllers so the list stays live.
   useEffect(() => {
@@ -166,6 +158,15 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       window.clearInterval(id);
     };
   }, []);
+
+  // When pads (re)connect, reselect the controller this emulator was mapped
+  // with — so bindings still line up after unplugging/reconnecting.
+  useEffect(() => {
+    const savedName = savedPadNameRef.current;
+    if (!savedName || pads.length === 0) return;
+    const match = pads.find((p) => p.id === savedName);
+    if (match) setSelectedPad(match.index);
+  }, [pads]);
 
   // Continuously read the selected pad so the diagram lights up live.
   useEffect(() => {
@@ -256,37 +257,22 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
         controllerIndex: selectedPad,
         controllerName: pad?.id ?? profile.controllerName,
       };
-      const res =
-        scope === "custom"
-          ? await window.electron.saveControllerProfile(
-              finalProfile,
-              binary,
-              controllerType ?? undefined
-            )
-          : await window.electron.saveControllerProfile(finalProfile);
-      const okCount = res.applied.filter((a) => a.ok).length;
+      savedPadNameRef.current = finalProfile.controllerName ?? null;
+      const res = await window.electron.saveControllerProfile(
+        finalProfile,
+        binary,
+        controllerType ?? undefined
+      );
+      const ok = res.applied.some((a) => a.ok);
       showSuccessToast(
-        scope === "custom"
-          ? okCount > 0
-            ? "Custom mapping saved for this console"
-            : "Custom mapping saved (emulator not installed yet)"
-          : okCount > 0
-            ? `Applied to ${okCount} installed emulator(s)`
-            : "Saved (no emulators installed yet)"
+        ok
+          ? "Controller mapping saved"
+          : "Mapping saved (emulator not installed yet)"
       );
     } catch {
       showErrorToast("Couldn't save the controller mapping");
     } finally {
       setApplying(false);
-    }
-  };
-
-  const onScopeChange = (next: "global" | "custom") => {
-    setScope(next);
-    if (next === "custom") loadProfile(binary);
-    else {
-      loadProfile(undefined);
-      window.electron.useGlobalController(binary).catch(() => {});
     }
   };
 
@@ -350,76 +336,62 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   return (
     <div className="controller-mapper">
       <div className="controller-mapping__toolbar">
-        <label className="controller-mapping__pad-select">
-          <span>Controller</span>
-          <select
-            value={selectedPad}
-            onChange={(e) => setSelectedPad(Number(e.target.value))}
-          >
-            {pads.length === 0 && (
-              <option value={0}>No controller detected</option>
-            )}
-            {pads.map((p) => (
-              <option key={p.index} value={p.index}>
-                #{p.index + 1} — {p.id.slice(0, 40)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="controller-mapping__pad-select">
-          <span>Profile</span>
-          <select
-            value={scope}
-            onChange={(e) =>
-              onScopeChange(e.target.value as "global" | "custom")
-            }
-          >
-            <option value="global">Shared (all emulators)</option>
-            <option value="custom">Custom for this console</option>
-          </select>
-        </label>
+        <SelectField
+          theme="dark"
+          className="controller-mapping__field"
+          label="Controller"
+          value={String(selectedPad)}
+          onChange={(e) => setSelectedPad(Number(e.target.value))}
+          options={
+            pads.length === 0
+              ? [{ key: "none", value: "0", label: "No controller detected" }]
+              : pads.map((p) => ({
+                  key: String(p.index),
+                  value: String(p.index),
+                  label: `#${p.index + 1} — ${p.id.slice(0, 40)}`,
+                }))
+          }
+        />
 
         {isRetro && (
-          <label className="controller-mapping__pad-select">
-            <span>Console layout</span>
-            <select
-              value={retroDiagram}
-              onChange={(e) => setRetroDiagram(e.target.value)}
-            >
-              {RETRO_DIAGRAM_CHOICES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            theme="dark"
+            className="controller-mapping__field"
+            label="Console layout"
+            value={retroDiagram}
+            onChange={(e) => setRetroDiagram(e.target.value)}
+            options={RETRO_DIAGRAM_CHOICES.map((o) => ({
+              key: o.value,
+              value: o.value,
+              label: o.label,
+            }))}
+          />
         )}
 
         {typeOptions && (
-          <label className="controller-mapping__pad-select">
-            <span>Controller type</span>
-            <select
-              value={controllerType ?? typeOptions[0].value}
-              onChange={(e) =>
-                setControllerType(e.target.value as EmulatedControllerType)
-              }
-            >
-              {typeOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            theme="dark"
+            className="controller-mapping__field"
+            label="Controller type"
+            value={controllerType ?? typeOptions[0].value}
+            onChange={(e) =>
+              setControllerType(e.target.value as EmulatedControllerType)
+            }
+            options={typeOptions.map((o) => ({
+              key: o.value,
+              value: o.value,
+              label: o.label,
+            }))}
+          />
         )}
 
-        <Button theme="primary" onClick={save} disabled={applying}>
-          {applying
-            ? "Saving…"
-            : scope === "custom"
-              ? "Save for this console"
-              : "Apply to all emulators"}
+        <Button
+          theme="primary"
+          className="controller-mapping__save"
+          onClick={save}
+          disabled={applying}
+        >
+          {applying ? "Saving…" : "Save mapping"}
         </Button>
       </div>
 

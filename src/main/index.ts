@@ -451,6 +451,15 @@ app.whenReady().then(async () => {
     .then(({ ensureGameHubMeta }) => ensureGameHubMeta())
     .catch((err) => logger.error("gamehub-meta bootstrap failed:", err));
 
+  // Re-stamp saved controller mappings into each emulator's native config, so a
+  // controller set up in a past session survives a restart or an emulator
+  // reinstall. No-op for emulators the user never configured here.
+  import("./events/emulators/emulator-settings-events")
+    .then(({ reapplyControllerProfilesOnStartup }) =>
+      reapplyControllerProfilesOnStartup()
+    )
+    .catch((err) => logger.error("controller re-apply failed:", err));
+
   // Suspend can outlive the 60s stall watchdog; reconnect right away instead
   powerMonitor.on("resume", () => {
     WSClient.reconnectNow();

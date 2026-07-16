@@ -111,10 +111,13 @@ export function writeRalibretro(
 // ─── PCSX2 (inis/PCSX2.ini [Pad1], SDL-0/ tokens) ─────────────────────────────
 // Translate an SDL token to PCSX2's SDL token vocabulary (v2.x stable).
 const PCSX2_TOKEN: Record<string, string> = {
-  a: "A",
-  b: "B",
-  x: "X",
-  y: "Y",
+  // PCSX2 v2.x (Qt) uses positional SDL3 face names, NOT A/B/X/Y — the latter
+  // only resolve through the legacy SDL2→SDL3 migration path. Our profile is
+  // physical-position centric: a=bottom, b=right, x=left, y=top.
+  a: "FaceSouth",
+  b: "FaceEast",
+  x: "FaceWest",
+  y: "FaceNorth",
   dpup: "DPadUp",
   dpdown: "DPadDown",
   dpleft: "DPadLeft",

@@ -100,6 +100,30 @@ const GAMECUBE: ControllerLayout = {
   ],
 };
 
+// Joy-Con pair (Eden's joycon_pair): the full twin-stick Switch layout with
+// Joy-Con face/shoulder labels. SL/SR rail + Capture aren't standard bindable
+// pad controls, so we surface the standard set and reuse the Switch Pro diagram.
+const JOYCON_PAIR: ControllerLayout = {
+  diagram: "switch-pro",
+  controls: [
+    ...DPAD,
+    { control: "a", label: "A (right face)" },
+    { control: "b", label: "B (bottom face)" },
+    { control: "x", label: "X (top face)" },
+    { control: "y", label: "Y (left face)" },
+    { control: "l1", label: "L (shoulder)" },
+    { control: "r1", label: "R (shoulder)" },
+    { control: "l2", label: "ZL (trigger)" },
+    { control: "r2", label: "ZR (trigger)" },
+    { control: "l3", label: "L3 (left stick click)" },
+    { control: "r3", label: "R3 (right stick click)" },
+    { control: "select", label: "Minus" },
+    { control: "start", label: "Plus" },
+    ...L_STICK,
+    ...R_STICK,
+  ],
+};
+
 // Wii Remote + Nunchuk. The Nunchuk adds an analog stick and the C/Z buttons,
 // which we route to the left stick and L1/L2 slots.
 const WIIMOTE: ControllerLayout = {
@@ -243,6 +267,8 @@ export function layoutFor(
   }
   // PS2/PS3 use the DualShock art and PS labels.
   if (binary === "pcsx2" || binary === "rpcs3") return DUALSHOCK;
+  // Eden (Switch): Joy-Con pair gets Joy-Con labels; Switch Pro uses FULL.
+  if (binary === "eden" && type === "joycon_pair") return JOYCON_PAIR;
   // Cemu (Wii U GamePad/Pro/Classic), Azahar, Eden and RALibretro's default
   // use a full twin-stick layout with the Switch Pro diagram.
   return FULL;

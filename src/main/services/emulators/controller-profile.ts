@@ -176,12 +176,14 @@ function writeForBinary(
 }
 
 /**
- * Apply the store to every INSTALLED emulator, using each emulator's own
- * override profile when present (per-console) and falling back to `global`.
- * RALibretro backs six systems from one install, so mapping it once covers
- * PS1/PSP/GBA/N64/DS/DSi.
+ * Re-apply every emulator's SAVED profile to its native config. Called at app
+ * startup so a controller set up in a previous session survives a restart (and
+ * survives the emulator being reinstalled/updated, which can reset its config).
+ * Each installed emulator uses its own per-binary profile; `global` is only a
+ * legacy seed for binaries the user never customised. RALibretro backs six
+ * systems from one install, so mapping it once covers PS1/PSP/GBA/N64/DS/DSi.
  */
-export async function applyControllerStoreToAll(
+export async function reapplyAllControllerProfiles(
   store: ControllerProfileStore
 ): Promise<{ binary: EmulatorBinary; ok: boolean }[]> {
   const results: { binary: EmulatorBinary; ok: boolean }[] = [];
@@ -195,8 +197,12 @@ export async function applyControllerStoreToAll(
     if (!config.executablePath || !fs.existsSync(config.executablePath))
       continue;
 
+    // Only write configs the user actually customised — don't stamp a default
+    // profile over an emulator the user hasn't touched here.
+    const profile = store.byBinary[known.binary];
+    if (!profile) continue;
+
     seen.add(known.binary);
-    const profile = store.byBinary[known.binary] ?? store.global;
     const ok = writeForBinary(
       known.binary,
       path.dirname(config.executablePath),

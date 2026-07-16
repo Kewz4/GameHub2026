@@ -16,7 +16,7 @@ import {
 } from "@main/services/emulators/emulator-settings";
 import {
   DEFAULT_CONTROLLER_PROFILE,
-  applyControllerStoreToAll,
+  reapplyAllControllerProfiles,
   applyControllerToBinary,
 } from "@main/services/emulators/controller-profile";
 
@@ -57,7 +57,11 @@ const setEmulatorSettings = async (
 
 // ── Controller profiles (global + per-console) ────────────────────────────────
 
-/** Effective profile for a scope: the per-binary override, else global. */
+/**
+ * Effective profile for one emulator. Each emulator now owns its own profile;
+ * if it has none yet, seed from the legacy `global` (or the built-in default)
+ * so the first visit shows a sensible standard mapping the user can tweak.
+ */
 const getControllerProfile = async (
   _e: Electron.IpcMainInvokeEvent,
   binary?: EmulatorBinary
@@ -67,18 +71,17 @@ const getControllerProfile = async (
   type: EmulatedControllerType | null;
 }> => {
   const store = await loadStore();
-  const override = binary ? store.byBinary[binary] : undefined;
+  const saved = binary ? store.byBinary[binary] : undefined;
   return {
-    profile: override ?? store.global,
-    isCustom: Boolean(override),
+    profile: saved ?? store.global,
+    isCustom: Boolean(saved),
     type: (binary && store.types[binary]) || null,
   };
 };
 
 /**
- * Save a profile. With no `binary`, updates the global profile and re-applies to
- * every installed emulator (that uses global). With a `binary`, saves a
- * per-console override and writes just that emulator's config.
+ * Save a controller profile for ONE emulator and write just that emulator's
+ * native config. Profiles are per-emulator — there is no "apply to all".
  */
 const saveControllerProfile = async (
   _e: Electron.IpcMainInvokeEvent,
@@ -86,35 +89,25 @@ const saveControllerProfile = async (
   binary?: EmulatorBinary,
   type?: EmulatedControllerType
 ): Promise<{ applied: { binary: string; ok: boolean }[] }> => {
+  if (!binary) return { applied: [] };
   const store = await loadStore();
-
-  if (binary) {
-    store.byBinary[binary] = profile;
-    if (type) store.types[binary] = type;
-    await db.put(STORE_KEY, store, { valueEncoding: "json" });
-    const ok = await applyControllerToBinary(binary, profile, type);
-    return { applied: [{ binary, ok }] };
-  }
-
-  store.global = profile;
+  store.byBinary[binary] = profile;
+  if (type) store.types[binary] = type;
   await db.put(STORE_KEY, store, { valueEncoding: "json" });
-  const applied = await applyControllerStoreToAll(store);
-  return { applied };
+  const ok = await applyControllerToBinary(binary, profile, type);
+  return { applied: [{ binary, ok }] };
 };
 
-/** Clear a per-console override so the emulator uses the global profile again. */
-const useGlobalController = async (
-  _e: Electron.IpcMainInvokeEvent,
-  binary: EmulatorBinary
-): Promise<boolean> => {
+/**
+ * Re-apply every saved per-emulator profile to its native config. Called once
+ * at startup so controllers configured in a past session survive restarts.
+ */
+export async function reapplyControllerProfilesOnStartup(): Promise<void> {
   const store = await loadStore();
-  delete store.byBinary[binary];
-  await db.put(STORE_KEY, store, { valueEncoding: "json" });
-  return applyControllerToBinary(binary, store.global, store.types[binary]);
-};
+  await reapplyAllControllerProfiles(store);
+}
 
 registerEvent("getEmulatorSettings", getEmulatorSettings);
 registerEvent("setEmulatorSettings", setEmulatorSettings);
 registerEvent("getControllerProfile", getControllerProfile);
 registerEvent("saveControllerProfile", saveControllerProfile);
-registerEvent("useGlobalController", useGlobalController);
