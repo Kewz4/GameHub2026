@@ -219,13 +219,30 @@ async function getSearchIndex(): Promise<IndexedGame[]> {
 export async function searchMinervaGames(
   title: string,
   limit = 8,
-  system?: EmulatorSystem
+  system?: EmulatorSystem,
+  /** When true, an empty/too-short query lists games instead of returning []. */
+  browse = false
 ): Promise<MinervaGameSuggestion[]> {
   const tokens = queryTokens(title);
   const normQuery = tokens.join("");
-  if (normQuery.length < 2) return [];
-
   const index = await getSearchIndex();
+
+  // Browse mode: an empty/too-short query lists games alphabetically (optionally
+  // scoped to one console). This powers the catalogue's "Console" filter, which
+  // shows all console games with no search term typed. Without the flag, an
+  // empty query returns nothing (so the global search dropdown stays quiet).
+  if (normQuery.length < 2) {
+    if (!browse) return [];
+    const all = system ? index.filter((game) => game.system === system) : index;
+    return [...all]
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .slice(0, limit)
+      .map(({ title: t, system: s, objectId }) => ({
+        title: t,
+        system: s,
+        objectId,
+      }));
+  }
 
   const matches: Array<{ game: IndexedGame; score: number }> = [];
   for (const game of index) {

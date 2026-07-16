@@ -20,7 +20,9 @@ registerEvent(
     limit?: number,
     system?: EmulatorSystem
   ): Promise<CatalogueSearchResult[]> => {
-    const games = await searchMinervaGames(query, limit, system);
+    // Browse mode: the catalogue "Console" filter shows all console games with
+    // no search term, so an empty query lists (optionally scoped to `system`).
+    const games = await searchMinervaGames(query, limit, system, true);
     return Promise.all(
       games.map(async (g) => {
         const meta = await getGameHubMeta(g.system, g.title);

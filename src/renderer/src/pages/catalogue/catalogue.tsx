@@ -20,6 +20,8 @@ import "./catalogue.scss";
 
 import { Button } from "@renderer/components/button/button";
 import { SelectField } from "@renderer/components/select-field/select-field";
+import { SettingSelect } from "@renderer/pages/settings/emulation/setting-select";
+import cn from "classnames";
 import { setFilters, setPage } from "@renderer/features";
 import { useCatalogue } from "@renderer/hooks/use-catalogue";
 import { debounce } from "lodash-es";
@@ -190,14 +192,15 @@ export default function Catalogue() {
           const isConsoleOnly = platformMode === "console";
           const isPcOnly = platformMode === "pc";
 
-          // Console games: only on page 1, with a title search, no PC-only
-          // filters, and when not in PC-only mode. When a specific console is
-          // selected, pass it through for system filtering.
+          // Console games: only on page 1, no PC-only filters, not PC-only
+          // mode. Normally gated on a title search — but in Console mode we
+          // browse ALL console games (optionally scoped to a system) even with
+          // an empty search box, so the "Console" filter isn't blank.
           const wantClassics =
             !isPcOnly &&
             offset === 0 &&
-            !!filters.title?.trim() &&
-            !hasPcOnlyFilters;
+            !hasPcOnlyFilters &&
+            (isConsoleOnly || !!filters.title?.trim());
 
           const consoleSystem = filters.consoleSystem;
 
@@ -648,66 +651,88 @@ export default function Catalogue() {
 
         <div className="catalogue__filters-container">
           <div className="catalogue__filters-sections">
-            <div className="catalogue__platform-filter">
-              <SelectField
-                theme="dark"
-                value={filters.platform ?? ""}
-                options={[
+            <div
+              className="catalogue__platform-filter"
+              role="group"
+              aria-label={t("platform", { defaultValue: "Platform" })}
+            >
+              {(
+                [
                   {
-                    key: "all",
                     value: "",
                     label: t("platform_all", { defaultValue: "All Platforms" }),
                   },
                   {
-                    key: "pc",
                     value: "pc",
                     label: t("platform_pc", { defaultValue: "PC" }),
                   },
-                  {
-                    key: "console",
-                    value: "console",
-                    label: t("platform_console", { defaultValue: "Console" }),
-                  },
-                ]}
-                onChange={(event) => {
-                  const value = event.target.value as "pc" | "console" | "";
-                  dispatch(
-                    setFilters({
-                      platform: value || undefined,
-                      consoleSystem: undefined,
-                    })
-                  );
-                }}
-              />
-              {filters.platform === "console" && (
-                <SelectField
-                  theme="dark"
+                ] as { value: "" | "pc"; label: string }[]
+              ).map(({ value, label }) => (
+                <button
+                  key={value || "all"}
+                  type="button"
+                  className={cn("catalogue__platform-pill", {
+                    "catalogue__platform-pill--active":
+                      (filters.platform ?? "") === value,
+                  })}
+                  onClick={() =>
+                    dispatch(
+                      setFilters({
+                        platform: value || undefined,
+                        consoleSystem: undefined,
+                      })
+                    )
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+
+              {/* Console: first click shows ALL console games; once active the
+                  pill becomes a picker to filter by a specific system. */}
+              {filters.platform === "console" ? (
+                <SettingSelect
+                  variant="pill"
+                  active
+                  ariaLabel={t("platform_console", { defaultValue: "Console" })}
                   value={filters.consoleSystem ?? ""}
-                  options={[
-                    {
-                      key: "all",
-                      value: "",
-                      label: t("all_consoles", {
-                        defaultValue: "All Consoles",
-                      }),
-                    },
-                    ...CONSOLE_FILTER_SYSTEMS.map((system) => ({
-                      key: system,
-                      value: system,
-                      label: CONSOLE_LABELS[system] ?? system,
-                    })),
-                  ]}
-                  onChange={(event) => {
-                    const value = event.target.value as EmulatorSystem | "";
+                  onChange={(value) =>
                     dispatch(
                       setFilters({
                         consoleSystem: (value || undefined) as
                           | EmulatorSystem
                           | undefined,
                       })
-                    );
-                  }}
+                    )
+                  }
+                  options={[
+                    {
+                      value: "",
+                      label: t("all_consoles", {
+                        defaultValue: "All Consoles",
+                      }),
+                    },
+                    ...CONSOLE_FILTER_SYSTEMS.map((system) => ({
+                      value: system,
+                      label: CONSOLE_LABELS[system] ?? system,
+                    })),
+                  ]}
                 />
+              ) : (
+                <button
+                  type="button"
+                  className="catalogue__platform-pill"
+                  onClick={() =>
+                    dispatch(
+                      setFilters({
+                        platform: "console",
+                        consoleSystem: undefined,
+                      })
+                    )
+                  }
+                >
+                  {t("platform_console", { defaultValue: "Console" })}
+                </button>
               )}
             </div>
             {shouldShowProtonFeatures && filters.platform !== "console" && (

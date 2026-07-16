@@ -112,9 +112,43 @@
 
   &__platform-filter {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
     margin-bottom: 8px;
+  }
+
+  // Branded platform pills (All Platforms / PC / Console). The Console pill
+  // becomes a SettingSelect picker once active — see setting-select.scss for
+  // its matching pill styling.
+  &__platform-pill {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid rgba(var(--fg-rgb), 0.18);
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease,
+      color 0.12s ease;
+
+    &:hover {
+      border-color: rgba(var(--fg-rgb), 0.35);
+      background: rgba(var(--fg-rgb), 0.05);
+    }
+
+    &--active {
+      color: var(--color-dark-background);
+      background: var(--color-text);
+      border-color: var(--color-text);
+    }
   }
 
   &__games-container {
