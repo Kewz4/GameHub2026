@@ -44,6 +44,7 @@ export function EmulatorSetupModal({
   const [folders, setFolders] = useState<PendingFolder[]>([]);
   const [firmwareOk, setFirmwareOk] = useState(false);
   const [biosOk, setBiosOk] = useState(false);
+  const [keysOk, setKeysOk] = useState(false);
   const [gamesAdded, setGamesAdded] = useState(0);
   const [scanComplete, setScanComplete] = useState(false);
   const [detecting, setDetecting] = useState(false);
@@ -60,6 +61,7 @@ export function EmulatorSetupModal({
       setFolders([]);
       setFirmwareOk(false);
       setBiosOk(false);
+      setKeysOk(false);
       setGamesAdded(0);
       setScanComplete(false);
       setYmlEntryCount(0);
@@ -372,10 +374,11 @@ export function EmulatorSetupModal({
     if (currentStep === "find_emulator") return config?.executablePath === null;
     if (currentStep === "firmware") return !firmwareOk;
     if (currentStep === "bios") return !biosOk;
+    if (currentStep === "keys") return !keysOk;
     if (currentStep === "rom_folder") return folders.length === 0;
     if (currentStep === "scanning") return !scanComplete;
     return true;
-  }, [currentStep, config, firmwareOk, biosOk, folders, scanComplete]);
+  }, [currentStep, config, firmwareOk, biosOk, keysOk, folders, scanComplete]);
 
   const continueHidden = currentStep === "done";
 
@@ -386,7 +389,11 @@ export function EmulatorSetupModal({
   };
 
   const handleSkip = () => {
-    if (currentStep === "firmware" || currentStep === "bios" || currentStep === "keys") {
+    if (
+      currentStep === "firmware" ||
+      currentStep === "bios" ||
+      currentStep === "keys"
+    ) {
       goNext();
     } else if (currentStep === "rom_folder") {
       refreshConfig();
@@ -446,6 +453,7 @@ export function EmulatorSetupModal({
             <SetupStepKeys
               onSkip={handleSkip}
               onComplete={() => goNext()}
+              onKeysStatusChange={setKeysOk}
             />
           )}
           {currentStep === "rom_folder" && (

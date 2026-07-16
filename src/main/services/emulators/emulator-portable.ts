@@ -16,6 +16,7 @@ import { logger } from "../logger";
  *  - PCSX2   → `portable.ini`  → data under `<install>/{inis,memcards,...}`
  *  - Dolphin → `portable.txt`  → data under `<install>/User/{Config,Wii,GC}`
  *  - Azahar  → a `user/` folder → data under `<install>/user/{config,nand,sdmc}`
+ *  - Eden    → a `user/` folder → data under `<install>/user/{config,nand,keys}`
  *  - Cemu    → a `portable/` folder → ALL data under `<install>/portable/...`
  *  - RPCS3 / RALibretro are portable already (config sits next to the exe).
  */
@@ -41,6 +42,17 @@ export const cemuDataDir = (installDir: string): string => {
   const portable = path.join(installDir, "portable");
   return fs.existsSync(portable) ? portable : installDir;
 };
+
+/**
+ * Eden's portable data root. Eden (a Yuzu/Sudachi-lineage emulator) enters
+ * portable mode when a folder named `user` sits next to the executable, and
+ * then roots ALL data — keys, nand (firmware + installed titles), config,
+ * sdmc, load — under it. This is the Yuzu convention (NOT Dolphin's
+ * `portable.txt`, which Eden ignores). Every Eden writer must agree on this
+ * root or the emulator reads its OS-default AppData and never sees our files.
+ */
+export const edenDataDir = (installDir: string): string =>
+  path.join(installDir, "user");
 
 /** A seed Cemu settings.xml so portable mode + graphic-pack downloads are on. */
 const CEMU_SEED_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
@@ -110,14 +122,19 @@ export const writePortableSetup = (
       }
 
       case "eden": {
-        // Eden (Yuzu/Sudachi derivative): portable.txt makes it use the
-        // install directory for all data instead of AppData.
-        ensureFile(path.join(installDir, "portable.txt"));
-        ensureDir(path.join(installDir, "nand", "user", "save"));
-        ensureDir(path.join(installDir, "nand", "system", "Contents", "registered"));
-        ensureDir(path.join(installDir, "sdmc"));
-        ensureDir(path.join(installDir, "keys"));
-        ensureDir(path.join(installDir, "config"));
+        // Eden (Yuzu/Sudachi derivative): a `user/` folder next to the exe is
+        // the portable trigger; ALL data roots under it. `portable.txt` is
+        // Dolphin's marker and is ignored by Eden.
+        const user = path.join(installDir, "user");
+        ensureDir(path.join(user, "keys"));
+        ensureDir(path.join(user, "config"));
+        ensureDir(path.join(user, "sdmc"));
+        ensureDir(path.join(user, "load"));
+        // Firmware NCAs live in the SYSTEM registered cache; installed
+        // titles/updates/DLC go in the USER registered cache.
+        ensureDir(path.join(user, "nand", "system", "Contents", "registered"));
+        ensureDir(path.join(user, "nand", "user", "Contents", "registered"));
+        ensureDir(path.join(user, "nand", "user", "save"));
         break;
       }
 

@@ -6,7 +6,7 @@ import type { EmulatorBinary, EmulatorSystem } from "@types";
 import { logger } from "../logger";
 import { getEmulatorConfig } from "./emulators-repository";
 import { KNOWN_BINARIES } from "./known-binaries";
-import { cemuDataDir } from "./emulator-portable";
+import { cemuDataDir, edenDataDir } from "./emulator-portable";
 import type { SettingDef, SettingValue } from "./setting-types";
 
 /**
@@ -219,11 +219,12 @@ const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
     parent: cemuParentFor,
   },
   eden: {
-    // Eden (Yuzu/Sudachi derivative): Qt INI config, portable via portable.txt.
+    // Eden (Yuzu/Sudachi derivative): Qt INI config under the `user/` portable
+    // root. The trigger is the existence of the `user/` DIRECTORY (not a marker
+    // file) — writing the config file creates user/config/, which satisfies it.
     format: "ini",
-    file: (d) => path.join(d, "config", "qt-config.ini"),
+    file: (d) => path.join(edenDataDir(d), "config", "qt-config.ini"),
     section: edenSectionFor,
-    markers: (d) => [path.join(d, "portable.txt")],
   },
 };
 

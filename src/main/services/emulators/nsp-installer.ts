@@ -2,15 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { getEmulatorConfig } from "./emulators-repository";
+import { edenDataDir } from "./emulator-portable";
 import { logger } from "../logger";
 
 /**
  * Headless NSP installer for the Eden (Switch) emulator.
  *
  * Eden (a Yuzu/Sudachi derivative) installs NSP files by extracting the NCA
- * archives from the PFS0 container and placing them in the NAND registered
- * cache at `nand/system/Contents/registered/`. Eden has no CLI install command,
- * so we replicate the install process directly:
+ * archives from the PFS0 container and placing them in the NAND USER registered
+ * cache at `user/nand/user/Contents/registered/` (the system cache is reserved
+ * for firmware). Eden has no CLI install command, so we replicate it directly:
  *
  * 1. Parse the PFS0 header to locate NCA files inside the NSP.
  * 2. For each NCA, the filename IS the NcaID (32-char hex = 16 bytes).
@@ -58,7 +59,13 @@ function parsePfs0Header(filePath: string): {
     fs.readSync(fd, fileEntriesBuf, 0, fileEntriesBuf.length, 16);
 
     const stringTableBuf = Buffer.alloc(stringTableSize);
-    fs.readSync(fd, stringTableBuf, 0, stringTableSize, 16 + numFiles * fileEntrySize);
+    fs.readSync(
+      fd,
+      stringTableBuf,
+      0,
+      stringTableSize,
+      16 + numFiles * fileEntrySize
+    );
 
     const dataOffset = 16 + numFiles * fileEntrySize + stringTableSize;
 
@@ -112,10 +119,12 @@ export async function installNspIntoEden(nspPath: string): Promise<boolean> {
   }
 
   const installDir = path.dirname(config.executablePath);
+  // Installed titles/updates/DLC go in the USER registered cache (under Eden's
+  // `user/` portable root); the SYSTEM cache is reserved for firmware NCAs.
   const registeredDir = path.join(
-    installDir,
+    edenDataDir(installDir),
     "nand",
-    "system",
+    "user",
     "Contents",
     "registered"
   );
@@ -145,7 +154,9 @@ export async function installNspIntoEden(nspPath: string): Promise<boolean> {
       const ncaIdHex = entry.name.replace(/\.cnmt\.nca$|\.nca$/i, "");
 
       if (ncaIdHex.length !== 32 || !/^[0-9a-fA-F]{32}$/.test(ncaIdHex)) {
-        logger.warn(`[nsp-install] Skipping NCA with invalid name: ${entry.name}`);
+        logger.warn(
+          `[nsp-install] Skipping NCA with invalid name: ${entry.name}`
+        );
         continue;
       }
 
