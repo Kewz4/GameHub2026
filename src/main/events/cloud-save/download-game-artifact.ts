@@ -6,6 +6,7 @@ import {
   Wine,
 } from "@main/services";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import * as tar from "tar";
 import { registerEvent } from "../register-event";
 import path from "node:path";
@@ -104,6 +105,26 @@ const remapMissingDrive = (
   return path.join(exeRoot, destinationPath.slice(root.length));
 };
 
+/** rename with a cross-filesystem (EXDEV) copy+unlink fallback. */
+const moveFile = (src: string, dest: string) => {
+  try {
+    fs.renameSync(src, dest);
+  } catch {
+    fs.copyFileSync(src, dest);
+    fs.unlinkSync(src);
+  }
+};
+
+/**
+ * Restore a Ludusavi backup ATOMICALLY (all-or-nothing), inspired by Hydra
+ * PR #2538's native staged restore. The old code deleted each existing save
+ * BEFORE moving the replacement in, with no rollback — so a crash, full disk,
+ * or one bad file mid-restore could destroy saves and leave an inconsistent
+ * mix of old/new files. Now: every existing target is moved aside to a backup
+ * first, replacements are committed one by one, and if ANY file fails the whole
+ * set rolls back (installed files removed, backups restored). Backups are only
+ * deleted once the entire set commits.
+ */
 const restoreLudusaviBackup = (
   backupPath: string,
   title: string,
@@ -124,16 +145,25 @@ const restoreLudusaviBackup = (
   const userProfilePath =
     CloudSync.getWindowsLikeUserProfilePath(winePrefixPath);
 
+  // 1. Resolve every (source, destination) pair up front, rejecting anything
+  //    with a `..` traversal segment (artifacts can be authored on another
+  //    machine — never let one write outside its resolved target).
+  const jobs: { sourcePath: string; destinationPath: string }[] = [];
+  const hasTraversal = (p: string) =>
+    p.split(/[\\/]/).some((seg) => seg === "..");
+
   manifest.backups.forEach((backup) => {
     Object.keys(backup.files).forEach((key) => {
       const sourcePathWithDrives = Object.entries(manifest.drives).reduce(
         (prev, [driveKey, driveValue]) => prev.replace(driveValue, driveKey),
         key
       );
+      if (hasTraversal(sourcePathWithDrives) || hasTraversal(key)) {
+        logger.error(`Skipping path-traversal entry in restore: ${key}`);
+        return;
+      }
 
       const sourcePath = path.join(gameBackupPath, sourcePathWithDrives);
-      logger.info(`Source path: ${sourcePath}`);
-
       const destinationPath = remapMissingDrive(
         transformLudusaviBackupPathIntoWindowsPath(key, artifactWinePrefixPath)
           .replace(
@@ -146,25 +176,67 @@ const restoreLudusaviBackup = (
           ),
         executablePath
       );
-
-      logger.info(`Moving ${sourcePath} to ${destinationPath}`);
-      try {
-        fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-        if (fs.existsSync(destinationPath)) fs.unlinkSync(destinationPath);
-        try {
-          fs.renameSync(sourcePath, destinationPath);
-        } catch {
-          // Cross-filesystem fallback
-          fs.copyFileSync(sourcePath, destinationPath);
-          fs.unlinkSync(sourcePath);
-        }
-      } catch (err) {
-        // Don't abort the whole restore because one file's destination is
-        // unreachable on this machine
-        logger.error(`Failed to restore ${destinationPath}`, err);
+      if (fs.existsSync(sourcePath)) {
+        jobs.push({ sourcePath, destinationPath });
       }
     });
   });
+
+  // 2. Commit each file, moving any existing target aside first so it can be
+  //    restored on failure. Each record is tracked the MOMENT its backup is
+  //    made — BEFORE the replacement is moved in — so a failure between the two
+  //    steps still rolls the backup back (don't move `push` after the install).
+  const records: {
+    destinationPath: string;
+    backup: string | null;
+    installed: boolean;
+  }[] = [];
+  const suffix = `hydra-${crypto.randomUUID()}`;
+
+  try {
+    for (const { sourcePath, destinationPath } of jobs) {
+      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
+
+      let backup: string | null = null;
+      if (fs.existsSync(destinationPath)) {
+        backup = `${destinationPath}.${suffix}.bak`;
+        moveFile(destinationPath, backup);
+      }
+
+      const record = { destinationPath, backup, installed: false };
+      records.push(record);
+
+      logger.info(`Restoring ${sourcePath} -> ${destinationPath}`);
+      moveFile(sourcePath, destinationPath);
+      record.installed = true;
+    }
+  } catch (err) {
+    // 3. Roll back in REVERSE: remove any file we installed, then put the
+    //    backup back. Leaves every save exactly as it was before the restore.
+    logger.error("Restore failed — rolling back", err);
+    for (const { destinationPath, backup, installed } of records.reverse()) {
+      try {
+        if (installed && fs.existsSync(destinationPath)) {
+          fs.rmSync(destinationPath);
+        }
+        if (backup && fs.existsSync(backup)) moveFile(backup, destinationPath);
+      } catch (rollbackErr) {
+        logger.error(`Rollback failed for ${destinationPath}`, rollbackErr);
+      }
+    }
+    throw err;
+  }
+
+  // 4. Whole set committed — drop the backups.
+  for (const { backup } of records) {
+    if (backup && fs.existsSync(backup)) {
+      try {
+        fs.rmSync(backup);
+      } catch {
+        /* best effort */
+      }
+    }
+  }
 };
 
 /**

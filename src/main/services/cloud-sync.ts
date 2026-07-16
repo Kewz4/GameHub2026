@@ -27,7 +27,46 @@ import {
 } from "./emulators/emulator-save-dirs";
 import { invalidateCachedArtifacts } from "./cloud-artifacts-cache";
 
+/** Upload guardrails — a single game's save should never exceed these. */
+const MAX_SAVE_FILES = 50;
+const MAX_SAVE_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
+
 export class CloudSync {
+  /** Recursively total the file count and bytes of a backup directory. */
+  private static measureBackup(dir: string): {
+    fileCount: number;
+    totalBytes: number;
+  } {
+    let fileCount = 0;
+    let totalBytes = 0;
+    const walk = (current: string) => {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+        } else if (entry.isFile()) {
+          // The mapping.yaml + drive metadata aren't user save files; count
+          // only the actual backed-up payload.
+          if (entry.name === "mapping.yaml") continue;
+          fileCount += 1;
+          try {
+            totalBytes += fs.statSync(full).size;
+          } catch {
+            /* ignore unreadable entries */
+          }
+        }
+      }
+    };
+    walk(dir);
+    return { fileCount, totalBytes };
+  }
+
   public static getWindowsLikeUserProfilePath(winePrefixPath?: string | null) {
     if (process.platform === "linux") {
       if (!winePrefixPath) {
@@ -136,6 +175,20 @@ export class CloudSync {
     }
 
     await Ludusavi.backupGame(shop, canonicalName, backupPath, winePrefix);
+
+    // Guardrails (adopted from PR #2538): a mis-scoped save folder — e.g. an
+    // emulator save dir pointed at something huge — shouldn't balloon into an
+    // unbounded upload. Abort loudly before tarring if the backup blows past
+    // the caps rather than silently pushing gigabytes to the cloud.
+    const { fileCount, totalBytes } = CloudSync.measureBackup(backupPath);
+    if (fileCount > MAX_SAVE_FILES || totalBytes > MAX_SAVE_BYTES) {
+      throw new Error(
+        `Refusing to upload ${shop}:${objectId} — save is too large ` +
+          `(${fileCount} files, ${(totalBytes / 1024 / 1024).toFixed(0)} MB; ` +
+          `limits ${MAX_SAVE_FILES} files / ${MAX_SAVE_BYTES / 1024 / 1024} MB). ` +
+          `Check the game's save-folder configuration.`
+      );
+    }
 
     const tarLocation = path.join(backupsPath, `${crypto.randomUUID()}.tar`);
 

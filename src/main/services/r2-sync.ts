@@ -159,14 +159,27 @@ export class R2Sync {
       new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
     );
     const body = res.Body as Readable;
+    const expected = res.ContentLength ?? null;
+    let written = 0;
     await new Promise<void>((resolve, reject) => {
       const out = fs.createWriteStream(destPath);
+      body.on("data", (chunk: Buffer) => {
+        written += chunk.length;
+      });
       body.pipe(out);
       body.on("error", reject);
       out.on("finish", resolve);
       out.on("error", reject);
     });
-    logger.log(`R2: downloaded ${key} → ${destPath}`);
+    // Integrity guard: a truncated download must fail loudly rather than let a
+    // partial tar extract over good saves (adopted from PR #2538's philosophy).
+    if (expected !== null && written !== expected) {
+      fs.rmSync(destPath, { force: true });
+      throw new Error(
+        `R2 download truncated for ${key}: expected ${expected} bytes, got ${written}`
+      );
+    }
+    logger.log(`R2: downloaded ${key} → ${destPath} (${written} bytes)`);
   }
 
   /** Delete an object by key. */
