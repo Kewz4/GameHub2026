@@ -6,7 +6,7 @@ import { Link } from "@renderer/components/link/link";
 
 import "./game-item.scss";
 import { useTranslation } from "react-i18next";
-import { CatalogueSearchResult } from "@types";
+import type { CatalogueSearchResult, EmulatorSystem } from "@types";
 import {
   QuestionIcon,
   PlusIcon,
@@ -14,6 +14,20 @@ import {
   ShareAndroidIcon,
 } from "@primer/octicons-react";
 import cn from "classnames";
+import { PlatformLogo } from "@renderer/pages/settings/emulation/platform-logo";
+import { PLATFORM_LABELS } from "@renderer/assets/emulation/platform-logos";
+
+/**
+ * Console/classics results are shop "launchbox" with an objectId shaped
+ * `minerva:<system>:<title>`. Returns the EmulatorSystem so we can badge the
+ * card with its platform logo, or null for PC games (which get no badge).
+ */
+function systemForResult(game: CatalogueSearchResult): EmulatorSystem | null {
+  if (game.shop !== "launchbox") return null;
+  if (!game.objectId.startsWith("minerva:")) return null;
+  const seg = game.objectId.split(":")[1];
+  return seg in PLATFORM_LABELS ? (seg as EmulatorSystem) : null;
+}
 
 const ProtonDBBadge = lazy(async () => {
   const mod = await import("./protondb-badge");
@@ -58,6 +72,8 @@ export function GameItem({ game }: GameItemProps) {
       });
   };
   const shouldShowProtonFeatures = window.electron.platform === "linux";
+
+  const platformSystem = useMemo(() => systemForResult(game), [game]);
 
   useEffect(() => {
     const exists = library.some(
@@ -145,6 +161,18 @@ export function GameItem({ game }: GameItemProps) {
       <Link to={buildGameDetailsPath(game)} className="game-item__content-link">
         <div className="game-item__cover-wrapper">
           {libraryImage}
+
+          {platformSystem && (
+            <span
+              className="game-item__platform-badge"
+              title={PLATFORM_LABELS[platformSystem]}
+            >
+              <PlatformLogo
+                system={platformSystem}
+                className="game-item__platform-badge-logo"
+              />
+            </span>
+          )}
 
           {shouldShowProtonFeatures && protonBadge && (
             <Suspense fallback={null}>
