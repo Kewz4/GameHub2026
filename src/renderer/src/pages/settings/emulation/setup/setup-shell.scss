@@ -84,6 +84,22 @@
     &:hover {
       color: #fafafa;
     }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
+
+  // In-wizard "download automatically" button row (BIOS / firmware steps).
+  &__auto-download {
+    display: flex;
+    margin: 4px 0 12px;
+
+    button {
+      min-width: 240px;
+      justify-content: center;
+    }
   }
 
   &__dots {

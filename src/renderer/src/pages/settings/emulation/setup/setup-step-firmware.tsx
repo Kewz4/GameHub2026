@@ -7,6 +7,7 @@ import {
 } from "@primer/octicons-react";
 
 import { Button } from "@renderer/components";
+import { useToast } from "@renderer/hooks";
 import type { EmulatorConfig } from "@types";
 
 import { firmwarePageUrl } from "./ps-firmware-url";
@@ -25,8 +26,11 @@ export function SetupStepFirmware({
   onSkip,
 }: Readonly<Props>) {
   const { t, i18n } = useTranslation("settings");
+  const { showErrorToast } = useToast();
   const [installed, setInstalled] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
 
   const probe = async () => {
     setChecking(true);
@@ -38,6 +42,45 @@ export function SetupStepFirmware({
       onFirmwareStatusChange(result.installed);
     } finally {
       setChecking(false);
+    }
+  };
+
+  // In-wizard automatic firmware install (RPCS3 --installfw), awaited with
+  // progress, then re-probe so Continue enables on success.
+  const autoDownload = async () => {
+    if (!config.executablePath) {
+      showErrorToast(t("bios_download_needs_emulator"));
+      return;
+    }
+    setDownloading(true);
+    setDownloadStatus(t("bios_download_starting"));
+    const unsubscribe = window.electron.onBiosDownloadProgress((payload) => {
+      if (payload.system !== config.system) return;
+      const pct =
+        payload.progress >= 0 ? ` ${Math.round(payload.progress * 100)}%` : "";
+      setDownloadStatus(t(`bios_download_stage_${payload.stage}`) + pct);
+    });
+    try {
+      const result = await window.electron.downloadEmulatorBios(config.system);
+      if (result.ok) {
+        setDownloadStatus(null);
+        await probe();
+      } else {
+        showErrorToast(
+          t("bios_download_failed", { error: result.error ?? "" })
+        );
+        setDownloadStatus(null);
+      }
+    } catch (error) {
+      showErrorToast(
+        t("bios_download_failed", {
+          error: error instanceof Error ? error.message : "",
+        })
+      );
+      setDownloadStatus(null);
+    } finally {
+      unsubscribe();
+      setDownloading(false);
     }
   };
 
@@ -75,6 +118,23 @@ export function SetupStepFirmware({
         </div>
       </div>
 
+      {!installed && (
+        <div className="setup-modal__auto-download">
+          <Button
+            theme="primary"
+            onClick={autoDownload}
+            disabled={downloading || checking}
+          >
+            {downloading
+              ? (downloadStatus ??
+                t("downloading", { defaultValue: "Downloading…" }))
+              : t("setup_firmware_auto_download", {
+                  defaultValue: "Download & install firmware automatically",
+                })}
+          </Button>
+        </div>
+      )}
+
       <div className="setup-modal__hint">
         <button
           type="button"
@@ -89,6 +149,7 @@ export function SetupStepFirmware({
           type="button"
           className="setup-modal__ghost-button"
           onClick={onSkip}
+          disabled={downloading}
         >
           {t("setup_skip_later")}
         </button>
