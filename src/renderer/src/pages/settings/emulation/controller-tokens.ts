@@ -30,6 +30,40 @@ export type DiagramControl =
   | "cleft"
   | "cright";
 
+/**
+ * The standard SDL GameController mapping (matches the main process
+ * DEFAULT_CONTROLLER_PROFILE). This is the reliable out-of-the-box mapping for
+ * ANY controller the emulator's SDL layer recognises — including DirectInput /
+ * DualShock pads — because SDL maps the physical device to these tokens via its
+ * gamecontrollerdb. Used by the mapper's "reset to default" action.
+ */
+export const DEFAULT_PAD_BINDINGS: Record<string, string> = {
+  up: "dpup",
+  down: "dpdown",
+  left: "dpleft",
+  right: "dpright",
+  a: "a",
+  b: "b",
+  x: "x",
+  y: "y",
+  l1: "leftshoulder",
+  r1: "rightshoulder",
+  l2: "lefttrigger",
+  r2: "righttrigger",
+  l3: "leftstick",
+  r3: "rightstick",
+  select: "back",
+  start: "start",
+  lstick_up: "-lefty",
+  lstick_down: "+lefty",
+  lstick_left: "-leftx",
+  lstick_right: "+leftx",
+  rstick_up: "-righty",
+  rstick_down: "+righty",
+  rstick_left: "-rightx",
+  rstick_right: "+rightx",
+};
+
 // Standard Gamepad API button index → SDL GameController token.
 export const BUTTON_TOKEN: Record<number, string> = {
   0: "a",

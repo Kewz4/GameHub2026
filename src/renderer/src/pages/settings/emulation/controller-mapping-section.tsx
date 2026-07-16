@@ -21,6 +21,7 @@ import {
   AXIS_NAME,
   AXIS_THRESHOLD,
   BUTTON_TOKEN,
+  DEFAULT_PAD_BINDINGS,
   tokenActivation,
   type DiagramControl,
 } from "./controller-tokens";
@@ -101,7 +102,9 @@ interface Props {
 export function ControllerMappingSection({ binary }: Readonly<Props>) {
   const { showSuccessToast, showErrorToast } = useToast();
   const [profile, setProfile] = useState<ControllerProfile | null>(null);
-  const [pads, setPads] = useState<{ index: number; id: string }[]>([]);
+  const [pads, setPads] = useState<
+    { index: number; id: string; mapping: string }[]
+  >([]);
   const [selectedPad, setSelectedPad] = useState<number>(0);
   const [capturing, setCapturing] = useState<PadControl | null>(null);
   const [applying, setApplying] = useState(false);
@@ -138,13 +141,15 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       .catch(() => {});
   }, [binary, typeOptions]);
 
-  // Poll connected controllers so the list stays live.
+  // Poll connected controllers so the list stays live. We keep `mapping` so we
+  // can tell XInput/standard pads (Gamepad API normalises them) from
+  // DirectInput/other pads (mapping === "", raw button order) and surface that.
   useEffect(() => {
     const scan = () => {
       const gps = navigator.getGamepads?.() ?? [];
-      const list: { index: number; id: string }[] = [];
+      const list: { index: number; id: string; mapping: string }[] = [];
       for (const gp of gps) {
-        if (gp) list.push({ index: gp.index, id: gp.id });
+        if (gp) list.push({ index: gp.index, id: gp.id, mapping: gp.mapping });
       }
       setPads(list);
     };
@@ -277,6 +282,14 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
     }
   };
 
+  // Reset every binding to the standard SDL default — the reliable mapping for
+  // any controller the emulator's SDL layer recognises (DirectInput/DualShock
+  // included), since SDL maps the physical device to these tokens.
+  const resetToDefault = () =>
+    setProfile((p) =>
+      p ? { ...p, bindings: { ...p.bindings, ...DEFAULT_PAD_BINDINGS } } : p
+    );
+
   const setMotion = (on: boolean) =>
     setProfile((p) => (p ? { ...p, motion: on } : p));
 
@@ -287,6 +300,19 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   // Per-emulator layout: only the controls this console actually uses, plus
   // the diagram that matches it. RALibretro is the exception — it serves many
   // consoles from one RetroPad map, so the user picks the diagram directly.
+  // The selected pad's input type. Standard = XInput (Gamepad API normalises
+  // the button order); "" = DirectInput / other (raw order). Both are supported
+  // — the emulators map via SDL — but non-standard pads need the note below.
+  const selectedPadObj = pads.find((p) => p.index === selectedPad);
+  const isNonStandardPad = Boolean(
+    selectedPadObj && selectedPadObj.mapping !== "standard"
+  );
+  const padTypeLabel = selectedPadObj
+    ? selectedPadObj.mapping === "standard"
+      ? "XInput / standard"
+      : "DirectInput / SDL"
+    : null;
+
   const isRetro = binary === "ralibretro";
   const layout: ControllerLayout = isRetro
     ? (RETRO_DIAGRAM_CHOICES.find((c) => c.value === retroDiagram)?.layout ??
@@ -349,7 +375,9 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
               : pads.map((p) => ({
                   key: String(p.index),
                   value: String(p.index),
-                  label: `#${p.index + 1} — ${p.id.slice(0, 40)}`,
+                  label: `#${p.index + 1} — ${p.id.slice(0, 34)}${
+                    p.mapping === "standard" ? "" : " (DirectInput)"
+                  }`,
                 }))
           }
         />
@@ -387,6 +415,14 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
         )}
 
         <Button
+          theme="outline"
+          className="controller-mapping__reset"
+          onClick={resetToDefault}
+        >
+          Reset to default
+        </Button>
+
+        <Button
           theme="primary"
           className="controller-mapping__save"
           onClick={save}
@@ -395,6 +431,21 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
           {applying ? "Saving…" : "Save mapping"}
         </Button>
       </div>
+
+      {padTypeLabel && (
+        <p className="controller-mapping__pad-type">
+          Detected input type: <strong>{padTypeLabel}</strong>
+          {isNonStandardPad && (
+            <>
+              {" "}
+              — this DirectInput/SDL controller is supported. GameHub maps it
+              through SDL, so <strong>Reset to default</strong> gives a working
+              mapping out of the box; the live diagram reflects raw button order
+              and may not match until you rebind.
+            </>
+          )}
+        </p>
+      )}
 
       <label className="controller-mapping__motion">
         <input

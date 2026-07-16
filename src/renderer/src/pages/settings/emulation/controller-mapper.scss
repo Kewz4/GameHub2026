@@ -25,6 +25,23 @@
     height: 40px;
     white-space: nowrap;
   }
+
+  .controller-mapping__reset {
+    align-self: flex-end;
+    height: 40px;
+    white-space: nowrap;
+  }
+}
+
+.controller-mapping__pad-type {
+  margin: -8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+
+  strong {
+    color: var(--color-text);
+  }
 }
 
 .controller-mapping__motion {
