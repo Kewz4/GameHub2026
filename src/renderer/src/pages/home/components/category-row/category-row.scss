@@ -1,0 +1,88 @@
+.category-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  outline: none;
+
+  &:focus-visible {
+    // Subtle affordance that the row has keyboard focus (arrows scroll it).
+    .category-row__title {
+      color: var(--color-primary, #7aa2ff);
+    }
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  &__nav {
+    display: flex;
+    gap: 6px;
+  }
+
+  &__nav-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--color-text);
+    background: rgba(var(--fg-rgb), 0.06);
+    border: 1px solid rgba(var(--fg-rgb), 0.1);
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease;
+
+    &:hover {
+      background: rgba(var(--fg-rgb), 0.12);
+      border-color: rgba(var(--fg-rgb), 0.2);
+    }
+  }
+
+  // Native horizontal scroll — no wheel listeners. Drag-to-scroll is layered
+  // on via pointer events (see use-drag-scroll).
+  &__track {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    // Let the browser pan horizontally; drag handles the rest.
+    touch-action: pan-x;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  &__card {
+    flex: 0 0 280px;
+    width: 280px;
+    scroll-snap-align: start;
+    user-select: none;
+  }
+
+  &__card-skeleton {
+    flex: 0 0 auto;
+    width: 280px;
+    height: 140px;
+    border-radius: 8px;
+  }
+}

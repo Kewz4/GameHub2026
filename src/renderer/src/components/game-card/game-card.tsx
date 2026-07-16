@@ -39,7 +39,7 @@ const shopIcon: Record<string, JSX.Element> = {
   ea: <EaLogo className="game-card__shop-icon" />,
 };
 
-export function GameCard({ game, ...props }: GameCardProps) {
+export function GameCard({ game, className, ...props }: GameCardProps) {
   const { t } = useTranslation("game_card");
 
   const [stats, setStats] = useState<GameStats | null>(null);
@@ -64,7 +64,7 @@ export function GameCard({ game, ...props }: GameCardProps) {
     <button
       {...props}
       type="button"
-      className="game-card"
+      className={className ? `game-card ${className}` : "game-card"}
       onMouseEnter={handleHover}
     >
       <div className="game-card__backdrop">
