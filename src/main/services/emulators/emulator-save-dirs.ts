@@ -10,6 +10,7 @@ import { cemuDataDir, edenDataDir } from "./emulator-portable";
 import { resolveWiiuTitleId } from "./cemu-graphic-packs";
 import { getPs2MemcardDirs } from "./ps2-memcard-dirs";
 import { getPs1MemcardDirs } from "./ps1-memcard-dirs";
+import { readGamesYml, buildPathToTitleIdIndex } from "./emulation-cloud-saves";
 
 /**
  * Resolves the on-disk save-data folders for the folder-based standalone
@@ -102,6 +103,8 @@ export const systemForGame = async (
 export interface EmulatorSaveLocation {
   system: EmulatorSystem;
   binary: string;
+  /** The emulator executable (used to find sibling databases like games.yml). */
+  executablePath: string;
   /**
    * ALL configured save-root folders for this emulator. May include folders that
    * don't exist on disk yet (the game hasn't saved, or the emulator creates the
@@ -144,8 +147,50 @@ export const resolveEmulatorSaveLocation = async (
   return {
     system,
     binary: config.binary ?? KNOWN_BINARIES[system].binary,
+    executablePath: config.executablePath,
     folders,
   };
+};
+
+/**
+ * Narrow an RPCS3 savedata root to the folder(s) for one game, using RPCS3's own
+ * `games.yml` (its database of TITLE_ID → game path). We map the game's ROM path
+ * to its PS3 title id, then keep only the savedata subfolders whose name carries
+ * that id (PS3 savedata dirs are named `<TITLE_ID>...`). Returns null when the
+ * title id can't be resolved (game not yet registered by RPCS3) so callers fall
+ * back to the whole savedata tree.
+ */
+const resolvePs3SaveSubfolders = async (
+  loc: EmulatorSaveLocation,
+  shop: GameShop,
+  objectId: string
+): Promise<string[] | null> => {
+  const game = await gamesSublevel
+    .get(levelKeys.game(shop, objectId))
+    .catch(() => null);
+  const romPath = game?.executablePath;
+  if (!romPath) return null;
+
+  const index = buildPathToTitleIdIndex(await readGamesYml(loc.executablePath));
+  const norm = path.normalize(romPath).replace(/[\\/]+$/, "");
+  const titleId =
+    index.get(norm) ??
+    index.get(path.basename(norm)) ??
+    index.get(path.basename(path.dirname(norm))) ??
+    null;
+  if (!titleId) return null;
+
+  const savedataRoot = loc.folders[0];
+  let subfolders: string[] = [];
+  try {
+    subfolders = fs
+      .readdirSync(savedataRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name.includes(titleId))
+      .map((e) => path.join(savedataRoot, e.name));
+  } catch {
+    // savedata root doesn't exist yet — no saves for this title.
+  }
+  return subfolders;
 };
 
 /**
@@ -172,6 +217,13 @@ export const resolveEmulatorGameSaveFolder = async (
       const withoutUser = path.join(loc.folders[0], high, low);
       if (fs.existsSync(withoutUser)) return withoutUser;
     }
+  }
+
+  // RPCS3: narrow to the game's own savedata folder via games.yml when it's
+  // already registered + has a save; else fall through to the savedata root.
+  if (loc.binary === "rpcs3") {
+    const ps3 = await resolvePs3SaveSubfolders(loc, shop, objectId);
+    if (ps3 && ps3.length > 0) return ps3[0];
   }
 
   // Prefer a root that already has saves; otherwise fall back to the first
@@ -250,6 +302,13 @@ export const resolveEmulatorBackupFolders = async (
     if (specific && specific !== loc.folders[0] && fs.existsSync(specific)) {
       return [specific];
     }
+  }
+
+  // RPCS3: back up only this game's savedata folder(s) when resolvable — so a
+  // restore doesn't overwrite every PS3 game's saves.
+  if (loc.binary === "rpcs3") {
+    const ps3 = await resolvePs3SaveSubfolders(loc, shop, objectId);
+    if (ps3 && ps3.length > 0) return ps3;
   }
 
   // Only back up roots that actually exist — a game that never saved simply has
