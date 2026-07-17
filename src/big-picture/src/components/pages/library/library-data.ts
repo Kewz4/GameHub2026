@@ -197,9 +197,13 @@ export function filterLibraryBySecondaryFilter(
     );
   }
 
-  // Retigga = games that came from the Hydra repack catalogue.
+  // Retigga = PC games that came from the Hydra repack catalogue. Console/ROM
+  // games (shop "launchbox") have their own place and must NOT leak in here
+  // (mirrors the desktop library).
   if (selectedFilter === "retigga") {
-    return library.filter((game) => getGameOrigin(game) === "catalog");
+    return library.filter(
+      (game) => getGameOrigin(game) === "catalog" && game.shop !== "launchbox"
+    );
   }
 
   // Custom = manually added games.
@@ -309,5 +313,10 @@ export function isLibrarySecondaryFilter(
 }
 
 export function isLibraryGamePlayable(game: LibraryGame): boolean {
-  return Boolean(game.executablePath || game.isInstalledLocally);
+  // Console/emulated games launch via openClassicsGame (which reports its own
+  // "emulator not configured" errors), so they're playable without an
+  // executablePath / local-install marker.
+  return Boolean(
+    game.executablePath || game.isInstalledLocally || game.shop === "launchbox"
+  );
 }

@@ -9,6 +9,17 @@ export function useLibraryLaunchGame(
     async (game: LibraryGame) => {
       if (!IS_DESKTOP) return;
 
+      // Console/emulated games (shop "launchbox") launch through the emulator,
+      // not an executable — they never have an executablePath, so route them to
+      // openClassicsGame instead of mis-firing the "missing executable" flow.
+      if (game.shop === "launchbox") {
+        await globalThis.window.electron.openClassicsGame(
+          game.shop,
+          game.objectId
+        );
+        return;
+      }
+
       if (!game.executablePath) {
         onMissingExecutable(game);
         return;

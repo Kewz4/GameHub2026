@@ -49,6 +49,8 @@ export interface BigPictureActiveDownloadItem {
   metaLabel: string;
   statusLabel: string;
   statusTone: DownloadTone;
+  /** True during the debrid/TorBox server-side caching phase (no local bytes). */
+  preparing?: boolean;
   progress: number;
   progressLabel: string;
   transferLabel: string;
@@ -355,10 +357,20 @@ export function useBigPictureDownloadsPageData() {
     } else if (lastPacket?.isCheckingFiles) {
       statusLabel = "Checking files";
     } else if (lastPacket?.isDownloadingMetadata) {
-      statusLabel = "Downloading metadata";
+      // For debrid/TorBox this is the server-side caching phase — nothing is on
+      // disk yet, so "Preparing" reads truthfully (vs a stalled-looking 0 B/s).
+      statusLabel = "Preparing download";
     } else {
       statusLabel = "In progress";
     }
+
+    // Preparing/caching: the transfer + local speed are meaningless (the bytes
+    // are being fetched on TorBox's servers, not to disk yet).
+    const isPreparing =
+      !isExtracting &&
+      !isPausedHero &&
+      download.status !== "error" &&
+      Boolean(lastPacket?.isDownloadingMetadata);
 
     if (!isPausedHero && download.status !== "error") {
       speedLabel = isExtracting
@@ -374,11 +386,13 @@ export function useBigPictureDownloadsPageData() {
       metaLabel: getDownloadMetaLabel(activeGame),
       statusLabel,
       statusTone,
+      preparing: isPreparing,
       progress,
       progressLabel: formatProgress(progress),
-      transferLabel:
-        formatTransfer(bytesDownloaded, sizeInBytes) ??
-        formatBytes(bytesDownloaded),
+      transferLabel: isPreparing
+        ? "Caching…"
+        : (formatTransfer(bytesDownloaded, sizeInBytes) ??
+          formatBytes(bytesDownloaded)),
       speedLabel,
       etaLabel: eta,
       sizeLabel: sizeInBytes != null ? formatBytes(sizeInBytes) : "Unknown",

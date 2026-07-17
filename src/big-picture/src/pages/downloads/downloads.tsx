@@ -1466,7 +1466,16 @@ export default function Downloads() {
           ? "Starting Download"
           : sourceDownload.pauseOrResumeAction === "resume"
             ? "Paused Download"
-            : "Download In Progress",
+            : // Surface the transient status (Preparing / Checking files /
+              // Reconnecting / Recovering) so TorBox caching doesn't read as a
+              // stalled "Download In Progress" at 0 B/s.
+              activeDownload?.preparing
+              ? "Preparing Download"
+              : activeDownload?.statusLabel &&
+                  activeDownload.statusLabel !== "In progress" &&
+                  activeDownload.statusLabel !== "Active"
+                ? activeDownload.statusLabel
+                : "Download In Progress",
         progress: isHeroOptimisticLoading ? 0 : (activeDownload?.progress ?? 0),
         progressLabel: isHeroOptimisticLoading
           ? "0%"
