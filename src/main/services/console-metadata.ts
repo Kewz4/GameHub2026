@@ -23,6 +23,11 @@ const igdbQueryTitle = (title: string): string =>
 
 const inMemory = new Map<string, ConsoleGameMetadata | null>();
 
+// Bump when the IGDB query or `extractConsoleMetadata` changes so persisted
+// caches from an older schema are re-fetched. v2: added collections/franchise
+// fallbacks for the "more from series" section.
+const METADATA_SCHEMA_VERSION = 2;
+
 /**
  * Resolve the extended console metadata (scores, players, languages, series,
  * box art) for a title, IGDB-backed and cached. Returns null when IGDB has no
@@ -46,7 +51,10 @@ export async function getConsoleGameMetadata(
     : null;
   if (metaKey) {
     const existing = await gamehubMetaSublevel.get(metaKey).catch(() => null);
-    if (existing?.extraMetadata) {
+    if (
+      existing?.extraMetadata &&
+      existing.extraMetadataVersion === METADATA_SCHEMA_VERSION
+    ) {
       inMemory.set(key, existing.extraMetadata);
       return existing.extraMetadata;
     }
@@ -74,6 +82,7 @@ export async function getConsoleGameMetadata(
           logoImageUrl: null,
           ...existing,
           extraMetadata: metadata,
+          extraMetadataVersion: METADATA_SCHEMA_VERSION,
         })
         .catch(() => {});
     }

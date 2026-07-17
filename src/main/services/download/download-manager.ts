@@ -947,7 +947,25 @@ export class DownloadManager {
     );
 
     if (nextItemOnQueue) {
-      this.resumeDownload(nextItemOnQueue);
+      await this.resumeDownload(nextItemOnQueue);
+      // Atomically mark the newly-started item active and clear its queued
+      // flag, instead of waiting for the next watch poll to persist it. This
+      // closes a consistency gap where, right after a base game finishes, the
+      // next item (update, then DLC) was left marked "queued" in leveldb while
+      // already downloading — so a restart in that window could drop it, and a
+      // sequential base→update→DLC queue could fail to advance reliably.
+      await downloadsSublevel
+        .put(levelKeys.game(nextItemOnQueue.shop, nextItemOnQueue.objectId), {
+          ...nextItemOnQueue,
+          status: "active",
+          queued: true,
+          pinnedToHero: false,
+          extracting: false,
+          extractionProgress: 0,
+          timestamp: Date.now(),
+        })
+        .catch(() => {});
+      WindowManager.sendDownloadsUpdated();
     } else {
       this.downloadingGameId = null;
       this.usingJsDownloader = false;

@@ -14,3 +14,16 @@
 .game-danger-zone-settings-tab__action-button {
   width: 100%;
 }
+
+.game-danger-zone-settings-tab__playtime {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing-unit) * 4);
+  width: 100%;
+}
+
+.game-danger-zone-settings-tab__playtime-inputs {
+  display: flex;
+  gap: calc(var(--spacing-unit) * 4);
+  width: 100%;
+}

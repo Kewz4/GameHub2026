@@ -1,7 +1,13 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { LibraryGame } from "@types";
-import { Button, VerticalFocusGroup } from "../../../common";
+import {
+  Button,
+  HorizontalFocusGroup,
+  Input,
+  Modal,
+  VerticalFocusGroup,
+} from "../../../common";
 import { ConfirmationModal } from "../../../modals";
 import { SettingsSection } from "../../../../pages/settings/settings-section";
 import { useBigPictureToast } from "../../../../hooks/use-big-picture-toast.hook";
@@ -62,6 +68,41 @@ export function GameDangerZoneSettingsTab({
   const { showSuccessToast, showErrorToast } = useBigPictureToast();
   const [pendingAction, setPendingAction] = useState<DangerAction | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const [isPlaytimeModalOpen, setIsPlaytimeModalOpen] = useState(false);
+  const [playtimeHours, setPlaytimeHours] = useState("");
+  const [playtimeMinutes, setPlaytimeMinutes] = useState("");
+
+  // Seed the inputs from the game's current playtime whenever the modal opens.
+  useEffect(() => {
+    if (!isPlaytimeModalOpen) return;
+    const totalMinutes = Math.floor(
+      (game.playTimeInMilliseconds ?? 0) / (1000 * 60)
+    );
+    setPlaytimeHours(String(Math.floor(totalMinutes / 60)));
+    setPlaytimeMinutes(String(totalMinutes % 60));
+  }, [isPlaytimeModalOpen, game.playTimeInMilliseconds]);
+
+  const handleChangePlaytime = useCallback(async () => {
+    const hours = Math.max(0, Math.min(10000, parseInt(playtimeHours) || 0));
+    const minutes = Math.max(0, Math.min(59, parseInt(playtimeMinutes) || 0));
+    const totalSeconds = hours * 3600 + minutes * 60;
+    setActionLoading(true);
+    try {
+      await globalThis.window.electron.changeGamePlayTime(
+        game.shop,
+        game.objectId,
+        totalSeconds
+      );
+      showSuccessToast("Playtime updated");
+      setIsPlaytimeModalOpen(false);
+      globalThis.window.dispatchEvent(new Event("library-update"));
+    } catch {
+      showErrorToast("Failed to update playtime");
+    } finally {
+      setActionLoading(false);
+    }
+  }, [game, playtimeHours, playtimeMinutes, showSuccessToast, showErrorToast]);
 
   const handleRemoveFromLibrary = useCallback(async () => {
     setActionLoading(true);
@@ -163,6 +204,22 @@ export function GameDangerZoneSettingsTab({
         </SettingsSection>
       )}
 
+      <SettingsSection
+        className="game-danger-zone-settings-tab__section"
+        title={t("update_game_playtime", { defaultValue: "Update playtime" })}
+        description={t("update_playtime_description_bp", {
+          defaultValue: "Manually set how long you've played this game.",
+        })}
+      >
+        <Button
+          variant="secondary"
+          className="game-danger-zone-settings-tab__action-button"
+          onClick={() => setIsPlaytimeModalOpen(true)}
+        >
+          {t("update_game_playtime", { defaultValue: "Update playtime" })}
+        </Button>
+      </SettingsSection>
+
       {game.shop !== "custom" && (
         <SettingsSection
           className="game-danger-zone-settings-tab__section"
@@ -181,6 +238,44 @@ export function GameDangerZoneSettingsTab({
           </Button>
         </SettingsSection>
       )}
+
+      <Modal
+        visible={isPlaytimeModalOpen}
+        onClose={() => setIsPlaytimeModalOpen(false)}
+        title={t("update_game_playtime", { defaultValue: "Update playtime" })}
+        description={game.title}
+      >
+        <VerticalFocusGroup className="game-danger-zone-settings-tab__playtime">
+          <HorizontalFocusGroup className="game-danger-zone-settings-tab__playtime-inputs">
+            <Input
+              label={t("hours", { defaultValue: "Hours" })}
+              type="number"
+              min="0"
+              max="10000"
+              value={playtimeHours}
+              placeholder="0"
+              onChange={(event) => setPlaytimeHours(event.target.value)}
+            />
+            <Input
+              label={t("minutes", { defaultValue: "Minutes" })}
+              type="number"
+              min="0"
+              max="59"
+              value={playtimeMinutes}
+              placeholder="0"
+              onChange={(event) => setPlaytimeMinutes(event.target.value)}
+            />
+          </HorizontalFocusGroup>
+          <Button
+            variant="primary"
+            loading={actionLoading}
+            disabled={actionLoading}
+            onClick={() => void handleChangePlaytime()}
+          >
+            {t("update_playtime", { defaultValue: "Update playtime" })}
+          </Button>
+        </VerticalFocusGroup>
+      </Modal>
 
       {confirmationConfig && (
         <ConfirmationModal

@@ -45,7 +45,15 @@ export interface IgdbGame {
     language_support_type?: number;
   }>;
   collection?: { name: string; games?: Array<{ id: number; name: string }> };
-  franchises?: Array<{ name: string }>;
+  collections?: Array<{
+    name: string;
+    games?: Array<{ id: number; name: string }>;
+  }>;
+  franchise?: { name: string; games?: Array<{ id: number; name: string }> };
+  franchises?: Array<{
+    name: string;
+    games?: Array<{ id: number; name: string }>;
+  }>;
   artworks?: Array<{ image_id: string }>;
 }
 
@@ -74,10 +82,21 @@ const GAME_FIELDS = [
   "multiplayer_modes.onlinecoopmax",
   "language_supports.language.name",
   "language_supports.language_support_type",
+  // IGDB is migrating from singular `collection` to the plural `collections`
+  // array; many games now only populate one or the other, and `franchise(s)`
+  // is the last-resort grouping — request all so the "series" resolves.
   "collection.name",
   "collection.games.name",
   "collection.games.id",
+  "collections.name",
+  "collections.games.name",
+  "collections.games.id",
+  "franchise.name",
+  "franchise.games.name",
+  "franchise.games.id",
   "franchises.name",
+  "franchises.games.name",
+  "franchises.games.id",
   "artworks.image_id",
 ].join(",");
 
@@ -104,14 +123,22 @@ export function extractConsoleMetadata(game: IgdbGame): ConsoleGameMetadata {
     )
   );
 
-  const series = game.collection?.name
-    ? {
-        name: game.collection.name,
-        titles: (game.collection.games ?? [])
-          .map((g) => g.name)
-          .filter((n) => n && n !== game.name),
-      }
-    : null;
+  // Resolve the "series" from whichever grouping IGDB populated for this game,
+  // in order of specificity: singular collection, plural collections, then
+  // franchise(s). Only keep a grouping that actually lists sibling games.
+  const seriesGroup =
+    game.collection ??
+    game.collections?.[0] ??
+    game.franchise ??
+    game.franchises?.[0] ??
+    null;
+  const seriesTitles = (seriesGroup?.games ?? [])
+    .map((g) => g.name)
+    .filter((n) => n && n !== game.name);
+  const series =
+    seriesGroup?.name && seriesTitles.length
+      ? { name: seriesGroup.name, titles: seriesTitles }
+      : null;
 
   const boxArtUrls = (game.artworks ?? []).map(
     (a) =>

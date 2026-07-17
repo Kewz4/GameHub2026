@@ -32,6 +32,12 @@ export interface GameHubMetaEntry {
    * means "never fetched"; a value (even with empty fields) means "fetched".
    */
   extraMetadata?: ConsoleGameMetadata;
+  /**
+   * Schema version of `extraMetadata`. Bumped when the IGDB query/normalization
+   * changes so stale caches (e.g. fetched before series/collections support)
+   * are transparently re-fetched instead of served forever.
+   */
+  extraMetadataVersion?: number;
 }
 
 export const gamehubMetaSublevel = db.sublevel<string, GameHubMetaEntry>(

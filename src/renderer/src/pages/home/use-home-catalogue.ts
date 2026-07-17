@@ -78,16 +78,23 @@ async function getFeatured(language: string): Promise<TrendingGame[]> {
 /**
  * Derive hero slides from an already-fetched category (Hot/Weekly) when
  * `/catalogue/featured` comes back empty — which it has done repeatedly on this
- * fork's backend. We keep only games that actually carry the two artwork slots
- * the hero renders (`libraryHeroImageUrl` + `logoImageUrl`) so slides are never
- * blank, and synthesize the `uri` the carousel navigates to.
+ * fork's backend. Catalogue list responses reliably carry only `libraryImageUrl`
+ * (the cover) — `libraryHeroImageUrl`/`logoImageUrl` are per-game detail-time
+ * SteamGridDB fetches and are usually absent here. So we require only *some*
+ * usable image and fall back hero → library → cover for the background; the
+ * carousel already degrades to a title heading when the logo is missing, so
+ * slides are never blank.
  */
 function heroFallbackFrom(games: ShopAssets[]): TrendingGame[] {
   return games
-    .filter((g) => g.libraryHeroImageUrl && g.logoImageUrl)
+    .filter(
+      (g) => g.libraryHeroImageUrl || g.libraryImageUrl || g.coverImageUrl
+    )
     .slice(0, 5)
     .map((g) => ({
       ...g,
+      libraryHeroImageUrl:
+        g.libraryHeroImageUrl ?? g.libraryImageUrl ?? g.coverImageUrl,
       description: null,
       uri: buildGameDetailsPath({
         shop: g.shop,
