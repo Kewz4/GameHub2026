@@ -70,6 +70,30 @@
       object-position: 50% 20%;
     }
   }
+  &__hero-badge {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 2;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+
+    &--update {
+      background: rgba(43, 108, 176, 0.75);
+    }
+    &--dlc {
+      background: rgba(124, 58, 176, 0.75);
+    }
+  }
+
   // PLEASE FIX THE COLORS
   &__hero-overlay {
     position: absolute;

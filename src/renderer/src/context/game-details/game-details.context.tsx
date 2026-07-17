@@ -729,6 +729,47 @@ export function GameDetailsContextProvider({
   const selectGameExecutable = async () => {
     const downloadsPath = await getDownloadsPath();
 
+    // For console/emulated games the "executable" is a ROM (or, for folder-based
+    // systems like Cemu, the extracted game FOLDER) — not a Windows .exe. Filter
+    // by the emulator's own launchable file types, and switch to a directory
+    // picker when the system is folder-based.
+    const emulatorSystem =
+      shop === "launchbox"
+        ? platformToEmulatorSystem(game?.platform ?? platform)
+        : null;
+
+    if (emulatorSystem) {
+      const romConfig = await window.electron
+        .getEmulatorRomFilters(emulatorSystem)
+        .catch(() => ({ extensions: [] as string[], folderBased: false }));
+
+      // On Windows/Linux, ['openFile','openDirectory'] resolves to a directory
+      // picker (Electron can't do both) — exactly what Cemu needs; on macOS the
+      // user can pick either. Non-folder systems stay file-only with ROM filters.
+      const properties: Array<"openFile" | "openDirectory"> =
+        romConfig.folderBased ? ["openFile", "openDirectory"] : ["openFile"];
+
+      const romFilters = romConfig.extensions.length
+        ? [
+            {
+              name: t("game_rom", { defaultValue: "Game ROM" }),
+              extensions: romConfig.extensions,
+            },
+            { name: t("all_files"), extensions: ["*"] },
+          ]
+        : undefined;
+
+      return window.electron
+        .showOpenDialog({
+          properties,
+          defaultPath: downloadsPath,
+          filters: romFilters,
+        })
+        .then(({ filePaths }) =>
+          filePaths && filePaths.length > 0 ? filePaths[0] : null
+        );
+    }
+
     const filters = getGameExecutableFilters(
       globalThis.window.electron.platform,
       {

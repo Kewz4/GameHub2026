@@ -330,6 +330,14 @@ function HeroDownloadView({
   const isReconnecting =
     !isGameExtracting && !isRecovering && !!lastPacket?.isReconnecting;
 
+  // Companion downloads (`base::update` / `base::dlc::…`) reuse the base game's
+  // hero art (enriched upstream); tag them so it's clear what's downloading.
+  const companionKind = /::update/.test(game.objectId)
+    ? "Update"
+    : /::dlc/.test(game.objectId)
+      ? "DLC"
+      : null;
+
   return (
     <div className="download-group download-group--hero">
       <div className="download-group__hero-background">
@@ -338,6 +346,13 @@ function HeroDownloadView({
           alt={game.title}
         />
         <div className="download-group__hero-overlay" />
+        {companionKind && (
+          <span
+            className={`download-group__hero-badge download-group__hero-badge--${companionKind.toLowerCase()}`}
+          >
+            {companionKind}
+          </span>
+        )}
       </div>
 
       <div className="download-group__hero-content">

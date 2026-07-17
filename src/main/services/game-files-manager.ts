@@ -245,7 +245,70 @@ export class GameFilesManager {
       }
     }
 
+    await this.flattenSingleWrapperDirectory(directoryPath);
+
     return true;
+  }
+
+  /**
+   * Many archives wrap their payload in a single redundant top-level folder
+   * (e.g. `Game.zip` → `Game/Game.exe`, or a console ROM → `Game/Game.wua`).
+   * After extraction that leaves the game one directory deeper than expected,
+   * which breaks executable/ROM detection ("extraction output is a folder with
+   * the game inside, not the game"). If — and only if — the directory now holds
+   * exactly one non-archive entry and it's a folder, we lift its contents up one
+   * level and drop the empty wrapper. Anything with multiple top-level entries
+   * is left untouched, so legitimate multi-folder layouts are never disturbed.
+   */
+  private async flattenSingleWrapperDirectory(
+    directoryPath: string
+  ): Promise<void> {
+    try {
+      const entries = await fs.promises.readdir(directoryPath, {
+        withFileTypes: true,
+      });
+
+      // Ignore leftover archive parts and hidden/metadata files when deciding
+      // whether a single wrapper folder is all that's here.
+      const meaningful = entries.filter(
+        (entry) =>
+          !entry.name.startsWith(".") &&
+          !FILE_EXTENSIONS_TO_EXTRACT.some((ext) =>
+            entry.name.toLowerCase().endsWith(ext)
+          )
+      );
+
+      if (meaningful.length !== 1 || !meaningful[0].isDirectory()) return;
+
+      const wrapper = path.join(directoryPath, meaningful[0].name);
+      const children = await fs.promises.readdir(wrapper);
+      if (children.length === 0) return;
+
+      // Abort if lifting any child would collide with an existing entry (e.g. a
+      // leftover archive of the same name) — never overwrite.
+      for (const child of children) {
+        if (fs.existsSync(path.join(directoryPath, child))) return;
+      }
+
+      for (const child of children) {
+        await fs.promises.rename(
+          path.join(wrapper, child),
+          path.join(directoryPath, child)
+        );
+      }
+      await fs.promises.rmdir(wrapper).catch(() => {});
+      logger.log(
+        `[GameFilesManager] Flattened redundant wrapper folder "${meaningful[0].name}" in ${directoryPath}`
+      );
+    } catch (error) {
+      // Best-effort: a flatten failure must never fail an otherwise-good
+      // extraction. Downstream ROM/exe scanning walks recursively anyway.
+      logger.log(
+        `[GameFilesManager] Wrapper-folder flatten skipped: ${
+          (error as Error).message
+        }`
+      );
+    }
   }
 
   async setExtractionComplete(publishNotification = true) {

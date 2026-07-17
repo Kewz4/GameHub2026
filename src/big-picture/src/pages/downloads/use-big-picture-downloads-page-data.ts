@@ -257,10 +257,34 @@ export function useBigPictureDownloadsPageData() {
   }, [lastPacket, seedingStatuses]);
 
   const downloadsById = useMemo(() => {
+    // Companion downloads (`base::update` / `base::dlc::…`) have no artwork of
+    // their own — borrow the base game's so the hero isn't a broken image.
+    const baseByKey = new Map<string, LibraryGame>();
+    for (const game of library) {
+      if (!game.objectId.includes("::")) {
+        baseByKey.set(`${game.shop}:${game.objectId}`, game);
+      }
+    }
     return new Map(
       library
         .filter((game) => game.download && game.download.status !== "removed")
-        .map((game) => [game.id, game])
+        .map((game) => {
+          if (!game.objectId.includes("::")) return [game.id, game] as const;
+          const base = baseByKey.get(
+            `${game.shop}:${game.objectId.split("::")[0]}`
+          );
+          const enriched = base
+            ? {
+                ...game,
+                libraryHeroImageUrl:
+                  game.libraryHeroImageUrl ?? base.libraryHeroImageUrl,
+                libraryImageUrl: game.libraryImageUrl ?? base.libraryImageUrl,
+                logoImageUrl: game.logoImageUrl ?? base.logoImageUrl,
+                coverImageUrl: game.coverImageUrl ?? base.coverImageUrl,
+              }
+            : game;
+          return [game.id, enriched] as const;
+        })
     );
   }, [library]);
 

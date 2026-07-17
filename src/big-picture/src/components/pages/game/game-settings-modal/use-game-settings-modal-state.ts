@@ -401,6 +401,33 @@ export function useGameSettingsModalState({
   const selectGameExecutable = useCallback(async () => {
     const downloadsPath = await getDownloadsPath();
 
+    // Console/emulated games: filter by the emulator's ROM types and, for
+    // folder-based systems like Cemu, allow selecting the game FOLDER.
+    if (game?.shop === "launchbox" && game.platform) {
+      const romConfig = await globalThis.window.electron
+        .getEmulatorRomFilters(game.platform)
+        .catch(() => ({ extensions: [] as string[], folderBased: false }));
+
+      const properties: Array<"openFile" | "openDirectory"> =
+        romConfig.folderBased ? ["openFile", "openDirectory"] : ["openFile"];
+      const romFilters = romConfig.extensions.length
+        ? [
+            {
+              name: t("game_rom", { defaultValue: "Game ROM" }),
+              extensions: romConfig.extensions,
+            },
+            { name: t("all_files"), extensions: ["*"] },
+          ]
+        : undefined;
+
+      const { filePaths } = await globalThis.window.electron.showOpenDialog({
+        properties,
+        defaultPath: downloadsPath,
+        filters: romFilters,
+      });
+      return filePaths && filePaths.length > 0 ? filePaths[0] : null;
+    }
+
     const filters = getGameExecutableFilters(
       globalThis.window.electron.platform,
       {
@@ -420,7 +447,7 @@ export function useGameSettingsModalState({
     }
 
     return null;
-  }, [getDownloadsPath, t]);
+  }, [game, getDownloadsPath, t]);
 
   const handleChangeExecutableLocation = useCallback(async () => {
     if (!game) return;

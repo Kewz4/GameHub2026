@@ -42,4 +42,5 @@ import "./search-classics-catalogue";
 import "./get-random-classics";
 import "./get-console-how-long-to-beat";
 import "./get-console-game-metadata";
+import "./get-emulator-rom-filters";
 import "./download-switch-keys";

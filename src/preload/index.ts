@@ -775,6 +775,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("checkPs3Firmware", executablePath),
   getEmulatorRomExtensions: (system: EmulatorSystem) =>
     ipcRenderer.invoke("getEmulatorRomExtensions", system),
+  getEmulatorRomFilters: (systemOrPlatform: string) =>
+    ipcRenderer.invoke("getEmulatorRomFilters", systemOrPlatform),
   addRomFolder: (
     system: EmulatorSystem,
     folderPath: string,
@@ -1663,16 +1665,14 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("getConsoleHowLongToBeat", title),
   getConsoleGameMetadata: (title: string, objectId: string) =>
     ipcRenderer.invoke("getConsoleGameMetadata", title, objectId),
-  downloadSwitchKeys: () =>
-    ipcRenderer.invoke("downloadSwitchKeys"),
+  downloadSwitchKeys: () => ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),
   searchClassicsCatalogue: (
     query: string,
     limit?: number,
     system?: EmulatorSystem
-  ) =>
-    ipcRenderer.invoke("searchClassicsCatalogue", query, limit, system),
+  ) => ipcRenderer.invoke("searchClassicsCatalogue", query, limit, system),
   getRandomClassics: (limit?: number) =>
     ipcRenderer.invoke("getRandomClassics", limit),
 

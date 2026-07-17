@@ -858,6 +858,10 @@ declare global {
       system: EmulatorSystem
     ) => Promise<{ exists: boolean }>;
     getEmulatorRomExtensions: (system: EmulatorSystem) => Promise<string[]>;
+    getEmulatorRomFilters: (systemOrPlatform: string) => Promise<{
+      extensions: string[];
+      folderBased: boolean;
+    }>;
     addRomFolder: (
       system: EmulatorSystem,
       folderPath: string,

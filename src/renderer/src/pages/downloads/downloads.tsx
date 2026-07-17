@@ -75,6 +75,34 @@ export default function Downloads() {
     setShowDeleteModal(true);
   };
 
+  // Companion downloads (`base::update` / `base::dlc::…`) carry no artwork of
+  // their own, so their hero renders a broken image. Borrow the base game's
+  // artwork so they show the game's hero (a "DLC"/"Update" badge is added by the
+  // hero component).
+  const enrichedLibrary = useMemo(() => {
+    const baseByKey = new Map<string, LibraryGame>();
+    for (const game of library) {
+      if (!game.objectId.includes("::")) {
+        baseByKey.set(`${game.shop}:${game.objectId}`, game);
+      }
+    }
+    return library.map((game) => {
+      if (!game.objectId.includes("::")) return game;
+      const base = baseByKey.get(
+        `${game.shop}:${game.objectId.split("::")[0]}`
+      );
+      if (!base) return game;
+      return {
+        ...game,
+        libraryHeroImageUrl:
+          game.libraryHeroImageUrl ?? base.libraryHeroImageUrl,
+        libraryImageUrl: game.libraryImageUrl ?? base.libraryImageUrl,
+        logoImageUrl: game.logoImageUrl ?? base.logoImageUrl,
+        coverImageUrl: game.coverImageUrl ?? base.coverImageUrl,
+      };
+    });
+  }, [library]);
+
   const libraryGroup: Record<string, LibraryGame[]> = useMemo(() => {
     const initialValue: Record<string, LibraryGame[]> = {
       downloading: [],
@@ -89,7 +117,7 @@ export default function Downloads() {
       pausedOrder.map((id, index) => [id, index])
     );
 
-    const result = library.reduce((prev, next) => {
+    const result = enrichedLibrary.reduce((prev, next) => {
       if (!next.download) return prev;
 
       const bucket = getRendererDownloadBucket(next.download, {
@@ -143,7 +171,7 @@ export default function Downloads() {
       queued,
       complete,
     };
-  }, [extraction?.visibleId, lastPacket?.gameId, layoutState, library]);
+  }, [extraction?.visibleId, lastPacket?.gameId, layoutState, enrichedLibrary]);
 
   const queuedGameIds = useMemo(
     () => libraryGroup.queued.map((game) => game.id),
