@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { EmulatorConfig, EmulatorConfigMap, EmulatorSystem } from "@types";
+import type {
+  EmulatorBinary,
+  EmulatorConfig,
+  EmulatorConfigMap,
+  EmulatorSystem,
+} from "@types";
 
 import {
   Button,
@@ -20,6 +25,7 @@ import {
   EMULATION_OVERVIEW_REGION_ID,
 } from "../settings-navigation";
 import { CloudSavesSection } from "./cloud-saves-section";
+import { ControllerMapperModal } from "./controller/controller-mapper-modal";
 import { MemoryCardsSection } from "./memory-cards-section";
 import { EmulatorSetupModal } from "./setup/emulator-setup-modal";
 import "./styles.scss";
@@ -238,6 +244,10 @@ export function EmulationSettingsSection() {
   const [configs, setConfigs] = useState<EmulatorConfigMap | null>(null);
   const [activeSystem, setActiveSystem] = useState<EmulatorSystem | null>(null);
   const [setupSystem, setSetupSystem] = useState<EmulatorSystem | null>(null);
+  const [controllerTarget, setControllerTarget] = useState<{
+    binary: EmulatorBinary;
+    label: string;
+  } | null>(null);
 
   const refresh = useCallback(async () => {
     const next = await globalThis.window.electron.getEmulatorConfigs();
@@ -274,6 +284,22 @@ export function EmulationSettingsSection() {
           system as keyof typeof EMULATION_OVERVIEW_CARD_FOCUS_IDS
         ],
     }));
+  }, [configs]);
+
+  // One controller-mapper entry per configured emulator (deduped by binary,
+  // since several systems can share one emulator binary).
+  const configuredEmulators = useMemo(() => {
+    if (!configs) return [];
+    const seen = new Set<EmulatorBinary>();
+    const out: { binary: EmulatorBinary; label: string }[] = [];
+    for (const system of SYSTEMS) {
+      const config = configs[system];
+      if (config?.detectedAt == null) continue;
+      if (seen.has(config.binary)) continue;
+      seen.add(config.binary);
+      out.push({ binary: config.binary, label: SYSTEM_LABELS[system] });
+    }
+    return out;
   }, [configs]);
 
   const handleBack = useCallback(async () => {
@@ -347,6 +373,39 @@ export function EmulationSettingsSection() {
           />
         ))}
       </GridFocusGroup>
+
+      {configuredEmulators.length > 0 && (
+        <section className="emulation-settings__controllers">
+          <h2 className="emulation-settings__title">
+            {t("controllers", "Controllers")}
+          </h2>
+          <p className="emulation-settings__description">
+            {t(
+              "controllers_description",
+              "Configure your controller mapping for each installed emulator."
+            )}
+          </p>
+          <VerticalFocusGroup regionId="emulation-controllers-region">
+            {configuredEmulators.map(({ binary, label }) => (
+              <Button
+                key={binary}
+                focusId={`emulation-controller-${binary}`}
+                variant="secondary"
+                onClick={() => setControllerTarget({ binary, label })}
+              >
+                {label} controller
+              </Button>
+            ))}
+          </VerticalFocusGroup>
+        </section>
+      )}
+
+      <ControllerMapperModal
+        visible={controllerTarget !== null}
+        binary={controllerTarget?.binary ?? "ralibretro"}
+        emulatorLabel={controllerTarget?.label ?? ""}
+        onClose={() => setControllerTarget(null)}
+      />
 
       <EmulatorSetupModal
         visible={setupSystem !== null}

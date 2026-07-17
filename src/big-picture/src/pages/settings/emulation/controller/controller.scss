@@ -1,0 +1,115 @@
+.bp-controller-mapper-modal {
+  max-width: 1080px;
+  width: 90vw;
+}
+
+.bp-controller-mapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  &__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  &__pad-type {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.75;
+    line-height: 1.5;
+  }
+
+  &__loading {
+    margin: 0;
+    opacity: 0.7;
+  }
+
+  &__main {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    align-items: flex-start;
+  }
+
+  &__diagram-col {
+    flex: 1 1 360px;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+
+  &__diagram-hint {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.7;
+    text-align: center;
+    min-height: 2.4em;
+  }
+
+  &__bind-col {
+    flex: 1 1 360px;
+    min-width: 300px;
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px !important;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
+
+    &[data-focused="true"],
+    &:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    &--capturing {
+      border-color: var(--color-primary, #ff5b3a);
+      background: rgba(255, 91, 58, 0.12);
+    }
+  }
+
+  &__control-label {
+    font-size: 14px;
+  }
+
+  &__binding {
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    opacity: 0.85;
+  }
+
+  &__set {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 8px;
+  }
+}
