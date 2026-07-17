@@ -8,6 +8,8 @@ import {
   PuzzlePieceIcon,
   SignOutIcon,
   SquaresFourIcon,
+  UserIcon,
+  UsersIcon,
 } from "@phosphor-icons/react";
 import { forwardRef, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -88,6 +90,18 @@ function SidebarRouter() {
         label: "Download",
         path: `${basePath}/downloads`,
         icon: DownloadSimpleIcon,
+      },
+      {
+        key: "profile",
+        label: "Profile",
+        path: `${basePath}/profile`,
+        icon: UserIcon,
+      },
+      {
+        key: "friends",
+        label: "Friends",
+        path: `${basePath}/friends`,
+        icon: UsersIcon,
       },
       {
         key: "settings",

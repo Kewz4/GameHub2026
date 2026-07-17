@@ -6,10 +6,12 @@ import Catalogue from "./pages/catalogue/catalogue";
 import CloudSavesPage from "./pages/cloud-saves/cloud-saves";
 import ComponentLab from "./pages/component-lab/component-lab";
 import Downloads from "./pages/downloads/downloads";
+import Friends from "./pages/friends/friends";
 import Game from "./pages/game/game";
 import GameAchievements from "./pages/game-achievements/game-achievements";
 import Home from "./pages/home/home";
 import LibraryPage from "./pages/library/page";
+import Profile from "./pages/profile/profile";
 import Settings from "./pages/settings/settings";
 
 const rootElement = document.getElementById("root");
@@ -30,6 +32,9 @@ ReactDOM.createRoot(rootElement).render(
           <Route path="settings" element={<Settings />} />
           <Route path="library" element={<LibraryPage />} />
           <Route path="cloud-saves" element={<CloudSavesPage />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="profile/:userId" element={<Profile />} />
+          <Route path="friends" element={<Friends />} />
           <Route path="game/:shop/:objectId" element={<Game />} />
           <Route
             path="game/:shop/:objectId/achievements"

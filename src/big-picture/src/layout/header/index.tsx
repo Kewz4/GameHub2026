@@ -10,7 +10,12 @@ import {
   useState,
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { FocusItem, HorizontalFocusGroup, Typography } from "../../components";
+import {
+  FocusItem,
+  HorizontalFocusGroup,
+  Typography,
+  UserProfile,
+} from "../../components";
 import { IS_DESKTOP } from "../../constants";
 import { useNavigationScreenActions } from "../../hooks";
 import type { FocusOverrides } from "../../services";
@@ -365,6 +370,10 @@ function Header() {
               onChange={(event) => handleSearchChange(event.target.value)}
             />
           </form>
+
+          <div className="header__profile">
+            <UserProfile />
+          </div>
         </header>
       </HorizontalFocusGroup>
     </div>

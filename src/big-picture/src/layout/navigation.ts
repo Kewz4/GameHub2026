@@ -6,6 +6,8 @@ import { HOME_PAGE_REGION_ID } from "../pages/home/navigation";
 import { SETTINGS_PAGE_REGION_ID } from "../pages/settings/navigation";
 import { LIBRARY_PAGE_REGION_ID } from "../components/pages/library/navigation";
 import { CLOUD_SAVES_PAGE_REGION_ID } from "../pages/cloud-saves/navigation";
+import { PROFILE_PAGE_REGION_ID } from "../pages/profile/navigation";
+import { FRIENDS_PAGE_REGION_ID } from "../pages/friends/navigation";
 
 export const BIG_PICTURE_APP_LAYER_ID = "big-picture-app-layer";
 export const BIG_PICTURE_SHELL_REGION_ID = "big-picture-shell";
@@ -19,6 +21,8 @@ export const BIG_PICTURE_SIDEBAR_ITEM_IDS = {
   library: "big-picture-sidebar-library",
   cloudSaves: "big-picture-sidebar-cloud-saves",
   downloads: "big-picture-sidebar-downloads",
+  profile: "big-picture-sidebar-profile",
+  friends: "big-picture-sidebar-friends",
   settings: "big-picture-sidebar-settings",
   componentLab: "big-picture-sidebar-component-lab",
 } as const;
@@ -93,6 +97,14 @@ export function getBigPictureSidebarItemIdFromPathname(pathname: string) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.downloads;
   }
 
+  if (normalizedPathname.startsWith("/profile")) {
+    return BIG_PICTURE_SIDEBAR_ITEM_IDS.profile;
+  }
+
+  if (normalizedPathname.startsWith("/friends")) {
+    return BIG_PICTURE_SIDEBAR_ITEM_IDS.friends;
+  }
+
   if (normalizedPathname.startsWith("/settings")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.settings;
   }
@@ -127,6 +139,14 @@ export function getBigPictureContentEntryRegionIdFromPathname(
 
   if (normalizedPathname.startsWith("/downloads")) {
     return DOWNLOADS_PAGE_REGION_ID;
+  }
+
+  if (normalizedPathname.startsWith("/profile")) {
+    return PROFILE_PAGE_REGION_ID;
+  }
+
+  if (normalizedPathname.startsWith("/friends")) {
+    return FRIENDS_PAGE_REGION_ID;
   }
 
   if (normalizedPathname.startsWith("/settings")) {
