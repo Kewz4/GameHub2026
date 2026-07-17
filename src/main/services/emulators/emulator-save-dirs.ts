@@ -11,6 +11,10 @@ import { resolveWiiuTitleId } from "./cemu-graphic-packs";
 import { getPs2MemcardDirs } from "./ps2-memcard-dirs";
 import { getPs1MemcardDirs } from "./ps1-memcard-dirs";
 import { readGamesYml, buildPathToTitleIdIndex } from "./emulation-cloud-saves";
+import {
+  resolveConsoleSaveNeedle,
+  searchSaveTreeForNeedle,
+} from "./emulator-title-id";
 
 /**
  * Resolves the on-disk save-data folders for the folder-based standalone
@@ -194,6 +198,33 @@ const resolvePs3SaveSubfolders = async (
 };
 
 /**
+ * Generic per-title narrowing for the id-based folder emulators (Switch / 3DS /
+ * Wii): derive the game's platform id from its ROM, then search the save tree
+ * for the folder(s) named with it. Returns null when the id can't be read or no
+ * matching folder exists yet, so callers fall back to the console-wide root.
+ */
+const resolveNeedleMatches = async (
+  loc: EmulatorSaveLocation,
+  shop: GameShop,
+  objectId: string
+): Promise<string[] | null> => {
+  if (
+    loc.system !== "switch" &&
+    loc.system !== "n3ds" &&
+    loc.system !== "wii"
+  ) {
+    return null;
+  }
+  const game = await gamesSublevel
+    .get(levelKeys.game(shop, objectId))
+    .catch(() => null);
+  const needle = resolveConsoleSaveNeedle(loc.system, game?.executablePath);
+  if (!needle) return null;
+  const matches = searchSaveTreeForNeedle(loc.folders, needle);
+  return matches.length > 0 ? matches : null;
+};
+
+/**
  * Resolve the single best save folder to OPEN for a specific game. For Cemu we
  * narrow to the exact per-title folder (mlc01/usr/save/<high>/<low>/user) when
  * the game's title id is readable; otherwise (and for other emulators, whose
@@ -225,6 +256,11 @@ export const resolveEmulatorGameSaveFolder = async (
     const ps3 = await resolvePs3SaveSubfolders(loc, shop, objectId);
     if (ps3 && ps3.length > 0) return ps3[0];
   }
+
+  // Switch / 3DS / Wii: narrow to the game's own save folder by searching the
+  // save tree for its platform id (from the ROM). Falls back to console-wide.
+  const needleMatches = await resolveNeedleMatches(loc, shop, objectId);
+  if (needleMatches && needleMatches.length > 0) return needleMatches[0];
 
   // Prefer a root that already has saves; otherwise fall back to the first
   // configured root and CREATE it, so "Open save folder" always lands the user
@@ -310,6 +346,11 @@ export const resolveEmulatorBackupFolders = async (
     const ps3 = await resolvePs3SaveSubfolders(loc, shop, objectId);
     if (ps3 && ps3.length > 0) return ps3;
   }
+
+  // Switch / 3DS / Wii: back up only this game's save folder(s) when its id
+  // resolves and the folder exists — otherwise the whole console tree.
+  const needleMatches = await resolveNeedleMatches(loc, shop, objectId);
+  if (needleMatches && needleMatches.length > 0) return needleMatches;
 
   // Only back up roots that actually exist — a game that never saved simply has
   // nothing to back up (that's not an error). Filtering here also keeps Ludusavi
