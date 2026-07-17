@@ -73,10 +73,19 @@ export const getEmulatorSaveRoots = (
       return [
         path.join(installDir, "dev_hdd0", "home", "00000001", "savedata"),
       ];
-    case "pcsx2":
-      return getPs2MemcardDirs(executablePath ?? null);
-    case "duckstation":
-      return getPs1MemcardDirs();
+    case "pcsx2": {
+      // The memcard resolvers filter to dirs that EXIST, so before PCSX2 has
+      // created a card they return [] — which would make the whole save
+      // location resolve to null ("not found"). Fall back to the portable
+      // memcards dir so an installed-but-unused PCSX2 still has a valid,
+      // creatable save folder.
+      const dirs = getPs2MemcardDirs(executablePath ?? null);
+      return dirs.length ? dirs : [path.join(installDir, "memcards")];
+    }
+    case "duckstation": {
+      const dirs = getPs1MemcardDirs();
+      return dirs.length ? dirs : [path.join(installDir, "memcards")];
+    }
     case "ralibretro":
       // Flat per-ROM save files (.srm etc.) — small, backed up as one tree.
       return [path.join(installDir, "Saves")];
