@@ -1661,6 +1661,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("searchMinervaCatalogue", title, system),
   getConsoleHowLongToBeat: (title: string) =>
     ipcRenderer.invoke("getConsoleHowLongToBeat", title),
+  getConsoleGameMetadata: (title: string, objectId: string) =>
+    ipcRenderer.invoke("getConsoleGameMetadata", title, objectId),
   downloadSwitchKeys: () =>
     ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>

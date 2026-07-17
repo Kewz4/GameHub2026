@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { ConsoleGameMetadata } from "@types";
 
 // Embedded default IGDB (Twitch) app credentials so metadata works out of the
 // box without per-user setup. Users may override these in settings if they want
@@ -28,6 +29,105 @@ export interface IgdbGame {
   cover?: { url: string }; // Replace t_thumb with t_cover_big
   screenshots?: Array<{ url: string }>;
   platforms?: Array<{ id: number; name: string }>;
+  rating?: number;
+  rating_count?: number;
+  aggregated_rating?: number;
+  aggregated_rating_count?: number;
+  game_modes?: Array<{ name: string }>;
+  multiplayer_modes?: Array<{
+    offlinemax?: number;
+    offlinecoopmax?: number;
+    onlinemax?: number;
+    onlinecoopmax?: number;
+  }>;
+  language_supports?: Array<{
+    language?: { name: string };
+    language_support_type?: number;
+  }>;
+  collection?: { name: string; games?: Array<{ id: number; name: string }> };
+  franchises?: Array<{ name: string }>;
+  artworks?: Array<{ image_id: string }>;
+}
+
+// Shared Apicalypse `fields` clause. Kept in one place so search and by-id
+// lookups return the same shape (including the metadata fields the console
+// details page renders: scores, players, languages, series, box art).
+const GAME_FIELDS = [
+  "name",
+  "summary",
+  "first_release_date",
+  "genres.name",
+  "cover.url",
+  "screenshots.url",
+  "platforms.id",
+  "involved_companies.company.name",
+  "involved_companies.developer",
+  "involved_companies.publisher",
+  "rating",
+  "rating_count",
+  "aggregated_rating",
+  "aggregated_rating_count",
+  "game_modes.name",
+  "multiplayer_modes.offlinemax",
+  "multiplayer_modes.offlinecoopmax",
+  "multiplayer_modes.onlinemax",
+  "multiplayer_modes.onlinecoopmax",
+  "language_supports.language.name",
+  "language_supports.language_support_type",
+  "collection.name",
+  "collection.games.name",
+  "collection.games.id",
+  "franchises.name",
+  "artworks.image_id",
+].join(",");
+
+/**
+ * Normalize an IGDB game into the console-details metadata shape. Scores are
+ * rounded to whole numbers; local player count is the max across all
+ * multiplayer modes' offline maxima; the series lists sibling titles (minus the
+ * game itself); box art is drawn from IGDB `artworks`.
+ */
+export function extractConsoleMetadata(game: IgdbGame): ConsoleGameMetadata {
+  const round = (n?: number) =>
+    typeof n === "number" && n > 0 ? Math.round(n) : null;
+
+  const maxLocalPlayers =
+    (game.multiplayer_modes ?? [])
+      .flatMap((m) => [m.offlinecoopmax ?? 0, m.offlinemax ?? 0])
+      .reduce((max, n) => Math.max(max, n), 0) || null;
+
+  const languages = Array.from(
+    new Set(
+      (game.language_supports ?? [])
+        .map((l) => l.language?.name)
+        .filter((n): n is string => Boolean(n))
+    )
+  );
+
+  const series = game.collection?.name
+    ? {
+        name: game.collection.name,
+        titles: (game.collection.games ?? [])
+          .map((g) => g.name)
+          .filter((n) => n && n !== game.name),
+      }
+    : null;
+
+  const boxArtUrls = (game.artworks ?? []).map(
+    (a) =>
+      `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${a.image_id}.jpg`
+  );
+
+  return {
+    criticScore: round(game.aggregated_rating),
+    userScore: round(game.rating),
+    ratingCount: game.rating_count ?? null,
+    gameModes: (game.game_modes ?? []).map((m) => m.name).filter(Boolean),
+    maxLocalPlayers,
+    languages,
+    series,
+    boxArtUrls,
+  };
 }
 
 /** IGDB platform IDs for emulator systems */
@@ -112,7 +212,7 @@ class IgdbService {
         ? `\nwhere platforms = [${platformId}];`
         : "";
       const query = `search "${title.replace(/"/g, "")}";
-fields name,summary,first_release_date,genres.name,cover.url,screenshots.url,platforms.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher;${platformClause}
+fields ${GAME_FIELDS};${platformClause}
 limit 5;`;
 
       const resp = await axios.post<IgdbGame[]>(
@@ -232,7 +332,7 @@ limit 5;`;
     try {
       const creds = resolveCredentials(clientId, clientSecret);
       const token = await this.getToken(creds.clientId, creds.clientSecret);
-      const query = `fields name,summary,first_release_date,genres.name,cover.url,screenshots.url,platforms.id,involved_companies.company.name,involved_companies.developer,involved_companies.publisher;
+      const query = `fields ${GAME_FIELDS};
 where id = ${igdbId};
 limit 1;`;
 

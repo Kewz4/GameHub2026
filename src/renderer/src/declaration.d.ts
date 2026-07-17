@@ -1188,6 +1188,10 @@ declare global {
     getConsoleHowLongToBeat: (
       title: string
     ) => Promise<import("@types").HowLongToBeatCategory[] | null>;
+    getConsoleGameMetadata: (
+      title: string,
+      objectId: string
+    ) => Promise<import("@types").ConsoleGameMetadata | null>;
     downloadSwitchKeys: () => Promise<{
       keys: boolean;
       firmware: boolean;

@@ -26,6 +26,7 @@ import { useSubscription } from "@renderer/hooks/use-subscription";
 import "./sidebar.scss";
 import { GameLanguageSection } from "./game-language-section";
 import { ControllerSupportSection } from "./controller-support-section";
+import { ConsoleMetadataSection } from "./console-metadata-section";
 
 const ProtonDBSection = lazy(async () => {
   const mod = await import("./protondb-section");
@@ -367,9 +368,15 @@ export function Sidebar({
         </SidebarSection>
       )}
 
+      {/* IGDB-sourced details for emulated games: genre/dev/publisher/release,
+          review scores, players, languages, series, and box art. */}
+      <ConsoleMetadataSection />
+
       <ControllerSupportSection />
 
-      <GameLanguageSection />
+      {/* The generic language table only ever shows "English" for launchbox
+          games; ConsoleMetadataSection renders the richer IGDB language list. */}
+      {shop !== "launchbox" && <GameLanguageSection />}
     </aside>
   );
 }

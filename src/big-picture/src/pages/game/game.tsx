@@ -6,7 +6,7 @@ import {
   getSkuRegionFlag,
   type SkuRegion,
 } from "@renderer/helpers";
-import type { GameShop } from "@types";
+import type { ConsoleGameMetadata, GameShop } from "@types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { buildLibraryToastOptions, getItemFocusTarget } from "../../helpers";
@@ -423,6 +423,28 @@ export default function Game() {
     (shopDetails?.movies?.length ?? 0) > 0 ||
     (shopDetails?.screenshots?.length ?? 0) > 0;
   const isLaunchboxGame = shop === "launchbox";
+  const [consoleMeta, setConsoleMeta] = useState<ConsoleGameMetadata | null>(
+    null
+  );
+  const consoleMetaTitle = shopDetails?.name ?? "";
+  useEffect(() => {
+    if (!isLaunchboxGame || !consoleMetaTitle || !objectId) {
+      setConsoleMeta(null);
+      return;
+    }
+    let active = true;
+    globalThis.window.electron
+      .getConsoleGameMetadata(consoleMetaTitle, objectId)
+      .then((data) => {
+        if (active) setConsoleMeta(data);
+      })
+      .catch(() => {
+        if (active) setConsoleMeta(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isLaunchboxGame, consoleMetaTitle, objectId]);
   const developer = shopDetails?.developers?.[0] ?? "";
   const publisher = shopDetails?.publishers?.[0] ?? "";
   const releaseDate = shopDetails?.release_date?.date ?? "";
@@ -1441,6 +1463,64 @@ export default function Game() {
                         </Typography>
                       </div>
                     )}
+
+                    {isLaunchboxGame &&
+                    (consoleMeta?.criticScore != null ||
+                      consoleMeta?.userScore != null) ? (
+                      <div className="game-page__metadata-row">
+                        <Typography className="game-page__metadata-label">
+                          Score
+                        </Typography>
+                        <Typography className="game-page__metadata-value">
+                          {[
+                            consoleMeta?.criticScore != null
+                              ? `Critics ${consoleMeta.criticScore}`
+                              : null,
+                            consoleMeta?.userScore != null
+                              ? `Players ${consoleMeta.userScore}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </Typography>
+                      </div>
+                    ) : null}
+
+                    {isLaunchboxGame && consoleMeta?.maxLocalPlayers ? (
+                      <div className="game-page__metadata-row">
+                        <Typography className="game-page__metadata-label">
+                          Local players
+                        </Typography>
+                        <Typography className="game-page__metadata-value">
+                          {consoleMeta.maxLocalPlayers === 1
+                            ? "1 player"
+                            : `Up to ${consoleMeta.maxLocalPlayers}`}
+                        </Typography>
+                      </div>
+                    ) : null}
+
+                    {isLaunchboxGame &&
+                    (consoleMeta?.languages.length ?? 0) > 0 ? (
+                      <div className="game-page__metadata-row">
+                        <Typography className="game-page__metadata-label">
+                          Languages
+                        </Typography>
+                        <Typography className="game-page__metadata-value">
+                          {consoleMeta?.languages.slice(0, 8).join(", ")}
+                        </Typography>
+                      </div>
+                    ) : null}
+
+                    {isLaunchboxGame && consoleMeta?.series?.titles.length ? (
+                      <div className="game-page__metadata-row">
+                        <Typography className="game-page__metadata-label">
+                          More from {consoleMeta.series.name}
+                        </Typography>
+                        <Typography className="game-page__metadata-value">
+                          {consoleMeta.series.titles.slice(0, 6).join(", ")}
+                        </Typography>
+                      </div>
+                    ) : null}
                   </section>
                 </FocusItem>
 

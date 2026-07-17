@@ -360,6 +360,31 @@ export interface TrendingGame extends ShopAssets {
   uri: string;
 }
 
+/**
+ * Extra IGDB-sourced metadata for a console/emulated ("launchbox") game that
+ * isn't carried by the Steam-shaped `ShopDetails`: review scores, local player
+ * count, languages, the game's series, and box/additional art. Fetched by title
+ * and cached; every field is best-effort and may be null/empty.
+ */
+export interface ConsoleGameMetadata {
+  /** Aggregated critic score, 0–100. */
+  criticScore: number | null;
+  /** IGDB member score, 0–100. */
+  userScore: number | null;
+  /** Number of member ratings behind `userScore`. */
+  ratingCount: number | null;
+  /** e.g. "Single player", "Co-operative", "Multiplayer". */
+  gameModes: string[];
+  /** Max players in local/offline play, when IGDB reports it. */
+  maxLocalPlayers: number | null;
+  /** Distinct supported language names. */
+  languages: string[];
+  /** The game's series/collection and its other titles. */
+  series: { name: string; titles: string[] } | null;
+  /** Box-art / additional-artwork image URLs. */
+  boxArtUrls: string[];
+}
+
 export interface UserStatsPercentile {
   value: number;
   topPercentile: number;

@@ -1,6 +1,6 @@
 import { db } from "../level";
 import { normalizeRomTitle } from "@main/services/emulators/parse-rom-filename";
-import type { EmulatorSystem } from "@types";
+import type { ConsoleGameMetadata, EmulatorSystem } from "@types";
 
 /**
  * Pre-generated metadata for a console/emulated game, sourced from the hosted
@@ -26,6 +26,12 @@ export interface GameHubMetaEntry {
   developers?: string[];
   /** Publisher names (RAWG / IGDB). */
   publishers?: string[];
+  /**
+   * Extended IGDB metadata (scores, players, languages, series, box art) for
+   * the details page. Cached here after the first live lookup. `undefined`
+   * means "never fetched"; a value (even with empty fields) means "fetched".
+   */
+  extraMetadata?: ConsoleGameMetadata;
 }
 
 export const gamehubMetaSublevel = db.sublevel<string, GameHubMetaEntry>(
