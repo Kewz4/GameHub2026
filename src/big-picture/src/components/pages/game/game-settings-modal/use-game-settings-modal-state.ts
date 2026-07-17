@@ -339,6 +339,10 @@ export function useGameSettingsModalState({
     [game, refreshGameDetails, showErrorToast, t, updateCustomizationAsset]
   );
 
+  const handleRefreshCustomizationAssets = useCallback(async () => {
+    await refreshGameDetails();
+  }, [refreshGameDetails]);
+
   const handleClearCustomizationAsset = useCallback(
     async (assetType: CustomAssetType) => {
       if (!game) return;
@@ -719,6 +723,7 @@ export function useGameSettingsModalState({
       onBlurGameTitle: handleBlurGameTitle,
       onSelectAsset: handleSelectCustomizationAsset,
       onClearAsset: handleClearCustomizationAsset,
+      onRefreshAssets: handleRefreshCustomizationAssets,
     } satisfies GameCustomizationSettingsProps;
   }, [
     game,
@@ -726,6 +731,7 @@ export function useGameSettingsModalState({
     handleBlurGameTitle,
     handleChangeGameTitle,
     handleClearCustomizationAsset,
+    handleRefreshCustomizationAssets,
     handleSelectCustomizationAsset,
     updatingGameTitle,
   ]);

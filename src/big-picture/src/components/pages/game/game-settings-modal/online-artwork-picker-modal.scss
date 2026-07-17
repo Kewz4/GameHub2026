@@ -1,0 +1,123 @@
+.online-artwork-picker-modal {
+  width: min(1100px, 92vw);
+  max-width: 1100px;
+}
+
+.online-artwork-picker {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing-unit) * 4);
+  width: 100%;
+  min-width: 0;
+}
+
+.online-artwork-picker__controls {
+  flex-wrap: wrap;
+  gap: calc(var(--spacing-unit) * 3);
+}
+
+.online-artwork-picker__results {
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.online-artwork-picker__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--spacing-unit) * 2);
+  flex: 1;
+  min-height: 200px;
+  color: var(--muted, rgba(255, 255, 255, 0.6));
+  text-align: center;
+}
+
+.online-artwork-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: calc(var(--spacing-unit) * 3);
+  width: 100%;
+}
+
+.online-artwork-picker__item {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: var(--online-artwork-aspect, 2 / 3);
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: calc(var(--spacing-unit) * 2);
+  background: var(--surface, rgba(255, 255, 255, 0.04));
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease-in-out,
+    box-shadow 0.15s ease-in-out,
+    transform 0.15s ease-in-out;
+
+  &:hover,
+  &:focus-visible,
+  &[data-focus-visible="true"] {
+    outline: none;
+    border-color: var(--primary, rgba(255, 255, 255, 0.9));
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
+    transform: scale(1.02);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    user-select: none;
+  }
+
+  &--transparent {
+    background-image:
+      linear-gradient(45deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(255, 255, 255, 0.05) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.05) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.05) 75%);
+    background-position:
+      0 0,
+      0 10px,
+      10px -10px,
+      -10px 0;
+    background-size: 20px 20px;
+
+    img {
+      object-fit: contain;
+    }
+  }
+}
+
+.online-artwork-picker__item-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.online-artwork-picker__spinner {
+  animation: online-artwork-picker-spin 1s linear infinite;
+}
+
+@keyframes online-artwork-picker-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

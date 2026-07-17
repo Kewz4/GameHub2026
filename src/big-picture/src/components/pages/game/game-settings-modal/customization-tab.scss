@@ -99,6 +99,13 @@
   }
 }
 
+.game-customization-settings-tab__online-artwork {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: calc(var(--spacing-unit) * 3);
+}
+
 .game-customization-settings-tab__asset-preview-image {
   display: block;
   width: 100%;

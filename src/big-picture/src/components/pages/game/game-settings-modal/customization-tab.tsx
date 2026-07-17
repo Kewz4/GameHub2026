@@ -5,6 +5,7 @@ import { Trash } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Button,
   FocusItem,
   Input,
   Tabs,
@@ -13,8 +14,17 @@ import {
 } from "../../../common";
 import { resolvePreferredGameAssets } from "../../../../helpers";
 import { SettingsSection } from "../../../../pages/settings/settings-section";
+import { OnlineArtworkPickerModal } from "./online-artwork-picker-modal";
 
 import "./customization-tab.scss";
+
+type OnlineArtworkAssetType = "cover" | "hero" | "logo" | "icon";
+
+const ASSET_TAB_TO_ONLINE_TYPE: Record<AssetTab, OnlineArtworkAssetType> = {
+  icon: "icon",
+  logo: "logo",
+  hero: "hero",
+};
 
 export const GAME_CUSTOMIZATION_SETTINGS_PRIMARY_CONTROL_ID =
   "game-customization-settings-primary-control";
@@ -44,6 +54,7 @@ export interface GameCustomizationSettingsProps {
   onBlurGameTitle: () => Promise<void>;
   onSelectAsset: (assetType: AssetTab) => Promise<void>;
   onClearAsset: (assetType: AssetTab) => Promise<void>;
+  onRefreshAssets: () => Promise<void>;
 }
 
 function getAssetPreviewState(game: LibraryGame): AssetPreviewState {
@@ -119,9 +130,11 @@ export function GameCustomizationSettingsTab({
   onBlurGameTitle,
   onSelectAsset,
   onClearAsset,
+  onRefreshAssets,
 }: Readonly<GameCustomizationSettingsProps>) {
   const { t } = useTranslation("big_picture");
   const [selectedAssetTab, setSelectedAssetTab] = useState<AssetTab>("icon");
+  const [isOnlinePickerVisible, setIsOnlinePickerVisible] = useState(false);
   const [hasAssetTabsInteracted, setHasAssetTabsInteracted] = useState(false);
   const [assetPreviewState, setAssetPreviewState] = useState<AssetPreviewState>(
     () => getAssetPreviewState(game)
@@ -286,8 +299,29 @@ export function GameCustomizationSettingsTab({
               </button>
             </FocusItem>
           </div>
+
+          <div className="game-customization-settings-tab__online-artwork">
+            <Button
+              variant="secondary"
+              onClick={() => setIsOnlinePickerVisible(true)}
+            >
+              {t("edit_game_modal_browse_online_artwork", {
+                defaultValue: "Browse online artwork",
+              })}
+            </Button>
+          </div>
         </div>
       </SettingsSection>
+
+      <OnlineArtworkPickerModal
+        visible={isOnlinePickerVisible}
+        onClose={() => setIsOnlinePickerVisible(false)}
+        shop={game.shop}
+        objectId={game.objectId}
+        title={gameTitle.trim() || game.title || ""}
+        initialAssetType={ASSET_TAB_TO_ONLINE_TYPE[selectedAssetTab]}
+        onArtworkApplied={onRefreshAssets}
+      />
     </VerticalFocusGroup>
   );
 }
