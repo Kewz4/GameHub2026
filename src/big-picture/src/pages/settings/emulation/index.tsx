@@ -21,6 +21,7 @@ import {
 } from "../settings-navigation";
 import { CloudSavesSection } from "./cloud-saves-section";
 import { MemoryCardsSection } from "./memory-cards-section";
+import { EmulatorSetupModal } from "./setup/emulator-setup-modal";
 import "./styles.scss";
 
 const SYSTEMS: EmulatorSystem[] = [
@@ -156,9 +157,9 @@ function ConsoleOverviewCard({
         <span className="emulation-settings__console-label">
           {SYSTEM_LABELS[system]}
         </span>
-        {detected && (
-          <span className="emulation-settings__console-badge">Configured</span>
-        )}
+        <span className="emulation-settings__console-badge">
+          {detected ? "Configured ✓ · Manage" : "Set up"}
+        </span>
       </button>
     </FocusItem>
   );
@@ -236,6 +237,7 @@ export function EmulationSettingsSection() {
   const { setFocus } = useNavigationActions();
   const [configs, setConfigs] = useState<EmulatorConfigMap | null>(null);
   const [activeSystem, setActiveSystem] = useState<EmulatorSystem | null>(null);
+  const [setupSystem, setSetupSystem] = useState<EmulatorSystem | null>(null);
 
   const refresh = useCallback(async () => {
     const next = await globalThis.window.electron.getEmulatorConfigs();
@@ -279,6 +281,31 @@ export function EmulationSettingsSection() {
     await refresh();
   }, [refresh]);
 
+  const handleSelectSystem = useCallback(
+    (system: EmulatorSystem) => {
+      const config = configs?.[system];
+      const detected = config?.detectedAt != null;
+      // Configured PS1/PS2 have a dedicated management view (memory cards +
+      // cloud saves); everything else opens the guided setup/manage wizard.
+      if (detected && (system === "ps1" || system === "ps2")) {
+        setActiveSystem(system);
+      } else {
+        setSetupSystem(system);
+      }
+    },
+    [configs]
+  );
+
+  const handleSetupClose = useCallback(async () => {
+    setSetupSystem(null);
+    await refresh();
+  }, [refresh]);
+
+  const handleSetupComplete = useCallback(async () => {
+    setSetupSystem(null);
+    await refresh();
+  }, [refresh]);
+
   if (activeSystem && configs) {
     return (
       <EmulationDetail config={configs[activeSystem]} onBack={handleBack} />
@@ -316,10 +343,19 @@ export function EmulationSettingsSection() {
             system={system}
             config={config}
             focusId={focusId}
-            onSelect={() => setActiveSystem(system)}
+            onSelect={() => handleSelectSystem(system)}
           />
         ))}
       </GridFocusGroup>
+
+      <EmulatorSetupModal
+        visible={setupSystem !== null}
+        system={setupSystem}
+        systemLabel={setupSystem ? SYSTEM_LABELS[setupSystem] : ""}
+        initialConfig={setupSystem ? (configs[setupSystem] ?? null) : null}
+        onClose={handleSetupClose}
+        onComplete={handleSetupComplete}
+      />
     </div>
   );
 }
