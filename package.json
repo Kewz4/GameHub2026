@@ -1,6 +1,6 @@
 {
   "name": "hydralauncher",
-  "version": "1.0.84",
+  "version": "1.0.85",
   "description": "GameHub",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
