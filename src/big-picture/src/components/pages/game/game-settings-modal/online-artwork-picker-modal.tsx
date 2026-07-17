@@ -1,12 +1,13 @@
 import type { GameShop } from "@types";
 import { SpinnerIcon } from "@phosphor-icons/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Button,
   DropdownSelect,
   FocusItem,
   GridFocusGroup,
   HorizontalFocusGroup,
+  Input,
   Modal,
   VerticalFocusGroup,
 } from "../../../common";
@@ -52,6 +53,7 @@ const ASSET_ASPECT = (assetType: ArtworkAssetType) =>
   ASSET_TYPES.find((asset) => asset.key === assetType)!.aspect;
 
 const ONLINE_ARTWORK_PICKER_SEARCH_ID = "online-artwork-picker-search";
+const ONLINE_ARTWORK_PICKER_NAME_ID = "online-artwork-picker-name";
 const ONLINE_ARTWORK_PICKER_GRID_REGION_ID = "online-artwork-picker-grid";
 
 export interface OnlineArtworkPickerModalProps {
@@ -78,6 +80,9 @@ export function OnlineArtworkPickerModal({
   const [assetType, setAssetType] =
     useState<ArtworkAssetType>(initialAssetType);
   const [source, setSource] = useState<ArtworkSource>("steamgriddb");
+  // Editable search title so a mis-titled game (wrong assets) can be corrected
+  // by searching under a different name. Defaults to the game's own title.
+  const [searchTitle, setSearchTitle] = useState(title);
   const [options, setOptions] = useState<ArtworkOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [applyingUrl, setApplyingUrl] = useState<string | null>(null);
@@ -89,10 +94,17 @@ export function OnlineArtworkPickerModal({
     if (!visible) return;
     setAssetType(initialAssetType);
     setSource(SOURCES_FOR[initialAssetType][0]);
+    setSearchTitle(title);
     setOptions([]);
     setHasSearched(false);
     setApplyingUrl(null);
-  }, [visible, initialAssetType]);
+  }, [visible, initialAssetType, title]);
+
+  // Read the latest search title without making it a loadOptions dependency, so
+  // typing in the name field doesn't fire a search on every keystroke (only the
+  // Search button / Enter does).
+  const searchTitleRef = useRef(searchTitle);
+  searchTitleRef.current = searchTitle;
 
   const loadOptions = useCallback(async () => {
     setIsLoading(true);
@@ -101,7 +113,7 @@ export function OnlineArtworkPickerModal({
       const results = await globalThis.window.electron.searchGameArtwork({
         shop,
         objectId,
-        title,
+        title: searchTitleRef.current.trim() || title,
         assetType,
         source,
       });
@@ -201,6 +213,17 @@ export function OnlineArtworkPickerModal({
             onValueChange={(next) => setSource(next)}
           />
 
+          <Input
+            label="Name"
+            focusId={ONLINE_ARTWORK_PICKER_NAME_ID}
+            placeholder={title}
+            value={searchTitle}
+            onChange={(event) => setSearchTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !isLoading) void loadOptions();
+            }}
+          />
+
           <Button
             variant="secondary"
             loading={isLoading}
@@ -209,7 +232,7 @@ export function OnlineArtworkPickerModal({
               void loadOptions();
             }}
           >
-            Refresh
+            Search
           </Button>
         </HorizontalFocusGroup>
 

@@ -54,6 +54,9 @@ export function ArtworkSourcePicker({
 
   const [assetType, setAssetType] = useState<AssetType>("cover");
   const [source, setSource] = useState<ArtworkSource>("steamgriddb");
+  // Editable search title so a mis-titled game (wrong assets) can be corrected
+  // by searching under a different name. Defaults to the game's own title.
+  const [searchTitle, setSearchTitle] = useState(title);
   const [options, setOptions] = useState<ArtworkOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [applyingUrl, setApplyingUrl] = useState<string | null>(null);
@@ -80,7 +83,7 @@ export function ArtworkSourcePicker({
       const results = await window.electron.searchGameArtwork({
         shop,
         objectId,
-        title,
+        title: searchTitle.trim() || title,
         assetType,
         source,
       });
@@ -93,7 +96,7 @@ export function ArtworkSourcePicker({
     } finally {
       setIsLoading(false);
     }
-  }, [assetType, objectId, shop, showErrorToast, source, title]);
+  }, [assetType, objectId, shop, showErrorToast, source, searchTitle, title]);
 
   const handleApply = useCallback(
     async (option: ArtworkOption) => {
@@ -146,6 +149,35 @@ export function ArtworkSourcePicker({
               {type.label}
             </button>
           ))}
+        </div>
+
+        <div className="artwork-picker__search-row">
+          <label
+            htmlFor="artwork-search-name"
+            className="artwork-picker__label"
+          >
+            {t("artwork_search_name", { defaultValue: "Search name" })}
+          </label>
+          <input
+            id="artwork-search-name"
+            type="text"
+            className="artwork-picker__search-input"
+            value={searchTitle}
+            placeholder={title}
+            onChange={(e) => setSearchTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !isLoading) loadOptions();
+            }}
+          />
+          {searchTitle.trim() !== title && (
+            <Button
+              type="button"
+              theme="outline"
+              onClick={() => setSearchTitle(title)}
+            >
+              {t("reset_name", { defaultValue: "Reset" })}
+            </Button>
+          )}
         </div>
 
         <div className="artwork-picker__source-row">
