@@ -441,10 +441,35 @@
       gap: calc(var(--spacing-unit) * 2);
       flex-wrap: wrap;
       flex: none;
+      align-items: center;
 
       .source-anchor {
         background-color: var(--secondary);
       }
+    }
+
+    // Platform logo chip for console/classics results (white wordmark on a
+    // dark chip, legible in any theme).
+    &__platform-chip {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    &__platform-chip-logo {
+      display: block;
+      height: 11px;
+      max-width: 72px;
+      object-fit: contain;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 22px;
+      color: #fff;
+      white-space: nowrap;
     }
   }
 }

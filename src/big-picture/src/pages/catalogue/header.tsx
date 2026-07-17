@@ -10,11 +10,18 @@ import { useNavigationActions } from "../../hooks";
 import { useNavigationStore } from "../../stores";
 import {
   CATALOGUE_CLEAR_FILTERS_ID,
+  CATALOGUE_CONSOLE_SELECT_ID,
   CATALOGUE_HEADER_CONTROLS_REGION_ID,
+  CATALOGUE_PLATFORM_SELECT_ID,
   CATALOGUE_SORT_SELECT_ID,
   getCatalogueActiveFilterChipFocusId,
   getCatalogueFilterHeaderFocusId,
 } from "./navigation";
+import {
+  CONSOLE_FILTER_SYSTEMS,
+  CONSOLE_LABELS,
+} from "@renderer/pages/library/console-filter";
+import type { EmulatorSystem } from "@types";
 import {
   CATALOGUE_SORT_OPTIONS,
   type CatalogueSortValue,
@@ -28,6 +35,10 @@ interface HeaderProps {
   values: SearchGamesFormValues;
   updateSearchParams: (newValues: Partial<SearchGamesFormValues>) => void;
   catalogueData: CatalogueData;
+  platform: "" | "pc" | "console";
+  consoleSystem: "" | EmulatorSystem;
+  setPlatform: (next: "" | "pc" | "console") => void;
+  setConsoleSystem: (next: "" | EmulatorSystem) => void;
 }
 
 interface FilterItem {
@@ -40,6 +51,10 @@ export function CatalogueHeader({
   values,
   updateSearchParams,
   catalogueData,
+  platform,
+  consoleSystem,
+  setPlatform,
+  setConsoleSystem,
 }: Readonly<HeaderProps>) {
   const {
     title,
@@ -104,6 +119,8 @@ export function CatalogueHeader({
   const headerFocusIds = [
     ...chipFocusIds,
     ...(activeFilters.length > 0 ? [CATALOGUE_CLEAR_FILTERS_ID] : []),
+    CATALOGUE_PLATFORM_SELECT_ID,
+    ...(platform === "console" ? [CATALOGUE_CONSOLE_SELECT_ID] : []),
     CATALOGUE_SORT_SELECT_ID,
   ];
   const navigationOverridesById = useCatalogueHeaderNavigation(headerFocusIds);
@@ -232,6 +249,50 @@ export function CatalogueHeader({
       </div>
 
       <div className="catalogue-header__sort">
+        <DropdownSelect
+          className="catalogue-header__sort-select"
+          label="Platform"
+          hideLabel
+          ariaLabel="Filter by platform"
+          focusId={CATALOGUE_PLATFORM_SELECT_ID}
+          focusNavigationOverrides={
+            navigationOverridesById[CATALOGUE_PLATFORM_SELECT_ID]
+          }
+          value={platform || "all"}
+          options={[
+            { value: "all", label: "All Platforms" },
+            { value: "pc", label: "PC" },
+            { value: "console", label: "Console" },
+          ]}
+          onValueChange={(value) =>
+            setPlatform(value === "all" ? "" : (value as "pc" | "console"))
+          }
+        />
+
+        {platform === "console" && (
+          <DropdownSelect
+            className="catalogue-header__sort-select"
+            label="Console"
+            hideLabel
+            ariaLabel="Filter by console system"
+            focusId={CATALOGUE_CONSOLE_SELECT_ID}
+            focusNavigationOverrides={
+              navigationOverridesById[CATALOGUE_CONSOLE_SELECT_ID]
+            }
+            value={consoleSystem || "all"}
+            options={[
+              { value: "all", label: "All consoles" },
+              ...CONSOLE_FILTER_SYSTEMS.map((system) => ({
+                value: system,
+                label: CONSOLE_LABELS[system] ?? system,
+              })),
+            ]}
+            onValueChange={(value) =>
+              setConsoleSystem(value === "all" ? "" : (value as EmulatorSystem))
+            }
+          />
+        )}
+
         <DropdownSelect
           className="catalogue-header__sort-select"
           label="Sort by"

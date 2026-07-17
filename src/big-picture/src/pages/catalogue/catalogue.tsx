@@ -37,6 +37,10 @@ export default function Catalogue() {
     pageSize,
     totalPages,
     changePage,
+    platform,
+    consoleSystem,
+    setPlatform,
+    setConsoleSystem,
   } = useCatalogueData();
 
   const handlePageChange = useCallback(
@@ -126,6 +130,10 @@ export default function Catalogue() {
             values={values}
             updateSearchParams={updateSearchParams}
             catalogueData={catalogueData}
+            platform={platform}
+            consoleSystem={consoleSystem}
+            setPlatform={setPlatform}
+            setConsoleSystem={setConsoleSystem}
           />
 
           <div className="catalogue-content">

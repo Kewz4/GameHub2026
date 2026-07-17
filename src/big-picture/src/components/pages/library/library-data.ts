@@ -32,7 +32,8 @@ export type LibrarySecondaryFilter =
   | "ubisoft"
   | "ea"
   | "retigga"
-  | "custom";
+  | "custom"
+  | "console";
 
 /** Platform shops that map 1:1 to a `GameShop` value (owned-on-platform). */
 export const PLATFORM_FILTER_SHOPS = [
@@ -209,6 +210,11 @@ export function filterLibraryBySecondaryFilter(
   // Custom = manually added games.
   if (selectedFilter === "custom") {
     return library.filter((game) => getGameOrigin(game) === "custom");
+  }
+
+  // Console = emulated/ROM games (shop "launchbox").
+  if (selectedFilter === "console") {
+    return library.filter((game) => game.shop === "launchbox");
   }
 
   return library;

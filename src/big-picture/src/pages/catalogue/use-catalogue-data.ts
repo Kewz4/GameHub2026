@@ -2,6 +2,7 @@ import type {
   CatalogueSearchPayload,
   CatalogueSearchResult,
   DownloadSource,
+  EmulatorSystem,
 } from "@types";
 import { levelDBService } from "@renderer/services/leveldb.service";
 import axios from "axios";
@@ -223,6 +224,41 @@ export function useCatalogueData() {
     };
   }, [searchParams]);
 
+  // Platform filter (All / PC / Console) + optional console-system, mirroring
+  // the desktop catalogue. Kept in the URL like every other filter.
+  const platform = (searchParams.get("platform") ?? "") as
+    | ""
+    | "pc"
+    | "console";
+  const consoleSystem = (searchParams.get("consoleSystem") ?? "") as
+    | ""
+    | EmulatorSystem;
+
+  const setPlatform = useCallback(
+    (next: "" | "pc" | "console") => {
+      setSearchParams((current) => {
+        const params = new URLSearchParams(current);
+        if (next) params.set("platform", next);
+        else params.delete("platform");
+        params.delete("consoleSystem");
+        return params;
+      });
+    },
+    [setSearchParams]
+  );
+
+  const setConsoleSystem = useCallback(
+    (next: "" | EmulatorSystem) => {
+      setSearchParams((current) => {
+        const params = new URLSearchParams(current);
+        if (next) params.set("consoleSystem", next);
+        else params.delete("consoleSystem");
+        return params;
+      });
+    },
+    [setSearchParams]
+  );
+
   useEffect(() => {
     setPage(1);
   }, [
@@ -235,6 +271,8 @@ export function useCatalogueData() {
     values.sortOrder,
     values.tags,
     pageSize,
+    platform,
+    consoleSystem,
   ]);
 
   const updateSearchParams = useCallback(
@@ -343,25 +381,61 @@ export function useCatalogueData() {
           deckCompatibility: [],
         };
 
-        const response =
-          await globalThis.window.electron.hydraApi.post<SearchGamesResponseData>(
-            "/catalogue/search",
-            {
-              data: {
-                ...payload,
-                downloadSourceIds,
-                take: pageSize,
-                skip: (page - 1) * pageSize,
-              },
-              needsAuth: false,
-            }
-          );
+        const isConsoleOnly = platform === "console";
+        const isPcOnly = platform === "pc";
+        // Console/classics games (GameHub Vault) merge into the grid on page 1
+        // unless the user is in PC-only mode. In console-only mode the classics
+        // ARE the results and the PC search is skipped.
+        const hasPcOnlyFilters =
+          (values.genres?.length ?? 0) > 0 ||
+          (values.tags?.length ?? 0) > 0 ||
+          (values.publishers?.length ?? 0) > 0 ||
+          (values.developers?.length ?? 0) > 0 ||
+          (values.downloadSourceFingerprints?.length ?? 0) > 0;
+        const wantClassics =
+          !isPcOnly &&
+          page === 1 &&
+          !hasPcOnlyFilters &&
+          (isConsoleOnly || Boolean(deferredTitle.trim()));
+
+        const [response, classics] = await Promise.all([
+          isConsoleOnly
+            ? Promise.resolve<SearchGamesResponseData>({ edges: [], count: 0 })
+            : globalThis.window.electron.hydraApi.post<SearchGamesResponseData>(
+                "/catalogue/search",
+                {
+                  data: {
+                    ...payload,
+                    downloadSourceIds,
+                    take: pageSize,
+                    skip: (page - 1) * pageSize,
+                  },
+                  needsAuth: false,
+                }
+              ),
+          wantClassics
+            ? globalThis.window.electron
+                .searchClassicsCatalogue(
+                  deferredTitle,
+                  consoleSystem ? 200 : 100,
+                  (consoleSystem || undefined) as EmulatorSystem | undefined
+                )
+                .catch(() => [] as CatalogueSearchResult[])
+            : Promise.resolve([] as CatalogueSearchResult[]),
+        ]);
 
         if (cancelled) return;
 
+        const merged: SearchGamesResponseData = isConsoleOnly
+          ? { edges: classics, count: classics.length }
+          : {
+              edges: [...classics, ...response.edges],
+              count: response.count + classics.length,
+            };
+
         const lastAvailablePage = Math.max(
           1,
-          Math.ceil(response.count / pageSize)
+          Math.ceil(merged.count / pageSize)
         );
 
         if (page > lastAvailablePage) {
@@ -370,7 +444,7 @@ export function useCatalogueData() {
           return;
         }
 
-        setSearchData(response);
+        setSearchData(merged);
         setSearchError(null);
       } catch (error) {
         if (cancelled) return;
@@ -403,6 +477,8 @@ export function useCatalogueData() {
     downloadSourceIds,
     page,
     pageSize,
+    platform,
+    consoleSystem,
   ]);
 
   const downloadSourcesAndFingerprints = useMemo(() => {
@@ -462,6 +538,10 @@ export function useCatalogueData() {
     values,
     updateSearchParams,
     catalogueData,
+    platform,
+    consoleSystem,
+    setPlatform,
+    setConsoleSystem,
     search: {
       data: searchData,
       isLoading: isLoadingSearch,

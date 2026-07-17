@@ -78,6 +78,7 @@ const PLATFORM_PILLS = [
   { value: "ea", label: "EA" },
   { value: "retigga", label: "Retigga" },
   { value: "custom", label: "Custom" },
+  { value: "console", label: "Console" },
 ] satisfies Array<{ value: LibrarySecondaryFilter; label: string }>;
 
 const PLATFORM_FILTER_VALUES = new Set<LibrarySecondaryFilter>(

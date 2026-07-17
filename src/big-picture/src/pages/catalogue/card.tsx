@@ -1,4 +1,4 @@
-import type { CatalogueSearchResult } from "@types";
+import type { CatalogueSearchResult, EmulatorSystem } from "@types";
 import { QuestionIcon } from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -6,6 +6,16 @@ import { FocusItem, SourceAnchor, Typography } from "../../components";
 import { getBigPictureGameDetailsPath } from "../../helpers";
 import type { FocusOverrides } from "../../services";
 import { getCatalogueCardFocusId } from "./navigation";
+import { PlatformLogo } from "@renderer/pages/settings/emulation/platform-logo";
+import { PLATFORM_LABELS } from "@renderer/assets/emulation/platform-logos";
+
+/** Console/classics results are shop "launchbox" with objectId minerva:<system>:… */
+function systemForResult(game: CatalogueSearchResult): EmulatorSystem | null {
+  if (game.shop !== "launchbox") return null;
+  if (!game.objectId.startsWith("minerva:")) return null;
+  const seg = game.objectId.split(":")[1];
+  return seg in PLATFORM_LABELS ? (seg as EmulatorSystem) : null;
+}
 
 interface CardProps {
   game: CatalogueSearchResult;
@@ -21,6 +31,8 @@ export function CatalogueCard({
   const uniqueDownloadSources = useMemo(() => {
     return Array.from(new Set(game.downloadSources));
   }, [game.downloadSources]);
+
+  const platformSystem = useMemo(() => systemForResult(game), [game]);
 
   const gamePath = getBigPictureGameDetailsPath({
     shop: game.shop,
@@ -80,6 +92,18 @@ export function CatalogueCard({
 
             {uniqueDownloadSources.length > 3 ? (
               <SourceAnchor title={`+${uniqueDownloadSources.length - 3}`} />
+            ) : null}
+
+            {platformSystem ? (
+              <span
+                className="catalogue-card__platform-chip"
+                title={PLATFORM_LABELS[platformSystem]}
+              >
+                <PlatformLogo
+                  system={platformSystem}
+                  className="catalogue-card__platform-chip-logo"
+                />
+              </span>
             ) : null}
           </div>
         </div>
