@@ -38,11 +38,14 @@ const getGameSaveFolder = async (
   try {
     // Console/emulator games keep their saves in the emulator's save tree, not
     // in the Ludusavi PC manifest — resolve that first (per-title for Cemu).
+    // The resolver creates the folder if the emulator is installed but the game
+    // hasn't saved yet, so a non-null result is always a valid folder to open —
+    // we no longer require it to pre-exist (which caused false "not found").
     const emulatorSave = await resolveEmulatorGameSaveFolder(
       shop,
       objectId
     ).catch(() => null);
-    if (emulatorSave && fs.existsSync(emulatorSave)) {
+    if (emulatorSave) {
       return emulatorSave;
     }
 

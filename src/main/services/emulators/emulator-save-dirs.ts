@@ -102,14 +102,20 @@ export const systemForGame = async (
 export interface EmulatorSaveLocation {
   system: EmulatorSystem;
   binary: string;
-  /** Existing save-root folders on disk to back up. */
+  /**
+   * ALL configured save-root folders for this emulator. May include folders that
+   * don't exist on disk yet (the game hasn't saved, or the emulator creates the
+   * dir lazily on first run) — consumers decide: "open folder" creates it,
+   * backup skips the ones that don't exist.
+   */
   folders: string[];
 }
 
 /**
- * Resolve the existing emulator save folders for a console game. Returns null
- * when the game isn't a folder-based console game or its emulator isn't
- * installed. Folder granularity is per-console (the emulator's whole save tree),
+ * Resolve the emulator save folders for a console game. Returns null ONLY when
+ * the game's emulator system can't be determined or the emulator isn't
+ * installed (both genuinely unresolvable) — NOT merely because no save exists
+ * yet. Folder granularity is per-console (the emulator's whole save tree),
  * which is robust without a per-title-ID database — restoring merges the tree.
  */
 export const resolveEmulatorSaveLocation = async (
@@ -125,12 +131,14 @@ export const resolveEmulatorSaveLocation = async (
   }
 
   const installDir = path.dirname(config.executablePath);
+  // Keep every configured root, even if it doesn't exist yet — a game that
+  // hasn't been played has no save folder, but the location is still known.
   const folders = getEmulatorSaveRoots(
     system,
     installDir,
     config.binary,
     config.executablePath
-  ).filter((dir) => fs.existsSync(dir));
+  );
   if (folders.length === 0) return null;
 
   return {
@@ -166,7 +174,23 @@ export const resolveEmulatorGameSaveFolder = async (
     }
   }
 
-  return loc.folders[0] ?? null;
+  // Prefer a root that already has saves; otherwise fall back to the first
+  // configured root and CREATE it, so "Open save folder" always lands the user
+  // in the right (possibly empty) place instead of failing with "not found"
+  // just because this game hasn't saved yet. The emulator is installed (checked
+  // in resolveEmulatorSaveLocation), so this dir is the correct location.
+  const target =
+    loc.folders.find((dir) => fs.existsSync(dir)) ?? loc.folders[0];
+  if (!target) return null;
+  if (!fs.existsSync(target)) {
+    try {
+      fs.mkdirSync(target, { recursive: true });
+    } catch {
+      // If we can't create it, still return the path — the opener will surface
+      // the real OS error rather than a misleading "not found".
+    }
+  }
+  return target;
 };
 
 /**
@@ -223,8 +247,13 @@ export const resolveEmulatorBackupFolders = async (
 
   if (loc.system === "wiiu") {
     const specific = await resolveEmulatorGameSaveFolder(shop, objectId);
-    if (specific && specific !== loc.folders[0]) return [specific];
+    if (specific && specific !== loc.folders[0] && fs.existsSync(specific)) {
+      return [specific];
+    }
   }
 
-  return loc.folders;
+  // Only back up roots that actually exist — a game that never saved simply has
+  // nothing to back up (that's not an error). Filtering here also keeps Ludusavi
+  // from registering phantom paths.
+  return loc.folders.filter((dir) => fs.existsSync(dir));
 };
