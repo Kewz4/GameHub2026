@@ -330,6 +330,32 @@
     font-size: 16px;
   }
 
+  &__metadata-series {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  &__metadata-series-chip {
+    font-family: inherit;
+    font-size: 14px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text);
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
+
+    &:hover {
+      background: var(--accent, rgba(124, 131, 255, 0.35));
+      border-color: var(--accent, #7c83ff);
+    }
+  }
+
   &__metadata-flags {
     display: flex;
     flex-wrap: wrap;

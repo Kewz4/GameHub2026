@@ -1,6 +1,9 @@
 import { useContext, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ConsoleGameMetadata } from "@types";
 import { gameDetailsContext } from "@renderer/context/game-details/game-details.context";
+import { useAppDispatch } from "@renderer/hooks";
+import { setFilters } from "@renderer/features";
 import { SidebarSection } from "../sidebar-section/sidebar-section";
 import "./console-metadata-section.scss";
 
@@ -18,6 +21,15 @@ export function ConsoleMetadataSection() {
   const { shop, gameTitle, objectId, shopDetails } =
     useContext(gameDetailsContext);
   const [meta, setMeta] = useState<ConsoleGameMetadata | null>(null);
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  // Search the catalogue for a series sibling by title (same path the header
+  // search uses): set the title filter, then land on the catalogue page.
+  const searchCatalogue = (searchTitle: string) => {
+    dispatch(setFilters({ title: searchTitle.slice(0, 255) }));
+    navigate("/catalogue");
+  };
 
   useEffect(() => {
     if (shop !== "launchbox" || !gameTitle || !objectId) {
@@ -167,9 +179,15 @@ export function ConsoleMetadataSection() {
         <SidebarSection title={`More from ${series.name}`}>
           <div className="console-meta__chips">
             {series.titles.slice(0, 12).map((title) => (
-              <span key={title} className="console-meta__chip" title={title}>
+              <button
+                key={title}
+                type="button"
+                className="console-meta__chip console-meta__chip--button"
+                title={`Search for ${title}`}
+                onClick={() => searchCatalogue(title)}
+              >
                 {title}
-              </span>
+              </button>
             ))}
           </div>
         </SidebarSection>

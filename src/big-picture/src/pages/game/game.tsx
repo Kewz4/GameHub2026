@@ -1516,9 +1516,27 @@ export default function Game() {
                         <Typography className="game-page__metadata-label">
                           More from {consoleMeta.series.name}
                         </Typography>
-                        <Typography className="game-page__metadata-value">
-                          {consoleMeta.series.titles.slice(0, 6).join(", ")}
-                        </Typography>
+                        <div className="game-page__metadata-series">
+                          {consoleMeta.series.titles
+                            .slice(0, 6)
+                            .map((seriesTitle) => (
+                              <button
+                                key={seriesTitle}
+                                type="button"
+                                className="game-page__metadata-series-chip"
+                                title={`Search for ${seriesTitle}`}
+                                onClick={() =>
+                                  navigate(
+                                    `/big-picture/catalogue?title=${encodeURIComponent(
+                                      seriesTitle
+                                    )}`
+                                  )
+                                }
+                              >
+                                {seriesTitle}
+                              </button>
+                            ))}
+                        </div>
                       </div>
                     ) : null}
                   </section>
