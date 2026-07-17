@@ -212,11 +212,21 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   const finishCapture = useCallback((control: PadControl, token: string) => {
     captureRef.current = null;
     setCapturing(null);
-    setProfile((prev) =>
-      prev
-        ? { ...prev, bindings: { ...prev.bindings, [control]: token } }
-        : prev
-    );
+    setProfile((prev) => {
+      if (!prev) return prev;
+      // No double-binding: one physical input can't drive two emulated controls.
+      // Clear any OTHER control currently bound to this exact token first.
+      const bindings = { ...prev.bindings };
+      if (token && token !== "none") {
+        for (const key of Object.keys(bindings) as PadControl[]) {
+          if (key !== control && bindings[key] === token) {
+            bindings[key] = "none";
+          }
+        }
+      }
+      bindings[control] = token;
+      return { ...prev, bindings };
+    });
   }, []);
 
   // Capture loop: while capturing, watch the selected pad for the first

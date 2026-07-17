@@ -330,36 +330,42 @@ export function Sidebar({
         isLoading={howLongToBeat.isLoading}
       />
 
-      <SidebarSection title={t("requirements")}>
-        <div className="requirement__button-container">
-          <Button
-            className="requirement__button"
-            onClick={() => setActiveRequirement("minimum")}
-            theme={activeRequirement === "minimum" ? "primary" : "outline"}
-          >
-            {t("minimum")}
-          </Button>
+      {/* PC system requirements are meaningless for emulated/console games —
+          the requirement is the emulator's, not the game's. */}
+      {shop !== "launchbox" && (
+        <SidebarSection title={t("requirements")}>
+          <div className="requirement__button-container">
+            <Button
+              className="requirement__button"
+              onClick={() => setActiveRequirement("minimum")}
+              theme={activeRequirement === "minimum" ? "primary" : "outline"}
+            >
+              {t("minimum")}
+            </Button>
 
-          <Button
-            className="requirement__button"
-            onClick={() => setActiveRequirement("recommended")}
-            theme={activeRequirement === "recommended" ? "primary" : "outline"}
-          >
-            {t("recommended")}
-          </Button>
-        </div>
+            <Button
+              className="requirement__button"
+              onClick={() => setActiveRequirement("recommended")}
+              theme={
+                activeRequirement === "recommended" ? "primary" : "outline"
+              }
+            >
+              {t("recommended")}
+            </Button>
+          </div>
 
-        <div
-          className="requirement__details"
-          dangerouslySetInnerHTML={{
-            __html:
-              shopDetails?.pc_requirements?.[activeRequirement] ??
-              t(`no_${activeRequirement}_requirements`, {
-                gameTitle,
-              }),
-          }}
-        />
-      </SidebarSection>
+          <div
+            className="requirement__details"
+            dangerouslySetInnerHTML={{
+              __html:
+                shopDetails?.pc_requirements?.[activeRequirement] ??
+                t(`no_${activeRequirement}_requirements`, {
+                  gameTitle,
+                }),
+            }}
+          />
+        </SidebarSection>
+      )}
 
       <ControllerSupportSection />
 
