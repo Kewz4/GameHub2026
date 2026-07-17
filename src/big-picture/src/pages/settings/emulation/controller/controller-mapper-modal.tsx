@@ -24,6 +24,8 @@ import {
   AXIS_THRESHOLD,
   BUTTON_TOKEN,
   DEFAULT_PAD_BINDINGS,
+  parseGamepadVendorProduct,
+  synthesizeSdlGuid,
   tokenActivation,
   type DiagramControl,
 } from "@renderer/pages/settings/emulation/controller-tokens";
@@ -286,10 +288,17 @@ export function ControllerMapperModal({
     setApplying(true);
     try {
       const pad = pads.find((p) => p.index === selectedPad);
+      // Derive the SDL GUID from USB vendor/product so joystick-engine emulators
+      // (Azahar, Eden) bind the real device instead of the all-zero fallback.
+      const vp = pad ? parseGamepadVendorProduct(pad.id) : null;
+      const guid = vp
+        ? synthesizeSdlGuid(vp.vendorId, vp.productId)
+        : (profile.controllerGuid ?? null);
       const finalProfile: ControllerProfile = {
         ...profile,
         controllerIndex: selectedPad,
         controllerName: pad?.id ?? profile.controllerName,
+        controllerGuid: guid ?? profile.controllerGuid ?? null,
       };
       savedPadNameRef.current = finalProfile.controllerName ?? null;
       const res = await globalThis.window.electron.saveControllerProfile(

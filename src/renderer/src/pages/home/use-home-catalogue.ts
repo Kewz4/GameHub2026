@@ -9,7 +9,7 @@ import type {
 } from "@types";
 import { CatalogueCategory } from "@shared";
 import { levelDBService } from "@renderer/services/leveldb.service";
-import { ensureArray } from "@renderer/helpers";
+import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
 
 export interface HomeCatalogue {
   featured: TrendingGame[];
@@ -75,6 +75,28 @@ async function getFeatured(language: string): Promise<TrendingGame[]> {
   return ensureArray<TrendingGame>(response, "/catalogue/featured");
 }
 
+/**
+ * Derive hero slides from an already-fetched category (Hot/Weekly) when
+ * `/catalogue/featured` comes back empty — which it has done repeatedly on this
+ * fork's backend. We keep only games that actually carry the two artwork slots
+ * the hero renders (`libraryHeroImageUrl` + `logoImageUrl`) so slides are never
+ * blank, and synthesize the `uri` the carousel navigates to.
+ */
+function heroFallbackFrom(games: ShopAssets[]): TrendingGame[] {
+  return games
+    .filter((g) => g.libraryHeroImageUrl && g.logoImageUrl)
+    .slice(0, 5)
+    .map((g) => ({
+      ...g,
+      description: null,
+      uri: buildGameDetailsPath({
+        shop: g.shop,
+        objectId: g.objectId,
+        title: g.title,
+      }),
+    }));
+}
+
 async function getClassics(): Promise<ShopAssets[]> {
   // Randomized, mixed-platform, artwork-only console games — a fresh shuffle
   // each load. The row hides itself when this is empty (see category-row).
@@ -125,8 +147,21 @@ export function useHomeCatalogue(language: string) {
         ]
       );
 
+      // Keep the hero alive even when `/catalogue/featured` returns empty by
+      // seeding it from the Hot (then Weekly) row, which shares the same
+      // artwork fields the hero needs.
+      const resolvedFeatured = featured.length
+        ? featured
+        : heroFallbackFrom(hot.length ? hot : weekly);
+
       if (isMounted) {
-        setCatalogue({ featured, hot, weekly, achievements, classics });
+        setCatalogue({
+          featured: resolvedFeatured,
+          hot,
+          weekly,
+          achievements,
+          classics,
+        });
       }
     }
 

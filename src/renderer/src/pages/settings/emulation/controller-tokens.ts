@@ -135,3 +135,56 @@ export function tokenActivation(
   if (btnIdx === undefined) return 0;
   return pressed[btnIdx] ? 1 : 0;
 }
+
+/**
+ * Synthesize the 32-char SDL joystick GUID for a controller from its USB
+ * vendor/product IDs, matching SDL's own `SDL_CreateJoystickGUID` layout so the
+ * value we write lines up with what SDL reports inside the emulator.
+ *
+ * Layout (16 bytes, each 16-bit field little-endian):
+ *   bus(=USB 0x03) · crc16(0) · vendor · 0 · product · 0 · version(0) · driver(0)
+ *
+ * e.g. a DualShock 4 (vendor 054c, product 09cc) →
+ *   "030000004c050000cc09000000000000" — the exact GUID SDL emits for it.
+ *
+ * The joystick-engine emulators (Azahar, Eden) bind by GUID, so without this
+ * they fall back to an all-zero GUID that never matches a real device and the
+ * pad silently fails to bind. XInput pads are unaffected — they bind by
+ * SDL GameController token/index, not GUID.
+ */
+export function synthesizeSdlGuid(
+  vendorId: number,
+  productId: number
+): string | null {
+  if (!vendorId || !productId) return null;
+  const le16 = (n: number) => {
+    const lo = (n & 0xff).toString(16).padStart(2, "0");
+    const hi = ((n >> 8) & 0xff).toString(16).padStart(2, "0");
+    return lo + hi;
+  };
+  const BUS_USB = "0300"; // bus type 0x0003, little-endian
+  return (
+    BUS_USB +
+    "0000" + // crc16 (unknown → 0)
+    le16(vendorId) +
+    "0000" +
+    le16(productId) +
+    "0000" +
+    "0000" + // version (unknown → 0)
+    "0000" // driver signature/data
+  );
+}
+
+/**
+ * Extract USB vendor/product IDs from a Gamepad API `id` string. Chromium
+ * formats non-standard pads as "… (Vendor: 054c Product: 09cc)" and standard
+ * ones as "… (STANDARD GAMEPAD Vendor: 045e Product: 028e)". Returns null when
+ * the id carries no IDs (some drivers omit them).
+ */
+export function parseGamepadVendorProduct(
+  id: string
+): { vendorId: number; productId: number } | null {
+  const m = /vendor:\s*([0-9a-f]{4}).*?product:\s*([0-9a-f]{4})/i.exec(id);
+  if (!m) return null;
+  return { vendorId: parseInt(m[1], 16), productId: parseInt(m[2], 16) };
+}

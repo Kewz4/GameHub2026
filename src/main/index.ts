@@ -226,6 +226,18 @@ if (process.platform !== "linux") {
   app.commandLine.appendSwitch("--no-sandbox");
 }
 
+// Controller detection: Chromium's default Windows.Gaming.Input fetcher only
+// surfaces XInput-class pads, which is why DirectInput/SDL controllers (DS4 in
+// DInput mode, generic USB gamepads, arcade sticks) never appear in the mapper.
+// Disabling it falls back to the XInput + RawInput fetchers, and RawInput
+// enumerates generic HID gamepads — so those pads show up in
+// navigator.getGamepads() (with mapping === "", raw button order). Xbox pads
+// keep working through the XInput fetcher.
+app.commandLine.appendSwitch(
+  "disable-features",
+  "WindowsGamingInputDataFetcher"
+);
+
 i18n.init({
   resources,
   lng: "en",

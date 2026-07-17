@@ -22,6 +22,8 @@ import {
   AXIS_THRESHOLD,
   BUTTON_TOKEN,
   DEFAULT_PAD_BINDINGS,
+  parseGamepadVendorProduct,
+  synthesizeSdlGuid,
   tokenActivation,
   type DiagramControl,
 } from "./controller-tokens";
@@ -268,10 +270,18 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
     setApplying(true);
     try {
       const pad = pads.find((p) => p.index === selectedPad);
+      // Derive the SDL GUID from the pad's USB vendor/product so joystick-engine
+      // emulators (Azahar, Eden) bind the real device instead of the all-zero
+      // GUID fallback. Falls back to the existing GUID when the id has no IDs.
+      const vp = pad ? parseGamepadVendorProduct(pad.id) : null;
+      const guid = vp
+        ? synthesizeSdlGuid(vp.vendorId, vp.productId)
+        : (profile.controllerGuid ?? null);
       const finalProfile: ControllerProfile = {
         ...profile,
         controllerIndex: selectedPad,
         controllerName: pad?.id ?? profile.controllerName,
+        controllerGuid: guid ?? profile.controllerGuid ?? null,
       };
       savedPadNameRef.current = finalProfile.controllerName ?? null;
       const res = await window.electron.saveControllerProfile(
@@ -441,6 +451,15 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
           {applying ? "Saving…" : "Save mapping"}
         </Button>
       </div>
+
+      {pads.length === 0 && (
+        <p className="controller-mapping__pad-type">
+          No controller detected yet.{" "}
+          <strong>Press any button on your controller</strong> — browsers
+          (including DirectInput/SDL pads) only reveal a gamepad after its first
+          input.
+        </p>
+      )}
 
       {padTypeLabel && (
         <p className="controller-mapping__pad-type">

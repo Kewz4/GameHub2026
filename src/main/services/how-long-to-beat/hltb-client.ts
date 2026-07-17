@@ -8,13 +8,13 @@ import { type HltbGame, mapHltbGame, pickBestHltbMatch } from "./hltb-parse";
  * backend doesn't know about, so they can't use the server-side HLTB endpoint).
  *
  * HLTB has no public API. As of their 2025 redesign the SPA resolves a rotating
- * `/api/<path>` search endpoint from its JS bundle (the path changes between
- * deploys — `/api/search`, `/api/seek`, `/api/bleed` have all been seen), then
- * GETs `<path>/init` for a short-lived `{ token, hpKey, hpVal }` security
- * triplet and POSTs the search to `<path>` carrying that triplet as the
- * `x-auth-token` / `x-hp-key` / `x-hp-val` headers. The token embeds the
- * caller's egress IP + User-Agent, so it must be used from the same session
- * that minted it.
+ * search endpoint from its JS bundle whose full form is
+ * `/api/<word>/<hexkey>` — e.g. `/api/search/21fda17e4a1d49be`. The appended
+ * hex segment *is* the auth: it is baked into the JS bundle and rotates between
+ * deploys, so it must be scraped at runtime and preserved in full. There is no
+ * separate `<path>/init` token endpoint on the current build (older versions
+ * used an `x-auth-token`/`x-hp-key`/`x-hp-val` header triplet; that scheme is
+ * gone). We simply POST the search to the fully-resolved URL.
  *
  * Requests go through Electron's session.fetch (Chromium's network stack)
  * rather than Node's fetch (undici). This is critical: HLTB uses an Imperva WAF
@@ -57,21 +57,15 @@ const browserHeaders = () => ({
   "Accept-Language": "en-US,en;q=0.9",
 });
 
-interface BleedSecurity {
-  token: string;
-  hpKey: string;
-  hpVal: string;
-}
-
 /**
- * Resolve the current `/api/<path>` search endpoint by scraping the SPA's JS
- * bundle for the POST `fetch` call. HLTB rotates this path between deploys
- * (observed values include `/api/search`, `/api/seek`, `/api/bleed`), so it
- * must be discovered at runtime rather than hard-coded. Returns the base path
- * (e.g. `/api/bleed`); the matching token endpoint is `<base>/init`.
+ * Resolve the current `/api/<word>/<hexkey>` search endpoint by scraping the
+ * SPA's JS bundle for the POST `fetch` call. HLTB rotates both the word and the
+ * appended hex key between deploys, and the hex key *is* the auth, so the whole
+ * path (word + key) must be captured — truncating to the first segment yields a
+ * bare `/api/search` that 404s.
  *
- * Mirrors the strategy of the maintained `howlongtobeatpy` package: prefer the
- * `_app-*` chunk, fall back to scanning every `<script src>` chunk.
+ * Prefer the `_app-*` chunk, fall back to scanning every `<script src>` chunk.
+ * Returns the full path (e.g. `/api/search/21fda17e4a1d49be`).
  */
 async function resolveSearchEndpoint(): Promise<string | null> {
   const html = await hltbFetch(`${BASE}/`, {
@@ -89,17 +83,16 @@ async function resolveSearchEndpoint(): Promise<string | null> {
     ...allSrcs.filter((s) => !s.includes("_app-")),
   ];
 
-  // Confirm the endpoint by the POST method so we don't grab the GET init call.
-  // The regex handles nested objects in the fetch options by matching
-  // `method:"POST"` anywhere after the opening brace (the `[^}]*` will
-  // backtrack past nested `}` to find `method:`).
-  const postFetch =
-    /fetch\s*\(\s*["']\/api\/([a-zA-Z0-9_]+)[^"']*["']\s*,\s*\{[^}]*method:\s*["']POST["']/i;
-
-  // Fallback endpoints to probe if the JS scraper fails (HLTB rotates the
-  // path between deploys). We test each by hitting `<endpoint>/init` and
-  // checking for a 200 with a token in the JSON body.
-  const KNOWN_ENDPOINTS = ["/api/bleed", "/api/search", "/api/seek"];
+  // The search URL is a string literal built from a constant word plus the
+  // rotating hex key, e.g. `"/api/search/" + "21fda17e4a1d49be"` collapsed by
+  // the bundler into `"/api/search/21fda17e4a1d49be"`. Capture the full
+  // `<word>/<hexkey>` — the trailing hex segment is 8+ hex chars and is the
+  // part that must NOT be dropped.
+  const fullSearchUrl =
+    /["'`]\/api\/([a-z0-9_]+\/[a-f0-9]{8,})["'`]/i;
+  // Some builds concatenate the key: `"/api/search/"+"<hex>"`. Match that too.
+  const splitSearchUrl =
+    /["'`]\/api\/([a-z0-9_]+)\/["'`]\s*\+\s*["'`]([a-f0-9]{8,})["'`]/i;
 
   for (const src of ordered) {
     const url = src.startsWith("http")
@@ -109,53 +102,16 @@ async function resolveSearchEndpoint(): Promise<string | null> {
       const js = await hltbFetch(url, { headers: browserHeaders() }).then((r) =>
         r.ok ? r.text() : ""
       );
-      const m = js.match(postFetch);
-      if (m) return `/api/${m[1]}`;
+      const full = js.match(fullSearchUrl);
+      if (full) return `/api/${full[1]}`;
+      const split = js.match(splitSearchUrl);
+      if (split) return `/api/${split[1]}/${split[2]}`;
     } catch {
       // try next chunk
     }
   }
 
-  // JS scrape failed — probe known endpoints by hitting /init on each.
-  logger.log("HLTB: JS scrape failed, probing known endpoints…");
-  for (const ep of KNOWN_ENDPOINTS) {
-    try {
-      const res = await hltbFetch(`${BASE}${ep}/init?t=${Date.now()}`, {
-        headers: browserHeaders(),
-      });
-      if (res.ok) {
-        const json = (await res.json()) as Partial<BleedSecurity>;
-        if (json.token && json.hpKey && json.hpVal) {
-          logger.log(`HLTB: probe found working endpoint ${ep}`);
-          return ep;
-        }
-      }
-    } catch {
-      // try next
-    }
-  }
   return null;
-}
-
-/**
- * Fetch the short-lived search security triplet from `<endpoint>/init`. The
- * homepage is loaded first so the request carries the same cookies/session the
- * real SPA would, then init mints the token bound to this caller.
- */
-async function initSearchSecurity(
-  endpoint: string
-): Promise<BleedSecurity | null> {
-  try {
-    const res = await hltbFetch(`${BASE}${endpoint}/init?t=${Date.now()}`, {
-      headers: browserHeaders(),
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as Partial<BleedSecurity>;
-    if (!json.token || !json.hpKey || !json.hpVal) return null;
-    return { token: json.token, hpKey: json.hpKey, hpVal: json.hpVal };
-  } catch {
-    return null;
-  }
 }
 
 function searchBody(title: string) {
@@ -185,20 +141,14 @@ function searchBody(title: string) {
   };
 }
 
-/** POST a search to the resolved endpoint with the given security triplet. */
+/** POST a search to the resolved (fully-keyed) endpoint. */
 async function postSearch(
   endpoint: string,
-  title: string,
-  security: BleedSecurity
+  title: string
 ): Promise<{ status: number; data: HltbGame[] } | null> {
   const res = await hltbFetch(`${BASE}${endpoint}`, {
     method: "POST",
-    headers: {
-      ...browserHeaders(),
-      "x-auth-token": security.token,
-      "x-hp-key": security.hpKey,
-      "x-hp-val": security.hpVal,
-    },
+    headers: browserHeaders(),
     body: JSON.stringify(searchBody(title)),
   });
   if (!res.ok) return { status: res.status, data: [] };
@@ -223,19 +173,13 @@ export async function fetchHowLongToBeat(
       return null;
     }
 
-    let security = await initSearchSecurity(endpoint);
-    if (!security) {
-      logger.log("HLTB: could not obtain search security token");
-      return null;
-    }
+    // Load the homepage first so session.fetch carries the same cookies the
+    // real SPA would when it POSTs the search.
+    await hltbFetch(`${BASE}/`, {
+      headers: { ...browserHeaders(), Accept: "text/html" },
+    }).catch(() => undefined);
 
-    let result = await postSearch(endpoint, title, security);
-    // The token expires quickly; on 403 refresh it once and retry, exactly as
-    // the SPA does ("Search token expired, refreshing and retrying...").
-    if (result?.status === 403) {
-      security = await initSearchSecurity(endpoint);
-      if (security) result = await postSearch(endpoint, title, security);
-    }
+    const result = await postSearch(endpoint, title);
 
     if (!result || result.status !== 200) {
       logger.log(`HLTB: search returned ${result?.status ?? "no response"}`);
