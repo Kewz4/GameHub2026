@@ -29,6 +29,7 @@ import {
   tokenActivation,
   type DiagramControl,
 } from "@renderer/pages/settings/emulation/controller-tokens";
+import { useSwitchHidPad } from "@renderer/pages/settings/emulation/use-switch-hid-pad";
 import {
   layoutFor,
   RETRO_DIAGRAM_CHOICES,
@@ -145,6 +146,10 @@ export function ControllerMapperModal({
   const captureRef = useRef<PadControl | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Nintendo-protocol controllers (Switch Pro / Joy-Con / 8BitDo in Switch mode)
+  // are invisible to the Gamepad API — bridge them in over WebHID.
+  const hidPad = useSwitchHidPad();
+
   // Live input for the diagram.
   const [livePressed, setLivePressed] = useState<boolean[]>([]);
   const [liveAxes, setLiveAxes] = useState<number[]>([]);
@@ -183,6 +188,13 @@ export function ControllerMapperModal({
       for (const gp of gps) {
         if (gp) list.push({ index: gp.index, id: gp.id, mapping: gp.mapping });
       }
+      if (hidPad.connected) {
+        list.push({
+          index: hidPad.padIndex,
+          id: hidPad.padId ?? "Nintendo Controller (WebHID)",
+          mapping: "standard",
+        });
+      }
       setPads(list);
     };
     scan();
@@ -195,7 +207,7 @@ export function ControllerMapperModal({
       globalThis.window.removeEventListener("gamepaddisconnected", onConnect);
       globalThis.window.clearInterval(id);
     };
-  }, [visible]);
+  }, [visible, hidPad.connected, hidPad.padIndex, hidPad.padId]);
 
   // When pads (re)connect, reselect the controller this emulator was mapped
   // with — so bindings still line up after unplugging/reconnecting.
@@ -211,16 +223,24 @@ export function ControllerMapperModal({
     if (!visible) return;
     let raf = 0;
     const tick = () => {
-      const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
-      if (gp) {
-        setLivePressed(gp.buttons.map((b) => b.pressed));
-        setLiveAxes(Array.from(gp.axes));
+      if (hidPad.isHidPadIndex(selectedPad)) {
+        const snapshot = hidPad.read();
+        if (snapshot) {
+          setLivePressed(snapshot.pressed);
+          setLiveAxes(snapshot.axes);
+        }
+      } else {
+        const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
+        if (gp) {
+          setLivePressed(gp.buttons.map((b) => b.pressed));
+          setLiveAxes(Array.from(gp.axes));
+        }
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [visible, selectedPad]);
+  }, [visible, selectedPad, hidPad]);
 
   const finishCapture = useCallback((control: PadControl, token: string) => {
     captureRef.current = null;
@@ -250,21 +270,31 @@ export function ControllerMapperModal({
     const loop = () => {
       const control = captureRef.current;
       if (!control) return;
-      const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
-      if (gp) {
-        for (let i = 0; i < gp.buttons.length; i++) {
-          if (gp.buttons[i]?.pressed && BUTTON_TOKEN[i]) {
-            finishCapture(control, BUTTON_TOKEN[i]);
-            return;
-          }
+      const isHid = hidPad.isHidPadIndex(selectedPad);
+      const snapshot = isHid ? hidPad.read() : null;
+      const buttons: boolean[] = isHid
+        ? (snapshot?.pressed ?? [])
+        : ((navigator.getGamepads?.() ?? [])[selectedPad]?.buttons.map(
+            (b) => b.pressed
+          ) ?? []);
+      const axes: number[] = isHid
+        ? (snapshot?.axes ?? [])
+        : Array.from(
+            (navigator.getGamepads?.() ?? [])[selectedPad]?.axes ?? []
+          );
+
+      for (let i = 0; i < buttons.length; i++) {
+        if (buttons[i] && BUTTON_TOKEN[i]) {
+          finishCapture(control, BUTTON_TOKEN[i]);
+          return;
         }
-        for (let a = 0; a < gp.axes.length; a++) {
-          const v = gp.axes[a];
-          if (AXIS_NAME[a] && Math.abs(v) > AXIS_THRESHOLD) {
-            const sign = v < 0 ? "-" : "+";
-            finishCapture(control, `${sign}${AXIS_NAME[a]}`);
-            return;
-          }
+      }
+      for (let a = 0; a < axes.length; a++) {
+        const v = axes[a];
+        if (AXIS_NAME[a] && Math.abs(v) > AXIS_THRESHOLD) {
+          const sign = v < 0 ? "-" : "+";
+          finishCapture(control, `${sign}${AXIS_NAME[a]}`);
+          return;
         }
       }
       rafRef.current = requestAnimationFrame(loop);
@@ -273,7 +303,7 @@ export function ControllerMapperModal({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [capturing, selectedPad, finishCapture]);
+  }, [capturing, selectedPad, finishCapture, hidPad]);
 
   useEffect(() => {
     if (!visible) return;
@@ -291,8 +321,10 @@ export function ControllerMapperModal({
       // Derive the SDL GUID from USB vendor/product so joystick-engine emulators
       // (Azahar, Eden) bind the real device instead of the all-zero fallback.
       const vp = pad ? parseGamepadVendorProduct(pad.id) : null;
+      // WebHID Nintendo controllers are almost always Bluetooth-paired.
+      const bus = hidPad.isHidPadIndex(selectedPad) ? "bluetooth" : "usb";
       const guid = vp
-        ? synthesizeSdlGuid(vp.vendorId, vp.productId)
+        ? synthesizeSdlGuid(vp.vendorId, vp.productId, bus)
         : (profile.controllerGuid ?? null);
       const finalProfile: ControllerProfile = {
         ...profile,
@@ -325,6 +357,7 @@ export function ControllerMapperModal({
     controllerType,
     showSuccessToast,
     showErrorToast,
+    hidPad,
   ]);
 
   // Reset every binding to the standard SDL default — the reliable mapping for
@@ -571,6 +604,11 @@ export function ControllerMapperModal({
         )}
 
         <div className="bp-controller-mapper__footer">
+          {!hidPad.connected && (
+            <Button variant="secondary" onClick={() => hidPad.connect()}>
+              Connect Switch controller
+            </Button>
+          )}
           <Button variant="secondary" onClick={resetToDefault}>
             Reset to default
           </Button>

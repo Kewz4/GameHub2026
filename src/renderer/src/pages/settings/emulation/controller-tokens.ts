@@ -154,7 +154,8 @@ export function tokenActivation(
  */
 export function synthesizeSdlGuid(
   vendorId: number,
-  productId: number
+  productId: number,
+  bus: "usb" | "bluetooth" = "usb"
 ): string | null {
   if (!vendorId || !productId) return null;
   const le16 = (n: number) => {
@@ -162,9 +163,12 @@ export function synthesizeSdlGuid(
     const hi = ((n >> 8) & 0xff).toString(16).padStart(2, "0");
     return lo + hi;
   };
-  const BUS_USB = "0300"; // bus type 0x0003, little-endian
+  // SDL encodes the transport in the first field: USB bus 0x0003, Bluetooth
+  // 0x0005 (little-endian). A BT controller mapped with a USB-shaped GUID won't
+  // match SDL inside the emulator, so callers pass the real transport.
+  const busField = bus === "bluetooth" ? "0500" : "0300";
   return (
-    BUS_USB +
+    busField +
     "0000" + // crc16 (unknown → 0)
     le16(vendorId) +
     "0000" +

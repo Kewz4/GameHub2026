@@ -33,6 +33,7 @@ import {
   type ControllerLayout,
 } from "./controller-layouts";
 import { GyroCube } from "./gyro-cube";
+import { useSwitchHidPad } from "./use-switch-hid-pad";
 import "./controller-mapper.scss";
 
 /** Diagram control → our PadControl (buttons that map 1:1). */
@@ -121,6 +122,10 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   const captureRef = useRef<PadControl | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Nintendo-protocol controllers (Switch Pro / Joy-Con / 8BitDo in Switch mode)
+  // are invisible to the Gamepad API — bridge them in over WebHID.
+  const hidPad = useSwitchHidPad();
+
   // Live input for the diagram + raw-data readout.
   const [livePressed, setLivePressed] = useState<boolean[]>([]);
   const [liveAxes, setLiveAxes] = useState<number[]>([]);
@@ -153,6 +158,15 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       for (const gp of gps) {
         if (gp) list.push({ index: gp.index, id: gp.id, mapping: gp.mapping });
       }
+      // Add the WebHID Nintendo controller as a selectable pad. It's decoded in
+      // standard order, so mark it "standard" — the diagram trusts the layout.
+      if (hidPad.connected) {
+        list.push({
+          index: hidPad.padIndex,
+          id: hidPad.padId ?? "Nintendo Controller (WebHID)",
+          mapping: "standard",
+        });
+      }
       setPads(list);
     };
     scan();
@@ -165,7 +179,7 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       window.removeEventListener("gamepaddisconnected", onConnect);
       window.clearInterval(id);
     };
-  }, []);
+  }, [hidPad.connected, hidPad.padIndex, hidPad.padId]);
 
   // When pads (re)connect, reselect the controller this emulator was mapped
   // with — so bindings still line up after unplugging/reconnecting.
@@ -180,16 +194,24 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
-      if (gp) {
-        setLivePressed(gp.buttons.map((b) => b.pressed));
-        setLiveAxes(Array.from(gp.axes));
+      if (hidPad.isHidPadIndex(selectedPad)) {
+        const snapshot = hidPad.read();
+        if (snapshot) {
+          setLivePressed(snapshot.pressed);
+          setLiveAxes(snapshot.axes);
+        }
+      } else {
+        const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
+        if (gp) {
+          setLivePressed(gp.buttons.map((b) => b.pressed));
+          setLiveAxes(Array.from(gp.axes));
+        }
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [selectedPad]);
+  }, [selectedPad, hidPad]);
 
   const testRumble = useCallback(() => {
     const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
@@ -240,21 +262,33 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
     const loop = () => {
       const control = captureRef.current;
       if (!control) return;
-      const gp = (navigator.getGamepads?.() ?? [])[selectedPad];
-      if (gp) {
-        for (let i = 0; i < gp.buttons.length; i++) {
-          if (gp.buttons[i]?.pressed && BUTTON_TOKEN[i]) {
-            finishCapture(control, BUTTON_TOKEN[i]);
-            return;
-          }
+      // WebHID Nintendo pad and Gamepad-API pad expose the same shape (pressed
+      // booleans + axes in standard index order), so capture is identical.
+      const isHid = hidPad.isHidPadIndex(selectedPad);
+      const snapshot = isHid ? hidPad.read() : null;
+      const buttons: boolean[] = isHid
+        ? (snapshot?.pressed ?? [])
+        : ((navigator.getGamepads?.() ?? [])[selectedPad]?.buttons.map(
+            (b) => b.pressed
+          ) ?? []);
+      const axes: number[] = isHid
+        ? (snapshot?.axes ?? [])
+        : Array.from(
+            (navigator.getGamepads?.() ?? [])[selectedPad]?.axes ?? []
+          );
+
+      for (let i = 0; i < buttons.length; i++) {
+        if (buttons[i] && BUTTON_TOKEN[i]) {
+          finishCapture(control, BUTTON_TOKEN[i]);
+          return;
         }
-        for (let a = 0; a < gp.axes.length; a++) {
-          const v = gp.axes[a];
-          if (AXIS_NAME[a] && Math.abs(v) > AXIS_THRESHOLD) {
-            const sign = v < 0 ? "-" : "+";
-            finishCapture(control, `${sign}${AXIS_NAME[a]}`);
-            return;
-          }
+      }
+      for (let a = 0; a < axes.length; a++) {
+        const v = axes[a];
+        if (AXIS_NAME[a] && Math.abs(v) > AXIS_THRESHOLD) {
+          const sign = v < 0 ? "-" : "+";
+          finishCapture(control, `${sign}${AXIS_NAME[a]}`);
+          return;
         }
       }
       rafRef.current = requestAnimationFrame(loop);
@@ -263,7 +297,7 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [capturing, selectedPad, finishCapture]);
+  }, [capturing, selectedPad, finishCapture, hidPad]);
 
   const save = async () => {
     if (!profile) return;
@@ -274,8 +308,11 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
       // emulators (Azahar, Eden) bind the real device instead of the all-zero
       // GUID fallback. Falls back to the existing GUID when the id has no IDs.
       const vp = pad ? parseGamepadVendorProduct(pad.id) : null;
+      // WebHID Nintendo controllers are almost always paired over Bluetooth, so
+      // encode the BT bus in their SDL GUID; wired Gamepad-API pads use USB.
+      const bus = hidPad.isHidPadIndex(selectedPad) ? "bluetooth" : "usb";
       const guid = vp
-        ? synthesizeSdlGuid(vp.vendorId, vp.productId)
+        ? synthesizeSdlGuid(vp.vendorId, vp.productId, bus)
         : (profile.controllerGuid ?? null);
       const finalProfile: ControllerProfile = {
         ...profile,
@@ -432,6 +469,17 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
               label: o.label,
             }))}
           />
+        )}
+
+        {!hidPad.connected && (
+          <Button
+            theme="outline"
+            className="controller-mapping__reset"
+            onClick={() => hidPad.connect()}
+            title="Detect a Nintendo Switch Pro Controller, Joy-Con, or 8BitDo pad in Switch mode over WebHID"
+          >
+            Connect Switch controller
+          </Button>
         )}
 
         <Button
