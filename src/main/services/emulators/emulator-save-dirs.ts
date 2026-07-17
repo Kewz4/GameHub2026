@@ -6,7 +6,7 @@ import { systemFromObjectId, platformToSystem } from "@main/helpers";
 import { levelKeys, gamesSublevel } from "@main/level";
 import { getEmulatorConfig } from "./emulators-repository";
 import { KNOWN_BINARIES } from "./known-binaries";
-import { cemuDataDir } from "./emulator-portable";
+import { cemuDataDir, edenDataDir } from "./emulator-portable";
 import { resolveWiiuTitleId } from "./cemu-graphic-packs";
 import { getPs2MemcardDirs } from "./ps2-memcard-dirs";
 import { getPs1MemcardDirs } from "./ps1-memcard-dirs";
@@ -76,9 +76,11 @@ export const getEmulatorSaveRoots = (
       // Flat per-ROM save files (.srm etc.) — small, backed up as one tree.
       return [path.join(installDir, "Saves")];
     case "eden":
-      // Eden (Yuzu/Sudachi derivative): save data lives in the NAND under
-      // <install>/nand/user/save in portable mode.
-      return [path.join(installDir, "nand", "user", "save")];
+      // Eden (Yuzu/Sudachi derivative): in portable mode ALL data roots under
+      // <install>/user (edenDataDir), so saves live at
+      // <install>/user/nand/user/save — NOT <install>/nand/user/save, which
+      // Eden never writes (that pointed the backup at a non-existent dir).
+      return [path.join(edenDataDir(installDir), "nand", "user", "save")];
     default:
       return [];
   }
