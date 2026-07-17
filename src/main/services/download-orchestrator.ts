@@ -74,6 +74,28 @@ export class DownloadOrchestrator {
   private static reconnectGraceTimer: NodeJS.Timeout | null = null;
   private static lastReconnectAt = 0;
 
+  // Serialize every layout-mutating operation. The queue/paused order and the
+  // per-download records live in a single leveldb "layout" record plus the
+  // download entries; concurrent read-modify-write (e.g. starting a base game
+  // while queuing its update + DLC in the same burst, or a drag-reorder landing
+  // mid-flight) would clobber each other's writes — which is exactly why queued
+  // items sometimes jumped ahead and reorders sometimes didn't stick. Chaining
+  // them guarantees each mutation sees the previous one's committed state.
+  // Only the public IPC entry points acquire this lock; internal helpers
+  // (queueDownload, activateDownload, pauseDownload, startNextQueuedDownloadImpl)
+  // run inside an already-held lock, so they must NOT re-acquire it.
+  private static mutationChain: Promise<unknown> = Promise.resolve();
+
+  private static runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.mutationChain.then(fn, fn);
+    // Keep the chain alive regardless of individual failures.
+    this.mutationChain = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
   static onNetworkStatusChanged(payload: {
     online: boolean;
     switched?: boolean;
@@ -198,7 +220,11 @@ export class DownloadOrchestrator {
     return { downloads, layoutState };
   }
 
-  public static async startNextQueuedDownload(downloads?: Download[]) {
+  public static startNextQueuedDownload(downloads?: Download[]) {
+    return this.runExclusive(() => this.startNextQueuedDownloadImpl(downloads));
+  }
+
+  private static async startNextQueuedDownloadImpl(downloads?: Download[]) {
     const currentDownloads = downloads ?? (await this.getAllDownloads());
     const layoutState =
       await getNormalizedDownloadLayoutState(currentDownloads);
@@ -285,7 +311,7 @@ export class DownloadOrchestrator {
 
     if (options.startNextQueued) {
       const downloads = await this.getAllDownloads();
-      await this.startNextQueuedDownload(
+      await this.startNextQueuedDownloadImpl(
         downloads.filter(
           (entry) => getDownloadId(entry) !== getDownloadId(nextDownload)
         )
@@ -359,7 +385,11 @@ export class DownloadOrchestrator {
     return syncDownloadLayoutState(downloads);
   }
 
-  static async startPreparedDownload(download: Download) {
+  static startPreparedDownload(download: Download) {
+    return this.runExclusive(() => this.startPreparedDownloadImpl(download));
+  }
+
+  private static async startPreparedDownloadImpl(download: Download) {
     const { downloads } = await this.getDownloadsWithLayout();
     const currentActiveDownload =
       downloads.find(
@@ -382,14 +412,28 @@ export class DownloadOrchestrator {
     return { ok: true };
   }
 
-  static async enqueuePreparedDownload(download: Download) {
+  static enqueuePreparedDownload(download: Download) {
+    return this.runExclusive(() => this.enqueuePreparedDownloadImpl(download));
+  }
+
+  private static async enqueuePreparedDownloadImpl(download: Download) {
     await this.queueDownload(download);
     WindowManager.sendDownloadsUpdated();
 
     return { ok: true };
   }
 
-  static async resumeDownload(
+  static resumeDownload(
+    shop: GameShop,
+    objectId: string,
+    strategy: ResumeDownloadStrategy = "interruptActive"
+  ) {
+    return this.runExclusive(() =>
+      this.resumeDownloadImpl(shop, objectId, strategy)
+    );
+  }
+
+  private static async resumeDownloadImpl(
     shop: GameShop,
     objectId: string,
     strategy: ResumeDownloadStrategy = "interruptActive"
@@ -433,7 +477,11 @@ export class DownloadOrchestrator {
     return true;
   }
 
-  static async pauseDownloadById(shop: GameShop, objectId: string) {
+  static pauseDownloadById(shop: GameShop, objectId: string) {
+    return this.runExclusive(() => this.pauseDownloadByIdImpl(shop, objectId));
+  }
+
+  private static async pauseDownloadByIdImpl(shop: GameShop, objectId: string) {
     const download = await this.getDownload(shop, objectId);
     if (!download) return false;
 
@@ -445,7 +493,14 @@ export class DownloadOrchestrator {
     return true;
   }
 
-  static async cancelDownloadById(shop: GameShop, objectId: string) {
+  static cancelDownloadById(shop: GameShop, objectId: string) {
+    return this.runExclusive(() => this.cancelDownloadByIdImpl(shop, objectId));
+  }
+
+  private static async cancelDownloadByIdImpl(
+    shop: GameShop,
+    objectId: string
+  ) {
     const download = await this.getDownload(shop, objectId);
     if (!download) return false;
 
@@ -471,7 +526,7 @@ export class DownloadOrchestrator {
     );
 
     if (wasActive) {
-      await this.startNextQueuedDownload(
+      await this.startNextQueuedDownloadImpl(
         downloads.filter((entry) => getDownloadId(entry) !== downloadId)
       );
       return true;
@@ -481,7 +536,18 @@ export class DownloadOrchestrator {
     return true;
   }
 
-  static async moveDownloadPlacement(
+  static moveDownloadPlacement(
+    shop: GameShop,
+    objectId: string,
+    targetArea: "hero" | "queue" | "paused",
+    targetIndex?: number
+  ) {
+    return this.runExclusive(() =>
+      this.moveDownloadPlacementImpl(shop, objectId, targetArea, targetIndex)
+    );
+  }
+
+  private static async moveDownloadPlacementImpl(
     shop: GameShop,
     objectId: string,
     targetArea: "hero" | "queue" | "paused",
@@ -543,7 +609,7 @@ export class DownloadOrchestrator {
       );
 
       if (isHero) {
-        await this.startNextQueuedDownload(
+        await this.startNextQueuedDownloadImpl(
           nextDownloads.filter((entry) => getDownloadId(entry) !== downloadId)
         );
       } else {
@@ -573,7 +639,17 @@ export class DownloadOrchestrator {
     return true;
   }
 
-  static async setQueuePosition(
+  static setQueuePosition(
+    shop: GameShop,
+    objectId: string,
+    targetIndex: number
+  ) {
+    return this.runExclusive(() =>
+      this.setQueuePositionImpl(shop, objectId, targetIndex)
+    );
+  }
+
+  private static async setQueuePositionImpl(
     shop: GameShop,
     objectId: string,
     targetIndex: number
@@ -601,7 +677,17 @@ export class DownloadOrchestrator {
     return true;
   }
 
-  static async setPausedPosition(
+  static setPausedPosition(
+    shop: GameShop,
+    objectId: string,
+    targetIndex: number
+  ) {
+    return this.runExclusive(() =>
+      this.setPausedPositionImpl(shop, objectId, targetIndex)
+    );
+  }
+
+  private static async setPausedPositionImpl(
     shop: GameShop,
     objectId: string,
     targetIndex: number
@@ -631,7 +717,11 @@ export class DownloadOrchestrator {
     return true;
   }
 
-  static async handleDownloadFailure(downloadId: string) {
+  static handleDownloadFailure(downloadId: string) {
+    return this.runExclusive(() => this.handleDownloadFailureImpl(downloadId));
+  }
+
+  private static async handleDownloadFailureImpl(downloadId: string) {
     const download = await downloadsSublevel.get(downloadId).catch(() => null);
     if (!download) return;
 

@@ -421,6 +421,16 @@
     }
   }
 
+  &__prompt-item--selectable {
+    cursor: pointer;
+
+    input[type="checkbox"] {
+      cursor: pointer;
+      flex-shrink: 0;
+      accent-color: var(--color-primary, #7c83ff);
+    }
+  }
+
   &__prompt-item-name {
     font-weight: 500;
     font-size: globals.$small-font-size;

@@ -350,6 +350,9 @@ export function RepacksModal({
 
     setPendingBaseRepack(repack);
     setPendingUpdates(updates);
+    // Pre-select the newest update (first after sorting) but let the user pick
+    // any subset — including none.
+    setSelectedUpdateIds(new Set(updates.length ? [updates[0].id] : []));
     setPendingDLCs(dlcs);
     setApplyUpdate(false);
     setApplyDLC(false);
@@ -462,16 +465,29 @@ export function RepacksModal({
       }
     };
 
-    if (applyUpdate && pendingUpdates.length > 0) {
-      const updateRepack = pendingUpdates[0];
-      const updateUri =
-        updateRepack.uris.find((u) => u.startsWith("magnet:")) ??
-        updateRepack.uris[0];
-      const updateSelection = await selectionFor(updateRepack, updateUri);
-      // updateRepack.title is now already "Update v208" (enriched in IPC handler)
-      if (updateSelection) {
+    // Queue every update the user selected, in display order (oldest→newest as
+    // sorted), each as its own companion download so multiple updates can be
+    // applied in sequence. A game may have several updates — we honour the
+    // user's picks instead of forcing all (or just the newest).
+    const chosenUpdates = pendingUpdates.filter((u) =>
+      selectedUpdateIds.has(u.id)
+    );
+    if (applyUpdate && chosenUpdates.length > 0) {
+      for (let i = 0; i < chosenUpdates.length; i++) {
+        const updateRepack = chosenUpdates[i];
+        const updateUri =
+          updateRepack.uris.find((u) => u.startsWith("magnet:")) ??
+          updateRepack.uris[0];
+        const updateSelection = await selectionFor(updateRepack, updateUri);
+        if (!updateSelection) continue;
+        // Suffix the objectId per update so several updates don't collide on the
+        // shared `::update` key.
+        const updateKey =
+          chosenUpdates.length > 1
+            ? `${objectId}::update::${i}`
+            : `${objectId}::update`;
         await addGameToQueue({
-          objectId: `${objectId}::update`,
+          objectId: updateKey,
           title: gameTitle
             ? `${gameTitle} — ${updateRepack.title}`
             : updateRepack.title,
@@ -574,6 +590,12 @@ export function RepacksModal({
     null
   );
   const [pendingUpdates, setPendingUpdates] = useState<GameRepack[]>([]);
+  // Which of the available updates the user chose to queue. Games can have
+  // several updates; we never force all of them — the newest is pre-selected
+  // and the user toggles freely.
+  const [selectedUpdateIds, setSelectedUpdateIds] = useState<Set<string>>(
+    new Set()
+  );
   const [pendingDLCs, setPendingDLCs] = useState<GameRepack[]>([]);
   const [applyUpdate, setApplyUpdate] = useState(false);
   const [applyDLC, setApplyDLC] = useState(false);
@@ -727,25 +749,48 @@ export function RepacksModal({
       >
         <div className="repacks-modal__prompt-content">
           <p className="repacks-modal__prompt-intro">
-            {t("apply_update_intro", {
-              defaultValue:
-                "An update is available for this game. It will be queued to download automatically after the base game finishes.",
-            })}
+            {pendingUpdates.length > 1
+              ? t("apply_updates_intro_multi", {
+                  defaultValue:
+                    "Multiple updates are available. Choose which ones to queue — they'll download in order after the base game finishes.",
+                })
+              : t("apply_update_intro", {
+                  defaultValue:
+                    "An update is available for this game. It will be queued to download automatically after the base game finishes.",
+                })}
           </p>
 
           <div className="repacks-modal__prompt-items">
-            {pendingUpdates.map((u) => (
-              <div key={u.id} className="repacks-modal__prompt-item">
-                <span className="repacks-modal__prompt-item-name">
-                  {u.title}
-                </span>
-                {u.fileSize && (
-                  <span className="repacks-modal__prompt-item-size">
-                    {u.fileSize}
+            {pendingUpdates.map((u) => {
+              const checked = selectedUpdateIds.has(u.id);
+              return (
+                <label
+                  key={u.id}
+                  className="repacks-modal__prompt-item repacks-modal__prompt-item--selectable"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setSelectedUpdateIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(u.id)) next.delete(u.id);
+                        else next.add(u.id);
+                        return next;
+                      })
+                    }
+                  />
+                  <span className="repacks-modal__prompt-item-name">
+                    {u.title}
                   </span>
-                )}
-              </div>
-            ))}
+                  {u.fileSize && (
+                    <span className="repacks-modal__prompt-item-size">
+                      {u.fileSize}
+                    </span>
+                  )}
+                </label>
+              );
+            })}
           </div>
 
           {pendingBaseRepack && (
@@ -756,17 +801,29 @@ export function RepacksModal({
                 })}
               </span>
               <span>
-                {totalDownloadSize([pendingBaseRepack, ...pendingUpdates])}
+                {totalDownloadSize([
+                  pendingBaseRepack,
+                  ...pendingUpdates.filter((u) => selectedUpdateIds.has(u.id)),
+                ])}
               </span>
             </div>
           )}
 
           <div className="repacks-modal__prompt-actions">
             <Button theme="outline" onClick={handleUpdatePromptCancel}>
-              {t("skip_update", { defaultValue: "Skip update" })}
+              {t("skip_update", { defaultValue: "Skip updates" })}
             </Button>
-            <Button theme="primary" onClick={handleUpdatePromptConfirm}>
-              {t("yes_queue_update", { defaultValue: "Yes, queue update" })}
+            <Button
+              theme="primary"
+              onClick={handleUpdatePromptConfirm}
+              disabled={selectedUpdateIds.size === 0}
+            >
+              {selectedUpdateIds.size > 1
+                ? t("queue_selected_updates", {
+                    defaultValue: `Queue ${selectedUpdateIds.size} updates`,
+                    count: selectedUpdateIds.size,
+                  })
+                : t("yes_queue_update", { defaultValue: "Queue update" })}
             </Button>
           </div>
         </div>
