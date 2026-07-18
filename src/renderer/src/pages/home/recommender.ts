@@ -1,42 +1,39 @@
 import type { CatalogueSearchResult, ShopAssets } from "@types";
-import {
-  clusterLabel,
-  detectClustersFromTitle,
-  isHeavilyOnline,
-} from "./recommender-affinity";
+import { isHeavilyOnline } from "./recommender-affinity";
 
 /**
  * A small, fully-local content-based recommender for the home "Recommended for
- * you" row. It learns a taste profile from the user's library over two feature
- * kinds — coarse Steam GENRES and curated niche playstyle CLUSTERS (roguelite,
- * character-action, souls-like…) — weighting each feature by how MUCH (playtime)
- * and how RECENTLY the user played games carrying it, plus explicit affinity
- * (favorite/pinned). Candidates are then ranked by similarity to that profile.
+ * you" row. It learns a taste profile from the user's library over two kinds of
+ * REAL per-game facets — Steam GENRES and Steam TAGS (the tags come from each
+ * catalogue edge's `searchVector`; see recommender-affinity) — weighting each by
+ * how MUCH (playtime) and how RECENTLY the user played games carrying it, plus
+ * explicit affinity (favorite/pinned/thumbs-up). Candidates are ranked by
+ * similarity to that profile. Tags are what make it niche-aware: 200h in Balatro
+ * carries "Roguelike Deckbuilder"/"Deckbuilding"/"Card Battler", so it surfaces
+ * Slay the Spire and Inscryption rather than generic Casual/Indie games — no
+ * hand-coded genre rules involved.
  *
  * No other users' data is involved (that would be server-side collaborative
  * filtering); this is the "more of what you actually play" signal, on-device.
- * Every feature also remembers which owned games contributed to it, so the row
- * can explain itself: "Because you played Hades, God of War".
+ * Every feature remembers which owned games contributed to it, so the row can
+ * explain itself: "Because you played Balatro — you seem to like Deckbuilding".
  */
 
 // Recency half-life: a game last played 45 days ago counts about half as much.
 const RECENCY_HALF_LIFE_MS = 1000 * 60 * 60 * 24 * 45;
 const HOUR_MS = 3_600_000;
 
-/** A niche cluster is a strong, specific signal, so it outweighs one genre. */
-const CLUSTER_WEIGHT = 0.9;
-
 const GENRE = (name: string) => `genre:${name}`;
-const CLUSTER = (id: string) => `cluster:${id}`;
+const TAG = (name: string) => `tag:${name}`;
 
-/** Library game enriched with detected niche clusters (see recommender-affinity). */
+/** Library game enriched with its real Steam genres + tags. */
 export interface EnrichedLibraryGame {
   shop: string;
   objectId: string;
   title: string;
   genres?: string[];
-  /** Detected playstyle cluster ids (from title + description text). */
-  clusters?: string[];
+  /** Real Steam tag names (decoded from the catalogue edge's searchVector). */
+  tags?: string[];
   playTimeInMilliseconds?: number;
   lastTimePlayed?: string | Date | null;
   favorite?: boolean;
@@ -49,7 +46,7 @@ interface Contributor {
 }
 
 export interface TasteProfile {
-  /** namespaced feature ("genre:Action" / "cluster:roguelite") → accumulated weight. */
+  /** namespaced feature ("genre:Action" / "tag:Deckbuilding") → accumulated weight. */
   featureWeights: Map<string, number>;
   /** feature → owned games that contributed, strongest first (for "why"). */
   contributors: Map<string, Contributor[]>;
@@ -57,8 +54,8 @@ export interface TasteProfile {
   ownedIds: Set<string>;
   /** Strongest raw genre names, used to query candidate pools. */
   topGenres: string[];
-  /** Strongest cluster ids, used to query candidates by their Steam tag ids. */
-  topClusters: string[];
+  /** Strongest raw tag names, used to query candidates by their Steam tag ids. */
+  topTags: string[];
   /** Total accumulated weight — 0 means we have no signal to recommend from. */
   totalSignal: number;
 }
@@ -87,8 +84,10 @@ function addContributor(
  *   log2(1 + hoursPlayed) + small-base        // played more → stronger, log-scaled
  *   × (recencyFloor + 0.5^(age / halfLife))    // played recently → stronger
  *   × favorite/pinned boosts
- * The base is split across the game's genres (so a many-genre game doesn't
- * over-count) and applied — scaled — to each detected niche cluster.
+ * The base is split across the game's genres and (separately) across its tags,
+ * so a game with many tags doesn't over-count — recurrence across the library is
+ * what concentrates weight on the user's actual niche (a lone "Relaxing" tag
+ * stays weak; "Deckbuilding" seen across several games rises to the top).
  */
 export function buildTasteProfile(
   library: EnrichedLibraryGame[]
@@ -106,8 +105,8 @@ export function buildTasteProfile(
   for (const game of library) {
     ownedIds.add(ownedKey(game));
     const genres = game.genres ?? [];
-    const clusters = game.clusters ?? [];
-    if (genres.length === 0 && clusters.length === 0) continue;
+    const tags = game.tags ?? [];
+    if (genres.length === 0 && tags.length === 0) continue;
 
     const hours = (game.playTimeInMilliseconds ?? 0) / HOUR_MS;
     // Owned-but-unplayed still signals mild interest (+0.2); playtime is
@@ -122,12 +121,16 @@ export function buildTasteProfile(
     if (game.favorite) weight *= 1.6;
     if (game.isPinned) weight *= 1.3;
 
+    // Each facet kind carries the same total mass (`weight`), split across its
+    // members, so genres and tags stay comparable regardless of how many a game
+    // lists.
     if (genres.length) {
       const perGenre = weight / genres.length;
       for (const genre of genres) bump(GENRE(genre), perGenre, game.title);
     }
-    for (const cluster of clusters) {
-      bump(CLUSTER(cluster), weight * CLUSTER_WEIGHT, game.title);
+    if (tags.length) {
+      const perTag = weight / tags.length;
+      for (const tag of tags) bump(TAG(tag), perTag, game.title);
     }
   }
 
@@ -137,35 +140,28 @@ export function buildTasteProfile(
     contributors.set(feature, list.slice(0, 6));
   }
 
-  const genreEntries = [...featureWeights.entries()]
-    .filter(([f]) => f.startsWith("genre:"))
-    .sort((a, b) => b[1] - a[1]);
-  const clusterEntries = [...featureWeights.entries()]
-    .filter(([f]) => f.startsWith("cluster:"))
-    .sort((a, b) => b[1] - a[1]);
+  const topBy = (prefix: string, count: number) =>
+    [...featureWeights.entries()]
+      .filter(([f]) => f.startsWith(prefix))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, count)
+      .map(([f]) => f.slice(prefix.length));
 
   return {
     featureWeights,
     contributors,
     ownedIds,
-    topGenres: genreEntries.slice(0, 6).map(([f]) => f.slice("genre:".length)),
-    topClusters: clusterEntries
-      .slice(0, 4)
-      .map(([f]) => f.slice("cluster:".length)),
+    topGenres: topBy("genre:", 6),
+    topTags: topBy("tag:", 8),
     totalSignal: [...featureWeights.values()].reduce((s, w) => s + w, 0),
   };
 }
 
-/** The feature set a candidate matches: its own genres + any origin/title clusters. */
-function candidateFeatures(
-  candidate: CatalogueSearchResult,
-  originFeatures: Set<string> | undefined
-): Set<string> {
-  const features = new Set<string>(originFeatures ?? []);
-  for (const genre of candidate.genres ?? []) features.add(GENRE(genre));
-  for (const cluster of detectClustersFromTitle(candidate.title)) {
-    features.add(CLUSTER(cluster));
-  }
+/** The feature set a candidate matches: its own genres + tags + pool origins. */
+function candidateFeatures(candidate: RankableCandidate): Set<string> {
+  const features = new Set<string>(candidate.originFeatures ?? []);
+  for (const genre of candidate.result.genres ?? []) features.add(GENRE(genre));
+  for (const tag of candidate.tags ?? []) features.add(TAG(tag));
   return features;
 }
 
@@ -180,18 +176,18 @@ function scoreFeatures(features: Set<string>, profile: TasteProfile): number {
 /**
  * Build the "Because you played …" explanation for a candidate: accumulate how
  * much each owned game contributed to the features this candidate matched, then
- * name the strongest one or two. Returns null when there's no attributable
- * signal (falls back to a generic phrase at the call site).
+ * name the strongest one or two, plus the niche tag driving the match. Returns
+ * null when there's no attributable signal (generic phrase at the call site).
  */
 export function explainRecommendation(
   features: Set<string>,
   profile: TasteProfile
 ): string | null {
   const byTitle = new Map<string, number>();
-  const matchedClusters: string[] = [];
+  const matchedTags: string[] = [];
   for (const feature of features) {
-    if (feature.startsWith("cluster:")) {
-      matchedClusters.push(feature.slice("cluster:".length));
+    if (feature.startsWith("tag:")) {
+      matchedTags.push(feature.slice("tag:".length));
     }
     const list = profile.contributors.get(feature);
     if (!list) continue;
@@ -211,19 +207,17 @@ export function explainRecommendation(
       ? `Because you played ${names[0]}`
       : `Because you played ${names[0]} and ${names[1]}`;
 
-  // Add the niche hook when the match is driven by a playstyle cluster the user
-  // has a taste for, e.g. "…— you seem to like roguelites".
-  const cluster = matchedClusters.find((id) =>
-    profile.topClusters.includes(id)
-  );
-  return cluster
-    ? `${because} — you seem to like ${clusterLabel(cluster)}`
-    : because;
+  // Add the niche hook when a tag the user has a taste for drove the match,
+  // e.g. "…— you seem to like Roguelike Deckbuilder games".
+  const tag = matchedTags.find((name) => profile.topTags.includes(name));
+  return tag ? `${because} — you seem to like ${tag} games` : because;
 }
 
-/** A candidate paired with the features that produced it (pool origins). */
+/** A candidate paired with its real tags + the features that produced it. */
 export interface RankableCandidate {
   result: CatalogueSearchResult;
+  /** Real Steam tag names decoded from the edge's searchVector. */
+  tags?: string[];
   /** Namespaced features from the pool(s) this candidate was fetched from. */
   originFeatures?: Set<string>;
 }
@@ -232,8 +226,8 @@ export interface RankableCandidate {
  * Rank + trim candidates against the profile. Drops owned games, de-dupes,
  * excludes heavily-online titles (no such catalogue here) and any the user has
  * thumbed-down (`excludeIds`). Re-orders by taste overlap across genres AND
- * niche clusters; ties keep the incoming (popularity) order via a stable sort.
- * Each returned asset carries its "why" explanation.
+ * tags; ties keep the incoming (popularity) order via a stable sort. Each
+ * returned asset carries its "why" explanation.
  */
 export function rankRecommendations(
   candidates: RankableCandidate[],
@@ -245,18 +239,20 @@ export function rankRecommendations(
   const seen = new Set<string>();
   return (
     candidates
-      .filter(({ result }) => {
-        const key = ownedKey(result);
+      .filter((candidate) => {
+        const key = ownedKey(candidate.result);
         if (profile.ownedIds.has(key) || seen.has(key)) return false;
         if (excludeIds.has(key)) return false;
-        if (isHeavilyOnline(result.genres)) return false;
+        if (isHeavilyOnline(candidate.result.genres, candidate.tags)) {
+          return false;
+        }
         seen.add(key);
         return true;
       })
-      .map(({ result, originFeatures }, index) => {
-        const features = candidateFeatures(result, originFeatures);
+      .map((candidate, index) => {
+        const features = candidateFeatures(candidate);
         return {
-          result,
+          result: candidate.result,
           index,
           features,
           score: scoreFeatures(features, profile),

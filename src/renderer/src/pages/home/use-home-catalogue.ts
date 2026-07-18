@@ -13,16 +13,18 @@ import { levelDBService } from "@renderer/services/leveldb.service";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
 import type { EnrichedLibraryGame, RankableCandidate } from "./recommender";
 import { buildTasteProfile, rankRecommendations } from "./recommender";
-import {
-  clusterTagIds,
-  detectClusters,
-  detectClustersFromTitle,
-} from "./recommender-affinity";
+import { parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
 import { externalResourcesInstance } from "@renderer/hooks/use-catalogue";
 
 /** A thumbs-up recommendation counts like a well-liked, moderately-played game. */
 const LIKE_SYNTHETIC_HOURS = 8;
+
+/**
+ * A catalogue edge as the backend actually returns it — `searchVector` carries
+ * the game's Steam tags as numeric ids and isn't in the shared type.
+ */
+type CatalogueEdge = CatalogueSearchResult & { searchVector?: string | null };
 
 export interface HomeCatalogue {
   featured: TrendingGame[];
@@ -130,39 +132,135 @@ async function getClassics(): Promise<ShopAssets[]> {
 }
 
 /**
- * Steam tag name→id map (from steam-user-tags.json), used to translate a niche
- * playstyle cluster into the tag ids the catalogue search understands. Fetched
- * once per session and cached — it's a large static file.
+ * Steam tag dictionary (from steam-user-tags.json): name↔id maps used to decode
+ * a catalogue edge's `searchVector` tag ids into names, and to query candidate
+ * pools by the user's top tags. Fetched once per session and cached.
  */
-let tagNameToIdCache: Map<string, number> | null = null;
+interface TagDictionary {
+  nameToId: Map<string, number>;
+  idToName: Map<number, string>;
+}
+let tagDictCache: TagDictionary | null = null;
 
-async function getTagNameToId(language: string): Promise<Map<string, number>> {
-  if (tagNameToIdCache) return tagNameToIdCache;
+async function getTagDictionary(language: string): Promise<TagDictionary> {
+  if (tagDictCache) return tagDictCache;
   try {
     const { data } = await externalResourcesInstance.get<
       Record<string, Record<string, number>>
     >("/steam-user-tags.json");
     const dict = data[language] ?? data["en"] ?? {};
-    const map = new Map<string, number>();
+    const nameToId = new Map<string, number>();
+    const idToName = new Map<number, string>();
     for (const [name, id] of Object.entries(dict)) {
       const numeric = Number(id);
-      if (name && Number.isFinite(numeric))
-        map.set(name.toLowerCase(), numeric);
+      if (!name || !Number.isFinite(numeric)) continue;
+      nameToId.set(name.toLowerCase(), numeric);
+      idToName.set(numeric, name);
     }
-    tagNameToIdCache = map;
+    tagDictCache = { nameToId, idToName };
   } catch {
-    tagNameToIdCache = new Map();
+    tagDictCache = { nameToId: new Map(), idToName: new Map() };
   }
-  return tagNameToIdCache;
+  return tagDictCache;
+}
+
+/** Decode a catalogue edge's real Steam tag NAMES from its searchVector. */
+function edgeTags(
+  edge: CatalogueEdge,
+  idToName: Map<number, string>
+): string[] {
+  const names: string[] = [];
+  for (const id of parseSearchVectorTagIds(edge.searchVector)) {
+    const name = idToName.get(id);
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+/** Base `/catalogue/search` body; callers override title/genres/tags/take. */
+const baseSearchBody = (downloadSourceIds: string[]) => ({
+  title: "",
+  genres: [] as string[],
+  tags: [] as number[],
+  publishers: [],
+  developers: [],
+  downloadSourceFingerprints: [],
+  protondbSupportBadges: [],
+  deckCompatibility: [],
+  sortBy: "popularity",
+  sortOrder: "desc",
+  take: 30,
+  skip: 0,
+  downloadSourceIds,
+});
+
+/** One `/catalogue/search` call, returning raw edges (incl. searchVector). */
+async function searchCatalogueEdges(
+  data: Record<string, unknown>
+): Promise<CatalogueEdge[]> {
+  return window.electron.hydraApi
+    .post<{ edges: CatalogueEdge[]; count: number }>("/catalogue/search", {
+      data,
+      needsAuth: false,
+    })
+    .then((r) => r.edges ?? [])
+    .catch(() => [] as CatalogueEdge[]);
+}
+
+/** Per-session cache of a game's real facets, keyed `${shop}:${objectId}`. */
+const facetsCache = new Map<string, { genres: string[]; tags: string[] }>();
+
+const normalizeTitle = (title: string) =>
+  title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/**
+ * Look up a game's real genres + tags by matching it to a catalogue edge (whose
+ * searchVector carries the tags). Steam games match on objectId (= appid);
+ * others fall back to a normalized-title match. Cached per session so repeat
+ * home loads don't re-query.
+ */
+async function fetchGameFacets(
+  game: { shop: string; objectId: string; title: string },
+  idToName: Map<number, string>,
+  downloadSourceIds: string[]
+): Promise<{ genres: string[]; tags: string[] } | null> {
+  const key = `${game.shop}:${game.objectId}`;
+  const cached = facetsCache.get(key);
+  if (cached) return cached;
+  if (!game.title) return null;
+
+  const edges = await searchCatalogueEdges({
+    ...baseSearchBody(downloadSourceIds),
+    title: game.title,
+    take: 8,
+  });
+  if (!edges.length) return null;
+
+  const wantTitle = normalizeTitle(game.title);
+  const match =
+    edges.find((e) => e.objectId === game.objectId && e.shop === game.shop) ??
+    edges.find((e) => normalizeTitle(e.title) === wantTitle) ??
+    edges[0];
+
+  const facets = {
+    genres: match.genres ?? [],
+    tags: edgeTags(match, idToName),
+  };
+  facetsCache.set(key, facets);
+  return facets;
 }
 
 /**
- * "Recommended for you": learn a taste profile from the user's library over
- * coarse genres AND niche playstyle clusters (roguelite, character-action,
- * souls-like…), fetch popular catalogue games in those genres and Steam tags,
- * then rank by similarity — excluding owned and heavily-online games. Each
- * result carries a "why" explanation. Empty (row hides) when the library has no
- * signal yet, so new users aren't shown a meaningless row.
+ * "Recommended for you": learn a taste profile from the user's library over the
+ * REAL genres AND tags of their most-played games — the tags are the same Steam
+ * user tags shown on the store, decoded from each catalogue edge's searchVector.
+ * Popular catalogue games are then ranked by how much of that genre+tag taste
+ * they share, excluding owned, disliked and heavily-online titles. Each result
+ * carries a "why" explanation. Empty (row hides) when the library has no signal
+ * yet, so new users aren't shown a meaningless row.
  */
 async function getRecommended(
   downloadSourceIds: string[],
@@ -173,40 +271,31 @@ async function getRecommended(
     .catch(() => [])) as LibraryGame[];
   if (!library.length) return [];
 
-  // Many library games (esp. Steam-synced) don't store genres, and none store
-  // the description text niche-cluster detection needs. Fetch full details for
-  // the most-played handful (cached in main, so repeat loads are cheap) to
-  // backfill genres and mine playstyle clusters from title + description.
+  const { nameToId, idToName } = await getTagDictionary(language);
+
+  // Enrich the most-played handful with their real genres + tags (looked up from
+  // the catalogue, cached per session). These few games dominate taste anyway,
+  // so we don't pay a lookup for the whole library.
   const topPlayed = [...library]
     .sort(
       (a, b) =>
         (b.playTimeInMilliseconds ?? 0) - (a.playTimeInMilliseconds ?? 0)
     )
-    .slice(0, 16);
+    .slice(0, 12);
 
   const enriched = await Promise.all(
     topPlayed.map(async (game): Promise<EnrichedLibraryGame> => {
-      const details = await window.electron
-        .getGameShopDetails(game.objectId, game.shop, language)
-        .catch(() => null);
-      const genres = game.genres?.length
-        ? game.genres
-        : (details?.genres ?? []).map((g) => g.name).filter(Boolean);
-      // Cap the mined text so the cluster regexes stay cheap on long HTML.
-      const text = [
-        game.title,
-        details?.short_description,
-        details?.about_the_game,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .slice(0, 2000);
-      return { ...game, genres, clusters: detectClusters(text) };
+      const facets = await fetchGameFacets(game, idToName, downloadSourceIds);
+      return {
+        ...game,
+        genres: facets?.genres ?? game.genres ?? [],
+        tags: facets?.tags ?? [],
+      };
     })
   );
 
-  // Merge the enriched entries into the full library so the taste weights use
-  // them while ownedIds still covers EVERY owned game (not just the top 16).
+  // Merge enriched entries into the full library so taste weights use them while
+  // ownedIds still covers EVERY owned game (not just the enriched handful).
   const enrichedById = new Map(
     enriched.map((g) => [`${g.shop}:${g.objectId}`, g])
   );
@@ -214,10 +303,9 @@ async function getRecommended(
     (g) => enrichedById.get(`${g.shop}:${g.objectId}`) ?? g
   );
 
-  // Fold in the user's thumbs up/down feedback. A "like" becomes a synthetic
-  // favorite (its genres/clusters strengthen the taste profile, and it won't be
-  // re-recommended); a "dislike" is excluded from candidates. Liked games
-  // already in the library are skipped so their weight isn't double-counted.
+  // Fold in thumbs up/down feedback: a "like" (not already owned) is enriched
+  // with its real facets and added as a synthetic favorite; a "dislike" is
+  // excluded from candidates.
   const feedback = await getAllFeedback();
   const libraryKeys = new Set(library.map((g) => `${g.shop}:${g.objectId}`));
   const dislikedIds = new Set(
@@ -225,78 +313,61 @@ async function getRecommended(
       .filter((f) => f.feedback === "dislike")
       .map((f) => `${f.shop}:${f.objectId}`)
   );
-  for (const record of feedback) {
-    const key = `${record.shop}:${record.objectId}`;
-    if (record.feedback !== "like" || libraryKeys.has(key)) continue;
-    fullLibrary.push({
-      shop: record.shop,
-      objectId: record.objectId,
-      title: record.title,
-      genres: record.genres,
-      clusters: detectClustersFromTitle(record.title),
-      playTimeInMilliseconds: LIKE_SYNTHETIC_HOURS * 3_600_000,
-      lastTimePlayed: new Date(record.updatedAt).toISOString(),
-      favorite: true,
-    });
-  }
+  const likedNew = feedback.filter(
+    (f) => f.feedback === "like" && !libraryKeys.has(`${f.shop}:${f.objectId}`)
+  );
+  await Promise.all(
+    likedNew.map(async (record) => {
+      const facets = await fetchGameFacets(record, idToName, downloadSourceIds);
+      fullLibrary.push({
+        shop: record.shop,
+        objectId: record.objectId,
+        title: record.title,
+        genres: facets?.genres ?? record.genres ?? [],
+        tags: facets?.tags ?? [],
+        playTimeInMilliseconds: LIKE_SYNTHETIC_HOURS * 3_600_000,
+        lastTimePlayed: new Date(record.updatedAt).toISOString(),
+        favorite: true,
+      });
+    })
+  );
 
   const profile = buildTasteProfile(fullLibrary);
-  if (profile.topGenres.length === 0 && profile.topClusters.length === 0) {
+  if (profile.topGenres.length === 0 && profile.topTags.length === 0) {
     return [];
   }
 
-  // `/catalogue/search` ANDs each filter category, so passing many genres/tags
-  // at once matches almost nothing. Query each top genre and each niche cluster
-  // SEPARATELY (broad single-facet pools), tag every candidate with the feature
-  // that produced it, then rank by the full taste vector so games hitting MORE
-  // of the user's genres AND their niche interests rise to the top.
-  const search = (
+  // `/catalogue/search` ANDs each filter category, so query each top genre and
+  // each top tag SEPARATELY (broad single-facet pools). Tag every candidate with
+  // the feature that produced it AND its own real tags, then rank by the full
+  // taste vector so games sharing MORE of the user's genres + tags rise.
+  const searchPool = (
     body: { genres?: string[]; tags?: number[] },
     originFeature: string
   ): Promise<RankableCandidate[]> =>
-    window.electron.hydraApi
-      .post<{ edges: CatalogueSearchResult[]; count: number }>(
-        "/catalogue/search",
-        {
-          data: {
-            title: "",
-            genres: body.genres ?? [],
-            tags: body.tags ?? [],
-            publishers: [],
-            developers: [],
-            downloadSourceFingerprints: [],
-            protondbSupportBadges: [],
-            deckCompatibility: [],
-            sortBy: "popularity",
-            sortOrder: "desc",
-            take: 30,
-            skip: 0,
-            downloadSourceIds,
-          },
-          needsAuth: false,
-        }
-      )
-      .then((r) =>
-        r.edges.map((result) => ({
-          result,
-          originFeatures: new Set([originFeature]),
-        }))
-      )
-      .catch(() => [] as RankableCandidate[]);
+    searchCatalogueEdges({
+      ...baseSearchBody(downloadSourceIds),
+      genres: body.genres ?? [],
+      tags: body.tags ?? [],
+    }).then((edges) =>
+      edges.map((result) => ({
+        result,
+        tags: edgeTags(result, idToName),
+        originFeatures: new Set([originFeature]),
+      }))
+    );
 
-  const tagNameToId = await getTagNameToId(language);
-  const clusterSearches = profile.topClusters
-    .map((id) => ({ id, tagIds: clusterTagIds(id, tagNameToId) }))
-    .filter((c) => c.tagIds.length > 0)
-    // One representative tag id per cluster keeps the pool broad (an AND of
-    // several tags would over-narrow) and the request count bounded.
-    .map((c) => search({ tags: [c.tagIds[0]] }, `cluster:${c.id}`));
+  const tagSearches = profile.topTags
+    .map((name) => ({ name, id: nameToId.get(name.toLowerCase()) }))
+    .filter((t): t is { name: string; id: number } => typeof t.id === "number")
+    .slice(0, 5)
+    .map((t) => searchPool({ tags: [t.id] }, `tag:${t.name}`));
 
   const genreSearches = profile.topGenres
     .slice(0, 3)
-    .map((genre) => search({ genres: [genre] }, `genre:${genre}`));
+    .map((genre) => searchPool({ genres: [genre] }, `genre:${genre}`));
 
-  const pools = await Promise.all([...genreSearches, ...clusterSearches]);
+  const pools = await Promise.all([...genreSearches, ...tagSearches]);
   const candidates = pools.flat();
 
   return rankRecommendations(
