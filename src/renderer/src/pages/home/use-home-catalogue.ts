@@ -11,7 +11,10 @@ import type {
 import { CatalogueCategory } from "@shared";
 import { levelDBService } from "@renderer/services/leveldb.service";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
+import type { EnrichedLibraryGame, RankableCandidate } from "./recommender";
 import { buildTasteProfile, rankRecommendations } from "./recommender";
+import { clusterTagIds, detectClusters } from "./recommender-affinity";
+import { externalResourcesInstance } from "@renderer/hooks/use-catalogue";
 
 export interface HomeCatalogue {
   featured: TrendingGame[];
@@ -119,11 +122,39 @@ async function getClassics(): Promise<ShopAssets[]> {
 }
 
 /**
- * "Recommended for you": learn a genre taste profile from the user's library
- * (playtime + recency + favorites), fetch popular catalogue games in those
- * genres, and rank them by similarity — excluding games they already own. Empty
- * (row hides) when the library has no genre signal yet, so new users aren't
- * shown a meaningless row.
+ * Steam tag name→id map (from steam-user-tags.json), used to translate a niche
+ * playstyle cluster into the tag ids the catalogue search understands. Fetched
+ * once per session and cached — it's a large static file.
+ */
+let tagNameToIdCache: Map<string, number> | null = null;
+
+async function getTagNameToId(language: string): Promise<Map<string, number>> {
+  if (tagNameToIdCache) return tagNameToIdCache;
+  try {
+    const { data } = await externalResourcesInstance.get<
+      Record<string, Record<string, number>>
+    >("/steam-user-tags.json");
+    const dict = data[language] ?? data["en"] ?? {};
+    const map = new Map<string, number>();
+    for (const [name, id] of Object.entries(dict)) {
+      const numeric = Number(id);
+      if (name && Number.isFinite(numeric))
+        map.set(name.toLowerCase(), numeric);
+    }
+    tagNameToIdCache = map;
+  } catch {
+    tagNameToIdCache = new Map();
+  }
+  return tagNameToIdCache;
+}
+
+/**
+ * "Recommended for you": learn a taste profile from the user's library over
+ * coarse genres AND niche playstyle clusters (roguelite, character-action,
+ * souls-like…), fetch popular catalogue games in those genres and Steam tags,
+ * then rank by similarity — excluding owned and heavily-online games. Each
+ * result carries a "why" explanation. Empty (row hides) when the library has no
+ * signal yet, so new users aren't shown a meaningless row.
  */
 async function getRecommended(
   downloadSourceIds: string[],
@@ -134,55 +165,69 @@ async function getRecommended(
     .catch(() => [])) as LibraryGame[];
   if (!library.length) return [];
 
-  // Many library games (esp. Steam-synced) don't store genres, which would
-  // leave the taste profile empty. Backfill genres for the most-played games
-  // from their shop details (cached in main) so the recommender always has a
-  // signal. Only the top-played handful are backfilled to keep home load fast.
+  // Many library games (esp. Steam-synced) don't store genres, and none store
+  // the description text niche-cluster detection needs. Fetch full details for
+  // the most-played handful (cached in main, so repeat loads are cheap) to
+  // backfill genres and mine playstyle clusters from title + description.
   const topPlayed = [...library]
     .sort(
       (a, b) =>
         (b.playTimeInMilliseconds ?? 0) - (a.playTimeInMilliseconds ?? 0)
     )
-    .slice(0, 12);
+    .slice(0, 16);
 
   const enriched = await Promise.all(
-    topPlayed.map(async (game) => {
-      if (game.genres?.length) return game;
+    topPlayed.map(async (game): Promise<EnrichedLibraryGame> => {
       const details = await window.electron
         .getGameShopDetails(game.objectId, game.shop, language)
         .catch(() => null);
-      const genres = (details?.genres ?? [])
-        .map((g) => g.name)
-        .filter(Boolean);
-      return { ...game, genres };
+      const genres = game.genres?.length
+        ? game.genres
+        : (details?.genres ?? []).map((g) => g.name).filter(Boolean);
+      // Cap the mined text so the cluster regexes stay cheap on long HTML.
+      const text = [
+        game.title,
+        details?.short_description,
+        details?.about_the_game,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .slice(0, 2000);
+      return { ...game, genres, clusters: detectClusters(text) };
     })
   );
 
-  // Merge backfilled genres into the full library so the taste weights use them
-  // while ownedIds still covers EVERY owned game (not just the top 12).
+  // Merge the enriched entries into the full library so the taste weights use
+  // them while ownedIds still covers EVERY owned game (not just the top 16).
   const enrichedById = new Map(
     enriched.map((g) => [`${g.shop}:${g.objectId}`, g])
   );
-  const fullLibrary = library.map(
+  const fullLibrary: EnrichedLibraryGame[] = library.map(
     (g) => enrichedById.get(`${g.shop}:${g.objectId}`) ?? g
   );
 
   const profile = buildTasteProfile(fullLibrary);
-  if (profile.topGenres.length === 0) return [];
+  if (profile.topGenres.length === 0 && profile.topClusters.length === 0) {
+    return [];
+  }
 
-  // `/catalogue/search` ANDs its genres filter, so passing all top genres at
-  // once matches almost nothing. Query the top few genres SEPARATELY (each a
-  // broad single-genre pool), merge, then rank by the full taste vector so games
-  // that hit MORE of the user's genres rise to the top.
-  const searchGenre = (genre: string) =>
+  // `/catalogue/search` ANDs each filter category, so passing many genres/tags
+  // at once matches almost nothing. Query each top genre and each niche cluster
+  // SEPARATELY (broad single-facet pools), tag every candidate with the feature
+  // that produced it, then rank by the full taste vector so games hitting MORE
+  // of the user's genres AND their niche interests rise to the top.
+  const search = (
+    body: { genres?: string[]; tags?: number[] },
+    originFeature: string
+  ): Promise<RankableCandidate[]> =>
     window.electron.hydraApi
       .post<{ edges: CatalogueSearchResult[]; count: number }>(
         "/catalogue/search",
         {
           data: {
             title: "",
-            genres: [genre],
-            tags: [],
+            genres: body.genres ?? [],
+            tags: body.tags ?? [],
             publishers: [],
             developers: [],
             downloadSourceFingerprints: [],
@@ -197,12 +242,27 @@ async function getRecommended(
           needsAuth: false,
         }
       )
-      .then((r) => r.edges)
-      .catch(() => [] as CatalogueSearchResult[]);
+      .then((r) =>
+        r.edges.map((result) => ({
+          result,
+          originFeatures: new Set([originFeature]),
+        }))
+      )
+      .catch(() => [] as RankableCandidate[]);
 
-  const pools = await Promise.all(
-    profile.topGenres.slice(0, 3).map(searchGenre)
-  );
+  const tagNameToId = await getTagNameToId(language);
+  const clusterSearches = profile.topClusters
+    .map((id) => ({ id, tagIds: clusterTagIds(id, tagNameToId) }))
+    .filter((c) => c.tagIds.length > 0)
+    // One representative tag id per cluster keeps the pool broad (an AND of
+    // several tags would over-narrow) and the request count bounded.
+    .map((c) => search({ tags: [c.tagIds[0]] }, `cluster:${c.id}`));
+
+  const genreSearches = profile.topGenres
+    .slice(0, 3)
+    .map((genre) => search({ genres: [genre] }, `genre:${genre}`));
+
+  const pools = await Promise.all([...genreSearches, ...clusterSearches]);
   const candidates = pools.flat();
 
   return rankRecommendations(

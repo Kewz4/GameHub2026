@@ -44,6 +44,7 @@ import {
   sanitizeTitleQuery,
   subtitleQuery,
 } from "./catalogue-relevance";
+import { buildVocabulary, suggestCorrection } from "./catalogue-spellcheck";
 
 const ProtonCompatibilitySection = lazy(async () => {
   const mod = await import("./proton-compatibility-section");
@@ -139,6 +140,7 @@ export default function Catalogue() {
   const { steamGenres, steamUserTags, filters, page } = useAppSelector(
     (state) => state.catalogueSearch
   );
+  const library = useAppSelector((state) => state.library.value);
   const deferredTitleFilter = useDeferredValue(filters.title);
 
   const effectiveFilters = useMemo(() => {
@@ -332,6 +334,21 @@ export default function Catalogue() {
   }, [effectiveFilters, downloadSources, page, debouncedSearch]);
 
   const language = i18n.language.split("-")[0];
+
+  // "Did you mean …?" spell-correction. The vocabulary includes the on-screen
+  // results, so a suggestion only fires for a query word that matched NOTHING —
+  // i.e. a genuine typo — never when the search already found the game.
+  const didYouMean = useMemo(() => {
+    const query = (filters.title ?? "").trim();
+    if (query.length < 4) return null;
+    const vocab = buildVocabulary([
+      ...library
+        .map((game) => game.title)
+        .filter((title): title is string => Boolean(title)),
+      ...results.map((result) => result.title),
+    ]);
+    return suggestCorrection(query, vocab);
+  }, [filters.title, library, results]);
 
   const steamGenresMapping = useMemo<Record<string, string>>(() => {
     if (!steamGenres[language]) return {};
@@ -670,6 +687,39 @@ export default function Catalogue() {
 
       <div className="catalogue__content">
         <div className="catalogue__games-container">
+          {didYouMean && (
+            <div className="catalogue__did-you-mean">
+              <span>
+                {t("did_you_mean", { defaultValue: "Did you mean" })}{" "}
+                <button
+                  type="button"
+                  className="catalogue__did-you-mean-suggestion"
+                  onClick={() => {
+                    dispatch(setFilters({ title: didYouMean }));
+                    dispatch(setPage(1));
+                  }}
+                >
+                  {didYouMean}
+                </button>
+                ?
+              </span>
+              <Button
+                type="button"
+                theme="outline"
+                className="catalogue__did-you-mean-button"
+                onClick={() => {
+                  dispatch(setFilters({ title: didYouMean }));
+                  dispatch(setPage(1));
+                }}
+              >
+                {t("search_instead", {
+                  defaultValue: "Search {{title}} instead",
+                  title: didYouMean,
+                })}
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">
               {Array.from({ length: PAGE_SIZE }).map((_, i) => (

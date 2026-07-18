@@ -11,8 +11,55 @@ import { setFilters } from "@renderer/features";
 import { buildGameDetailsPath } from "@renderer/helpers";
 import { PlatformLogo } from "@renderer/pages/settings/emulation/platform-logo";
 import { PLATFORM_LABELS } from "@renderer/assets/emulation/platform-logos";
+import {
+  scoreTitleMatch,
+  subtitleQuery,
+} from "@renderer/pages/catalogue/catalogue-relevance";
 import { SidebarSection } from "../sidebar-section/sidebar-section";
 import "./console-metadata-section.scss";
+
+/**
+ * Resolve one series-sibling TITLE to a real catalogue game, robustly. The
+ * catalogue's console search requires every query token to appear in a title,
+ * so a franchise entry like "The Legend of Zelda: Ocarina of Time 3D" resolves
+ * only when we (a) search ALL systems — the sibling often lives on a different
+ * console than the game being viewed (OoT 3D on 3DS vs OoT on N64) — and (b)
+ * fall back to the distinctive subtitle when the full title finds nothing.
+ * Among matches we keep the best by title relevance, preferring the same
+ * console on a tie. Returns null only when nothing plausibly matches.
+ */
+async function resolveSeriesCard(
+  title: string,
+  preferSystem: EmulatorSystem | undefined
+): Promise<CatalogueSearchResult | null> {
+  const search = (query: string) =>
+    window.electron
+      .searchClassicsCatalogue(query, 8)
+      .catch(() => [] as CatalogueSearchResult[]);
+
+  let results = await search(title);
+  if (!results.length) {
+    const subtitle = subtitleQuery(title);
+    if (subtitle) results = await search(subtitle);
+  }
+  if (!results.length) return null;
+
+  const systemOf = (r: CatalogueSearchResult) =>
+    r.objectId.startsWith("minerva:") ? r.objectId.split(":")[1] : null;
+
+  const best = results
+    .map((result) => ({
+      result,
+      score:
+        scoreTitleMatch(result.title, title) +
+        // Nudge toward the same console when scores are otherwise close.
+        (preferSystem && systemOf(result) === preferSystem ? 0.05 : 0),
+    }))
+    .sort((a, b) => b.score - a.score)[0];
+
+  // Require a minimal token overlap so we never show an unrelated first result.
+  return best && best.score >= 0.34 ? best.result : null;
+}
 
 /**
  * Console/classics results are shop "launchbox" with an objectId shaped
@@ -88,12 +135,9 @@ export function ConsoleMetadataSection() {
     }
     let active = true;
     Promise.all(
-      titles.slice(0, 12).map((title) =>
-        window.electron
-          .searchClassicsCatalogue(title, 1, currentSystem)
-          .then((results) => results?.[0] ?? null)
-          .catch(() => null)
-      )
+      titles
+        .slice(0, 12)
+        .map((title) => resolveSeriesCard(title, currentSystem))
     ).then((resolved) => {
       if (!active) return;
       const seen = new Set<string>([objectId ?? ""]);

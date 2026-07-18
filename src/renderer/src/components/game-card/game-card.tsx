@@ -1,4 +1,4 @@
-import { DownloadIcon, PeopleIcon } from "@primer/octicons-react";
+import { DownloadIcon, InfoIcon, PeopleIcon } from "@primer/octicons-react";
 import type { GameStats, ShopAssets } from "@types";
 
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
@@ -43,6 +43,7 @@ export function GameCard({ game, className, ...props }: GameCardProps) {
   const { t } = useTranslation("game_card");
 
   const [stats, setStats] = useState<GameStats | null>(null);
+  const [showReason, setShowReason] = useState(false);
 
   const handleHover = useCallback(() => {
     if (!stats) {
@@ -74,6 +75,45 @@ export function GameCard({ game, className, ...props }: GameCardProps) {
           className="game-card__cover"
           loading="lazy"
         />
+
+        {game.recommendationReason && (
+          <div className="game-card__reason">
+            {/* Not a <button> — the card root already is one, and buttons can't
+                nest. A role=button span with stopPropagation shows the "why"
+                without triggering navigation. */}
+            <span
+              role="button"
+              tabIndex={0}
+              className="game-card__reason-toggle"
+              aria-label={t("why_recommended", {
+                defaultValue: "Why is this recommended?",
+              })}
+              title={game.recommendationReason}
+              aria-expanded={showReason}
+              onClick={(event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                setShowReason((prev) => !prev);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.stopPropagation();
+                  event.preventDefault();
+                  setShowReason((prev) => !prev);
+                }
+              }}
+              onMouseEnter={() => setShowReason(true)}
+              onMouseLeave={() => setShowReason(false)}
+            >
+              <InfoIcon size={14} />
+            </span>
+            {showReason && (
+              <span className="game-card__reason-popover" role="tooltip">
+                {game.recommendationReason}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="game-card__content">
           <div className="game-card__title-container">

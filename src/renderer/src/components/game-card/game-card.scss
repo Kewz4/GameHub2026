@@ -113,6 +113,63 @@
     font-weight: bold;
   }
 
+  // "Why recommended" info affordance, top-right of the cover.
+  &__reason {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  &__reason-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity ease 0.2s;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(0, 0, 0, 0.75);
+    }
+  }
+
+  // Reveal the affordance on card hover / focus, and keep it visible while its
+  // popover is open (the toggle keeps focus/hover then anyway).
+  &:hover &__reason-toggle,
+  &:focus-within &__reason-toggle {
+    opacity: 1;
+  }
+
+  &__reason-popover {
+    position: absolute;
+    top: 30px;
+    right: 0;
+    z-index: 3;
+    max-width: 200px;
+    width: max-content;
+    padding: 6px 9px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.35;
+    text-align: left;
+    color: #fff;
+    background: rgba(10, 10, 10, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+  }
+
   &:hover &__cover {
     transform: scale(1.05);
   }

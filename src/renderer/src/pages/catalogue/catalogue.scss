@@ -166,6 +166,42 @@
     margin-top: 16px;
   }
 
+  // "Did you mean …?" spell-correction banner above the results.
+  &__did-you-mean {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    background: rgba(var(--fg-rgb), 0.05);
+    border: 1px solid rgba(var(--fg-rgb), 0.12);
+    font-size: 14px;
+    color: var(--color-text);
+  }
+
+  &__did-you-mean-suggestion {
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    font-style: italic;
+    color: var(--color-primary, #7c83ff);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover {
+      opacity: 0.85;
+    }
+  }
+
+  &__did-you-mean-button {
+    flex-shrink: 0;
+  }
+
   &__result-count {
     font-size: 12px;
     font-weight: 500;

@@ -73,6 +73,12 @@ export interface ShopAssets {
   logoPosition: string | null;
   coverImageUrl: string | null;
   downloadSources: string[];
+  /**
+   * Optional human explanation of why this game was recommended, e.g.
+   * "Because you played Hades, God of War". Only set on "Recommended for you"
+   * results; the home info button surfaces it.
+   */
+  recommendationReason?: string;
 }
 
 export type ShopDetails = SteamAppDetails & {
