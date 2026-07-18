@@ -1,11 +1,29 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { ConsoleGameMetadata } from "@types";
+import type {
+  CatalogueSearchResult,
+  ConsoleGameMetadata,
+  EmulatorSystem,
+} from "@types";
 import { gameDetailsContext } from "@renderer/context/game-details/game-details.context";
 import { useAppDispatch } from "@renderer/hooks";
 import { setFilters } from "@renderer/features";
+import { buildGameDetailsPath } from "@renderer/helpers";
+import { PlatformLogo } from "@renderer/pages/settings/emulation/platform-logo";
+import { PLATFORM_LABELS } from "@renderer/assets/emulation/platform-logos";
 import { SidebarSection } from "../sidebar-section/sidebar-section";
 import "./console-metadata-section.scss";
+
+/**
+ * Console/classics results are shop "launchbox" with an objectId shaped
+ * `minerva:<system>:<title>`. Returns the EmulatorSystem so we can badge the
+ * card with its platform logo, or null when it can't be derived.
+ */
+function systemForResult(result: CatalogueSearchResult): EmulatorSystem | null {
+  if (!result.objectId.startsWith("minerva:")) return null;
+  const seg = result.objectId.split(":")[1];
+  return seg in PLATFORM_LABELS ? (seg as EmulatorSystem) : null;
+}
 
 /** Colour a 0–100 score green/yellow/red the way review aggregators do. */
 const scoreClass = (score: number) =>
@@ -21,8 +39,17 @@ export function ConsoleMetadataSection() {
   const { shop, gameTitle, objectId, shopDetails } =
     useContext(gameDetailsContext);
   const [meta, setMeta] = useState<ConsoleGameMetadata | null>(null);
+  const [seriesCards, setSeriesCards] = useState<CatalogueSearchResult[]>([]);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+
+  // The current game's console (from its `minerva:<system>:<title>` objectId),
+  // so series-sibling lookups are scoped to the same platform.
+  const currentSystem = useMemo<EmulatorSystem | undefined>(() => {
+    if (!objectId?.startsWith("minerva:")) return undefined;
+    const seg = objectId.split(":")[1];
+    return seg in PLATFORM_LABELS ? (seg as EmulatorSystem) : undefined;
+  }, [objectId]);
 
   // Search the catalogue for a series sibling by title (same path the header
   // search uses): set the title filter, then land on the catalogue page.
@@ -49,6 +76,37 @@ export function ConsoleMetadataSection() {
       active = false;
     };
   }, [shop, gameTitle, objectId]);
+
+  // Resolve each series-sibling title against the console catalogue so the
+  // section can render real cards (art + platform) that navigate to the actual
+  // game, instead of blind title-search chips. Skip the current game itself.
+  useEffect(() => {
+    const titles = meta?.series?.titles ?? [];
+    if (shop !== "launchbox" || !titles.length) {
+      setSeriesCards([]);
+      return;
+    }
+    let active = true;
+    Promise.all(
+      titles.slice(0, 12).map((title) =>
+        window.electron
+          .searchClassicsCatalogue(title, 1, currentSystem)
+          .then((results) => results?.[0] ?? null)
+          .catch(() => null)
+      )
+    ).then((resolved) => {
+      if (!active) return;
+      const seen = new Set<string>([objectId ?? ""]);
+      const cards = resolved.filter(
+        (r): r is CatalogueSearchResult =>
+          !!r && !seen.has(r.objectId) && (seen.add(r.objectId), true)
+      );
+      setSeriesCards(cards);
+    });
+    return () => {
+      active = false;
+    };
+  }, [shop, objectId, currentSystem, meta?.series]);
 
   const basics = useMemo(() => {
     if (shop !== "launchbox" || !shopDetails) return [];
@@ -177,19 +235,65 @@ export function ConsoleMetadataSection() {
 
       {series?.titles.length ? (
         <SidebarSection title={`More from ${series.name}`}>
-          <div className="console-meta__chips">
-            {series.titles.slice(0, 12).map((title) => (
-              <button
-                key={title}
-                type="button"
-                className="console-meta__chip console-meta__chip--button"
-                title={`Search for ${title}`}
-                onClick={() => searchCatalogue(title)}
-              >
-                {title}
-              </button>
-            ))}
-          </div>
+          {seriesCards.length ? (
+            <div className="console-meta__series">
+              {seriesCards.map((card) => {
+                const cardSystem = systemForResult(card);
+                return (
+                  <button
+                    key={card.objectId}
+                    type="button"
+                    className="console-meta__series-card"
+                    title={card.title}
+                    onClick={() => navigate(buildGameDetailsPath(card))}
+                  >
+                    <div className="console-meta__series-hero">
+                      {card.libraryImageUrl ? (
+                        <img
+                          src={card.libraryImageUrl}
+                          alt={card.title}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="console-meta__series-hero--placeholder" />
+                      )}
+                      {cardSystem && (
+                        <span
+                          className="console-meta__series-platform"
+                          title={PLATFORM_LABELS[cardSystem]}
+                        >
+                          <PlatformLogo
+                            system={cardSystem}
+                            className="console-meta__series-platform-logo"
+                          />
+                        </span>
+                      )}
+                    </div>
+                    <span className="console-meta__series-title">
+                      {card.title}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            // Nothing matched the catalogue yet — fall back to title-search
+            // chips so the series is still discoverable.
+            <div className="console-meta__chips">
+              {series.titles.slice(0, 12).map((title) => (
+                <button
+                  key={title}
+                  type="button"
+                  className="console-meta__chip console-meta__chip--button"
+                  title={`Search for ${title}`}
+                  onClick={() => searchCatalogue(title)}
+                >
+                  {title}
+                </button>
+              ))}
+            </div>
+          )}
         </SidebarSection>
       ) : null}
 

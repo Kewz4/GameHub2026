@@ -299,7 +299,14 @@ function HeroDownloadView({
   const { t: tGameDetails } = useTranslation("game_details");
 
   const handleLogoClick = useCallback(() => {
-    navigate(buildGameDetailsPath(game));
+    // Companion downloads carry a `base::update` / `base::dlc::…` objectId;
+    // clicking should land on the ORIGINAL (base) game page, so strip the suffix.
+    navigate(
+      buildGameDetailsPath({
+        ...game,
+        objectId: game.objectId.split("::")[0],
+      })
+    );
   }, [navigate, game]);
 
   const etaText = calculateETA();
@@ -1129,20 +1136,41 @@ export function DownloadGroup({
 
         <ul className="download-group__simple-list">
           {downloadInfo.map(({ game, size, progress, isSeeding: seeding }) => {
+            // Companion downloads (`base::update` / `base::dlc::…`) reuse the
+            // base game's cover; tag them and route clicks to the base game.
+            const companionKind = /::update/.test(game.objectId)
+              ? "Update"
+              : /::dlc/.test(game.objectId)
+                ? "DLC"
+                : null;
+            const goToBaseGame = () =>
+              navigate(
+                buildGameDetailsPath({
+                  ...game,
+                  objectId: game.objectId.split("::")[0],
+                })
+              );
             return (
               <li key={game.id} className="download-group__simple-card">
                 <button
                   type="button"
-                  onClick={() => navigate(buildGameDetailsPath(game))}
+                  onClick={goToBaseGame}
                   className="download-group__simple-thumbnail"
                 >
                   <img src={game.libraryImageUrl || ""} alt={game.title} />
+                  {companionKind && (
+                    <span
+                      className={`download-group__simple-badge download-group__simple-badge--${companionKind.toLowerCase()}`}
+                    >
+                      {companionKind}
+                    </span>
+                  )}
                 </button>
 
                 <div className="download-group__simple-info">
                   <button
                     type="button"
-                    onClick={() => navigate(buildGameDetailsPath(game))}
+                    onClick={goToBaseGame}
                     className="download-group__simple-title-button"
                   >
                     <h3 className="download-group__simple-title">

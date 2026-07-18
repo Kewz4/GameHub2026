@@ -184,11 +184,19 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
   // When pads (re)connect, reselect the controller this emulator was mapped
   // with — so bindings still line up after unplugging/reconnecting.
   useEffect(() => {
+    // Prefer the WebHID Nintendo pad whenever it's connected: it decodes in
+    // standard order so the diagram + capture work correctly, whereas the same
+    // controller's raw Gamepad-API duplicate (mapping === "") lights the wrong
+    // controls. This is why the mapper "didn't respond" to Switch/SDL pads.
+    if (hidPad.connected) {
+      setSelectedPad(hidPad.padIndex);
+      return;
+    }
     const savedName = savedPadNameRef.current;
     if (!savedName || pads.length === 0) return;
     const match = pads.find((p) => p.id === savedName);
     if (match) setSelectedPad(match.index);
-  }, [pads]);
+  }, [pads, hidPad.connected, hidPad.padIndex]);
 
   // Continuously read the selected pad so the diagram lights up live.
   useEffect(() => {

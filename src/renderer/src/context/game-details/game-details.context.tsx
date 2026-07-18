@@ -729,23 +729,26 @@ export function GameDetailsContextProvider({
   const selectGameExecutable = async () => {
     const downloadsPath = await getDownloadsPath();
 
-    // For console/emulated games the "executable" is a ROM (or, for folder-based
-    // systems like Cemu, the extracted game FOLDER) — not a Windows .exe. Filter
-    // by the emulator's own launchable file types, and switch to a directory
-    // picker when the system is folder-based.
-    const emulatorSystem =
-      shop === "launchbox"
-        ? platformToEmulatorSystem(game?.platform ?? platform)
-        : null;
+    // For console/emulated (launchbox) games the "executable" is a ROM (or, for
+    // folder-based systems like Cemu, the extracted game FOLDER) — never a
+    // Windows .exe. ALWAYS take the ROM path for launchbox: pass the raw platform
+    // to the main resolver (which maps display names → system), and if it can't
+    // resolve the exact extensions, fall back to an all-files picker — never the
+    // exe-only filter, which is meaningless for a ROM.
+    if (shop === "launchbox") {
+      const systemOrPlatform =
+        platformToEmulatorSystem(game?.platform ?? platform) ??
+        game?.platform ??
+        platform ??
+        "";
 
-    if (emulatorSystem) {
       const romConfig = await window.electron
-        .getEmulatorRomFilters(emulatorSystem)
+        .getEmulatorRomFilters(systemOrPlatform)
         .catch(() => ({ extensions: [] as string[], folderBased: false }));
 
       // On Windows/Linux, ['openFile','openDirectory'] resolves to a directory
       // picker (Electron can't do both) — exactly what Cemu needs; on macOS the
-      // user can pick either. Non-folder systems stay file-only with ROM filters.
+      // user can pick either. Non-folder systems stay file-only.
       const properties: Array<"openFile" | "openDirectory"> =
         romConfig.folderBased ? ["openFile", "openDirectory"] : ["openFile"];
 
@@ -757,7 +760,7 @@ export function GameDetailsContextProvider({
             },
             { name: t("all_files"), extensions: ["*"] },
           ]
-        : undefined;
+        : [{ name: t("all_files"), extensions: ["*"] }];
 
       return window.electron
         .showOpenDialog({

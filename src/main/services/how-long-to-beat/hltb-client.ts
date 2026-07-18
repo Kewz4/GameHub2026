@@ -7,14 +7,14 @@ import { type HltbGame, mapHltbGame, pickBestHltbMatch } from "./hltb-parse";
  * Minimal HowLongToBeat client used for console/emulated games (which the Hydra
  * backend doesn't know about, so they can't use the server-side HLTB endpoint).
  *
- * HLTB has no public API. As of their 2025 redesign the SPA resolves a rotating
- * search endpoint from its JS bundle whose full form is
- * `/api/<word>/<hexkey>` — e.g. `/api/search/21fda17e4a1d49be`. The appended
- * hex segment *is* the auth: it is baked into the JS bundle and rotates between
- * deploys, so it must be scraped at runtime and preserved in full. There is no
- * separate `<path>/init` token endpoint on the current build (older versions
- * used an `x-auth-token`/`x-hp-key`/`x-hp-val` header triplet; that scheme is
- * gone). We simply POST the search to the fully-resolved URL.
+ * HLTB has no public API. The SPA (1) scrapes a rotating search WORD from its JS
+ * bundle — `/api/search`, `/api/seek`, `/api/find`… (the word changes between
+ * deploys, so we discover it at runtime), (2) GETs `<endpoint>/init` for a
+ * short-lived security triplet — a `token` plus a key/val pair whose field names
+ * also rotate — and (3) POSTs the search to `/api/<word>` carrying that triplet
+ * both as `x-auth-token`/`x-hp-key`/`x-hp-val` headers AND as a `{[key]: val}`
+ * property in the JSON body. There is no auth in the URL path. (Verified against
+ * the maintained howlongtobeatpy wrapper.)
  *
  * Requests go through Electron's session.fetch (Chromium's network stack)
  * rather than Node's fetch (undici). This is critical: HLTB uses an Imperva WAF
@@ -57,42 +57,34 @@ const browserHeaders = () => ({
   "Accept-Language": "en-US,en;q=0.9",
 });
 
+/** Fallback search word when the JS scrape can't find one (HLTB's own default). */
+const FALLBACK_SEARCH_WORD = "s";
+
 /**
- * Resolve the current `/api/<word>/<hexkey>` search endpoint by scraping the
- * SPA's JS bundle for the POST `fetch` call. HLTB rotates both the word and the
- * appended hex key between deploys, and the hex key *is* the auth, so the whole
- * path (word + key) must be captured — truncating to the first segment yields a
- * bare `/api/search` that 404s.
- *
- * Prefer the `_app-*` chunk, fall back to scanning every `<script src>` chunk.
- * Returns the full path (e.g. `/api/search/21fda17e4a1d49be`).
+ * Resolve the current `/api/<word>` search endpoint by scraping the SPA's JS
+ * bundle for the POST `fetch` call. HLTB rotates the word between deploys
+ * (`/api/search`, `/api/seek`, `/api/find`…). The auth is NOT in the URL — it
+ * comes from a separate `<endpoint>/init` call (see resolveAuth). Prefer the
+ * `_app-*` chunk, fall back to every `<script src>` chunk, then to `/api/s`.
+ * (Scheme verified against the maintained howlongtobeatpy wrapper.)
  */
 async function resolveSearchEndpoint(): Promise<string | null> {
   const html = await hltbFetch(`${BASE}/`, {
     headers: { ...browserHeaders(), Accept: "text/html" },
   }).then((r) => (r.ok ? r.text() : ""));
-  if (!html) return null;
+  if (!html) return `/api/${FALLBACK_SEARCH_WORD}`;
 
   const allSrcs = [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi)].map(
     (m) => m[1]
   );
-  // Try the _app chunk(s) first, then any chunk — the POST call lives in a
-  // lazily-loaded chunk on current builds.
   const ordered = [
     ...allSrcs.filter((s) => s.includes("_app-")),
     ...allSrcs.filter((s) => !s.includes("_app-")),
   ];
 
-  // The search URL is a string literal built from a constant word plus the
-  // rotating hex key, e.g. `"/api/search/" + "21fda17e4a1d49be"` collapsed by
-  // the bundler into `"/api/search/21fda17e4a1d49be"`. Capture the full
-  // `<word>/<hexkey>` — the trailing hex segment is 8+ hex chars and is the
-  // part that must NOT be dropped.
-  const fullSearchUrl =
-    /["'`]\/api\/([a-z0-9_]+\/[a-f0-9]{8,})["'`]/i;
-  // Some builds concatenate the key: `"/api/search/"+"<hex>"`. Match that too.
-  const splitSearchUrl =
-    /["'`]\/api\/([a-z0-9_]+)\/["'`]\s*\+\s*["'`]([a-f0-9]{8,})["'`]/i;
+  // Grab the base word of the POST fetch: fetch("/api/<word>...", {..method:POST..}).
+  const postFetch =
+    /fetch\s*\(\s*["'`]\/api\/([a-z0-9_/]+)[^"'`]*["'`]\s*,\s*\{[^}]*method\s*:\s*["'`]POST["'`]/i;
 
   for (const src of ordered) {
     const url = src.startsWith("http")
@@ -102,16 +94,50 @@ async function resolveSearchEndpoint(): Promise<string | null> {
       const js = await hltbFetch(url, { headers: browserHeaders() }).then((r) =>
         r.ok ? r.text() : ""
       );
-      const full = js.match(fullSearchUrl);
-      if (full) return `/api/${full[1]}`;
-      const split = js.match(splitSearchUrl);
-      if (split) return `/api/${split[1]}/${split[2]}`;
+      const m = js.match(postFetch);
+      if (m) return `/api/${m[1].split("/")[0]}`; // just the base word
     } catch {
       // try next chunk
     }
   }
 
-  return null;
+  return `/api/${FALLBACK_SEARCH_WORD}`;
+}
+
+interface HltbAuth {
+  token: string;
+  /** The short-lived key + value the search must echo in headers AND the body. */
+  authKey: string;
+  authVal: string;
+}
+
+/**
+ * Fetch the search security triplet from `<endpoint>/init`. The response carries
+ * `token` plus two fields whose NAMES contain "key"/"val" (the exact names
+ * rotate). The search then sends them as x-auth-token / x-hp-key / x-hp-val
+ * headers AND a `{ [authKey]: authVal }` property in the body.
+ */
+async function resolveAuth(endpoint: string): Promise<HltbAuth | null> {
+  try {
+    const res = await hltbFetch(`${BASE}${endpoint}/init?t=${Date.now()}`, {
+      headers: browserHeaders(),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as Record<string, unknown>;
+    let token = "";
+    let authKey = "";
+    let authVal = "";
+    for (const [name, value] of Object.entries(json)) {
+      const lower = name.toLowerCase();
+      if (lower === "token") token = String(value);
+      else if (lower.includes("key")) authKey = String(value);
+      else if (lower.includes("val")) authVal = String(value);
+    }
+    if (!token && !authKey) return null;
+    return { token, authKey, authVal };
+  } catch {
+    return null;
+  }
 }
 
 function searchBody(title: string) {
@@ -126,7 +152,7 @@ function searchBody(title: string) {
         platform: "",
         sortCategory: "popular",
         rangeCategory: "main",
-        rangeTime: { min: null, max: null },
+        rangeTime: { min: 0, max: 0 },
         gameplay: { perspective: "", flow: "", genre: "", difficulty: "" },
         rangeYear: { min: "", max: "" },
         modifier: "",
@@ -141,15 +167,25 @@ function searchBody(title: string) {
   };
 }
 
-/** POST a search to the resolved (fully-keyed) endpoint. */
+/** POST a search to the resolved endpoint, carrying the init auth triplet. */
 async function postSearch(
   endpoint: string,
-  title: string
+  title: string,
+  auth: HltbAuth | null
 ): Promise<{ status: number; data: HltbGame[] } | null> {
+  const headers: Record<string, string> = { ...browserHeaders() };
+  const body = searchBody(title) as Record<string, unknown>;
+  if (auth) {
+    if (auth.token) headers["x-auth-token"] = auth.token;
+    if (auth.authKey) headers["x-hp-key"] = auth.authKey;
+    if (auth.authVal) headers["x-hp-val"] = auth.authVal;
+    // The search must also echo the key/val as a top-level body property.
+    if (auth.authKey) body[auth.authKey] = auth.authVal;
+  }
   const res = await hltbFetch(`${BASE}${endpoint}`, {
     method: "POST",
-    headers: browserHeaders(),
-    body: JSON.stringify(searchBody(title)),
+    headers,
+    body: JSON.stringify(body),
   });
   if (!res.ok) return { status: res.status, data: [] };
   const json = (await res.json()) as { data?: HltbGame[] };
@@ -179,7 +215,15 @@ export async function fetchHowLongToBeat(
       headers: { ...browserHeaders(), Accept: "text/html" },
     }).catch(() => undefined);
 
-    const result = await postSearch(endpoint, title);
+    let auth = await resolveAuth(endpoint);
+    let result = await postSearch(endpoint, title, auth);
+
+    // The init token is short-lived; on 401/403 refresh it once and retry (the
+    // SPA does the same: "Search token expired, refreshing and retrying…").
+    if (result && (result.status === 401 || result.status === 403)) {
+      auth = await resolveAuth(endpoint);
+      result = await postSearch(endpoint, title, auth);
+    }
 
     if (!result || result.status !== 200) {
       logger.log(`HLTB: search returned ${result?.status ?? "no response"}`);

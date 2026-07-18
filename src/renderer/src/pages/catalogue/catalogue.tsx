@@ -39,6 +39,11 @@ import {
   CONSOLE_FILTER_SYSTEMS,
   CONSOLE_LABELS,
 } from "@renderer/pages/library/console-filter";
+import {
+  rerankByRelevance,
+  sanitizeTitleQuery,
+  subtitleQuery,
+} from "./catalogue-relevance";
 
 const ProtonCompatibilitySection = lazy(async () => {
   const mod = await import("./proton-compatibility-section");
@@ -166,14 +171,31 @@ export default function Catalogue() {
         offset: number,
         requestId: number
       ) => {
+        const rawTitle = filters.title?.trim() ?? "";
+        // Punctuation-heavy franchise titles ("The Legend of Zelda: Link's
+        // Awakening") rank badly on the hosted search, so send it a cleaned
+        // query (punctuation stripped, stopwords dropped) instead of the raw
+        // string. Deeper pages keep server order; page 1 is re-ranked below.
+        const searchTitle = rawTitle
+          ? sanitizeTitleQuery(rawTitle)
+          : filters.title;
+
         const requestData = {
           ...filters,
+          title: searchTitle,
           take: pageSize,
           skip: offset,
           downloadSourceIds: downloadSources.map(
             (downloadSource) => downloadSource.id
           ),
         };
+
+        // When the title has a distinctive subtitle after a colon/dash, the
+        // subtitle alone often matches far better ("Link's Awakening" works
+        // where the full title doesn't). On page 1 we search it too and merge
+        // the unique hits, then re-rank everything by relevance to what the
+        // user actually typed.
+        const subtitle = offset === 0 ? subtitleQuery(rawTitle) : null;
 
         try {
           // Console/emulated games are only meaningful for a plain title
@@ -204,18 +226,30 @@ export default function Catalogue() {
 
           const consoleSystem = filters.consoleSystem;
 
-          const [response, classics] = await Promise.all([
+          const searchPc = (title: string) =>
+            window.electron.hydraApi.post<{
+              edges: CatalogueSearchResult[];
+              count: number;
+            }>("/catalogue/search", {
+              data: { ...requestData, title },
+              needsAuth: false,
+            });
+
+          const [response, subtitleResponse, classics] = await Promise.all([
             isConsoleOnly
               ? Promise.resolve({
                   edges: [] as CatalogueSearchResult[],
                   count: 0,
                 })
-              : window.electron.hydraApi.post<{
-                  edges: CatalogueSearchResult[];
-                  count: number;
-                }>("/catalogue/search", {
-                  data: requestData,
-                  needsAuth: false,
+              : searchPc(searchTitle),
+            !isConsoleOnly && subtitle
+              ? searchPc(subtitle).catch(() => ({
+                  edges: [] as CatalogueSearchResult[],
+                  count: 0,
+                }))
+              : Promise.resolve({
+                  edges: [] as CatalogueSearchResult[],
+                  count: 0,
                 }),
             wantClassics
               ? window.electron
@@ -223,7 +257,7 @@ export default function Catalogue() {
                   // matching console game, not an arbitrary first dozen.
                   // When a specific console is selected, pass it for filtering.
                   .searchClassicsCatalogue(
-                    filters.title,
+                    searchTitle,
                     consoleSystem ? 200 : 100,
                     consoleSystem
                   )
@@ -235,11 +269,26 @@ export default function Catalogue() {
 
           if (isConsoleOnly) {
             // Console-only mode: classics ARE the results (no PC API call).
-            setResults(classics);
+            setResults(
+              rawTitle ? rerankByRelevance(classics, rawTitle) : classics
+            );
             setItemsCount(classics.length);
           } else {
-            setResults([...classics, ...response.edges]);
-            setItemsCount(response.count + classics.length);
+            // Merge the subtitle hits into the primary PC edges (dedupe by
+            // objectId), then re-rank page 1 by relevance to the raw query so
+            // the actual match leads regardless of the server's loose order.
+            const seen = new Set(response.edges.map((edge) => edge.objectId));
+            const extraEdges = subtitleResponse.edges.filter(
+              (edge) => !seen.has(edge.objectId)
+            );
+            const pcEdges = [...response.edges, ...extraEdges];
+            const merged = [...classics, ...pcEdges];
+            setResults(
+              rawTitle && offset === 0
+                ? rerankByRelevance(merged, rawTitle)
+                : merged
+            );
+            setItemsCount(response.count + classics.length + extraEdges.length);
           }
           setIsLoading(false);
         } finally {

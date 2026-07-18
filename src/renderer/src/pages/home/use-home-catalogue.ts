@@ -126,14 +126,48 @@ async function getClassics(): Promise<ShopAssets[]> {
  * shown a meaningless row.
  */
 async function getRecommended(
-  downloadSourceIds: string[]
+  downloadSourceIds: string[],
+  language: string
 ): Promise<ShopAssets[]> {
   const library = (await window.electron
     .getLibrary()
     .catch(() => [])) as LibraryGame[];
   if (!library.length) return [];
 
-  const profile = buildTasteProfile(library);
+  // Many library games (esp. Steam-synced) don't store genres, which would
+  // leave the taste profile empty. Backfill genres for the most-played games
+  // from their shop details (cached in main) so the recommender always has a
+  // signal. Only the top-played handful are backfilled to keep home load fast.
+  const topPlayed = [...library]
+    .sort(
+      (a, b) =>
+        (b.playTimeInMilliseconds ?? 0) - (a.playTimeInMilliseconds ?? 0)
+    )
+    .slice(0, 12);
+
+  const enriched = await Promise.all(
+    topPlayed.map(async (game) => {
+      if (game.genres?.length) return game;
+      const details = await window.electron
+        .getGameShopDetails(game.objectId, game.shop, language)
+        .catch(() => null);
+      const genres = (details?.genres ?? [])
+        .map((g) => g.name)
+        .filter(Boolean);
+      return { ...game, genres };
+    })
+  );
+
+  // Merge backfilled genres into the full library so the taste weights use them
+  // while ownedIds still covers EVERY owned game (not just the top 12).
+  const enrichedById = new Map(
+    enriched.map((g) => [`${g.shop}:${g.objectId}`, g])
+  );
+  const fullLibrary = library.map(
+    (g) => enrichedById.get(`${g.shop}:${g.objectId}`) ?? g
+  );
+
+  const profile = buildTasteProfile(fullLibrary);
   if (profile.topGenres.length === 0) return [];
 
   // `/catalogue/search` ANDs its genres filter, so passing all top genres at
@@ -206,7 +240,9 @@ export function useHomeCatalogue(language: string) {
       const [featured, recommended, hot, weekly, achievements, classics] =
         await Promise.all([
           getFeatured(language).catch(() => [] as TrendingGame[]),
-          getRecommended(downloadSourceIds).catch(() => [] as ShopAssets[]),
+          getRecommended(downloadSourceIds, language).catch(
+            () => [] as ShopAssets[]
+          ),
           getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
             () => [] as ShopAssets[]
           ),

@@ -214,20 +214,32 @@ export function GyroCube({ padIndex, enabled }: Readonly<Props>) {
   const [hidState, setHidState] = useState<"off" | "connecting" | "on">("off");
   const [deviceName, setDeviceName] = useState<string | null>(null);
 
-  // Auto-reconnect a previously-granted motion device (no chooser needed).
+  // Auto-reconnect a previously-granted motion device (no chooser needed), and
+  // keep trying when a controller is plugged in / granted AFTER mount — so the
+  // cube starts on its own once an SDL/Sony/Switch pad is connected, with no
+  // "Connect" click required.
   useEffect(() => {
     if (!enabled) return;
     const hid = hidRef.current;
     let cancelled = false;
-    hid.connectGranted().then((ok) => {
-      if (cancelled) return;
-      if (ok) {
+
+    const tryConnect = () => {
+      if (cancelled || hid.connected) return;
+      hid.connectGranted().then((ok) => {
+        if (cancelled || !ok) return;
         setHidState("on");
         setDeviceName(hid.deviceName);
-      }
-    });
+      });
+    };
+
+    tryConnect();
+
+    const onHidConnect = () => tryConnect();
+    navigator.hid?.addEventListener?.("connect", onHidConnect);
+
     return () => {
       cancelled = true;
+      navigator.hid?.removeEventListener?.("connect", onHidConnect);
       hid.disconnect();
       setHidState("off");
     };
