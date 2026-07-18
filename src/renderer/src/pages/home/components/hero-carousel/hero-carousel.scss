@@ -9,6 +9,13 @@
   // large on 1920 without dwarfing smaller windows.
   $hero-height: clamp(340px, 40vw, 500px);
 
+  // The home is a fixed-height, scrolling flex COLUMN. Because this element is
+  // `overflow: hidden`, flexbox treats its min-height as 0 and shrinks it to
+  // nothing to fit the column — collapsing the whole hero to an invisible
+  // strip. Pin the height and forbid shrinking so it always shows at full size.
+  flex: 0 0 auto;
+  height: $hero-height;
+
   &__skeleton {
     width: 100%;
     height: $hero-height;
