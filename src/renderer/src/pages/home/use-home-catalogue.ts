@@ -15,9 +15,10 @@ import type {
   EnrichedLibraryGame,
   FacetStats,
   RankableCandidate,
+  TasteProfile,
 } from "./recommender";
 import { buildTasteProfile, rankRecommendations } from "./recommender";
-import { parseSearchVectorTagIds } from "./recommender-affinity";
+import { isMechanicTag, parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
 import { externalResourcesInstance } from "@renderer/hooks/use-catalogue";
 
@@ -30,9 +31,16 @@ const LIKE_SYNTHETIC_HOURS = 8;
  */
 type CatalogueEdge = CatalogueSearchResult & { searchVector?: string | null };
 
+/** A "Because you played {anchor}" shelf for one of the user's taste clusters. */
+export interface BecauseYouPlayedRow {
+  anchorTitle: string;
+  games: ShopAssets[];
+}
+
 export interface HomeCatalogue {
   featured: TrendingGame[];
   recommended: ShopAssets[];
+  becauseYouPlayed: BecauseYouPlayedRow[];
   hot: ShopAssets[];
   weekly: ShopAssets[];
   achievements: ShopAssets[];
@@ -42,6 +50,7 @@ export interface HomeCatalogue {
 const EMPTY_CATALOGUE: HomeCatalogue = {
   featured: [],
   recommended: [],
+  becauseYouPlayed: [],
   hot: [],
   weekly: [],
   achievements: [],
@@ -340,14 +349,29 @@ async function getFacetCounts(
  * carries a "why" explanation. Empty (row hides) when the library has no signal
  * yet, so new users aren't shown a meaningless row.
  */
+interface RecommendationResult {
+  recommended: ShopAssets[];
+  becauseYouPlayed: BecauseYouPlayedRow[];
+}
+
+const EMPTY_RECOMMENDATIONS: RecommendationResult = {
+  recommended: [],
+  becauseYouPlayed: [],
+};
+
+/** How many "Because you played …" shelves to show at most. */
+const MAX_BECAUSE_ROWS = 3;
+/** A shelf needs at least this many recs to be worth showing. */
+const MIN_ROW_SIZE = 6;
+
 async function getRecommended(
   downloadSourceIds: string[],
   language: string
-): Promise<ShopAssets[]> {
+): Promise<RecommendationResult> {
   const library = (await window.electron
     .getLibrary()
     .catch(() => [])) as LibraryGame[];
-  if (!library.length) return [];
+  if (!library.length) return EMPTY_RECOMMENDATIONS;
 
   const { nameToId, idToName } = await getTagDictionary(language);
 
@@ -428,49 +452,100 @@ async function getRecommended(
 
   const profile = buildTasteProfile(fullLibrary, stats);
   if (profile.topGenres.length === 0 && profile.topTags.length === 0) {
-    return [];
+    return EMPTY_RECOMMENDATIONS;
   }
 
   // `/catalogue/search` ANDs each filter category, so query each top genre and
-  // each top tag SEPARATELY (broad single-facet pools). Tag every candidate with
-  // the feature that produced it AND its own real tags, then rank by the full
-  // taste vector so games sharing MORE of the user's genres + tags rise.
-  const searchPool = (
+  // each top tag SEPARATELY (broad single-facet pools). Pools are cached per
+  // load and re-used across the blended row and the per-anchor shelves (which
+  // often share tags). Tag pools use a deep `take` so a niche-but-well-matching
+  // game (e.g. an early-access roguelike ranked ~#90 by popularity) still enters
+  // scoring instead of being crowded out by the popular head of the list.
+  const poolCache = new Map<string, RankableCandidate[]>();
+  const getPool = async (
+    feature: string,
     body: { genres?: string[]; tags?: number[] },
-    originFeature: string
-  ): Promise<RankableCandidate[]> =>
-    searchCatalogueEdges({
+    take: number
+  ): Promise<RankableCandidate[]> => {
+    const cached = poolCache.get(feature);
+    if (cached) return cached;
+    const edges = await searchCatalogueEdges({
       ...baseSearchBody(downloadSourceIds),
       genres: body.genres ?? [],
       tags: body.tags ?? [],
-    }).then((edges) =>
-      edges.map((result) => ({
-        result,
-        tags: edgeTags(result, idToName),
-        originFeatures: new Set([originFeature]),
-      }))
+      take,
+    });
+    const pool = edges.map((result) => ({
+      result,
+      tags: edgeTags(result, idToName),
+      originFeatures: new Set([feature]),
+    }));
+    poolCache.set(feature, pool);
+    return pool;
+  };
+
+  /** Fetch + rank a single profile's candidates, excluding the given ids. */
+  const recommendFrom = async (
+    taste: TasteProfile,
+    excludeIds: Set<string>,
+    limit: number
+  ): Promise<ShopAssets[]> => {
+    const tagPools = taste.topTags
+      .map((name) => ({ name, id: nameToId.get(name.toLowerCase()) }))
+      .filter(
+        (t): t is { name: string; id: number } => typeof t.id === "number"
+      )
+      .slice(0, 6)
+      .map((t) => getPool(`tag:${t.name}`, { tags: [t.id] }, 100));
+    const genrePools = taste.topGenres
+      .slice(0, 3)
+      .map((genre) => getPool(`genre:${genre}`, { genres: [genre] }, 40));
+    const pools = await Promise.all([...tagPools, ...genrePools]);
+    return rankRecommendations(
+      pools.flat(),
+      taste,
+      limit,
+      classicsResultToShopAssets,
+      excludeIds
     );
+  };
 
-  const tagSearches = profile.topTags
-    .map((name) => ({ name, id: nameToId.get(name.toLowerCase()) }))
-    .filter((t): t is { name: string; id: number } => typeof t.id === "number")
-    .slice(0, 5)
-    .map((t) => searchPool({ tags: [t.id] }, `tag:${t.name}`));
+  const recommended = await recommendFrom(profile, dislikedIds, 24);
 
-  const genreSearches = profile.topGenres
-    .slice(0, 3)
-    .map((genre) => searchPool({ genres: [genre] }, `genre:${genre}`));
-
-  const pools = await Promise.all([...genreSearches, ...tagSearches]);
-  const candidates = pools.flat();
-
-  return rankRecommendations(
-    candidates,
-    profile,
-    24,
-    classicsResultToShopAssets,
-    dislikedIds
+  // "Because you played X": one shelf per DISTINCT taste cluster in the library.
+  // Anchor on the most-played games, skipping any whose dominant mechanic tag is
+  // already covered (so a roguelike-heavy library doesn't get three roguelike
+  // shelves), and dedupe games across shelves for variety.
+  const allOwnedIds = new Set(
+    fullLibrary.map((g) => `${g.shop}:${g.objectId}`)
   );
+  const shown = new Set(recommended.map((g) => `${g.shop}:${g.objectId}`));
+  const usedClusters = new Set<string>();
+  const becauseYouPlayed: BecauseYouPlayedRow[] = [];
+
+  for (const anchor of enriched) {
+    if (becauseYouPlayed.length >= MAX_BECAUSE_ROWS) break;
+    if (!anchor.tags?.length && !anchor.genres?.length) continue;
+
+    const anchorProfile = buildTasteProfile([{ ...anchor }], stats);
+    // Identify the cluster by the anchor's strongest mechanic tag (else its top
+    // tag/genre), so distinct shelves cover distinct kinds of games.
+    const cluster =
+      anchorProfile.topTags.find((t) => isMechanicTag(t)) ??
+      anchorProfile.topTags[0] ??
+      anchorProfile.topGenres[0];
+    if (!cluster || usedClusters.has(cluster)) continue;
+    usedClusters.add(cluster);
+
+    const exclude = new Set([...allOwnedIds, ...dislikedIds, ...shown]);
+    const games = await recommendFrom(anchorProfile, exclude, 20);
+    if (games.length >= MIN_ROW_SIZE) {
+      becauseYouPlayed.push({ anchorTitle: anchor.title, games });
+      for (const g of games) shown.add(`${g.shop}:${g.objectId}`);
+    }
+  }
+
+  return { recommended, becauseYouPlayed };
 }
 
 /**
@@ -497,12 +572,12 @@ export function useHomeCatalogue(language: string) {
         (source) => source.id
       );
 
-      const [featured, recommended, hot, weekly, achievements, classics] =
+      const [recommendations, featured, hot, weekly, achievements, classics] =
         await Promise.all([
-          getFeatured(language).catch(() => [] as TrendingGame[]),
           getRecommended(downloadSourceIds, language).catch(
-            () => [] as ShopAssets[]
+            () => EMPTY_RECOMMENDATIONS
           ),
+          getFeatured(language).catch(() => [] as TrendingGame[]),
           getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
             () => [] as ShopAssets[]
           ),
@@ -525,7 +600,8 @@ export function useHomeCatalogue(language: string) {
       if (isMounted) {
         setCatalogue({
           featured: resolvedFeatured,
-          recommended,
+          recommended: recommendations.recommended,
+          becauseYouPlayed: recommendations.becauseYouPlayed,
           hot,
           weekly,
           achievements,

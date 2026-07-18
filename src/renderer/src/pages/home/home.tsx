@@ -76,6 +76,18 @@ export default function Home() {
             isLoading={isLoading}
             enableFeedback
           />
+          {catalogue.becauseYouPlayed.map((row) => (
+            <CategoryRow
+              key={`because-${row.anchorTitle}`}
+              title={t("because_you_played", {
+                defaultValue: "Because you played {{title}}",
+                title: row.anchorTitle,
+              })}
+              games={row.games}
+              isLoading={isLoading}
+              enableFeedback
+            />
+          ))}
           <CategoryRow
             title={t("hot")}
             icon={
