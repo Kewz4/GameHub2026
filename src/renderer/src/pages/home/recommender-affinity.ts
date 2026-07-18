@@ -61,6 +61,23 @@ export const PLAYSTYLE_CLUSTERS: PlaystyleCluster[] = [
       /rogue|hades|dead cells|risk of rain|vampire survivors|enter the gungeon|brotato|ravenswatch|gungeon|isaac|slay the spire|balatro|hellblade|nova drift|noita/i,
   },
   {
+    id: "deckbuilder",
+    label: "deckbuilders",
+    // Balatro's own niche: a roguelike DECKBUILDER / synergy-engine game. Kept
+    // distinct from "roguelite" so 200h in Balatro recommends Slay the Spire /
+    // Inscryption / Monster Train rather than action roguelikes like Hades.
+    detect:
+      /deck-?build|deckbuilder|card battler|roguelike deck|synergy|slay the spire|inscryption|monster train|balatro|griftlands|luck be a landlord/i,
+    tagNames: [
+      "Deckbuilding",
+      "Card Battler",
+      "Roguelike Deckbuilder",
+      "Card Game",
+    ],
+    titleHints:
+      /slay the spire|inscryption|monster train|balatro|griftlands|cobalt core|dicey dungeons|across the obelisk|dawncaster|luck be a landlord|backpack hero|peglin|nowhere prophet|wildfrost|stacklands/i,
+  },
+  {
     id: "soulslike",
     label: "souls-likes",
     detect:

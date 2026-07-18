@@ -113,6 +113,60 @@
     font-weight: bold;
   }
 
+  // Like / dislike feedback cluster, top-left of the cover (recommended row).
+  &__feedback {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 2;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity ease 0.2s;
+  }
+
+  // Keep controls visible on hover/focus, or whenever one is already active so
+  // an existing rating is always shown.
+  &:hover &__feedback,
+  &:focus-within &__feedback,
+  &__feedback:has(.game-card__feedback-button--active),
+  &__feedback:has(.game-card__feedback-button--active-dislike) {
+    opacity: 1;
+  }
+
+  &__feedback-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+    transition:
+      background ease 0.15s,
+      color ease 0.15s;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+
+    &--active {
+      background: #2ea043;
+      border-color: #2ea043;
+      color: #fff;
+    }
+
+    &--active-dislike {
+      background: #c8412f;
+      border-color: #c8412f;
+      color: #fff;
+    }
+  }
+
   // "Why recommended" info affordance, top-right of the cover.
   &__reason {
     position: absolute;

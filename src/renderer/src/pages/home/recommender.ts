@@ -229,16 +229,18 @@ export interface RankableCandidate {
 }
 
 /**
- * Rank + trim candidates against the profile. Drops owned games, de-dupes, and
- * excludes heavily-online titles (no such catalogue here). Re-orders by taste
- * overlap across genres AND niche clusters; ties keep the incoming (popularity)
- * order via a stable sort. Each returned asset carries its "why" explanation.
+ * Rank + trim candidates against the profile. Drops owned games, de-dupes,
+ * excludes heavily-online titles (no such catalogue here) and any the user has
+ * thumbed-down (`excludeIds`). Re-orders by taste overlap across genres AND
+ * niche clusters; ties keep the incoming (popularity) order via a stable sort.
+ * Each returned asset carries its "why" explanation.
  */
 export function rankRecommendations(
   candidates: RankableCandidate[],
   profile: TasteProfile,
   limit: number,
-  widen: (result: CatalogueSearchResult) => ShopAssets
+  widen: (result: CatalogueSearchResult) => ShopAssets,
+  excludeIds: Set<string> = new Set()
 ): ShopAssets[] {
   const seen = new Set<string>();
   return (
@@ -246,6 +248,7 @@ export function rankRecommendations(
       .filter(({ result }) => {
         const key = ownedKey(result);
         if (profile.ownedIds.has(key) || seen.has(key)) return false;
+        if (excludeIds.has(key)) return false;
         if (isHeavilyOnline(result.genres)) return false;
         seen.add(key);
         return true;

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import Skeleton from "react-loading-skeleton";
@@ -6,6 +6,12 @@ import Skeleton from "react-loading-skeleton";
 import { GameCard } from "@renderer/components";
 import type { ShopAssets } from "@types";
 import { buildGameDetailsPath } from "@renderer/helpers";
+import {
+  type FeedbackKind,
+  feedbackKey,
+  getFeedbackMap,
+  setFeedback,
+} from "@renderer/pages/home/recommendation-feedback";
 
 import { useDragScroll } from "./use-drag-scroll";
 import "./category-row.scss";
@@ -15,6 +21,8 @@ interface Props {
   icon?: React.ReactNode;
   games: ShopAssets[];
   isLoading: boolean;
+  /** Enables per-card like/dislike controls (the "Recommended for you" row). */
+  enableFeedback?: boolean;
 }
 
 const SCROLL_STEP = 600;
@@ -24,9 +32,42 @@ export function CategoryRow({
   icon,
   games,
   isLoading,
+  enableFeedback = false,
 }: Readonly<Props>) {
   const navigate = useNavigate();
   const { ref, dragProps } = useDragScroll<HTMLDivElement>();
+
+  // Thumbs up/down state for the recommended row, keyed by `${shop}:${objectId}`.
+  const [feedback, setFeedbackState] = useState<Map<string, FeedbackKind>>(
+    new Map()
+  );
+
+  useEffect(() => {
+    if (!enableFeedback) return;
+    let active = true;
+    getFeedbackMap().then((map) => {
+      if (!active) return;
+      setFeedbackState(
+        new Map([...map].map(([key, record]) => [key, record.feedback]))
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [enableFeedback]);
+
+  const handleFeedback = useCallback((game: ShopAssets, kind: FeedbackKind) => {
+    const key = feedbackKey(game);
+    setFeedbackState((prev) => {
+      const next = new Map(prev);
+      // A second tap on the active thumb clears it (toggle off).
+      const nextKind = prev.get(key) === kind ? null : kind;
+      if (nextKind) next.set(key, nextKind);
+      else next.delete(key);
+      void setFeedback(game, nextKind);
+      return next;
+    });
+  }, []);
 
   const scrollBy = useCallback(
     (delta: number) => {
@@ -88,6 +129,16 @@ export function CategoryRow({
                 game={game}
                 className="category-row__card"
                 onClick={() => navigate(buildGameDetailsPath(game))}
+                feedback={
+                  enableFeedback
+                    ? (feedback.get(feedbackKey(game)) ?? null)
+                    : undefined
+                }
+                onFeedback={
+                  enableFeedback
+                    ? (kind) => handleFeedback(game, kind)
+                    : undefined
+                }
               />
             ))}
       </div>

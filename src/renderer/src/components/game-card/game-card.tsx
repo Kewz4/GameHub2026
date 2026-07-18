@@ -1,5 +1,12 @@
-import { DownloadIcon, InfoIcon, PeopleIcon } from "@primer/octicons-react";
+import {
+  DownloadIcon,
+  InfoIcon,
+  PeopleIcon,
+  ThumbsdownIcon,
+  ThumbsupIcon,
+} from "@primer/octicons-react";
 import type { GameStats, ShopAssets } from "@types";
+import type { FeedbackKind } from "@renderer/pages/home/recommendation-feedback";
 
 import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import EpicLogo from "@renderer/assets/epic-logo.svg?react";
@@ -26,6 +33,10 @@ export interface GameCardProps
     HTMLButtonElement
   > {
   game: ShopAssets;
+  /** Current thumbs up/down state (recommended row only). */
+  feedback?: FeedbackKind | null;
+  /** When provided, renders like/dislike controls that report the tapped kind. */
+  onFeedback?: (kind: FeedbackKind) => void;
 }
 
 const shopIcon: Record<string, JSX.Element> = {
@@ -39,11 +50,29 @@ const shopIcon: Record<string, JSX.Element> = {
   ea: <EaLogo className="game-card__shop-icon" />,
 };
 
-export function GameCard({ game, className, ...props }: GameCardProps) {
+export function GameCard({
+  game,
+  className,
+  feedback,
+  onFeedback,
+  ...props
+}: GameCardProps) {
   const { t } = useTranslation("game_card");
 
   const [stats, setStats] = useState<GameStats | null>(null);
   const [showReason, setShowReason] = useState(false);
+
+  // Interactive controls can't be real <button>s here (the card root already is
+  // one, and buttons can't nest), so feedback uses role=button spans that stop
+  // propagation to avoid triggering card navigation.
+  const handleFeedback = useCallback(
+    (event: React.SyntheticEvent, kind: FeedbackKind) => {
+      event.stopPropagation();
+      event.preventDefault();
+      onFeedback?.(kind);
+    },
+    [onFeedback]
+  );
 
   const handleHover = useCallback(() => {
     if (!stats) {
@@ -75,6 +104,51 @@ export function GameCard({ game, className, ...props }: GameCardProps) {
           className="game-card__cover"
           loading="lazy"
         />
+
+        {onFeedback && (
+          <div className="game-card__feedback">
+            <span
+              role="button"
+              tabIndex={0}
+              className={`game-card__feedback-button${
+                feedback === "like" ? " game-card__feedback-button--active" : ""
+              }`}
+              aria-label={t("recommend_like", {
+                defaultValue: "I like this recommendation",
+              })}
+              aria-pressed={feedback === "like"}
+              onClick={(event) => handleFeedback(event, "like")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  handleFeedback(event, "like");
+                }
+              }}
+            >
+              <ThumbsupIcon size={13} />
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              className={`game-card__feedback-button${
+                feedback === "dislike"
+                  ? " game-card__feedback-button--active-dislike"
+                  : ""
+              }`}
+              aria-label={t("recommend_dislike", {
+                defaultValue: "I don't like this recommendation",
+              })}
+              aria-pressed={feedback === "dislike"}
+              onClick={(event) => handleFeedback(event, "dislike")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  handleFeedback(event, "dislike");
+                }
+              }}
+            >
+              <ThumbsdownIcon size={13} />
+            </span>
+          </div>
+        )}
 
         {game.recommendationReason && (
           <div className="game-card__reason">

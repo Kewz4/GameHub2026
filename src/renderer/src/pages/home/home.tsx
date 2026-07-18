@@ -74,6 +74,7 @@ export default function Home() {
             }
             games={catalogue.recommended}
             isLoading={isLoading}
+            enableFeedback
           />
           <CategoryRow
             title={t("hot")}

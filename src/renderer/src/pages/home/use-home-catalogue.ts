@@ -13,8 +13,16 @@ import { levelDBService } from "@renderer/services/leveldb.service";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
 import type { EnrichedLibraryGame, RankableCandidate } from "./recommender";
 import { buildTasteProfile, rankRecommendations } from "./recommender";
-import { clusterTagIds, detectClusters } from "./recommender-affinity";
+import {
+  clusterTagIds,
+  detectClusters,
+  detectClustersFromTitle,
+} from "./recommender-affinity";
+import { getAllFeedback } from "./recommendation-feedback";
 import { externalResourcesInstance } from "@renderer/hooks/use-catalogue";
+
+/** A thumbs-up recommendation counts like a well-liked, moderately-played game. */
+const LIKE_SYNTHETIC_HOURS = 8;
 
 export interface HomeCatalogue {
   featured: TrendingGame[];
@@ -206,6 +214,32 @@ async function getRecommended(
     (g) => enrichedById.get(`${g.shop}:${g.objectId}`) ?? g
   );
 
+  // Fold in the user's thumbs up/down feedback. A "like" becomes a synthetic
+  // favorite (its genres/clusters strengthen the taste profile, and it won't be
+  // re-recommended); a "dislike" is excluded from candidates. Liked games
+  // already in the library are skipped so their weight isn't double-counted.
+  const feedback = await getAllFeedback();
+  const libraryKeys = new Set(library.map((g) => `${g.shop}:${g.objectId}`));
+  const dislikedIds = new Set(
+    feedback
+      .filter((f) => f.feedback === "dislike")
+      .map((f) => `${f.shop}:${f.objectId}`)
+  );
+  for (const record of feedback) {
+    const key = `${record.shop}:${record.objectId}`;
+    if (record.feedback !== "like" || libraryKeys.has(key)) continue;
+    fullLibrary.push({
+      shop: record.shop,
+      objectId: record.objectId,
+      title: record.title,
+      genres: record.genres,
+      clusters: detectClustersFromTitle(record.title),
+      playTimeInMilliseconds: LIKE_SYNTHETIC_HOURS * 3_600_000,
+      lastTimePlayed: new Date(record.updatedAt).toISOString(),
+      favorite: true,
+    });
+  }
+
   const profile = buildTasteProfile(fullLibrary);
   if (profile.topGenres.length === 0 && profile.topClusters.length === 0) {
     return [];
@@ -269,7 +303,8 @@ async function getRecommended(
     candidates,
     profile,
     24,
-    classicsResultToShopAssets
+    classicsResultToShopAssets,
+    dislikedIds
   );
 }
 
