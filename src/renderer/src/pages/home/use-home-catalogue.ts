@@ -4,15 +4,18 @@ import { orderBy } from "lodash-es";
 import type {
   CatalogueSearchResult,
   DownloadSource,
+  LibraryGame,
   ShopAssets,
   TrendingGame,
 } from "@types";
 import { CatalogueCategory } from "@shared";
 import { levelDBService } from "@renderer/services/leveldb.service";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
+import { buildTasteProfile, rankRecommendations } from "./recommender";
 
 export interface HomeCatalogue {
   featured: TrendingGame[];
+  recommended: ShopAssets[];
   hot: ShopAssets[];
   weekly: ShopAssets[];
   achievements: ShopAssets[];
@@ -21,6 +24,7 @@ export interface HomeCatalogue {
 
 const EMPTY_CATALOGUE: HomeCatalogue = {
   featured: [],
+  recommended: [],
   hot: [],
   weekly: [],
   achievements: [],
@@ -115,6 +119,67 @@ async function getClassics(): Promise<ShopAssets[]> {
 }
 
 /**
+ * "Recommended for you": learn a genre taste profile from the user's library
+ * (playtime + recency + favorites), fetch popular catalogue games in those
+ * genres, and rank them by similarity — excluding games they already own. Empty
+ * (row hides) when the library has no genre signal yet, so new users aren't
+ * shown a meaningless row.
+ */
+async function getRecommended(
+  downloadSourceIds: string[]
+): Promise<ShopAssets[]> {
+  const library = (await window.electron
+    .getLibrary()
+    .catch(() => [])) as LibraryGame[];
+  if (!library.length) return [];
+
+  const profile = buildTasteProfile(library);
+  if (profile.topGenres.length === 0) return [];
+
+  // `/catalogue/search` ANDs its genres filter, so passing all top genres at
+  // once matches almost nothing. Query the top few genres SEPARATELY (each a
+  // broad single-genre pool), merge, then rank by the full taste vector so games
+  // that hit MORE of the user's genres rise to the top.
+  const searchGenre = (genre: string) =>
+    window.electron.hydraApi
+      .post<{ edges: CatalogueSearchResult[]; count: number }>(
+        "/catalogue/search",
+        {
+          data: {
+            title: "",
+            genres: [genre],
+            tags: [],
+            publishers: [],
+            developers: [],
+            downloadSourceFingerprints: [],
+            protondbSupportBadges: [],
+            deckCompatibility: [],
+            sortBy: "popularity",
+            sortOrder: "desc",
+            take: 30,
+            skip: 0,
+            downloadSourceIds,
+          },
+          needsAuth: false,
+        }
+      )
+      .then((r) => r.edges)
+      .catch(() => [] as CatalogueSearchResult[]);
+
+  const pools = await Promise.all(
+    profile.topGenres.slice(0, 3).map(searchGenre)
+  );
+  const candidates = pools.flat();
+
+  return rankRecommendations(
+    candidates,
+    profile,
+    24,
+    classicsResultToShopAssets
+  );
+}
+
+/**
  * Single source of truth for the home screen. Every list is fetched exactly
  * once (in parallel) so the hero carousel and the category rows never request
  * the same dataset twice. The hero consumes `/catalogue/featured`, which is a
@@ -138,9 +203,10 @@ export function useHomeCatalogue(language: string) {
         (source) => source.id
       );
 
-      const [featured, hot, weekly, achievements, classics] = await Promise.all(
-        [
+      const [featured, recommended, hot, weekly, achievements, classics] =
+        await Promise.all([
           getFeatured(language).catch(() => [] as TrendingGame[]),
+          getRecommended(downloadSourceIds).catch(() => [] as ShopAssets[]),
           getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
             () => [] as ShopAssets[]
           ),
@@ -151,8 +217,7 @@ export function useHomeCatalogue(language: string) {
             () => [] as ShopAssets[]
           ),
           getClassics().catch(() => [] as ShopAssets[]),
-        ]
-      );
+        ]);
 
       // Keep the hero alive even when `/catalogue/featured` returns empty by
       // seeding it from the Hot (then Weekly) row, which shares the same
@@ -164,6 +229,7 @@ export function useHomeCatalogue(language: string) {
       if (isMounted) {
         setCatalogue({
           featured: resolvedFeatured,
+          recommended,
           hot,
           weekly,
           achievements,

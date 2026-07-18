@@ -68,6 +68,14 @@ export default function Home() {
 
         <div className="home__rows">
           <CategoryRow
+            title={t("recommended", { defaultValue: "Recommended for you" })}
+            icon={
+              <img src={starsIconAnimated} alt="" className="home__row-flame" />
+            }
+            games={catalogue.recommended}
+            isLoading={isLoading}
+          />
+          <CategoryRow
             title={t("hot")}
             icon={
               <img src={flameIconAnimated} alt="" className="home__row-flame" />
