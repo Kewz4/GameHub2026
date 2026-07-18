@@ -11,7 +11,11 @@ import type {
 import { CatalogueCategory } from "@shared";
 import { levelDBService } from "@renderer/services/leveldb.service";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
-import type { EnrichedLibraryGame, RankableCandidate } from "./recommender";
+import type {
+  EnrichedLibraryGame,
+  FacetStats,
+  RankableCandidate,
+} from "./recommender";
 import { buildTasteProfile, rankRecommendations } from "./recommender";
 import { parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
@@ -253,6 +257,80 @@ async function fetchGameFacets(
   return facets;
 }
 
+/** One `/catalogue/search` call returning just the global match count. */
+async function catalogueCount(data: Record<string, unknown>): Promise<number> {
+  return window.electron.hydraApi
+    .post<{ count: number }>("/catalogue/search", { data, needsAuth: false })
+    .then((r) => r.count ?? 0)
+    .catch(() => 0);
+}
+
+/** Total catalogue size (IDF denominator), fetched once per session. */
+let totalGamesCache: number | null = null;
+async function getTotalGames(downloadSourceIds: string[]): Promise<number> {
+  if (totalGamesCache !== null) return totalGamesCache;
+  totalGamesCache = await catalogueCount({
+    ...baseSearchBody(downloadSourceIds),
+    take: 5,
+  });
+  return totalGamesCache;
+}
+
+/**
+ * Global frequency of each genre/tag feature (how many catalogue games carry
+ * it), used for IDF weighting. Persisted in leveldb with a 14-day TTL since
+ * these barely change — so the count queries are effectively a one-time cost,
+ * then served from cache on every later home load.
+ */
+const FACET_COUNT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const facetCountSession = new Map<string, number>();
+
+async function getFacetCounts(
+  features: string[],
+  nameToId: Map<string, number>,
+  downloadSourceIds: string[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  await Promise.all(
+    features.map(async (feature) => {
+      const session = facetCountSession.get(feature);
+      if (session !== undefined) {
+        counts.set(feature, session);
+        return;
+      }
+      const cached = (await levelDBService
+        .get(feature, "recommenderFacetCounts")
+        .catch(() => null)) as { count: number; cachedAt: number } | null;
+      if (cached && Date.now() - cached.cachedAt < FACET_COUNT_TTL_MS) {
+        facetCountSession.set(feature, cached.count);
+        counts.set(feature, cached.count);
+        return;
+      }
+      let body: Record<string, unknown> | null = null;
+      if (feature.startsWith("tag:")) {
+        const id = nameToId.get(feature.slice("tag:".length).toLowerCase());
+        if (typeof id === "number") {
+          body = { ...baseSearchBody(downloadSourceIds), tags: [id], take: 5 };
+        }
+      } else if (feature.startsWith("genre:")) {
+        body = {
+          ...baseSearchBody(downloadSourceIds),
+          genres: [feature.slice("genre:".length)],
+          take: 5,
+        };
+      }
+      if (!body) return;
+      const count = await catalogueCount(body);
+      facetCountSession.set(feature, count);
+      counts.set(feature, count);
+      levelDBService
+        .put(feature, { count, cachedAt: Date.now() }, "recommenderFacetCounts")
+        .catch(() => {});
+    })
+  );
+  return counts;
+}
+
 /**
  * "Recommended for you": learn a taste profile from the user's library over the
  * REAL genres AND tags of their most-played games — the tags are the same Steam
@@ -316,10 +394,10 @@ async function getRecommended(
   const likedNew = feedback.filter(
     (f) => f.feedback === "like" && !libraryKeys.has(`${f.shop}:${f.objectId}`)
   );
-  await Promise.all(
+  const likedEnriched: EnrichedLibraryGame[] = await Promise.all(
     likedNew.map(async (record) => {
       const facets = await fetchGameFacets(record, idToName, downloadSourceIds);
-      fullLibrary.push({
+      return {
         shop: record.shop,
         objectId: record.objectId,
         title: record.title,
@@ -328,11 +406,27 @@ async function getRecommended(
         playTimeInMilliseconds: LIKE_SYNTHETIC_HOURS * 3_600_000,
         lastTimePlayed: new Date(record.updatedAt).toISOString(),
         favorite: true,
-      });
+      };
     })
   );
+  fullLibrary.push(...likedEnriched);
 
-  const profile = buildTasteProfile(fullLibrary);
+  // Price every genre/tag the enriched games carry by its global frequency, so
+  // the profile can down-weight common facets and up-weight rare/mechanic ones.
+  const featureSet = new Set<string>();
+  for (const game of [...enriched, ...likedEnriched]) {
+    for (const genre of game.genres ?? []) featureSet.add(`genre:${genre}`);
+    for (const tag of game.tags ?? []) featureSet.add(`tag:${tag}`);
+  }
+  const [totalGames, counts] = await Promise.all([
+    getTotalGames(downloadSourceIds),
+    // Cap the burst of count queries on a cold cache; the cache is persistent so
+    // this is a one-time cost, and 60 facets covers any realistic library.
+    getFacetCounts([...featureSet].slice(0, 60), nameToId, downloadSourceIds),
+  ]);
+  const stats: FacetStats = { counts, totalGames };
+
+  const profile = buildTasteProfile(fullLibrary, stats);
   if (profile.topGenres.length === 0 && profile.topTags.length === 0) {
     return [];
   }

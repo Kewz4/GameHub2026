@@ -62,3 +62,88 @@ export function isHeavilyOnline(
     ONLINE_EXCLUDE.has(facet.toLowerCase())
   );
 }
+
+/**
+ * Gameplay-MECHANIC tags — the "what you actually do" tags that define a play
+ * loop (roguelike, deckbuilding, metroidvania, tower defense…). These are
+ * weighted ABOVE theme/mood/audience tags (Mythology, Vampire, Atmospheric,
+ * LGBTQ+…) in the taste profile, because two games can share a lot of THEME
+ * (Hades II and God of War are both mythological hack-and-slash) while the thing
+ * that actually separates "more roguelikes" from "more God of War" is the
+ * mechanic. This is a taxonomy of tag TYPE, not a model of anyone's taste — the
+ * taste still comes entirely from the user's own play data.
+ */
+const MECHANIC_TAGS = new Set(
+  [
+    "Roguelike",
+    "Roguelite",
+    "Action Roguelike",
+    "Roguelike Deckbuilder",
+    "Traditional Roguelike",
+    "Deckbuilding",
+    "Card Battler",
+    "Card Game",
+    "Bullet Hell",
+    "Twin Stick Shooter",
+    "Arena Shooter",
+    "Looter Shooter",
+    "Metroidvania",
+    "Souls-like",
+    "Hack and Slash",
+    "Beat 'em up",
+    "Character Action Game",
+    "Platformer",
+    "Precision Platformer",
+    "2D Platformer",
+    "3D Platformer",
+    "Tower Defense",
+    "Auto Battler",
+    "Turn-Based Strategy",
+    "Turn-Based Tactics",
+    "Real Time Tactics",
+    "Real-Time Strategy",
+    "RTS",
+    "Grand Strategy",
+    "4X",
+    "City Builder",
+    "Colony Sim",
+    "Base Building",
+    "Automation",
+    "Immersive Sim",
+    "Stealth",
+    "Dungeon Crawler",
+    "CRPG",
+    "Party-Based RPG",
+    "JRPG",
+    "Action RPG",
+    "Tactical RPG",
+    "Survival",
+    "Crafting",
+    "Farming Sim",
+    "Life Sim",
+    "Fighting",
+    "Shoot 'Em Up",
+    "Rhythm",
+    "Racing",
+    "Flight",
+    "Puzzle",
+    "Tactical",
+    "Wargame",
+    "Sandbox",
+    "Visual Novel",
+    "Dating Sim",
+    "Walking Simulator",
+    "Point & Click",
+    "Management",
+    "Tycoon",
+    "Perma Death",
+    "Open World Survival Craft",
+    "Battle Royale",
+    "Extraction Shooter",
+  ].map((s) => s.toLowerCase())
+);
+
+/** True when a tag names a gameplay mechanic (boosted over theme/mood tags). */
+export function isMechanicTag(name: string): boolean {
+  return MECHANIC_TAGS.has(name.toLowerCase());
+}

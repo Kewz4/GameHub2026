@@ -1,5 +1,5 @@
 import type { CatalogueSearchResult, ShopAssets } from "@types";
-import { isHeavilyOnline } from "./recommender-affinity";
+import { isHeavilyOnline, isMechanicTag } from "./recommender-affinity";
 
 /**
  * A small, fully-local content-based recommender for the home "Recommended for
@@ -23,8 +23,45 @@ import { isHeavilyOnline } from "./recommender-affinity";
 const RECENCY_HALF_LIFE_MS = 1000 * 60 * 60 * 24 * 45;
 const HOUR_MS = 3_600_000;
 
+/** How much a gameplay-mechanic tag outweighs a theme/mood tag of equal rarity. */
+const MECHANIC_BOOST = 1.9;
+
 const GENRE = (name: string) => `genre:${name}`;
 const TAG = (name: string) => `tag:${name}`;
+
+/**
+ * Global facet frequencies used to sharpen the taste profile: how many
+ * catalogue games carry each feature (`genre:…`/`tag:…`), plus the catalogue
+ * total. Lets common facets (RPG, Action, Singleplayer) be down-weighted and
+ * rare, distinctive ones (Action Roguelike, Deckbuilding) up-weighted (IDF).
+ */
+export interface FacetStats {
+  counts: Map<string, number>;
+  totalGames: number;
+}
+
+/**
+ * Per-feature weight multiplier = inverse document frequency × mechanic boost.
+ * IDF makes rare facets count more than ubiquitous ones; the mechanic boost
+ * then lifts gameplay-mechanic tags above equally-rare theme/mood tags. Degrades
+ * to 1× (mechanic boost only) when no frequency stats are available.
+ */
+function featureMultiplier(feature: string, stats?: FacetStats): number {
+  let multiplier = 1;
+  if (stats && stats.totalGames > 0) {
+    const count = stats.counts.get(feature);
+    if (typeof count === "number") {
+      multiplier *= Math.log(1 + stats.totalGames / (1 + count));
+    }
+  }
+  if (
+    feature.startsWith("tag:") &&
+    isMechanicTag(feature.slice("tag:".length))
+  ) {
+    multiplier *= MECHANIC_BOOST;
+  }
+  return multiplier;
+}
 
 /** Library game enriched with its real Steam genres + tags. */
 export interface EnrichedLibraryGame {
@@ -90,16 +127,30 @@ function addContributor(
  * stays weak; "Deckbuilding" seen across several games rises to the top).
  */
 export function buildTasteProfile(
-  library: EnrichedLibraryGame[]
+  library: EnrichedLibraryGame[],
+  stats?: FacetStats
 ): TasteProfile {
   const now = Date.now();
   const featureWeights = new Map<string, number>();
   const contributors = new Map<string, Contributor[]>();
   const ownedIds = new Set<string>();
 
+  // IDF × mechanic-boost multiplier per feature (memoized — it's frequency-only,
+  // independent of the game contributing the feature).
+  const multipliers = new Map<string, number>();
+  const multiplierFor = (feature: string) => {
+    let m = multipliers.get(feature);
+    if (m === undefined) {
+      m = featureMultiplier(feature, stats);
+      multipliers.set(feature, m);
+    }
+    return m;
+  };
+
   const bump = (feature: string, weight: number, title: string) => {
-    featureWeights.set(feature, (featureWeights.get(feature) ?? 0) + weight);
-    addContributor(contributors, feature, title, weight);
+    const weighted = weight * multiplierFor(feature);
+    featureWeights.set(feature, (featureWeights.get(feature) ?? 0) + weighted);
+    addContributor(contributors, feature, title, weighted);
   };
 
   for (const game of library) {
