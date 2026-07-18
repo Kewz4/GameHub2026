@@ -141,7 +141,13 @@ export function Sidebar({
     // Console/emulated games aren't in the Hydra backend, so resolve HLTB live
     // by title (cached in main); PC games use the server-side endpoint.
     if (shop === "launchbox") {
-      if (!gameTitle) return;
+      if (!gameTitle) {
+        // The title isn't resolved yet (e.g. deep-linked before shopDetails
+        // loads). Don't sit on the loading skeleton forever — clear it; the
+        // effect re-runs (gameTitle is a dep) and fetches once the title lands.
+        setHowLongToBeat({ isLoading: false, data: null });
+        return;
+      }
       setHowLongToBeat({ isLoading: true, data: null });
       window.electron
         .getConsoleHowLongToBeat(gameTitle)

@@ -809,7 +809,10 @@ export function GameDetailsContextProvider({
         canonicalShop,
         canonicalObjectId,
         repacks,
-        gameTitle,
+        // Backfill the title from shopDetails when the page was deep-linked
+        // without a title in router state, so title-dependent sidebar features
+        // (HowLongToBeat, achievements links) work on direct navigation too.
+        gameTitle: gameTitle || shopDetails?.name || "",
         isGameRunning,
         isLoading,
         objectId,
