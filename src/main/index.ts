@@ -132,6 +132,16 @@ const _portableExeDir =
   process.env.PORTABLE_EXECUTABLE_DIR ||
   (() => {
     try {
+      // AppImage: execPath lives inside the squashfs mount, so the marker must
+      // be checked next to the .AppImage file itself (its real path is in
+      // $APPIMAGE). The Linux web-setup script drops the marker there for
+      // portable installs, keeping all data beside the AppImage.
+      if (process.env.APPIMAGE) {
+        const appImageDir = path.dirname(process.env.APPIMAGE);
+        if (fs.existsSync(path.join(appImageDir, "portable"))) {
+          return appImageDir;
+        }
+      }
       const exeDir = path.dirname(process.execPath);
       if (fs.existsSync(path.join(exeDir, "portable"))) return exeDir;
       if (

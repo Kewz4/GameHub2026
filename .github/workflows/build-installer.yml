@@ -39,6 +39,7 @@ jobs:
               dist/*.deb
               dist/*.rpm
               dist/*.tar.gz
+              dist/*.sh
               dist/latest-linux.yml
       fail-fast: false
 
@@ -95,6 +96,14 @@ jobs:
         run: |
           makensis /V2 resources\web-setup\GameHubWebSetup.nsi
           if (-not (Test-Path "dist\GameHub-WebSetup.exe")) { throw "web setup stub missing" }
+
+      - name: Stage web-setup script (Linux)
+        # Linux counterpart of the web setup: a few-KB shell script offering
+        # install (deb/rpm/AppImage-integrated) vs portable (AppImage + marker).
+        if: runner.os == 'Linux'
+        run: |
+          bash -n resources/web-setup/gamehub-websetup.sh
+          install -m 0755 resources/web-setup/gamehub-websetup.sh dist/GameHub-WebSetup.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
