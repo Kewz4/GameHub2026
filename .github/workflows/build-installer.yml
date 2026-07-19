@@ -86,6 +86,16 @@ jobs:
           RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
           MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
 
+      - name: Build web-setup bootstrapper (Windows)
+        # Tiny (~1 MB) stub exe that downloads the full app from the GitHub
+        # release at install time; offers install vs portable. Lands in dist/
+        # so the existing *.exe globs carry it into the artifact + release.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          makensis /V2 resources\web-setup\GameHubWebSetup.nsi
+          if (-not (Test-Path "dist\GameHub-WebSetup.exe")) { throw "web setup stub missing" }
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

@@ -20,6 +20,7 @@ import type {
 import { buildTasteProfile, rankRecommendations } from "./recommender";
 import { isMechanicTag, parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
+import { getRecommendedClassics } from "./recommender-classics";
 import { externalResourcesInstance } from "@renderer/hooks/use-catalogue";
 
 /** A thumbs-up recommendation counts like a well-liked, moderately-played game. */
@@ -41,6 +42,7 @@ export interface HomeCatalogue {
   featured: TrendingGame[];
   recommended: ShopAssets[];
   becauseYouPlayed: BecauseYouPlayedRow[];
+  recommendedClassics: ShopAssets[];
   hot: ShopAssets[];
   weekly: ShopAssets[];
   achievements: ShopAssets[];
@@ -51,6 +53,7 @@ const EMPTY_CATALOGUE: HomeCatalogue = {
   featured: [],
   recommended: [],
   becauseYouPlayed: [],
+  recommendedClassics: [],
   hot: [],
   weekly: [],
   achievements: [],
@@ -555,6 +558,16 @@ async function getRecommended(
  * distinct dataset from `/catalogue/hot`, so the hero and the Hot row do not
  * overlap.
  */
+/** Persisted home snapshot: painted instantly, then refreshed in background. */
+const HOME_SNAPSHOT_SUBLEVEL = "homeCache";
+const HOME_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+interface HomeSnapshot {
+  catalogue: HomeCatalogue;
+  language: string;
+  savedAt: number;
+}
+
 export function useHomeCatalogue(language: string) {
   const [catalogue, setCatalogue] = useState<HomeCatalogue>(EMPTY_CATALOGUE);
   const [isLoading, setIsLoading] = useState(true);
@@ -562,9 +575,26 @@ export function useHomeCatalogue(language: string) {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadCatalogue() {
-      setIsLoading(true);
+    // Stale-while-revalidate: paint the last session's rows immediately (no
+    // skeleton flash), then let the fresh load below replace them when it
+    // lands. The snapshot is only cosmetic state, so failures are ignored.
+    levelDBService
+      .get("snapshot", HOME_SNAPSHOT_SUBLEVEL)
+      .then((value) => {
+        const snap = value as HomeSnapshot | null;
+        if (
+          isMounted &&
+          snap?.catalogue &&
+          snap.language === language &&
+          Date.now() - snap.savedAt < HOME_SNAPSHOT_MAX_AGE_MS
+        ) {
+          setCatalogue({ ...EMPTY_CATALOGUE, ...snap.catalogue });
+          setIsLoading(false);
+        }
+      })
+      .catch(() => undefined);
 
+    async function loadCatalogue() {
       const sources = (await levelDBService.values(
         "downloadSources"
       )) as DownloadSource[];
@@ -572,23 +602,34 @@ export function useHomeCatalogue(language: string) {
         (source) => source.id
       );
 
-      const [recommendations, featured, hot, weekly, achievements, classics] =
-        await Promise.all([
-          getRecommended(downloadSourceIds, language).catch(
-            () => EMPTY_RECOMMENDATIONS
-          ),
-          getFeatured(language).catch(() => [] as TrendingGame[]),
-          getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Weekly, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Achievements, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getClassics().catch(() => [] as ShopAssets[]),
-        ]);
+      const [
+        recommendations,
+        recommendedClassics,
+        featured,
+        hot,
+        weekly,
+        achievements,
+        classics,
+      ] = await Promise.all([
+        getRecommended(downloadSourceIds, language).catch(
+          () => EMPTY_RECOMMENDATIONS
+        ),
+        window.electron
+          .getLibrary()
+          .then((library) => getRecommendedClassics(library as LibraryGame[]))
+          .catch(() => [] as ShopAssets[]),
+        getFeatured(language).catch(() => [] as TrendingGame[]),
+        getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
+          () => [] as ShopAssets[]
+        ),
+        getCategory(CatalogueCategory.Weekly, downloadSourceIds).catch(
+          () => [] as ShopAssets[]
+        ),
+        getCategory(CatalogueCategory.Achievements, downloadSourceIds).catch(
+          () => [] as ShopAssets[]
+        ),
+        getClassics().catch(() => [] as ShopAssets[]),
+      ]);
 
       // Keep the hero alive even when `/catalogue/featured` returns empty by
       // seeding it from the Hot (then Weekly) row, which shares the same
@@ -597,22 +638,39 @@ export function useHomeCatalogue(language: string) {
         ? featured
         : heroFallbackFrom(hot.length ? hot : weekly);
 
-      if (isMounted) {
-        setCatalogue({
-          featured: resolvedFeatured,
-          recommended: recommendations.recommended,
-          becauseYouPlayed: recommendations.becauseYouPlayed,
-          hot,
-          weekly,
-          achievements,
-          classics,
-        });
+      const fresh: HomeCatalogue = {
+        featured: resolvedFeatured,
+        recommended: recommendations.recommended,
+        becauseYouPlayed: recommendations.becauseYouPlayed,
+        recommendedClassics,
+        hot,
+        weekly,
+        achievements,
+        classics,
+      };
+
+      if (isMounted) setCatalogue(fresh);
+
+      // Persist for the next launch's instant paint — but never overwrite a
+      // good snapshot with an all-empty load (e.g. offline start).
+      const hasContent = Object.values(fresh).some(
+        (rows) => Array.isArray(rows) && rows.length > 0
+      );
+      if (hasContent) {
+        const snapshot: HomeSnapshot = {
+          catalogue: fresh,
+          language,
+          savedAt: Date.now(),
+        };
+        levelDBService
+          .put("snapshot", snapshot, HOME_SNAPSHOT_SUBLEVEL)
+          .catch(() => undefined);
       }
     }
 
     loadCatalogue()
       .catch(() => {
-        if (isMounted) setCatalogue(EMPTY_CATALOGUE);
+        // Keep whatever the snapshot painted; only blank out if nothing did.
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);

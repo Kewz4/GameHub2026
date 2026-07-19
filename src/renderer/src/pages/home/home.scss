@@ -30,6 +30,19 @@
     object-fit: contain;
   }
 
+  // Static SVG row icons (calendar/trophy/gamepad) — sized to match the
+  // animated flame/stars gifs and tinted to the heading color.
+  &__row-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    color: currentColor;
+
+    path {
+      fill: currentColor;
+    }
+  }
+
   &__stars-icon {
     width: 70px;
     position: absolute;

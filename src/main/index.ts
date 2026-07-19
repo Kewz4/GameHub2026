@@ -187,6 +187,15 @@ if (_portableExeDir) {
   }
 }
 
+// Let Chromium's HTTP/image disk cache grow to 2 GB (default is ~a few hundred
+// MB with LRU eviction). Game art (covers/heroes/screenshots) dominates load
+// time on every navigation, so a bigger cache means far fewer refetches. The
+// cache lives under sessionData — the exe's data folder in portable mode, the
+// install's user-data dir otherwise — and Chromium still evicts LRU within the
+// budget, so it only grows as art is actually browsed. Must be set before
+// app.whenReady().
+app.commandLine.appendSwitch("disk-cache-size", String(2 * 1024 ** 3));
+
 // Restore Epic/GOG auth if NSIS update wiped the data directory.
 // Must run after app paths are set but before app.whenReady().
 restoreAuthIfMissing();

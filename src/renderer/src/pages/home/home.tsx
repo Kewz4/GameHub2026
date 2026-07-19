@@ -8,6 +8,9 @@ import type { Steam250Game } from "@types";
 
 import flameIconAnimated from "@renderer/assets/icons/flame-animated.gif";
 import starsIconAnimated from "@renderer/assets/icons/stars-animated.gif";
+import { CalendarIcon } from "@primer/octicons-react";
+import TrophyIcon from "@renderer/assets/icons/trophy.svg?react";
+import GamepadIcon from "@renderer/assets/icons/gamepad.svg?react";
 
 import { buildGameDetailsPath } from "@renderer/helpers";
 import { HeroCarousel } from "./components/hero-carousel/hero-carousel";
@@ -89,6 +92,15 @@ export default function Home() {
             />
           ))}
           <CategoryRow
+            title={t("recommended_classics", {
+              defaultValue: "Recommended classics",
+            })}
+            icon={<GamepadIcon className="home__row-icon" />}
+            games={catalogue.recommendedClassics}
+            isLoading={isLoading}
+            enableFeedback
+          />
+          <CategoryRow
             title={t("hot")}
             icon={
               <img src={flameIconAnimated} alt="" className="home__row-flame" />
@@ -98,16 +110,19 @@ export default function Home() {
           />
           <CategoryRow
             title={t("weekly")}
+            icon={<CalendarIcon size={20} className="home__row-icon" />}
             games={catalogue.weekly}
             isLoading={isLoading}
           />
           <CategoryRow
             title={t("achievements")}
+            icon={<TrophyIcon className="home__row-icon" />}
             games={catalogue.achievements}
             isLoading={isLoading}
           />
           <CategoryRow
             title={t("classics", { defaultValue: "Classics" })}
+            icon={<GamepadIcon className="home__row-icon" />}
             games={catalogue.classics}
             isLoading={isLoading}
           />
