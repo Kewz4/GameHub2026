@@ -10,11 +10,16 @@ import {
   WindowManager,
 } from "@main/services";
 import { classifyScannedOrigin } from "@main/helpers/classify-scanned-origin";
+import { discoverRomFiles } from "@main/helpers/scan-executables";
+import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import type { EmulatorSystem } from "@types";
 
 interface FoundGame {
   title: string;
   executablePath: string;
   key: string;
+  isNew?: boolean;
+  emulatorSystem?: EmulatorSystem;
 }
 interface ScanResult {
   foundGames: FoundGame[];
@@ -86,6 +91,67 @@ const selectiveScanInstalledGames = async (
     for (const scanPath of scanPaths) {
       const foundPath = await findExecutableInFolder(scanPath, normalizedNames);
       if (foundPath) {
+        // ── ROM discovery: scan selected folders for emulator/console ROM files ──
+        const allGames = await gamesSublevel.iterator().all();
+        const knownRomPaths = new Set(
+          allGames
+            .filter(([, g]) => g.shop === "launchbox")
+            .map(([, g]) => g.executablePath?.toLowerCase())
+            .filter((p): p is string => Boolean(p))
+        );
+
+        const discoveredRoms = await discoverRomFiles(
+          scanPaths,
+          (current, total, title) =>
+            WindowManager.sendToAppWindows("on-scan-progress", {
+              scanned: current,
+              total,
+              foundCount: foundGames.length,
+              currentTitle: `ROM: ${title}`,
+            })
+        );
+
+        for (const rom of discoveredRoms) {
+          const romLower = rom.romPath.toLowerCase();
+          if (knownRomPaths.has(romLower)) continue;
+
+          const romNorm = normalizeGameTitle(rom.title);
+          const existingRom = allGames.find(
+            ([, g]) =>
+              g.shop === "launchbox" && normalizeGameTitle(g.title) === romNorm
+          );
+
+          if (existingRom) {
+            const [existingKey, existingGame] = existingRom;
+            if (!dryRun) {
+              await gamesSublevel.put(existingKey, {
+                ...existingGame,
+                isDeleted: false,
+                executablePath: rom.romPath,
+                isInstalledLocally: true,
+              });
+            }
+            foundGames.push({
+              title: existingGame.title,
+              executablePath: rom.romPath,
+              key: existingKey,
+            });
+            logger.info(
+              `[SelectiveScan] Resolved ROM: ${existingGame.title} → ${rom.romPath}`
+            );
+            continue;
+          }
+
+          // New ROM not in the library — surface for confirmation.
+          foundGames.push({
+            title: rom.title,
+            executablePath: rom.romPath,
+            key: `rom:${romLower}`,
+            isNew: true,
+            emulatorSystem: rom.system,
+          });
+        }
+
         if (!dryRun) {
           await gamesSublevel.put(key, {
             ...game,

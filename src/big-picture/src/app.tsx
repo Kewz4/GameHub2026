@@ -21,7 +21,6 @@ import {
   NavigationAutoScrollBridge,
   NavigationInputProvider,
   NavigationStateBridge,
-  NavigationDiagnostics,
   VerticalFocusGroup,
   BigPictureToastHost,
   VirtualKeyboardProvider,
@@ -123,7 +122,6 @@ export default function App() {
             </HorizontalFocusGroup>
           </NavigationLayer>
 
-          <NavigationDiagnostics />
           <BigPictureToastHost />
         </div>
       </NavigationInputProvider>

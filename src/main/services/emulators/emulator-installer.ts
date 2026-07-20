@@ -346,6 +346,28 @@ export const installEmulator = async (
       }));
     }
 
+    // Eden (Switch) needs prod.keys + firmware to boot games. Install them
+    // silently right after extraction so the user never sees Eden's own
+    // first-run key prompt.
+    if (binary === "eden") {
+      try {
+        const { downloadSwitchKeysImpl } = await import(
+          "@main/events/emulators/download-switch-keys"
+        );
+        const result = await downloadSwitchKeysImpl(executablePath);
+        if (!result.keys) {
+          logger.warn(
+            "[emulator-installer] Eden keys auto-install failed (non-fatal)"
+          );
+        }
+      } catch (err) {
+        logger.warn(
+          "[emulator-installer] Eden keys/firmware auto-install skipped:",
+          err
+        );
+      }
+    }
+
     emit("done", { path: executablePath });
     logger.log(`Emulator installed: ${binary} → ${executablePath}`);
     return { ok: true, path: executablePath };

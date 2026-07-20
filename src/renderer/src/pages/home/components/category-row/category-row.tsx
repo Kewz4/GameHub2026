@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import Skeleton from "react-loading-skeleton";
@@ -27,7 +27,7 @@ interface Props {
 
 const SCROLL_STEP = 600;
 
-export function CategoryRow({
+export const CategoryRow = memo(function CategoryRow({
   title,
   icon,
   games,
@@ -37,7 +37,6 @@ export function CategoryRow({
   const navigate = useNavigate();
   const { ref, dragProps } = useDragScroll<HTMLDivElement>();
 
-  // Thumbs up/down state for the recommended row, keyed by `${shop}:${objectId}`.
   const [feedback, setFeedbackState] = useState<Map<string, FeedbackKind>>(
     new Map()
   );
@@ -60,7 +59,6 @@ export function CategoryRow({
     const key = feedbackKey(game);
     setFeedbackState((prev) => {
       const next = new Map(prev);
-      // A second tap on the active thumb clears it (toggle off).
       const nextKind = prev.get(key) === kind ? null : kind;
       if (nextKind) next.set(key, nextKind);
       else next.delete(key);
@@ -68,6 +66,13 @@ export function CategoryRow({
       return next;
     });
   }, []);
+
+  const handleCardClick = useCallback(
+    (game: ShopAssets) => {
+      navigate(buildGameDetailsPath(game));
+    },
+    [navigate]
+  );
 
   const scrollBy = useCallback(
     (delta: number) => {
@@ -128,15 +133,11 @@ export function CategoryRow({
                 key={`${game.shop}-${game.objectId}`}
                 game={game}
                 className="category-row__card"
-                onClick={() => navigate(buildGameDetailsPath(game))}
+                onCardClick={handleCardClick}
+                onCardFeedback={enableFeedback ? handleFeedback : undefined}
                 feedback={
                   enableFeedback
                     ? (feedback.get(feedbackKey(game)) ?? null)
-                    : undefined
-                }
-                onFeedback={
-                  enableFeedback
-                    ? (kind) => handleFeedback(game, kind)
                     : undefined
                 }
               />
@@ -144,4 +145,4 @@ export function CategoryRow({
       </div>
     </section>
   );
-}
+});

@@ -23,7 +23,7 @@ import "./game-card.scss";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../badge/badge";
 import { StarRating } from "../star-rating/star-rating";
-import { useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useFormat, useAppSelector } from "@renderer/hooks";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
 
@@ -37,6 +37,10 @@ export interface GameCardProps
   feedback?: FeedbackKind | null;
   /** When provided, renders like/dislike controls that report the tapped kind. */
   onFeedback?: (kind: FeedbackKind) => void;
+  /** Stable click handler that receives the game — preferred over onClick for memoization. */
+  onCardClick?: (game: ShopAssets) => void;
+  /** Stable feedback handler that receives the game + kind — preferred over onFeedback for memoization. */
+  onCardFeedback?: (game: ShopAssets, kind: FeedbackKind) => void;
 }
 
 const shopIcon: Record<string, JSX.Element> = {
@@ -50,11 +54,14 @@ const shopIcon: Record<string, JSX.Element> = {
   ea: <EaLogo className="game-card__shop-icon" />,
 };
 
-export function GameCard({
+export const GameCard = memo(function GameCard({
   game,
   className,
   feedback,
   onFeedback,
+  onCardClick,
+  onCardFeedback,
+  onClick,
   ...props
 }: GameCardProps) {
   const { t } = useTranslation("game_card");
@@ -62,16 +69,14 @@ export function GameCard({
   const [stats, setStats] = useState<GameStats | null>(null);
   const [showReason, setShowReason] = useState(false);
 
-  // Interactive controls can't be real <button>s here (the card root already is
-  // one, and buttons can't nest), so feedback uses role=button spans that stop
-  // propagation to avoid triggering card navigation.
   const handleFeedback = useCallback(
     (event: React.SyntheticEvent, kind: FeedbackKind) => {
       event.stopPropagation();
       event.preventDefault();
-      onFeedback?.(kind);
+      if (onCardFeedback) onCardFeedback(game, kind);
+      else onFeedback?.(kind);
     },
-    [onFeedback]
+    [game, onCardFeedback, onFeedback]
   );
 
   const handleHover = useCallback(() => {
@@ -85,16 +90,24 @@ export function GameCard({
   const { numberFormatter } = useFormat();
 
   const library = useAppSelector((state) => state.library.value);
-  // Only show platform icons for games actually synced from a platform (not catalog-added)
-  const ownedShops = library
-    .filter((g) => g.objectId === game.objectId && getGameOrigin(g) === "sync")
-    .map((g) => g.shop);
+  const ownedShops = useMemo(
+    () =>
+      library
+        .filter(
+          (g) => g.objectId === game.objectId && getGameOrigin(g) === "sync"
+        )
+        .map((g) => g.shop),
+    [library, game.objectId]
+  );
+
+  const showFeedbackControls = onFeedback || onCardFeedback;
 
   return (
     <button
       {...props}
       type="button"
       className={className ? `game-card ${className}` : "game-card"}
+      onClick={onClick ?? (onCardClick ? () => onCardClick(game) : undefined)}
       onMouseEnter={handleHover}
     >
       <div className="game-card__backdrop">
@@ -105,7 +118,7 @@ export function GameCard({
           loading="lazy"
         />
 
-        {onFeedback && (
+        {showFeedbackControls && (
           <div className="game-card__feedback">
             <span
               role="button"
@@ -248,4 +261,4 @@ export function GameCard({
       </div>
     </button>
   );
-}
+});

@@ -92,7 +92,16 @@ export function LibraryHero({
   const lastPlayedLabel = getLastPlayedLabel(featuredGame?.lastTimePlayed);
   const isFavoriteLoading =
     Boolean(featuredGame) && favoriteLoadingGameId === featuredGame?.id;
-  const hasExecutable = Boolean(featuredGame?.executablePath);
+  // Playable = a real executable, a confirmed local install, or an emulated
+  // (launchbox) game with its discs present — the same predicate the game page
+  // hero uses, so last-played classics show "Launch Game", not "Download".
+  const isPlayableClassicsGame =
+    featuredGame?.shop === "launchbox" &&
+    (featuredGame.discs?.length ?? 0) > 0;
+  const isPlayable =
+    Boolean(featuredGame?.executablePath) ||
+    featuredGame?.isInstalledLocally === true ||
+    isPlayableClassicsGame;
 
   const handlePlayOrDownloadClick = () => {
     if (!featuredGame) return;
@@ -173,7 +182,7 @@ export function LibraryHero({
               navigationOverrides={heroActionsNavigationOverrides}
               getScrollAnchor={getHeroScrollAnchor}
             >
-              {hasExecutable ? (
+              {isPlayable ? (
                 <Button
                   variant="primary"
                   icon={<PlayIcon size={24} weight="fill" />}

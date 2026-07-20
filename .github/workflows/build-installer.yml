@@ -88,22 +88,31 @@ jobs:
           MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
 
       - name: Build web-setup bootstrapper (Windows)
-        # Tiny (~1 MB) stub exe that downloads the full app from the GitHub
-        # release at install time; offers install vs portable. Lands in dist/
-        # so the existing *.exe globs carry it into the artifact + release.
+        # Electron-based setup app with matching dark-theme UI.
+        # Downloads the full app from the GitHub release at install time;
+        # offers install vs portable. Lands in dist/ so the existing
+        # *.exe globs carry it into the artifact + release.
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
         run: |
-          makensis /V2 resources\web-setup\GameHubWebSetup.nsi
-          if (-not (Test-Path "dist\GameHub-WebSetup.exe")) { throw "web setup stub missing" }
+          cd web-setup-electron
+          npm install --no-audit --no-fund
+          npx electron-builder --win portable --config electron-builder.yml
+          if (-not (Test-Path "../dist/GameHub-WebSetup.exe")) { throw "web setup exe missing" }
 
-      - name: Stage web-setup script (Linux)
-        # Linux counterpart of the web setup: a few-KB shell script offering
-        # install (deb/rpm/AppImage-integrated) vs portable (AppImage + marker).
+      - name: Build web-setup bootstrapper (Linux)
+        # Electron-based setup app (AppImage) for Linux.
         if: runner.os == 'Linux'
+        shell: bash
+        env:
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
         run: |
-          bash -n resources/web-setup/gamehub-websetup.sh
-          install -m 0755 resources/web-setup/gamehub-websetup.sh dist/GameHub-WebSetup.sh
+          cd web-setup-electron
+          npm install --no-audit --no-fund
+          npx electron-builder --linux AppImage --config electron-builder.yml
+          if [ ! -f ../dist/GameHub-WebSetup.AppImage ]; then echo "web setup AppImage missing"; exit 1; fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

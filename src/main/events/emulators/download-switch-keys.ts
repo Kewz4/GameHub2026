@@ -55,22 +55,27 @@ function findByExt(dir: string, exts: string[]): string[] {
  * Download prod.keys and system firmware for the Eden (Switch) emulator,
  * extracting them into the emulator's portable data directory.
  */
-const downloadSwitchKeys = async (
-  _event: Electron.IpcMainInvokeEvent
+export const downloadSwitchKeysImpl = async (
+  explicitExePath?: string
 ): Promise<{ keys: boolean; firmware: boolean; error?: string }> => {
   try {
-    const config = await getEmulatorConfig("switch").catch(() => null);
-    if (config?.binary !== "eden" || !config.executablePath) {
-      return {
-        keys: false,
-        firmware: false,
-        error: "Eden is not installed. Please install Eden first.",
-      };
+    let executablePath = explicitExePath;
+
+    if (!executablePath) {
+      const config = await getEmulatorConfig("switch");
+      if (config?.binary !== "eden" || !config.executablePath) {
+        return {
+          keys: false,
+          firmware: false,
+          error: "Eden is not installed. Please install Eden first.",
+        };
+      }
+      executablePath = config.executablePath;
     }
 
     // Eden roots all data under <install>/user/ (portable mode). Keys go in
     // user/keys/prod.keys; firmware NCAs in the SYSTEM registered cache.
-    const dataDir = edenDataDir(path.dirname(config.executablePath));
+    const dataDir = edenDataDir(path.dirname(executablePath));
     const keysDir = path.join(dataDir, "keys");
     const firmwareDir = path.join(
       dataDir,
@@ -153,6 +158,12 @@ const downloadSwitchKeys = async (
       error: (err as Error).message,
     };
   }
+};
+
+const downloadSwitchKeys = async (
+  _event: Electron.IpcMainInvokeEvent
+): Promise<{ keys: boolean; firmware: boolean; error?: string }> => {
+  return downloadSwitchKeysImpl();
 };
 
 registerEvent("downloadSwitchKeys", downloadSwitchKeys);

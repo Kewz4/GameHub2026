@@ -115,7 +115,6 @@ export const KNOWN_BINARIES: Record<EmulatorSystem, KnownBinary> = {
       ".chd",
       ".cso",
       ".zso",
-      ".gz",
       ".nrg",
       ".cue",
       ".bin",

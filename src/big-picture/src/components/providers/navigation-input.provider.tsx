@@ -2,6 +2,7 @@ import { useGamepad, useNavigationActions } from "../../hooks";
 import { useNavigationStore } from "../../stores";
 import { GamepadAxisDirection, GamepadButtonType } from "../../types";
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface NavigationInputProviderProps {
   children: ReactNode;
@@ -104,6 +105,7 @@ export function NavigationInputProvider({
     isActiveGamepadEvent,
     activeGamepadIndex,
   } = useGamepad();
+  const navigate = useNavigate();
   const currentFocusId = useNavigationStore((state) => state.currentFocusId);
   const holdSessionsRef = useRef(createInitialHoldSessions());
   const warnedConflictsRef = useRef(new Set<string>());
@@ -200,7 +202,9 @@ export function NavigationInputProvider({
 
       if (event.key === "Escape" && !event.repeat) {
         event.preventDefault();
-        triggerScreenPress("b", event);
+        if (!triggerScreenPress("b", event)) {
+          navigate(-1);
+        }
       }
     };
 
@@ -209,7 +213,13 @@ export function NavigationInputProvider({
     return () => {
       globalThis.removeEventListener("keydown", handleKeyDown);
     };
-  }, [moveFocus, triggerPrimary, triggerScreenDirection, triggerScreenPress]);
+  }, [
+    moveFocus,
+    navigate,
+    triggerPrimary,
+    triggerScreenDirection,
+    triggerScreenPress,
+  ]);
 
   useEffect(() => {
     const unsubDpadUp = onButtonPressed(GamepadButtonType.DPAD_UP, (event) => {
@@ -363,7 +373,9 @@ export function NavigationInputProvider({
       }
 
       if (button === "b") {
-        return triggerScreenPress("b");
+        if (triggerScreenPress("b")) return true;
+        navigate(-1);
+        return true;
       }
 
       if (button === "x" || button === "y") {
@@ -445,6 +457,7 @@ export function NavigationInputProvider({
     isYPressed,
     isStartPressed,
     isSelectPressed,
+    navigate,
     triggerItemHold,
     triggerItemPress,
     triggerPrimary,

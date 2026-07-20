@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
@@ -13,7 +13,10 @@ interface Props {
   isLoading: boolean;
 }
 
-export function HeroCarousel({ games, isLoading }: Readonly<Props>) {
+export const HeroCarousel = memo(function HeroCarousel({
+  games,
+  isLoading,
+}: Readonly<Props>) {
   const navigate = useNavigate();
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [
     Autoplay({ delay: 6000, stopOnInteraction: false, stopOnMouseEnter: true }),
@@ -115,4 +118,4 @@ export function HeroCarousel({ games, isLoading }: Readonly<Props>) {
       </div>
     </section>
   );
-}
+});

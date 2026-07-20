@@ -8,7 +8,7 @@ import type {
 } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { getEmulatorConfig } from "./emulators-repository";
-import { cemuDataDir } from "./emulator-portable";
+import { cemuDataDir, edenDataDir } from "./emulator-portable";
 import { logger } from "../logger";
 import {
   writeRalibretro,
@@ -154,8 +154,12 @@ function writeForBinary(
       }
 
       case "eden": {
-        // Portable Eden (Yuzu/Sudachi derivative): portable.txt → config/
-        const iniFile = path.join(installDir, "config", "qt-config.ini");
+        // Eden (Yuzu/Sudachi derivative): config lives in <install>/user/config/
+        const iniFile = path.join(
+          edenDataDir(installDir),
+          "config",
+          "qt-config.ini"
+        );
         const existing = fs.existsSync(iniFile)
           ? fs.readFileSync(iniFile, "utf-8")
           : "";

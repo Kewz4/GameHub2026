@@ -207,74 +207,6 @@ const scanInstalledGames = async (
     if (unresolved) {
       if (!seenKeys.has(unresolved.key)) {
         seenKeys.add(unresolved.key);
-        // ── Phase 3: Discover emulator/console ROM files on disk ──────────────────
-        // The deep scan also looks for ROM files (.iso, .3ds, .gba, etc.) in the
-        // "Emulator Games" folders and generic ROM directories. Found ROMs that
-        // aren't already in the library are surfaced for the user to confirm.
-        const knownRomPaths = new Set(
-          games
-            .filter((g) => g.game.shop === "launchbox")
-            .map((g) => g.game.executablePath?.toLowerCase())
-            .filter((p): p is string => Boolean(p))
-        );
-
-        const discoveredRoms = await discoverRomFiles(
-          [],
-          (current, total, title) =>
-            WindowManager.sendToAppWindows("on-scan-progress", {
-              scanned: current,
-              total,
-              foundCount: foundGames.length,
-              currentTitle: `ROM: ${title}`,
-            })
-        );
-
-        for (const rom of discoveredRoms) {
-          const romLower = rom.romPath.toLowerCase();
-          if (knownRomPaths.has(romLower)) continue;
-
-          const norm = normalizeGameTitle(rom.title);
-
-          // Check if this ROM matches an existing (possibly deleted) launchbox entry
-          // by title — if so, resolve its executable path instead of creating new.
-          const existingRom = games.find(
-            (g) =>
-              g.game.shop === "launchbox" &&
-              normalizeGameTitle(g.game.title) === norm
-          );
-          if (existingRom) {
-            if (!seenKeys.has(existingRom.key)) {
-              seenKeys.add(existingRom.key);
-              if (!dryRun) {
-                await gamesSublevel.put(existingRom.key, {
-                  ...existingRom.game,
-                  isDeleted: false,
-                  executablePath: rom.romPath,
-                  isInstalledLocally: true,
-                });
-              }
-              foundGames.push({
-                title: existingRom.game.title,
-                executablePath: rom.romPath,
-                key: existingRom.key,
-              });
-              logger.info(
-                `[ScanInstalledGames] Resolved ROM: ${existingRom.game.title} → ${rom.romPath}`
-              );
-            }
-            continue;
-          }
-
-          // New ROM not in the library — surface for confirmation.
-          foundGames.push({
-            title: rom.title,
-            executablePath: rom.romPath,
-            key: `rom:${romLower}`,
-            isNew: true,
-            emulatorSystem: rom.system,
-          });
-        }
-
         if (!dryRun) {
           await gamesSublevel.put(unresolved.key, {
             ...unresolved.game,
@@ -305,6 +237,72 @@ const scanInstalledGames = async (
       // entry is created at confirm time from title + executablePath.
       key: `new:${exeLower}`,
       isNew: true,
+    });
+  }
+
+  // ── Phase 3: Discover emulator/console ROM files on disk ──────────────────
+  // The deep scan also looks for ROM files (.iso, .3ds, .gba, etc.) in the
+  // "Emulator Games" folders and generic ROM directories. Found ROMs that
+  // aren't already in the library are surfaced for the user to confirm.
+  const knownRomPaths = new Set(
+    games
+      .filter((g) => g.game.shop === "launchbox")
+      .map((g) => g.game.executablePath?.toLowerCase())
+      .filter((p): p is string => Boolean(p))
+  );
+
+  const discoveredRoms = await discoverRomFiles([], (current, total, title) =>
+    WindowManager.sendToAppWindows("on-scan-progress", {
+      scanned: current,
+      total,
+      foundCount: foundGames.length,
+      currentTitle: `ROM: ${title}`,
+    })
+  );
+
+  for (const rom of discoveredRoms) {
+    const romLower = rom.romPath.toLowerCase();
+    if (knownRomPaths.has(romLower)) continue;
+
+    const romNorm = normalizeGameTitle(rom.title);
+
+    // Check if this ROM matches an existing (possibly deleted) launchbox entry
+    // by title — if so, resolve its executable path instead of creating new.
+    const existingRom = games.find(
+      (g) =>
+        g.game.shop === "launchbox" &&
+        normalizeGameTitle(g.game.title) === romNorm
+    );
+    if (existingRom) {
+      if (!seenKeys.has(existingRom.key)) {
+        seenKeys.add(existingRom.key);
+        if (!dryRun) {
+          await gamesSublevel.put(existingRom.key, {
+            ...existingRom.game,
+            isDeleted: false,
+            executablePath: rom.romPath,
+            isInstalledLocally: true,
+          });
+        }
+        foundGames.push({
+          title: existingRom.game.title,
+          executablePath: rom.romPath,
+          key: existingRom.key,
+        });
+        logger.info(
+          `[ScanInstalledGames] Resolved ROM: ${existingRom.game.title} → ${rom.romPath}`
+        );
+      }
+      continue;
+    }
+
+    // New ROM not in the library — surface for confirmation.
+    foundGames.push({
+      title: rom.title,
+      executablePath: rom.romPath,
+      key: `rom:${romLower}`,
+      isNew: true,
+      emulatorSystem: rom.system,
     });
   }
 

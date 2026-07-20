@@ -11,14 +11,21 @@ import { type HomeChallengeGame } from "./home-data";
 import { useHotGames } from "./use-hot-games";
 import { useHomeChallengeGridNavigation } from "./use-home-challenge-grid-navigation";
 import { useHardPlatinums } from "./use-hard-platinums";
+import { useRecommendedRows } from "./use-recommended-rows";
 import { useWeeklyGames } from "./use-weekly-games";
 import {
+  getHomeBecauseCarouselRegionId,
+  getHomeBecauseGameItemId,
   getHomeChallengeGameItemId,
+  getHomeClassicsGameItemId,
+  getHomeRecommendedGameItemId,
   getHomeTrendingGameItemId,
   getHomeWeeklyGameItemId,
+  HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID,
   HOME_HARD_PLATINUMS_GRID_REGION_ID,
   HOME_HERO_ACTIONS_REGION_ID,
   HOME_PAGE_REGION_ID,
+  HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID,
   HOME_TRENDING_GAMES_CAROUSEL_REGION_ID,
   HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID,
 } from "./navigation";
@@ -61,7 +68,15 @@ import type { FocusOverrideTarget, FocusOverrides } from "../../services";
 
 import "./page.scss";
 
-const HOME_SECTION_ORDER = ["hero", "weekly", "trending", "challenge"] as const;
+const HOME_SECTION_ORDER = [
+  "hero",
+  "recommended",
+  "because",
+  "classics",
+  "weekly",
+  "trending",
+  "challenge",
+] as const;
 
 type HomeSectionId = (typeof HOME_SECTION_ORDER)[number];
 type DownloadModalGame = Pick<
@@ -84,7 +99,7 @@ export default function Home() {
   const navigate = useNavigate();
   const { setFocus } = useNavigation();
   const { showSuccessToast } = useBigPictureToast();
-  const { t } = useTranslation("big_picture");
+  const { t, i18n } = useTranslation("big_picture");
   const { library, updateLibrary } = useLibrary();
   const { loadCollections } = useGameCollections();
 
@@ -342,155 +357,296 @@ export default function Home() {
   const hardPlatinums = useHardPlatinums();
   const hotGames = useHotGames();
   const weeklyGames = useWeeklyGames();
+  const { recommended, becauseYouPlayed, recommendedClassics } =
+    useRecommendedRows(i18n.language.split("-")[0]);
 
   useEffect(() => {
     void updateLibrary();
   }, [updateLibrary]);
 
   const hasHero = featuredGame != null;
+  const hasRecommended = recommended.length > 0;
+  const hasBecause = becauseYouPlayed.length > 0;
+  const hasClassics = recommendedClassics.length > 0;
   const hasWeekly = weeklyGames.length > 0;
   const hasTrending = hotGames.length > 0;
   const hasChallenge = hardPlatinums.length > 0;
 
-  const homeSectionRegionIdById: Record<
-    Exclude<HomeSectionId, "hero">,
-    string
-  > = {
-    weekly: HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID,
-    trending: HOME_TRENDING_GAMES_CAROUSEL_REGION_ID,
-    challenge: HOME_HARD_PLATINUMS_GRID_REGION_ID,
-  };
+  const homeSectionRegionIdById = useMemo<
+    Record<Exclude<HomeSectionId, "hero">, string>
+  >(
+    () => ({
+      recommended: HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID,
+      because: getHomeBecauseCarouselRegionId(0),
+      classics: HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID,
+      weekly: HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID,
+      trending: HOME_TRENDING_GAMES_CAROUSEL_REGION_ID,
+      challenge: HOME_HARD_PLATINUMS_GRID_REGION_ID,
+    }),
+    []
+  );
 
-  const availableSections = HOME_SECTION_ORDER.filter((sectionId) => {
-    switch (sectionId) {
-      case "hero":
-        return hasHero;
-      case "weekly":
-        return hasWeekly;
-      case "trending":
-        return hasTrending;
-      case "challenge":
-        return hasChallenge;
-    }
-  });
+  const availableSections = useMemo(
+    () =>
+      HOME_SECTION_ORDER.filter((sectionId) => {
+        switch (sectionId) {
+          case "hero":
+            return hasHero;
+          case "recommended":
+            return hasRecommended;
+          case "because":
+            return hasBecause;
+          case "classics":
+            return hasClassics;
+          case "weekly":
+            return hasWeekly;
+          case "trending":
+            return hasTrending;
+          case "challenge":
+            return hasChallenge;
+        }
+      }),
+    [
+      hasBecause,
+      hasChallenge,
+      hasClassics,
+      hasHero,
+      hasRecommended,
+      hasTrending,
+      hasWeekly,
+    ]
+  );
 
-  const getRegionTarget = (
-    sectionId: Exclude<HomeSectionId, "hero"> | undefined,
-    entryDirection: "right" | "down" = "right"
-  ): FocusOverrideTarget | undefined => {
-    if (!sectionId) return undefined;
+  const getRegionTarget = useCallback(
+    (
+      sectionId: Exclude<HomeSectionId, "hero"> | undefined,
+      entryDirection: "right" | "down" = "right"
+    ): FocusOverrideTarget | undefined => {
+      if (!sectionId) return undefined;
 
-    return {
-      type: "region",
-      regionId: homeSectionRegionIdById[sectionId],
-      entryDirection,
-    };
-  };
-
-  const getFirstContentRegionBelowHero = () => {
-    const nextSectionId = availableSections.find((sectionId) => {
-      return sectionId !== "hero";
-    });
-
-    return getRegionTarget(nextSectionId);
-  };
-
-  const getNextRegionBelow = (sectionId: Exclude<HomeSectionId, "hero">) => {
-    const currentIndex = availableSections.indexOf(sectionId);
-
-    if (currentIndex === -1) return undefined;
-
-    const nextSectionId = availableSections[currentIndex + 1];
-
-    if (!nextSectionId || nextSectionId === "hero") return undefined;
-
-    return getRegionTarget(nextSectionId);
-  };
-
-  const getPreviousRegionAbove = (
-    sectionId: Exclude<HomeSectionId, "hero">
-  ): { type: "region"; regionId: string; entryDirection: "right" } => {
-    const currentIndex = availableSections.indexOf(sectionId);
-    const previousSectionId =
-      currentIndex > 0 ? availableSections[currentIndex - 1] : "hero";
-
-    if (previousSectionId === "hero") {
       return {
         type: "region",
-        regionId: HOME_HERO_ACTIONS_REGION_ID,
-        entryDirection: "right",
+        regionId: homeSectionRegionIdById[sectionId],
+        entryDirection,
       };
-    }
+    },
+    [homeSectionRegionIdById]
+  );
 
-    return getRegionTarget(previousSectionId) as {
+  const getFirstContentRegionBelowHero = useCallback(() => {
+    const nextSectionId = availableSections.find(
+      (sectionId) => sectionId !== "hero"
+    );
+    return getRegionTarget(nextSectionId);
+  }, [availableSections, getRegionTarget]);
+
+  const getNextRegionBelow = useCallback(
+    (sectionId: Exclude<HomeSectionId, "hero">) => {
+      const currentIndex = availableSections.indexOf(sectionId);
+      if (currentIndex === -1) return undefined;
+      const nextSectionId = availableSections[currentIndex + 1];
+      if (!nextSectionId || nextSectionId === "hero") return undefined;
+      return getRegionTarget(nextSectionId);
+    },
+    [availableSections, getRegionTarget]
+  );
+
+  const getPreviousRegionAbove = useCallback(
+    (sectionId: Exclude<HomeSectionId, "hero">): {
       type: "region";
       regionId: string;
       entryDirection: "right";
-    };
-  };
+    } => {
+      const currentIndex = availableSections.indexOf(sectionId);
+      const previousSectionId =
+        currentIndex > 0 ? availableSections[currentIndex - 1] : "hero";
 
-  const heroDownNavigationTarget = getFirstContentRegionBelowHero();
-  const heroUpNavigationTarget: FocusOverrideTarget = {
-    type: "region",
-    regionId: BIG_PICTURE_HEADER_REGION_ID,
-    entryDirection: "down",
-  };
+      if (previousSectionId === "hero") {
+        return {
+          type: "region",
+          regionId: HOME_HERO_ACTIONS_REGION_ID,
+          entryDirection: "right",
+        };
+      }
 
-  const getWeeklyGameNavigationOverrides = (
-    _game: (typeof weeklyGames)[number],
-    index: number,
-    games: typeof weeklyGames
-  ): FocusOverrides => ({
-    ...(index === 0
-      ? {
-          left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
-        }
-      : {}),
-    ...(index === games.length - 1
-      ? {
-          right: {
-            type: "block",
-          },
-        }
-      : {}),
-    up: {
+      return getRegionTarget(previousSectionId) as {
+        type: "region";
+        regionId: string;
+        entryDirection: "right";
+      };
+    },
+    [availableSections, getRegionTarget]
+  );
+
+  const heroDownNavigationTarget = useMemo(
+    () => getFirstContentRegionBelowHero(),
+    [getFirstContentRegionBelowHero]
+  );
+  const heroUpNavigationTarget = useMemo<FocusOverrideTarget>(
+    () => ({
       type: "region",
-      regionId: HOME_HERO_ACTIONS_REGION_ID,
-      entryDirection: "right",
-    },
-    ...(getNextRegionBelow("weekly")
-      ? {
-          down: getNextRegionBelow("weekly"),
-        }
-      : {}),
-  });
+      regionId: BIG_PICTURE_HEADER_REGION_ID,
+      entryDirection: "down",
+    }),
+    []
+  );
 
-  const getHotGameNavigationOverrides = (
-    _game: (typeof hotGames)[number],
-    index: number,
-    games: typeof hotGames
-  ): FocusOverrides => ({
-    ...(index === 0
-      ? {
-          left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
-        }
-      : {}),
-    ...(index === games.length - 1
-      ? {
-          right: {
-            type: "block",
-          },
-        }
-      : {}),
-    up: {
-      ...getPreviousRegionAbove("trending"),
-    },
-    ...(getNextRegionBelow("trending")
-      ? {
-          down: getNextRegionBelow("trending"),
-        }
-      : {}),
-  });
+  const getRecommendedGameNavigationOverrides = useCallback(
+    (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => ({
+      ...(index === 0
+        ? {
+            left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+          }
+        : {}),
+      ...(index === games.length - 1
+        ? {
+            right: {
+              type: "block",
+            },
+          }
+        : {}),
+      up: {
+        ...getPreviousRegionAbove("recommended"),
+      },
+      ...(getNextRegionBelow("recommended")
+        ? {
+            down: getNextRegionBelow("recommended"),
+          }
+        : {}),
+    }),
+    [getNextRegionBelow, getPreviousRegionAbove]
+  );
+
+  const getClassicsGameNavigationOverrides = useCallback(
+    (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => ({
+      ...(index === 0
+        ? {
+            left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+          }
+        : {}),
+      ...(index === games.length - 1
+        ? {
+            right: {
+              type: "block",
+            },
+          }
+        : {}),
+      up: {
+        ...getPreviousRegionAbove("classics"),
+      },
+      ...(getNextRegionBelow("classics")
+        ? {
+            down: getNextRegionBelow("classics"),
+          }
+        : {}),
+    }),
+    [getNextRegionBelow, getPreviousRegionAbove]
+  );
+
+  const becauseCount = becauseYouPlayed.length;
+  const getBecauseGameNavigationOverrides = useCallback(
+    (shelfIndex: number) =>
+      (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => {
+        const isFirstShelf = shelfIndex === 0;
+        const isLastShelf = shelfIndex === becauseCount - 1;
+
+        const up: FocusOverrideTarget = isFirstShelf
+          ? { ...getPreviousRegionAbove("because") }
+          : {
+              type: "region",
+              regionId: getHomeBecauseCarouselRegionId(shelfIndex - 1),
+              entryDirection: "right",
+            };
+
+        const down: FocusOverrideTarget | undefined = isLastShelf
+          ? getNextRegionBelow("because")
+          : {
+              type: "region",
+              regionId: getHomeBecauseCarouselRegionId(shelfIndex + 1),
+              entryDirection: "right",
+            };
+
+        return {
+          ...(index === 0
+            ? {
+                left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+              }
+            : {}),
+          ...(index === games.length - 1
+            ? {
+                right: {
+                  type: "block",
+                },
+              }
+            : {}),
+          up,
+          ...(down ? { down } : {}),
+        };
+      },
+    [becauseCount, getNextRegionBelow, getPreviousRegionAbove]
+  );
+
+  const getWeeklyGameNavigationOverrides = useCallback(
+    (
+      _game: (typeof weeklyGames)[number],
+      index: number,
+      games: typeof weeklyGames
+    ): FocusOverrides => ({
+      ...(index === 0
+        ? {
+            left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+          }
+        : {}),
+      ...(index === games.length - 1
+        ? {
+            right: {
+              type: "block",
+            },
+          }
+        : {}),
+      up: {
+        type: "region",
+        regionId: HOME_HERO_ACTIONS_REGION_ID,
+        entryDirection: "right",
+      },
+      ...(getNextRegionBelow("weekly")
+        ? {
+            down: getNextRegionBelow("weekly"),
+          }
+        : {}),
+    }),
+    [getNextRegionBelow]
+  );
+
+  const getHotGameNavigationOverrides = useCallback(
+    (
+      _game: (typeof hotGames)[number],
+      index: number,
+      games: typeof hotGames
+    ): FocusOverrides => ({
+      ...(index === 0
+        ? {
+            left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+          }
+        : {}),
+      ...(index === games.length - 1
+        ? {
+            right: {
+              type: "block",
+            },
+          }
+        : {}),
+      up: {
+        ...getPreviousRegionAbove("trending"),
+      },
+      ...(getNextRegionBelow("trending")
+        ? {
+            down: getNextRegionBelow("trending"),
+          }
+        : {}),
+    }),
+    [getNextRegionBelow, getPreviousRegionAbove]
+  );
 
   const challengeGridUpRegionId = getPreviousRegionAbove("challenge").regionId;
   const challengeNavigationOverridesByItemId = useHomeChallengeGridNavigation(
@@ -505,6 +661,50 @@ export default function Home() {
           featuredGame={featuredGame}
           downNavigationTarget={heroDownNavigationTarget}
           upNavigationTarget={heroUpNavigationTarget}
+        />
+        <FocusCarousel
+          title="Recommended for you"
+          cardVariant="vertical"
+          games={recommended}
+          regionId={HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID}
+          getItemId={getHomeRecommendedGameItemId}
+          getItemNavigationOverrides={getRecommendedGameNavigationOverrides}
+          onCarouselItemOpenContextMenu={openCatalogMenu}
+          onItemActivate={(game) => {
+            navigate(getBigPictureGameDetailsPath(game));
+          }}
+          showRightFade
+        />
+        {becauseYouPlayed.map((row, shelfIndex) => (
+          <FocusCarousel
+            key={`because-${row.anchorTitle}`}
+            title={`Because you played ${row.anchorTitle}`}
+            cardVariant="vertical"
+            games={row.games}
+            regionId={getHomeBecauseCarouselRegionId(shelfIndex)}
+            getItemId={(game) => getHomeBecauseGameItemId(shelfIndex, game)}
+            getItemNavigationOverrides={getBecauseGameNavigationOverrides(
+              shelfIndex
+            )}
+            onCarouselItemOpenContextMenu={openCatalogMenu}
+            onItemActivate={(game) => {
+              navigate(getBigPictureGameDetailsPath(game));
+            }}
+            showRightFade
+          />
+        ))}
+        <FocusCarousel
+          title="Recommended classics"
+          cardVariant="vertical"
+          games={recommendedClassics}
+          regionId={HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID}
+          getItemId={getHomeClassicsGameItemId}
+          getItemNavigationOverrides={getClassicsGameNavigationOverrides}
+          onCarouselItemOpenContextMenu={openCatalogMenu}
+          onItemActivate={(game) => {
+            navigate(getBigPictureGameDetailsPath(game));
+          }}
+          showRightFade
         />
         <FocusCarousel
           title="Popular on Hydra"

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GameHub Setup</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="logo">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M12 2L2 7L12 12L22 7L12 2Z"
+              stroke="#16b195"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M2 17L12 22L22 17"
+              stroke="#16b195"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M2 12L12 17L22 12"
+              stroke="#16b195"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <h1>GameHub</h1>
+        </div>
+        <p class="version" id="version">Loading latest release...</p>
+      </div>
+
+      <!-- Mode Selection Screen -->
+      <div id="screen-select" class="screen active">
+        <div class="mode-cards">
+          <button class="mode-card" id="mode-install">
+            <div class="mode-card__icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 3V12M12 12L8 8M12 12L16 8"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M3 15V18C3 19.1046 3.89543 20 5 20H19C20.1046 20 21 19.1046 21 18V15"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+            <div class="mode-card__content">
+              <h2>Install</h2>
+              <p>Downloads the full installer and runs it. Updates automatically.</p>
+            </div>
+            <div class="mode-card__badge">Recommended</div>
+          </button>
+
+          <button class="mode-card" id="mode-portable">
+            <div class="mode-card__icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M21 7L13 15L10 12"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M3 3V21H21"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </div>
+            <div class="mode-card__content">
+              <h2>Portable</h2>
+              <p>Extracts GameHub into a folder you pick (USB-friendly). All data stays in that folder.</p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Download Progress Screen -->
+      <div id="screen-progress" class="screen">
+        <div class="progress-section">
+          <div class="status-text" id="status-text">Preparing...</div>
+          <div class="progress-bar">
+            <div class="progress-bar__fill" id="progress-fill"></div>
+          </div>
+          <div class="progress-stats">
+            <span id="progress-percent">0%</span>
+            <span id="progress-size"></span>
+          </div>
+        </div>
+        <div class="spinner" id="spinner">
+          <div class="spinner__ring"></div>
+        </div>
+      </div>
+
+      <!-- Done Screen -->
+      <div id="screen-done" class="screen">
+        <div class="done-section">
+          <div class="done-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0095 17.9818C18.7185 19.709 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51167 20.6273 4.78265 19.2461 3.60904 17.4371C2.43543 15.628 1.87972 13.4881 2.02172 11.3363C2.16372 9.18457 2.99576 7.13633 4.39439 5.50506C5.79301 3.87379 7.68297 2.74532 9.77934 2.28843C11.8757 1.83155 14.0635 2.07168 16.01 2.97"
+                stroke="#16b195"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M22 4L12 14.01L9 11.01"
+                stroke="#16b195"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <h2 id="done-title">Setup Complete!</h2>
+          <p id="done-message">GameHub has been installed successfully.</p>
+          <div class="done-actions">
+            <button class="btn btn--primary" id="btn-launch">Launch GameHub</button>
+            <button class="btn btn--secondary" id="btn-close">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Screen -->
+      <div id="screen-error" class="screen">
+        <div class="error-section">
+          <div class="error-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="#e05c5c"
+                stroke-width="2"
+              />
+              <path
+                d="M12 8V12M12 16H12.01"
+                stroke="#e05c5c"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </div>
+          <h2>Something went wrong</h2>
+          <p id="error-message" class="error-message"></p>
+          <button class="btn btn--primary" id="btn-retry">Try Again</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

@@ -312,6 +312,7 @@ export function Hero({
       canAddToLibrary,
       dominantColor,
       game,
+      hasPrimaryAction,
       heroDownNavigationTarget,
       isAddingToLibrary,
       isGameRunning,

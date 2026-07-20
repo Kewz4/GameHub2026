@@ -76,8 +76,18 @@ export function romContentType(fileName: string): "game" | "update" | "dlc" {
     if (/^(update|patch|upd)\b/.test(tag)) return "update";
     if (/^(dlc|aoc|add-?on( content)?)\b/.test(tag)) return "dlc";
   }
+  // Embedded 16-hex title ids (GodMode9/NUS-style dumps with no tags):
+  //   Wii U  0005000E…/0005000C… → update/dlc
+  //   3DS    0004000E…/0004008C… → update/dlc
   if (/\b(0005000e|0004000e)[0-9a-f]{8}\b/i.test(withoutExt)) return "update";
   if (/\b(0005000c|0004008c)[0-9a-f]{8}\b/i.test(withoutExt)) return "dlc";
+  // Switch title IDs are 16 hex chars: 0100 + 8-hex game id + 4-hex type.
+  //   0000 = base game, 0800 = update, 0c00 = DLC
+  if (/\b0100[0-9a-f]{8}0800\b/i.test(withoutExt)) return "update";
+  if (/\b0100[0-9a-f]{8}0c00\b/i.test(withoutExt)) return "dlc";
+  // Minerva-style "::update" / "::dlc" suffixes
+  if (/::update\b/i.test(withoutExt)) return "update";
+  if (/::dlc\b/i.test(withoutExt)) return "dlc";
   return "game";
 }
 
@@ -129,6 +139,9 @@ export function parseRomFilename(fileName: string): ParsedRomFilename {
 
   const title = withoutExt
     .replace(TAG_REGEX, " ")
+    // Strip trailing version markers that aren't in brackets/parentheses
+    // (e.g. "SUPER MARIO ODYSSEY v1.4.1" → "SUPER MARIO ODYSSEY").
+    .replace(/\s+v\d+(\.\d+)*\s*$/i, " ")
     // Collapse leftover separators/whitespace.
     .replace(/[_]+/g, " ")
     .replace(/\s+/g, " ")

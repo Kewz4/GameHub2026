@@ -11,6 +11,8 @@ export const getDownloadSourcesCheckBaseline = async (): Promise<
       valueEncoding: "utf8",
     });
 
+    if (!timestamp) return null;
+
     // Value was wrapped in quotes for some reason, remove them if they exist
     return timestamp.replaceAll('"', "");
   } catch (error) {

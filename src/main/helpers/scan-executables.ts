@@ -4,7 +4,7 @@ import { cleanGameFolderName } from "./clean-game-folder-name";
 import { getExeGameTitle } from "./exe-metadata";
 import { logger } from "@main/services/logger";
 import { KNOWN_BINARIES } from "@main/services/emulators/known-binaries";
-import { parseRomFilename } from "@main/services/emulators/parse-rom-filename";
+import { parseRomFilename, romContentType } from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem } from "@types";
 
 /**
@@ -431,6 +431,27 @@ const ROM_ROOT_NAMES = [
  *   2. The extension when it's unique to one system (e.g. `.3ds` → n3ds)
  *   3. Skipped when the extension is shared and the folder gives no clue
  */
+/** Minimum file size (in bytes) for a file to be considered a ROM. Asset
+ * packs, update files and other non-ROM files sharing a ROM extension are
+ * almost always far smaller than an actual game image. */
+const MIN_ROM_SIZE_BYTES = 1_000_000; // 1 MB
+
+/** Extensions that are too generic to match without folder context. */
+const AMBIGUOUS_EXTENSIONS = new Set([".pkg", ".elf", ".self"]);
+
+/** Minimum file size for disc-based system ROMs (PS3/PS2/Wii/etc.). */
+const MIN_DISC_ROM_SIZE_BYTES = 10_000_000; // 10 MB
+
+const DISC_BASED_SYSTEMS = new Set<EmulatorSystem>([
+  "ps1",
+  "ps2",
+  "ps3",
+  "psp",
+  "wii",
+  "gc",
+  "wiiu",
+]);
+
 export async function discoverRomFiles(
   extraDirs: string[] = [],
   onProgress?: (current: number, total: number, title: string) => void
@@ -508,7 +529,38 @@ export async function discoverRomFiles(
         system = systemFromFolderName(grandparent);
       }
 
-      if (!system) continue; // can't safely categorize — skip
+      if (!system) {
+        // For ambiguous extensions (like .pkg which is also used by UE4/UE5
+        // games), require a matching folder name — never guess.
+        if (AMBIGUOUS_EXTENSIONS.has(ext)) continue;
+        continue;
+      }
+
+      // Skip ambiguous extensions unless the folder confirms the system.
+      // E.g. a .pkg file in a PS3 folder is a PS3 game, but a .pkg in
+      // "Hades II/Content/Packages" is a UE4 asset pack.
+      if (AMBIGUOUS_EXTENSIONS.has(ext)) {
+        const folderSystem = systemFromFolderName(parentFolderName);
+        if (!folderSystem) continue;
+      }
+
+      // Minimum file size check — filter out tiny asset/patch files that
+      // happen to share a ROM extension.
+      try {
+        const stat = fs.statSync(fullPath);
+        const minSize = DISC_BASED_SYSTEMS.has(system)
+          ? MIN_DISC_ROM_SIZE_BYTES
+          : MIN_ROM_SIZE_BYTES;
+        if (stat.size < minSize) continue;
+      } catch {
+        continue;
+      }
+
+      // Skip update/DLC files — they share ROM extensions with base games but
+      // aren't standalone games. romContentType checks for explicit tags
+      // ("(Update)", "(DLC)"), embedded title IDs (Wii U/3DS/Switch), and
+      // minerva-style "::update"/"::dlc" suffixes.
+      if (romContentType(entry.name) !== "game") continue;
 
       // Skip multi-file disc images: .bin is a .cue sidecar, .mdf is a .mds
       // sidecar. The .cue/.mds is the launchable entry point.

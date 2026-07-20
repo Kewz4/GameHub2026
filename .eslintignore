@@ -6,3 +6,5 @@ migration.stub
 hydra-python-rpc/
 hydra-native/
 src/main/generated/
+resources/controller-testers/
+web-setup-electron/

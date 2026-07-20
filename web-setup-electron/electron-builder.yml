@@ -1,0 +1,21 @@
+appId: com.gamehub.websetup
+productName: GameHub WebSetup
+directories:
+  output: ../dist
+asar: true
+files:
+  - main.js
+  - renderer.js
+  - index.html
+  - styles.css
+  - preload.js
+win:
+  target: portable
+  icon: ../build/icon.ico
+linux:
+  target: AppImage
+  icon: ../build/icon.png
+portable:
+  artifactName: GameHub-WebSetup.exe
+appImage:
+  artifactName: GameHub-WebSetup.AppImage

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { t } from "i18next";
 import { registerEvent } from "../register-event";
 import { gamesSublevel, levelKeys } from "@main/level";
@@ -134,6 +135,14 @@ const confirmScanGames = async (
             addedToLibraryAt: new Date(),
             platform,
             executablePath: game.executablePath,
+            discs: [
+              {
+                path: game.executablePath,
+                label: path.basename(game.executablePath),
+                fileName: path.basename(game.executablePath),
+              },
+            ],
+            selectedDiscPath: game.executablePath,
             isInstalledLocally: true,
             libraryOrigin: "custom" as const,
           });

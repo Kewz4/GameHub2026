@@ -241,15 +241,23 @@ export function LibraryFilters({
     };
   }, [selectedTabFocusId]);
 
-  const toolbarUpOverride = {
-    type: "region",
-    regionId: LIBRARY_HERO_ACTIONS_REGION_ID,
-    entryDirection: "up",
-  } as const;
-  const toolbarDownOverride = {
-    type: "item",
-    itemId: selectedTabFocusId,
-  } as const;
+  const toolbarUpOverride = useMemo(
+    () =>
+      ({
+        type: "region",
+        regionId: LIBRARY_HERO_ACTIONS_REGION_ID,
+        entryDirection: "up",
+      }) as const,
+    []
+  );
+  const toolbarDownOverride = useMemo(
+    () =>
+      ({
+        type: "item",
+        itemId: selectedTabFocusId,
+      }) as const,
+    [selectedTabFocusId]
+  );
   const searchNavigationOverrides: FocusOverrides = {
     left: SIDEBAR_LIBRARY_OVERRIDE,
     right: {

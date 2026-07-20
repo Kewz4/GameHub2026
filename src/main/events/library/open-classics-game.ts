@@ -76,7 +76,11 @@ const openClassicsGame = async (
   }
 
   const resolvedDiscPath =
-    discPath ?? game.selectedDiscPath ?? game.discs?.[0]?.path ?? null;
+    discPath ??
+    game.selectedDiscPath ??
+    game.discs?.[0]?.path ??
+    game.executablePath ??
+    null;
 
   if (!resolvedDiscPath || !existsSync(resolvedDiscPath)) {
     throw codedLaunchError(

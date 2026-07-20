@@ -1,9 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { Tabs, type TabsItem, VerticalFocusGroup } from "../../components";
-import { useGamepad, useNavigation } from "../../hooks";
+import {
+  useGamepad,
+  useNavigation,
+  useNavigationScreenActions,
+} from "../../hooks";
 import { type FocusOverrideTarget } from "../../services";
 import { GamepadButtonType } from "../../types";
 import { useVirtualKeyboardStore } from "../../stores";
@@ -150,6 +154,7 @@ function SettingsTabPanel({
 export default function Settings() {
   const { userDetails } = useUserDetails();
   const { search } = useLocation();
+  const navigate = useNavigate();
   const [selectedTab, setSelectedTab] = useState<SettingsTabId>(
     getSettingsTabFromSearch(search) ?? ALL_SETTINGS_TABS[0].id
   );
@@ -248,6 +253,14 @@ export default function Settings() {
     virtualKeyboardTarget,
     visibleTabs.length,
   ]);
+
+  useNavigationScreenActions({
+    press: {
+      b: () => {
+        navigate(-1);
+      },
+    },
+  });
 
   const tabItems = useMemo(() => {
     return visibleTabs.map(
