@@ -6,7 +6,7 @@ import { useLibrary } from "./use-library.hook";
 const emptyLibraryState: LibraryGameState = {
   libraryGame: null,
   isInLibrary: false,
-  hasExecutable: false,
+  isPlayable: false,
 };
 
 export type UseLibraryGameStateResult = LibraryGameState & {

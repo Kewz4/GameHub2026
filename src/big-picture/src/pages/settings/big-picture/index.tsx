@@ -5,6 +5,7 @@ import type { BigPictureDiagnosticsPosition } from "@types";
 import {
   Checkbox,
   DropdownSelect,
+  NavigationDiagnostics,
   VerticalFocusGroup,
 } from "../../../components";
 import { useUserPreferences } from "../../../hooks";
@@ -224,25 +225,28 @@ export function BigPictureSettingsSection({
             />
 
             {form.bigPictureDiagnosticsEnabled && (
-              <DropdownSelect
-                focusId={BIG_PICTURE_DIAGNOSTICS_POSITION_SELECT_ID}
-                label={t(
-                  "big_picture_diagnostics_position",
-                  "Diagnostics position"
-                )}
-                value={form.bigPictureDiagnosticsPosition}
-                options={diagnosticsPositionOptions}
-                focusNavigationOverrides={{
-                  up: { type: "item", itemId: diagnosticsItem.focusId },
-                  down: { type: "block" },
-                }}
-                onValueChange={(value) =>
-                  void update({
-                    bigPictureDiagnosticsPosition:
-                      value as BigPictureDiagnosticsPosition,
-                  })
-                }
-              />
+              <>
+                <NavigationDiagnostics />
+                <DropdownSelect
+                  focusId={BIG_PICTURE_DIAGNOSTICS_POSITION_SELECT_ID}
+                  label={t(
+                    "big_picture_diagnostics_position",
+                    "Diagnostics position"
+                  )}
+                  value={form.bigPictureDiagnosticsPosition}
+                  options={diagnosticsPositionOptions}
+                  focusNavigationOverrides={{
+                    up: { type: "item", itemId: diagnosticsItem.focusId },
+                    down: { type: "block" },
+                  }}
+                  onValueChange={(value) =>
+                    void update({
+                      bigPictureDiagnosticsPosition:
+                        value as BigPictureDiagnosticsPosition,
+                    })
+                  }
+                />
+              </>
             )}
           </SettingsSection>
         </VerticalFocusGroup>

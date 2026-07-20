@@ -33,11 +33,25 @@ export interface GamepadAxisTriggerMapping {
   threshold?: number;
 }
 
+export type GamepadHatDirection =
+  | "up"
+  | "right"
+  | "down"
+  | "left";
+
+export interface GamepadAxisHatMapping {
+  axis: number;
+  source: "axis-hat";
+  type: GamepadButtonType;
+  direction: GamepadHatDirection;
+}
+
 export type GamepadInputMapping =
   | GamepadPhysicalButtonMapping
   | GamepadPhysicalAxisMapping
   | GamepadAxisButtonMapping
-  | GamepadAxisTriggerMapping;
+  | GamepadAxisTriggerMapping
+  | GamepadAxisHatMapping;
 
 export interface GamepadLayout {
   name: string;
@@ -225,6 +239,120 @@ const LINUX_DRAGONRISE_MAPPINGS: GamepadInputMapping[] = [
   { index: 4, source: "axis", type: GamepadAxisType.RIGHT_STICK_Y },
 ];
 
+const WINDOWS_DINPUT_MAPPINGS: GamepadInputMapping[] = [
+  { index: 1, source: "button", type: GamepadButtonType.BUTTON_A },
+  { index: 0, source: "button", type: GamepadButtonType.BUTTON_B },
+  { index: 3, source: "button", type: GamepadButtonType.BUTTON_X },
+  { index: 2, source: "button", type: GamepadButtonType.BUTTON_Y },
+  { index: 4, source: "button", type: GamepadButtonType.LEFT_BUMPER },
+  { index: 5, source: "button", type: GamepadButtonType.RIGHT_BUMPER },
+  { index: 6, source: "button", type: GamepadButtonType.BACK },
+  { index: 7, source: "button", type: GamepadButtonType.START },
+  { index: 8, source: "button", type: GamepadButtonType.LEFT_STICK_PRESS },
+  { index: 9, source: "button", type: GamepadButtonType.RIGHT_STICK_PRESS },
+  {
+    axis: 6,
+    source: "axis-button",
+    direction: "negative",
+    type: GamepadButtonType.DPAD_UP,
+  },
+  {
+    axis: 6,
+    source: "axis-button",
+    direction: "positive",
+    type: GamepadButtonType.DPAD_DOWN,
+  },
+  {
+    axis: 7,
+    source: "axis-button",
+    direction: "negative",
+    type: GamepadButtonType.DPAD_LEFT,
+  },
+  {
+    axis: 7,
+    source: "axis-button",
+    direction: "positive",
+    type: GamepadButtonType.DPAD_RIGHT,
+  },
+  { index: 0, source: "axis", type: GamepadAxisType.LEFT_STICK_X },
+  { index: 1, source: "axis", type: GamepadAxisType.LEFT_STICK_Y },
+  { index: 2, source: "axis", type: GamepadAxisType.RIGHT_STICK_X },
+  { index: 3, source: "axis", type: GamepadAxisType.RIGHT_STICK_Y },
+];
+
+const WINDOWS_DINPUT_HAT_MAPPINGS: GamepadInputMapping[] = [
+  { index: 1, source: "button", type: GamepadButtonType.BUTTON_A },
+  { index: 0, source: "button", type: GamepadButtonType.BUTTON_B },
+  { index: 3, source: "button", type: GamepadButtonType.BUTTON_X },
+  { index: 2, source: "button", type: GamepadButtonType.BUTTON_Y },
+  { index: 4, source: "button", type: GamepadButtonType.LEFT_BUMPER },
+  { index: 5, source: "button", type: GamepadButtonType.RIGHT_BUMPER },
+  { index: 6, source: "button", type: GamepadButtonType.BACK },
+  { index: 7, source: "button", type: GamepadButtonType.START },
+  { index: 8, source: "button", type: GamepadButtonType.LEFT_STICK_PRESS },
+  { index: 9, source: "button", type: GamepadButtonType.RIGHT_STICK_PRESS },
+  {
+    axis: 9,
+    source: "axis-hat",
+    type: GamepadButtonType.DPAD_UP,
+    direction: "up",
+  },
+  {
+    axis: 9,
+    source: "axis-hat",
+    type: GamepadButtonType.DPAD_RIGHT,
+    direction: "right",
+  },
+  {
+    axis: 9,
+    source: "axis-hat",
+    type: GamepadButtonType.DPAD_DOWN,
+    direction: "down",
+  },
+  {
+    axis: 9,
+    source: "axis-hat",
+    type: GamepadButtonType.DPAD_LEFT,
+    direction: "left",
+  },
+  { index: 0, source: "axis", type: GamepadAxisType.LEFT_STICK_X },
+  { index: 1, source: "axis", type: GamepadAxisType.LEFT_STICK_Y },
+  { index: 2, source: "axis", type: GamepadAxisType.RIGHT_STICK_X },
+  { index: 3, source: "axis", type: GamepadAxisType.RIGHT_STICK_Y },
+];
+
+const SDL_GAMEPAD_MAPPINGS: GamepadInputMapping[] = [
+  { index: 0, source: "button", type: GamepadButtonType.BUTTON_A },
+  { index: 1, source: "button", type: GamepadButtonType.BUTTON_B },
+  { index: 2, source: "button", type: GamepadButtonType.BUTTON_X },
+  { index: 3, source: "button", type: GamepadButtonType.BUTTON_Y },
+  { index: 4, source: "button", type: GamepadButtonType.LEFT_BUMPER },
+  { index: 5, source: "button", type: GamepadButtonType.RIGHT_BUMPER },
+  { index: 6, source: "button", type: GamepadButtonType.BACK },
+  { index: 7, source: "button", type: GamepadButtonType.START },
+  { index: 8, source: "button", type: GamepadButtonType.LEFT_STICK_PRESS },
+  { index: 9, source: "button", type: GamepadButtonType.RIGHT_STICK_PRESS },
+  { index: 11, source: "button", type: GamepadButtonType.HOME },
+  { index: 14, source: "button", type: GamepadButtonType.DPAD_UP },
+  { index: 15, source: "button", type: GamepadButtonType.DPAD_DOWN },
+  { index: 16, source: "button", type: GamepadButtonType.DPAD_LEFT },
+  { index: 17, source: "button", type: GamepadButtonType.DPAD_RIGHT },
+  {
+    axis: 4,
+    source: "axis-trigger",
+    type: GamepadButtonType.LEFT_TRIGGER,
+  },
+  {
+    axis: 5,
+    source: "axis-trigger",
+    type: GamepadButtonType.RIGHT_TRIGGER,
+  },
+  { index: 0, source: "axis", type: GamepadAxisType.LEFT_STICK_X },
+  { index: 1, source: "axis", type: GamepadAxisType.LEFT_STICK_Y },
+  { index: 2, source: "axis", type: GamepadAxisType.RIGHT_STICK_X },
+  { index: 3, source: "axis", type: GamepadAxisType.RIGHT_STICK_Y },
+];
+
 const GAMEPAD_LAYOUTS: GamepadLayout[] = [
   {
     name: "Linux XInput Controller",
@@ -263,6 +391,30 @@ const GAMEPAD_LAYOUTS: GamepadLayout[] = [
     platforms: ["linux"],
     idPatterns: [/Vendor:\s*2dc8\s+Product:\s*3106/i],
     mappings: STANDARD_GAMEPAD_MAPPINGS,
+  },
+  {
+    name: "Windows DInput Controller",
+    platforms: ["windows"],
+    idPatterns: [
+      /vendor:\s*044f\s+product:\s*0f0[0-9]/i,
+      /vendor:\s*0810\s+product:\s*0001/i,
+      /hid-compliant gamepad/i,
+    ],
+    mappings: WINDOWS_DINPUT_MAPPINGS,
+  },
+  {
+    name: "Windows DInput Hat Controller",
+    platforms: ["windows"],
+    idPatterns: [
+      /vendor:\s*0079\s+product:\s*0011/i,
+      /vendor:\s*11ff\s+product:\s*3341/i,
+    ],
+    mappings: WINDOWS_DINPUT_HAT_MAPPINGS,
+  },
+  {
+    name: "SDL Gamepad",
+    idPatterns: [/sdlcontroller/i, /gamepad\s+controller/i],
+    mappings: SDL_GAMEPAD_MAPPINGS,
   },
   {
     name: "Standard Gamepad",

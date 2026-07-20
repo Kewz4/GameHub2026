@@ -15,7 +15,11 @@ import {
   Input,
   VerticalFocusGroup,
 } from "../../../components";
-import { useNavigationActions, useUserPreferences } from "../../../hooks";
+import {
+  useNavigationActions,
+  useNavigationScreenActions,
+  useUserPreferences,
+} from "../../../hooks";
 import {
   EMULATION_DETAIL_BACK_BUTTON_ID,
   EMULATION_DETAIL_CLOUD_SAVES_REGION_ID,
@@ -73,6 +77,12 @@ interface EmulationDetailProps {
 function EmulationDetail({ config, onBack }: Readonly<EmulationDetailProps>) {
   const { t } = useTranslation("settings");
   const { setFocus } = useNavigationActions();
+
+  useNavigationScreenActions({
+    press: {
+      b: onBack,
+    },
+  });
 
   useEffect(() => {
     setFocus(EMULATION_DETAIL_BACK_BUTTON_ID);

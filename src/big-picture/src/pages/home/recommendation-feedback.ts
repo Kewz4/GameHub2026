@@ -1,11 +1,12 @@
-import { levelDBService } from "@renderer/services/leveldb.service";
-
 /**
  * On-device thumbs up/down feedback for "Recommended for you" cards, persisted
  * so the recommender remembers whether a suggestion landed. A "like" folds the
  * game's genres into the taste profile (as a strong positive, like a favorite),
  * while a "dislike" removes it from future recommendations. Stored locally only
  * — this is a private signal, never uploaded.
+ *
+ * Shares the same leveldb sublevel as the main renderer, so feedback given in
+ * either UI applies to both.
  */
 
 const SUBLEVEL = "recommendationFeedback";
@@ -28,7 +29,9 @@ export const feedbackKey = (game: { shop: string; objectId: string }): string =>
 /** All stored feedback records. */
 export async function getAllFeedback(): Promise<FeedbackRecord[]> {
   try {
-    const values = (await levelDBService.values(SUBLEVEL)) as FeedbackRecord[];
+    const values = (await globalThis.window.electron.leveldb.values(
+      SUBLEVEL
+    )) as FeedbackRecord[];
     return Array.isArray(values) ? values.filter(Boolean) : [];
   } catch {
     return [];
@@ -53,7 +56,7 @@ export async function setFeedback(
   const key = feedbackKey(game);
   try {
     if (feedback === null) {
-      await levelDBService.del(key, SUBLEVEL);
+      await globalThis.window.electron.leveldb.del(key, SUBLEVEL);
     } else {
       const record: FeedbackRecord = {
         shop: game.shop,
@@ -63,10 +66,8 @@ export async function setFeedback(
         feedback,
         updatedAt: Date.now(),
       };
-      await levelDBService.put(key, record, SUBLEVEL);
+      await globalThis.window.electron.leveldb.put(key, record, SUBLEVEL);
     }
-    // Lets session-cached recommender shelves invalidate (see use-home-catalogue).
-    window.dispatchEvent(new Event("recommendation-feedback-changed"));
   } catch {
     // Non-fatal — feedback is best-effort personalization, not critical state.
   }

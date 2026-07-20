@@ -11,6 +11,33 @@ export const HOME_TRENDING_GAMES_CAROUSEL_REGION_ID =
   "home-trending-games-carousel";
 export const HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID =
   "home-weekly-games-carousel";
+export const HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID =
+  "home-recommended-games-carousel";
+export const HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID =
+  "home-classics-games-carousel";
+
+export function getHomeBecauseCarouselRegionId(shelfIndex: number) {
+  return `home-because-carousel-${shelfIndex}`;
+}
+
+export function getHomeRecommendedGameItemId(
+  game: Pick<ShopAssets, "shop" | "objectId">
+) {
+  return `home-recommended-game-${getGameIdentityKey(game, { separator: "-" })}`;
+}
+
+export function getHomeClassicsGameItemId(
+  game: Pick<ShopAssets, "shop" | "objectId">
+) {
+  return `home-classics-game-${getGameIdentityKey(game, { separator: "-" })}`;
+}
+
+export function getHomeBecauseGameItemId(
+  shelfIndex: number,
+  game: Pick<ShopAssets, "shop" | "objectId">
+) {
+  return `home-because-${shelfIndex}-game-${getGameIdentityKey(game, { separator: "-" })}`;
+}
 
 export function getHomeChallengeGameItemId(
   game: Pick<ShopAssets, "shop" | "objectId">

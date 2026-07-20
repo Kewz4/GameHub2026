@@ -11,14 +11,21 @@ import { type HomeChallengeGame } from "./home-data";
 import { useHotGames } from "./use-hot-games";
 import { useHomeChallengeGridNavigation } from "./use-home-challenge-grid-navigation";
 import { useHardPlatinums } from "./use-hard-platinums";
+import { useRecommendedRows } from "./use-recommended-rows";
 import { useWeeklyGames } from "./use-weekly-games";
 import {
+  getHomeBecauseCarouselRegionId,
+  getHomeBecauseGameItemId,
   getHomeChallengeGameItemId,
+  getHomeClassicsGameItemId,
+  getHomeRecommendedGameItemId,
   getHomeTrendingGameItemId,
   getHomeWeeklyGameItemId,
+  HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID,
   HOME_HARD_PLATINUMS_GRID_REGION_ID,
   HOME_HERO_ACTIONS_REGION_ID,
   HOME_PAGE_REGION_ID,
+  HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID,
   HOME_TRENDING_GAMES_CAROUSEL_REGION_ID,
   HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID,
 } from "./navigation";
@@ -61,7 +68,15 @@ import type { FocusOverrideTarget, FocusOverrides } from "../../services";
 
 import "./page.scss";
 
-const HOME_SECTION_ORDER = ["hero", "weekly", "trending", "challenge"] as const;
+const HOME_SECTION_ORDER = [
+  "hero",
+  "recommended",
+  "because",
+  "classics",
+  "weekly",
+  "trending",
+  "challenge",
+] as const;
 
 type HomeSectionId = (typeof HOME_SECTION_ORDER)[number];
 type DownloadModalGame = Pick<
@@ -84,7 +99,7 @@ export default function Home() {
   const navigate = useNavigate();
   const { setFocus } = useNavigation();
   const { showSuccessToast } = useBigPictureToast();
-  const { t } = useTranslation("big_picture");
+  const { t, i18n } = useTranslation("big_picture");
   const { library, updateLibrary } = useLibrary();
   const { loadCollections } = useGameCollections();
 
@@ -342,12 +357,17 @@ export default function Home() {
   const hardPlatinums = useHardPlatinums();
   const hotGames = useHotGames();
   const weeklyGames = useWeeklyGames();
+  const { recommended, becauseYouPlayed, recommendedClassics } =
+    useRecommendedRows(i18n.language.split("-")[0]);
 
   useEffect(() => {
     void updateLibrary();
   }, [updateLibrary]);
 
   const hasHero = featuredGame != null;
+  const hasRecommended = recommended.length > 0;
+  const hasBecause = becauseYouPlayed.length > 0;
+  const hasClassics = recommendedClassics.length > 0;
   const hasWeekly = weeklyGames.length > 0;
   const hasTrending = hotGames.length > 0;
   const hasChallenge = hardPlatinums.length > 0;
@@ -356,6 +376,9 @@ export default function Home() {
     Exclude<HomeSectionId, "hero">,
     string
   > = {
+    recommended: HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID,
+    because: getHomeBecauseCarouselRegionId(0),
+    classics: HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID,
     weekly: HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID,
     trending: HOME_TRENDING_GAMES_CAROUSEL_REGION_ID,
     challenge: HOME_HARD_PLATINUMS_GRID_REGION_ID,
@@ -365,6 +388,12 @@ export default function Home() {
     switch (sectionId) {
       case "hero":
         return hasHero;
+      case "recommended":
+        return hasRecommended;
+      case "because":
+        return hasBecause;
+      case "classics":
+        return hasClassics;
       case "weekly":
         return hasWeekly;
       case "trending":
@@ -436,6 +465,103 @@ export default function Home() {
     entryDirection: "down",
   };
 
+  const getRecommendedGameNavigationOverrides = (
+    _game: ShopAssets,
+    index: number,
+    games: ShopAssets[]
+  ): FocusOverrides => ({
+    ...(index === 0
+      ? {
+          left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+        }
+      : {}),
+    ...(index === games.length - 1
+      ? {
+          right: {
+            type: "block",
+          },
+        }
+      : {}),
+    up: {
+      ...getPreviousRegionAbove("recommended"),
+    },
+    ...(getNextRegionBelow("recommended")
+      ? {
+          down: getNextRegionBelow("recommended"),
+        }
+      : {}),
+  });
+
+  const getClassicsGameNavigationOverrides = (
+    _game: ShopAssets,
+    index: number,
+    games: ShopAssets[]
+  ): FocusOverrides => ({
+    ...(index === 0
+      ? {
+          left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+        }
+      : {}),
+    ...(index === games.length - 1
+      ? {
+          right: {
+            type: "block",
+          },
+        }
+      : {}),
+    up: {
+      ...getPreviousRegionAbove("classics"),
+    },
+    ...(getNextRegionBelow("classics")
+      ? {
+          down: getNextRegionBelow("classics"),
+        }
+      : {}),
+  });
+
+  // "Because you played X" shelves chain vertically: up from the first shelf is
+  // the previous available section, down from the last is the next one, and
+  // adjacent shelves link to each other.
+  const getBecauseGameNavigationOverrides =
+    (shelfIndex: number) =>
+    (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => {
+      const isFirstShelf = shelfIndex === 0;
+      const isLastShelf = shelfIndex === becauseYouPlayed.length - 1;
+
+      const up: FocusOverrideTarget = isFirstShelf
+        ? { ...getPreviousRegionAbove("because") }
+        : {
+            type: "region",
+            regionId: getHomeBecauseCarouselRegionId(shelfIndex - 1),
+            entryDirection: "right",
+          };
+
+      const down: FocusOverrideTarget | undefined = isLastShelf
+        ? getNextRegionBelow("because")
+        : {
+            type: "region",
+            regionId: getHomeBecauseCarouselRegionId(shelfIndex + 1),
+            entryDirection: "right",
+          };
+
+      return {
+        ...(index === 0
+          ? {
+              left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
+            }
+          : {}),
+        ...(index === games.length - 1
+          ? {
+              right: {
+                type: "block",
+              },
+            }
+          : {}),
+        up,
+        ...(down ? { down } : {}),
+      };
+    };
+
   const getWeeklyGameNavigationOverrides = (
     _game: (typeof weeklyGames)[number],
     index: number,
@@ -505,6 +631,50 @@ export default function Home() {
           featuredGame={featuredGame}
           downNavigationTarget={heroDownNavigationTarget}
           upNavigationTarget={heroUpNavigationTarget}
+        />
+        <FocusCarousel
+          title="Recommended for you"
+          cardVariant="vertical"
+          games={recommended}
+          regionId={HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID}
+          getItemId={getHomeRecommendedGameItemId}
+          getItemNavigationOverrides={getRecommendedGameNavigationOverrides}
+          onCarouselItemOpenContextMenu={openCatalogMenu}
+          onItemActivate={(game) => {
+            navigate(getBigPictureGameDetailsPath(game));
+          }}
+          showRightFade
+        />
+        {becauseYouPlayed.map((row, shelfIndex) => (
+          <FocusCarousel
+            key={`because-${row.anchorTitle}`}
+            title={`Because you played ${row.anchorTitle}`}
+            cardVariant="vertical"
+            games={row.games}
+            regionId={getHomeBecauseCarouselRegionId(shelfIndex)}
+            getItemId={(game) => getHomeBecauseGameItemId(shelfIndex, game)}
+            getItemNavigationOverrides={getBecauseGameNavigationOverrides(
+              shelfIndex
+            )}
+            onCarouselItemOpenContextMenu={openCatalogMenu}
+            onItemActivate={(game) => {
+              navigate(getBigPictureGameDetailsPath(game));
+            }}
+            showRightFade
+          />
+        ))}
+        <FocusCarousel
+          title="Recommended classics"
+          cardVariant="vertical"
+          games={recommendedClassics}
+          regionId={HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID}
+          getItemId={getHomeClassicsGameItemId}
+          getItemNavigationOverrides={getClassicsGameNavigationOverrides}
+          onCarouselItemOpenContextMenu={openCatalogMenu}
+          onItemActivate={(game) => {
+            navigate(getBigPictureGameDetailsPath(game));
+          }}
+          showRightFade
         />
         <FocusCarousel
           title="Popular on Hydra"
