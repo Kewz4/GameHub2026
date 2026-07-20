@@ -163,7 +163,7 @@ export function HomePageHero({
 
   let heroSecondaryAction: ReactNode;
   if (isInLibrary) {
-    if (gameState.hasExecutable) {
+    if (gameState.isPlayable) {
       heroSecondaryAction = (
         <Button
           focusId={HOME_HERO_DOWNLOAD_ID}

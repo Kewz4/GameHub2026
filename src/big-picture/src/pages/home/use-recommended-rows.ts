@@ -1,16 +1,10 @@
-import { useEffect, useState } from "react";
-import { orderBy } from "lodash-es";
-
 import type {
   CatalogueSearchResult,
   DownloadSource,
   LibraryGame,
   ShopAssets,
-  TrendingGame,
 } from "@types";
-import { CatalogueCategory } from "@shared";
-import { levelDBService } from "@renderer/services/leveldb.service";
-import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
+import { useEffect, useState } from "react";
 import type {
   EnrichedLibraryGame,
   FacetStats,
@@ -21,7 +15,6 @@ import { buildTasteProfile, rankRecommendations } from "./recommender";
 import { isMechanicTag, parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
 import { getRecommendedClassics } from "./recommender-classics";
-import { externalResourcesInstance } from "@renderer/hooks/use-catalogue";
 
 /** A thumbs-up recommendation counts like a well-liked, moderately-played game. */
 const LIKE_SYNTHETIC_HOURS = 8;
@@ -38,33 +31,23 @@ export interface BecauseYouPlayedRow {
   games: ShopAssets[];
 }
 
-export interface HomeCatalogue {
-  featured: TrendingGame[];
+export interface RecommendedRows {
   recommended: ShopAssets[];
   becauseYouPlayed: BecauseYouPlayedRow[];
   recommendedClassics: ShopAssets[];
-  hot: ShopAssets[];
-  weekly: ShopAssets[];
-  achievements: ShopAssets[];
-  classics: ShopAssets[];
 }
 
-const EMPTY_CATALOGUE: HomeCatalogue = {
-  featured: [],
+const EMPTY_ROWS: RecommendedRows = {
   recommended: [],
   becauseYouPlayed: [],
   recommendedClassics: [],
-  hot: [],
-  weekly: [],
-  achievements: [],
-  classics: [],
 };
 
 /**
  * The classics browse endpoint returns `CatalogueSearchResult`, which only
  * carries a subset of `ShopAssets`. We widen it to `ShopAssets` (filling the
- * missing artwork slots with `null`) so the same `<GameCard>` used by every
- * other row can render it without a bespoke card.
+ * missing artwork slots with `null`) so the same card used by every other row
+ * can render it without a bespoke card.
  */
 const classicsResultToShopAssets = (
   result: CatalogueSearchResult
@@ -81,72 +64,6 @@ const classicsResultToShopAssets = (
   downloadSources: result.downloadSources ?? [],
 });
 
-async function getCategory(
-  category: CatalogueCategory,
-  downloadSourceIds: string[]
-): Promise<ShopAssets[]> {
-  const response = await window.electron.hydraApi.get<ShopAssets[]>(
-    `/catalogue/${category}`,
-    {
-      params: { take: 24, skip: 0, downloadSourceIds },
-      needsAuth: false,
-    }
-  );
-
-  return ensureArray<ShopAssets>(response, `/catalogue/${category}`);
-}
-
-async function getFeatured(language: string): Promise<TrendingGame[]> {
-  const response = await window.electron.hydraApi.get<TrendingGame[]>(
-    "/catalogue/featured",
-    {
-      params: { language },
-      needsAuth: false,
-    }
-  );
-
-  return ensureArray<TrendingGame>(response, "/catalogue/featured");
-}
-
-/**
- * Derive hero slides from an already-fetched category (Hot/Weekly) when
- * `/catalogue/featured` comes back empty — which it has done repeatedly on this
- * fork's backend. Catalogue list responses reliably carry only `libraryImageUrl`
- * (the cover) — `libraryHeroImageUrl`/`logoImageUrl` are per-game detail-time
- * SteamGridDB fetches and are usually absent here. So we require only *some*
- * usable image and fall back hero → library → cover for the background; the
- * carousel already degrades to a title heading when the logo is missing, so
- * slides are never blank.
- */
-function heroFallbackFrom(games: ShopAssets[]): TrendingGame[] {
-  return games
-    .filter(
-      (g) => g.libraryHeroImageUrl || g.libraryImageUrl || g.coverImageUrl
-    )
-    .slice(0, 5)
-    .map((g) => ({
-      ...g,
-      libraryHeroImageUrl:
-        g.libraryHeroImageUrl ?? g.libraryImageUrl ?? g.coverImageUrl,
-      description: null,
-      uri: buildGameDetailsPath({
-        shop: g.shop,
-        objectId: g.objectId,
-        title: g.title,
-      }),
-    }));
-}
-
-async function getClassics(): Promise<ShopAssets[]> {
-  // Randomized, mixed-platform, artwork-only console games — a fresh shuffle
-  // each load. The row hides itself when this is empty (see category-row).
-  const response = await window.electron.getRandomClassics(24);
-
-  return ensureArray<CatalogueSearchResult>(response, "getRandomClassics").map(
-    classicsResultToShopAssets
-  );
-}
-
 /**
  * Steam tag dictionary (from steam-user-tags.json): name↔id maps used to decode
  * a catalogue edge's `searchVector` tag ids into names, and to query candidate
@@ -161,9 +78,13 @@ let tagDictCache: TagDictionary | null = null;
 async function getTagDictionary(language: string): Promise<TagDictionary> {
   if (tagDictCache) return tagDictCache;
   try {
-    const { data } = await externalResourcesInstance.get<
-      Record<string, Record<string, number>>
-    >("/steam-user-tags.json");
+    const response = await fetch(
+      `${import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL}/steam-user-tags.json`
+    );
+    const data = (await response.json()) as Record<
+      string,
+      Record<string, number>
+    >;
     const dict = data[language] ?? data["en"] ?? {};
     const nameToId = new Map<string, number>();
     const idToName = new Map<number, string>();
@@ -214,7 +135,7 @@ const baseSearchBody = (downloadSourceIds: string[]) => ({
 async function searchCatalogueEdges(
   data: Record<string, unknown>
 ): Promise<CatalogueEdge[]> {
-  return window.electron.hydraApi
+  return globalThis.window.electron.hydraApi
     .post<{ edges: CatalogueEdge[]; count: number }>("/catalogue/search", {
       data,
       needsAuth: false,
@@ -271,7 +192,7 @@ async function fetchGameFacets(
 
 /** One `/catalogue/search` call returning just the global match count. */
 async function catalogueCount(data: Record<string, unknown>): Promise<number> {
-  return window.electron.hydraApi
+  return globalThis.window.electron.hydraApi
     .post<{ count: number }>("/catalogue/search", { data, needsAuth: false })
     .then((r) => r.count ?? 0)
     .catch(() => 0);
@@ -310,7 +231,7 @@ async function getFacetCounts(
         counts.set(feature, session);
         return;
       }
-      const cached = (await levelDBService
+      const cached = (await globalThis.window.electron.leveldb
         .get(feature, "recommenderFacetCounts")
         .catch(() => null)) as { count: number; cachedAt: number } | null;
       if (cached && Date.now() - cached.cachedAt < FACET_COUNT_TTL_MS) {
@@ -335,7 +256,7 @@ async function getFacetCounts(
       const count = await catalogueCount(body);
       facetCountSession.set(feature, count);
       counts.set(feature, count);
-      levelDBService
+      globalThis.window.electron.leveldb
         .put(feature, { count, cachedAt: Date.now() }, "recommenderFacetCounts")
         .catch(() => {});
     })
@@ -371,7 +292,7 @@ async function getRecommended(
   downloadSourceIds: string[],
   language: string
 ): Promise<RecommendationResult> {
-  const library = (await window.electron
+  const library = (await globalThis.window.electron
     .getLibrary()
     .catch(() => [])) as LibraryGame[];
   if (!library.length) return EMPTY_RECOMMENDATIONS;
@@ -553,183 +474,73 @@ async function getRecommended(
   return { recommended, becauseYouPlayed };
 }
 
-/**
- * Single source of truth for the home screen. Every list is fetched exactly
- * once (in parallel) so the hero carousel and the category rows never request
- * the same dataset twice. The hero consumes `/catalogue/featured`, which is a
- * distinct dataset from `/catalogue/hot`, so the hero and the Hot row do not
- * overlap.
- */
-/** Persisted home snapshot: painted instantly, then refreshed in background. */
-const HOME_SNAPSHOT_SUBLEVEL = "homeCache";
-const HOME_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-
-interface HomeSnapshot {
-  catalogue: HomeCatalogue;
-  language: string;
-  savedAt: number;
-}
+/** Per-session cache so BP home remounts don't rerun the whole pipeline. */
+const sessionCache = new Map<string, RecommendedRows>();
 
 /**
- * Session-scoped recommender results, so navigating away from home and back
- * doesn't rerun the whole tag/facet/pool pipeline (the shelves just reappear).
- * Keyed by language; refreshed once per mount only when absent.
+ * The recommended home shelves for Big Picture: "Recommended for you", up to
+ * three "Because you played X" shelves, and "Recommended classics". Loads in
+ * the background — rows self-hide while empty, so home paints without them and
+ * they pop in when ready (same lazy pattern as the renderer home).
  */
-const recommendationSessionCache = new Map<string, RecommendationResult>();
-
-export function useHomeCatalogue(language: string) {
-  const [catalogue, setCatalogue] = useState<HomeCatalogue>(EMPTY_CATALOGUE);
-  const [isLoading, setIsLoading] = useState(true);
+export function useRecommendedRows(language: string): RecommendedRows {
+  const [rows, setRows] = useState<RecommendedRows>(
+    () => sessionCache.get(language) ?? EMPTY_ROWS
+  );
 
   useEffect(() => {
-    // Thumbs up/down anywhere on home invalidates the cached shelves so the
-    // next mount recomputes instead of resurrecting disliked games.
-    const clearRecommendationCache = () => recommendationSessionCache.clear();
-    window.addEventListener(
-      "recommendation-feedback-changed",
-      clearRecommendationCache
-    );
+    const cached = sessionCache.get(language);
+    if (cached) {
+      setRows(cached);
+      return;
+    }
 
     let isMounted = true;
 
-    // Stale-while-revalidate: paint the last session's rows immediately (no
-    // skeleton flash), then let the fresh load below replace them when it
-    // lands. The snapshot is only cosmetic state, so failures are ignored.
-    levelDBService
-      .get("snapshot", HOME_SNAPSHOT_SUBLEVEL)
-      .then((value) => {
-        const snap = value as HomeSnapshot | null;
-        if (
-          isMounted &&
-          snap?.catalogue &&
-          snap.language === language &&
-          Date.now() - snap.savedAt < HOME_SNAPSHOT_MAX_AGE_MS
-        ) {
-          setCatalogue({ ...EMPTY_CATALOGUE, ...snap.catalogue });
-          setIsLoading(false);
-        }
-      })
-      .catch(() => undefined);
-
-    async function loadCatalogue() {
-      const sources = (await levelDBService.values(
+    async function load() {
+      const sources = (await globalThis.window.electron.leveldb.values(
         "downloadSources"
       )) as DownloadSource[];
-      const downloadSourceIds = orderBy(sources, "createdAt", "desc").map(
-        (source) => source.id
-      );
+      const downloadSourceIds = [...sources]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        .map((source) => source.id);
 
-      // Heavy recommender (dozens of catalogue queries): kick it off right away
-      // — or reuse the session cache — but NEVER block the first paint on it.
-      // The shelves pop in when phase 2 lands; the rest of home paints as soon
-      // as the fast batch below resolves.
-      const cachedRecommendations =
-        recommendationSessionCache.get(language) ?? null;
-      const recommendationsPromise = cachedRecommendations
-        ? Promise.resolve(cachedRecommendations)
-        : getRecommended(downloadSourceIds, language)
-            .catch(() => EMPTY_RECOMMENDATIONS)
-            .then((result) => {
-              if (
-                result.recommended.length > 0 ||
-                result.becauseYouPlayed.length > 0
-              ) {
-                recommendationSessionCache.set(language, result);
-              }
-              return result;
-            });
+      const [recommendations, recommendedClassics] = await Promise.all([
+        getRecommended(downloadSourceIds, language).catch(
+          () => EMPTY_RECOMMENDATIONS
+        ),
+        globalThis.window.electron
+          .getLibrary()
+          .then((library) => getRecommendedClassics(library as LibraryGame[]))
+          .catch(() => [] as ShopAssets[]),
+      ]);
 
-      // Phase 1: the fast batch — one request each. This is what makes home
-      // feel instant again; nothing here depends on the recommender.
-      const [recommendedClassics, featured, hot, weekly, achievements, classics] =
-        await Promise.all([
-          window.electron
-            .getLibrary()
-            .then((library) => getRecommendedClassics(library as LibraryGame[]))
-            .catch(() => [] as ShopAssets[]),
-          getFeatured(language).catch(() => [] as TrendingGame[]),
-          getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Weekly, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Achievements, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getClassics().catch(() => [] as ShopAssets[]),
-        ]);
-
-      // Keep the hero alive even when `/catalogue/featured` returns empty by
-      // seeding it from the Hot (then Weekly) row, which shares the same
-      // artwork fields the hero needs.
-      const resolvedFeatured = featured.length
-        ? featured
-        : heroFallbackFrom(hot.length ? hot : weekly);
-
-      if (!isMounted) return;
-
-      // Paint phase 1 — keep any snapshot-painted recommender shelves until
-      // phase 2 replaces them.
-      setCatalogue((prev) => ({
-        featured: resolvedFeatured,
-        recommended: prev.recommended,
-        becauseYouPlayed: prev.becauseYouPlayed,
+      const fresh: RecommendedRows = {
+        recommended: recommendations.recommended,
+        becauseYouPlayed: recommendations.becauseYouPlayed,
         recommendedClassics,
-        hot,
-        weekly,
-        achievements,
-        classics,
-      }));
-      setIsLoading(false);
+      };
 
-      // Phase 2: recommender shelves land whenever they're ready.
-      const recommendations = await recommendationsPromise;
-      if (!isMounted) return;
+      if (
+        fresh.recommended.length > 0 ||
+        fresh.becauseYouPlayed.length > 0 ||
+        fresh.recommendedClassics.length > 0
+      ) {
+        sessionCache.set(language, fresh);
+      }
 
-      setCatalogue((prev) => {
-        const fresh: HomeCatalogue = {
-          ...prev,
-          recommended: recommendations.recommended,
-          becauseYouPlayed: recommendations.becauseYouPlayed,
-        };
-
-        // Persist for the next launch's instant paint — but never overwrite a
-        // good snapshot with an all-empty load (e.g. offline start).
-        const hasContent = Object.values(fresh).some(
-          (rows) => Array.isArray(rows) && rows.length > 0
-        );
-        if (hasContent) {
-          const snapshot: HomeSnapshot = {
-            catalogue: fresh,
-            language,
-            savedAt: Date.now(),
-          };
-          levelDBService
-            .put("snapshot", snapshot, HOME_SNAPSHOT_SUBLEVEL)
-            .catch(() => undefined);
-        }
-
-        return fresh;
-      });
+      if (isMounted) setRows(fresh);
     }
 
-    loadCatalogue()
-      .catch(() => {
-        // Keep whatever the snapshot painted; only blank out if nothing did.
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
+    void load();
 
     return () => {
       isMounted = false;
-      window.removeEventListener(
-        "recommendation-feedback-changed",
-        clearRecommendationCache
-      );
     };
   }, [language]);
 
-  return { catalogue, isLoading };
+  return rows;
 }

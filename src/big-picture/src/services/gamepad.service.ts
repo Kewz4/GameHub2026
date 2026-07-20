@@ -6,6 +6,7 @@ import {
 } from "../helpers";
 import type {
   GamepadAxisButtonMapping,
+  GamepadAxisHatMapping,
   GamepadAxisTriggerMapping,
   GamepadInputMapping,
   GamepadPhysicalAxisMapping,
@@ -660,6 +661,30 @@ export class GamepadService {
     };
   }
 
+  private getAxisHatState(
+    gamepad: Gamepad,
+    mapping: GamepadAxisHatMapping
+  ): Pick<GamepadButton, "pressed" | "value"> | null {
+    const raw = gamepad.axes[mapping.axis];
+    if (raw === undefined) return null;
+
+    const angle = ((raw * 360) % 360 + 360) % 360;
+    const isPressed = (() => {
+      switch (mapping.direction) {
+        case "up":
+          return angle >= 315 || angle < 45;
+        case "right":
+          return angle >= 45 && angle < 135;
+        case "down":
+          return angle >= 135 && angle < 225;
+        case "left":
+          return angle >= 225 && angle < 315;
+      }
+    })();
+
+    return { pressed: isPressed, value: isPressed ? 1 : 0 };
+  }
+
   private getPhysicalAxisValue(
     gamepad: Gamepad,
     mapping: GamepadPhysicalAxisMapping
@@ -829,6 +854,18 @@ export class GamepadService {
       }
       case "axis-trigger": {
         const buttonState = this.getAxisTriggerState(gamepad, mapping);
+        if (!buttonState) return false;
+
+        return this.updateMappedButtonState(
+          gamepadState,
+          mapping.type,
+          buttonState,
+          gamepadIndex,
+          now
+        );
+      }
+      case "axis-hat": {
+        const buttonState = this.getAxisHatState(gamepad, mapping);
         if (!buttonState) return false;
 
         return this.updateMappedButtonState(
