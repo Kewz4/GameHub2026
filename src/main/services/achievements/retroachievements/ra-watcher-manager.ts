@@ -191,6 +191,7 @@ export class RaWatcherManager {
         icongray: raBadgeUrl(a.badgeName),
         hidden: false,
         points: a.points,
+        missable: a.missable ?? false,
       }));
       unlocked = progress.achievements
         .filter((a) => !!a.dateEarned)

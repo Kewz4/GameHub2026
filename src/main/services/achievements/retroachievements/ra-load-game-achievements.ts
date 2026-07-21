@@ -70,6 +70,7 @@ export async function loadRaAchievementList(
     icongray: raBadgeUrl(a.badgeName),
     hidden: false,
     points: a.points,
+    missable: a.missable ?? false,
   }));
 
   // Merge the watcher's existing unlocks with whatever RA reports as earned, so

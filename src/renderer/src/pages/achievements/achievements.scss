@@ -171,6 +171,23 @@ $logo-max-width: 200px;
       }
     }
 
+    // RetroAchievements "missable" indicator — an amber alert, distinct from the
+    // neutral "hidden" eye, so a can-be-permanently-missed achievement stands out.
+    &-missable-icon {
+      display: flex;
+      color: #f0a020;
+      opacity: 0.9;
+
+      &:hover {
+        opacity: 1;
+      }
+
+      svg {
+        width: 12px;
+        height: 12px;
+      }
+    }
+
     &-eye-closed {
       width: 12px;
       height: 12px;

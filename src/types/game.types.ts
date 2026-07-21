@@ -35,6 +35,9 @@ export interface SteamAchievement {
   icongray: string;
   hidden: boolean;
   points?: number;
+  /** RetroAchievements "missable" type — can be permanently missed during a
+   *  normal playthrough (RA achievement `Type === "missable"`). */
+  missable?: boolean;
 }
 
 export interface UserAchievement extends SteamAchievement {

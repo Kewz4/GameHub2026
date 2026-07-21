@@ -5,6 +5,41 @@ $logo-height: 100px;
 $logo-max-width: 200px;
 
 .achievements-content {
+  &__filter-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 globals.$spacing-unit * 2 globals.$spacing-unit * 2;
+  }
+
+  &__filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--color-text);
+    background: rgba(var(--fg-rgb), 0.06);
+    border: 1px solid rgba(var(--fg-rgb), 0.1);
+    transition:
+      background 0.12s ease,
+      border-color 0.12s ease,
+      color 0.12s ease;
+
+    &:hover {
+      background: rgba(var(--fg-rgb), 0.1);
+    }
+
+    &--active {
+      color: var(--color-text-bright);
+      background: rgba(var(--fg-rgb), 0.14);
+      border-color: rgba(var(--fg-rgb), 0.28);
+    }
+  }
+
   &__comparison {
     display: flex;
     gap: globals.$spacing-unit * 2;

@@ -2,7 +2,7 @@ import { useDate } from "@renderer/hooks";
 import type { UserAchievement } from "@types";
 import { useTranslation } from "react-i18next";
 import "./achievements.scss";
-import { EyeClosedIcon } from "@primer/octicons-react";
+import { AlertIcon, EyeClosedIcon } from "@primer/octicons-react";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
 import { useSubscription } from "@renderer/hooks/use-subscription";
 
@@ -36,6 +36,17 @@ export function AchievementList({
                   title={t("hidden_achievement_tooltip")}
                 >
                   <EyeClosedIcon size={12} />
+                </span>
+              )}
+              {achievement.missable && (
+                <span
+                  className="achievements__item-missable-icon"
+                  title={t("missable_achievement_tooltip", {
+                    defaultValue:
+                      "Missable — can be permanently missed in a normal playthrough",
+                  })}
+                >
+                  <AlertIcon size={12} />
                 </span>
               )}
               {achievement.displayName}

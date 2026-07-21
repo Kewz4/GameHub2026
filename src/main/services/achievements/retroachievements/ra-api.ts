@@ -25,6 +25,8 @@ export interface RaGameAchievement {
   badgeName: string;
   numAwarded: number;
   dateEarned?: string;
+  /** RA achievement `Type === "missable"` — can be missed in a normal run. */
+  missable?: boolean;
 }
 
 export interface RaGameProgress {
@@ -58,6 +60,8 @@ interface RaGameAchievementResponse {
   NumAwarded: number;
   DateEarned?: string;
   DateEarnedHardcore?: string;
+  /** "missable" | "progression" | "win_condition" | "" (RA achievement type). */
+  Type?: string | null;
 }
 
 interface RaGameProgressResponse {
@@ -186,6 +190,7 @@ export async function getGameInfoAndUserProgress(
       badgeName: a.BadgeName,
       numAwarded: a.NumAwarded,
       dateEarned: a.DateEarnedHardcore ?? a.DateEarned,
+      missable: a.Type === "missable",
     }));
 
     return {

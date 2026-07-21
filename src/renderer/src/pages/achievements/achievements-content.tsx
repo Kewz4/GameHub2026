@@ -1,12 +1,18 @@
 import { setHeaderTitle } from "@renderer/features";
 import { useAppDispatch, useUserDetails } from "@renderer/hooks";
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   buildGameDetailsPath,
   formatDownloadProgress,
 } from "@renderer/helpers";
-import { LockIcon, PersonIcon, TrophyIcon } from "@primer/octicons-react";
+import {
+  AlertIcon,
+  EyeClosedIcon,
+  LockIcon,
+  PersonIcon,
+  TrophyIcon,
+} from "@primer/octicons-react";
 import { gameDetailsContext } from "@renderer/context";
 import type { ComparedAchievements } from "@types";
 import { Link } from "@renderer/components";
@@ -117,8 +123,35 @@ export function AchievementsContent({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isHeaderStuck, setIsHeaderStuck] = useState(false);
 
+  const { t } = useTranslation("achievement");
   const { gameTitle, objectId, shop, shopDetails, achievements } =
     useContext(gameDetailsContext);
+
+  // Filter tabs — only meaningful when the set actually carries the category.
+  // "Missable" comes from RetroAchievements (emulated games); "Hidden" is the
+  // pre-existing per-row category. The tab row is hidden entirely when neither
+  // applies (e.g. a Steam game with no missable/hidden achievements).
+  const [achievementFilter, setAchievementFilter] = useState<
+    "all" | "missable" | "hidden"
+  >("all");
+
+  const hasMissable = useMemo(
+    () => !!achievements?.some((a) => a.missable),
+    [achievements]
+  );
+  const hasHidden = useMemo(
+    () => !!achievements?.some((a) => a.hidden),
+    [achievements]
+  );
+
+  const filteredAchievements = useMemo(() => {
+    if (!achievements) return achievements;
+    if (achievementFilter === "missable")
+      return achievements.filter((a) => a.missable);
+    if (achievementFilter === "hidden")
+      return achievements.filter((a) => a.hidden);
+    return achievements;
+  }, [achievements, achievementFilter]);
 
   const dispatch = useAppDispatch();
 
@@ -238,7 +271,53 @@ export function AchievementsContent({
         ) : (
           <>
             <AchievementPanel achievements={achievements!} />
-            <AchievementList achievements={achievements!} />
+            {(hasMissable || hasHidden) && (
+              <div
+                className="achievements-content__filter-tabs"
+                role="tablist"
+                aria-label={t("filter_achievements", {
+                  defaultValue: "Filter achievements",
+                })}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={achievementFilter === "all"}
+                  className={`achievements-content__filter-tab ${achievementFilter === "all" ? "achievements-content__filter-tab--active" : ""}`}
+                  onClick={() => setAchievementFilter("all")}
+                >
+                  {t("filter_all", { defaultValue: "All" })} (
+                  {achievements!.length})
+                </button>
+                {hasMissable && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={achievementFilter === "missable"}
+                    className={`achievements-content__filter-tab ${achievementFilter === "missable" ? "achievements-content__filter-tab--active" : ""}`}
+                    onClick={() => setAchievementFilter("missable")}
+                  >
+                    <AlertIcon size={12} />
+                    {t("filter_missable", { defaultValue: "Missable" })} (
+                    {achievements!.filter((a) => a.missable).length})
+                  </button>
+                )}
+                {hasHidden && (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={achievementFilter === "hidden"}
+                    className={`achievements-content__filter-tab ${achievementFilter === "hidden" ? "achievements-content__filter-tab--active" : ""}`}
+                    onClick={() => setAchievementFilter("hidden")}
+                  >
+                    <EyeClosedIcon size={12} />
+                    {t("filter_hidden", { defaultValue: "Hidden" })} (
+                    {achievements!.filter((a) => a.hidden).length})
+                  </button>
+                )}
+              </div>
+            )}
+            <AchievementList achievements={filteredAchievements!} />
           </>
         )}
       </section>
