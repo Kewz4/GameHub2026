@@ -669,6 +669,7 @@ declare global {
         executablePath: string;
         key: string;
         isNew?: boolean;
+        emulatorSystem?: EmulatorSystem;
       }[];
       total: number;
     }>;
@@ -676,7 +677,13 @@ declare global {
       scanPaths: string[],
       dryRun?: boolean
     ) => Promise<{
-      foundGames: { title: string; executablePath: string; key: string }[];
+      foundGames: {
+        title: string;
+        executablePath: string;
+        key: string;
+        isNew?: boolean;
+        emulatorSystem?: EmulatorSystem;
+      }[];
       total: number;
     }>;
     confirmScanGames: (
@@ -685,6 +692,7 @@ declare global {
         executablePath: string;
         title?: string;
         isNew?: boolean;
+        emulatorSystem?: EmulatorSystem;
       }>
     ) => Promise<void>;
     onScanProgress: (

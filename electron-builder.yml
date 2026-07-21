@@ -91,6 +91,6 @@ npmRebuild: false
 publish:
   provider: github
   owner: Kewz4
-  repo: hydra
+  repo: GameHub2026
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { EmulatorSystem } from "@types";
 import { Modal } from "../modal/modal";
 import { Button } from "../button/button";
 
@@ -8,6 +9,10 @@ export interface ScannedGame {
   key: string;
   /** Set for games discovered on disk that aren't yet in the library. */
   isNew?: boolean;
+  /** Set when the game is a console/emulator ROM. Must be preserved end-to-end
+   *  so the confirm step binds it as a disc (emulator launch) instead of a raw
+   *  executable (which shell-opens the ROM → the "open with" dialog). */
+  emulatorSystem?: EmulatorSystem;
 }
 
 interface Props {

@@ -509,6 +509,7 @@ contextBridge.exposeInMainWorld("electron", {
       executablePath: string;
       title?: string;
       isNew?: boolean;
+      emulatorSystem?: EmulatorSystem;
     }>
   ) => ipcRenderer.invoke("confirmScanGames", approvedGames),
   onScanProgress: (

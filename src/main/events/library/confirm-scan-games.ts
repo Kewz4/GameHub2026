@@ -70,6 +70,36 @@ const confirmScanGames = async (
   for (const { key, executablePath } of existingGames) {
     const game = await gamesSublevel.get(key).catch(() => null);
     if (!game) continue;
+
+    if (game.shop === "launchbox") {
+      // Console/emulator game already in the library — bind the discovered ROM
+      // as a DISC so it launches through its emulator (openClassicsGame).
+      // Setting executablePath to the raw ROM makes the library Play button
+      // shell-open the file (the "Select an app to open this .gbc file"
+      // dialog). This also repairs entries a pre-fix scan stored with a raw
+      // executablePath and no discs. Mirrors bind-downloaded-rom.ts.
+      const alreadyBound = game.discs?.some(
+        (d) => d.path?.toLowerCase() === executablePath.toLowerCase()
+      );
+      const disc = {
+        path: executablePath,
+        label: path.basename(executablePath),
+        fileName: path.basename(executablePath),
+      };
+      await gamesSublevel.put(key, {
+        ...game,
+        isDeleted: false,
+        isInstalledLocally: true,
+        executablePath: null,
+        discs: alreadyBound ? game.discs : [...(game.discs ?? []), disc],
+        selectedDiscPath: game.selectedDiscPath ?? executablePath,
+      });
+      logger.info(
+        `[ConfirmScanGames] Confirmed launchbox ${key} as disc: ${executablePath}`
+      );
+      continue;
+    }
+
     await gamesSublevel.put(key, {
       ...game,
       // Resurrect previously-deleted records — the user just confirmed the game

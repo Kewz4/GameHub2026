@@ -228,6 +228,9 @@ export default function LibraryPage() {
           executablePath: g.executablePath,
           title: g.title,
           isNew: g.isNew,
+          // Forward emulatorSystem so console ROMs are bound as emulator discs,
+          // not raw executables (which shell-open the ROM).
+          emulatorSystem: g.emulatorSystem,
         }))
       );
       await refreshLibraryData();

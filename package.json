@@ -1,12 +1,12 @@
 {
   "name": "hydralauncher",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "GameHub",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Kewz4/hydra.git"
+    "url": "https://github.com/Kewz4/GameHub2026.git"
   },
   "type": "module",
   "engines": {

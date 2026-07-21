@@ -5,7 +5,7 @@
 param(
   [Parameter(Mandatory = $true)][ValidateSet("install", "portable")][string]$Mode,
   [string]$Dir = "",
-  [string]$Repo = "Kewz4/hydra"
+  [string]$Repo = "Kewz4/GameHub2026"
 )
 
 $ErrorActionPreference = "Stop"

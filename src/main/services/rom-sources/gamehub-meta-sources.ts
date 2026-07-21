@@ -49,7 +49,7 @@ function readLocalMeta(system: EmulatorSystem): HostedMetaFile | null {
  */
 const GAMEHUB_META_BASE_URL =
   process.env.GAMEHUB_META_BASE_URL ??
-  "https://raw.githubusercontent.com/Kewz4/hydra/dev/sources/gamehub-meta";
+  "https://raw.githubusercontent.com/Kewz4/GameHub2026/dev/sources/gamehub-meta";
 
 const META_SYSTEMS: EmulatorSystem[] = [
   "ps1",

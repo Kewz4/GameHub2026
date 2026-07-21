@@ -14,7 +14,7 @@ const { promisify } = require("util");
 
 const execAsync = promisify(exec);
 
-const REPO = "Kewz4/hydra";
+const REPO = "Kewz4/GameHub2026";
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 const WINDOW_WIDTH = 560;
 const WINDOW_HEIGHT = 420;

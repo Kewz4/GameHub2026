@@ -20,7 +20,9 @@ async function downloadTo(url: string, dest: string): Promise<void> {
     timeout: 0,
     maxRedirects: 5,
     // Some CDNs (prodkeys.net / GitHub) 403 a UA-less streaming request.
-    headers: { "User-Agent": "GameHub/1.0 (+https://github.com/Kewz4/hydra)" },
+    headers: {
+      "User-Agent": "GameHub/1.0 (+https://github.com/Kewz4/GameHub2026)",
+    },
   });
   await pipeline(response.data, createWriteStream(dest));
 }

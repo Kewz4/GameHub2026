@@ -98,7 +98,7 @@ export class UpdateCheckerManager {
     this.sendEvent({ type: "checking", currentVersion: app.getVersion() });
 
     logger.log(
-      `[updater] checking for updates — current v${app.getVersion()}, feed github:Kewz4/hydra, portable=${this.isPortable}`
+      `[updater] checking for updates — current v${app.getVersion()}, feed github:Kewz4/GameHub2026, portable=${this.isPortable}`
     );
 
     if (!app.isPackaged) {
@@ -227,7 +227,7 @@ export class UpdateCheckerManager {
   }
 
   private static async downloadPortableUpdate(version: string): Promise<void> {
-    const apiUrl = `https://api.github.com/repos/Kewz4/hydra/releases/tags/v${version}`;
+    const apiUrl = `https://api.github.com/repos/Kewz4/GameHub2026/releases/tags/v${version}`;
     const apiRes = await fetch(apiUrl, {
       headers: { "User-Agent": "GameHub-Updater/2.0" },
     });

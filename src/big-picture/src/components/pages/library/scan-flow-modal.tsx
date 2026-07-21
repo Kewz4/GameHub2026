@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { EmulatorSystem } from "@types";
 import { Button, Modal } from "../../common";
 import {
   XIcon,
@@ -14,6 +15,9 @@ export interface FoundGame {
   executablePath: string;
   key: string;
   isNew?: boolean;
+  /** Set when the game is a console/emulator ROM. Preserved through confirm so
+   *  the ROM is bound as an emulator disc, not a raw executable. */
+  emulatorSystem?: EmulatorSystem;
 }
 
 interface ScanProgress {

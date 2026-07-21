@@ -13,7 +13,7 @@
 #   ./gamehub-websetup.sh --portable [DIR]    # non-interactive portable
 set -euo pipefail
 
-REPO="Kewz4/hydra"
+REPO="Kewz4/GameHub2026"
 API="https://api.github.com/repos/$REPO/releases/latest"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }

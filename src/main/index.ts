@@ -233,7 +233,7 @@ const { autoUpdater } = updater;
 autoUpdater.setFeedURL({
   provider: "github",
   owner: "Kewz4",
-  repo: "hydra",
+  repo: "GameHub2026",
 });
 
 autoUpdater.logger = logger;

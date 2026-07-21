@@ -5,7 +5,8 @@ import { Link } from "../link/link";
 import "./auto-update-header.scss";
 import type { AppUpdaterEvent } from "@types";
 
-export const releasesPageUrl = "https://github.com/Kewz4/hydra/releases/latest";
+export const releasesPageUrl =
+  "https://github.com/Kewz4/GameHub2026/releases/latest";
 
 export function AutoUpdateSubHeader() {
   const [isReadyToInstall, setIsReadyToInstall] = useState(false);

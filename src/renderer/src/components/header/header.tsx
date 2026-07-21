@@ -30,7 +30,7 @@ import { setFilters, setLibrarySearchQuery } from "@renderer/features";
 import cn from "classnames";
 import { SearchDropdown, ScanApprovalModal } from "@renderer/components";
 import { buildGameDetailsPath } from "@renderer/helpers";
-import type { GameShop } from "@types";
+import type { EmulatorSystem, GameShop } from "@types";
 import { debounce } from "lodash-es";
 
 const pathTitle: Record<string, string> = {
@@ -117,6 +117,7 @@ export function Header() {
       executablePath: string;
       key: string;
       isNew?: boolean;
+      emulatorSystem?: EmulatorSystem;
     }[]
   >([]);
   const [showScanApproval, setShowScanApproval] = useState(false);
@@ -369,15 +370,20 @@ export function Header() {
       executablePath: string;
       key: string;
       isNew?: boolean;
+      emulatorSystem?: EmulatorSystem;
     }[]
   ) => {
     setShowScanApproval(false);
     await window.electron.confirmScanGames(
-      approved.map(({ key, executablePath, title, isNew }) => ({
+      // emulatorSystem MUST be forwarded — it's what routes a console ROM to the
+      // disc-bound launchbox entry (emulator launch). Dropping it here makes the
+      // ROM a raw-executable custom game that shell-opens ("open with" dialog).
+      approved.map(({ key, executablePath, title, isNew, emulatorSystem }) => ({
         key,
         executablePath,
         title,
         isNew,
+        emulatorSystem,
       }))
     );
     setScanResult({ foundGames: approved, total: scanCandidates.length });
