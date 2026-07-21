@@ -322,12 +322,16 @@ const resolveCemuGamePaths = async (
     gameDir = path.dirname(gameContentDir);
   }
 
-  // ── Update + DLC: Cemu's mlc01 install first, then loose sibling folders ─────
-  // (e.g. a Minerva download of base + update + DLC that hasn't been installed
-  // into Cemu — the update/DLC sit next to the base game on disk).
+  // ── Update + DLC: Cemu's mlc01 install first, then loose folders ─────────────
+  // Two dump layouts exist in the wild: (a) base/update/DLC as SIBLING folders
+  // next to each other (classic Minerva layout — covered by the parent dirs
+  // below), and (b) base/update/DLC bundled as SUBFOLDERS inside one combined
+  // dump folder (common for single-archive community dumps) — covered by
+  // including gameDir itself, so the BFS also scans its children.
   const searchRoots = Array.from(
     new Set(
       [
+        gameDir,
         gameDir ? path.dirname(gameDir) : null,
         gameDir ? path.dirname(path.dirname(gameDir)) : null,
         disc ? path.dirname(disc) : null,

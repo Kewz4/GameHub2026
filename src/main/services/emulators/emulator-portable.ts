@@ -40,7 +40,17 @@ const ensureFile = (file: string, contents = "") => {
  */
 export const cemuDataDir = (installDir: string): string => {
   const portable = path.join(installDir, "portable");
-  return fs.existsSync(portable) ? portable : installDir;
+  // Must be an actual DIRECTORY, not just "exists" — if a stray file named
+  // "portable" ever ends up there (e.g. corrupted install, manual copy), every
+  // downstream path.join(cemuDataDir(...), "settings.xml") would silently
+  // build a path through a file instead of a folder, which fails on Windows
+  // with a misleading "Access is denied" rather than a clear "not found".
+  try {
+    if (fs.statSync(portable).isDirectory()) return portable;
+  } catch {
+    // doesn't exist — fall through to installDir
+  }
+  return installDir;
 };
 
 /**
