@@ -75,6 +75,13 @@ export interface EnrichedLibraryGame {
   lastTimePlayed?: string | Date | null;
   favorite?: boolean;
   isPinned?: boolean;
+  /**
+   * A "dislike" entry: contributes NEGATIVE weight to its genres/tags instead
+   * of positive, so the taste model actively steers away from that kind of
+   * game (not just away from this one game — that exclusion is handled
+   * separately via `excludeIds` in rankRecommendations).
+   */
+  distaste?: boolean;
 }
 
 interface Contributor {
@@ -172,6 +179,10 @@ export function buildTasteProfile(
     if (game.favorite) weight *= 1.6;
     if (game.isPinned) weight *= 1.3;
 
+    // A "dislike" contributes NEGATIVE weight to its genres/tags — the taste
+    // model actively steers away from that kind of game, not just this one.
+    if (game.distaste) weight = -Math.abs(weight);
+
     // Each facet kind carries the same total mass (`weight`), split across its
     // members, so genres and tags stay comparable regardless of how many a game
     // lists.
@@ -246,7 +257,11 @@ export function explainRecommendation(
       byTitle.set(c.title, (byTitle.get(c.title) ?? 0) + c.weight);
     }
   }
+  // Only ever attribute to POSITIVE contributors — a disliked game contributes
+  // negative weight to shared features, and must never surface as "Because you
+  // played <the game you disliked>".
   const names = [...byTitle.entries()]
+    .filter(([, weight]) => weight > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 2)
     .map(([title]) => title);

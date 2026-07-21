@@ -1,16 +1,25 @@
 import { levelDBService } from "@renderer/services/leveldb.service";
 
 /**
- * On-device thumbs up/down feedback for "Recommended for you" cards, persisted
- * so the recommender remembers whether a suggestion landed. A "like" folds the
- * game's genres into the taste profile (as a strong positive, like a favorite),
- * while a "dislike" removes it from future recommendations. Stored locally only
- * — this is a private signal, never uploaded.
+ * On-device feedback for "Recommended for you" cards, persisted so the
+ * recommender remembers whether a suggestion landed. Stored locally only —
+ * this is a private signal, never uploaded. Three distinct kinds:
+ *
+ *  - "like": folds the game's real genres/tags into the taste profile as a
+ *    strong positive (like a favorite) — you'll see MORE games like it, and
+ *    it's excluded from future recommendations (it's now "already known").
+ *  - "dislike": folds the game's genres/tags in as a NEGATIVE weight — the
+ *    taste model actively steers away from games that share its facets, so
+ *    you'll see LESS of that kind of game — and it's excluded too.
+ *  - "ignore": excludes the game from future recommendations ONLY. It has
+ *    zero effect on the taste model — a purely mechanical "don't show me
+ *    this specific game again" with no opinion about the kind of games it
+ *    represents.
  */
 
 const SUBLEVEL = "recommendationFeedback";
 
-export type FeedbackKind = "like" | "dislike";
+export type FeedbackKind = "like" | "dislike" | "ignore";
 
 export interface FeedbackRecord {
   shop: string;

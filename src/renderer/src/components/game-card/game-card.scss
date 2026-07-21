@@ -130,7 +130,8 @@
   &:hover &__feedback,
   &:focus-within &__feedback,
   &__feedback:has(.game-card__feedback-button--active),
-  &__feedback:has(.game-card__feedback-button--active-dislike) {
+  &__feedback:has(.game-card__feedback-button--active-dislike),
+  &__feedback:has(.game-card__feedback-button--active-ignore) {
     opacity: 1;
   }
 
@@ -163,6 +164,14 @@
     &--active-dislike {
       background: #c8412f;
       border-color: #c8412f;
+      color: #fff;
+    }
+
+    // Ignore: neutral gray, distinct from the positive/negative colors — it's
+    // a mechanical "hide this one game", not a taste opinion.
+    &--active-ignore {
+      background: #6e7681;
+      border-color: #6e7681;
       color: #fff;
     }
   }

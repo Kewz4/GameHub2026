@@ -119,9 +119,12 @@ export async function getRecommendedClassics(
     library.filter((g) => g.shop === "launchbox").map((g) => normalize(g.title))
   );
   const feedback = await getAllFeedback();
+  // This recommender has no per-feature taste model to push negative weight
+  // into (it's series + system/genre-overlap based, not tag-weighted) — both
+  // "dislike" and "ignore" simply mean "don't show me this game again".
   const excludedIds = new Set(
     feedback
-      .filter((f) => f.feedback === "dislike")
+      .filter((f) => f.feedback === "dislike" || f.feedback === "ignore")
       .map((f) => `${f.shop}:${f.objectId}`)
   );
 

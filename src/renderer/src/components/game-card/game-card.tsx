@@ -1,5 +1,6 @@
 import {
   DownloadIcon,
+  EyeClosedIcon,
   InfoIcon,
   PeopleIcon,
   ThumbsdownIcon,
@@ -148,7 +149,7 @@ export const GameCard = memo(function GameCard({
                   : ""
               }`}
               aria-label={t("recommend_dislike", {
-                defaultValue: "I don't like this recommendation",
+                defaultValue: "I don't like this — show me fewer games like it",
               })}
               aria-pressed={feedback === "dislike"}
               onClick={(event) => handleFeedback(event, "dislike")}
@@ -159,6 +160,32 @@ export const GameCard = memo(function GameCard({
               }}
             >
               <ThumbsdownIcon size={13} />
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              className={`game-card__feedback-button${
+                feedback === "ignore"
+                  ? " game-card__feedback-button--active-ignore"
+                  : ""
+              }`}
+              aria-label={t("recommend_ignore", {
+                defaultValue:
+                  "Don't recommend this specific game again (no effect on other recommendations)",
+              })}
+              title={t("recommend_ignore", {
+                defaultValue:
+                  "Don't recommend this specific game again (no effect on other recommendations)",
+              })}
+              aria-pressed={feedback === "ignore"}
+              onClick={(event) => handleFeedback(event, "ignore")}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  handleFeedback(event, "ignore");
+                }
+              }}
+            >
+              <EyeClosedIcon size={13} />
             </span>
           </div>
         )}

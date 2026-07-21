@@ -410,9 +410,12 @@ async function getRecommended(
     return { ...g, genres: g.genres ?? undefined };
   });
 
-  // Fold in thumbs up/down feedback: a "like" (not already owned) is enriched
-  // with its real facets and added as a synthetic favorite; a "dislike" is
-  // excluded from candidates.
+  // Fold in feedback, distinctly per kind:
+  //  - "like": enriched with real facets, added as a synthetic favorite (POSITIVE
+  //    taste weight) — shows MORE games like it — and excluded from candidates.
+  //  - "dislike": enriched the same way but with NEGATIVE taste weight — shows
+  //    LESS of that kind of game — and excluded from candidates.
+  //  - "ignore": excluded from candidates ONLY. No taste-model effect at all.
   const feedback = await getAllFeedback();
   const libraryKeys = new Set(library.map((g) => `${g.shop}:${g.objectId}`));
   const dislikedIds = new Set(
@@ -420,30 +423,47 @@ async function getRecommended(
       .filter((f) => f.feedback === "dislike")
       .map((f) => `${f.shop}:${f.objectId}`)
   );
+  const ignoredIds = new Set(
+    feedback
+      .filter((f) => f.feedback === "ignore")
+      .map((f) => `${f.shop}:${f.objectId}`)
+  );
+  // Everything excluded from candidate pools, regardless of WHY.
+  const excludeIds = new Set([...dislikedIds, ...ignoredIds]);
+
   const likedNew = feedback.filter(
     (f) => f.feedback === "like" && !libraryKeys.has(`${f.shop}:${f.objectId}`)
   );
-  const likedEnriched: EnrichedLibraryGame[] = await Promise.all(
-    likedNew.map(async (record) => {
-      const facets = await fetchGameFacets(record, idToName, downloadSourceIds);
-      return {
-        shop: record.shop,
-        objectId: record.objectId,
-        title: record.title,
-        genres: facets?.genres ?? record.genres ?? [],
-        tags: facets?.tags ?? [],
-        playTimeInMilliseconds: LIKE_SYNTHETIC_HOURS * 3_600_000,
-        lastTimePlayed: new Date(record.updatedAt).toISOString(),
-        favorite: true,
-      };
-    })
-  );
-  fullLibrary.push(...likedEnriched);
+  const dislikedNew = feedback.filter((f) => f.feedback === "dislike");
+
+  const enrichFeedbackEntry = async (
+    record: (typeof feedback)[number],
+    distaste: boolean
+  ): Promise<EnrichedLibraryGame> => {
+    const facets = await fetchGameFacets(record, idToName, downloadSourceIds);
+    return {
+      shop: record.shop,
+      objectId: record.objectId,
+      title: record.title,
+      genres: facets?.genres ?? record.genres ?? [],
+      tags: facets?.tags ?? [],
+      playTimeInMilliseconds: LIKE_SYNTHETIC_HOURS * 3_600_000,
+      lastTimePlayed: new Date(record.updatedAt).toISOString(),
+      favorite: !distaste,
+      distaste,
+    };
+  };
+
+  const [likedEnriched, dislikedEnriched] = await Promise.all([
+    Promise.all(likedNew.map((record) => enrichFeedbackEntry(record, false))),
+    Promise.all(dislikedNew.map((record) => enrichFeedbackEntry(record, true))),
+  ]);
+  fullLibrary.push(...likedEnriched, ...dislikedEnriched);
 
   // Price every genre/tag the enriched games carry by its global frequency, so
   // the profile can down-weight common facets and up-weight rare/mechanic ones.
   const featureSet = new Set<string>();
-  for (const game of [...enriched, ...likedEnriched]) {
+  for (const game of [...enriched, ...likedEnriched, ...dislikedEnriched]) {
     for (const genre of game.genres ?? []) featureSet.add(`genre:${genre}`);
     for (const tag of game.tags ?? []) featureSet.add(`tag:${tag}`);
   }
@@ -515,7 +535,7 @@ async function getRecommended(
     );
   };
 
-  const recommended = await recommendFrom(profile, dislikedIds, 24);
+  const recommended = await recommendFrom(profile, excludeIds, 24);
 
   // "Because you played X": one shelf per DISTINCT taste cluster in the library.
   // Anchor on the most-played games, skipping any whose dominant mechanic tag is
@@ -542,7 +562,7 @@ async function getRecommended(
     if (!cluster || usedClusters.has(cluster)) continue;
     usedClusters.add(cluster);
 
-    const exclude = new Set([...allOwnedIds, ...dislikedIds, ...shown]);
+    const exclude = new Set([...allOwnedIds, ...excludeIds, ...shown]);
     const games = await recommendFrom(anchorProfile, exclude, 20);
     if (games.length >= MIN_ROW_SIZE) {
       becauseYouPlayed.push({ anchorTitle: anchor.title, games });
@@ -577,14 +597,29 @@ interface HomeSnapshot {
  */
 const recommendationSessionCache = new Map<string, RecommendationResult>();
 
+/**
+ * Session-scoped cache for the classics shelf. Unlike `getRecommended` this
+ * doesn't vary by language (it's driven by the console library + local
+ * catalogue only), so one slot is enough. `getRecommendedClassics` runs its
+ * own multi-query fan-out (series expansion + genre lookups + a random-sample
+ * scan) that is at least as heavy as the PC recommender — it must NOT block
+ * first paint, and must be cached the same way, or every home mount pays the
+ * full cost again (this was the actual cause of the home page feeling laggy:
+ * the PC recommender got decoupled from first paint, but this one didn't).
+ */
+let recommendedClassicsCache: ShopAssets[] | null = null;
+
 export function useHomeCatalogue(language: string) {
   const [catalogue, setCatalogue] = useState<HomeCatalogue>(EMPTY_CATALOGUE);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Thumbs up/down anywhere on home invalidates the cached shelves so the
-    // next mount recomputes instead of resurrecting disliked games.
-    const clearRecommendationCache = () => recommendationSessionCache.clear();
+    // next mount recomputes instead of resurrecting disliked/ignored games.
+    const clearRecommendationCache = () => {
+      recommendationSessionCache.clear();
+      recommendedClassicsCache = null;
+    };
     window.addEventListener(
       "recommendation-feedback-changed",
       clearRecommendationCache
@@ -619,10 +654,10 @@ export function useHomeCatalogue(language: string) {
         (source) => source.id
       );
 
-      // Heavy recommender (dozens of catalogue queries): kick it off right away
-      // — or reuse the session cache — but NEVER block the first paint on it.
-      // The shelves pop in when phase 2 lands; the rest of home paints as soon
-      // as the fast batch below resolves.
+      // Heavy recommenders (dozens of catalogue queries each): kick both off
+      // right away — or reuse the session cache — but NEVER block first paint
+      // on either. The shelves pop in when phase 2 lands; the rest of home
+      // paints as soon as the fast batch below resolves.
       const cachedRecommendations =
         recommendationSessionCache.get(language) ?? null;
       const recommendationsPromise = cachedRecommendations
@@ -639,14 +674,21 @@ export function useHomeCatalogue(language: string) {
               return result;
             });
 
-      // Phase 1: the fast batch — one request each. This is what makes home
-      // feel instant again; nothing here depends on the recommender.
-      const [recommendedClassics, featured, hot, weekly, achievements, classics] =
-        await Promise.all([
-          window.electron
+      const recommendedClassicsPromise = recommendedClassicsCache
+        ? Promise.resolve(recommendedClassicsCache)
+        : window.electron
             .getLibrary()
             .then((library) => getRecommendedClassics(library as LibraryGame[]))
-            .catch(() => [] as ShopAssets[]),
+            .catch(() => [] as ShopAssets[])
+            .then((result) => {
+              if (result.length > 0) recommendedClassicsCache = result;
+              return result;
+            });
+
+      // Phase 1: the fast batch — one request each. This is what makes home
+      // feel instant again; neither recommender is awaited here.
+      const [featured, hot, weekly, achievements, classics] = await Promise.all(
+        [
           getFeatured(language).catch(() => [] as TrendingGame[]),
           getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
             () => [] as ShopAssets[]
@@ -658,7 +700,8 @@ export function useHomeCatalogue(language: string) {
             () => [] as ShopAssets[]
           ),
           getClassics().catch(() => [] as ShopAssets[]),
-        ]);
+        ]
+      );
 
       // Keep the hero alive even when `/catalogue/featured` returns empty by
       // seeding it from the Hot (then Weekly) row, which shares the same
@@ -669,13 +712,13 @@ export function useHomeCatalogue(language: string) {
 
       if (!isMounted) return;
 
-      // Paint phase 1 — keep any snapshot-painted recommender shelves until
-      // phase 2 replaces them.
+      // Paint phase 1 — keep any snapshot-painted recommender shelves (PC AND
+      // classics) until phase 2 replaces them.
       setCatalogue((prev) => ({
         featured: resolvedFeatured,
         recommended: prev.recommended,
         becauseYouPlayed: prev.becauseYouPlayed,
-        recommendedClassics,
+        recommendedClassics: prev.recommendedClassics,
         hot,
         weekly,
         achievements,
@@ -683,34 +726,46 @@ export function useHomeCatalogue(language: string) {
       }));
       setIsLoading(false);
 
-      // Phase 2: recommender shelves land whenever they're ready.
-      const recommendations = await recommendationsPromise;
-      if (!isMounted) return;
-
-      setCatalogue((prev) => {
-        const fresh: HomeCatalogue = {
-          ...prev,
-          recommended: recommendations.recommended,
-          becauseYouPlayed: recommendations.becauseYouPlayed,
-        };
-
-        // Persist for the next launch's instant paint — but never overwrite a
-        // good snapshot with an all-empty load (e.g. offline start).
-        const hasContent = Object.values(fresh).some(
+      // Persist a snapshot for the next launch's instant paint — but never
+      // overwrite a good snapshot with an all-empty load (e.g. offline start).
+      const persistSnapshot = (next: HomeCatalogue) => {
+        const hasContent = Object.values(next).some(
           (rows) => Array.isArray(rows) && rows.length > 0
         );
-        if (hasContent) {
-          const snapshot: HomeSnapshot = {
-            catalogue: fresh,
-            language,
-            savedAt: Date.now(),
-          };
-          levelDBService
-            .put("snapshot", snapshot, HOME_SNAPSHOT_SUBLEVEL)
-            .catch(() => undefined);
-        }
+        if (!hasContent) return;
+        const snapshot: HomeSnapshot = {
+          catalogue: next,
+          language,
+          savedAt: Date.now(),
+        };
+        levelDBService
+          .put("snapshot", snapshot, HOME_SNAPSHOT_SUBLEVEL)
+          .catch(() => undefined);
+      };
 
-        return fresh;
+      // Phase 2: both recommenders land INDEPENDENTLY whenever they're ready —
+      // neither blocks first paint, and neither waits on the other (one may be
+      // cache-instant while the other is a cold multi-query fan-out).
+      recommendationsPromise.then((recommendations) => {
+        if (!isMounted) return;
+        setCatalogue((prev) => {
+          const fresh: HomeCatalogue = {
+            ...prev,
+            recommended: recommendations.recommended,
+            becauseYouPlayed: recommendations.becauseYouPlayed,
+          };
+          persistSnapshot(fresh);
+          return fresh;
+        });
+      });
+
+      recommendedClassicsPromise.then((recommendedClassics) => {
+        if (!isMounted) return;
+        setCatalogue((prev) => {
+          const fresh: HomeCatalogue = { ...prev, recommendedClassics };
+          persistSnapshot(fresh);
+          return fresh;
+        });
       });
     }
 
