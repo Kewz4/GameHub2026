@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import Skeleton from "react-loading-skeleton";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { GameCard } from "@renderer/components";
 import type { ShopAssets } from "@types";
@@ -30,6 +31,8 @@ interface Props {
 }
 
 const SCROLL_STEP = 600;
+/** Card width (280px) + track gap (16px) — the horizontal stride per card. */
+const CARD_STRIDE = 296;
 
 export const CategoryRow = memo(function CategoryRow({
   title,
@@ -101,6 +104,20 @@ export const CategoryRow = memo(function CategoryRow({
     [ref]
   );
 
+  // Horizontally virtualize the track: only the cards near the viewport are
+  // mounted, instead of all ~24 per row (×~10 rows = 200+ GameCards). This is
+  // the fix `content-visibility` could not give — CSS skips off-screen PAINT
+  // but React still mounted/laid-out every card. Now off-screen cards don't
+  // exist in the tree at all until scrolled near.
+  const virtualizer = useVirtualizer({
+    count: games.length,
+    horizontal: true,
+    getScrollElement: () => ref.current,
+    estimateSize: () => CARD_STRIDE,
+    overscan: 3,
+  });
+  const virtualItems = virtualizer.getVirtualItems();
+
   if (!isLoading && games.length === 0) return null;
 
   return (
@@ -144,27 +161,40 @@ export const CategoryRow = memo(function CategoryRow({
         aria-label={title}
         {...dragProps}
       >
-        {isLoading
-          ? Array.from({ length: 8 }).map((_, index) => (
-              <Skeleton key={index} className="category-row__card-skeleton" />
-            ))
-          : games.map((game) => (
-              <GameCard
-                key={`${game.shop}-${game.objectId}`}
-                game={game}
-                className="category-row__card"
-                ownedShops={
-                  ownedShopsByObjectId.get(game.objectId) ?? EMPTY_SHOPS
-                }
-                onCardClick={handleCardClick}
-                onCardFeedback={enableFeedback ? handleFeedback : undefined}
-                feedback={
-                  enableFeedback
-                    ? (feedback.get(feedbackKey(game)) ?? null)
-                    : undefined
-                }
-              />
-            ))}
+        {isLoading ? (
+          Array.from({ length: 8 }).map((_, index) => (
+            <Skeleton key={index} className="category-row__card-skeleton" />
+          ))
+        ) : (
+          // Spacer sized to the full track width so the scrollbar/drag range is
+          // correct; each visible card is absolutely positioned at its offset.
+          <div
+            className="category-row__virtual-sizer"
+            style={{ width: virtualizer.getTotalSize() }}
+          >
+            {virtualItems.map((virtualItem) => {
+              const game = games[virtualItem.index];
+              return (
+                <GameCard
+                  key={`${game.shop}-${game.objectId}`}
+                  game={game}
+                  className="category-row__card"
+                  style={{ transform: `translateX(${virtualItem.start}px)` }}
+                  ownedShops={
+                    ownedShopsByObjectId.get(game.objectId) ?? EMPTY_SHOPS
+                  }
+                  onCardClick={handleCardClick}
+                  onCardFeedback={enableFeedback ? handleFeedback : undefined}
+                  feedback={
+                    enableFeedback
+                      ? (feedback.get(feedbackKey(game)) ?? null)
+                      : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );

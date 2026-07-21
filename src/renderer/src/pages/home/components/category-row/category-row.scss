@@ -66,13 +66,14 @@
   }
 
   // Native horizontal scroll — no wheel listeners. Drag-to-scroll is layered
-  // on via pointer events (see use-drag-scroll).
+  // on via pointer events (see use-drag-scroll). The track is virtualized: it
+  // holds a single width-sized spacer, and only the cards near the viewport are
+  // mounted (absolutely positioned at their computed offset).
   &__track {
     display: flex;
     gap: 16px;
     overflow-x: auto;
     overflow-y: hidden;
-    scroll-snap-type: x proximity;
     scrollbar-width: none;
     padding-bottom: 4px;
     // Let the browser pan horizontally; drag handles the rest.
@@ -83,11 +84,24 @@
     }
   }
 
+  // Full-width spacer that gives the scroll track its real length; the mounted
+  // (windowed) cards are positioned absolutely inside it via translateX.
+  &__virtual-sizer {
+    position: relative;
+    height: 180px;
+    flex: 0 0 auto;
+  }
+
   &__card {
-    flex: 0 0 280px;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 280px;
-    scroll-snap-align: start;
+    height: 180px;
     user-select: none;
+    // `will-change` keeps the translateX cards on their own compositor layer so
+    // scrolling the row doesn't repaint siblings.
+    will-change: transform;
   }
 
   &__card-skeleton {
