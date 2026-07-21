@@ -8,6 +8,7 @@ import { scanRomFolder } from "./scan-rom-folder";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
 import { installNspIntoEden } from "./nsp-installer";
+import { resolveWiiuTitleId } from "./cemu-graphic-packs";
 import { logger } from "../logger";
 
 /** Display platform label per console (mirrors the launchbox importer). */
@@ -278,29 +279,60 @@ async function installPkgIntoRpcs3(pkgPath: string): Promise<void> {
   }
 }
 
+/** Cemu title-id high word per companion kind (base is 00050000). */
+const WIIU_TITLE_HIGH: Record<"update" | "dlc", string> = {
+  update: "0005000e",
+  dlc: "0005000c",
+};
+
 /**
  * Install a Wii U update/DLC title folder into the configured Cemu's mlc01 —
  * the location Cemu actually applies at launch (mirrors Cemu's own "Install
  * game update or DLC", which is a title-id copy). The title id is read from
  * the folder's meta/meta.xml; e.g. update 0005000E101C9400 lands at
  * `mlc01/usr/title/0005000e/101c9400/{content,code,meta}`.
+ *
+ * Wii U UPDATES frequently ship WITHOUT their own meta/meta.xml (they're
+ * deltas that inherit the base title's metadata), and some dumps carry a
+ * meta.xml whose high word is the base's (00050000) rather than the
+ * update/DLC one — in both cases we derive the correct id from the base
+ * game's low word (`fallbackTitleId`) + the kind's high word, so it still
+ * lands in mlc01 instead of being left as a loose folder.
  */
 async function installWiiuTitleIntoCemu(
   titleDir: string,
-  kind: "update" | "dlc"
+  kind: "update" | "dlc",
+  fallbackTitleId?: string | null
 ): Promise<void> {
-  const metaPath = path.join(titleDir, "meta", "meta.xml");
+  const expectedHigh = WIIU_TITLE_HIGH[kind];
+
+  // Prefer the folder's own meta.xml — but only when its high word actually
+  // matches this kind (an update's meta must be 0005000e…, a DLC's 0005000c…).
   let titleId: string | null = null;
   try {
-    const xml = fs.readFileSync(metaPath, "utf-8");
+    const xml = fs.readFileSync(
+      path.join(titleDir, "meta", "meta.xml"),
+      "utf-8"
+    );
     const m = xml.match(/<title_id[^>]*>\s*([0-9a-fA-F]{16})\s*<\/title_id>/);
-    titleId = m ? m[1].toLowerCase() : null;
+    const id = m ? m[1].toLowerCase() : null;
+    if (id && id.slice(0, 8) === expectedHigh) titleId = id;
   } catch {
-    /* no meta.xml */
+    /* no meta.xml — common for update deltas */
   }
+
+  // Fall back to <expectedHigh> + <baseLow> from the resolved base title id
+  // (00050000<low> → e.g. 0005000e<low> for the update).
+  if (!titleId && fallbackTitleId && fallbackTitleId.length === 16) {
+    titleId = expectedHigh + fallbackTitleId.slice(8).toLowerCase();
+    logger.log(
+      `[bindDownloadedRom] ${kind} has no matching meta.xml — derived title id ${titleId} from base ${fallbackTitleId}`
+    );
+  }
+
   if (!titleId) {
     logger.warn(
-      `[bindDownloadedRom] ${kind} has no meta.xml title id — left as loose folder (${titleDir})`
+      `[bindDownloadedRom] ${kind} has no meta.xml title id and no base to derive from — left as loose folder (${titleDir})`
     );
     return;
   }
@@ -322,6 +354,7 @@ async function installWiiuTitleIntoCemu(
   );
 
   fs.mkdirSync(mlcTitleDir, { recursive: true });
+  const copied: string[] = [];
   for (const sub of ["content", "code", "meta"]) {
     const src = path.join(titleDir, sub);
     if (fs.existsSync(src)) {
@@ -329,10 +362,19 @@ async function installWiiuTitleIntoCemu(
         recursive: true,
         force: true,
       });
+      copied.push(sub);
     }
   }
+  // An update MUST land its `content` (the patched files Cemu applies) and a
+  // `meta` so Cemu lists it — verify rather than silently reporting success.
+  if (!copied.includes("content")) {
+    logger.warn(
+      `[bindDownloadedRom] ${kind} install copied [${copied.join(", ") || "nothing"}] but no "content" — Cemu may not apply it (${titleDir})`
+    );
+    return;
+  }
   logger.log(
-    `[bindDownloadedRom] Installed ${kind} (title ${titleId}) into Cemu → ${mlcTitleDir}`
+    `[bindDownloadedRom] Installed ${kind} (title ${titleId}, parts: ${copied.join(", ")}) into Cemu → ${mlcTitleDir}`
   );
 }
 
@@ -381,7 +423,13 @@ async function placeCompanionContent(
     // pipeline). Mirror what Cemu's own "Install game update/DLC" does — copy
     // the title into mlc01/usr/title/<high>/<low>/.
     if (download.emulatorSystem === "wiiu") {
-      await installWiiuTitleIntoCemu(dest, kind).catch((err) =>
+      // Resolve the base title id (00050000<low>) so updates/DLC still install
+      // even when their own dump lacks a matching meta.xml.
+      const fallbackTitleId = await resolveWiiuTitleId(
+        download.shop,
+        baseObjectId
+      ).catch(() => null);
+      await installWiiuTitleIntoCemu(dest, kind, fallbackTitleId).catch((err) =>
         logger.warn(`[bindDownloadedRom] Cemu mlc01 install failed`, err)
       );
     }
