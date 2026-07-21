@@ -77,6 +77,11 @@ jobs:
       - name: Build (${{ matrix.os }})
         run: ${{ matrix.build_cmd }}
         env:
+          # The Vite production build renders ~10k modules + large sourcemaps and
+          # overruns Node's default ~2 GB heap ("Ineffective mark-compacts near
+          # heap limit / JavaScript heap out of memory"). Runners have ~16 GB, so
+          # give the build an 8 GB heap.
+          NODE_OPTIONS: --max-old-space-size=8192
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL || 'https://hydra-api-us-east-1.losbroxas.org' }}
