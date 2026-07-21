@@ -234,6 +234,14 @@ autoUpdater.setFeedURL({
   provider: "github",
   owner: "Kewz4",
   repo: "GameHub2026",
+  // The release repo is PRIVATE, so GitHub 404s the releases feed and gates
+  // asset downloads for anonymous requests. `private: true` makes
+  // electron-updater fetch releases + assets through the authenticated GitHub
+  // API. The token is injected at build time from the UPDATER_GH_TOKEN CI
+  // secret (never committed); it's read-only + scoped to this one repo. It is
+  // embedded in the shipped binary, so treat it as low-privilege.
+  private: true,
+  token: import.meta.env.MAIN_VITE_UPDATER_GH_TOKEN,
 });
 
 autoUpdater.logger = logger;

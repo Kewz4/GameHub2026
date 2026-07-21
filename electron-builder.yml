@@ -92,5 +92,8 @@ publish:
   provider: github
   owner: Kewz4
   repo: GameHub2026
+  # Private release repo — records `private: true` in app-update.yml so the
+  # updater authenticates. The runtime token comes from setFeedURL (index.ts).
+  private: true
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

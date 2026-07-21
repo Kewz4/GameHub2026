@@ -83,6 +83,10 @@ jobs:
           # give the build an 8 GB heap.
           NODE_OPTIONS: --max-old-space-size=8192
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read-only token embedded in the build so the auto-updater can read
+          # releases/assets from the PRIVATE repo. Add it in repo Settings →
+          # Secrets and variables → Actions as UPDATER_GH_TOKEN.
+          MAIN_VITE_UPDATER_GH_TOKEN: ${{ secrets.UPDATER_GH_TOKEN }}
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL || 'https://hydra-api-us-east-1.losbroxas.org' }}
           MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL || 'https://auth.hydralauncher.gg' }}

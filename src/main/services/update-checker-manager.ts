@@ -12,6 +12,24 @@ import { logger } from "./logger";
 
 const { autoUpdater } = updater;
 
+/** Read-only GitHub token injected at build time (see vite-env.d.ts). Required
+ *  because the release repo is private. */
+const UPDATER_TOKEN = import.meta.env.MAIN_VITE_UPDATER_GH_TOKEN;
+
+/** Headers for GitHub API / asset requests. When downloading a private-repo
+ *  asset, the API redirects to a signed CDN URL on another origin; per the
+ *  fetch spec the Authorization header is dropped on that cross-origin
+ *  redirect, so the token never leaks to the CDN. */
+function githubHeaders(
+  extra: Record<string, string> = {}
+): Record<string, string> {
+  return {
+    "User-Agent": "GameHub-Updater/2.0",
+    ...(UPDATER_TOKEN ? { Authorization: `Bearer ${UPDATER_TOKEN}` } : {}),
+    ...extra,
+  };
+}
+
 export type UpdateCheckerEvent =
   | { type: "checking"; currentVersion: string }
   | { type: "not-available"; currentVersion: string }
@@ -229,13 +247,19 @@ export class UpdateCheckerManager {
   private static async downloadPortableUpdate(version: string): Promise<void> {
     const apiUrl = `https://api.github.com/repos/Kewz4/GameHub2026/releases/tags/v${version}`;
     const apiRes = await fetch(apiUrl, {
-      headers: { "User-Agent": "GameHub-Updater/2.0" },
+      headers: githubHeaders({ Accept: "application/vnd.github+json" }),
     });
 
     if (!apiRes.ok) throw new Error(`GitHub API returned ${apiRes.status}`);
 
     const release = (await apiRes.json()) as {
-      assets: Array<{ name: string; browser_download_url: string }>;
+      // `url` is the API asset endpoint (works for private repos with the
+      // token); `browser_download_url` needs an authenticated browser session.
+      assets: Array<{
+        name: string;
+        url: string;
+        browser_download_url: string;
+      }>;
     };
 
     const zipAsset = release.assets.find(
@@ -251,7 +275,12 @@ export class UpdateCheckerManager {
     const zipPath = path.join(tmpDir, "gamehub-update.zip");
     const extractDir = path.join(tmpDir, "gamehub-update");
 
-    const zipRes = await fetch(zipAsset.browser_download_url);
+    // Download via the asset API endpoint (not browser_download_url) so the
+    // request is authenticated for the private repo. `Accept: octet-stream`
+    // makes GitHub return the binary (302 → signed CDN URL).
+    const zipRes = await fetch(zipAsset.url, {
+      headers: githubHeaders({ Accept: "application/octet-stream" }),
+    });
     const total = parseInt(zipRes.headers.get("content-length") ?? "0", 10);
     const reader = zipRes.body!.getReader();
     const chunks: Buffer[] = [];
