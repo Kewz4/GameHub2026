@@ -291,7 +291,13 @@ $margin-bottom: 28px;
 
   &__trophy-overlay {
     position: absolute;
-    mask-image: url("/src/assets/icons/trophy.svg");
+    // The mask image URL is supplied inline from the component (a bundled `?url`
+    // asset). A raw `/src/...` path here was never bundled, so in the built app
+    // the mask failed and this box showed as a solid rectangle over the icon.
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
     top: 22px;
     left: 22px;
     width: 36px;

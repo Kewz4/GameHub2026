@@ -39,6 +39,26 @@ export function AchievementNotification() {
 
   const [shadowRootRef, setShadowRootRef] = useState<HTMLElement | null>(null);
 
+  // The overlay BrowserWindow is created with `transparent: true`, but this
+  // route loads the same document as the main app, whose global styles set
+  // `body { background-color: var(--color-dark-background) }`. That opaque fill
+  // painted the whole window as a black rectangle around the toast (visible over
+  // a game). Force the document chain transparent so only the toast shows.
+  useEffect(() => {
+    const targets = [
+      document.documentElement,
+      document.body,
+      document.getElementById("root"),
+    ].filter((el): el is HTMLElement => el != null);
+    const previous = targets.map((el) => el.style.background);
+    for (const el of targets) el.style.background = "transparent";
+    return () => {
+      targets.forEach((el, i) => {
+        el.style.background = previous[i];
+      });
+    };
+  }, []);
+
   const playAudio = useCallback(async () => {
     const soundUrl = await getAchievementSoundUrl();
     const volume = await getAchievementSoundVolume();
