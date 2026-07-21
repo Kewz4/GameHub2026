@@ -297,49 +297,67 @@ async function getTotalGames(downloadSourceIds: string[]): Promise<number> {
 const FACET_COUNT_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const facetCountSession = new Map<string, number>();
 
+/** Max facet-count queries in flight at once — bounds the cold-cache burst. */
+const FACET_COUNT_CONCURRENCY = 6;
+
 async function getFacetCounts(
   features: string[],
   nameToId: Map<string, number>,
   downloadSourceIds: string[]
 ): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
-  await Promise.all(
-    features.map(async (feature) => {
-      const session = facetCountSession.get(feature);
-      if (session !== undefined) {
-        counts.set(feature, session);
-        return;
+
+  const resolveOne = async (feature: string): Promise<void> => {
+    const session = facetCountSession.get(feature);
+    if (session !== undefined) {
+      counts.set(feature, session);
+      return;
+    }
+    const cached = (await levelDBService
+      .get(feature, "recommenderFacetCounts")
+      .catch(() => null)) as { count: number; cachedAt: number } | null;
+    if (cached && Date.now() - cached.cachedAt < FACET_COUNT_TTL_MS) {
+      facetCountSession.set(feature, cached.count);
+      counts.set(feature, cached.count);
+      return;
+    }
+    let body: Record<string, unknown> | null = null;
+    if (feature.startsWith("tag:")) {
+      const id = nameToId.get(feature.slice("tag:".length).toLowerCase());
+      if (typeof id === "number") {
+        body = { ...baseSearchBody(downloadSourceIds), tags: [id], take: 5 };
       }
-      const cached = (await levelDBService
-        .get(feature, "recommenderFacetCounts")
-        .catch(() => null)) as { count: number; cachedAt: number } | null;
-      if (cached && Date.now() - cached.cachedAt < FACET_COUNT_TTL_MS) {
-        facetCountSession.set(feature, cached.count);
-        counts.set(feature, cached.count);
-        return;
+    } else if (feature.startsWith("genre:")) {
+      body = {
+        ...baseSearchBody(downloadSourceIds),
+        genres: [feature.slice("genre:".length)],
+        take: 5,
+      };
+    }
+    if (!body) return;
+    const count = await catalogueCount(body);
+    facetCountSession.set(feature, count);
+    counts.set(feature, count);
+    levelDBService
+      .put(feature, { count, cachedAt: Date.now() }, "recommenderFacetCounts")
+      .catch(() => {});
+  };
+
+  // Bounded-concurrency pool: instead of firing all (up to 60) queries at once
+  // — a thundering herd of IPC+HTTP that stalls the main process even in the
+  // background — keep only FACET_COUNT_CONCURRENCY in flight. Cheap once cached.
+  let cursor = 0;
+  const workers = Array.from(
+    { length: Math.min(FACET_COUNT_CONCURRENCY, features.length) },
+    async () => {
+      while (cursor < features.length) {
+        const feature = features[cursor++];
+        await resolveOne(feature);
       }
-      let body: Record<string, unknown> | null = null;
-      if (feature.startsWith("tag:")) {
-        const id = nameToId.get(feature.slice("tag:".length).toLowerCase());
-        if (typeof id === "number") {
-          body = { ...baseSearchBody(downloadSourceIds), tags: [id], take: 5 };
-        }
-      } else if (feature.startsWith("genre:")) {
-        body = {
-          ...baseSearchBody(downloadSourceIds),
-          genres: [feature.slice("genre:".length)],
-          take: 5,
-        };
-      }
-      if (!body) return;
-      const count = await catalogueCount(body);
-      facetCountSession.set(feature, count);
-      counts.set(feature, count);
-      levelDBService
-        .put(feature, { count, cachedAt: Date.now() }, "recommenderFacetCounts")
-        .catch(() => {});
-    })
+    }
   );
+  await Promise.all(workers);
+
   return counts;
 }
 

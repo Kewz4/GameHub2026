@@ -24,9 +24,8 @@ import "./game-card.scss";
 import { useTranslation } from "react-i18next";
 import { Badge } from "../badge/badge";
 import { StarRating } from "../star-rating/star-rating";
-import { memo, useCallback, useMemo, useState } from "react";
-import { useFormat, useAppSelector } from "@renderer/hooks";
-import { getGameOrigin } from "@renderer/helpers/game-origin";
+import { memo, useCallback, useState } from "react";
+import { useFormat } from "@renderer/hooks";
 
 export interface GameCardProps
   extends React.DetailedHTMLProps<
@@ -34,6 +33,13 @@ export interface GameCardProps
     HTMLButtonElement
   > {
   game: ShopAssets;
+  /**
+   * Shops this game is owned/synced on (for the platform icons). Passed down
+   * from the row so the card does NOT each subscribe to the whole Redux library
+   * — with 200+ home cards, per-card library subscriptions caused a re-render
+   * storm on every library update. Computed once per row instead.
+   */
+  ownedShops?: string[];
   /** Current thumbs up/down state (recommended row only). */
   feedback?: FeedbackKind | null;
   /** When provided, renders like/dislike controls that report the tapped kind. */
@@ -58,6 +64,7 @@ const shopIcon: Record<string, JSX.Element> = {
 export const GameCard = memo(function GameCard({
   game,
   className,
+  ownedShops = [],
   feedback,
   onFeedback,
   onCardClick,
@@ -89,17 +96,6 @@ export const GameCard = memo(function GameCard({
   }, [game, stats]);
 
   const { numberFormatter } = useFormat();
-
-  const library = useAppSelector((state) => state.library.value);
-  const ownedShops = useMemo(
-    () =>
-      library
-        .filter(
-          (g) => g.objectId === game.objectId && getGameOrigin(g) === "sync"
-        )
-        .map((g) => g.shop),
-    [library, game.objectId]
-  );
 
   const showFeedbackControls = onFeedback || onCardFeedback;
 

@@ -346,6 +346,24 @@ export const installEmulator = async (
       }));
     }
 
+    // Now that the executable is known, wire the user's already-configured ROM
+    // folders into the freshly-installed emulator's OWN config (e.g. Cemu's
+    // portable settings.xml <GamePaths>) so its native game browser shows the
+    // same library. Without this, a folder added BEFORE the emulator was
+    // installed never reached the emulator's config (Cemu showed no games).
+    try {
+      const { syncEmulatorRomPaths } = await import(
+        "./configure-emulator-rom-paths"
+      );
+      await Promise.all(
+        systemsForBinary(binary).map((system) =>
+          syncEmulatorRomPaths(system).catch(() => {})
+        )
+      );
+    } catch {
+      /* best-effort — launch always passes the ROM path directly anyway */
+    }
+
     // Eden (Switch) needs prod.keys + firmware to boot games. Install them
     // silently right after extraction so the user never sees Eden's own
     // first-run key prompt.

@@ -38,6 +38,7 @@ import {
   pcsx2ConfigCandidates,
 } from "./emulator-config";
 import { getEmulatorConfig } from "./emulators-repository";
+import { cemuDataDir } from "./emulator-portable";
 
 // ── INI helpers ──────────────────────────────────────────────────────────────
 
@@ -179,22 +180,7 @@ function configurePcsx2(romFolders: string[]): void {
   writeIni(cfgPath, ini);
 }
 
-function configureCemu(romFolders: string[]): void {
-  // Cemu settings.xml may live next to the executable (portable) or in config dir
-  const candidates: string[] = [
-    path.join(os.homedir(), ".config", "Cemu", "settings.xml"),
-    path.join(
-      os.homedir(),
-      ".var",
-      "app",
-      "info.cemu.Cemu",
-      "config",
-      "Cemu",
-      "settings.xml"
-    ),
-  ];
-  const cfgPath = candidates.find(existsSync) ?? candidates[0];
-
+function writeCemuGamePaths(cfgPath: string, romFolders: string[]): void {
   let xml: string;
   try {
     xml = readFileSync(cfgPath, "utf-8");
@@ -209,13 +195,68 @@ function configureCemu(romFolders: string[]): void {
 
   if (xml.includes("<GamePaths>")) {
     xml = xml.replace(/<GamePaths>[\s\S]*?<\/GamePaths>/, block);
-  } else {
+  } else if (xml.includes("</content>")) {
     xml = xml.replace("</content>", `${block}\n</content>`);
+  } else {
+    // Malformed/empty file — start fresh so we don't silently no-op.
+    xml = `<?xml version="1.0" encoding="UTF-8"?>\n<content>\n${block}\n</content>`;
   }
 
   const dir = path.dirname(cfgPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(cfgPath, xml, "utf-8");
+}
+
+function configureCemu(
+  romFolders: string[],
+  executablePath?: string | null
+): void {
+  // Cemu reads settings.xml from whichever location matches its mode. Write to
+  // EVERY plausible one that this install could use — the previous version only
+  // handled the two Linux paths, so on Windows (and for GameHub's portable
+  // install) the game folder was never wired into Cemu's own game browser at
+  // all. That's the reason a set-up Wii U library showed no games in Cemu.
+  const candidates = new Set<string>();
+
+  // 1. Portable settings.xml next to the exe — this is what GameHub's own
+  //    portable Cemu install reads, on every OS. Always (re)write it.
+  if (executablePath) {
+    const installDir = path.dirname(executablePath);
+    candidates.add(path.join(cemuDataDir(installDir), "settings.xml"));
+  }
+  // 2. Windows per-user default (non-portable Cemu).
+  if (process.platform === "win32" && process.env.APPDATA) {
+    candidates.add(path.join(process.env.APPDATA, "Cemu", "settings.xml"));
+  }
+  // 3. Linux native + flatpak.
+  candidates.add(path.join(os.homedir(), ".config", "Cemu", "settings.xml"));
+  candidates.add(
+    path.join(
+      os.homedir(),
+      ".var",
+      "app",
+      "info.cemu.Cemu",
+      "config",
+      "Cemu",
+      "settings.xml"
+    )
+  );
+
+  // Write to the portable path (create if missing) plus any OTHER candidate
+  // that already exists (so a pre-existing user Cemu is updated too, but we
+  // don't spam empty config dirs for emulators the user doesn't have).
+  const portable = executablePath
+    ? path.join(cemuDataDir(path.dirname(executablePath)), "settings.xml")
+    : null;
+  for (const cfgPath of candidates) {
+    if (cfgPath === portable || existsSync(cfgPath)) {
+      try {
+        writeCemuGamePaths(cfgPath, romFolders);
+      } catch {
+        /* best-effort per file */
+      }
+    }
+  }
 }
 
 function configureDolphin(romFolders: string[]): void {
@@ -421,7 +462,7 @@ export async function syncEmulatorRomPaths(
         configureRpcs3(romPaths, config.executablePath);
         break;
       case "wiiu":
-        configureCemu(romPaths);
+        configureCemu(romPaths, config.executablePath);
         break;
       case "wii":
       case "gc":

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeftIcon, ChevronRightIcon } from "@primer/octicons-react";
 import Skeleton from "react-loading-skeleton";
@@ -6,12 +6,16 @@ import Skeleton from "react-loading-skeleton";
 import { GameCard } from "@renderer/components";
 import type { ShopAssets } from "@types";
 import { buildGameDetailsPath } from "@renderer/helpers";
+import { getGameOrigin } from "@renderer/helpers/game-origin";
+import { useAppSelector } from "@renderer/hooks";
 import {
   type FeedbackKind,
   feedbackKey,
   getFeedbackMap,
   setFeedback,
 } from "@renderer/pages/home/recommendation-feedback";
+
+const EMPTY_SHOPS: string[] = [];
 
 import { useDragScroll } from "./use-drag-scroll";
 import "./category-row.scss";
@@ -36,6 +40,22 @@ export const CategoryRow = memo(function CategoryRow({
 }: Readonly<Props>) {
   const navigate = useNavigate();
   const { ref, dragProps } = useDragScroll<HTMLDivElement>();
+
+  // Subscribe to the library ONCE per row (not once per card) and derive the
+  // synced-shop icons for just the games in this row. Rebuilds only when the
+  // library reference actually changes.
+  const library = useAppSelector((state) => state.library.value);
+  const ownedShopsByObjectId = useMemo(() => {
+    const wanted = new Set(games.map((g) => g.objectId));
+    const map = new Map<string, string[]>();
+    for (const g of library) {
+      if (!wanted.has(g.objectId) || getGameOrigin(g) !== "sync") continue;
+      const list = map.get(g.objectId);
+      if (list) list.push(g.shop);
+      else map.set(g.objectId, [g.shop]);
+    }
+    return map;
+  }, [library, games]);
 
   const [feedback, setFeedbackState] = useState<Map<string, FeedbackKind>>(
     new Map()
@@ -133,6 +153,9 @@ export const CategoryRow = memo(function CategoryRow({
                 key={`${game.shop}-${game.objectId}`}
                 game={game}
                 className="category-row__card"
+                ownedShops={
+                  ownedShopsByObjectId.get(game.objectId) ?? EMPTY_SHOPS
+                }
                 onCardClick={handleCardClick}
                 onCardFeedback={enableFeedback ? handleFeedback : undefined}
                 feedback={

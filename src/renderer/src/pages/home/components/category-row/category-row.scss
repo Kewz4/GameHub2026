@@ -4,6 +4,17 @@
   gap: 12px;
   outline: none;
 
+  // Skip layout/paint for rows that are scrolled off-screen. The home screen
+  // stacks up to ~9 card rows (Recommended, 3× Because-you-played, Recommended
+  // classics, Hot, Weekly, Achievements, Classics), each with ~24 cards — well
+  // over 200 cards. Without this the browser lays out and paints ALL of them at
+  // once, which is the main cause of the home-page jank. `content-visibility`
+  // lets the compositor skip everything below the fold until it's scrolled near,
+  // and `contain-intrinsic-size` reserves the right scroll height so the bar
+  // doesn't jump. Roughly: title (~30px) + gap + card (180px) ≈ 230px tall.
+  content-visibility: auto;
+  contain-intrinsic-size: auto 230px;
+
   &:focus-visible {
     // Subtle affordance that the row has keyboard focus (arrows scroll it).
     .category-row__title {
