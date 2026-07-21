@@ -110,14 +110,33 @@ const confirmScanGames = async (
         const objectId = romObjectId(system, game.title ?? "Unknown Game");
         const gameKey = levelKeys.game("launchbox", objectId);
 
+        // The ROM is bound as a DISC, not as `executablePath`. A launchbox game
+        // launches through its emulator (openClassicsGame → spawn emulator with
+        // the ROM + core args); leaving executablePath set to the raw ROM made
+        // the library Play button shell-open the file (the Windows "Select an
+        // app to open this .gbc file" dialog) instead. Mirror the downloaded-ROM
+        // binding (bind-downloaded-rom.ts), which deliberately leaves it null.
+        const disc = {
+          path: game.executablePath,
+          label: path.basename(game.executablePath),
+          fileName: path.basename(game.executablePath),
+        };
+
         const existing = await gamesSublevel.get(gameKey).catch(() => null);
         if (existing) {
-          // Already in library (maybe soft-deleted) — resurrect.
+          // Already in library (maybe soft-deleted) — resurrect and (re)bind the
+          // ROM as a disc so it launches via the emulator.
           await gamesSublevel.put(gameKey, {
             ...existing,
             isDeleted: false,
             isInstalledLocally: true,
-            executablePath: game.executablePath,
+            executablePath: null,
+            platform: existing.platform ?? platform,
+            discs:
+              existing.discs && existing.discs.length > 0
+                ? existing.discs
+                : [disc],
+            selectedDiscPath: existing.selectedDiscPath ?? game.executablePath,
             addedToLibraryAt: existing.addedToLibraryAt ?? new Date(),
           });
         } else {
@@ -134,14 +153,8 @@ const confirmScanGames = async (
             lastTimePlayed: null,
             addedToLibraryAt: new Date(),
             platform,
-            executablePath: game.executablePath,
-            discs: [
-              {
-                path: game.executablePath,
-                label: path.basename(game.executablePath),
-                fileName: path.basename(game.executablePath),
-              },
-            ],
+            executablePath: null,
+            discs: [disc],
             selectedDiscPath: game.executablePath,
             isInstalledLocally: true,
             libraryOrigin: "custom" as const,

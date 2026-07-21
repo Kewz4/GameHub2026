@@ -4,7 +4,10 @@ import { cleanGameFolderName } from "./clean-game-folder-name";
 import { getExeGameTitle } from "./exe-metadata";
 import { logger } from "@main/services/logger";
 import { KNOWN_BINARIES } from "@main/services/emulators/known-binaries";
-import { parseRomFilename, romContentType } from "@main/services/emulators/parse-rom-filename";
+import {
+  parseRomFilename,
+  romContentType,
+} from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem } from "@types";
 
 /**
@@ -452,6 +455,75 @@ const DISC_BASED_SYSTEMS = new Set<EmulatorSystem>([
   "wiiu",
 ]);
 
+// ─── Folder-format / companion guards (Wii U, 3DS decrypted dumps) ───────────
+// The recursive walk below would otherwise list every internal file of a
+// folder-format title as its own "game": the `content\*.app` content chunks,
+// the `code\*.rpx`, files inside `(Update)`/`(DLC)` sibling folders, and Cemu's
+// own mlc01/graphicPacks scaffolding. These mirror the guards already used by
+// the hardened scan-rom-folder.ts, ported here for the selective-scan path.
+
+/** Cemu-managed folders that are never real game folders. */
+const CEMU_INTERNAL_DIRS = new Set([
+  "mlc01",
+  "graphicpacks",
+  "shadercache",
+  "controllerprofiles",
+  "gameprofiles",
+  "cafelibs",
+]);
+
+/** Wii U folder-format subdirs that hold content chunks / metadata, not a
+ * launchable ROM. The launch target lives in `code` (the `.rpx`), so `content`
+ * and `meta` files must never be surfaced as games. */
+const FOLDER_FORMAT_CONTENT_DIRS = new Set(["content", "meta"]);
+
+/** A pure 8- or 16-hex folder name is a Wii U title-id segment (Cemu-internal
+ * mlc path or a meta-less CDecrypt/NUSPacker dump), never a real game folder. */
+const isTitleIdFolderName = (name: string): boolean =>
+  /^[0-9a-f]{8}$/i.test(name) || /^[0-9a-f]{16}$/i.test(name);
+
+/** A `.app` whose basename is pure hex (e.g. `00000004.app`, `0000000A.app`)
+ * is a Wii U/NUS content chunk — encrypted title content, never a standalone
+ * game. (These also collide with 3DS's `.app` mapping, flooding the scan.) */
+const isNusContentChunk = (fileName: string): boolean =>
+  /^[0-9a-f]+\.app$/i.test(fileName);
+
+/**
+ * True when a discovered ROM path is actually an internal/companion file that
+ * must not be listed as its own game: anything under a Cemu-internal folder, a
+ * bare title-id folder, an `(Update)`/`(DLC)` companion folder, or a folder-
+ * format `content`/`meta` chunk directory. `root` is the scan root so we only
+ * inspect ancestors within the scanned tree.
+ */
+function isNonGameRomPath(
+  fullPath: string,
+  fileName: string,
+  root: string
+): boolean {
+  if (isNusContentChunk(fileName)) return true;
+  const rootLower = root.toLowerCase();
+  // Inspect ancestor directory segments, but only WITHIN the scan root (never
+  // the fixed root names like "Emulator Games" themselves, or a user folder
+  // coincidentally named "content" above the scanned tree).
+  let dir = path.dirname(fullPath);
+  let guard = 0;
+  while (guard++ < 40 && dir.toLowerCase().startsWith(rootLower)) {
+    if (dir.toLowerCase() === rootLower) break;
+    const seg = path.basename(dir);
+    const segLower = seg.toLowerCase();
+    if (CEMU_INTERNAL_DIRS.has(segLower)) return true;
+    if (FOLDER_FORMAT_CONTENT_DIRS.has(segLower)) return true;
+    if (isTitleIdFolderName(seg)) return true;
+    // `(Update)`/`(DLC)` (and any tagged companion) folder → romContentType
+    // returns "update"/"dlc" for the folder name; only "game" folders pass.
+    if (romContentType(seg) !== "game") return true;
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // reached the drive root
+    dir = parent;
+  }
+  return false;
+}
+
 export async function discoverRomFiles(
   extraDirs: string[] = [],
   onProgress?: (current: number, total: number, title: string) => void
@@ -513,6 +585,10 @@ export async function discoverRomFiles(
       if (seenPaths.has(fullPathLower)) continue;
       // Skip files inside store-managed paths (Steam/Epic/etc.).
       if (isStoreManagedPath(fullPath)) continue;
+      // Skip folder-format internal/companion files: Wii U content chunks
+      // (`content\*.app`), title-id/mlc01 scaffolding, and `(Update)`/`(DLC)`
+      // folders — none are standalone games.
+      if (isNonGameRomPath(fullPath, entry.name, root)) continue;
 
       // Determine the system: prefer the folder name, fall back to unique ext.
       const parentFolderName = path.basename(parentPath);

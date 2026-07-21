@@ -30,7 +30,14 @@ export function useGameActions(game: LibraryGame) {
   const [creatingShortcut, setCreatingShortcut] = useState(false);
   const [isGameRunning, setIsGameRunning] = useState(false);
 
-  const canPlay = Boolean(game.executablePath);
+  // Console/emulated (launchbox) games launch through their emulator and have
+  // no executablePath — they're playable once the ROM is bound as a disc. They
+  // must route to openClassicsGame (spawn emulator + core), NOT openGame (which
+  // shell-opens the raw ROM → the Windows "open with" dialog).
+  const isClassics =
+    game.shop === "launchbox" &&
+    Boolean(game.selectedDiscPath || (game.discs && game.discs.length > 0));
+  const canPlay = isClassics || Boolean(game.executablePath);
   const isDeleting = isGameDeleting(game.id);
   const isGameDownloading =
     game.download?.status === "active" && lastPacket?.gameId === game.id;
@@ -82,12 +89,17 @@ export function useGameActions(game: LibraryGame) {
     }
 
     try {
-      await window.electron.openGame(
-        game.shop,
-        game.objectId,
-        game.executablePath!,
-        game.launchOptions
-      );
+      if (isClassics) {
+        // Emulator launch (resolves the binary + core args, spawns with the ROM).
+        await window.electron.openClassicsGame(game.shop, game.objectId);
+      } else {
+        await window.electron.openGame(
+          game.shop,
+          game.objectId,
+          game.executablePath!,
+          game.launchOptions
+        );
+      }
     } catch (error) {
       showErrorToast("Failed to start game");
       logger.error("Failed to start game", error);
