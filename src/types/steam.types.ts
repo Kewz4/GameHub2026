@@ -54,8 +54,26 @@ export interface SteamAppDetails {
     coming_soon: boolean;
     date: string;
   };
+  /** Minimum age Steam gates the store page behind (0 when ungated). */
+  required_age?: number | string;
+  /**
+   * Per-agency age ratings Steam returns for the `cc`/region requested (only
+   * populated for some games/regions). Agency keys vary (esrb, pegi, usk, oflc,
+   * dejus, steam_germany, …); each carries at least a `rating` code.
+   */
+  ratings?: Record<
+    string,
+    {
+      rating?: string;
+      descriptors?: string;
+      required_age?: string;
+      use_age_gate?: string;
+    }
+  >;
   content_descriptors: {
     ids: number[];
+    /** Free-text mature-content notes, when present. */
+    notes?: string | null;
   };
 }
 

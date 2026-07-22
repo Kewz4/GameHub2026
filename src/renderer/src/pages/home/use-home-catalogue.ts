@@ -137,6 +137,40 @@ function heroFallbackFrom(games: ShopAssets[]): TrendingGame[] {
     }));
 }
 
+/**
+ * The hero's fallback slides (topped up from Hot/Weekly) carry no description —
+ * only `/catalogue/featured` does — so every slide but the first showed just a
+ * logo/title. AFTER first paint, fetch a short description for each hero slide
+ * that lacks one (bounded concurrency; results are cached by the shop-details
+ * store, so it's a one-time cost per game and never blocks the initial render).
+ */
+async function enrichHeroDescriptions(
+  hero: TrendingGame[],
+  language: string
+): Promise<TrendingGame[]> {
+  const missing = hero
+    .map((game, index) => ({ game, index }))
+    .filter(({ game }) => !game.description?.trim());
+  if (!missing.length) return hero;
+
+  const next = [...hero];
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < missing.length) {
+      const { game, index } = missing[cursor++];
+      const details = await window.electron
+        .getGameShopDetails(game.objectId, game.shop, language)
+        .catch(() => null);
+      const desc = details?.short_description || details?.about_the_game || "";
+      if (desc.trim()) next[index] = { ...next[index], description: desc };
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(3, missing.length) }, worker)
+  );
+  return next;
+}
+
 async function getClassics(): Promise<ShopAssets[]> {
   // Randomized, mixed-platform, artwork-only console games — a fresh shuffle
   // each load. The row hides itself when this is empty (see category-row).
@@ -627,6 +661,23 @@ const recommendationSessionCache = new Map<string, RecommendationResult>();
  */
 let recommendedClassicsCache: ShopAssets[] | null = null;
 
+/**
+ * Session cache for the phase-1 "fast batch" (featured/hot/weekly/achievements).
+ * Without it, every navigation back to home re-fires those four network calls.
+ * Short TTL so content still refreshes; `classics` is deliberately NOT cached
+ * here so its random shuffle stays fresh on each visit.
+ */
+const FAST_BATCH_TTL_MS = 5 * 60 * 1000;
+interface FastBatchCache {
+  language: string;
+  at: number;
+  featured: TrendingGame[];
+  hot: ShopAssets[];
+  weekly: ShopAssets[];
+  achievements: ShopAssets[];
+}
+let fastBatchCache: FastBatchCache | null = null;
+
 export function useHomeCatalogue(language: string) {
   const [catalogue, setCatalogue] = useState<HomeCatalogue>(EMPTY_CATALOGUE);
   const [isLoading, setIsLoading] = useState(true);
@@ -704,22 +755,52 @@ export function useHomeCatalogue(language: string) {
             });
 
       // Phase 1: the fast batch — one request each. This is what makes home
-      // feel instant again; neither recommender is awaited here.
+      // feel instant again; neither recommender is awaited here. Reuse the
+      // session cache (if fresh) so navigating back to home doesn't re-fire the
+      // four category calls; `classics` is always re-fetched for a fresh shuffle.
+      const cachedFast =
+        fastBatchCache &&
+        fastBatchCache.language === language &&
+        Date.now() - fastBatchCache.at < FAST_BATCH_TTL_MS
+          ? fastBatchCache
+          : null;
+
       const [featured, hot, weekly, achievements, classics] = await Promise.all(
         [
-          getFeatured(language).catch(() => [] as TrendingGame[]),
-          getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Weekly, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Achievements, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
+          cachedFast
+            ? Promise.resolve(cachedFast.featured)
+            : getFeatured(language).catch(() => [] as TrendingGame[]),
+          cachedFast
+            ? Promise.resolve(cachedFast.hot)
+            : getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
+                () => [] as ShopAssets[]
+              ),
+          cachedFast
+            ? Promise.resolve(cachedFast.weekly)
+            : getCategory(CatalogueCategory.Weekly, downloadSourceIds).catch(
+                () => [] as ShopAssets[]
+              ),
+          cachedFast
+            ? Promise.resolve(cachedFast.achievements)
+            : getCategory(
+                CatalogueCategory.Achievements,
+                downloadSourceIds
+              ).catch(() => [] as ShopAssets[]),
           getClassics().catch(() => [] as ShopAssets[]),
         ]
       );
+
+      // Cache the four category lists (not classics) for quick return visits.
+      if (!cachedFast && (featured.length || hot.length || weekly.length)) {
+        fastBatchCache = {
+          language,
+          at: Date.now(),
+          featured,
+          hot,
+          weekly,
+          achievements,
+        };
+      }
 
       // Keep the hero carousel populated with MULTIPLE slides: `/catalogue/
       // featured` on this fork's backend often returns empty or just a single
@@ -795,6 +876,20 @@ export function useHomeCatalogue(language: string) {
           return fresh;
         });
       });
+
+      // Fill in descriptions for hero slides that came from the Hot/Weekly
+      // top-up (those have none) so every slide shows text, not just the first.
+      // Post-paint, cached, and persisted so the next launch is instant.
+      if (resolvedFeatured.some((g) => !g.description?.trim())) {
+        enrichHeroDescriptions(resolvedFeatured, language).then((withDesc) => {
+          if (!isMounted) return;
+          setCatalogue((prev) => {
+            const fresh: HomeCatalogue = { ...prev, featured: withDesc };
+            persistSnapshot(fresh);
+            return fresh;
+          });
+        });
+      }
     }
 
     loadCatalogue()
