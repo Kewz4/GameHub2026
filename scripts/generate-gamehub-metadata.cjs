@@ -728,40 +728,37 @@ async function processSystem(system, opts) {
         didWork = true;
       }
 
-      // IGN backfill: only re-fetch IGN for entries missing screenshots /
-      // developers / publishers. Skips SGDB + IGDB entirely (art + description
-      // already resolved). Used to fill gaps from an interrupted run.
+      // IGN backfill: re-fetch IGN for EVERY entry and OVERWRITE the
+      // IGN-sourced fields (screenshots/devs/pubs/ageRating/ratingScore/series).
+      // This is the migration path off RAWG — cached entries already carry RAWG
+      // screenshots/devs/pubs, so a fill-only pass would skip them all and
+      // replace nothing. Art (SGDB) + description/genres (IGDB) are left intact,
+      // so this is far cheaper than a full --force re-resolve. On an IGN miss
+      // the existing values are kept (some data beats none for games not on
+      // IGN) — use --force for a hard purge.
       if (opts.ignBackfill) {
-        const hasIgn =
-          (existing.screenshots && existing.screenshots.length > 0) ||
-          (existing.developers && existing.developers.length > 0) ||
-          (existing.publishers && existing.publishers.length > 0);
-        if (!hasIgn) {
-          await waitForRamIfNeeded();
-          const ign = await ignFetch(cleanTitle(title) || title).catch(
-            () => null
-          );
-          if (ign) {
-            if (ign.screenshots?.length) existing.screenshots = ign.screenshots;
-            if (ign.developers?.length) existing.developers = ign.developers;
-            if (ign.publishers?.length) existing.publishers = ign.publishers;
-            if (ign.ageRating) existing.ageRating = ign.ageRating;
-            if (typeof ign.ratingScore === "number")
-              existing.ratingScore = ign.ratingScore;
-            if (!existing.series && ign.series) existing.series = ign.series;
-            // Don't overwrite an IGDB description.
-            if (!existing.description && ign.description)
-              existing.description = ign.description;
-          }
-          backfills.push(
-            ign
-              ? `ign(${ign.screenshots?.length ?? 0}ss,${
-                  ign.developers?.length ?? 0
-                }dev,${ign.ageRating ? "age" : "-"})`
-              : "ign-miss"
-          );
-          didWork = true;
+        await waitForRamIfNeeded();
+        const ign = await ignFetch(cleanTitle(title) || title).catch(() => null);
+        if (ign) {
+          if (ign.screenshots?.length) existing.screenshots = ign.screenshots;
+          if (ign.developers?.length) existing.developers = ign.developers;
+          if (ign.publishers?.length) existing.publishers = ign.publishers;
+          if (ign.ageRating) existing.ageRating = ign.ageRating;
+          if (typeof ign.ratingScore === "number")
+            existing.ratingScore = ign.ratingScore;
+          if (ign.series) existing.series = ign.series;
+          // Only fill a description when IGDB never provided one.
+          if (!existing.description && ign.description)
+            existing.description = ign.description;
         }
+        backfills.push(
+          ign
+            ? `ign(${ign.screenshots?.length ?? 0}ss,${
+                ign.developers?.length ?? 0
+              }dev,${ign.ageRating ? ign.ageRating.name : "-"})`
+            : "ign-miss"
+        );
+        didWork = true;
       }
 
       if (didWork) {
