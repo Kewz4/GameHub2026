@@ -4,8 +4,9 @@ import type { ConsoleGameMetadata, EmulatorSystem } from "@types";
 
 /**
  * Pre-generated metadata for a console/emulated game, sourced from the hosted
- * `sources/gamehub-meta/<system>.json` dataset (SteamGridDB art + IGDB info).
- * Stored locally so console games render rich cards without live API calls.
+ * `sources/gamehub-meta/<system>.json` dataset (SteamGridDB art + IGDB info +
+ * IGN + LaunchBox Games DB). Stored locally so console games render rich cards
+ * without live API calls.
  */
 export interface GameHubMetaEntry {
   title: string;
@@ -18,6 +19,9 @@ export interface GameHubMetaEntry {
   logoImageUrl: string | null;
   /** Square game icon (SteamGridDB). Optional: absent in pre-icon datasets. */
   iconUrl?: string | null;
+  /** LaunchBox 3-D box render (falls back to a flat front box). Used as the
+   *  details "feature" art for emulated games. Optional: absent pre-LaunchBox. */
+  boxImageUrl?: string | null;
   /** Screenshots for the game gallery (IGN). */
   screenshots?: string[];
   /** Trailer/video URLs (IGN). */

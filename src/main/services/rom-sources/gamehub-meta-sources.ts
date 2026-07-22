@@ -12,10 +12,18 @@ import {
 } from "@main/level/sublevels/gamehub-meta";
 
 /**
- * Metadata store schema version. Bump when the key normalization changes so
- * existing installs purge and re-seed instead of keeping unreachable keys.
+ * Metadata store schema version. Bump when the key normalization OR the dataset
+ * content changes so existing installs purge and re-seed instead of serving
+ * stale entries.
  * v2: article-insensitive keys (re-derived from each entry's raw title —
  *     the JSON's own keys were generated with the old normalization).
+ *
+ * IMPORTANT: bump this ONLY in the same release that ships the regenerated
+ * dataset. Re-seed clears the store, then per-system sync is skipped for any
+ * system that still has entries — so a version bump that ships BEFORE the new
+ * JSON would re-seed the OLD data and then never pick up the new data (the next
+ * release would see the same version and skip). When the IGN + LaunchBox
+ * dataset is regenerated and committed, bump this to 6 in that same commit.
  */
 const META_VERSION = 5;
 const META_VERSION_KEY = "gamehubMetaVersion";

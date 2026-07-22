@@ -182,7 +182,15 @@ const getGameShopDetails = async (
     };
 
     // Map meta screenshots into the SteamScreenshot shape the gallery expects.
-    const screenshots = (meta?.screenshots ?? []).map((url, i) => ({
+    // Lead with the LaunchBox 3-D box render (when present and not already the
+    // cover) so emulated games "feature" it, then the gameplay screenshots.
+    const galleryUrls = [
+      ...(meta?.boxImageUrl && meta.boxImageUrl !== assets.coverImageUrl
+        ? [meta.boxImageUrl]
+        : []),
+      ...(meta?.screenshots ?? []),
+    ];
+    const screenshots = galleryUrls.map((url, i) => ({
       id: i,
       path_thumbnail: url,
       path_full: url,
