@@ -66,23 +66,26 @@ export async function getConsoleGameMetadata(
     ? await gamehubMetaSublevel.get(metaKey).catch(() => null)
     : null;
 
-  // HLTB playtimes come from the hosted dataset (populated independently of the
-  // IGDB `extraMetadata` cache), so they're merged onto the result at read-time
-  // rather than baked into the cached IGDB blob — that way playtimes added to a
-  // later dataset show up without invalidating a still-good IGDB cache.
+  // HLTB playtimes and the age rating come from the hosted dataset (populated
+  // independently of the IGDB `extraMetadata` cache), so they're merged onto the
+  // result at read-time rather than baked into the cached IGDB blob — that way
+  // fields added to a later dataset show up without invalidating a good cache.
   const hltb = entry?.hltb ?? null;
-  const withHltb = (
+  const ageRating = entry?.ageRating ?? null;
+  const withExtras = (
     m: ConsoleGameMetadata | null
   ): ConsoleGameMetadata | null => {
-    if (m) return { ...m, hltb };
-    return hltb ? { ...EMPTY_CONSOLE_METADATA, hltb } : null;
+    if (m) return { ...m, hltb, ageRating };
+    return hltb || ageRating
+      ? { ...EMPTY_CONSOLE_METADATA, hltb, ageRating }
+      : null;
   };
 
   if (
     entry?.extraMetadata &&
     entry.extraMetadataVersion === METADATA_SCHEMA_VERSION
   ) {
-    const result = withHltb(entry.extraMetadata);
+    const result = withExtras(entry.extraMetadata);
     inMemory.set(key, result);
     return result;
   }
@@ -92,7 +95,7 @@ export async function getConsoleGameMetadata(
     const game = await igdb.searchGame(igdbQueryTitle(title), platformId);
     const metadata = game ? extractConsoleMetadata(game) : null;
 
-    const result = withHltb(metadata);
+    const result = withExtras(metadata);
     inMemory.set(key, result);
 
     // Persist a successful lookup back into gamehub-meta (best-effort).

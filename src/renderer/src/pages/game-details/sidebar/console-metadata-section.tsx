@@ -197,6 +197,12 @@ export function ConsoleMetadataSection() {
         { label: "Completionist", value: hltb.completionist },
       ].filter((r) => r.value != null) as { label: string; value: number }[])
     : [];
+  const ageRating = meta?.ageRating ?? null;
+  const ageRatingLabel = ageRating
+    ? ageRating.system
+      ? `${ageRating.system} ${ageRating.name}`
+      : ageRating.name
+    : null;
 
   const nothingToShow =
     basics.length === 0 &&
@@ -206,7 +212,8 @@ export function ConsoleMetadataSection() {
     languages.length === 0 &&
     !series?.titles.length &&
     boxArt.length === 0 &&
-    hltbRows.length === 0;
+    hltbRows.length === 0 &&
+    !ageRatingLabel;
 
   if (nothingToShow) return null;
 
@@ -225,7 +232,7 @@ export function ConsoleMetadataSection() {
         </SidebarSection>
       )}
 
-      {(hasScores || players || modes.length > 0) && (
+      {(hasScores || players || modes.length > 0 || ageRatingLabel) && (
         <SidebarSection title="Ratings & players">
           {hasScores && (
             <div className="console-meta__scores">
@@ -259,8 +266,14 @@ export function ConsoleMetadataSection() {
             </div>
           )}
 
-          {(players || modes.length > 0) && (
+          {(players || modes.length > 0 || ageRatingLabel) && (
             <ul className="console-meta__rows">
+              {ageRatingLabel ? (
+                <li className="console-meta__row">
+                  <span className="console-meta__key">Age rating</span>
+                  <span className="console-meta__value">{ageRatingLabel}</span>
+                </li>
+              ) : null}
               {players ? (
                 <li className="console-meta__row">
                   <span className="console-meta__key">Local players</span>

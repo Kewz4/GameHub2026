@@ -396,6 +396,9 @@ export interface ConsoleGameMetadata {
     mainExtra: number | null;
     completionist: number | null;
   } | null;
+  /** Content/age rating from the hosted dataset (IGN/LaunchBox), e.g.
+   *  { name: "M", system: "ESRB" }. */
+  ageRating?: { name: string; system: string | null } | null;
 }
 
 export interface UserStatsPercentile {
