@@ -493,14 +493,23 @@ const isNusContentChunk = (fileName: string): boolean =>
  * must not be listed as its own game: anything under a Cemu-internal folder, a
  * bare title-id folder, an `(Update)`/`(DLC)` companion folder, or a folder-
  * format `content`/`meta` chunk directory. `root` is the scan root so we only
- * inspect ancestors within the scanned tree.
+ * inspect ancestors within the scanned tree. `possibleSystems` is every system
+ * this file's extension could belong to (from ROM_EXTENSION_MAP) — the Cemu/
+ * Wii-U-only guards (mlc scaffolding, bare-hex title-id folders) are scoped to
+ * only fire when "wiiu" is among them, since other consoles also use bare-hex
+ * folder naming for their OWN title ids (Switch title ids are 16 hex chars
+ * too, and dumps are commonly organized in a folder named by that id — e.g.
+ * "0100152000022000\game.nsp" — which must not be mistaken for Wii U's mlc/
+ * NUSPacker layout and silently excluded).
  */
 function isNonGameRomPath(
   fullPath: string,
   fileName: string,
-  root: string
+  root: string,
+  possibleSystems: EmulatorSystem[]
 ): boolean {
   if (isNusContentChunk(fileName)) return true;
+  const couldBeWiiU = possibleSystems.includes("wiiu");
   const rootLower = root.toLowerCase();
   // Inspect ancestor directory segments, but only WITHIN the scan root (never
   // the fixed root names like "Emulator Games" themselves, or a user folder
@@ -511,11 +520,14 @@ function isNonGameRomPath(
     if (dir.toLowerCase() === rootLower) break;
     const seg = path.basename(dir);
     const segLower = seg.toLowerCase();
-    if (CEMU_INTERNAL_DIRS.has(segLower)) return true;
-    if (FOLDER_FORMAT_CONTENT_DIRS.has(segLower)) return true;
-    if (isTitleIdFolderName(seg)) return true;
+    if (couldBeWiiU) {
+      if (CEMU_INTERNAL_DIRS.has(segLower)) return true;
+      if (FOLDER_FORMAT_CONTENT_DIRS.has(segLower)) return true;
+      if (isTitleIdFolderName(seg)) return true;
+    }
     // `(Update)`/`(DLC)` (and any tagged companion) folder → romContentType
     // returns "update"/"dlc" for the folder name; only "game" folders pass.
+    // Not Wii-U-specific — applies to every system.
     if (romContentType(seg) !== "game") return true;
     const parent = path.dirname(dir);
     if (parent === dir) break; // reached the drive root
@@ -588,37 +600,39 @@ export async function discoverRomFiles(
       // Skip folder-format internal/companion files: Wii U content chunks
       // (`content\*.app`), title-id/mlc01 scaffolding, and `(Update)`/`(DLC)`
       // folders — none are standalone games.
-      if (isNonGameRomPath(fullPath, entry.name, root)) continue;
+      if (isNonGameRomPath(fullPath, entry.name, root, systems)) continue;
 
-      // Determine the system: prefer the folder name, fall back to unique ext.
+      // Determine the system. An UNAMBIGUOUS extension — one that maps to
+      // exactly one system and isn't separately flagged ambiguous (.pkg/.elf/
+      // .self are also used by non-ROM software) — is trusted directly from
+      // the file itself. Folder name is used ONLY to disambiguate a genuinely
+      // shared/ambiguous extension.
+      //
+      // Folder name must NEVER override an unambiguous extension: a folder
+      // grouped or named e.g. "GBA"/"Game Boy Advance" previously made every
+      // .gb/.gbc file found inside it register as system "gba" — wrong console
+      // badge, wrong RetroAchievements system id at launch (RALibretro then
+      // refuses to boot: "associated to the GameBoy console, but the emulator
+      // has initialized the GameBoy Advance console"), and achievements never
+      // resolving for the misidentified game.
       const parentFolderName = path.basename(parentPath);
-      let system: EmulatorSystem | null =
-        systemFromFolderName(parentFolderName);
+      let system: EmulatorSystem | null = null;
 
-      if (!system && systems.length === 1) {
-        // Unique extension — no ambiguity.
+      if (systems.length === 1 && !AMBIGUOUS_EXTENSIONS.has(ext)) {
         system = systems[0];
-      } else if (!system) {
-        // Shared extension and folder name gives no clue — try the grandparent
-        // folder too (e.g. "Emulator Games/PS3 Games/game.iso").
-        const grandparent = path.basename(path.dirname(parentPath));
-        system = systemFromFolderName(grandparent);
+      } else {
+        system = systemFromFolderName(parentFolderName);
+        if (!system) {
+          // Shared/ambiguous extension and the folder gives no clue — try the
+          // grandparent folder too (e.g. "Emulator Games/PS3 Games/game.iso").
+          const grandparent = path.basename(path.dirname(parentPath));
+          system = systemFromFolderName(grandparent);
+        }
       }
 
-      if (!system) {
-        // For ambiguous extensions (like .pkg which is also used by UE4/UE5
-        // games), require a matching folder name — never guess.
-        if (AMBIGUOUS_EXTENSIONS.has(ext)) continue;
-        continue;
-      }
-
-      // Skip ambiguous extensions unless the folder confirms the system.
-      // E.g. a .pkg file in a PS3 folder is a PS3 game, but a .pkg in
-      // "Hades II/Content/Packages" is a UE4 asset pack.
-      if (AMBIGUOUS_EXTENSIONS.has(ext)) {
-        const folderSystem = systemFromFolderName(parentFolderName);
-        if (!folderSystem) continue;
-      }
+      // No signal at all (ambiguous extension, no folder confirmation) —
+      // never guess.
+      if (!system) continue;
 
       // Minimum file size check — filter out tiny asset/patch files that
       // happen to share a ROM extension.

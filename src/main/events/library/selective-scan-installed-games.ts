@@ -161,6 +161,10 @@ const selectiveScanInstalledGames = async (
         title: existingGame.title,
         executablePath: rom.romPath,
         key: existingKey,
+        // Forward the freshly-detected system so confirmScanGames can correct
+        // a mis-detected platform on an already-library entry (e.g. a Game
+        // Boy/Color ROM a pre-fix scan stamped as Game Boy Advance).
+        emulatorSystem: rom.system,
       });
       logger.info(
         `[SelectiveScan] Matched existing ROM: ${existingGame.title} → ${rom.romPath}`

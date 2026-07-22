@@ -65,6 +65,45 @@ jobs:
         with:
           python-version: "3.9"
 
+      # Cache the Cargo registry + our own native addon's incremental build
+      # output. Keyed on its Cargo.lock, so an unchanged addon skips almost
+      # all of `cargo build` (postinstall's build:native, re-run again by
+      # build:win/mac/linux) instead of recompiling from scratch every run.
+      - name: Cache Rust dependencies (hydra-native)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/hydra-native/target
+          key: ${{ runner.os }}-cargo-hydra-native-${{ hashFiles('native/hydra-native/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-hydra-native-
+
+      # UKMM is a full third-party Rust GUI app cloned + compiled from scratch
+      # on every build, even though it's pinned to a fixed upstream commit that
+      # only changes when scripts/build-ukmm.cjs itself is edited. Caching the
+      # OUTPUT binary (not the build) lets build-ukmm.cjs's own idempotency
+      # check (`if outPath already exists, skip`) short-circuit the entire
+      # clone/patch/compile — this is the single biggest Windows build cost.
+      - name: Cache UKMM binary (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: binaries/ukmm.exe
+          key: ${{ runner.os }}-ukmm-${{ hashFiles('scripts/build-ukmm.cjs', 'native/ukmm/ukmm-headless-install-bnp.patch') }}
+
+      # Cache node_modules itself (not just yarn's download cache, which
+      # setup-node's `cache: yarn` above already covers) so an unchanged
+      # yarn.lock skips most of the package extract/link work too.
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
+
       - name: Install Node dependencies
         run: yarn --frozen-lockfile
 
