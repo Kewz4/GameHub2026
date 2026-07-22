@@ -37,6 +37,13 @@ export interface GameHubMetaEntry {
   ratingScore?: number;
   /** Franchise/series name (IGN). */
   series?: string;
+  /** HowLongToBeat playtimes in hours. Any field is null when HLTB has no time
+   *  for that category: main story / main + extras / completionist. */
+  hltb?: {
+    main: number | null;
+    mainExtra: number | null;
+    completionist: number | null;
+  };
   /**
    * Extended IGDB metadata (scores, players, languages, series, box art) for
    * the details page. Cached here after the first live lookup. `undefined`

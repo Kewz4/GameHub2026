@@ -28,6 +28,19 @@ const inMemory = new Map<string, ConsoleGameMetadata | null>();
 // fallbacks for the "more from series" section.
 const METADATA_SCHEMA_VERSION = 2;
 
+/** All-empty metadata, used to carry HLTB playtimes for a game that has no IGDB
+ *  match (so the "How long to beat" panel still renders). */
+const EMPTY_CONSOLE_METADATA: ConsoleGameMetadata = {
+  criticScore: null,
+  userScore: null,
+  ratingCount: null,
+  gameModes: [],
+  maxLocalPlayers: null,
+  languages: [],
+  series: null,
+  boxArtUrls: [],
+};
+
 /**
  * Resolve the extended console metadata (scores, players, languages, series,
  * box art) for a title, IGDB-backed and cached. Returns null when IGDB has no
@@ -49,15 +62,29 @@ export async function getConsoleGameMetadata(
   const metaKey = system
     ? gamehubMetaKey(system as EmulatorSystem, normalizeMetaTitle(title))
     : null;
-  if (metaKey) {
-    const existing = await gamehubMetaSublevel.get(metaKey).catch(() => null);
-    if (
-      existing?.extraMetadata &&
-      existing.extraMetadataVersion === METADATA_SCHEMA_VERSION
-    ) {
-      inMemory.set(key, existing.extraMetadata);
-      return existing.extraMetadata;
-    }
+  const entry = metaKey
+    ? await gamehubMetaSublevel.get(metaKey).catch(() => null)
+    : null;
+
+  // HLTB playtimes come from the hosted dataset (populated independently of the
+  // IGDB `extraMetadata` cache), so they're merged onto the result at read-time
+  // rather than baked into the cached IGDB blob — that way playtimes added to a
+  // later dataset show up without invalidating a still-good IGDB cache.
+  const hltb = entry?.hltb ?? null;
+  const withHltb = (
+    m: ConsoleGameMetadata | null
+  ): ConsoleGameMetadata | null => {
+    if (m) return { ...m, hltb };
+    return hltb ? { ...EMPTY_CONSOLE_METADATA, hltb } : null;
+  };
+
+  if (
+    entry?.extraMetadata &&
+    entry.extraMetadataVersion === METADATA_SCHEMA_VERSION
+  ) {
+    const result = withHltb(entry.extraMetadata);
+    inMemory.set(key, result);
+    return result;
   }
 
   try {
@@ -65,11 +92,11 @@ export async function getConsoleGameMetadata(
     const game = await igdb.searchGame(igdbQueryTitle(title), platformId);
     const metadata = game ? extractConsoleMetadata(game) : null;
 
-    inMemory.set(key, metadata);
+    const result = withHltb(metadata);
+    inMemory.set(key, result);
 
     // Persist a successful lookup back into gamehub-meta (best-effort).
     if (metadata && metaKey) {
-      const existing = await gamehubMetaSublevel.get(metaKey).catch(() => null);
       await gamehubMetaSublevel
         .put(metaKey, {
           title,
@@ -80,14 +107,14 @@ export async function getConsoleGameMetadata(
           libraryImageUrl: null,
           libraryHeroImageUrl: null,
           logoImageUrl: null,
-          ...existing,
+          ...entry,
           extraMetadata: metadata,
           extraMetadataVersion: METADATA_SCHEMA_VERSION,
         })
         .catch(() => {});
     }
 
-    return metadata;
+    return result;
   } catch (err) {
     logger.log(`console-metadata: lookup failed: ${(err as Error).message}`);
     return null;

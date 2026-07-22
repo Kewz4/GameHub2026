@@ -389,6 +389,13 @@ export interface ConsoleGameMetadata {
   series: { name: string; titles: string[] } | null;
   /** Box-art / additional-artwork image URLs. */
   boxArtUrls: string[];
+  /** HowLongToBeat playtimes in hours (from the hosted dataset), when known:
+   *  main story / main + extras / completionist. */
+  hltb?: {
+    main: number | null;
+    mainExtra: number | null;
+    completionist: number | null;
+  } | null;
 }
 
 export interface UserStatsPercentile {

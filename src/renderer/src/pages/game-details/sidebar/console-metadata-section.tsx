@@ -76,6 +76,14 @@ function systemForResult(result: CatalogueSearchResult): EmulatorSystem | null {
 const scoreClass = (score: number) =>
   score >= 75 ? "high" : score >= 50 ? "medium" : "low";
 
+/** "12½ hours" / "1 hour" — HowLongToBeat's half-hour display grain. */
+const formatHours = (h: number) => {
+  const whole = Math.floor(h);
+  const half = h - whole >= 0.5;
+  if (whole === 0) return half ? "½ hour" : "<1 hour";
+  return `${whole}${half ? "½" : ""} ${whole === 1 && !half ? "hour" : "hours"}`;
+};
+
 /**
  * Extra metadata for console/emulated (launchbox) games: the basics that live
  * on `shopDetails` (genre/developer/publisher/release) plus IGDB-only data
@@ -181,6 +189,14 @@ export function ConsoleMetadataSection() {
   const languages = meta?.languages ?? [];
   const series = meta?.series;
   const boxArt = meta?.boxArtUrls ?? [];
+  const hltb = meta?.hltb ?? null;
+  const hltbRows = hltb
+    ? ([
+        { label: "Main Story", value: hltb.main },
+        { label: "Main + Extras", value: hltb.mainExtra },
+        { label: "Completionist", value: hltb.completionist },
+      ].filter((r) => r.value != null) as { label: string; value: number }[])
+    : [];
 
   const nothingToShow =
     basics.length === 0 &&
@@ -189,7 +205,8 @@ export function ConsoleMetadataSection() {
     modes.length === 0 &&
     languages.length === 0 &&
     !series?.titles.length &&
-    boxArt.length === 0;
+    boxArt.length === 0 &&
+    hltbRows.length === 0;
 
   if (nothingToShow) return null;
 
@@ -262,6 +279,21 @@ export function ConsoleMetadataSection() {
               )}
             </ul>
           )}
+        </SidebarSection>
+      )}
+
+      {hltbRows.length > 0 && (
+        <SidebarSection title="How long to beat">
+          <ul className="console-meta__rows">
+            {hltbRows.map((row) => (
+              <li key={row.label} className="console-meta__row">
+                <span className="console-meta__key">{row.label}</span>
+                <span className="console-meta__value">
+                  {formatHours(row.value)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </SidebarSection>
       )}
 

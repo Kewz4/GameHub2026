@@ -9,6 +9,7 @@
  *   - IGN metadata (screenshots, devs/pubs, age rating, review score, series)
  *   - LaunchBox Games DB (curated description/Overview, 3-D box render, true
  *     gameplay screenshots, ESRB rating; romhacks excluded via <ReleaseType>)
+ *   - HowLongToBeat (main / main+extras / completionist playtimes)
  * and writes a flat, GitHub-hostable dataset to
  * sources/gamehub-meta/<system>.json keyed by the SAME normalized title the
  * app uses at runtime. The app fetches these files raw from GitHub — no live
@@ -47,6 +48,7 @@
  *   --ign-backfill                        overwrite IGN-sourced fields
  *   --launchbox-backfill                  fill/upgrade from the LaunchBox index
  *   --launchbox-refresh                   force re-download of Metadata.zip
+ *   --hltb-backfill                       fill/overwrite HowLongToBeat playtimes
  *
  * The LaunchBox index is built once from the daily Metadata.zip and cached in
  * LAUNCHBOX_CACHE_DIR (default: <tmp>/gamehub-launchbox); it needs the system
@@ -1024,6 +1026,195 @@ function mergeScreens(a, b) {
   return [...new Set([...(a ?? []), ...(b ?? [])])].slice(0, 10);
 }
 
+// ---- HowLongToBeat (main / main+extra / completionist playtimes) ------------
+//
+// Mirrors the Playnite HowLongToBeat plugin's access path. HLTB has no public
+// API and actively fights scrapers: the POST search endpoint word rotates
+// (/api/search → /api/seek → /api/bleed …) and recent builds gate it behind a
+// per-session auth handshake. So we (1) discover the current endpoint from the
+// site's _app-*.js bundle, (2) best-effort fetch its /init auth token + key/val,
+// then (3) POST the search with those headers — the same dance the plugin (and
+// the maintained howlongtobeat libraries) do. Everything is best-effort: any
+// failure just yields no HLTB data for the run, it never blocks it. The
+// comp_main/comp_plus/comp_100 response fields are in seconds.
+
+const HLTB_BASE = "https://howlongtobeat.com";
+const HLTB_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept: "*/*",
+  Referer: `${HLTB_BASE}/`,
+  Origin: HLTB_BASE,
+};
+
+// Discovered once per run and reused for every title. undefined = not tried yet.
+let _hltbSession = undefined;
+
+/** GET text (not JSON) with the browser-like HLTB headers. */
+async function hltbText(url) {
+  try {
+    const res = await fetch(url, { headers: HLTB_HEADERS });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+/** Discover the current POST search endpoint (e.g. "/api/seek") from the
+ *  homepage's _app-*.js bundle. Falls back to "/api/search". */
+async function hltbDiscoverEndpoint() {
+  const html = await hltbText(`${HLTB_BASE}/`);
+  if (!html) return "/api/search";
+  const scripts = [...html.matchAll(/src="([^"]*_app-[^"]*\.js)"/g)].map(
+    (m) => m[1]
+  );
+  for (const src of scripts) {
+    const js = await hltbText(
+      src.startsWith("http") ? src : `${HLTB_BASE}${src}`
+    );
+    if (!js) continue;
+    // fetch("/api/<word>...", { … method:"POST" … })
+    const m = js.match(/fetch\(\s*["'`]\/api\/([a-zA-Z0-9_/]+)["'`]/);
+    if (m) return `/api/${m[1]}`;
+    // Some builds concatenate: "/api/".concat("word")
+    const m2 = js.match(
+      /\/api\/["'`]\s*\)?\s*\.concat\(\s*["'`]([a-zA-Z0-9_/]+)["'`]/
+    );
+    if (m2) return `/api/${m2[1]}`;
+  }
+  return "/api/search";
+}
+
+/** Best-effort auth handshake: GET <endpoint>/init for { token, *key*, *val* }
+ *  (recent HLTB builds require x-auth-token + x-hp-key/x-hp-val on the search). */
+async function hltbGetAuth(endpoint) {
+  const data = await fetchJson(`${HLTB_BASE}${endpoint}/init`, {
+    headers: HLTB_HEADERS,
+  }).catch(() => null);
+  if (!data || typeof data !== "object") return null;
+  // The init response carries a token plus a key/val pair whose VALUES become
+  // both the x-hp-key/x-hp-val headers and a body field: payload[key] = val
+  // (mirrors the maintained howlongtobeat clients / the Playnite plugin).
+  let token = null;
+  let key = null;
+  let val = null;
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v !== "string") continue;
+    if (/token/i.test(k) && !token) token = v;
+    else if (/key/i.test(k) && key == null) key = v;
+    else if (/val/i.test(k) && val == null) val = v;
+  }
+  if (!token && !key) return null;
+  return { token, key, val };
+}
+
+/** Discover the endpoint + auth once; cached in _hltbSession for the run. */
+async function ensureHltbSession() {
+  if (_hltbSession !== undefined) return _hltbSession;
+  const endpoint = await hltbDiscoverEndpoint();
+  const auth = await hltbGetAuth(endpoint).catch(() => null);
+  _hltbSession = { endpoint, auth };
+  process.stdout.write(
+    `  hltb: endpoint ${endpoint}${auth ? " (+auth)" : ""}\n`
+  );
+  return _hltbSession;
+}
+
+/** Build the search request body for a title (the plugin's payload shape). */
+function hltbBody(name, auth) {
+  const body = {
+    searchType: "games",
+    searchTerms: name.split(/\s+/).filter(Boolean),
+    searchPage: 1,
+    size: 20,
+    searchOptions: {
+      games: {
+        userId: 0,
+        platform: "",
+        sortCategory: "popular",
+        rangeCategory: "main",
+        rangeTime: { min: 0, max: 0 },
+        gameplay: { perspective: "", flow: "", genre: "", difficulty: "" },
+        rangeYear: { max: "", min: "" },
+        modifier: "",
+      },
+      users: { sortCategory: "postcount" },
+      lists: { sortCategory: "follows" },
+      filter: "",
+      sort: 0,
+      randomizer: 0,
+    },
+    useCache: true,
+  };
+  if (auth?.key && auth?.val != null) body[auth.key] = auth.val;
+  return body;
+}
+
+/** POST one search with a session; returns the data array or null. */
+async function hltbPost(name, session) {
+  const headers = { ...HLTB_HEADERS, "Content-Type": "application/json" };
+  if (session.auth?.token) headers["x-auth-token"] = session.auth.token;
+  if (session.auth?.key) headers["x-hp-key"] = session.auth.key;
+  if (session.auth?.val) headers["x-hp-val"] = session.auth.val;
+  const data = await fetchJson(`${HLTB_BASE}${session.endpoint}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(hltbBody(name, session.auth)),
+  }).catch(() => null);
+  return Array.isArray(data?.data) ? data.data : null;
+}
+
+/** Search HLTB and return the best-matching game row, or null. */
+async function hltbSearch(title) {
+  const session = await ensureHltbSession();
+  const name = cleanTitle(title) || title;
+  let rows = await hltbPost(name, session);
+  // Nothing back? The endpoint/token may have rotated mid-run — re-discover
+  // once and retry (the plugin's "auth fallback").
+  if (!rows || rows.length === 0) {
+    _hltbSession = undefined;
+    rows = await hltbPost(name, await ensureHltbSession());
+  }
+  if (!rows || rows.length === 0) return null;
+
+  const target = normalizeTitle(name);
+  const tTokens = tokenize(name);
+  let best = null;
+  let bestScore = Infinity;
+  for (const r of rows) {
+    const rn = r?.game_name || "";
+    if (!rn) continue;
+    const score =
+      normalizeTitle(rn) === target ? 0 : tokenSymDiff(tokenize(rn), tTokens);
+    if (score < bestScore) {
+      bestScore = score;
+      best = r;
+    }
+  }
+  // Require a close match — a wrong game's playtime is worse than none.
+  return best && bestScore <= 2 ? best : null;
+}
+
+/** Seconds → hours rounded to the nearest half hour (HLTB's display grain). */
+function hltbHours(sec) {
+  return typeof sec === "number" && sec > 0
+    ? Math.round((sec / 3600) * 2) / 2
+    : null;
+}
+
+/** Resolve HLTB playtimes: { main, mainExtra, completionist } in hours. */
+async function hltbFetch(title) {
+  const g = await hltbSearch(title).catch(() => null);
+  if (!g) return null;
+  const main = hltbHours(g.comp_main);
+  const mainExtra = hltbHours(g.comp_plus);
+  const completionist = hltbHours(g.comp_100);
+  if (main == null && mainExtra == null && completionist == null) return null;
+  return { main, mainExtra, completionist };
+}
+
 // ---- SteamGridDB -----------------------------------------------------------
 
 async function sgdbSearchId(title) {
@@ -1247,6 +1438,18 @@ async function processSystem(system, opts) {
         didWork = true;
       }
 
+      // HowLongToBeat backfill: fill/overwrite the playtimes on a cached entry.
+      // One network search per title (endpoint/auth discovered once per run).
+      if (opts.hltbBackfill) {
+        await waitForRamIfNeeded();
+        const hltb = await hltbFetch(cleanTitle(title) || title).catch(
+          () => null
+        );
+        if (hltb) existing.hltb = hltb;
+        backfills.push(hltb ? `hltb(${hltb.main ?? "-"}h)` : "hltb-miss");
+        didWork = true;
+      }
+
       if (didWork) {
         resolved++;
         process.stdout.write(
@@ -1263,11 +1466,13 @@ async function processSystem(system, opts) {
       await sleep(
         opts.ignBackfill
           ? 400
-          : opts.igdbBackfill
-            ? 280
-            : opts.launchboxBackfill
-              ? 0
-              : 120
+          : opts.hltbBackfill
+            ? 350
+            : opts.igdbBackfill
+              ? 280
+              : opts.launchboxBackfill
+                ? 0
+                : 120
       );
       continue;
     }
@@ -1279,15 +1484,16 @@ async function processSystem(system, opts) {
     // memory pressure (other scrapers, Playwright/Chrome), pause until it
     // recovers so we don't get OOM-killed mid-run.
     await waitForRamIfNeeded();
-    const [art, igdb, ign] = await Promise.all([
+    const [art, igdb, ign, hltb] = await Promise.all([
       sgdbArtwork(cleanTitle(title) || title).catch(() => null),
       igdbSearch(igdbTitle(title), platformId).catch(() => null),
       ignFetch(cleanTitle(title) || title).catch(() => null),
+      hltbFetch(cleanTitle(title) || title).catch(() => null),
     ]);
     // LaunchBox is a local index lookup (no network) — cheap, so no await.
     const lb = launchboxLookup(system, title);
 
-    if (art || igdb || ign || lb) {
+    if (art || igdb || ign || lb || hltb) {
       const igdbGenres = (igdb?.genres ?? []).map((g) => g.name);
       const mergedScreens = mergeScreens(lb?.screenshots, ign?.screenshots);
       games[key] = {
@@ -1325,6 +1531,8 @@ async function processSystem(system, opts) {
         ageRating: ign?.ageRating ?? lb?.esrb ?? undefined,
         ratingScore: ign?.ratingScore ?? undefined,
         series: ign?.series ?? undefined,
+        // HowLongToBeat playtimes (hours): main / main+extras / completionist.
+        hltb: hltb ?? undefined,
       };
       resolved++;
       const artParts = [];
@@ -1353,12 +1561,18 @@ async function processSystem(system, opts) {
       else if (lb?.boxFront) lbParts.push("box");
       if (lb?.screenshots?.length) lbParts.push(`${lb.screenshots.length}ss`);
       if (lb?.esrb) lbParts.push(lb.esrb.name);
+      const hltbParts = [];
+      if (hltb?.main != null) hltbParts.push(`${hltb.main}h`);
+      else if (hltb?.mainExtra != null) hltbParts.push(`${hltb.mainExtra}h+`);
+      else if (hltb?.completionist != null)
+        hltbParts.push(`${hltb.completionist}h*`);
       const tag =
         [
           artParts.length ? `art(${artParts.join(",")})` : null,
           igdbParts.length ? `igdb(${igdbParts.join(",")})` : null,
           ignParts.length ? `ign(${ignParts.join(",")})` : null,
           lbParts.length ? `lbox(${lbParts.join(",")})` : null,
+          hltbParts.length ? `hltb(${hltbParts.join(",")})` : null,
         ]
           .filter(Boolean)
           .join(" + ") || "partial";
@@ -1367,7 +1581,7 @@ async function processSystem(system, opts) {
       );
     } else {
       process.stdout.write(
-        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB, no IGN, no LaunchBox)\n`
+        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB, no IGN, no LaunchBox, no HLTB)\n`
       );
     }
 
@@ -1399,6 +1613,7 @@ async function main() {
   const ignBackfill = args.includes("--ign-backfill");
   const launchboxBackfill = args.includes("--launchbox-backfill");
   const launchboxRefresh = args.includes("--launchbox-refresh");
+  const hltbBackfill = args.includes("--hltb-backfill");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
@@ -1429,6 +1644,13 @@ async function main() {
     }
   }
 
+  // Warm the HLTB session (discover endpoint + auth once) up-front when this run
+  // will consume it — a --hltb-backfill, or any fresh/full run (the fresh path
+  // calls hltbFetch). Pure ign/igdb/launchbox backfills skip it.
+  const usesHltb =
+    hltbBackfill || (!ignBackfill && !igdbBackfill && !launchboxBackfill);
+  if (usesHltb) await ensureHltbSession().catch(() => null);
+
   // Load the checkpoint so a crash/resume skips already-completed systems
   // entirely (instead of re-reading games.json + re-checking every cached entry).
   const completed = loadCheckpoint();
@@ -1441,7 +1663,13 @@ async function main() {
   for (const system of targets) {
     // Skip systems already completed in a prior run (checkpoint). --force and
     // the backfill modes ignore the checkpoint so a re-resolve is still possible.
-    if (!force && !ignBackfill && !launchboxBackfill && completed.has(system)) {
+    if (
+      !force &&
+      !ignBackfill &&
+      !launchboxBackfill &&
+      !hltbBackfill &&
+      completed.has(system)
+    ) {
       process.stdout.write(`skip ${system}: already completed (checkpoint)\n`);
       continue;
     }
@@ -1452,6 +1680,7 @@ async function main() {
       revalidate,
       ignBackfill,
       launchboxBackfill,
+      hltbBackfill,
     });
     // Per-platform checkpoint save — even if the process crashes later,
     // we know this system's output file is complete and can be skipped.
