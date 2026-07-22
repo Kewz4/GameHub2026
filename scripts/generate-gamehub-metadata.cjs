@@ -49,6 +49,13 @@
  *   --launchbox-backfill                  fill/upgrade from the LaunchBox index
  *   --launchbox-refresh                   force re-download of Metadata.zip
  *   --hltb-backfill                       fill/overwrite HowLongToBeat playtimes
+ *   --hltb-probe                          diagnose the live HLTB endpoint, exit
+ *
+ * HLTB has no stable API (it rotates its endpoint word and, since the 2026 Ziff
+ * revamp, serves its frontend from a cross-origin "pogo" bundle). The generator
+ * auto-discovers a working /api search endpoint from the site's scripts and
+ * probes candidates until one returns data. If HLTB changes again: run
+ * `--hltb-probe` to see what's live, then pin it with env HLTB_SEARCH_URL=<url>.
  *
  * The LaunchBox index is built once from the daily Metadata.zip and cached in
  * LAUNCHBOX_CACHE_DIR (default: <tmp>/gamehub-launchbox); it needs the system
@@ -1062,35 +1069,71 @@ async function hltbText(url) {
   }
 }
 
-/** Discover the current POST search endpoint (e.g. "/api/seek") from the
- *  homepage's _app-*.js bundle. Falls back to "/api/search". */
-async function hltbDiscoverEndpoint() {
+// Historical/known search paths, tried after anything found in the JS bundles.
+// HLTB rotates this word (search → s → seek → find → ouch → bleed …) and, since
+// the 2026 Ziff Davis revamp, moved its frontend to a cross-origin "pogo" bundle
+// on cdn.ziffstatic.com — so the endpoint now lives in that bundle, not an
+// _app-*.js file. We therefore DISCOVER candidates from every script the page
+// loads and TRY each until one returns data, rather than guessing one path.
+const HLTB_DEFAULT_ENDPOINTS = [
+  "/api/search",
+  "/api/s/",
+  "/api/seek",
+  "/api/find",
+  "/api/ouch",
+  "/api/bleed",
+  "/api/lookup",
+  "/api/games",
+];
+
+/** Every <script src> the homepage loads, app/pogo/ziffstatic bundles first. */
+async function hltbScriptUrls() {
   const html = await hltbText(`${HLTB_BASE}/`);
-  if (!html) return "/api/search";
-  const scripts = [...html.matchAll(/src="([^"]*_app-[^"]*\.js)"/g)].map(
+  if (!html) return [];
+  const urls = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(
     (m) => m[1]
   );
-  for (const src of scripts) {
-    const js = await hltbText(
-      src.startsWith("http") ? src : `${HLTB_BASE}${src}`
-    );
-    if (!js) continue;
-    // fetch("/api/<word>...", { … method:"POST" … })
-    const m = js.match(/fetch\(\s*["'`]\/api\/([a-zA-Z0-9_/]+)["'`]/);
-    if (m) return `/api/${m[1]}`;
-    // Some builds concatenate: "/api/".concat("word")
-    const m2 = js.match(
-      /\/api\/["'`]\s*\)?\s*\.concat\(\s*["'`]([a-zA-Z0-9_/]+)["'`]/
-    );
-    if (m2) return `/api/${m2[1]}`;
-  }
-  return "/api/search";
+  const abs = urls.map((u) =>
+    u.startsWith("http") ? u : `${HLTB_BASE}${u.startsWith("/") ? "" : "/"}${u}`
+  );
+  const rank = (u) =>
+    /pogo|ziffstatic/i.test(u)
+      ? 0
+      : /_app-|app[.-]|main|chunk|index/i.test(u)
+        ? 1
+        : 2;
+  return [...new Set(abs)].sort((a, b) => rank(a) - rank(b));
 }
 
-/** Best-effort auth handshake: GET <endpoint>/init for { token, *key*, *val* }
+/** Scan the JS bundles for candidate /api/<word> search paths (and any absolute
+ *  howlongtobeat.com/api URLs, in case it moved off the apex host). */
+async function hltbBundleEndpoints() {
+  const found = [];
+  const push = (p) => {
+    if (p && !found.includes(p)) found.push(p);
+  };
+  for (const src of (await hltbScriptUrls()).slice(0, 10)) {
+    const js = await hltbText(src);
+    if (!js) continue;
+    for (const m of js.matchAll(
+      /["'`]\/api\/([a-zA-Z][a-zA-Z0-9_]*(?:\/[a-zA-Z0-9_]+)*)["'`]/g
+    )) {
+      push(`/api/${m[1]}`);
+    }
+    for (const m of js.matchAll(
+      /https?:\/\/[a-z0-9.-]*howlongtobeat\.com\/api\/[a-zA-Z0-9_/]+/g
+    )) {
+      push(m[0]);
+    }
+    if (found.length) break; // first bundle carrying /api refs is enough
+  }
+  return found;
+}
+
+/** Best-effort auth handshake: GET <searchUrl>/init for { token, *key*, *val* }
  *  (recent HLTB builds require x-auth-token + x-hp-key/x-hp-val on the search). */
-async function hltbGetAuth(endpoint) {
-  const data = await fetchJson(`${HLTB_BASE}${endpoint}/init`, {
+async function hltbGetAuth(searchUrl) {
+  const data = await fetchJson(`${searchUrl.replace(/\/$/, "")}/init`, {
     headers: HLTB_HEADERS,
   }).catch(() => null);
   if (!data || typeof data !== "object") return null;
@@ -1110,14 +1153,35 @@ async function hltbGetAuth(endpoint) {
   return { token, key, val };
 }
 
-/** Discover the endpoint + auth once; cached in _hltbSession for the run. */
+/**
+ * Resolve a working HLTB search session once per run: gather candidate endpoints
+ * (JS bundles first, then the known words), and probe each with a throwaway
+ * search until one returns data — that URL + its auth is cached. A hard override
+ * (env HLTB_SEARCH_URL) skips discovery entirely. `null` = none worked.
+ */
 async function ensureHltbSession() {
   if (_hltbSession !== undefined) return _hltbSession;
-  const endpoint = await hltbDiscoverEndpoint();
-  const auth = await hltbGetAuth(endpoint).catch(() => null);
-  _hltbSession = { endpoint, auth };
+  const override = process.env.HLTB_SEARCH_URL;
+  const candidates = override
+    ? [override]
+    : [...(await hltbBundleEndpoints()), ...HLTB_DEFAULT_ENDPOINTS];
+  const tried = [];
+  for (const ep of [...new Set(candidates)]) {
+    const url = ep.startsWith("http") ? ep : `${HLTB_BASE}${ep}`;
+    const auth = await hltbGetAuth(url).catch(() => null);
+    const session = { url, auth };
+    const rows = await hltbPost("Mario", session); // throwaway probe
+    tried.push(`${ep}${auth ? "+auth" : ""}${rows?.length ? "=OK" : ""}`);
+    if (rows && rows.length) {
+      _hltbSession = session;
+      process.stdout.write(`  hltb: using ${url}${auth ? " (+auth)" : ""}\n`);
+      return _hltbSession;
+    }
+  }
+  _hltbSession = null;
   process.stdout.write(
-    `  hltb: endpoint ${endpoint}${auth ? " (+auth)" : ""}\n`
+    `  hltb: no working endpoint (tried ${tried.join(", ") || "none"}). ` +
+      `Set HLTB_SEARCH_URL to override, or run --hltb-probe to inspect.\n`
   );
   return _hltbSession;
 }
@@ -1158,7 +1222,7 @@ async function hltbPost(name, session) {
   if (session.auth?.token) headers["x-auth-token"] = session.auth.token;
   if (session.auth?.key) headers["x-hp-key"] = session.auth.key;
   if (session.auth?.val) headers["x-hp-val"] = session.auth.val;
-  const data = await fetchJson(`${HLTB_BASE}${session.endpoint}`, {
+  const data = await fetchJson(session.url, {
     method: "POST",
     headers,
     body: JSON.stringify(hltbBody(name, session.auth)),
@@ -1169,13 +1233,14 @@ async function hltbPost(name, session) {
 /** Search HLTB and return the best-matching game row, or null. */
 async function hltbSearch(title) {
   const session = await ensureHltbSession();
+  if (!session) return null;
   const name = cleanTitle(title) || title;
   let rows = await hltbPost(name, session);
-  // Nothing back? The endpoint/token may have rotated mid-run — re-discover
-  // once and retry (the plugin's "auth fallback").
+  // Nothing back? The token may have rotated mid-run — re-resolve once and retry.
   if (!rows || rows.length === 0) {
     _hltbSession = undefined;
-    rows = await hltbPost(name, await ensureHltbSession());
+    const fresh = await ensureHltbSession();
+    rows = fresh ? await hltbPost(name, fresh) : null;
   }
   if (!rows || rows.length === 0) return null;
 
@@ -1213,6 +1278,36 @@ async function hltbFetch(title) {
   const completionist = hltbHours(g.comp_100);
   if (main == null && mainExtra == null && completionist == null) return null;
   return { main, mainExtra, completionist };
+}
+
+/** Diagnostic (`--hltb-probe`): dump the site's scripts, the /api candidates
+ *  found in the bundles, whether a working search endpoint was resolved, and a
+ *  sample result. Run this whenever HLTB changes its site again — it shows what
+ *  is actually live so the endpoint/shape can be re-mapped (or pinned via
+ *  HLTB_SEARCH_URL) without guessing. */
+async function hltbProbeReport() {
+  process.stdout.write("HLTB probe:\n");
+  const scripts = await hltbScriptUrls();
+  process.stdout.write(`  homepage scripts (${scripts.length}):\n`);
+  for (const s of scripts.slice(0, 25)) process.stdout.write(`    ${s}\n`);
+  const eps = await hltbBundleEndpoints();
+  process.stdout.write(
+    `  /api candidates in bundles: ${eps.length ? eps.join(", ") : "(none found)"}\n`
+  );
+  const session = await ensureHltbSession();
+  if (!session) {
+    process.stdout.write("  result: NO working endpoint.\n");
+    return;
+  }
+  process.stdout.write(`  result: WORKING → ${session.url}\n`);
+  const rows = await hltbPost("The Legend of Zelda Ocarina of Time", session);
+  process.stdout.write(`  sample search rows: ${rows?.length ?? 0}\n`);
+  if (rows?.[0]) {
+    const r = rows[0];
+    process.stdout.write(
+      `    top: "${r.game_name}" main=${r.comp_main}s plus=${r.comp_plus}s 100=${r.comp_100}s\n`
+    );
+  }
 }
 
 // ---- SteamGridDB -----------------------------------------------------------
@@ -1614,12 +1709,19 @@ async function main() {
   const launchboxBackfill = args.includes("--launchbox-backfill");
   const launchboxRefresh = args.includes("--launchbox-refresh");
   const hltbBackfill = args.includes("--hltb-backfill");
+  const hltbProbe = args.includes("--hltb-probe");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
     (a, i) => ALL_SYSTEMS.includes(a) && !(limitIdx >= 0 && i === limitIdx + 1)
   );
   const targets = systems.length ? systems : ALL_SYSTEMS;
+
+  // Diagnostic-only: inspect what HLTB is serving right now, then exit.
+  if (hltbProbe) {
+    await hltbProbeReport();
+    return;
+  }
 
   process.stdout.write(
     `Generating metadata for: ${targets.join(", ")}${limit ? ` (limit ${limit}/system)` : ""}\n`
