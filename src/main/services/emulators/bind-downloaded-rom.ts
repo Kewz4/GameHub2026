@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { gamesSublevel, levelKeys } from "@main/level";
 import type { ClassicsDisc, Download, EmulatorSystem } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
+import { GB_FAMILY_SYSTEMS, gbFamilySystemFromPath } from "@main/helpers";
 import { scanRomFolder } from "./scan-rom-folder";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
@@ -29,6 +30,10 @@ const SYSTEM_PLATFORM_LABEL: Record<EmulatorSystem, string> = {
   gc: "Nintendo GameCube",
   switch: "Nintendo Switch",
 };
+
+/** Every GB-family ROM extension — used to find a .gb/.gbc/.gba download even
+ *  when the merged catalogue typed it "gba" (whose binary matches .gba only). */
+const GB_FAMILY_EXTS = [".gb", ".gbc", ".cgb", ".sgb", ".gba", ".agb"];
 
 const baseName = (p: string): string => {
   const name = path.basename(p);
@@ -538,7 +543,19 @@ export const bindDownloadedRom = async (download: Download): Promise<void> => {
       return;
     }
 
-    const result = await scanRomFolder(scanRoot, binary, true);
+    // The merged gb_gba_gbc catalogue stamps every Game Boy title "gba", but the
+    // downloaded ROM may actually be .gb/.gbc. KNOWN_BINARIES["gba"] only matches
+    // .gba/.agb, so scanning with it finds NOTHING for a .gb/.gbc download and
+    // the game never gets a disc (unplayable). Scan for the whole GB-family
+    // extension set instead, then re-derive the true system from the ROM below.
+    const scanBinary = GB_FAMILY_SYSTEMS.has(system)
+      ? {
+          ...binary,
+          romExtensions: [...binary.romExtensions, ...GB_FAMILY_EXTS],
+        }
+      : binary;
+
+    const result = await scanRomFolder(scanRoot, scanBinary, true);
     const playable = result.games.filter((g) => !g.wrongPlatform);
     if (playable.length === 0) {
       logger.warn(
@@ -558,6 +575,15 @@ export const bindDownloadedRom = async (download: Download): Promise<void> => {
       });
     }
 
+    // Correct the platform for the merged GB family from the actual ROM's
+    // extension (.gb → Game Boy, .gbc → Game Boy Color, .gba → Game Boy
+    // Advance), so the console badge / achievements / launch use the real
+    // subtype rather than the catalogue's blanket "gba".
+    const effectiveSystem =
+      (GB_FAMILY_SYSTEMS.has(system)
+        ? gbFamilySystemFromPath(discs[0]?.path)
+        : null) ?? system;
+
     // Remove the now-empty Myrient scaffolding left behind by the torrent —
     // scoped to THIS download's folder so sibling games and their
     // (Update)/(DLC) folders are never touched. Skip when any bound disc still
@@ -575,7 +601,7 @@ export const bindDownloadedRom = async (download: Download): Promise<void> => {
 
     await gamesSublevel.put(gameKey, {
       ...game,
-      platform: game.platform ?? SYSTEM_PLATFORM_LABEL[system] ?? system,
+      platform: SYSTEM_PLATFORM_LABEL[effectiveSystem] ?? system,
       discs,
       selectedDiscPath: discs[0]?.path ?? null,
       romSizeBytes: result.sizeBytes || game.romSizeBytes || null,

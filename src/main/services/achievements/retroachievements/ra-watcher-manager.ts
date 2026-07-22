@@ -7,6 +7,7 @@ import type {
   UserPreferences,
 } from "@types";
 import { db, gameAchievementsSublevel, levelKeys } from "@main/level";
+import { resolveEffectiveSystem } from "@main/helpers";
 import { achievementsLogger } from "../../logger";
 import { systemHasRetroAchievements } from "../../emulators/known-binaries";
 import { publishNewAchievementNotification } from "../../notifications";
@@ -53,7 +54,13 @@ const PLATFORM_TO_SYSTEM: Record<string, EmulatorSystem> = {
 const systemForGame = (game: Game): EmulatorSystem | null => {
   if (!game.platform) return null;
   const normalized = game.platform.trim().toLowerCase().replace(/\s+/g, " ");
-  return PLATFORM_TO_SYSTEM[normalized] ?? null;
+  const stored = PLATFORM_TO_SYSTEM[normalized] ?? null;
+  // GB/GBC/GBA are stamped "gba" by the merged catalogue; the bound ROM's
+  // extension is the real console, so RA polls under the correct system id.
+  return resolveEffectiveSystem(
+    stored,
+    game.selectedDiscPath ?? game.discs?.[0]?.path
+  );
 };
 
 interface RaPollState {

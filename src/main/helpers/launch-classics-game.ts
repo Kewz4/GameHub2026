@@ -12,6 +12,7 @@ import type {
 import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
 import { resolveLaunchCommand } from "./resolve-launch-command";
+import { resolveEffectiveSystem } from "./index";
 
 export class EmulatorNotConfiguredError extends Error {
   code = "EMULATOR_NOT_CONFIGURED" as const;
@@ -89,7 +90,16 @@ const buildEmulatorArgs = (
     case "ravba":
       return [discPath];
     case "ralibretro": {
-      const launch = RALIBRETRO_LAUNCH[system];
+      // GB/GBC/GBA all run on RALibretro's mGBA core but need the RIGHT
+      // RetroAchievements system id (-s). The merged gb_gba_gbc catalogue
+      // stamps every Game Boy title "gba", so trust the actual ROM extension
+      // here — otherwise RALibretro boots a .gb/.gbc as the GBA console and
+      // refuses to launch ("associated to the GameBoy console, but the emulator
+      // has initialized the GameBoy Advance console"), and unlocks the wrong
+      // console's achievements.
+      const effectiveSystem =
+        resolveEffectiveSystem(system, discPath) ?? system;
+      const launch = RALIBRETRO_LAUNCH[effectiveSystem];
       // Boot directly into the game with the right core; fall back to just the
       // ROM (GUI picks the core) only if the system isn't mapped.
       return launch

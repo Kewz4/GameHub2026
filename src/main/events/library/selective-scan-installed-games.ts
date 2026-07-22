@@ -119,9 +119,12 @@ const selectiveScanInstalledGames = async (
   // with only a raw executablePath is the broken state (it shell-opens the
   // ROM), so it's re-surfaced and repaired into a disc binding on confirm
   // rather than skipped forever.
+  // A soft-DELETED launchbox game must NOT count as known — otherwise deleting
+  // a game and re-scanning (the way to force a fresh, corrected import) silently
+  // skips its ROM and finds nothing.
   const knownRomPaths = new Set<string>();
   for (const [, g] of allGames) {
-    if (g.shop !== "launchbox") continue;
+    if (g.shop !== "launchbox" || g.isDeleted) continue;
     for (const p of [
       g.selectedDiscPath,
       ...(g.discs?.map((d) => d.path) ?? []),

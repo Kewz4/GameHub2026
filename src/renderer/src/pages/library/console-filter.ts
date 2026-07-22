@@ -95,30 +95,75 @@ function systemFromObjectId(objectId: string): EmulatorSystem | null {
 }
 
 /**
+ * GB/GBC/GBA share one merged catalogue + one emulator; the catalogue stamps
+ * every Game Boy title "gba" (baked into the objectId as minerva:gba:…). Once a
+ * ROM is bound, its EXTENSION is the ground truth, so the real subtype is
+ * resolved from the selected disc. Mirrors resolveEffectiveSystem in
+ * src/main/helpers/index.ts.
+ */
+const GB_FAMILY_SYSTEMS: ReadonlySet<EmulatorSystem> = new Set([
+  "gb",
+  "gbc",
+  "gba",
+]);
+
+const gbFamilySystemFromPath = (
+  romPath: string | null | undefined
+): EmulatorSystem | null => {
+  if (!romPath) return null;
+  const dot = romPath.lastIndexOf(".");
+  const ext = dot > 0 ? romPath.slice(dot).toLowerCase() : "";
+  if (ext === ".gb") return "gb";
+  if (ext === ".gbc" || ext === ".cgb" || ext === ".sgb") return "gbc";
+  if (ext === ".gba" || ext === ".agb") return "gba";
+  return null;
+};
+
+/** For a GB-family game with a bound ROM, the file extension wins over the
+ *  catalogue's blanket "gba"; everything else passes through unchanged. */
+export const resolveEffectiveSystem = (
+  stored: EmulatorSystem | null,
+  romPath: string | null | undefined
+): EmulatorSystem | null => {
+  if (stored && GB_FAMILY_SYSTEMS.has(stored)) {
+    return gbFamilySystemFromPath(romPath) ?? stored;
+  }
+  return stored;
+};
+
+/**
  * The console a library game belongs to, or null if it isn't a console ROM.
  * Tries `game.platform` first (set by bindDownloadedRom after download
  * completes); falls back to extracting the system from `game.objectId` (set
  * at catalogue-add time, before the download finishes) so games that are in
  * the library but not yet downloaded still appear in the Console dropdown.
+ * For the merged GB family, the bound ROM's extension overrides both.
  */
 export const systemForGame = (
-  game: Pick<Game, "shop" | "platform" | "objectId">
+  game: Pick<
+    Game,
+    "shop" | "platform" | "objectId" | "selectedDiscPath" | "discs"
+  >
 ): EmulatorSystem | null => {
   if (game.shop !== "launchbox") return null;
+
+  let stored: EmulatorSystem | null = null;
 
   // Primary: platform string (set after download by bindDownloadedRom).
   if (game.platform) {
     const normalized = game.platform.trim().toLowerCase().replace(/\s+/g, " ");
-    const fromPlatform = PLATFORM_TO_SYSTEM[normalized];
-    if (fromPlatform) return fromPlatform;
+    stored = PLATFORM_TO_SYSTEM[normalized] ?? null;
   }
 
   // Fallback: extract from objectId (set at catalogue-add time, before
   // download completes). This is what makes games appear in the Console
   // dropdown even when they haven't been downloaded yet.
-  if (game.objectId) {
-    return systemFromObjectId(game.objectId);
+  if (!stored && game.objectId) {
+    stored = systemFromObjectId(game.objectId);
   }
 
-  return null;
+  return resolveEffectiveSystem(
+    stored,
+    game.selectedDiscPath ?? game.discs?.[0]?.path
+  );
 };

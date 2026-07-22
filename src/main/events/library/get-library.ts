@@ -10,7 +10,11 @@ import {
   gamesSublevel,
   getGameHubMeta,
 } from "@main/level";
-import { systemFromObjectId, platformToSystem } from "@main/helpers";
+import {
+  systemFromObjectId,
+  platformToSystem,
+  resolveEffectiveSystem,
+} from "@main/helpers";
 
 const getLibrary = async (): Promise<LibraryGame[]> => {
   return gamesSublevel
@@ -36,9 +40,11 @@ const getLibrary = async (): Promise<LibraryGame[]> => {
                 !gameAssets?.libraryImageUrl ||
                 !gameAssets?.libraryHeroImageUrl)
             ) {
-              const system =
+              const system = resolveEffectiveSystem(
                 systemFromObjectId(game.objectId) ??
-                platformToSystem(game.platform);
+                  platformToSystem(game.platform),
+                game.selectedDiscPath ?? game.discs?.[0]?.path
+              );
               if (system) {
                 meta = await getGameHubMeta(system, game.title).catch(
                   () => null
