@@ -796,6 +796,7 @@
     "launch_hydra_in_library_page": "Launch GameHub in the Library page",
     "launch_hydra_in_big_picture": "Launch GameHub in Big Picture mode (experimental)",
     "disable_nsfw_alert": "Disable NSFW alert",
+    "hide_mature_games": "Hide mature-rated games on home",
     "seed_after_download_complete": "Seed after download complete",
     "show_hidden_achievement_description": "Show hidden achievement descriptions before unlocking them",
     "account": "Account",

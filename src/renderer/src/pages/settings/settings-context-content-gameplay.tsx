@@ -19,6 +19,7 @@ export function SettingsContextContentGameplay() {
   const [form, setForm] = useState({
     autoplayGameTrailers: true,
     disableNsfwAlert: false,
+    hideMatureGames: false,
     showHiddenAchievementsDescription: false,
     enableSteamAchievements: false,
     enableNewDownloadOptionsBadges: true,
@@ -30,6 +31,7 @@ export function SettingsContextContentGameplay() {
     setForm({
       autoplayGameTrailers: userPreferences.autoplayGameTrailers ?? true,
       disableNsfwAlert: userPreferences.disableNsfwAlert ?? false,
+      hideMatureGames: userPreferences.hideMatureGames ?? false,
       showHiddenAchievementsDescription:
         userPreferences.showHiddenAchievementsDescription ?? false,
       enableSteamAchievements: userPreferences.enableSteamAchievements ?? false,
@@ -63,6 +65,14 @@ export function SettingsContextContentGameplay() {
           checked={form.disableNsfwAlert}
           onChange={() =>
             handleChange({ disableNsfwAlert: !form.disableNsfwAlert })
+          }
+        />
+
+        <CheckboxField
+          label={t("hide_mature_games")}
+          checked={form.hideMatureGames}
+          onChange={() =>
+            handleChange({ hideMatureGames: !form.hideMatureGames })
           }
         />
 

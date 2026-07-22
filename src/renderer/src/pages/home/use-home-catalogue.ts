@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { orderBy } from "lodash-es";
 
 import type {
   CatalogueSearchResult,
   DownloadSource,
+  GameShop,
   LibraryGame,
   ShopAssets,
   TrendingGame,
 } from "@types";
 import { CatalogueCategory } from "@shared";
 import { levelDBService } from "@renderer/services/leveldb.service";
+import { useAppSelector } from "@renderer/hooks";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
 import type {
   EnrichedLibraryGame,
@@ -169,6 +171,54 @@ async function enrichHeroDescriptions(
     Array.from({ length: Math.min(3, missing.length) }, worker)
   );
   return next;
+}
+
+/** Every game shown in the home ROWS (not the hero), deduped — the set the
+ *  "hide mature" filter classifies. */
+function collectHomeRowGames(
+  cat: HomeCatalogue
+): { shop: GameShop; objectId: string; title: string }[] {
+  const rows: ShopAssets[] = [
+    ...cat.recommended,
+    ...cat.becauseYouPlayed.flatMap((r) => r.games),
+    ...cat.recommendedClassics,
+    ...cat.hot,
+    ...cat.weekly,
+    ...cat.achievements,
+    ...cat.classics,
+  ];
+  const seen = new Set<string>();
+  const out: { shop: GameShop; objectId: string; title: string }[] = [];
+  for (const g of rows) {
+    const key = `${g.shop}:${g.objectId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ shop: g.shop, objectId: g.objectId, title: g.title });
+  }
+  return out;
+}
+
+/** Filter the home rows (not the hero) by a hide-set of `${shop}:${objectId}`. */
+function filterHomeRows(
+  cat: HomeCatalogue,
+  hideKeys: Set<string>
+): HomeCatalogue {
+  if (hideKeys.size === 0) return cat;
+  const keep = (games: ShopAssets[]) =>
+    games.filter((g) => !hideKeys.has(`${g.shop}:${g.objectId}`));
+  return {
+    ...cat,
+    recommended: keep(cat.recommended),
+    becauseYouPlayed: cat.becauseYouPlayed.map((r) => ({
+      ...r,
+      games: keep(r.games),
+    })),
+    recommendedClassics: keep(cat.recommendedClassics),
+    hot: keep(cat.hot),
+    weekly: keep(cat.weekly),
+    achievements: keep(cat.achievements),
+    classics: keep(cat.classics),
+  };
 }
 
 async function getClassics(): Promise<ShopAssets[]> {
@@ -681,6 +731,10 @@ let fastBatchCache: FastBatchCache | null = null;
 export function useHomeCatalogue(language: string) {
   const [catalogue, setCatalogue] = useState<HomeCatalogue>(EMPTY_CATALOGUE);
   const [isLoading, setIsLoading] = useState(true);
+  const hideMatureGames = useAppSelector(
+    (state) => state.userPreferences.value?.hideMatureGames ?? false
+  );
+  const [hideKeys, setHideKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Thumbs up/down anywhere on home invalidates the cached shelves so the
@@ -909,5 +963,54 @@ export function useHomeCatalogue(language: string) {
     };
   }, [language]);
 
-  return { catalogue, isLoading };
+  // A stable signature of the games currently shown in the rows, so the maturity
+  // resolver re-runs only when that set actually changes (not on every render).
+  const rowSignature = useMemo(
+    () =>
+      hideMatureGames
+        ? collectHomeRowGames(catalogue)
+            .map((g) => `${g.shop}:${g.objectId}`)
+            .join("|")
+        : "",
+    [hideMatureGames, catalogue]
+  );
+
+  // Resolve maturity for the home rows whenever the filter is on and that set
+  // changes. Phase 1 (cache-only) is instant and fail-closed — uncached Steam
+  // games are hidden immediately so nothing mature can flash; phase 2 fetches
+  // the uncached ratings (cached thereafter) and relaxes to the true verdicts.
+  useEffect(() => {
+    if (!hideMatureGames) {
+      setHideKeys(new Set());
+      return;
+    }
+    const games = collectHomeRowGames(catalogue);
+    if (!games.length) return;
+    let active = true;
+    window.electron
+      .getGamesMaturity(games, false)
+      .then((keys) => {
+        if (active) setHideKeys(new Set(keys));
+      })
+      .catch(() => {});
+    window.electron
+      .getGamesMaturity(games, true)
+      .then((keys) => {
+        if (active) setHideKeys(new Set(keys));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // `catalogue` is read via closure; `rowSignature` is what meaningfully
+    // changes the game set, so it's the real dependency here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hideMatureGames, rowSignature]);
+
+  const visibleCatalogue = useMemo(
+    () => (hideMatureGames ? filterHomeRows(catalogue, hideKeys) : catalogue),
+    [hideMatureGames, catalogue, hideKeys]
+  );
+
+  return { catalogue: visibleCatalogue, isLoading };
 }

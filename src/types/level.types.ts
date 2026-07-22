@@ -212,6 +212,10 @@ export interface UserPreferences {
   bigPictureDiagnosticsEnabled?: boolean;
   bigPictureDiagnosticsPosition?: BigPictureDiagnosticsPosition;
   disableNsfwAlert?: boolean;
+  /** Hide mature-rated games (ESRB M/AO, PEGI/USK 18, 17+ gate) from the home
+   *  rows. Emulated games use the local dataset rating; Steam games are
+   *  classified from Steam's appdetails and cached. */
+  hideMatureGames?: boolean;
   enableAutoInstall?: boolean;
   seedAfterDownloadComplete?: boolean;
   showHiddenAchievementsDescription?: boolean;
