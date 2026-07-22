@@ -101,6 +101,11 @@ export default function UpdateChecker() {
         setTimeout(proceed, 4000);
       }
     });
+    // Now that the listener is attached, tell main to replay any events it
+    // emitted before we subscribed — otherwise a fast post-update check fires
+    // "not-available" before this splash mounts and it stays stuck on
+    // "Checking for updates…".
+    window.electron.updateCheckerReady();
     return unsub;
   }, []);
 

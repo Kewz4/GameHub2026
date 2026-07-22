@@ -545,9 +545,13 @@ export default function Library() {
         (g) => getGameOrigin(g) === "catalog" && g.shop !== "launchbox"
       );
 
-    // Custom = manually added games.
+    // Custom = manually added games. Exclude console/emulated games (shop
+    // "launchbox") the same way Retigga does — a pre-fix scan stamped scanned
+    // ROMs with libraryOrigin "custom", so guard against those leaking here too.
     if (storeFilter === "custom")
-      return filteredLibrary.filter((g) => getGameOrigin(g) === "custom");
+      return filteredLibrary.filter(
+        (g) => getGameOrigin(g) === "custom" && g.shop !== "launchbox"
+      );
 
     return filteredLibrary.filter((g) => g.shop === storeFilter);
   }, [filteredLibrary, storeFilter, consoleMode]);

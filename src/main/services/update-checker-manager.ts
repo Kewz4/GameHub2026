@@ -51,6 +51,28 @@ export class UpdateCheckerManager {
   private static portableExtractDir = "";
 
   /**
+   * Events emitted before the splash renderer has subscribed are buffered and
+   * replayed once it signals ready. Without this, a post-update relaunch — where
+   * the GitHub check resolves almost instantly because electron-updater's feed
+   * is already warm — fires "checking"/"not-available" before the freshly
+   * created splash window has mounted its listener, so the splash stays stuck on
+   * "Checking for updates…". (A manual reopen's slower cold check wins the race,
+   * which is why it looked fine.)
+   */
+  private static eventBuffer: UpdateCheckerEvent[] = [];
+  private static rendererReady = false;
+
+  /** Called by the splash renderer (via IPC) once its event listener is set up:
+   *  flush anything that was emitted before it could hear it. */
+  static markRendererReady() {
+    this.rendererReady = true;
+    if (this.sendEventFn) {
+      for (const event of this.eventBuffer) this.sendEventFn(event);
+    }
+    this.eventBuffer = [];
+  }
+
+  /**
    * True while the startup splash is actively checking. The periodic
    * UpdateManager check (main-loop) shares the same global autoUpdater and calls
    * removeAllListeners(); it stands down while this is set so it can't stomp the
@@ -109,6 +131,12 @@ export class UpdateCheckerManager {
   }
 
   private static sendEvent(event: UpdateCheckerEvent) {
+    // Until the renderer says it's listening, buffer (don't drop) events so a
+    // fast post-update check can't fire before anyone hears it.
+    if (!this.rendererReady) {
+      this.eventBuffer.push(event);
+      return;
+    }
     this.sendEventFn?.(event);
   }
 

@@ -207,7 +207,10 @@ const confirmScanGames = async (
             discs: [disc],
             selectedDiscPath: game.executablePath,
             isInstalledLocally: true,
-            libraryOrigin: "custom" as const,
+            // No store origin — this is a console/emulated game, surfaced under
+            // Console mode by its shop ("launchbox"), NOT the custom tab. (The
+            // import-launchbox-roms path likewise leaves this unset; stamping
+            // "custom" here is what leaked scanned ROMs into the custom tab.)
           });
         }
         logger.info(

@@ -27,7 +27,11 @@ const assignGameToCollection = async (
   }
 
   try {
-    if (shop !== "custom") {
+    // Custom AND console/emulated ("launchbox") games are local-only — they
+    // don't exist on the Hydra profile, so syncing their collection there 404s
+    // (game/not-found) and, before this guard, threw before the LOCAL write
+    // below ran — which is why emulated games couldn't be added to collections.
+    if (shop !== "custom" && shop !== "launchbox") {
       const syncCollection = () =>
         HydraApi.put(`/profile/games/${shop}/${objectId}/collection`, {
           collectionIds,

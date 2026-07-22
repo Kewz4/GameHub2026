@@ -1220,6 +1220,7 @@ contextBridge.exposeInMainWorld("electron", {
   checkForUpdates: () => ipcRenderer.invoke("checkForUpdates"),
   restartAndInstallUpdate: () => ipcRenderer.invoke("restartAndInstallUpdate"),
   updateCheckerProceed: () => ipcRenderer.invoke("updateCheckerProceed"),
+  updateCheckerReady: () => ipcRenderer.invoke("updateCheckerReady"),
   updateCheckerApply: () => ipcRenderer.invoke("updateCheckerApply"),
   toggleConsoleWindow: () => ipcRenderer.invoke("toggleConsoleWindow"),
   onUpdateCheckerEvent: (cb: (event: unknown) => void) => {

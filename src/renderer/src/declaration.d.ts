@@ -1339,6 +1339,7 @@ declare global {
     checkForUpdates: () => Promise<boolean>;
     restartAndInstallUpdate: () => Promise<void>;
     updateCheckerProceed: () => Promise<void>;
+    updateCheckerReady: () => Promise<void>;
     updateCheckerApply: () => Promise<void>;
     toggleConsoleWindow: () => Promise<void>;
     onUpdateCheckerEvent: (
