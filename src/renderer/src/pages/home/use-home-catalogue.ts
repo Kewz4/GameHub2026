@@ -721,12 +721,22 @@ export function useHomeCatalogue(language: string) {
         ]
       );
 
-      // Keep the hero alive even when `/catalogue/featured` returns empty by
-      // seeding it from the Hot (then Weekly) row, which shares the same
-      // artwork fields the hero needs.
-      const resolvedFeatured = featured.length
-        ? featured
-        : heroFallbackFrom(hot.length ? hot : weekly);
+      // Keep the hero carousel populated with MULTIPLE slides: `/catalogue/
+      // featured` on this fork's backend often returns empty or just a single
+      // game, which left the "carousel" with one static slide. Always top the
+      // featured list up from the Hot (then Weekly) row — which shares the same
+      // artwork fields — deduped by objectId (featured first) and capped so the
+      // carousel has several slides to rotate through.
+      const resolvedFeatured = (() => {
+        const seen = new Set<string>();
+        return [
+          ...featured,
+          ...heroFallbackFrom(hot),
+          ...heroFallbackFrom(weekly),
+        ]
+          .filter((g) => !seen.has(g.objectId) && (seen.add(g.objectId), true))
+          .slice(0, 8);
+      })();
 
       if (!isMounted) return;
 

@@ -336,7 +336,16 @@ export function Sidebar() {
     }
 
     if (event.detail === 2) {
-      if (game.executablePath) {
+      // Emulated/console (launchbox) games have no executablePath — they launch
+      // through their emulator once a ROM is bound as a disc. Route them to
+      // openClassicsGame (spawns the emulator + core), exactly like the game
+      // page's Play button; using openGame here would error "no executable".
+      const isClassics =
+        game.shop === "launchbox" &&
+        Boolean(game.selectedDiscPath || (game.discs && game.discs.length > 0));
+      if (isClassics) {
+        window.electron.openClassicsGame(game.shop, game.objectId);
+      } else if (game.executablePath) {
         window.electron.openGame(
           game.shop,
           game.objectId,

@@ -162,8 +162,16 @@
 
   &__series-platform-logo {
     display: block;
-    height: 8px;
-    max-width: 46px;
+    height: 9px;
+    width: auto;
+    // The wordmarks span a wide aspect-ratio range (Wii ~2:1 up to 3DS ~8.2:1).
+    // max-width must clear the WIDEST at this height (9 × 8.2 ≈ 74px) — with a
+    // tighter cap the wide logos hit it and object-fit: contain then letterboxes
+    // them SHORTER than the narrow ones, so they read as squished/cropped and
+    // the row looks inconsistent. This lets every console render at the same
+    // height with its true proportions (the inline-flex chip grows to fit; the
+    // series card is ≥105px wide so it never clips).
+    max-width: 76px;
     object-fit: contain;
     // Text-label fallback (PlatformLogo renders a <span> when a logo is
     // missing/fails) reads as a compact white label instead.

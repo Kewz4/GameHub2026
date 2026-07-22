@@ -120,10 +120,13 @@ export const GameCard = memo(function GameCard({
             <span
               role="button"
               tabIndex={0}
-              className={`game-card__feedback-button${
+              className={`game-card__feedback-button game-card__tooltip-anchor${
                 feedback === "like" ? " game-card__feedback-button--active" : ""
               }`}
               aria-label={t("recommend_like", {
+                defaultValue: "I like this recommendation",
+              })}
+              data-tooltip={t("recommend_like", {
                 defaultValue: "I like this recommendation",
               })}
               aria-pressed={feedback === "like"}
@@ -139,12 +142,15 @@ export const GameCard = memo(function GameCard({
             <span
               role="button"
               tabIndex={0}
-              className={`game-card__feedback-button${
+              className={`game-card__feedback-button game-card__tooltip-anchor${
                 feedback === "dislike"
                   ? " game-card__feedback-button--active-dislike"
                   : ""
               }`}
               aria-label={t("recommend_dislike", {
+                defaultValue: "I don't like this — show me fewer games like it",
+              })}
+              data-tooltip={t("recommend_dislike", {
                 defaultValue: "I don't like this — show me fewer games like it",
               })}
               aria-pressed={feedback === "dislike"}
@@ -160,7 +166,7 @@ export const GameCard = memo(function GameCard({
             <span
               role="button"
               tabIndex={0}
-              className={`game-card__feedback-button${
+              className={`game-card__feedback-button game-card__tooltip-anchor${
                 feedback === "ignore"
                   ? " game-card__feedback-button--active-ignore"
                   : ""
@@ -169,9 +175,8 @@ export const GameCard = memo(function GameCard({
                 defaultValue:
                   "Don't recommend this specific game again (no effect on other recommendations)",
               })}
-              title={t("recommend_ignore", {
-                defaultValue:
-                  "Don't recommend this specific game again (no effect on other recommendations)",
+              data-tooltip={t("recommend_ignore_short", {
+                defaultValue: "Don't show this game again",
               })}
               aria-pressed={feedback === "ignore"}
               onClick={(event) => handleFeedback(event, "ignore")}
@@ -198,7 +203,6 @@ export const GameCard = memo(function GameCard({
               aria-label={t("why_recommended", {
                 defaultValue: "Why is this recommended?",
               })}
-              title={game.recommendationReason}
               aria-expanded={showReason}
               onClick={(event) => {
                 event.stopPropagation();
