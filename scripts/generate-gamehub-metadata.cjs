@@ -75,17 +75,17 @@ const CHECKPOINT_FILE = path.join(OUT_DIR, ".checkpoint.json");
 
 /**
  * EmulatorSystem → Dump folder. Reverse of CONSOLE_MAP in
- * src/main/services/rom-sources/gamehub-dump-sources.ts. gb/gbc/gba all read
- * from the merged gb_gba_gbc folder (the dump stores them together because
- * RALibretro auto-detects the console from the file extension at launch).
+ * src/main/services/rom-sources/gamehub-dump-sources.ts. GB/GBC/GBA are now
+ * separate folders (each carries its true console) rather than one merged
+ * gb_gba_gbc folder.
  */
 const SYSTEM_TO_DUMP_FOLDER = {
   n3ds: "3ds",
   nds: "ds",
   gc: "gamecube",
-  gb: "gb_gba_gbc",
-  gbc: "gb_gba_gbc",
-  gba: "gb_gba_gbc",
+  gb: "gb",
+  gbc: "gbc",
+  gba: "gba",
   n64: "n64",
   ps1: "ps1",
   ps2: "ps2",
@@ -626,11 +626,8 @@ async function processSystem(system, opts) {
     : { system, generatedAt: 0, games: {} };
   const games = existing.games ?? {};
 
-  // Distinct base-game titles (dedup by normalized key so the merged
-  // gb_gba_gbc folder doesn't triple-emit a game that ships under all three
-  // consoles — the meta file is per-EmulatorSystem, so gb.json/gbc.json/gba.json
-  // each get their own copy of the same entry, which is correct since the
-  // runtime lookups are per-system too).
+  // Distinct base-game titles (dedup by normalized key within the folder so a
+  // console's meta file has one entry per title).
   const titles = [];
   const seen = new Set();
   for (const row of gamesRows) {
