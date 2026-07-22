@@ -51,21 +51,30 @@ const IGDB_CLIENT_ID =
   process.env.IGDB_CLIENT_ID || "lbccfxg1ie3739dubo4bvlj7bw0sue";
 const IGDB_CLIENT_SECRET =
   process.env.IGDB_CLIENT_SECRET || "e88mbm5snb40ax0n37jpyhearwfikp";
-const RAWG_KEYS = [
-  process.env.RAWG_API_KEY,
-  "995d69ec8d474d268f33cf41e6e37f2e",
-  "08e01f201d03418eb70f4fcf541df17d",
-  "5d73ba65ac4f42bbbd67bc8e75913c42",
-].filter(Boolean);
-let _rawgKeyIdx = 0;
-function nextRawgKey() {
-  const key = RAWG_KEYS[_rawgKeyIdx % RAWG_KEYS.length];
-  _rawgKeyIdx++;
-  return key;
-}
-
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
-const RAWG_BASE = "https://api.rawg.io/api";
+
+// IGN's public GraphQL (mollusk) — Apollo Automatic Persisted Queries, the same
+// endpoint the IGN web client (kraken) uses. Replaces RAWG as the source of
+// screenshots, developers/publishers, description, genres, AGE RATING and the
+// review score — RAWG's console data was sparse and often mismatched. The
+// hashes are the operation ids IGN's client ships; they only change when IGN
+// publishes a new query (re-capture from the site's network tab if a call
+// starts returning PersistedQueryNotFound).
+const IGN_GQL = "https://mollusk.apis.ign.com/graphql";
+const IGN_HEADERS = {
+  "apollographql-client-name": "kraken",
+  "apollographql-client-version": "v0.67.0",
+  Referer: "https://www.ign.com/reviews/games",
+  "Content-Type": "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+};
+const IGN_HASH = {
+  search: "e1c2e012a21b4a98aaa618ef1b43eb0cafe9136303274a34f5d9ea4f2446e884",
+  get: "b9c48f45a7390ecd157229419dc9a2acb48de90c0f255b667076befb38338de6",
+  images: "06204b0f0871f8382e3adab7d1c59399e6c17ac94bff575c20a12ebf9d880b86",
+};
 
 const DUMP_DIR = path.join(__dirname, "..", "Dump");
 const OUT_DIR = path.join(__dirname, "..", "sources", "gamehub-meta");
@@ -115,25 +124,6 @@ const IGDB_PLATFORM_IDS = {
   ps2: 8,
   ps3: 9,
   switch: 130,
-};
-
-/** RAWG platform IDs — from https://api.rawg.io/docs/#operation/games_list.
- *  Used to filter search results by console for better matching. */
-const RAWG_PLATFORM_IDS = {
-  ps1: 27,
-  ps2: 15,
-  ps3: 16,
-  psp: 17,
-  n3ds: 8,
-  nds: 9,
-  n64: 83,
-  gb: 26,
-  gbc: 43,
-  gba: 24,
-  wii: 11,
-  wiiu: 10,
-  gc: 105,
-  switch: 7,
 };
 
 // ---- helpers ---------------------------------------------------------------
@@ -459,83 +449,131 @@ function platformPref(x, platformId) {
     : 1;
 }
 
-// ---- RAWG.io (screenshots, developers, publishers) -------------------------
+// ---- IGN (screenshots, devs/pubs, description, age rating, review score) ----
 
-/**
- * Search RAWG for a game by title, optionally filtered by platform. Returns
- * the first result's screenshots + developer/publisher info, or null.
- *
- * RAWG's search returns `short_screenshots` inline (no extra request needed).
- * Developer/publisher info requires a follow-up details call.
- */
-async function rawgSearch(title, system) {
-  const platformId = RAWG_PLATFORM_IDS[system];
-  const searchKey = nextRawgKey();
+/** Build an IGN mollusk Automatic-Persisted-Query GET URL. */
+function ignUrl(operationName, variables, hash) {
   const params = new URLSearchParams({
-    key: searchKey,
-    search: title,
-    page_size: "5",
+    operationName,
+    variables: JSON.stringify(variables),
+    extensions: JSON.stringify({
+      persistedQuery: { version: 1, sha256Hash: hash },
+    }),
   });
-  if (platformId) params.set("platforms", String(platformId));
+  return `${IGN_GQL}?${params.toString()}`;
+}
 
-  const data = await fetchJson(`${RAWG_BASE}/games?${params.toString()}`);
-  const results = data?.results ?? [];
-  if (results.length === 0) return null;
+async function ignGql(operationName, variables, hash) {
+  const data = await fetchJson(ignUrl(operationName, variables, hash), {
+    headers: IGN_HEADERS,
+  });
+  return data?.data ?? null;
+}
 
-  // Pick the best match: exact name match, then closest by token similarity.
-  const clean = title
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\[[^\]]*\]/g, "")
-    .trim()
-    .toLowerCase();
-  let best = results[0];
+/** Resolve a title to its IGN game slug via the search operation. Returns null
+ *  when nothing plausibly matches (guards against wrong-game screenshots). */
+async function ignSearch(title) {
+  const data = await ignGql(
+    "SearchObjectsByName",
+    { term: title, count: 20, objectType: "Game" },
+    IGN_HASH.search
+  );
+  const objects = data?.searchObjectsByName?.objects ?? [];
+  if (objects.length === 0) return null;
+
+  const target = normalizeTitle(title);
+  const tTokens = tokenize(title);
+  let best = null;
   let bestScore = Infinity;
-  for (const r of results) {
-    const name = (r.name || "").toLowerCase();
+  for (const o of objects) {
+    const name = o?.metadata?.names?.name || o?.metadata?.names?.short || "";
+    if (!o?.slug || !name) continue;
     const score =
-      name === clean
+      normalizeTitle(name) === target
         ? 0
-        : name.includes(clean) || clean.includes(name)
-          ? 1
-          : tokenSymDiff(tokenize(name), tokenize(clean));
-    const pref = platformId
-      ? (r.parent_platforms ?? []).some((p) => p.platform?.id === platformId)
-        ? 0
-        : 1
-      : 0;
-    if (score + pref * 0.5 < bestScore) {
-      bestScore = score + pref * 0.5;
-      best = r;
+        : tokenSymDiff(tokenize(name), tTokens);
+    if (score < bestScore) {
+      bestScore = score;
+      best = o;
     }
   }
+  // Require a close match — a large token symmetric-difference means IGN
+  // returned a different game, and a wrong screenshot set is worse than none.
+  if (!best || bestScore > 2) return null;
+  return { slug: best.slug, id: best.id ?? null };
+}
 
-  // Screenshots are inline in the search response.
-  const screenshots = (best.short_screenshots ?? [])
-    .map((s) => s.image)
-    .filter(Boolean)
-    .slice(0, 10);
+/** Full game object (devs/pubs/genres/description/age rating/review/release). */
+async function ignGet(slug) {
+  const data = await ignGql(
+    "ObjectSelectByTypeAndSlug",
+    { slug, objectType: "Game", region: "us", state: "Published" },
+    IGN_HASH.get
+  );
+  return data?.objectSelectByTypeAndSlug ?? null;
+}
 
-  // Fetch game details for developer/publisher info (rotate key).
-  let developers = [];
-  let publishers = [];
-  let description = null;
-  try {
-    const detailsKey = nextRawgKey();
-    const details = await fetchJson(
-      `${RAWG_BASE}/games/${best.id}?key=${detailsKey}`
-    );
-    developers = (details?.developers ?? []).map((d) => d.name).filter(Boolean);
-    publishers = (details?.publishers ?? []).map((p) => p.name).filter(Boolean);
-    description = details?.description_raw ?? null;
-  } catch {
-    // Best-effort — screenshots are still useful without dev/pub info.
-  }
+/** Screenshot gallery URLs for a slug. */
+async function ignImages(slug) {
+  const data = await ignGql(
+    "ObjectImageGallery",
+    { slug, objectType: "Game", count: 10 },
+    IGN_HASH.images
+  );
+  const images = data?.objectSelectByTypeAndSlug?.imageGallery?.images ?? [];
+  return images.map((i) => i?.url).filter(Boolean);
+}
+
+/**
+ * Fetch IGN metadata for a title: resolve the slug, then pull the game object +
+ * image gallery. Returns the fields we store (undefined when absent), or null
+ * when the game isn't on IGN / doesn't match.
+ */
+async function ignFetch(title) {
+  const match = await ignSearch(title);
+  if (!match?.slug) return null;
+
+  const [game, gallery] = await Promise.all([
+    ignGet(match.slug).catch(() => null),
+    ignImages(match.slug).catch(() => []),
+  ]);
+  if (!game && gallery.length === 0) return null;
+
+  const names = (arr) => (arr ?? []).map((a) => a?.name).filter(Boolean);
+  const region = (game?.objectRegions ?? [])[0] ?? null;
+  const ageRating = region?.ageRating?.name
+    ? {
+        name: region.ageRating.name,
+        system: region.ageRating.ageRatingType ?? null,
+      }
+    : undefined;
+  const releaseDate = region?.releases?.[0]?.date ?? null;
+  const primaryImage = game?.primaryImage?.url ?? null;
+  const screenshots = (
+    gallery.length ? gallery : primaryImage ? [primaryImage] : []
+  ).slice(0, 10);
+  const developers = names(game?.producers);
+  const publishers = names(game?.publishers);
+  const genres = names(game?.genres);
+  const series = names(game?.franchises)[0];
+  const description =
+    game?.metadata?.descriptions?.long ||
+    game?.metadata?.descriptions?.short ||
+    undefined;
+  const score = game?.primaryReview?.score;
 
   return {
-    screenshots: screenshots.length > 0 ? screenshots : undefined,
-    developers: developers.length > 0 ? developers : undefined,
-    publishers: publishers.length > 0 ? publishers : undefined,
-    description: description ?? undefined,
+    screenshots: screenshots.length ? screenshots : undefined,
+    developers: developers.length ? developers : undefined,
+    publishers: publishers.length ? publishers : undefined,
+    description: description || undefined,
+    genres: genres.length ? genres : undefined,
+    series: series || undefined,
+    ageRating,
+    ratingScore: typeof score === "number" ? Math.round(score * 10) : undefined,
+    releaseYear: releaseDate
+      ? Number(String(releaseDate).slice(0, 4)) || undefined
+      : undefined,
   };
 }
 
@@ -690,38 +728,37 @@ async function processSystem(system, opts) {
         didWork = true;
       }
 
-      // RAWG backfill: only re-fetch RAWG for entries missing
-      // screenshots/developers/publishers. Skips SGDB + IGDB entirely
-      // (art and description are already resolved). Used to fill gaps
-      // when the previous RAWG API key was rate-limited mid-run.
-      if (opts.rawgBackfill) {
-        const hasRawg =
+      // IGN backfill: only re-fetch IGN for entries missing screenshots /
+      // developers / publishers. Skips SGDB + IGDB entirely (art + description
+      // already resolved). Used to fill gaps from an interrupted run.
+      if (opts.ignBackfill) {
+        const hasIgn =
           (existing.screenshots && existing.screenshots.length > 0) ||
           (existing.developers && existing.developers.length > 0) ||
           (existing.publishers && existing.publishers.length > 0);
-        if (!hasRawg) {
+        if (!hasIgn) {
           await waitForRamIfNeeded();
-          const rawg = await rawgSearch(
-            cleanTitle(title) || title,
-            system
-          ).catch(() => null);
-          if (rawg) {
-            if (rawg.screenshots?.length)
-              existing.screenshots = rawg.screenshots;
-            if (rawg.developers?.length)
-              existing.developers = rawg.developers;
-            if (rawg.publishers?.length)
-              existing.publishers = rawg.publishers;
-            // Don't overwrite description if IGDB already provided one
-            if (!existing.description && rawg.description)
-              existing.description = rawg.description;
+          const ign = await ignFetch(cleanTitle(title) || title).catch(
+            () => null
+          );
+          if (ign) {
+            if (ign.screenshots?.length) existing.screenshots = ign.screenshots;
+            if (ign.developers?.length) existing.developers = ign.developers;
+            if (ign.publishers?.length) existing.publishers = ign.publishers;
+            if (ign.ageRating) existing.ageRating = ign.ageRating;
+            if (typeof ign.ratingScore === "number")
+              existing.ratingScore = ign.ratingScore;
+            if (!existing.series && ign.series) existing.series = ign.series;
+            // Don't overwrite an IGDB description.
+            if (!existing.description && ign.description)
+              existing.description = ign.description;
           }
           backfills.push(
-            rawg
-              ? `rawg(${
-                  rawg.screenshots?.length ?? 0
-                }ss,${rawg.developers?.length ?? 0}dev,pub)`
-              : "rawg-miss"
+            ign
+              ? `ign(${ign.screenshots?.length ?? 0}ss,${
+                  ign.developers?.length ?? 0
+                }dev,${ign.ageRating ? "age" : "-"})`
+              : "ign-miss"
           );
           didWork = true;
         }
@@ -740,7 +777,7 @@ async function processSystem(system, opts) {
       processed++;
       // In backfill mode, flush after EVERY entry so zero data is lost on crash.
       flush(outPath, { system, generatedAt: Date.now(), games });
-      await sleep(opts.rawgBackfill ? 30 : opts.igdbBackfill ? 280 : 120);
+      await sleep(opts.ignBackfill ? 400 : opts.igdbBackfill ? 280 : 120);
       continue;
     }
 
@@ -751,28 +788,35 @@ async function processSystem(system, opts) {
     // memory pressure (other scrapers, Playwright/Chrome), pause until it
     // recovers so we don't get OOM-killed mid-run.
     await waitForRamIfNeeded();
-    const [art, igdb, rawg] = await Promise.all([
+    const [art, igdb, ign] = await Promise.all([
       sgdbArtwork(cleanTitle(title) || title).catch(() => null),
       igdbSearch(igdbTitle(title), platformId).catch(() => null),
-      rawgSearch(cleanTitle(title) || title, system).catch(() => null),
+      ignFetch(cleanTitle(title) || title).catch(() => null),
     ]);
 
-    if (art || igdb || rawg) {
+    if (art || igdb || ign) {
+      const igdbGenres = (igdb?.genres ?? []).map((g) => g.name);
       games[key] = {
         title,
-        description: igdb?.summary ?? rawg?.description ?? null,
-        genres: (igdb?.genres ?? []).map((g) => g.name),
+        description: igdb?.summary ?? ign?.description ?? null,
+        // Prefer IGDB genres; fall back to IGN's when IGDB missed the game.
+        genres: igdbGenres.length ? igdbGenres : (ign?.genres ?? []),
         releaseYear: igdb?.first_release_date
           ? new Date(igdb.first_release_date * 1000).getUTCFullYear()
-          : null,
+          : (ign?.releaseYear ?? null),
         coverImageUrl: art?.coverImageUrl ?? null,
         libraryImageUrl: art?.libraryImageUrl ?? null,
         libraryHeroImageUrl: art?.libraryHeroImageUrl ?? null,
         logoImageUrl: art?.logoImageUrl ?? null,
         iconUrl: art?.iconUrl ?? null,
-        screenshots: rawg?.screenshots ?? undefined,
-        developers: rawg?.developers ?? undefined,
-        publishers: rawg?.publishers ?? undefined,
+        screenshots: ign?.screenshots ?? undefined,
+        developers: ign?.developers ?? undefined,
+        publishers: ign?.publishers ?? undefined,
+        // New IGN-sourced fields: ESRB/PEGI age rating (drives the settings
+        // "hide M-rated" filter), the aggregate review score, and the series.
+        ageRating: ign?.ageRating ?? undefined,
+        ratingScore: ign?.ratingScore ?? undefined,
+        series: ign?.series ?? undefined,
       };
       resolved++;
       const artParts = [];
@@ -787,16 +831,19 @@ async function processSystem(system, opts) {
         igdbParts.push(
           new Date(igdb.first_release_date * 1000).getUTCFullYear()
         );
-      const rawgParts = [];
-      if (rawg?.screenshots?.length)
-        rawgParts.push(`${rawg.screenshots.length}ss`);
-      if (rawg?.developers?.length) rawgParts.push("dev");
-      if (rawg?.publishers?.length) rawgParts.push("pub");
+      const ignParts = [];
+      if (ign?.screenshots?.length)
+        ignParts.push(`${ign.screenshots.length}ss`);
+      if (ign?.developers?.length) ignParts.push("dev");
+      if (ign?.publishers?.length) ignParts.push("pub");
+      if (ign?.ageRating) ignParts.push(ign.ageRating.name);
+      if (typeof ign?.ratingScore === "number")
+        ignParts.push(`${ign.ratingScore}`);
       const tag =
         [
           artParts.length ? `art(${artParts.join(",")})` : null,
           igdbParts.length ? `igdb(${igdbParts.join(",")})` : null,
-          rawgParts.length ? `rawg(${rawgParts.join(",")})` : null,
+          ignParts.length ? `ign(${ignParts.join(",")})` : null,
         ]
           .filter(Boolean)
           .join(" + ") || "partial";
@@ -805,7 +852,7 @@ async function processSystem(system, opts) {
       );
     } else {
       process.stdout.write(
-        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB, no RAWG)\n`
+        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB, no IGN)\n`
       );
     }
 
@@ -834,7 +881,7 @@ async function main() {
   const force = args.includes("--force");
   const revalidate = args.includes("--igdb-revalidate");
   const igdbBackfill = args.includes("--igdb-backfill") || revalidate;
-  const rawgBackfill = args.includes("--rawg-backfill");
+  const ignBackfill = args.includes("--ign-backfill");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
@@ -858,11 +905,17 @@ async function main() {
   for (const system of targets) {
     // Skip systems already completed in a prior run (checkpoint). --force
     // ignores the checkpoint so a full re-resolve is still possible.
-    if (!force && !rawgBackfill && completed.has(system)) {
+    if (!force && !ignBackfill && completed.has(system)) {
       process.stdout.write(`skip ${system}: already completed (checkpoint)\n`);
       continue;
     }
-    await processSystem(system, { force, limit, igdbBackfill, revalidate, rawgBackfill });
+    await processSystem(system, {
+      force,
+      limit,
+      igdbBackfill,
+      revalidate,
+      ignBackfill,
+    });
     // Per-platform checkpoint save — even if the process crashes later,
     // we know this system's output file is complete and can be skipped.
     completed.add(system);

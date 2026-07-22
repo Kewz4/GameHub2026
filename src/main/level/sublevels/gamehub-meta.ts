@@ -18,14 +18,21 @@ export interface GameHubMetaEntry {
   logoImageUrl: string | null;
   /** Square game icon (SteamGridDB). Optional: absent in pre-icon datasets. */
   iconUrl?: string | null;
-  /** Screenshots for the game gallery (RAWG). */
+  /** Screenshots for the game gallery (IGN). */
   screenshots?: string[];
-  /** Trailer/video URLs (RAWG). */
+  /** Trailer/video URLs (IGN). */
   videos?: string[];
-  /** Developer names (RAWG / IGDB). */
+  /** Developer names (IGN / IGDB). */
   developers?: string[];
-  /** Publisher names (RAWG / IGDB). */
+  /** Publisher names (IGN / IGDB). */
   publishers?: string[];
+  /** Age/content rating (IGN): e.g. { name: "M", system: "ESRB" }. Drives the
+   *  optional "hide mature-rated games" library filter. */
+  ageRating?: { name: string; system: string | null };
+  /** Aggregate review score on a 0–100 scale (IGN primaryReview × 10). */
+  ratingScore?: number;
+  /** Franchise/series name (IGN). */
+  series?: string;
   /**
    * Extended IGDB metadata (scores, players, languages, series, box art) for
    * the details page. Cached here after the first live lookup. `undefined`
