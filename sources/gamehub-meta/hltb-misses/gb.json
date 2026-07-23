@@ -1,0 +1,2330 @@
+[
+  {
+    "title": "14 Juillet",
+    "key": "14juillet",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "4-in-1 Funpak: Volume II",
+    "key": "4in1funpakvolumeii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Adulting!",
+    "key": "adulting",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Adventure Island II: Aliens in Paradise",
+    "key": "adventureislandiialiensinparadise",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Alien Olympics",
+    "key": "alienolympics",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Alphamax",
+    "key": "alphamax",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Arcade Classics: Super Breakout / Battlezone",
+    "key": "arcadeclassicssuperbreakoutbattlezone",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Art School Pocket",
+    "key": "artschoolpocket",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Asteroids Chasers",
+    "key": "asteroidschasers",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Astro-Jump",
+    "key": "astrojump",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Baby's Day Out",
+    "key": "babysdayout",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bill Elliott's NASCAR Fast Tracks",
+    "key": "billelliottsnascarfasttracks",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Birdie Bartender",
+    "key": "birdiebartender",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Black Bass: Lure Fishing",
+    "key": "blackbasslurefishing",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bust-a-Move 3 DX",
+    "key": "bustamove3dx",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Casino FunPak",
+    "key": "casinofunpak",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Championship Pool",
+    "key": "championshippool",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Chase H.Q.",
+    "key": "chasehq",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cheesy Town",
+    "key": "cheesytown",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cherry Rescue!",
+    "key": "cherryrescue",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "College Slam",
+    "key": "collegeslam",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cool Hand",
+    "key": "coolhand",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "DMG Deals Damage",
+    "key": "dmgdealsdamage",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dangan GB",
+    "key": "dangangb",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dexterity",
+    "key": "dexterity",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dino's Offline Adventure",
+    "key": "dinosofflineadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Double Dragon 3: The Arcade Game",
+    "key": "doubledragon3thearcadegame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Eddie's Puzzle Time",
+    "key": "eddiespuzzletime",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "F-15 Strike Eagle",
+    "key": "f15strikeeagle",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "F-Zero Project",
+    "key": "fzeroproject",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FIFA Soccer 97",
+    "key": "fifasoccer97",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Faceball 2000",
+    "key": "faceball2000",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Fastest Lap",
+    "key": "fastestlap",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Fighting Simulator 2-in-1: Flying Warriors",
+    "key": "fightingsimulator2in1flyingwarriors",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Flappy Special",
+    "key": "flappyspecial",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Football International",
+    "key": "footballinternational",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Foreman for Real",
+    "key": "foremanforreal",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Game Boy Camera Gold",
+    "key": "gameboycameragold",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Home Alone 2: Kevin's Dream",
+    "key": "homealone2kevinsdream",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jet Pak Jak",
+    "key": "jetpakjak",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "John Madden Football",
+    "key": "johnmaddenfootball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jurassic Park Part 2: The Chaos Continues",
+    "key": "jurassicparkpart2thechaoscontinues",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "King James Bible",
+    "key": "kingjamesbible",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Klustar",
+    "key": "klustar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Learn and Play: Blackjack & Solitaire",
+    "key": "learnandplayblackjacksolitaire",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mad Monster",
+    "key": "madmonster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Madden '95",
+    "key": "madden95",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Madden '97",
+    "key": "madden97",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Megalit",
+    "key": "megalit",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mick & Mack as the Global Gladiators",
+    "key": "mickmackastheglobalgladiators",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mini-Putt",
+    "key": "miniputt",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Porklike",
+    "key": "porklike",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Power Mission",
+    "key": "powermission",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pushingo",
+    "key": "pushingo",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Q*bert for Game Boy",
+    "key": "qbertforgameboy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Race Days",
+    "key": "racedays",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rap Quest",
+    "key": "rapquest",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Reservoir Rat",
+    "key": "reservoirrat",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Retroid",
+    "key": "retroid",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ring Rage",
+    "key": "ringrage",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sacred Meat",
+    "key": "sacredmeat",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sam Mallard: The Case of the Missing Swan",
+    "key": "sammallardthecaseofthemissingswan",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sarakon",
+    "key": "sarakon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Skate or Die: Tour de Thrash",
+    "key": "skateordietourdethrash",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SolarStriker",
+    "key": "solarstriker",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Stop That Roach!",
+    "key": "stopthatroach",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sunsoft Grand Prix",
+    "key": "sunsoftgrandprix",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Black Bass",
+    "key": "superblackbass",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super James Pond",
+    "key": "superjamespond",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tarzan: Lord of the Jungle",
+    "key": "tarzanlordofthejungle",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tip Off",
+    "key": "tipoff",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Titus the Fox",
+    "key": "titusthefox",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Top Gun: Guts & Glory",
+    "key": "topgungutsglory",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Torpedo Range",
+    "key": "torpedorange",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "WordZap",
+    "key": "wordzap",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Workboy",
+    "key": "workboy",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zool: Ninja of the Nth Dimension",
+    "key": "zoolninjaofthenthdimension",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Auto Zone",
+    "key": "autozone",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Baby T-Rex EUWe're Back! A Dinosaur's StoryBamse SWAgroSoar AU",
+    "key": "babytrexeuwerebackadinosaursstorybamseswagrosoarau",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Blitz Bomber",
+    "key": "blitzbomber",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Blockade",
+    "key": "blockade",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bo Jackson: Two Games In One",
+    "key": "bojacksontwogamesinone",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "BrainBender",
+    "key": "brainbender",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Card Game",
+    "key": "cardgame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Castle Quest",
+    "key": "castlequest",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Choplifter II: Rescue Survive",
+    "key": "choplifteriirescuesurvive",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "CosmoTank",
+    "key": "cosmotank",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cyber Dreamscape Battle-Deckers 2199",
+    "key": "cyberdreamscapebattledeckers2199",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dan Laser",
+    "key": "danlaser",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disney's The Hunchback of Notre Dame: 5 Foolishly Fun Topsy Turvy Games",
+    "key": "disneysthehunchbackofnotredame5foolishlyfuntopsyturvygames",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dr. Franken II",
+    "key": "drfrankenii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dragonborne",
+    "key": "dragonborne",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dungeon Warrior",
+    "key": "dungeonwarrior",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "F-1 Race",
+    "key": "f1race",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Franky, Joe & Dirk: On The Tiles",
+    "key": "frankyjoedirkonthetiles",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Fydo's Magic Tiles",
+    "key": "fydosmagictiles",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Game Boy Wars",
+    "key": "gameboywars",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Gremlins 2: The New Batch",
+    "key": "gremlins2thenewbatch",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hercules",
+    "key": "hercules",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "InfoGenius Productivity Pak: Frommer's Travel Guide",
+    "key": "infogeniusproductivitypakfrommerstravelguide",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "InfoGenius Productivity Pak: Personal Organizer and Phone Book",
+    "key": "infogeniusproductivitypakpersonalorganizerandphonebook",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "InfoGenius Productivity Pak: Spell Checker and Calculator",
+    "key": "infogeniusproductivitypakspellcheckerandcalculator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Into the Blue",
+    "key": "intotheblue",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jeep Jamboree: Off-Road Adventure",
+    "key": "jeepjamboreeoffroadadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "La Linea",
+    "key": "lalinea",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Lost Knight",
+    "key": "lostknight",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Madden '96",
+    "key": "madden96",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Magnetic Soccer",
+    "key": "magneticsoccer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "McDonaldland",
+    "key": "mcdonaldland",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Robby's Day Out",
+    "key": "robbysdayout",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rock'n! Monster!!",
+    "key": "rocknmonster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sensible Soccer: European Champions",
+    "key": "sensiblesoccereuropeanchampions",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Smartcom",
+    "key": "smartcom",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Splitz",
+    "key": "splitz",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sports Illustrated: Golf Classic",
+    "key": "sportsillustratedgolfclassic",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Star Trek Generations: Beyond the Nexus",
+    "key": "startrekgenerationsbeyondthenexus",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Chinese Land 1-2-3 Dash",
+    "key": "superchineseland123dash",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Kick Off",
+    "key": "superkickoff",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Adventures of Pinocchio",
+    "key": "adventuresofpinocchio",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Bouncing Ball",
+    "key": "bouncingball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Fidgetts",
+    "key": "fidgetts",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Game of Harmony",
+    "key": "gameofharmony",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Ren & Stimpy Show: Space Cadet Adventures",
+    "key": "renstimpyshowspacecadetadventures",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Thin Ice Rescue",
+    "key": "thinicerescue",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Turn and Burn: The F-14 Dogfight Simulator",
+    "key": "turnandburnthef14dogfightsimulator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Un Indien Dans La Ville",
+    "key": "unindiendanslaville",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World Ice Hockey",
+    "key": "worldicehockey",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dogz",
+    "key": "dogz",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Doug's Big Game",
+    "key": "dougsbiggame",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "D\u00e9j\u00e0 Vu I & II: The Casebooks of Ace Harding",
+    "key": "dejavuiiithecasebooksofaceharding",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "F1 Racing Championship",
+    "key": "f1racingchampionship",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jimmy White's Cue Ball",
+    "key": "jimmywhitescueball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "JumpStart: Dino Adventure Field Trip",
+    "key": "jumpstartdinoadventurefieldtrip",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MTV Sports: Pure Ride",
+    "key": "mtvsportspureride",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MTV Sports: Skateboarding featuring Andy Macdonald",
+    "key": "mtvsportsskateboardingfeaturingandymacdonald",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MTV Sports: T.J. Lavin's Ultimate BMX",
+    "key": "mtvsportstjlavinsultimatebmx",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Madden NFL 2001",
+    "key": "maddennfl2001",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Racin' Ratz",
+    "key": "racinratz",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Mask of Zorro",
+    "key": "maskofzorro",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Nations: Land of Legends",
+    "key": "nationslandoflegends",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tom and Jerry in Mouse Attacks!",
+    "key": "tomandjerryinmouseattacks",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Top Gun: Firestorm",
+    "key": "topgunfirestorm",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games In 1: Disney Princess + Disney's The Lion King",
+    "key": "2gamesin1disneyprincessdisneysthelionking",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1 Double Pack: Hot Wheels: World Race / Hot Wheels: Velocity X",
+    "key": "2gamesin1doublepackhotwheelsworldracehotwheelsvelocityx",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1 Double Pack: Scooby-Doo and the Cyber Chase / Scooby-Doo!: Mystery Mayhem",
+    "key": "2gamesin1doublepackscoobydooandthecyberchasescoobydoomysterymayhem",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1!: Dragon Ball Z: Buu's Fury / Dragon Ball GT: Transformation",
+    "key": "2gamesin1dragonballzbuusfurydragonballgttransformation",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1: Brother Bear + The Lion King",
+    "key": "2gamesin1brotherbearthelionking",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1: Columns Crown + Chu Chu Rocket!",
+    "key": "2gamesin1columnscrownchuchurocket",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1: LEGO Knights' Kingdom + LEGO Bionicle",
+    "key": "2gamesin1legoknightskingdomlegobionicle",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1: Power Rangers: Ninja Storm / Power Rangers: Time Force",
+    "key": "2gamesin1powerrangersninjastormpowerrangerstimeforce",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1: SpongeBob SquarePants: Battle for Bikini Bottom + SpongeBob SquarePants: Supersponge",
+    "key": "2gamesin1spongebobsquarepantsbattleforbikinibottomspongebobsquarepantssupersponge",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Games in 1: SpongeBob SquarePants: Supersponge & SpongeBob SquarePants: Revenge of the Flying Dutchman",
+    "key": "2gamesin1spongebobsquarepantssuperspongespongebobsquarepantsrevengeoftheflyingdutchman",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 Great Games!: Ms. Pac-Man: Maze Madness & Pac-Man World",
+    "key": "2greatgamesmspacmanmazemadnesspacmanworld",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2 in 1 Game Pack: Spider-Man / Spider-Man 2",
+    "key": "2in1gamepackspidermanspiderman2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "2-In-1 Fun Pack: Madagascar: Operation Penguin / Shrek 2",
+    "key": "2in1funpackmadagascaroperationpenguinshrek2",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "3 Games in 1: Rugrats: I Gotta Party / Spongebob Squarepants: Supersponge / Tak and the Power of the Juju",
+    "key": "3gamesin1rugratsigottapartyspongebobsquarepantssuperspongetakandthepowerofthejuju",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "All Grown Up! Express Yourself",
+    "key": "allgrownupexpressyourself",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Animal Snap: Rescue Them 2 by 2",
+    "key": "animalsnaprescuethem2by2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Babar to the Rescue",
+    "key": "babartotherescue",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Backyard Baseball 2006",
+    "key": "backyardbaseball2006",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Backyard Football 2006",
+    "key": "backyardfootball2006",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Backyard Sports: Baseball 2007",
+    "key": "backyardsportsbaseball2007",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Backyard Sports: Football 2007",
+    "key": "backyardsportsfootball2007",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Barbie Horse Adventures: Blue Ribbon Race",
+    "key": "barbiehorseadventuresblueribbonrace",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Barbie: The Princess and the Pauper",
+    "key": "barbietheprincessandthepauper",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Battle B-Daman: Fire Spirits!",
+    "key": "battlebdamanfirespirits",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "BattleBots: Design & Destroy",
+    "key": "battlebotsdesigndestroy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bomberman Max 2: Blue Advance",
+    "key": "bombermanmax2blueadvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bomberman Max 2: Red Advance",
+    "key": "bombermanmax2redadvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Buffy the Vampire Slayer: Wrath of the Darkhul King",
+    "key": "buffythevampireslayerwrathofthedarkhulking",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Caesars Palace Advance: Millennium Gold Edition",
+    "key": "caesarspalaceadvancemillenniumgoldedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Carrera Power Slide",
+    "key": "carrerapowerslide",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Combo Pack: Sonic Advance + Sonic Pinball Party",
+    "key": "combopacksonicadvancesonicpinballparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Crash & Spyro Super Pack Volume 2",
+    "key": "crashspyrosuperpackvolume2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Crash & Spyro Superpack: Spyro Orange: The Cortex Conspiracy / Crash Bandicoot Purple: Ripto's Rampage",
+    "key": "crashspyrosuperpackspyroorangethecortexconspiracycrashbandicootpurpleriptosrampage",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Crazy Chase",
+    "key": "crazychase",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Creatures",
+    "key": "creatures",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Desert Strike Advance",
+    "key": "desertstrikeadvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disney Sports Snowboarding",
+    "key": "disneysportssnowboarding",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disney's American Dragon: Jake Long - Rise of the Huntsclan",
+    "key": "disneysamericandragonjakelongriseofthehuntsclan",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disney's Magical Quest 2 Starring Mickey & Minnie",
+    "key": "disneysmagicalquest2starringmickeyminnie",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disney's Magical Quest Starring Mickey & Minnie",
+    "key": "disneysmagicalqueststarringmickeyminnie",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dora the Explorer Double Pack",
+    "key": "doratheexplorerdoublepack",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dragon's Rock",
+    "key": "dragonsrock",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Droopy's Tennis Open",
+    "key": "droopystennisopen",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ESPN Final Round Golf 2002",
+    "key": "espnfinalroundgolf2002",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ESPN Great Outdoor Games: Bass 2002",
+    "key": "espngreatoutdoorgamesbass2002",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ESPN Winter X-Games Snowboarding 2002",
+    "key": "espnwinterxgamessnowboarding2002",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Egg Mania",
+    "key": "eggmania",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "F24: Stealth Fighter",
+    "key": "f24stealthfighter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FIFA Soccer 06",
+    "key": "fifasoccer06",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FIFA Soccer 07",
+    "key": "fifasoccer07",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FIFA Soccer 2003",
+    "key": "fifasoccer2003",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FIFA Soccer 2004",
+    "key": "fifasoccer2004",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FIFA Soccer 2005",
+    "key": "fifasoccer2005",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FILA Decathlon",
+    "key": "filadecathlon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Galidor: Defenders of the Outer Dimension",
+    "key": "galidordefendersoftheouterdimension",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hardcore Pool",
+    "key": "hardcorepool",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Heidi: The Game",
+    "key": "heidithegame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "High Heat Major League Baseball 2003",
+    "key": "highheatmajorleaguebaseball2003",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hugo 2 in 1",
+    "key": "hugo2in1",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "International Karate Advanced",
+    "key": "internationalkarateadvanced",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "International Superstar Soccer Advance",
+    "key": "internationalsuperstarsocceradvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "It's Mr. Pants",
+    "key": "itsmrpants",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "James Pond: Codename Robocod",
+    "key": "jamespondcodenamerobocod",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jet Grind Radio",
+    "key": "jetgrindradio",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Kid's Cards",
+    "key": "kidscards",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Konami Collector's Series: Arcade Advanced",
+    "key": "konamicollectorsseriesarcadeadvanced",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Kong: The 8th Wonder of the World",
+    "key": "kongthe8thwonderoftheworld",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Kong: The Animated Series",
+    "key": "kongtheanimatedseries",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Lara Croft: Tomb Raider: The Prophecy",
+    "key": "laracrofttombraidertheprophecy",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Let's Ride!: Dreamer",
+    "key": "letsridedreamer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Let's Ride!: Friends Forever",
+    "key": "letsridefriendsforever",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Let's Ride!: Sunshine Stables",
+    "key": "letsridesunshinestables",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MX 2002 featuring Ricky Carmichael",
+    "key": "mx2002featuringrickycarmichael",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Majesco's Sports Pack",
+    "key": "majescossportspack",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Manic Miner",
+    "key": "manicminer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "March of the Penguins",
+    "key": "marchofthepenguins",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mary-Kate and Ashley: Girls Night Out",
+    "key": "marykateandashleygirlsnightout",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Matchbox Missions: Air, Land and Sea Rescue / Emergency Response",
+    "key": "matchboxmissionsairlandandsearescueemergencyresponse",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Math Patrol: The Kleptoid Threat",
+    "key": "mathpatrolthekleptoidthreat",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Maya the Bee: Sweet Gold",
+    "key": "mayathebeesweetgold",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Maya the Bee: The Great Adventure",
+    "key": "mayathebeethegreatadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Medabots AX: Metabee Ver.",
+    "key": "medabotsaxmetabeever",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Medabots AX: Rokusho Ver.",
+    "key": "medabotsaxrokushover",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mega Man Battle Network 3: White Version",
+    "key": "megamanbattlenetwork3whiteversion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mega Man Battle Network 4: Blue Moon",
+    "key": "megamanbattlenetwork4bluemoon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mega Man Battle Network 5: Team Colonel",
+    "key": "megamanbattlenetwork5teamcolonel",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mega Man Battle Network 6: Cybeast Falzar",
+    "key": "megamanbattlenetwork6cybeastfalzar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mega Man Battle Network 6: Cybeast Gregar",
+    "key": "megamanbattlenetwork6cybeastgregar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mighty Beanz Pocket Puzzles",
+    "key": "mightybeanzpocketpuzzles",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Monster! Bass Fishing",
+    "key": "monsterbassfishing",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Muppet Pinball Mayhem",
+    "key": "muppetpinballmayhem",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NGT: Next Generation Tennis",
+    "key": "ngtnextgenerationtennis",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Operation: Armored Liberty",
+    "key": "operationarmoredliberty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Paws & Claws Pet Resort",
+    "key": "pawsclawspetresort",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Petz Vet",
+    "key": "petzvet",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pinball Advance",
+    "key": "pinballadvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pinball Challenge Deluxe",
+    "key": "pinballchallengedeluxe",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pinball Tycoon",
+    "key": "pinballtycoon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pok\u00e9mon Mystery Dungeon: Red Rescue Team",
+    "key": "pokemonmysterydungeonredrescueteam",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Polly Pocket: Super Splash Island",
+    "key": "pollypocketsupersplashisland",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Premier Action Soccer",
+    "key": "premieractionsoccer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Premier Manager 2003\u201304",
+    "key": "premiermanager200304",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Premier Manager 2004\u20132005",
+    "key": "premiermanager20042005",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Premier Manager 2005\u20132006",
+    "key": "premiermanager20052006",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Prince of Persia: The Sands of Time & Lara Croft Tomb Raider: The Prophecy",
+    "key": "princeofpersiathesandsoftimelaracrofttombraidertheprophecy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Puppy Luv: Spa and Resort",
+    "key": "puppyluvspaandresort",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Racing Fever",
+    "key": "racingfever",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rampage Puzzle Attack",
+    "key": "rampagepuzzleattack",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rocket Power: Zero Gravity Zone",
+    "key": "rocketpowerzerogravityzone",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Santa Claus Jr. Advance",
+    "key": "santaclausjradvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Scrabble Blast!",
+    "key": "scrabbleblast",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Secret Agent Barbie: Royal Jewels Mission",
+    "key": "secretagentbarbieroyaljewelsmission",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sega Arcade Gallery",
+    "key": "segaarcadegallery",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sega Smash Pack",
+    "key": "segasmashpack",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shrek the Third",
+    "key": "shrekthethird",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sports Illustrated for Kids Baseball",
+    "key": "sportsillustratedforkidsbaseball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sportsmans Pack 2 in 1: Cabela's Big Game Hunter and Rapala Pro Fishing",
+    "key": "sportsmanspack2in1cabelasbiggamehunterandrapalaprofishing",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Spy Kids Challenger",
+    "key": "spykidschallenger",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Spy Muppets: License to Croak",
+    "key": "spymuppetslicensetocroak",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SpyHunter",
+    "key": "spyhunter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Strawberry Shortcake: Ice Cream Island: Riding Camp",
+    "key": "strawberryshortcakeicecreamislandridingcamp",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Strawberry Shortcake: Summertime Adventure: Special Edition",
+    "key": "strawberryshortcakesummertimeadventurespecialedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Dropzone: Intergalactic Rescue Mission",
+    "key": "superdropzoneintergalacticrescuemission",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Hornet F/A-18F",
+    "key": "superhornetfa18f",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Teenage Mutant Ninja Turtles: Double Pack",
+    "key": "teenagemutantninjaturtlesdoublepack",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ten Pin Alley 2",
+    "key": "tenpinalley2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tennis Masters Series 2003",
+    "key": "tennismastersseries2003",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Bee Game",
+    "key": "beegame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Hobbit: The Prelude to the Lord of the Rings",
+    "key": "hobbitthepreludetothelordoftherings",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Muppets: On With The Show!",
+    "key": "muppetsonwiththeshow",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Suite Life of Zack & Cody: Tipton Caper",
+    "key": "suitelifeofzackcodytiptoncaper",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Tower SP",
+    "key": "towersp",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Wild Thornberrys: Chimp Chase",
+    "key": "wildthornberryschimpchase",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tiger Woods PGA Tour Golf",
+    "key": "tigerwoodspgatourgolf",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tim Burton's The Nightmare Before Christmas: The Pumpkin King",
+    "key": "timburtonsthenightmarebeforechristmasthepumpkinking",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tiny Toon Adventures: Scary Dreams",
+    "key": "tinytoonadventuresscarydreams",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tonka: On The Job",
+    "key": "tonkaonthejob",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Top Gun Firestorm Advance",
+    "key": "topgunfirestormadvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Trick Star",
+    "key": "trickstar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Trollz: Hair Affair!",
+    "key": "trollzhairaffair",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ultimate Arcade Games",
+    "key": "ultimatearcadegames",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ultimate Beach Soccer",
+    "key": "ultimatebeachsoccer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ultimate Muscle: The Kinnikuman Legacy: The Path of the Superhero",
+    "key": "ultimatemusclethekinnikumanlegacythepathofthesuperhero",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Unfabulous",
+    "key": "unfabulous",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Who Wants to Be a Millionaire? 2nd Edition",
+    "key": "whowantstobeamillionaire2ndedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Winnie the Pooh's Rumbly Tumbly Adventure & Rayman 3",
+    "key": "winniethepoohsrumblytumblyadventurerayman3",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Winter Sports",
+    "key": "wintersports",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World Championship Poker",
+    "key": "worldchampionshippoker",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World Poker Tour",
+    "key": "worldpokertour",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  }
+]

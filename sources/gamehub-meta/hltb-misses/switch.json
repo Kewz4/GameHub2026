@@ -1,0 +1,3266 @@
+[
+  {
+    "title": "Assassin\u0393\u00c7\u00d6s Creed The Ezio Collection",
+    "key": "assassincoscreedtheeziocollection",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "inKONBINI",
+    "key": "inkonbini",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nickelodeon Extreme Tennis: Next!",
+    "key": "nickelodeonextremetennisnext",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Drop Duchy \u0393\u00c7\u00f4 Complete Edition",
+    "key": "dropduchycocompleteedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ys Memoire: Revelations in Celceta",
+    "key": "ysmemoirerevelationsincelceta",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Vampire Crawlers",
+    "key": "vampirecrawlers",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Virtual Boy \u0393\u00c7\u00f4 Nintendo Classics",
+    "key": "virtualboyconintendoclassics",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cave of Illusions",
+    "key": "caveofillusions",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MLB The Show 26",
+    "key": "mlbtheshow26",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hello Kitty and Friends Freeze Tag Party",
+    "key": "hellokittyandfriendsfreezetagparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dynamic Chord feat. Kyosho (Remastered Edition)",
+    "key": "dynamicchordfeatkyoshoremasterededition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Blazblue Entropy Effect X",
+    "key": "blazblueentropyeffectx",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Onimusha 2 Samurai\u0393\u00c7\u00d6s Destiny",
+    "key": "onimusha2samuraicosdestiny",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ultimate Sheep Raccoon",
+    "key": "ultimatesheepraccoon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "HUNTER\u251c\u00f9HUNTER NEN\u251c\u00f9IMPACT",
+    "key": "hunteruhunternenuimpact",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Five Nights at Freddy\u0393\u00c7\u00d6s: Secret of the Mimic",
+    "key": "fivenightsatfreddycossecretofthemimic",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "OneShot: World Machine Edition",
+    "key": "oneshotworldmachineedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Samurai Academy: Paws of Fury",
+    "key": "samuraiacademypawsoffury",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Party Arcade: Enhanced Edition",
+    "key": "partyarcadeenhancededition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Momotaro Dentetsu 2 ~ Anata no Machi mo Kitto Aru ~",
+    "key": "momotarodentetsu2anatanomachimokittoaru",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Minecraft Nintendo Switch Edition",
+    "key": "minecraftnintendoswitchedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Walking Dead The Complete First Season",
+    "key": "walkingdeadthecompletefirstseason",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Neko Ramen",
+    "key": "nekoramen",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "L.A Noire",
+    "key": "lanoire",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wasteland 2 : Director's Cut",
+    "key": "wasteland2directorscut",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Towa and the Guardians of the Sacred Tree",
+    "key": "towaandtheguardiansofthesacredtree",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SD Gundam G Generation Cross Rays Platinum Edition",
+    "key": "sdgundamggenerationcrossraysplatinumedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Dark Pictures Anthology : Little Hope",
+    "key": "darkpicturesanthologylittlehope",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Demon Slayer The Hinokami Chronicles 2",
+    "key": "demonslayerthehinokamichronicles2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Amane Switch",
+    "key": "amaneswitch",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zumba Royal Marble Shooter Mania",
+    "key": "zumbaroyalmarbleshootermania",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zumba Burn It Up!",
+    "key": "zumbaburnitup",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zumatch",
+    "key": "zumatch",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zorya: The Celestial Sisters",
+    "key": "zoryathecelestialsisters",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ZooKeeper",
+    "key": "zookeeper",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombiotik",
+    "key": "zombiotik",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombiewood: Survival Shooter",
+    "key": "zombiewoodsurvivalshooter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombies Rising xXx",
+    "key": "zombiesrisingxxx",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombies Crusher",
+    "key": "zombiescrusher",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombies Cool",
+    "key": "zombiescool",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Watch",
+    "key": "zombiewatch",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Town",
+    "key": "zombietown",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Survivors",
+    "key": "zombiesurvivors",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Raft",
+    "key": "zombieraft",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Outbreak Survival in Ancient Egyptian",
+    "key": "zombieoutbreaksurvivalinancientegyptian",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Hunter D-Day",
+    "key": "zombiehunterdday",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Hill Race",
+    "key": "zombiehillrace",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Harvest: Survival Farming Simulator",
+    "key": "zombieharvestsurvivalfarmingsimulator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Garden & Plants Defense",
+    "key": "zombiegardenplantsdefense",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Football Simulator",
+    "key": "zombiefootballsimulator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Driver Immortal Edition",
+    "key": "zombiedriverimmortaledition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Call: Trigger 3D",
+    "key": "zombiecalltrigger3d",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Blocks Pixel Shooter Gun",
+    "key": "zombieblockspixelshootergun",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ZOMBIE Beyond Terror: FPS Survival",
+    "key": "zombiebeyondterrorfpssurvival",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Apocalypse: Survival Stories",
+    "key": "zombieapocalypsesurvivalstories",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ZombFarm",
+    "key": "zombfarm",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zoids Wild: King of Blast",
+    "key": "zoidswildkingofblast",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zoids Wild: Infinity Blast",
+    "key": "zoidswildinfinityblast",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ZikSquare",
+    "key": "ziksquare",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ZIC: Zombies in City",
+    "key": "ziczombiesincity",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zero to Dance Hero",
+    "key": "zerotodancehero",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zero Fire Toaplan Arcade Garage",
+    "key": "zerofiretoaplanarcadegarage",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zelda Musou Hyrule All Stars DX",
+    "key": "zeldamusouhyruleallstarsdx",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Z War Apocalypse Shooter",
+    "key": "zwarapocalypseshooter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yuuwaku ni Makenaide: Succubus ni Kanri Sareta Sekai de",
+    "key": "yuuwakunimakenaidesuccubusnikanrisaretasekaide",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yuuna and the Haunted Hot Springs The Thrilling Steamy Maze Kiwami",
+    "key": "yuunaandthehauntedhotspringsthethrillingsteamymazekiwami",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yuru Yuru Theater-Theatrical Version-1",
+    "key": "yuruyurutheatertheatricalversion1",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yuppie Psycho: Executive Edition",
+    "key": "yuppiepsychoexecutiveedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yuoni: Rises",
+    "key": "yuonirises",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yumemidori Nostalgia",
+    "key": "yumemidorinostalgia",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yum Yum Line",
+    "key": "yumyumline",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yukaku Mikaido Detective Agency Chapter 1",
+    "key": "yukakumikaidodetectiveagencychapter1",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yu-Gi-Oh! Rush Duel: Saikyou Battle Royale",
+    "key": "yugiohrushduelsaikyoubattleroyale",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ys Memoire: Memories of Celceta",
+    "key": "ysmemoirememoriesofcelceta",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Youtubers Life OMG Edition",
+    "key": "youtuberslifeomgedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Your Future 2 Future Prediction",
+    "key": "yourfuture2futureprediction",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Younger Girlfriend",
+    "key": "youngergirlfriend",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Youmandriver",
+    "key": "youmandriver",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Youkai Poetry",
+    "key": "youkaipoetry",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "YOU and ME and HER: A Love Story / Kimi to Kanojo to Kanojo no Koi",
+    "key": "youandmeandheralovestorykimitokanojotokanojonokoi",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yoris Journey: Forgotten Origins",
+    "key": "yorisjourneyforgottenorigins",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yomawari San",
+    "key": "yomawarisan",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yoga Studio: Poses for experts and beginners",
+    "key": "yogastudioposesforexpertsandbeginners",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "YOGA MASTER",
+    "key": "yogamaster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "YOBARAI Detective: Miasma Breaker",
+    "key": "yobaraidetectivemiasmabreaker",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yellow Fins",
+    "key": "yellowfins",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yello Adventures",
+    "key": "yelloadventures",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yakimochi Kanojo no Ichizu na Koi",
+    "key": "yakimochikanojonoichizunakoi",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Y. Village The Visitors",
+    "key": "yvillagethevisitors",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "XIIZEAL",
+    "key": "xiizeal",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Xicatrice",
+    "key": "xicatrice",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Xiaomei and the Flame Dragons Fist",
+    "key": "xiaomeiandtheflamedragonsfist",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Xenogunner",
+    "key": "xenogunner",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "XALADIA: Rise of the Space Pirates X2",
+    "key": "xaladiariseofthespacepiratesx2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "X-Force Under Attack",
+    "key": "xforceunderattack",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wukong Sun: Black Legend",
+    "key": "wukongsunblacklegend",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "WorldNeverland Elnea Kingdom",
+    "key": "worldneverlandelneakingdom",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World War: D-Day PART ONE",
+    "key": "worldwarddaypartone",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World War II City Rebirth Tycoon",
+    "key": "worldwariicityrebirthtycoon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World Soccer Kid",
+    "key": "worldsoccerkid",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World Quiz",
+    "key": "worldquiz",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World of Outlaws: Dirt Racing 23 Edition",
+    "key": "worldofoutlawsdirtracing23edition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World Cruise Story",
+    "key": "worldcruisestory",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World Championship Boxing Manager 2",
+    "key": "worldchampionshipboxingmanager2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World At War: Cobra",
+    "key": "worldatwarcobra",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "World At War Normandy",
+    "key": "worldatwarnormandy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Working Zombies",
+    "key": "workingzombies",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Work it Out! Job Challenge",
+    "key": "workitoutjobchallenge",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Word Mesh",
+    "key": "wordmesh",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Woodturning 3D",
+    "key": "woodturning3d",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wonder Boy Anniversary Collection",
+    "key": "wonderboyanniversarycollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wizards Owl: Magic Delivery",
+    "key": "wizardsowlmagicdelivery",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wizardry: The Five Ordeals",
+    "key": "wizardrythefiveordeals",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "WitchSpring3 [Re:Fine] The Story of Eirudy",
+    "key": "witchspring3refinethestoryofeirudy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Witchs Pranks Frogs Fortune Collectors Edition",
+    "key": "witchspranksfrogsfortunecollectorsedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Winning Post 10 2025",
+    "key": "winningpost102025",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Why Pizza",
+    "key": "whypizza",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Whittingham Asylum: The Investigation",
+    "key": "whittinghamasylumtheinvestigation",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "What does it look like? Diagnosis",
+    "key": "whatdoesitlooklikediagnosis",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Watermelon Game / Suika Game",
+    "key": "watermelongamesuikagame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wand of Fortune R",
+    "key": "wandoffortuner",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Waifu Discovered 2: Medieval Fantasy",
+    "key": "waifudiscovered2medievalfantasy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Vostok 2061",
+    "key": "vostok2061",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "void tRrLM2();",
+    "key": "voidtrrlm2",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Virtual Families Cook Off Chapter 2 Farm Life",
+    "key": "virtualfamiliescookoffchapter2farmlife",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Vessels of Decay",
+    "key": "vesselsofdecay",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Utakata no Uchronia",
+    "key": "utakatanouchronia",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Urban Skater Skateboard Delivery City Challenge",
+    "key": "urbanskaterskateboarddeliverycitychallenge",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Unheard Voices of Crime Edition",
+    "key": "unheardvoicesofcrimeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Umineko no Naku Koro ni Saku ~Nekobako to Musou no Koukyoukyoku~",
+    "key": "uminekononakukoronisakunekobakotomusounokoukyoukyoku",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ultimate Rock Climbing Challenge",
+    "key": "ultimaterockclimbingchallenge",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Two Point Hospital JUMBO Edition",
+    "key": "twopointhospitaljumboedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Turrican Anthology Vol. II",
+    "key": "turricananthologyvolii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "TT Isle of Man Ride On The Edge 2",
+    "key": "ttisleofmanrideontheedge2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Truck Simulator City Delivery",
+    "key": "trucksimulatorcitydelivery",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Truck Drag Racing Legends Simulator",
+    "key": "truckdragracinglegendssimulator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tracks Toybox Edition",
+    "key": "trackstoyboxedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Toraware no Palm Refrain Deluxe Edition",
+    "key": "torawarenopalmrefraindeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Top Speed: Drag & Fast Racing",
+    "key": "topspeeddragfastracing",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Toonsters Crossing Worlds",
+    "key": "toonsterscrossingworlds",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Toolboy",
+    "key": "toolboy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tony Hawks Pro Skater 1 Plus 2",
+    "key": "tonyhawksproskater1plus2",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tomoyo After -Its a Wonderful Life- CS Edition",
+    "key": "tomoyoafteritsawonderfullifecsedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "TOKYO CHRONOS & ALTDEUS: Beyond Chronos TWIN PACK",
+    "key": "tokyochronosaltdeusbeyondchronostwinpack",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tokimeki Memorial: forever with you Emotional Deluxe Edition",
+    "key": "tokimekimemorialforeverwithyouemotionaldeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tiny Lands Deluxe Edition",
+    "key": "tinylandsdeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Time Gal HD Remaster Taito LD Game Collection",
+    "key": "timegalhdremastertaitoldgamecollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "TIEBREAK Plus Ace Edition",
+    "key": "tiebreakplusaceedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "This is from Mother Star",
+    "key": "thisisfrommotherstar",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "They Always Run Switch + Audio Art Book",
+    "key": "theyalwaysrunswitchaudioartbook",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Walking Dead: Season Two",
+    "key": "walkingdeadseasontwo",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Voice of Germany Das offizielle Videospiel!",
+    "key": "voiceofgermanydasoffiziellevideospiel",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Talos Principle: Deluxe Edition",
+    "key": "talosprincipledeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Smurfs: Learn and Play",
+    "key": "smurfslearnandplay",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Sisters: Party Of The Year",
+    "key": "sisterspartyoftheyear",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Sisters 2 Road to Fame",
+    "key": "sisters2roadtofame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Legend of the Dragonflame Highschool Collection",
+    "key": "legendofthedragonflamehighschoolcollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Legend of Legacy HD Remastered",
+    "key": "legendoflegacyhdremastered",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Legend of Heroes: Hajimari no Kiseki",
+    "key": "legendofheroeshajimarinokiseki",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "THE KING OF FIGHTERS XIII GLOBAL MATCH Switch + Artbook + Soundtrack",
+    "key": "kingoffightersxiiiglobalmatchswitchartbooksoundtrack",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Garden Path",
+    "key": "gardenpath",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Flame In The Flood: Complete Edition",
+    "key": "flameinthefloodcompleteedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Escapists: Complete Edition",
+    "key": "escapistscompleteedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Escape Room Chronicles ep1:The Mysterious KumaDonalds",
+    "key": "escaperoomchroniclesep1themysteriouskumadonalds",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Dark Pictures Anthology: Man Of Medan",
+    "key": "darkpicturesanthologymanofmedan",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "THE BIKE MOTO RIDE SIMULATOR",
+    "key": "bikemotoridesimulator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Terra Flame",
+    "key": "terraflame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Taxi Driver Simulator 2024",
+    "key": "taxidriversimulator2024",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tank Battle Retro",
+    "key": "tankbattleretro",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "TAISHO x ALICE ALL IN ONE Switch + Addon",
+    "key": "taishoxaliceallinoneswitchaddon",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "System Shock 2: 25th Anniversary Remaster",
+    "key": "systemshock225thanniversaryremaster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Syberia Trilogy (1 + 2 + 3)",
+    "key": "syberiatrilogy123",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Supermarket Owner Simulator: Business",
+    "key": "supermarketownersimulatorbusiness",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Woden GP II",
+    "key": "superwodengpii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Technos World: River City & Technos Arcade Classics",
+    "key": "supertechnosworldrivercitytechnosarcadeclassics",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Robot Taisen V Premium Anime Song & Sound Edition",
+    "key": "superrobottaisenvpremiumanimesongsoundedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super nodage World",
+    "key": "supernodageworld",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Mega Baseball 4 Standard Edition 1.8.0",
+    "key": "supermegabaseball4standardedition180",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Famicom Nintendo Switch Online",
+    "key": "superfamicomnintendoswitchonline",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Dark Deception",
+    "key": "superdarkdeception",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Supaplex GO!",
+    "key": "supaplexgo",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sunless Skies: Sovereign Edition",
+    "key": "sunlessskiessovereignedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sunless Sea: Zubmariner Edition",
+    "key": "sunlessseazubmarineredition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Suika Game Special Edition",
+    "key": "suikagamespecialedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sugar Tanks Arena",
+    "key": "sugartanksarena",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sudoku Relax 3 Autumn Leaves",
+    "key": "sudokurelax3autumnleaves",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Subarashiki Hibi ~Furenzoku Sonzai~",
+    "key": "subarashikihibifurenzokusonzai",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Strike Force 2 Terrorist Hunt",
+    "key": "strikeforce2terroristhunt",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Stikbold! A Dodgeball Adventure DELUXE",
+    "key": "stikboldadodgeballadventuredeluxe",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Stickman Odyssey",
+    "key": "stickmanodyssey",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Stay Cool, Kobayashi-san!: A River City Ransom Story",
+    "key": "staycoolkobayashisanarivercityransomstory",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Star Gagnant",
+    "key": "stargagnant",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sports Party",
+    "key": "sportsparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Spelunker HD Deluxe",
+    "key": "spelunkerhddeluxe",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sonic Dimensions",
+    "key": "sonicdimensions",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sonic Colours: Ultimate",
+    "key": "soniccoloursultimate",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Snake It Til You Make It",
+    "key": "snakeittilyoumakeit",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SMASHING THE BATTLE GHOST SOUL",
+    "key": "smashingthebattleghostsoul",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Slimeboo",
+    "key": "slimeboo",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sky Gamblers: Storm Raiders 2",
+    "key": "skygamblersstormraiders2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Silver 2425",
+    "key": "silver2425",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shiro to Kuro no Alice",
+    "key": "shirotokuronoalice",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shin chan: Shiro of Coal Town",
+    "key": "shinchanshiroofcoaltown",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sengoku Musou Sanada Maru",
+    "key": "sengokumusousanadamaru",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SEGA Mega Drive Classics",
+    "key": "segamegadriveclassics",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SEGA Genesis Nintendo Switch Online",
+    "key": "segagenesisnintendoswitchonline",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SEGA AGES SONIC THE HEDGEHOG",
+    "key": "segaagessonicthehedgehog",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SEGA Ages Puzzle & Action: Ichidant-R",
+    "key": "segaagespuzzleactionichidantr",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sea of Solitude: The Directors Cut",
+    "key": "seaofsolitudethedirectorscut",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SD Gundam G Generation Genesis for Nintendo",
+    "key": "sdgundamggenerationgenesisfornintendo",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Screencheat: Unplugged",
+    "key": "screencheatunplugged",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SCHEDULE I MAFIA EMPIRE",
+    "key": "scheduleimafiaempire",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "sCATch: The Painter Cat",
+    "key": "scatchthepaintercat",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "S.T.A.L.K.E.R.: Shadow of Chornobyl",
+    "key": "stalkershadowofchornobyl",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "S.T.A.L.K.E.R.: Call of Prypiat",
+    "key": "stalkercallofprypiat",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rush Rally Origins Switch",
+    "key": "rushrallyoriginsswitch",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "rRootage Reloaded",
+    "key": "rrootagereloaded",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ROMANCE OF THE THREE KINGDOMS XIV: Diplomacy and Strategy Expansion Pack Bundle",
+    "key": "romanceofthethreekingdomsxivdiplomacyandstrategyexpansionpackbundle",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Roman Rumble in Las Vegum Asterix & Obelix XXL 2",
+    "key": "romanrumbleinlasvegumasterixobelixxxl2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "RISK: The Game of Global Domination",
+    "key": "riskthegameofglobaldomination",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "RiMS Racing",
+    "key": "rimsracing",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Redeemer: Enhanced Edition",
+    "key": "redeemerenhancededition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Record of Lodoss War-Deedlit in Wonder Labyrinth Sue",
+    "key": "recordoflodosswardeedlitinwonderlabyrinthsue",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Real Hentai 4",
+    "key": "realhentai4",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Raiden IV x MIKADO remix",
+    "key": "raidenivxmikadoremix",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Raft Survival Simulator",
+    "key": "raftsurvivalsimulator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Puzzle Bobble / Bust-a-Move (16-Bit Console Version)",
+    "key": "puzzlebobblebustamove16bitconsoleversion",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Powerful Pro Yakyu 2024-2025 / Powerful Pro Baseball 2024-2025",
+    "key": "powerfulproyakyu20242025powerfulprobaseball20242025",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Potion Permit Complete Edition",
+    "key": "potionpermitcompleteedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Poker Champion: Texas Holdem",
+    "key": "pokerchampiontexasholdem",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pokemon TV",
+    "key": "pokemontv",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pocket Card Jockey: Ride On!",
+    "key": "pocketcardjockeyrideon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Plants vs. Zombies: Battle for Neighborville Complete Edition",
+    "key": "plantsvszombiesbattleforneighborvillecompleteedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "planetarian: The Reverie of a Little Planet & Snow Globe",
+    "key": "planetarianthereverieofalittleplanetsnowglobe",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Planescape: Torment and Icewind Dale: Enhanced Editions",
+    "key": "planescapetormentandicewinddaleenhancededitions",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Overcooked Special Edition",
+    "key": "overcookedspecialedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Outlast: Bundle of Terror",
+    "key": "outlastbundleofterror",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Oshiete Onedari Shogi",
+    "key": "oshieteonedarishogi",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ONE PIECE: Pirate Warriors 3 Deluxe Edition",
+    "key": "onepiecepiratewarriors3deluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ONE PIECE ODYSSEY Deluxe Edition",
+    "key": "onepieceodysseydeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "nPool",
+    "key": "npool",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "nPiano",
+    "key": "npiano",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "nPaint",
+    "key": "npaint",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "nOS new Operating System",
+    "key": "nosnewoperatingsystem",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nobunagas Ambition / Rebirth",
+    "key": "nobunagasambitionrebirth",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nil Admirari no Tenbin Irodori Nadeshiko",
+    "key": "niladmirarinotenbinirodorinadeshiko",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Night Vision",
+    "key": "nightvision",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Never Alone: Arctic Collection",
+    "key": "neveralonearcticcollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Neptunia: Sisters VS Sisters Switch + Digital Artbook + Soundtrack",
+    "key": "neptuniasistersvssistersswitchdigitalartbooksoundtrack",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "nDay",
+    "key": "nday",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NBA 2K19 20th Anniversary Edition",
+    "key": "nba2k1920thanniversaryedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NBA 2K18 Legend Edition Gold",
+    "key": "nba2k18legendeditiongold",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NASCAR Arcade Rush Project-X Edition",
+    "key": "nascararcaderushprojectxedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nari Kids Park HUGtto! PreCure",
+    "key": "narikidsparkhugttoprecure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "My Universe School Teacher",
+    "key": "myuniverseschoolteacher",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "My Universe Pet Clinic: Cats & Dogs",
+    "key": "myuniversepetcliniccatsdogs",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "My Riding Stables 2: A New Adventure",
+    "key": "myridingstables2anewadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "My Cozy Room",
+    "key": "mycozyroom",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mutant Year Zero: Road to Eden Deluxe Edition",
+    "key": "mutantyearzeroroadtoedendeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mutant Football League: Dynasty Edition",
+    "key": "mutantfootballleaguedynastyedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "more! Classical music that can be learned loosely-fun and educational music brain training quiz for adults and children",
+    "key": "moreclassicalmusicthatcanbelearnedlooselyfunandeducationalmusicbraintrainingquizforadultsandchildren",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Monster Farm/Rancher 1 & 2 DX",
+    "key": "monsterfarmrancher12dx",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Momotaro Electric Railway World The Earth revolves around hope!",
+    "key": "momotaroelectricrailwayworldtheearthrevolvesaroundhope",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Moeyo! Otome Doushi: Kayu Koigatari",
+    "key": "moeyootomedoushikayukoigatari",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MODEL Debut3 #nicola",
+    "key": "modeldebut3nicola",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mistonia no Kibou -The Lost Delight",
+    "key": "mistonianokibouthelostdelight",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "METAL SLUG 1st & 2nd MISSION Double Pack",
+    "key": "metalslug1st2ndmissiondoublepack",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "METAL GEAR SOLID MASTER COLLECTION Vol 1 BONUS CONTENT Switch + Pre Order DLCs",
+    "key": "metalgearsolidmastercollectionvol1bonuscontentswitchpreorderdlcs",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "METAL GEAR SOLID 3 Snake Eater Master Collection Version",
+    "key": "metalgearsolid3snakeeatermastercollectionversion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "METAL GEAR SOLID 2: Sons of Liberty Master Collection Version",
+    "key": "metalgearsolid2sonsoflibertymastercollectionversion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "METAL GEAR SOLID Master Collection Version",
+    "key": "metalgearsolidmastercollectionversion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MEGATON MUSASHI W: WIRED Standard Edition",
+    "key": "megatonmusashiwwiredstandardedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Marvels Guardians of the Galaxy: Cloud Version",
+    "key": "marvelsguardiansofthegalaxycloudversion",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "LoverPretend",
+    "key": "loverpretend",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Life is Strange Arcadia Bay Collection",
+    "key": "lifeisstrangearcadiabaycollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Lets Sing 2025",
+    "key": "letssing2025",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Lets Sing 2024",
+    "key": "letssing2024",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Legend Bowl",
+    "key": "legendbowl",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Laytons Mystery Journey Katrielle to Daifugo no Inbo DX Plus",
+    "key": "laytonsmysteryjourneykatrielletodaifugonoinbodxplus",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "KORG Gadget",
+    "key": "korggadget",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Knockout Home Fitness",
+    "key": "knockouthomefitness",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Kaze and the Wild Masks Switch +DLC",
+    "key": "kazeandthewildmasksswitchdlc",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Kangokutou Mary Skelter 2",
+    "key": "kangokutoumaryskelter2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jurassic World Evolution: Complete Edition",
+    "key": "jurassicworldevolutioncompleteedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Japanese Rail Sim: Journey to Kyoto",
+    "key": "japaneserailsimjourneytokyoto",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Instant Sports Winter Games",
+    "key": "instantsportswintergames",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Instant Sports",
+    "key": "instantsports",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Infinite Tanks WWII",
+    "key": "infinitetankswwii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "I am an Air Traffic Controller AIRPORT HERO Centrair 20TH ANNIVERSARY",
+    "key": "iamanairtrafficcontrollerairportherocentrair20thanniversary",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hyperdimension Neptunia Re;Birth3: V Generation",
+    "key": "hyperdimensionneptuniarebirth3vgeneration",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "HUNDRED FIRES: The rising of red star",
+    "key": "hundredfirestherisingofredstar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "HOTWHEELS UNLEASHED",
+    "key": "hotwheelsunleashed",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "HOTWHEELS UNLEASHED 2 Turbocharged Legendary Edition",
+    "key": "hotwheelsunleashed2turbochargedlegendaryedition",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Home Sheep Home: Farmageddon Party Edition",
+    "key": "homesheephomefarmageddonpartyedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "HITMAN 3 Cloud Version",
+    "key": "hitman3cloudversion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hentai Solitaire",
+    "key": "hentaisolitaire",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hentai Girls Naughty Gamer",
+    "key": "hentaigirlsnaughtygamer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hatsune Miku: Project DIVA MEGA 39s 1.0.9",
+    "key": "hatsunemikuprojectdivamega39s109",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Hasbro Game Night",
+    "key": "hasbrogamenight",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Harry Potter: Quidditch Champions Deluxe Edition",
+    "key": "harrypotterquidditchchampionsdeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "GRIME Definitive Edition",
+    "key": "grimedefinitiveedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Gothic II Complete Classic",
+    "key": "gothiciicompleteclassic",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Goat Simulator: The GOATY",
+    "key": "goatsimulatorthegoaty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Goat Simulator 3 + Digital Downgrade DLC",
+    "key": "goatsimulator3digitaldowngradedlc",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "G-MODE Archives + Persona 3 Aigis THE FIRST MISSION",
+    "key": "gmodearchivespersona3aigisthefirstmission",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Final Fantasy XV: Pocket Edition HD",
+    "key": "finalfantasyxvpocketeditionhd",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Famicom Nintendo Switch Online",
+    "key": "famicomnintendoswitchonline",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "eCrossminton",
+    "key": "ecrossminton",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ecchi Memories",
+    "key": "ecchimemories",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Drova",
+    "key": "drova",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Divinity Original Sin 2 Definitive Edition",
+    "key": "divinityoriginalsin2definitiveedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cotton Reboot!",
+    "key": "cottonreboot",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Chocobo GP Lite",
+    "key": "chocobogplite",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cardfight Vanguard EX",
+    "key": "cardfightvanguardex",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Car Mechanic Simulator Pocket Edition",
+    "key": "carmechanicsimulatorpocketedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Captain Tsubasa: Rise of New Champions Month 1 Edition",
+    "key": "captaintsubasariseofnewchampionsmonth1edition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bullet Battle Evolution",
+    "key": "bulletbattleevolution",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "BloodRayne: ReVamped",
+    "key": "bloodraynerevamped",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "BLAZBLUE CENTRALFICTION Special Edition",
+    "key": "blazbluecentralfictionspecialedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Beyond Good and Evil 20th Anniversary Edition",
+    "key": "beyondgoodandevil20thanniversaryedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "bayala the game",
+    "key": "bayalathegame",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Battle Supremacy Evolution",
+    "key": "battlesupremacyevolution",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Arise: A Simple Story Definitive Edition",
+    "key": "ariseasimplestorydefinitiveedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Arcade Archives IN THE HUNT",
+    "key": "arcadearchivesinthehunt",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "amazin Mage",
+    "key": "amazinmage",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "AKIBAS TRIP: Undead & Undressed Directors Cut",
+    "key": "akibastripundeadundresseddirectorscut",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "9-nine",
+    "key": "9nine",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "9 in 1 Puzzles",
+    "key": "9in1puzzles",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "88 Heroes 98 Heroes Edition",
+    "key": "88heroes98heroesedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "8 Ball Clash",
+    "key": "8ballclash",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "8 & 9 Ball Pocket",
+    "key": "89ballpocket",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "5 Nate+",
+    "key": "5nate",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "4\u251c\u00e2\u252c\u00bb\u251c\u00e9\u252c\u2510\u251c\u00e9\u252c\u255c4 Offroad Driver 2",
+    "key": "4aee4offroaddriver2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "3D Arcade Fishing",
+    "key": "3darcadefishing",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "3D Air Hockey",
+    "key": "3dairhockey",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "3D Advantime",
+    "key": "3dadvantime",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "30-in-1 Game Collection: Volume 1",
+    "key": "30in1gamecollectionvolume1",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "30-in-1 Game Collection",
+    "key": "30in1gamecollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "3 Out of 10: Season One",
+    "key": "3outof10seasonone",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "#Xmas, Super Puzzles Dream",
+    "key": "xmassuperpuzzlesdream",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NASCAR Heat Ultimate Edition+",
+    "key": "nascarheatultimateedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Alliance Alive HD Remastered",
+    "key": "alliancealivehdremastered",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Metal Gear Solid: Master Collection Volume 1",
+    "key": "metalgearsolidmastercollectionvolume1",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Grim Guardians: Demon Purge",
+    "key": "grimguardiansdemonpurge",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shovel Knight: Treasure Trove",
+    "key": "shovelknighttreasuretrove",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "DNF Duel: Who's Next",
+    "key": "dnfduelwhosnext",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dr Kawashima's Brain Training",
+    "key": "drkawashimasbraintraining",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Etrian Origins Collection (English Only)",
+    "key": "etrianoriginscollectionenglishonly",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SD GUNDAM BATTLE ALLIANCE Deluxe Edition",
+    "key": "sdgundambattlealliancedeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Blazblue Central Fiction SE",
+    "key": "blazbluecentralfictionse",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shin chan: Me and the Professor on Summer Vacation",
+    "key": "shinchanmeandtheprofessoronsummervacation",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dragon Quest XI S",
+    "key": "dragonquestxis",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NieR: Automata The End of YoRHa Edition",
+    "key": "nierautomatatheendofyorhaedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Needy Streamer Overload Girl Overdose",
+    "key": "needystreameroverloadgirloverdose",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shin Megami Tensei III NOCTURNE HD REMASTER",
+    "key": "shinmegamitenseiiiinocturnehdremaster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ys Memoire: The Oath in Felghana",
+    "key": "ysmemoiretheoathinfelghana",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Five Nights at Freddy's: Core Collection",
+    "key": "fivenightsatfreddyscorecollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sword Art Online: Fatal Bullet Complete Edition",
+    "key": "swordartonlinefatalbulletcompleteedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sword Art Online: Hollow Realization Deluxe Edition",
+    "key": "swordartonlinehollowrealizationdeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Lara Croft Collection",
+    "key": "laracroftcollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Megaman Battle Network Legacy Collection",
+    "key": "megamanbattlenetworklegacycollection",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Danganronpa Decadence",
+    "key": "danganronpadecadence",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Trials Rising Gold Edition",
+    "key": "trialsrisinggoldedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Suikoden I and II HD Remaster",
+    "key": "suikodeniandiihdremaster",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pokemon Shining Pearl",
+    "key": "pokemonshiningpearl",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nintendo Switch Online - SNES",
+    "key": "nintendoswitchonlinesnes",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nintendo Switch Online - Nintendo 64 Mature 17+",
+    "key": "nintendoswitchonlinenintendo64mature17",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nintendo Switch Online - Nintendo 64",
+    "key": "nintendoswitchonlinenintendo64",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nintendo Switch Online - Game Boy Advance",
+    "key": "nintendoswitchonlinegameboyadvance",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nintendo Switch Online - Game Boy",
+    "key": "nintendoswitchonlinegameboy",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Yo-kai Academy Y",
+    "key": "yokaiacademyy",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Snipperclips : Plus Cut It Out Together",
+    "key": "snipperclipspluscutitouttogether",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bulletstorm : Duke of Switch Edition",
+    "key": "bulletstormdukeofswitchedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Demon Slayer : The Hinokami Chronicles",
+    "key": "demonslayerthehinokamichronicles",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disco Elysium The Final Cut",
+    "key": "discoelysiumthefinalcut",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Warhammer 40k : Boltgun",
+    "key": "warhammer40kboltgun",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FINAL FANTASY Pixel Remaster",
+    "key": "finalfantasypixelremaster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Persona 3 Portable",
+    "key": "persona3portable",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pokemon Shield",
+    "key": "pokemonshield",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tomb Raider I-III Remastered",
+    "key": "tombraideriiiiremastered",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SEGA AGES Phantasy Star",
+    "key": "segaagesphantasystar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FANTASIAN Neo Dimension",
+    "key": "fantasianneodimension",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Slime Rancher Plortable Edition",
+    "key": "slimerancherplortableedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Simpson Hit&Run",
+    "key": "simpsonhitrun",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pokemon Violet",
+    "key": "pokemonviolet",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pokemon Brilliant Diamond",
+    "key": "pokemonbrilliantdiamond",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pokemon Lets Go Eevee !",
+    "key": "pokemonletsgoeevee",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pokemon Lets Go Pikachu !",
+    "key": "pokemonletsgopikachu",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mortal Kombat 1 Premium Edition",
+    "key": "mortalkombat1premiumedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Luigi's Mansion 2 HD",
+    "key": "luigismansion2hd",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "LEGO Marvel Super Heros",
+    "key": "legomarvelsuperheros",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Legend of Zelda : Link's Awakening HD",
+    "key": "legendofzeldalinksawakeninghd",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "KINGDOM HEARTS INTEGRUM MASTERPIECE",
+    "key": "kingdomheartsintegrummasterpiece",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Just Dance 2022 Edition",
+    "key": "justdance2022edition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Call of Warfare",
+    "key": "callofwarfare",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Catching Spirits",
+    "key": "catchingspirits",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Alphadia III",
+    "key": "alphadiaiii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ace Combat 7 Skies Unknown Deluxe Edition",
+    "key": "acecombat7skiesunknowndeluxeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Harvest Moon: Home Sweet Home Special Edition",
+    "key": "harvestmoonhomesweethomespecialedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Agatha Christie \u0393\u00c7\u00f4 Death on the Nile",
+    "key": "agathachristiecodeathonthenile",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "BODYCAM SHOOTER 2025",
+    "key": "bodycamshooter2025",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cozy Cooking: Tiny Tastes",
+    "key": "cozycookingtinytastes",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "LOGIC PUZZLE 1000",
+    "key": "logicpuzzle1000",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zumania Magic Casual Puzzle",
+    "key": "zumaniamagiccasualpuzzle",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zotrix Starglider",
+    "key": "zotrixstarglider",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Is Planting",
+    "key": "zombieisplanting",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zen Chess Collection",
+    "key": "zenchesscollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Woodcutter",
+    "key": "woodcutter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  }
+]
