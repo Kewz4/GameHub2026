@@ -17,15 +17,16 @@ import {
  * stale entries.
  * v2: article-insensitive keys (re-derived from each entry's raw title —
  *     the JSON's own keys were generated with the old normalization).
+ * v6: dataset regenerated off IGN + LaunchBox + HowLongToBeat (age ratings,
+ *     3-D box art, gameplay screenshots, playtimes); forces a re-seed so
+ *     existing installs pick up the new fields instead of serving stale entries.
  *
  * IMPORTANT: bump this ONLY in the same release that ships the regenerated
  * dataset. Re-seed clears the store, then per-system sync is skipped for any
  * system that still has entries — so a version bump that ships BEFORE the new
- * JSON would re-seed the OLD data and then never pick up the new data (the next
- * release would see the same version and skip). When the IGN + LaunchBox
- * dataset is regenerated and committed, bump this to 6 in that same commit.
+ * JSON would re-seed the OLD data and then never pick up the new data.
  */
-const META_VERSION = 5;
+const META_VERSION = 6;
 const META_VERSION_KEY = "gamehubMetaVersion";
 
 /**
