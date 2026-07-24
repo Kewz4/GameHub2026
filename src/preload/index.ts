@@ -1741,6 +1741,63 @@ contextBridge.exposeInMainWorld("electron", {
     >,
   spotifyControl: (action: import("@types").SpotifyControlAction) =>
     ipcRenderer.invoke("spotifyControl", action) as Promise<boolean>,
+  /* ── Music player (overlay, Deezer + yt-dlp) ─────────────────────────── */
+  musicSearch: (query: string) =>
+    ipcRenderer.invoke("musicSearch", query) as Promise<
+      import("@types").MusicTrack[]
+    >,
+  musicGetState: () =>
+    ipcRenderer.invoke("musicGetState") as Promise<
+      import("@types").MusicPlayerState
+    >,
+  musicSetQueue: (tracks: import("@types").MusicTrack[], startIndex?: number) =>
+    ipcRenderer.invoke("musicSetQueue", tracks, startIndex),
+  musicAddToQueue: (track: import("@types").MusicTrack) =>
+    ipcRenderer.invoke("musicAddToQueue", track),
+  musicRemoveFromQueue: (index: number) =>
+    ipcRenderer.invoke("musicRemoveFromQueue", index),
+  musicClearQueue: () => ipcRenderer.invoke("musicClearQueue"),
+  musicPlay: (index?: number) =>
+    ipcRenderer.invoke("musicPlay", index) as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicPause: () => ipcRenderer.invoke("musicPause"),
+  musicResume: () => ipcRenderer.invoke("musicResume"),
+  musicStop: () => ipcRenderer.invoke("musicStop"),
+  musicNext: () =>
+    ipcRenderer.invoke("musicNext") as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicPrevious: () =>
+    ipcRenderer.invoke("musicPrevious") as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicSetShuffle: (enabled: boolean) =>
+    ipcRenderer.invoke("musicSetShuffle", enabled),
+  musicSetRepeat: (mode: import("@types").RepeatMode) =>
+    ipcRenderer.invoke("musicSetRepeat", mode),
+  musicGetPlaylists: () =>
+    ipcRenderer.invoke("musicGetPlaylists") as Promise<
+      import("@types").MusicPlaylist[]
+    >,
+  musicCreatePlaylist: (name: string) =>
+    ipcRenderer.invoke("musicCreatePlaylist", name) as Promise<
+      import("@types").MusicPlaylist
+    >,
+  musicDeletePlaylist: (id: string) =>
+    ipcRenderer.invoke("musicDeletePlaylist", id),
+  musicRenamePlaylist: (id: string, name: string) =>
+    ipcRenderer.invoke("musicRenamePlaylist", id, name),
+  musicAddToPlaylist: (
+    playlistId: string,
+    track: import("@types").MusicTrack
+  ) => ipcRenderer.invoke("musicAddToPlaylist", playlistId, track),
+  musicRemoveFromPlaylist: (playlistId: string, trackIndex: number) =>
+    ipcRenderer.invoke("musicRemoveFromPlaylist", playlistId, trackIndex),
+  musicPlayPlaylist: (playlistId: string, startIndex?: number) =>
+    ipcRenderer.invoke("musicPlayPlaylist", playlistId, startIndex) as Promise<
+      import("@types").MusicTrack | null
+    >,
   /* ── Overlay pinned-apps launcher ───────────────────────────────────── */
   getPinnedApps: () =>
     ipcRenderer.invoke("getPinnedApps") as Promise<

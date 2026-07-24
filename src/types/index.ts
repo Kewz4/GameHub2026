@@ -781,4 +781,5 @@ export * from "./theme.types";
 export * from "./emulator.types";
 export * from "./mods.types";
 export * from "./overlay.types";
+export * from "./music-player.types";
 export * from "./spotify.types";

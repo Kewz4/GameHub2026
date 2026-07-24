@@ -345,13 +345,50 @@ body.overlay-window {
   }
 }
 
-// Spotify "Now playing" card.
-.overlay-np {
+// Music player card.
+.overlay-card--music {
+  grid-row: span 2;
+}
+
+.overlay-music__tabs {
+  display: flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  padding: 2px;
+}
+.overlay-music__tab {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.overlay-music__tab:hover {
+  color: var(--ink);
+}
+.overlay-music__tab.is-active {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--ink);
+}
+
+// Now-playing.
+.overlay-music__np {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.overlay-music__np-top {
   display: flex;
   gap: 12px;
   align-items: center;
 }
-.overlay-np__art {
+.overlay-music__np-art {
   width: 60px;
   height: 60px;
   border-radius: 10px;
@@ -359,14 +396,14 @@ body.overlay-window {
   object-fit: cover;
   box-shadow: 0 0 0 1px var(--brd) inset;
 }
-.overlay-np__art--empty {
-  background: linear-gradient(145deg, #1db954, #148a3f);
+.overlay-music__np-art--empty {
+  background: linear-gradient(145deg, #6f79e8, #aab2ff);
 }
-.overlay-np__body {
+.overlay-music__np-body {
   min-width: 0;
   flex: 1;
 }
-.overlay-np__track {
+.overlay-music__np-track {
   margin: 0;
   font-size: 13.5px;
   font-weight: 650;
@@ -374,7 +411,7 @@ body.overlay-window {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.overlay-np__artist {
+.overlay-music__np-artist {
   margin: 2px 0 0;
   font-size: 12px;
   color: var(--muted);
@@ -382,25 +419,40 @@ body.overlay-window {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.overlay-np__bar {
+.overlay-music__np-album {
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__np-bar {
   height: 4px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.12);
-  margin: 8px 0;
   overflow: hidden;
 }
-.overlay-np__bar i {
+.overlay-music__np-bar i {
   display: block;
   height: 100%;
   border-radius: 3px;
   background: var(--good);
 }
-.overlay-np__ctrls {
+.overlay-music__np-time {
+  display: flex;
+  justify-content: space-between;
+  font: 600 11px/1 ui-monospace, monospace;
+  color: var(--faint);
+  margin-top: -6px;
+}
+.overlay-music__np-ctrls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  justify-content: center;
 }
-.overlay-np__ctrls button {
+.overlay-music__np-ctrls button {
   background: none;
   border: none;
   color: var(--ink);
@@ -408,33 +460,350 @@ body.overlay-window {
   cursor: pointer;
   opacity: 0.85;
 }
-.overlay-np__ctrls button:hover {
+.overlay-music__np-ctrls button:hover {
   opacity: 1;
 }
-.overlay-np__ctrls .overlay-np__play {
-  width: 32px;
-  height: 32px;
+.overlay-music__play {
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: #fff;
   color: #101018;
-  font-size: 12px;
+  font-size: 13px;
   display: grid;
   place-items: center;
 }
-.overlay-np__connect {
-  align-self: flex-start;
-  padding: 9px 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(29, 185, 84, 0.5);
-  background: rgba(29, 185, 84, 0.16);
-  color: #b7f5cf;
+.overlay-music__mode {
+  font-size: 13px !important;
+}
+.overlay-music__mode.is-active {
+  opacity: 1 !important;
+  color: var(--good) !important;
+}
+
+// Queue.
+.overlay-music__queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--brd);
+  padding-top: 10px;
+}
+.overlay-music__queue-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.overlay-music__queue-clear {
+  background: none;
+  border: 1px solid var(--brd);
+  border-radius: 6px;
+  color: var(--faint);
   font: inherit;
-  font-size: 13px;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.overlay-music__queue-clear:hover {
+  color: var(--ink);
+}
+.overlay-music__queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.overlay-music__queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background 0.1s;
+}
+.overlay-music__queue-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.overlay-music__queue-item.is-current {
+  background: rgba(99, 211, 141, 0.10);
+}
+.overlay-music__queue-art {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  flex: none;
+  object-fit: cover;
+}
+.overlay-music__queue-art--empty {
+  background: linear-gradient(145deg, #6f79e8, #aab2ff);
+}
+.overlay-music__queue-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.overlay-music__queue-title {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__queue-artist {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__queue-rm {
+  background: none;
+  border: none;
+  color: var(--faint);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.overlay-music__queue-item:hover .overlay-music__queue-rm {
+  opacity: 1;
+}
+.overlay-music__queue-rm:hover {
+  color: #ff6f7d;
+}
+
+// Search.
+.overlay-music__search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.overlay-music__search-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12.5px;
+}
+.overlay-music__search-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.overlay-music__search-input::placeholder {
+  color: var(--faint);
+}
+.overlay-music__search-results {
+  max-height: 260px;
+  overflow-y: auto;
+}
+.overlay-music__search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.overlay-music__search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  transition: background 0.1s;
+}
+.overlay-music__search-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.overlay-music__search-art {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex: none;
+  object-fit: cover;
+}
+.overlay-music__search-art--empty {
+  background: linear-gradient(145deg, #6f79e8, #aab2ff);
+}
+.overlay-music__search-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.overlay-music__search-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__search-artist {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__search-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.overlay-music__search-add {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.overlay-music__search-add:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+// Playlists.
+.overlay-music__playlists {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.overlay-music__plist-new {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--brd);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
-.overlay-np__connect:hover {
-  background: rgba(29, 185, 84, 0.26);
+.overlay-music__plist-new:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.overlay-music__plist-create {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.overlay-music__plist-input {
+  flex: 1;
+  border-radius: 8px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+}
+.overlay-music__plist-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.overlay-music__plist-save,
+.overlay-music__plist-cancel {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.overlay-music__plist-save {
+  background: var(--good);
+  color: #101018;
+}
+.overlay-music__plist-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+.overlay-music__plist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.overlay-music__plist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.14);
+}
+.overlay-music__plist-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.overlay-music__plist-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__plist-count {
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.overlay-music__plist-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.overlay-music__plist-play,
+.overlay-music__plist-del {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.overlay-music__plist-play {
+  background: rgba(99, 211, 141, 0.16);
+  color: var(--good);
+}
+.overlay-music__plist-play:hover {
+  background: rgba(99, 211, 141, 0.28);
+}
+.overlay-music__plist-del {
+  background: rgba(255, 111, 125, 0.12);
+  color: #ff6f7d;
+}
+.overlay-music__plist-del:hover {
+  background: rgba(255, 111, 125, 0.24);
 }
 
 // Friends-online card.

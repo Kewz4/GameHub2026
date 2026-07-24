@@ -18,6 +18,7 @@ import "./leveldb";
 import "./misc";
 import "./notifications";
 import "./overlay";
+import "./music-player";
 import "./spotify";
 import "./profile";
 import "./themes";

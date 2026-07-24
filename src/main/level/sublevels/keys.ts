@@ -25,6 +25,7 @@ export const levelKeys = {
   exophaseCache: "exophaseCache", // Shared Exophase achievement-definition cache (R2-synced)
   playnitePlaytimeCache: "playnitePlaytimeCache", // Playtime for Playnite games not yet in the library
   sgdbSearchCache: "sgdbSearchCache", // Persistent SteamGridDB title -> game id cache
+  musicPlaylists: "musicPlaylists", // User-created music playlists (Deezer + yt-dlp player)
 
   exophaseSyncReport: "exophaseSyncReport", // Last background sync report (for the notification modal)
   exophaseCacheSyncedAt: "exophaseCacheSyncedAt", // Last time the shared cache blob was pulled from R2

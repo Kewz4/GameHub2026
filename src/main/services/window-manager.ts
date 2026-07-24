@@ -72,7 +72,7 @@ export class WindowManager {
       show: false,
     };
 
-  // Public so the overlay managers (overlay-manager / injected-overlay-manager)
+  // Public so the overlay-manager can load the `#/overlay` renderer route into
   // can load the `#/overlay` renderer route into their own BrowserWindows.
   public static async loadWindowURL(window: BrowserWindow, hash: string = "") {
     // HMR for renderer base on electron-vite cli.

@@ -33,7 +33,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HWND, LPARAM, LRESULT, WPARAM};
+use windows_sys::Win32::Foundation::{BOOL, CloseHandle, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Security::{
     GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
@@ -58,9 +59,11 @@ use windows_sys::Win32::UI::Input::{
 use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
-    GetWindowThreadProcessId, RegisterClassW, TranslateMessage, HWND_MESSAGE, MSG, SW_SHOWNORMAL,
-    WM_HOTKEY, WM_INPUT, WNDCLASSW,
+    CreateWindowExW, DefWindowProcW, DispatchMessageW, EnumWindows, GetClientRect,
+    GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW, GetWindowThreadProcessId,
+    IsIconic, IsWindowVisible, RegisterClassW, SetForegroundWindow, SetWindowPos, ShowWindow,
+    TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST, MSG, SW_SHOWNORMAL,
+    SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_RESTORE, WM_HOTKEY, WM_INPUT, WNDCLASSW, WS_EX_TOOLWINDOW,
 };
 
 // Per-app volume mixer (Core Audio) — higher-level `windows` COM bindings.
@@ -110,6 +113,78 @@ struct XInputGamepad {
 struct XInputState {
     packet_number: u32,
     gamepad: XInputGamepad,
+}
+
+#[napi(object)]
+pub struct NativeWindowBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[cfg(target_os = "windows")]
+struct WindowSearch {
+    pid: u32,
+    window: HWND,
+    bounds: RECT,
+    area: i64,
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn find_process_window(window: HWND, parameter: LPARAM) -> BOOL {
+    let search = unsafe { &mut *(parameter as *mut WindowSearch) };
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    if pid != search.pid || unsafe { IsWindowVisible(window) } == 0 {
+        return 1;
+    }
+    if unsafe { GetWindowLongW(window, GWL_EXSTYLE) } as u32 & WS_EX_TOOLWINDOW != 0 {
+        return 1;
+    }
+    if !unsafe { GetWindow(window, GW_OWNER) }.is_null() {
+        return 1;
+    }
+
+    let mut client: RECT = unsafe { zeroed() };
+    if unsafe { GetClientRect(window, &mut client) } == 0 {
+        return 1;
+    }
+    let mut origin = POINT { x: 0, y: 0 };
+    if unsafe { ClientToScreen(window, &mut origin) } == 0 {
+        return 1;
+    }
+    let width = client.right - client.left;
+    let height = client.bottom - client.top;
+    let area = i64::from(width) * i64::from(height);
+    if width > 0 && height > 0 && area > search.area {
+        search.window = window;
+        search.bounds = RECT {
+            left: origin.x,
+            top: origin.y,
+            right: origin.x + width,
+            bottom: origin.y + height,
+        };
+        search.area = area;
+    }
+    1
+}
+
+#[cfg(target_os = "windows")]
+fn process_window(pid: u32) -> Option<(HWND, RECT)> {
+    let mut search = WindowSearch {
+        pid,
+        window: null_mut(),
+        bounds: unsafe { zeroed() },
+        area: 0,
+    };
+    unsafe {
+        EnumWindows(
+            Some(find_process_window),
+            &mut search as *mut WindowSearch as LPARAM,
+        );
+    }
+    (!search.window.is_null()).then_some((search.window, search.bounds))
 }
 
 #[cfg(target_os = "windows")]
@@ -442,6 +517,57 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
     }
 
     0
+}
+
+#[napi]
+pub fn get_process_window_bounds(_pid: u32) -> Option<NativeWindowBounds> {
+    #[cfg(target_os = "windows")]
+    if let Some((_, bounds)) = process_window(_pid) {
+        return Some(NativeWindowBounds {
+            x: bounds.left,
+            y: bounds.top,
+            width: bounds.right - bounds.left,
+            height: bounds.bottom - bounds.top,
+        });
+    }
+    None
+}
+
+#[napi]
+pub fn place_overlay_window(_window_handle: i64, _pid: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    if let Some((_, bounds)) = process_window(_pid) {
+        let overlay = _window_handle as HWND;
+        if overlay.is_null() {
+            return false;
+        }
+        return unsafe {
+            SetWindowPos(
+                overlay,
+                HWND_TOPMOST,
+                bounds.left,
+                bounds.top,
+                bounds.right - bounds.left,
+                bounds.bottom - bounds.top,
+                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+            ) != 0
+        };
+    }
+    false
+}
+
+#[napi]
+pub fn focus_process_window(_pid: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    if let Some((window, _)) = process_window(_pid) {
+        unsafe {
+            if IsIconic(window) != 0 {
+                ShowWindow(window, SW_RESTORE);
+            }
+            return SetForegroundWindow(window) != 0;
+        }
+    }
+    false
 }
 
 // ── Per-app volume mixer (Core Audio, Windows only) ──────────────────────────

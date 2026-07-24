@@ -38,6 +38,10 @@ type HydraNativeModule = {
     parameters: string,
     workingDirectory: string
   ) => boolean;
+  // BrowserWindow overlay placement (Windows-only; no-op fallbacks elsewhere).
+  getProcessWindowBounds: (pid: number) => NativeWindowBounds | null;
+  placeOverlayWindow: (windowHandle: number, pid: number) => boolean;
+  focusProcessWindow: (pid: number) => boolean;
   // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
   getAudioSessions: () => NativeAudioSession[];
   setAudioSessionVolume: (pid: number, volume: number) => boolean;
@@ -49,6 +53,13 @@ export type NativeAudioSession = {
   name: string;
   volume: number;
   muted: boolean;
+};
+
+export type NativeWindowBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 export type SystemProcessMap = {
@@ -360,6 +371,34 @@ export class NativeAddon {
       );
     } catch (error) {
       logger.error("Failed to request elevated GameHub process", error);
+      return false;
+    }
+  }
+
+  // ── BrowserWindow overlay window placement (Windows only) ─────────────────
+  // Find the game window for a given PID and get its client-area bounds, or
+  // place the overlay window over it. Non-Windows builds return safe defaults.
+
+  public static getProcessWindowBounds(pid: number): NativeWindowBounds | null {
+    try {
+      return this.load().getProcessWindowBounds(pid) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  public static placeOverlayWindow(windowHandle: number, pid: number): boolean {
+    try {
+      return this.load().placeOverlayWindow(windowHandle, pid);
+    } catch {
+      return false;
+    }
+  }
+
+  public static focusProcessWindow(pid: number): boolean {
+    try {
+      return this.load().focusProcessWindow(pid);
+    } catch {
       return false;
     }
   }
