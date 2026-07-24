@@ -64,3 +64,9 @@ export type HydraOverlayGamepadAction =
   | "back"
   | "previous-tab"
   | "next-tab";
+
+/** An app the user pinned to the overlay's quick launcher. */
+export interface PinnedApp {
+  name: string;
+  path: string;
+}

@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import type {
   HydraOverlayContext,
   HydraOverlayPerformance,
+  PinnedApp,
   ProfileFriends,
   SpotifyControlAction,
   SpotifyNowPlaying,
@@ -53,6 +54,7 @@ export default function Overlay() {
   const [nowPlaying, setNowPlaying] = useState<SpotifyNowPlaying | null>(null);
   const [spotifyBusy, setSpotifyBusy] = useState(false);
   const [friends, setFriends] = useState<UserFriend[]>([]);
+  const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
 
   const refreshContext = useCallback(() => {
     window.electron
@@ -161,6 +163,28 @@ export default function Overlay() {
     window.electron
       .spotifyLogin()
       .then((status) => setSpotifyStatus(status))
+      .catch(() => undefined);
+  }, []);
+
+  // Pinned quick-launch apps.
+  useEffect(() => {
+    window.electron
+      .getPinnedApps()
+      .then(setPinnedApps)
+      .catch(() => undefined);
+  }, []);
+
+  const pinApp = useCallback(() => {
+    window.electron
+      .pickPinnedApp()
+      .then(setPinnedApps)
+      .catch(() => undefined);
+  }, []);
+
+  const unpinApp = useCallback((appPath: string) => {
+    window.electron
+      .removePinnedApp(appPath)
+      .then(setPinnedApps)
       .catch(() => undefined);
   }, []);
 
@@ -482,6 +506,41 @@ export default function Overlay() {
               </ul>
             </section>
           )}
+
+          <section className="overlay-card overlay-card--pins">
+            <div className="overlay-card__head">
+              <h2>Quick launch</h2>
+              <span className="overlay-card__count">{pinnedApps.length}</span>
+            </div>
+            <div className="overlay-pins">
+              {pinnedApps.map((app) => (
+                <button
+                  key={app.path}
+                  type="button"
+                  className="overlay-pin-tile"
+                  onClick={() => void window.electron.launchPinnedApp(app.path)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    unpinApp(app.path);
+                  }}
+                  title={`${app.name} — right-click to unpin`}
+                >
+                  <span className="overlay-pin-tile__glyph">
+                    {app.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="overlay-pin-tile__label">{app.name}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="overlay-pin-tile overlay-pin-tile--add"
+                onClick={pinApp}
+              >
+                <span className="overlay-pin-tile__glyph">+</span>
+                <span className="overlay-pin-tile__label">Pin app</span>
+              </button>
+            </div>
+          </section>
 
           <section className="overlay-card overlay-card--notes">
             <div className="overlay-card__head">

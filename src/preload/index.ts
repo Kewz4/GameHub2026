@@ -1741,6 +1741,21 @@ contextBridge.exposeInMainWorld("electron", {
     >,
   spotifyControl: (action: import("@types").SpotifyControlAction) =>
     ipcRenderer.invoke("spotifyControl", action) as Promise<boolean>,
+  /* ── Overlay pinned-apps launcher ───────────────────────────────────── */
+  getPinnedApps: () =>
+    ipcRenderer.invoke("getPinnedApps") as Promise<
+      import("@types").PinnedApp[]
+    >,
+  pickPinnedApp: () =>
+    ipcRenderer.invoke("pickPinnedApp") as Promise<
+      import("@types").PinnedApp[]
+    >,
+  removePinnedApp: (appPath: string) =>
+    ipcRenderer.invoke("removePinnedApp", appPath) as Promise<
+      import("@types").PinnedApp[]
+    >,
+  launchPinnedApp: (appPath: string) =>
+    ipcRenderer.invoke("launchPinnedApp", appPath) as Promise<string>,
   downloadSwitchKeys: () => ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),

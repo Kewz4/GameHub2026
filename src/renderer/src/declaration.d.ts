@@ -1234,6 +1234,10 @@ declare global {
     spotifyControl: (
       action: import("@types").SpotifyControlAction
     ) => Promise<boolean>;
+    getPinnedApps: () => Promise<import("@types").PinnedApp[]>;
+    pickPinnedApp: () => Promise<import("@types").PinnedApp[]>;
+    removePinnedApp: (appPath: string) => Promise<import("@types").PinnedApp[]>;
+    launchPinnedApp: (appPath: string) => Promise<string>;
     downloadSwitchKeys: () => Promise<{
       keys: boolean;
       firmware: boolean;

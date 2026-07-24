@@ -489,6 +489,59 @@ body.overlay-window {
   box-shadow: 0 0 8px var(--good);
 }
 
+// Pinned-apps quick launcher.
+.overlay-pins {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.overlay-pin-tile {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 11px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    background 0.15s;
+}
+.overlay-pin-tile:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+.overlay-pin-tile__glyph {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(150deg, var(--accent), #6f79e8);
+  color: #0d1024;
+  font-weight: 800;
+  font-size: 15px;
+}
+.overlay-pin-tile__label {
+  font-size: 10.5px;
+  color: var(--muted);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-pin-tile--add {
+  border-style: dashed;
+}
+.overlay-pin-tile--add .overlay-pin-tile__glyph {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+}
+
 @media (max-width: 720px) {
   .overlay-grid {
     grid-template-columns: 1fr;
