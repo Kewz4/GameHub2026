@@ -3,9 +3,11 @@ import { useLocation } from "react-router-dom";
 import type {
   HydraOverlayContext,
   HydraOverlayPerformance,
+  ProfileFriends,
   SpotifyControlAction,
   SpotifyNowPlaying,
   SpotifyStatus,
+  UserFriend,
 } from "@types";
 import "./overlay.scss";
 
@@ -50,6 +52,7 @@ export default function Overlay() {
   );
   const [nowPlaying, setNowPlaying] = useState<SpotifyNowPlaying | null>(null);
   const [spotifyBusy, setSpotifyBusy] = useState(false);
+  const [friends, setFriends] = useState<UserFriend[]>([]);
 
   const refreshContext = useCallback(() => {
     window.electron
@@ -160,6 +163,26 @@ export default function Overlay() {
       .then((status) => setSpotifyStatus(status))
       .catch(() => undefined);
   }, []);
+
+  // Friends presence while the full overlay is open (requires sign-in).
+  const isSignedIn = Boolean(context?.user);
+  useEffect(() => {
+    if (mode !== "full" || !isSignedIn) return;
+    let active = true;
+    const load = () =>
+      window.electron.hydraApi
+        .get<ProfileFriends>("/profile/friends", {
+          params: { take: 12, skip: 0 },
+        })
+        .then((res) => active && setFriends(res.friends ?? []))
+        .catch(() => undefined);
+    load();
+    const id = setInterval(load, 30_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [mode, isSignedIn]);
 
   const handleNoteChange = (value: string) => {
     setNote(value);
@@ -420,6 +443,45 @@ export default function Overlay() {
               </p>
             )}
           </section>
+
+          {context?.user && friends.length > 0 && (
+            <section className="overlay-card overlay-card--friends">
+              <div className="overlay-card__head">
+                <h2>Friends</h2>
+                <span className="overlay-card__count">
+                  {friends.filter((friend) => friend.isOnline).length} online
+                </span>
+              </div>
+              <ul className="overlay-friends">
+                {friends.slice(0, 6).map((friend) => (
+                  <li key={friend.id} className="overlay-friend">
+                    {friend.profileImageUrl ? (
+                      <img
+                        className="overlay-friend__av"
+                        src={friend.profileImageUrl}
+                        alt=""
+                      />
+                    ) : (
+                      <div className="overlay-friend__av overlay-friend__av--empty" />
+                    )}
+                    <div className="overlay-friend__body">
+                      <p>{friend.displayName}</p>
+                      <small>
+                        {friend.currentGame
+                          ? `Playing ${friend.currentGame.title}`
+                          : friend.isOnline
+                            ? "Online"
+                            : "Offline"}
+                      </small>
+                    </div>
+                    <span
+                      className={`overlay-friend__dot ${friend.isOnline ? "is-online" : ""}`}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section className="overlay-card overlay-card--notes">
             <div className="overlay-card__head">

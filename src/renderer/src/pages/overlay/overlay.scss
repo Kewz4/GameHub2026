@@ -437,6 +437,58 @@ body.overlay-window {
   background: rgba(29, 185, 84, 0.26);
 }
 
+// Friends-online card.
+.overlay-friends {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.overlay-friend {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.overlay-friend__av {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex: none;
+  object-fit: cover;
+}
+.overlay-friend__av--empty {
+  background: linear-gradient(150deg, #6f79e8, #aab2ff);
+}
+.overlay-friend__body {
+  flex: 1;
+  min-width: 0;
+}
+.overlay-friend__body p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-friend__body small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.overlay-friend__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+.overlay-friend__dot.is-online {
+  background: var(--good);
+  box-shadow: 0 0 8px var(--good);
+}
+
 @media (max-width: 720px) {
   .overlay-grid {
     grid-template-columns: 1fr;
