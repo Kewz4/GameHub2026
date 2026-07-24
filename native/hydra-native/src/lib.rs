@@ -33,7 +33,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::Foundation::{BOOL, CloseHandle, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Security::{
@@ -132,7 +133,7 @@ struct WindowSearch {
 }
 
 #[cfg(target_os = "windows")]
-unsafe extern "system" fn find_process_window(window: HWND, parameter: LPARAM) -> BOOL {
+unsafe extern "system" fn find_process_window(window: HWND, parameter: LPARAM) -> i32 {
     let search = unsafe { &mut *(parameter as *mut WindowSearch) };
     let mut pid = 0;
     unsafe { GetWindowThreadProcessId(window, &mut pid) };
