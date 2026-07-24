@@ -23,6 +23,8 @@ export function SettingsContextContentGameplay() {
     showHiddenAchievementsDescription: false,
     enableSteamAchievements: false,
     enableNewDownloadOptionsBadges: true,
+    overlayEnabled: true,
+    overlayPerformanceEnabled: true,
   });
 
   useEffect(() => {
@@ -37,6 +39,9 @@ export function SettingsContextContentGameplay() {
       enableSteamAchievements: userPreferences.enableSteamAchievements ?? false,
       enableNewDownloadOptionsBadges:
         userPreferences.enableNewDownloadOptionsBadges ?? true,
+      overlayEnabled: userPreferences.overlayEnabled ?? true,
+      overlayPerformanceEnabled:
+        userPreferences.overlayPerformanceEnabled ?? true,
     });
   }, [userPreferences]);
 
@@ -117,6 +122,28 @@ export function SettingsContextContentGameplay() {
             handleChange({
               enableNewDownloadOptionsBadges:
                 !form.enableNewDownloadOptionsBadges,
+            })
+          }
+        />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>{t("in_game_overlay")}</h3>
+
+        <CheckboxField
+          label={t("enable_in_game_overlay")}
+          checked={form.overlayEnabled}
+          onChange={() =>
+            handleChange({ overlayEnabled: !form.overlayEnabled })
+          }
+        />
+
+        <CheckboxField
+          label={t("overlay_performance_hud")}
+          checked={form.overlayPerformanceEnabled}
+          onChange={() =>
+            handleChange({
+              overlayPerformanceEnabled: !form.overlayPerformanceEnabled,
             })
           }
         />
