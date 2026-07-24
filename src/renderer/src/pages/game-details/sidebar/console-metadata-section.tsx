@@ -76,14 +76,6 @@ function systemForResult(result: CatalogueSearchResult): EmulatorSystem | null {
 const scoreClass = (score: number) =>
   score >= 75 ? "high" : score >= 50 ? "medium" : "low";
 
-/** "12½ hours" / "1 hour" — HowLongToBeat's half-hour display grain. */
-const formatHours = (h: number) => {
-  const whole = Math.floor(h);
-  const half = h - whole >= 0.5;
-  if (whole === 0) return half ? "½ hour" : "<1 hour";
-  return `${whole}${half ? "½" : ""} ${whole === 1 && !half ? "hour" : "hours"}`;
-};
-
 /**
  * Extra metadata for console/emulated (launchbox) games: the basics that live
  * on `shopDetails` (genre/developer/publisher/release) plus IGDB-only data
@@ -188,15 +180,15 @@ export function ConsoleMetadataSection() {
   const modes = meta?.gameModes ?? [];
   const languages = meta?.languages ?? [];
   const series = meta?.series;
-  const boxArt = meta?.boxArtUrls ?? [];
-  const hltb = meta?.hltb ?? null;
-  const hltbRows = hltb
-    ? ([
-        { label: "Main Story", value: hltb.main },
-        { label: "Main + Extras", value: hltb.mainExtra },
-        { label: "Completionist", value: hltb.completionist },
-      ].filter((r) => r.value != null) as { label: string; value: number }[])
-    : [];
+  // Feature the LaunchBox 3-D box render first — it's the authentic box art for
+  // the game — then any generic IGDB artwork, de-duplicated. Without this the
+  // dedicated "Box art" slot filled up with the IGDB fallback art instead of the
+  // real box.
+  const launchboxBox = meta?.boxImageUrl ?? null;
+  const boxArt = [
+    ...(launchboxBox ? [launchboxBox] : []),
+    ...(meta?.boxArtUrls ?? []).filter((url) => url !== launchboxBox),
+  ];
   const ageRating = meta?.ageRating ?? null;
   const ageRatingLabel = ageRating
     ? ageRating.system
@@ -212,7 +204,6 @@ export function ConsoleMetadataSection() {
     languages.length === 0 &&
     !series?.titles.length &&
     boxArt.length === 0 &&
-    hltbRows.length === 0 &&
     !ageRatingLabel;
 
   if (nothingToShow) return null;
@@ -295,20 +286,9 @@ export function ConsoleMetadataSection() {
         </SidebarSection>
       )}
 
-      {hltbRows.length > 0 && (
-        <SidebarSection title="How long to beat">
-          <ul className="console-meta__rows">
-            {hltbRows.map((row) => (
-              <li key={row.label} className="console-meta__row">
-                <span className="console-meta__key">{row.label}</span>
-                <span className="console-meta__value">
-                  {formatHours(row.value)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </SidebarSection>
-      )}
+      {/* HowLongToBeat is rendered by the shared <HowLongToBeatSection> in the
+          sidebar (dataset-backed for emulated games) so it matches the PC-game
+          look exactly — it is intentionally NOT duplicated here. */}
 
       {languages.length > 0 && (
         <SidebarSection title="Languages">

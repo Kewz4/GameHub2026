@@ -538,18 +538,26 @@ function isNonGameRomPath(
 
 export async function discoverRomFiles(
   extraDirs: string[] = [],
-  onProgress?: (current: number, total: number, title: string) => void
+  onProgress?: (current: number, total: number, title: string) => void,
+  onlyExtraDirs = false
 ): Promise<DiscoveredRom[]> {
   if (process.platform !== "win32") return [];
 
   // Build the list of ROM root directories to scan.
   const roots = new Set<string>(extraDirs);
-  for (const d of fixedDriveLetters()) {
-    for (const name of ROM_ROOT_NAMES) {
-      roots.add(`${d}:\\${name}`);
+  // A SELECTIVE scan (onlyExtraDirs) searches exactly the folders the user
+  // picked — nothing else. Without this guard it always ALSO crawled every
+  // drive's "ROMs"/"Emulator Games"/"Games" folders, so a "selective" scan
+  // silently ran a full deep scan. Only a deep scan (no scoped dirs) adds those
+  // drive-wide roots.
+  if (!onlyExtraDirs) {
+    for (const d of fixedDriveLetters()) {
+      for (const name of ROM_ROOT_NAMES) {
+        roots.add(`${d}:\\${name}`);
+      }
+      // Also scan the generic Games folder for loose ROMs.
+      roots.add(`${d}:\\Games`);
     }
-    // Also scan the generic Games folder for loose ROMs.
-    roots.add(`${d}:\\Games`);
   }
 
   const existingRoots = [...roots].filter((dir) => {
@@ -634,13 +642,24 @@ export async function discoverRomFiles(
       // never guess.
       if (!system) continue;
 
+      // A Wii U folder-format game is an unpacked `<Game>\code\*.rpx` +
+      // `content\` + `meta\` layout. The launchable `.rpx` is just the compiled
+      // executable (a few MB — the bulk lives in `content\`), so it must NOT be
+      // held to the 10 MB disc-image threshold, which previously filtered out
+      // every Wii U game whose .rpx happened to be small (only the odd large one
+      // like BOTW's slipped through).
+      const isFolderFormatRpx =
+        ext === ".rpx" && path.basename(parentPath).toLowerCase() === "code";
+
       // Minimum file size check — filter out tiny asset/patch files that
       // happen to share a ROM extension.
       try {
         const stat = fs.statSync(fullPath);
-        const minSize = DISC_BASED_SYSTEMS.has(system)
-          ? MIN_DISC_ROM_SIZE_BYTES
-          : MIN_ROM_SIZE_BYTES;
+        const minSize = isFolderFormatRpx
+          ? MIN_ROM_SIZE_BYTES
+          : DISC_BASED_SYSTEMS.has(system)
+            ? MIN_DISC_ROM_SIZE_BYTES
+            : MIN_ROM_SIZE_BYTES;
         if (stat.size < minSize) continue;
       } catch {
         continue;
@@ -672,7 +691,13 @@ export async function discoverRomFiles(
       }
 
       seenPaths.add(fullPathLower);
-      const { title } = parseRomFilename(entry.name);
+      // For a folder-format Wii U game the real title is the folder that HOLDS
+      // code/content/meta — not the internal ".rpx" basename (which is an engine
+      // name like "U-King.rpx" for Breath of the Wild). Derive it from that game
+      // folder (the parent of `code`); everything else keeps its filename title.
+      const title = isFolderFormatRpx
+        ? parseRomFilename(path.basename(path.dirname(parentPath))).title
+        : parseRomFilename(entry.name).title;
       results.push({ title, romPath: fullPath, system });
 
       i++;

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useContext, useEffect, useState } from "react";
 import type {
+  EmulatorSystem,
   HowLongToBeatCategory,
   ProtonDBData,
   SteamAppDetails,
@@ -149,8 +150,14 @@ export function Sidebar({
         return;
       }
       setHowLongToBeat({ isLoading: true, data: null });
+      // Scope the dataset-first lookup to this game's console when the objectId
+      // carries it (`minerva:<system>:<title>`); an opaque id passes "" and the
+      // service scans every system's dataset by title instead.
+      const consoleSystem = objectId?.startsWith("minerva:")
+        ? (objectId.split(":")[1] as EmulatorSystem)
+        : "";
       window.electron
-        .getConsoleHowLongToBeat(gameTitle)
+        .getConsoleHowLongToBeat(gameTitle, consoleSystem)
         .then((data) => setHowLongToBeat({ isLoading: false, data }))
         .catch(() => setHowLongToBeat({ isLoading: false, data: null }));
       return;
@@ -173,7 +180,7 @@ export function Sidebar({
           setHowLongToBeat({ isLoading: false, data: null });
         });
     }
-  }, [effectiveObjectId, effectiveShop, shop, gameTitle]);
+  }, [effectiveObjectId, effectiveShop, shop, gameTitle, objectId]);
 
   useEffect(() => {
     if (!shouldShowProtonFeatures || !effectiveObjectId) {

@@ -1202,7 +1202,8 @@ declare global {
       system?: EmulatorSystem
     ) => Promise<import("@types").GameRepack[]>;
     getConsoleHowLongToBeat: (
-      title: string
+      title: string,
+      system?: import("@types").EmulatorSystem | ""
     ) => Promise<import("@types").HowLongToBeatCategory[] | null>;
     getConsoleGameMetadata: (
       title: string,

@@ -66,18 +66,20 @@ export async function getConsoleGameMetadata(
     ? await gamehubMetaSublevel.get(metaKey).catch(() => null)
     : null;
 
-  // HLTB playtimes and the age rating come from the hosted dataset (populated
-  // independently of the IGDB `extraMetadata` cache), so they're merged onto the
-  // result at read-time rather than baked into the cached IGDB blob — that way
-  // fields added to a later dataset show up without invalidating a good cache.
+  // HLTB playtimes, the age rating and the LaunchBox box render come from the
+  // hosted dataset (populated independently of the IGDB `extraMetadata` cache),
+  // so they're merged onto the result at read-time rather than baked into the
+  // cached IGDB blob — that way fields added to a later dataset show up without
+  // invalidating a good cache.
   const hltb = entry?.hltb ?? null;
   const ageRating = entry?.ageRating ?? null;
+  const boxImageUrl = entry?.boxImageUrl ?? null;
   const withExtras = (
     m: ConsoleGameMetadata | null
   ): ConsoleGameMetadata | null => {
-    if (m) return { ...m, hltb, ageRating };
-    return hltb || ageRating
-      ? { ...EMPTY_CONSOLE_METADATA, hltb, ageRating }
+    if (m) return { ...m, hltb, ageRating, boxImageUrl };
+    return hltb || ageRating || boxImageUrl
+      ? { ...EMPTY_CONSOLE_METADATA, hltb, ageRating, boxImageUrl }
       : null;
   };
 

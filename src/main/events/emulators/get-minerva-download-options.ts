@@ -16,12 +16,14 @@ function buildRepackTitle(entry: MinervaCatalogueEntry): string {
 
   if (entry.contentType === "update") {
     const m =
-      entry.filename.match(/[Uu]pdate\s+(v[\d.]+)/i) ??
-      entry.filename.match(/(v[\d.]+)/i);
+      entry.filename.match(/[Uu]pdate\s+v?([\d.]+)/i) ??
+      entry.filename.match(/\bv([\d.]+)/i);
+    // The capture is the bare number (no "v"): a case-insensitive match on a
+    // "(V1.0)" tag used to leave the captured "V" in place and then prepend
+    // another "v" ("Update vV1.0" → read as "vv1.0"). Capturing digits-only and
+    // always prefixing a single lowercase "v" makes the label case-proof.
     const ver = m?.[1] ?? "";
-    return ver
-      ? `Update ${ver.startsWith("v") ? ver : "v" + ver}${regionSuffix}`
-      : `Update${regionSuffix}`;
+    return ver ? `Update v${ver}${regionSuffix}` : `Update${regionSuffix}`;
   }
   if (entry.contentType === "dlc") {
     // Strip the extension and EVERY trailing parenthetical tag ("(USA) (DLC)")

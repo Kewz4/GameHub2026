@@ -399,6 +399,10 @@ export interface ConsoleGameMetadata {
   /** Content/age rating from the hosted dataset (IGN/LaunchBox), e.g.
    *  { name: "M", system: "ESRB" }. */
   ageRating?: { name: string; system: string | null } | null;
+  /** LaunchBox 3-D box render (from the hosted dataset). The authentic box art
+   *  for the game, featured in the details "Box art" panel ahead of any generic
+   *  IGDB artwork. */
+  boxImageUrl?: string | null;
 }
 
 export interface UserStatsPercentile {

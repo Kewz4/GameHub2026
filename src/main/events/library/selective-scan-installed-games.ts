@@ -141,7 +141,10 @@ const selectiveScanInstalledGames = async (
         total,
         foundCount: foundGames.length,
         currentTitle: `ROM: ${title}`,
-      })
+      }),
+    // Selective scan: restrict ROM discovery to the chosen folders only, so it
+    // doesn't fan out into a full drive-wide deep scan.
+    true
   );
 
   for (const rom of discoveredRoms) {

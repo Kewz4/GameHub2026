@@ -1033,6 +1033,29 @@ function mergeScreens(a, b) {
   return [...new Set([...(a ?? []), ...(b ?? [])])].slice(0, 10);
 }
 
+/**
+ * Union the genre lists from every provider, in priority order, de-duplicated
+ * case-insensitively (first spelling wins) and capped. A single provider often
+ * under-describes a game — IGDB alone tags e.g. "Breath of the Wild" merely
+ * "Puzzle, Adventure" — so combining IGN (the primary source), IGDB and
+ * LaunchBox yields the fuller, more accurate genre set the game actually is.
+ */
+function mergeGenres(...lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    for (const raw of list ?? []) {
+      const name = String(raw ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+    }
+  }
+  return out.slice(0, 5);
+}
+
 // ---- HowLongToBeat (main / main+extra / completionist playtimes) ------------
 //
 // Mirrors the Playnite HowLongToBeat plugin's access path. HLTB has no public
@@ -1596,10 +1619,11 @@ async function processSystem(system, opts) {
         // Description preference: LaunchBox Overviews read best for emulated
         // games (user preference), then IGDB, then IGN.
         description: lb?.overview ?? igdb?.summary ?? ign?.description ?? null,
-        // Prefer IGDB genres; fall back to IGN's, then LaunchBox's.
-        genres: igdbGenres.length
-          ? igdbGenres
-          : (ign?.genres ?? (lb?.genres?.length ? lb.genres : [])),
+        // Merge genres across providers (IGN first — the primary source — then
+        // IGDB, then LaunchBox), de-duplicated and capped, so a game gets its
+        // full genre set instead of whatever a single source happened to return
+        // (IGDB alone under-tags e.g. Breath of the Wild as "Puzzle, Adventure").
+        genres: mergeGenres(ign?.genres, igdbGenres, lb?.genres),
         releaseYear: igdb?.first_release_date
           ? new Date(igdb.first_release_date * 1000).getUTCFullYear()
           : (ign?.releaseYear ?? lb?.releaseYear ?? null),

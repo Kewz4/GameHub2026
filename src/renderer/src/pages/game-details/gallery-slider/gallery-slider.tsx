@@ -25,6 +25,21 @@ export function GallerySlider() {
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false });
   const [selectedIndex, setSelectedIndex] = useState(0);
+  // Natural aspect ratio (w/h) of each slide's media, recorded as it loads, so
+  // the viewport can size itself to the CURRENT image instead of cropping every
+  // image into a fixed 16:9 box. Screenshots (16:9), 3-D box renders (~3:4) and
+  // vertical art all keep their true proportions this way.
+  const [mediaRatios, setMediaRatios] = useState<Record<string, number>>({});
+
+  const recordRatio = useCallback(
+    (id: string, width: number, height: number) => {
+      if (!width || !height) return;
+      setMediaRatios((prev) =>
+        prev[id] ? prev : { ...prev, [id]: width / height }
+      );
+    },
+    []
+  );
 
   const scrollPrev = useCallback(() => {
     if (emblaApi) emblaApi.scrollPrev();
@@ -187,13 +202,24 @@ export function GallerySlider() {
     [mediaItems]
   );
 
+  // Aspect ratio of the slide currently in view — drives the viewport size so
+  // it matches the image. Falls back to 16:9 until the media reports its natural
+  // size (videos, and images not yet loaded).
+  const currentMedia = mediaItems[selectedIndex];
+  const viewportRatio =
+    (currentMedia && mediaRatios[currentMedia.id]) || 16 / 9;
+
   if (!hasMedia) {
     return null;
   }
 
   return (
     <div className="gallery-slider__container">
-      <div className="gallery-slider__viewport" ref={emblaRef}>
+      <div
+        className="gallery-slider__viewport"
+        ref={emblaRef}
+        style={{ aspectRatio: String(viewportRatio) }}
+      >
         <div className="gallery-slider__container-inner">
           {mediaItems.map((item, index) => (
             <div key={item.id} className="gallery-slider__slide">
@@ -216,6 +242,13 @@ export function GallerySlider() {
                   src={item.src}
                   alt={item.alt}
                   loading="lazy"
+                  onLoad={(e) =>
+                    recordRatio(
+                      item.id,
+                      e.currentTarget.naturalWidth,
+                      e.currentTarget.naturalHeight
+                    )
+                  }
                 />
               )}
             </div>
