@@ -225,6 +225,9 @@ export interface UserPreferences {
   overlayPerformanceShowAverageFps?: boolean;
   overlayPerformanceShowFrameTime?: boolean;
   overlayPerformanceShowOnePercentLow?: boolean;
+  /** Spotify app client ID (public, PKCE) for the overlay's Now-playing widget.
+   *  The user registers their own Spotify app and pastes its client ID here. */
+  spotifyClientId?: string | null;
   enableAutoInstall?: boolean;
   seedAfterDownloadComplete?: boolean;
   showHiddenAchievementsDescription?: boolean;

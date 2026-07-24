@@ -1225,6 +1225,15 @@ declare global {
     onOverlayGamepadAction: (
       cb: (action: import("@types").HydraOverlayGamepadAction) => void
     ) => () => void;
+    spotifyGetStatus: () => Promise<import("@types").SpotifyStatus>;
+    spotifyLogin: () => Promise<import("@types").SpotifyStatus>;
+    spotifyLogout: () => Promise<import("@types").SpotifyStatus>;
+    spotifyGetNowPlaying: () => Promise<
+      import("@types").SpotifyNowPlaying | null
+    >;
+    spotifyControl: (
+      action: import("@types").SpotifyControlAction
+    ) => Promise<boolean>;
     downloadSwitchKeys: () => Promise<{
       keys: boolean;
       firmware: boolean;

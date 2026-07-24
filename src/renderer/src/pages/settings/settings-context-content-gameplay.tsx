@@ -1,10 +1,11 @@
 import { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CheckboxField } from "@renderer/components";
+import { Button, CheckboxField, TextField } from "@renderer/components";
 import { settingsContext } from "@renderer/context";
 import { useAppSelector } from "@renderer/hooks";
 import { QuestionIcon } from "@primer/octicons-react";
+import type { SpotifyStatus } from "@types";
 
 import "./settings-behavior.scss";
 
@@ -25,7 +26,19 @@ export function SettingsContextContentGameplay() {
     enableNewDownloadOptionsBadges: true,
     overlayEnabled: true,
     overlayPerformanceEnabled: true,
+    spotifyClientId: "",
   });
+
+  const [spotifyStatus, setSpotifyStatus] = useState<SpotifyStatus | null>(
+    null
+  );
+
+  useEffect(() => {
+    window.electron
+      .spotifyGetStatus()
+      .then(setSpotifyStatus)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!userPreferences) return;
@@ -42,12 +55,35 @@ export function SettingsContextContentGameplay() {
       overlayEnabled: userPreferences.overlayEnabled ?? true,
       overlayPerformanceEnabled:
         userPreferences.overlayPerformanceEnabled ?? true,
+      spotifyClientId: userPreferences.spotifyClientId ?? "",
     });
   }, [userPreferences]);
 
   const handleChange = (values: Partial<typeof form>) => {
     setForm((prev) => ({ ...prev, ...values }));
     updateUserPreferences(values);
+  };
+
+  const saveSpotifyClientId = () => {
+    updateUserPreferences({ spotifyClientId: form.spotifyClientId || null });
+    window.electron
+      .spotifyGetStatus()
+      .then(setSpotifyStatus)
+      .catch(() => undefined);
+  };
+
+  const connectSpotify = () => {
+    window.electron
+      .spotifyLogin()
+      .then(setSpotifyStatus)
+      .catch(() => undefined);
+  };
+
+  const disconnectSpotify = () => {
+    window.electron
+      .spotifyLogout()
+      .then(setSpotifyStatus)
+      .catch(() => undefined);
   };
 
   return (
@@ -147,6 +183,41 @@ export function SettingsContextContentGameplay() {
             })
           }
         />
+      </div>
+
+      <div className="settings-context-panel__group">
+        <h3>{t("spotify_overlay")}</h3>
+
+        <TextField
+          label={t("spotify_client_id")}
+          value={form.spotifyClientId ?? ""}
+          onChange={(event) =>
+            setForm((prev) => ({
+              ...prev,
+              spotifyClientId: event.target.value,
+            }))
+          }
+          placeholder="0123456789abcdef0123456789abcdef"
+          rightContent={
+            <Button type="button" onClick={saveSpotifyClientId}>
+              {t("save_changes")}
+            </Button>
+          }
+          hint={t("spotify_client_id_hint")}
+        />
+
+        {spotifyStatus?.connected ? (
+          <Button theme="outline" onClick={disconnectSpotify}>
+            {t("spotify_disconnect")}
+          </Button>
+        ) : (
+          <Button
+            onClick={connectSpotify}
+            disabled={!spotifyStatus?.configured}
+          >
+            {t("spotify_connect")}
+          </Button>
+        )}
       </div>
     </div>
   );

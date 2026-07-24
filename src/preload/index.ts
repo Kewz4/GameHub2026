@@ -1722,6 +1722,25 @@ contextBridge.exposeInMainWorld("electron", {
     return () =>
       ipcRenderer.removeListener("on-overlay-gamepad-action", listener);
   },
+  /* ── Spotify (overlay Now-playing) ──────────────────────────────────── */
+  spotifyGetStatus: () =>
+    ipcRenderer.invoke("spotifyGetStatus") as Promise<
+      import("@types").SpotifyStatus
+    >,
+  spotifyLogin: () =>
+    ipcRenderer.invoke("spotifyLogin") as Promise<
+      import("@types").SpotifyStatus
+    >,
+  spotifyLogout: () =>
+    ipcRenderer.invoke("spotifyLogout") as Promise<
+      import("@types").SpotifyStatus
+    >,
+  spotifyGetNowPlaying: () =>
+    ipcRenderer.invoke("spotifyGetNowPlaying") as Promise<
+      import("@types").SpotifyNowPlaying | null
+    >,
+  spotifyControl: (action: import("@types").SpotifyControlAction) =>
+    ipcRenderer.invoke("spotifyControl", action) as Promise<boolean>,
   downloadSwitchKeys: () => ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),

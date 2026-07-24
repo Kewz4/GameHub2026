@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-import type { HydraOverlayContext, HydraOverlayPerformance } from "@types";
+import type {
+  HydraOverlayContext,
+  HydraOverlayPerformance,
+  SpotifyControlAction,
+  SpotifyNowPlaying,
+  SpotifyStatus,
+} from "@types";
 import "./overlay.scss";
 
 type OverlayMode = "hidden" | "toast" | "pinned" | "full";
@@ -39,6 +45,11 @@ export default function Overlay() {
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(true);
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [spotifyStatus, setSpotifyStatus] = useState<SpotifyStatus | null>(
+    null
+  );
+  const [nowPlaying, setNowPlaying] = useState<SpotifyNowPlaying | null>(null);
+  const [spotifyBusy, setSpotifyBusy] = useState(false);
 
   const refreshContext = useCallback(() => {
     window.electron
@@ -94,6 +105,60 @@ export default function Overlay() {
   useEffect(() => {
     document.body.classList.add("overlay-window");
     return () => document.body.classList.remove("overlay-window");
+  }, []);
+
+  // Spotify: read connection status once, then poll now-playing while open.
+  useEffect(() => {
+    let active = true;
+    window.electron
+      .spotifyGetStatus()
+      .then((status) => active && setSpotifyStatus(status))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mode !== "full" || !spotifyStatus?.connected) return;
+    let active = true;
+    const poll = () =>
+      window.electron
+        .spotifyGetNowPlaying()
+        .then((track) => active && setNowPlaying(track))
+        .catch(() => undefined);
+    poll();
+    const id = setInterval(poll, 4000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [mode, spotifyStatus?.connected]);
+
+  const handleSpotifyControl = useCallback(
+    async (action: SpotifyControlAction) => {
+      if (spotifyBusy) return;
+      setSpotifyBusy(true);
+      setNowPlaying((current) =>
+        current && (action === "play" || action === "pause")
+          ? { ...current, isPlaying: action === "play" }
+          : current
+      );
+      await window.electron.spotifyControl(action).catch(() => undefined);
+      window.electron
+        .spotifyGetNowPlaying()
+        .then(setNowPlaying)
+        .catch(() => undefined)
+        .finally(() => setSpotifyBusy(false));
+    },
+    [spotifyBusy]
+  );
+
+  const connectSpotify = useCallback(() => {
+    window.electron
+      .spotifyLogin()
+      .then((status) => setSpotifyStatus(status))
+      .catch(() => undefined);
   }, []);
 
   const handleNoteChange = (value: string) => {
@@ -267,6 +332,93 @@ export default function Overlay() {
                 </li>
               )}
             </ul>
+          </section>
+
+          <section className="overlay-card overlay-card--spotify">
+            <div className="overlay-card__head">
+              <h2>Now playing</h2>
+              <span className="overlay-card__count">Spotify</span>
+            </div>
+            {spotifyStatus?.connected ? (
+              nowPlaying ? (
+                <div className="overlay-np">
+                  {nowPlaying.albumImageUrl ? (
+                    <img
+                      className="overlay-np__art"
+                      src={nowPlaying.albumImageUrl}
+                      alt=""
+                    />
+                  ) : (
+                    <div className="overlay-np__art overlay-np__art--empty" />
+                  )}
+                  <div className="overlay-np__body">
+                    <p className="overlay-np__track">{nowPlaying.trackName}</p>
+                    <p className="overlay-np__artist">{nowPlaying.artists}</p>
+                    <div className="overlay-np__bar">
+                      <i
+                        style={{
+                          width: `${
+                            nowPlaying.durationMs
+                              ? Math.min(
+                                  100,
+                                  (nowPlaying.progressMs /
+                                    nowPlaying.durationMs) *
+                                    100
+                                )
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                    <div className="overlay-np__ctrls">
+                      <button
+                        type="button"
+                        onClick={() => handleSpotifyControl("previous")}
+                        aria-label="Previous track"
+                      >
+                        ⏮
+                      </button>
+                      <button
+                        type="button"
+                        className="overlay-np__play"
+                        onClick={() =>
+                          handleSpotifyControl(
+                            nowPlaying.isPlaying ? "pause" : "play"
+                          )
+                        }
+                        aria-label={nowPlaying.isPlaying ? "Pause" : "Play"}
+                      >
+                        {nowPlaying.isPlaying ? "⏸" : "▶"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSpotifyControl("next")}
+                        aria-label="Next track"
+                      >
+                        ⏭
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="overlay-ach__empty">
+                  Nothing playing on Spotify right now.
+                </p>
+              )
+            ) : spotifyStatus?.configured ? (
+              <button
+                type="button"
+                className="overlay-np__connect"
+                onClick={connectSpotify}
+              >
+                Connect Spotify
+              </button>
+            ) : (
+              <p className="overlay-ach__empty">
+                Add a Spotify client ID in Settings → Gameplay to enable the
+                player.
+              </p>
+            )}
           </section>
 
           <section className="overlay-card overlay-card--notes">
