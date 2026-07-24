@@ -14,5 +14,12 @@ napi-derive = "3.3.2"
 sysinfo = "0.37.2"
 uuid = { version = "1.11.0", features = ["v4"] }
 
+# Windows-only APIs backing the in-game overlay (ported from Hydra PR #2579):
+# raw keyboard input + hotkey for the Shift+F3 shortcut, XInput for the
+# controller chord, and the process-access / token-elevation / ShellExecute
+# helpers the injected overlay uses to attach to the running game.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
 [build-dependencies]
 napi-build = "2.3.1"

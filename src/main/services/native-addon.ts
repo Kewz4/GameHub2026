@@ -21,6 +21,23 @@ type HydraNativeModule = {
     targetExtension?: string
   ) => NativeProcessProfileImageResponse;
   listProcesses: () => ProcessPayload[];
+  // In-game overlay natives (Windows-only; no-op fallbacks elsewhere).
+  startOverlayKeyboardWatcher: () => boolean;
+  getOverlayKeyboardEventCount: () => number;
+  getOverlayGamepadButtons: () => number;
+  getForegroundProcessId: () => number;
+  isCurrentProcessElevated: () => boolean;
+  getProcessAccessStatus: (pid: number) => {
+    canInject?: boolean;
+    can_inject?: boolean;
+    errorCode?: number;
+    error_code?: number;
+  };
+  launchElevated: (
+    executable: string,
+    parameters: string,
+    workingDirectory: string
+  ) => boolean;
 };
 
 export type SystemProcessMap = {
@@ -259,5 +276,80 @@ export class NativeAddon {
         resolve({ processMap: {}, winePrefixMap: {}, linuxProcesses: [] });
       }
     });
+  }
+
+  // ── In-game overlay natives (ported from Hydra PR #2579) ──────────────────
+  // Run on the main thread (they touch process-global state: the Raw Input
+  // window, this process's elevation token, the foreground window). Every call
+  // is guarded so a platform without the native (or an older addon) degrades to
+  // a safe default instead of throwing.
+
+  public static startOverlayKeyboardWatcher(): boolean {
+    try {
+      return this.load().startOverlayKeyboardWatcher();
+    } catch {
+      return false;
+    }
+  }
+
+  public static getOverlayKeyboardEventCount(): number {
+    try {
+      return this.load().getOverlayKeyboardEventCount();
+    } catch {
+      return 0;
+    }
+  }
+
+  public static getOverlayGamepadButtons(): number {
+    try {
+      return this.load().getOverlayGamepadButtons();
+    } catch {
+      return 0;
+    }
+  }
+
+  public static getForegroundProcessId(): number {
+    try {
+      return this.load().getForegroundProcessId();
+    } catch {
+      return 0;
+    }
+  }
+
+  public static isCurrentProcessElevated(): boolean {
+    try {
+      return this.load().isCurrentProcessElevated();
+    } catch {
+      return false;
+    }
+  }
+
+  public static getProcessAccessStatus(pid: number) {
+    try {
+      const status = this.load().getProcessAccessStatus(pid);
+      return {
+        canInject: status.canInject ?? status.can_inject ?? false,
+        errorCode: status.errorCode ?? status.error_code ?? 0,
+      };
+    } catch {
+      return { canInject: false, errorCode: 0 };
+    }
+  }
+
+  public static launchElevated(
+    executable: string,
+    parameters: string,
+    workingDirectory: string
+  ) {
+    try {
+      return this.load().launchElevated(
+        executable,
+        parameters,
+        workingDirectory
+      );
+    } catch (error) {
+      logger.error("Failed to request elevated GameHub process", error);
+      return false;
+    }
   }
 }
