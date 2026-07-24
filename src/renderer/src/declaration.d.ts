@@ -1209,6 +1209,22 @@ declare global {
       title: string,
       objectId: string
     ) => Promise<import("@types").ConsoleGameMetadata | null>;
+    getOverlayContext: () => Promise<
+      import("@types").HydraOverlayContext | null
+    >;
+    closeHydraOverlay: () => Promise<void>;
+    setOverlayPerformancePinned: (pinned: boolean) => Promise<void>;
+    getOverlayNote: () => Promise<string>;
+    saveOverlayNote: (note: string) => Promise<void>;
+    onOverlayPerformance: (
+      cb: (value: import("@types").HydraOverlayPerformance) => void
+    ) => () => void;
+    onOverlayMode: (cb: (mode: string) => void) => () => void;
+    onOverlayShown: (cb: () => void) => () => void;
+    onOverlayPerformancePin: (cb: (pinned: boolean) => void) => () => void;
+    onOverlayGamepadAction: (
+      cb: (action: import("@types").HydraOverlayGamepadAction) => void
+    ) => () => void;
     downloadSwitchKeys: () => Promise<{
       keys: boolean;
       firmware: boolean;

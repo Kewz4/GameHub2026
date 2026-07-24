@@ -1671,6 +1671,57 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("getConsoleHowLongToBeat", title, system),
   getConsoleGameMetadata: (title: string, objectId: string) =>
     ipcRenderer.invoke("getConsoleGameMetadata", title, objectId),
+
+  /* ── In-game overlay ────────────────────────────────────────────────── */
+  getOverlayContext: () =>
+    ipcRenderer.invoke("getOverlayContext") as Promise<
+      import("@types").HydraOverlayContext | null
+    >,
+  closeHydraOverlay: () => ipcRenderer.invoke("closeHydraOverlay"),
+  setOverlayPerformancePinned: (pinned: boolean) =>
+    ipcRenderer.invoke("setOverlayPerformancePinned", pinned),
+  getOverlayNote: () => ipcRenderer.invoke("getOverlayNote") as Promise<string>,
+  saveOverlayNote: (note: string) =>
+    ipcRenderer.invoke("saveOverlayNote", note),
+  onOverlayPerformance: (
+    cb: (value: import("@types").HydraOverlayPerformance) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      value: import("@types").HydraOverlayPerformance
+    ) => cb(value);
+    ipcRenderer.on("on-overlay-performance", listener);
+    return () => ipcRenderer.removeListener("on-overlay-performance", listener);
+  },
+  onOverlayMode: (cb: (mode: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, mode: string) =>
+      cb(mode);
+    ipcRenderer.on("on-overlay-mode", listener);
+    return () => ipcRenderer.removeListener("on-overlay-mode", listener);
+  },
+  onOverlayShown: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("on-overlay-shown", listener);
+    return () => ipcRenderer.removeListener("on-overlay-shown", listener);
+  },
+  onOverlayPerformancePin: (cb: (pinned: boolean) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, pinned: boolean) =>
+      cb(pinned);
+    ipcRenderer.on("on-overlay-performance-pin", listener);
+    return () =>
+      ipcRenderer.removeListener("on-overlay-performance-pin", listener);
+  },
+  onOverlayGamepadAction: (
+    cb: (action: import("@types").HydraOverlayGamepadAction) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      action: import("@types").HydraOverlayGamepadAction
+    ) => cb(action);
+    ipcRenderer.on("on-overlay-gamepad-action", listener);
+    return () =>
+      ipcRenderer.removeListener("on-overlay-gamepad-action", listener);
+  },
   downloadSwitchKeys: () => ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),
