@@ -1756,6 +1756,19 @@ contextBridge.exposeInMainWorld("electron", {
     >,
   launchPinnedApp: (appPath: string) =>
     ipcRenderer.invoke("launchPinnedApp", appPath) as Promise<string>,
+  /* ── Overlay volume mixer (per-app audio sessions) ──────────────────── */
+  getAudioSessions: () =>
+    ipcRenderer.invoke("getAudioSessions") as Promise<
+      import("@types").AudioSession[]
+    >,
+  setAudioSessionVolume: (pid: number, volume: number) =>
+    ipcRenderer.invoke(
+      "setAudioSessionVolume",
+      pid,
+      volume
+    ) as Promise<boolean>,
+  setAudioSessionMute: (pid: number, muted: boolean) =>
+    ipcRenderer.invoke("setAudioSessionMute", pid, muted) as Promise<boolean>,
   downloadSwitchKeys: () => ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),

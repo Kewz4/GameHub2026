@@ -38,6 +38,17 @@ type HydraNativeModule = {
     parameters: string,
     workingDirectory: string
   ) => boolean;
+  // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
+  getAudioSessions: () => NativeAudioSession[];
+  setAudioSessionVolume: (pid: number, volume: number) => boolean;
+  setAudioSessionMute: (pid: number, muted: boolean) => boolean;
+};
+
+export type NativeAudioSession = {
+  pid: number;
+  name: string;
+  volume: number;
+  muted: boolean;
 };
 
 export type SystemProcessMap = {
@@ -349,6 +360,36 @@ export class NativeAddon {
       );
     } catch (error) {
       logger.error("Failed to request elevated GameHub process", error);
+      return false;
+    }
+  }
+
+  // ── Per-app volume mixer (Windows Core Audio) ─────────────────────────────
+  // The overlay's "volume mixer" widget reads and writes each running app's
+  // audio session. Non-Windows builds (and older addons) return an empty list
+  // and treat writes as no-ops.
+
+  public static getAudioSessions(): NativeAudioSession[] {
+    try {
+      const sessions = this.load().getAudioSessions();
+      return Array.isArray(sessions) ? sessions : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static setAudioSessionVolume(pid: number, volume: number): boolean {
+    try {
+      return this.load().setAudioSessionVolume(pid, volume);
+    } catch {
+      return false;
+    }
+  }
+
+  public static setAudioSessionMute(pid: number, muted: boolean): boolean {
+    try {
+      return this.load().setAudioSessionMute(pid, muted);
+    } catch {
       return false;
     }
   }

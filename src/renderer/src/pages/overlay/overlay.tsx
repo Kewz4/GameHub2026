@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type {
+  AudioSession,
   HydraOverlayContext,
   HydraOverlayPerformance,
   PinnedApp,
@@ -55,6 +56,10 @@ export default function Overlay() {
   const [spotifyBusy, setSpotifyBusy] = useState(false);
   const [friends, setFriends] = useState<UserFriend[]>([]);
   const [pinnedApps, setPinnedApps] = useState<PinnedApp[]>([]);
+  const [audioSessions, setAudioSessions] = useState<AudioSession[]>([]);
+  // pid of the fader the user is actively dragging — its value is preserved
+  // across polls so the slider doesn't jump back mid-drag.
+  const draggingPidRef = useRef<number | null>(null);
 
   const refreshContext = useCallback(() => {
     window.electron
@@ -186,6 +191,50 @@ export default function Overlay() {
       .removePinnedApp(appPath)
       .then(setPinnedApps)
       .catch(() => undefined);
+  }, []);
+
+  // Per-app volume mixer (Windows only — elsewhere the native returns []).
+  useEffect(() => {
+    if (mode !== "full") return;
+    let active = true;
+    const load = () =>
+      window.electron
+        .getAudioSessions()
+        .then((sessions) => {
+          if (!active) return;
+          setAudioSessions((prev) => {
+            const dragging = draggingPidRef.current;
+            if (dragging === null) return sessions;
+            // Don't overwrite the fader the user is currently dragging.
+            const held = prev.find((s) => s.pid === dragging)?.volume;
+            return sessions.map((s) =>
+              s.pid === dragging && held !== undefined
+                ? { ...s, volume: held }
+                : s
+            );
+          });
+        })
+        .catch(() => undefined);
+    load();
+    const id = setInterval(load, 3000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [mode]);
+
+  const changeSessionVolume = useCallback((pid: number, volume: number) => {
+    setAudioSessions((prev) =>
+      prev.map((s) => (s.pid === pid ? { ...s, volume } : s))
+    );
+    void window.electron.setAudioSessionVolume(pid, volume);
+  }, []);
+
+  const toggleSessionMute = useCallback((pid: number, muted: boolean) => {
+    setAudioSessions((prev) =>
+      prev.map((s) => (s.pid === pid ? { ...s, muted } : s))
+    );
+    void window.electron.setAudioSessionMute(pid, muted);
   }, []);
 
   // Friends presence while the full overlay is open (requires sign-in).
@@ -501,6 +550,71 @@ export default function Overlay() {
                     <span
                       className={`overlay-friend__dot ${friend.isOnline ? "is-online" : ""}`}
                     />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {audioSessions.length > 0 && (
+            <section className="overlay-card overlay-card--mixer">
+              <div className="overlay-card__head">
+                <h2>Volume mixer</h2>
+                <span className="overlay-card__count">
+                  {audioSessions.length}
+                </span>
+              </div>
+              <ul className="overlay-mixer">
+                {audioSessions.map((session) => (
+                  <li
+                    key={session.pid}
+                    className={`overlay-mixer__row ${session.muted ? "is-muted" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="overlay-mixer__mute"
+                      onClick={() =>
+                        toggleSessionMute(session.pid, !session.muted)
+                      }
+                      aria-label={
+                        session.muted
+                          ? `Unmute ${session.name}`
+                          : `Mute ${session.name}`
+                      }
+                      title={session.muted ? "Unmute" : "Mute"}
+                    >
+                      {session.muted ? "🔇" : "🔊"}
+                    </button>
+                    <div className="overlay-mixer__body">
+                      <div className="overlay-mixer__label">
+                        <span className="overlay-mixer__name">
+                          {session.name}
+                        </span>
+                        <span className="overlay-mixer__pct">
+                          {Math.round(session.volume * 100)}
+                        </span>
+                      </div>
+                      <input
+                        className="overlay-mixer__slider"
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={Math.round(session.volume * 100)}
+                        onPointerDown={() => {
+                          draggingPidRef.current = session.pid;
+                        }}
+                        onPointerUp={() => {
+                          draggingPidRef.current = null;
+                        }}
+                        onChange={(event) =>
+                          changeSessionVolume(
+                            session.pid,
+                            Number(event.target.value) / 100
+                          )
+                        }
+                        aria-label={`${session.name} volume`}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>

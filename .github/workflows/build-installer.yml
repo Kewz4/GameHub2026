@@ -163,11 +163,18 @@ jobs:
           if [ ! -f ../dist/GameHub-WebSetup.AppImage ]; then echo "web setup AppImage missing"; exit 1; fi
 
       - name: Upload artifact
+        # Non-fatal: these are convenience CI downloads for non-release builds.
+        # The release step below reads the installers straight from dist/, so a
+        # failed upload (e.g. GitHub Actions artifact storage quota exhausted)
+        # must never abort the job before the release is published.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_glob }}
-          retention-days: 30
+          # Short retention so per-branch installer artifacts (~150 MB × 2
+          # platforms × every push) don't refill the account storage quota.
+          retention-days: 5
 
       - name: Resolve release tag
         id: reltag

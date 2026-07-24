@@ -70,3 +70,12 @@ export interface PinnedApp {
   name: string;
   path: string;
 }
+
+/** A running app's audio session, surfaced by the overlay volume mixer. */
+export interface AudioSession {
+  pid: number;
+  name: string;
+  /** Session master volume, 0.0–1.0. */
+  volume: number;
+  muted: boolean;
+}

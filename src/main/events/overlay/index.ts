@@ -1,7 +1,8 @@
 import { dialog, shell } from "electron";
 import path from "node:path";
-import type { PinnedApp, UserPreferences } from "@types";
+import type { AudioSession, PinnedApp, UserPreferences } from "@types";
 import { OverlayManager } from "@main/services/overlay-manager";
+import { NativeAddon } from "@main/services/native-addon";
 import { db, levelKeys, overlayNotesSublevel } from "@main/level";
 import { registerEvent } from "../register-event";
 
@@ -80,3 +81,23 @@ registerEvent("pickPinnedApp", async (): Promise<PinnedApp[]> => {
   }
   return writePinnedApps(apps);
 });
+
+// ── Per-app volume mixer ─────────────────────────────────────────────────────
+// Sessions are keyed by pid — the same key is used for volume/mute writes so
+// the renderer never has to hold a native handle.
+registerEvent(
+  "getAudioSessions",
+  async (): Promise<AudioSession[]> => NativeAddon.getAudioSessions()
+);
+
+registerEvent(
+  "setAudioSessionVolume",
+  (_event, pid: number, volume: number): boolean =>
+    NativeAddon.setAudioSessionVolume(Number(pid), Number(volume))
+);
+
+registerEvent(
+  "setAudioSessionMute",
+  (_event, pid: number, muted: boolean): boolean =>
+    NativeAddon.setAudioSessionMute(Number(pid), Boolean(muted))
+);

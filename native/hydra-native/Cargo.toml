@@ -20,6 +20,10 @@ uuid = { version = "1.11.0", features = ["v4"] }
 # helpers the injected overlay uses to attach to the running game.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+# Higher-level COM bindings for the overlay's per-app volume mixer (Core Audio:
+# IAudioSessionManager2 / ISimpleAudioVolume). windows-sys' raw vtable COM is
+# too error-prone for this, so the ergonomic `windows` crate is used here.
+windows = { version = "0.61", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation"] }
 
 [build-dependencies]
 napi-build = "2.3.1"

@@ -1238,6 +1238,9 @@ declare global {
     pickPinnedApp: () => Promise<import("@types").PinnedApp[]>;
     removePinnedApp: (appPath: string) => Promise<import("@types").PinnedApp[]>;
     launchPinnedApp: (appPath: string) => Promise<string>;
+    getAudioSessions: () => Promise<import("@types").AudioSession[]>;
+    setAudioSessionVolume: (pid: number, volume: number) => Promise<boolean>;
+    setAudioSessionMute: (pid: number, muted: boolean) => Promise<boolean>;
     downloadSwitchKeys: () => Promise<{
       keys: boolean;
       firmware: boolean;

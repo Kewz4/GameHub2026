@@ -279,6 +279,7 @@ dependencies = [
  "napi-derive",
  "sysinfo",
  "uuid",
+ "windows",
  "windows-sys",
 ]
 

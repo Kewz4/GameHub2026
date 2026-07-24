@@ -63,6 +63,19 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_HOTKEY, WM_INPUT, WNDCLASSW,
 };
 
+// Per-app volume mixer (Core Audio) — higher-level `windows` COM bindings.
+#[cfg(target_os = "windows")]
+use windows::core::Interface;
+#[cfg(target_os = "windows")]
+use windows::Win32::Media::Audio::{
+    eConsole, eRender, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator,
+    ISimpleAudioVolume, MMDeviceEnumerator,
+};
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
+};
+
 #[cfg(target_os = "windows")]
 static RAW_INPUT_STARTED: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "windows")]
@@ -429,6 +442,168 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
     }
 
     0
+}
+
+// ── Per-app volume mixer (Core Audio, Windows only) ──────────────────────────
+#[napi(object)]
+pub struct AudioSession {
+    pub pid: u32,
+    pub name: String,
+    /// Master volume of this app's audio session, 0.0–1.0.
+    pub volume: f64,
+    pub muted: bool,
+}
+
+#[napi]
+pub fn get_audio_sessions() -> Vec<AudioSession> {
+    // Run COM on a dedicated MTA thread so we never touch Electron's own COM
+    // apartment on the JS thread.
+    #[cfg(target_os = "windows")]
+    {
+        std::thread::spawn(enumerate_audio_sessions)
+            .join()
+            .unwrap_or_default()
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    Vec::new()
+}
+
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn set_audio_session_volume(pid: u32, volume: f64) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        std::thread::spawn(move || {
+            apply_to_session(pid, &|simple| unsafe {
+                simple
+                    .SetMasterVolume(volume.clamp(0.0, 1.0) as f32, std::ptr::null())
+                    .is_ok()
+            })
+        })
+        .join()
+        .unwrap_or(false)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn set_audio_session_mute(pid: u32, muted: bool) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        std::thread::spawn(move || {
+            apply_to_session(pid, &|simple| unsafe {
+                simple.SetMute(muted, std::ptr::null()).is_ok()
+            })
+        })
+        .join()
+        .unwrap_or(false)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
+#[cfg(target_os = "windows")]
+struct ComGuard;
+#[cfg(target_os = "windows")]
+impl ComGuard {
+    unsafe fn new() -> Self {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        ComGuard
+    }
+}
+#[cfg(target_os = "windows")]
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        unsafe { CoUninitialize() };
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn session_manager() -> windows::core::Result<IAudioSessionManager2> {
+    let enumerator: IMMDeviceEnumerator =
+        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)?;
+    device.Activate(CLSCTX_ALL, None)
+}
+
+#[cfg(target_os = "windows")]
+fn enumerate_audio_sessions() -> Vec<AudioSession> {
+    unsafe {
+        let _guard = ComGuard::new();
+        collect_sessions().unwrap_or_default()
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn collect_sessions() -> windows::core::Result<Vec<AudioSession>> {
+    let manager = session_manager()?;
+    let sessions = manager.GetSessionEnumerator()?;
+    let count = sessions.GetCount()?;
+
+    let mut raw: Vec<(u32, f32, bool)> = Vec::new();
+    for index in 0..count {
+        let control = sessions.GetSession(index)?;
+        let control2: IAudioSessionControl2 = control.cast()?;
+        let pid = control2.GetProcessId().unwrap_or(0);
+        let simple: ISimpleAudioVolume = control.cast()?;
+        let volume = simple.GetMasterVolume().unwrap_or(0.0);
+        let muted = simple.GetMute().map(|value| value.as_bool()).unwrap_or(false);
+        raw.push((pid, volume, muted));
+    }
+
+    let mut system = System::new();
+    system.refresh_processes(ProcessesToUpdate::All, true);
+
+    Ok(raw
+        .into_iter()
+        .map(|(pid, volume, muted)| AudioSession {
+            pid,
+            name: if pid == 0 {
+                "System sounds".to_string()
+            } else {
+                system
+                    .process(sysinfo::Pid::from_u32(pid))
+                    .map(|process| process.name().to_string_lossy().to_string())
+                    .unwrap_or_else(|| format!("PID {pid}"))
+            },
+            volume: volume as f64,
+            muted,
+        })
+        .collect())
+}
+
+#[cfg(target_os = "windows")]
+fn apply_to_session(pid: u32, apply: &dyn Fn(&ISimpleAudioVolume) -> bool) -> bool {
+    unsafe {
+        let _guard = ComGuard::new();
+        let Ok(manager) = session_manager() else {
+            return false;
+        };
+        let Ok(sessions) = manager.GetSessionEnumerator() else {
+            return false;
+        };
+        let count = sessions.GetCount().unwrap_or(0);
+        for index in 0..count {
+            let Ok(control) = sessions.GetSession(index) else {
+                continue;
+            };
+            let Ok(control2) = control.cast::<IAudioSessionControl2>() else {
+                continue;
+            };
+            if control2.GetProcessId().unwrap_or(0) != pid {
+                continue;
+            }
+            if let Ok(simple) = control.cast::<ISimpleAudioVolume>() {
+                return apply(&simple);
+            }
+        }
+        false
+    }
 }
 
 #[napi(object)]
