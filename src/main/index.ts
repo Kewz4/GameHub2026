@@ -217,6 +217,7 @@ import {
   Lock,
   PowerSaveBlockerManager,
   DownloadOrchestrator,
+  OverlayManager,
 } from "@main/services";
 import { WSClient } from "@main/services/ws";
 import resources from "@locales";
@@ -322,6 +323,10 @@ app.whenReady().then(async () => {
   refreshShortcuts();
 
   electronApp.setAppUserModelId("io.gamehub.launcher");
+
+  // Wire the in-game overlay (perf HUD via PresentMon, injected surface via
+  // asdf-overlay, Shift+F3 / hold-Guide toggle). Idempotent; safe on all OSes.
+  OverlayManager.initialize();
 
   protocol.handle("local", (request) => {
     const filePath = request.url.slice("local:".length);

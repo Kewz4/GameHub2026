@@ -6,6 +6,7 @@ import { db, gamesSublevel, levelKeys } from "@main/level";
 import { CloudSync } from "./cloud-sync";
 import { logger, networkLogger } from "./logger";
 import { PowerSaveBlockerManager } from "./power-save-blocker";
+import { OverlayManager } from "./overlay-manager";
 import path from "node:path";
 import { AchievementWatcherManager } from "./achievements/achievement-watcher-manager";
 import { RaWatcherManager } from "./achievements/retroachievements/ra-watcher-manager";
@@ -335,6 +336,11 @@ function onOpenGame(game: Game) {
   // RetroAchievements live polling for RA-capable emulated games.
   RaWatcherManager.startPolling(game).catch(() => {});
 
+  // Activate the in-game overlay for this session (Shift+F3 / hold-Guide,
+  // performance HUD, achievements/friends/notes). No-op when the overlay is
+  // disabled in preferences.
+  OverlayManager.setActiveGame(game);
+
   // On Linux, keep the launcher visible briefly and let it auto-close itself.
   if (process.platform !== "linux") {
     WindowManager.closeGameLauncherWindow();
@@ -492,6 +498,7 @@ const onCloseGame = (game: Game) => {
   launchedGamePids.delete(gameKey);
   PowerSaveBlockerManager.markGameClosed(gameKey);
   RaWatcherManager.stopPolling(game);
+  OverlayManager.clearActiveGame(game);
 
   const delta = now - gamePlaytime.lastTick;
 

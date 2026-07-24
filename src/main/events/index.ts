@@ -17,6 +17,7 @@ import "./library";
 import "./leveldb";
 import "./misc";
 import "./notifications";
+import "./overlay";
 import "./profile";
 import "./themes";
 import "./torrenting";
