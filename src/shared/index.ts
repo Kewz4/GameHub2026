@@ -20,6 +20,7 @@ import { AchievementNotificationInfo } from "@types";
 
 export * from "./constants";
 export * from "./controller-support";
+export * from "./overlay-preferences";
 export * from "./download-directories";
 export * from "./html-sanitizer";
 export * from "./language-flags";

@@ -780,3 +780,4 @@ export * from "./level.types";
 export * from "./theme.types";
 export * from "./emulator.types";
 export * from "./mods.types";
+export * from "./overlay.types";

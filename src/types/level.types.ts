@@ -216,6 +216,15 @@ export interface UserPreferences {
    *  rows. Emulated games use the local dataset rating; Steam games are
    *  classified from Steam's appdetails and cached. */
   hideMatureGames?: boolean;
+  /** In-game overlay (Shift+F3 / hold-Guide) — master switch + performance HUD
+   *  rows. Mirrors HydraOverlayPreferences; resolved via
+   *  resolveHydraOverlayPreferences with all-on defaults. */
+  overlayEnabled?: boolean;
+  overlayPerformanceEnabled?: boolean;
+  overlayPerformanceShowFps?: boolean;
+  overlayPerformanceShowAverageFps?: boolean;
+  overlayPerformanceShowFrameTime?: boolean;
+  overlayPerformanceShowOnePercentLow?: boolean;
   enableAutoInstall?: boolean;
   seedAfterDownloadComplete?: boolean;
   showHiddenAchievementsDescription?: boolean;
