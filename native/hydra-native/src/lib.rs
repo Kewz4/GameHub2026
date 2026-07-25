@@ -33,7 +33,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, FreeLibrary, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,
+};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
 #[cfg(target_os = "windows")]
@@ -42,7 +44,7 @@ use windows_sys::Win32::Security::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::LibraryLoader::{
-    FreeLibrary, GetModuleHandleW, GetProcAddress, LoadLibraryExW,
+    GetModuleHandleW, GetProcAddress, LoadLibraryExW,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
@@ -732,7 +734,10 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
         return first_connected_buttons.unwrap_or(0);
     }
 
-    0
+    #[cfg(not(target_os = "windows"))]
+    {
+        0
+    }
 }
 
 #[napi]
