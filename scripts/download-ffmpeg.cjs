@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { pipeline } = require("node:stream/promises");
 
 // Pinned LGPL build used only to join the recorder's independently encoded
 // WebM segments. The capture/encoding path itself is Chromium's Windows
@@ -14,11 +15,12 @@ const FFMPEG_ARCHIVE_SHA256 =
 const FFMPEG_LICENSE_SHA256 =
   "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768";
 const GPL_LICENSE_SHA256 =
-  "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986";
+  "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903";
 const FFMPEG_URL =
   `https://github.com/BtbN/FFmpeg-Builds/releases/download/` +
   `autobuild-2026-06-30-13-34/${FFMPEG_ASSET}`;
-const GPL_LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.txt";
+const GPL_LICENSE_URL =
+  "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n8.1.2/COPYING.GPLv3";
 
 const digestFile = (filePath) =>
   new Promise((resolve, reject) => {
@@ -43,19 +45,38 @@ const findFile = (directory, fileName) => {
 };
 
 const downloadToFile = async (url, targetPath) => {
-  const response = await axios.get(url, {
-    responseType: "stream",
-    timeout: 180_000,
-    maxBodyLength: Infinity,
-    maxContentLength: Infinity,
-  });
-  await new Promise((resolve, reject) => {
-    const output = fs.createWriteStream(targetPath);
-    response.data.once("error", reject);
-    output.once("error", reject);
-    output.once("finish", resolve);
-    response.data.pipe(output);
-  });
+  const maximumAttempts = 4;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      const response = await axios.get(url, {
+        responseType: "stream",
+        timeout: 180_000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        headers: { "User-Agent": "GameHub-build/1.1.20" },
+      });
+      await pipeline(response.data, fs.createWriteStream(targetPath));
+      return;
+    } catch (error) {
+      await fs.promises.rm(targetPath, { force: true });
+      const status = error?.response?.status;
+      const retryable = !status || status === 429 || status >= 500;
+      if (!retryable || attempt === maximumAttempts) throw error;
+
+      const retryAfterSeconds = Number(
+        error?.response?.headers?.["retry-after"]
+      );
+      const delay = Number.isFinite(retryAfterSeconds)
+        ? Math.min(retryAfterSeconds * 1_000, 30_000)
+        : 1_000 * 2 ** (attempt - 1);
+      console.warn(
+        `Download attempt ${attempt} failed${
+          status ? ` with HTTP ${status}` : ""
+        }; retrying in ${delay}ms…`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 };
 
 const downloadFfmpeg = async () => {
