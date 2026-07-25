@@ -1643,6 +1643,43 @@ declare global {
       imageUrl: string | null,
       options: { width: number; height: number; preserveAnimation?: boolean }
     ) => Promise<string | null>;
+
+    /* Music player (overlay, Deezer + yt-dlp) */
+    musicSearch: (query: string) => Promise<import("@types").MusicTrack[]>;
+    musicGetState: () => Promise<import("@types").MusicPlayerState>;
+    musicSetQueue: (
+      tracks: import("@types").MusicTrack[],
+      startIndex?: number
+    ) => Promise<void>;
+    musicAddToQueue: (track: import("@types").MusicTrack) => Promise<void>;
+    musicRemoveFromQueue: (index: number) => Promise<void>;
+    musicClearQueue: () => Promise<void>;
+    musicPlay: (index?: number) => Promise<import("@types").MusicTrack | null>;
+    musicPause: () => Promise<void>;
+    musicResume: () => Promise<void>;
+    musicStop: () => Promise<void>;
+    musicNext: () => Promise<import("@types").MusicTrack | null>;
+    musicPrevious: () => Promise<import("@types").MusicTrack | null>;
+    musicSetShuffle: (enabled: boolean) => Promise<void>;
+    musicSetRepeat: (mode: import("@types").RepeatMode) => Promise<void>;
+    musicGetPlaylists: () => Promise<import("@types").MusicPlaylist[]>;
+    musicCreatePlaylist: (
+      name: string
+    ) => Promise<import("@types").MusicPlaylist>;
+    musicDeletePlaylist: (id: string) => Promise<void>;
+    musicRenamePlaylist: (id: string, name: string) => Promise<void>;
+    musicAddToPlaylist: (
+      playlistId: string,
+      track: import("@types").MusicTrack
+    ) => Promise<void>;
+    musicRemoveFromPlaylist: (
+      playlistId: string,
+      trackIndex: number
+    ) => Promise<void>;
+    musicPlayPlaylist: (
+      playlistId: string,
+      startIndex?: number
+    ) => Promise<import("@types").MusicTrack | null>;
   }
 
   interface Window {

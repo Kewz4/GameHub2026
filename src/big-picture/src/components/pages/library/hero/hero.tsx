@@ -96,8 +96,7 @@ export function LibraryHero({
   // (launchbox) game with its discs present — the same predicate the game page
   // hero uses, so last-played classics show "Launch Game", not "Download".
   const isPlayableClassicsGame =
-    featuredGame?.shop === "launchbox" &&
-    (featuredGame.discs?.length ?? 0) > 0;
+    featuredGame?.shop === "launchbox" && (featuredGame.discs?.length ?? 0) > 0;
   const isPlayable =
     Boolean(featuredGame?.executablePath) ||
     featuredGame?.isInstalledLocally === true ||

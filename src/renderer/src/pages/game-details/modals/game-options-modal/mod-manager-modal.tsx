@@ -228,7 +228,9 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
 
   const cancelOptions = async () => {
     if (optionPrep) {
-      await window.electron.cancelModInstall(optionPrep.stagingId).catch(() => {});
+      await window.electron
+        .cancelModInstall(optionPrep.stagingId)
+        .catch(() => {});
     }
     setOptionPrep(null);
   };
@@ -304,77 +306,88 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
     );
     return (
       <>
-      <Modal
-        visible
-        className="modal--mod-manager"
-        title={`Options — ${optionPrep.name}`}
-        onClose={cancelOptions}
-        large
-      >
-        <div className="mod-manager mod-manager--options">
-          <p className="mod-manager__muted" style={{ padding: "0 0 4px" }}>
-            This mod has configurable options. Choose what to install — it all
-            happens in the background, no external app opens.
-          </p>
-          <div className="mod-manager__scroll">
-            {optionPrep.groups.map((group, gi) => (
-              <div className="mod-manager__opt-group" key={`${group.name}-${gi}`}>
-                <div className="mod-manager__opt-title">
-                  {group.name}
-                  {group.required && (
-                    <span className="mod-manager__opt-req"> (required)</span>
-                  )}
-                </div>
-                {group.description && (
-                  <div className="mod-manager__opt-desc">
-                    {group.description}
+        <Modal
+          visible
+          className="modal--mod-manager"
+          title={`Options — ${optionPrep.name}`}
+          onClose={cancelOptions}
+          large
+        >
+          <div className="mod-manager mod-manager--options">
+            <p className="mod-manager__muted" style={{ padding: "0 0 4px" }}>
+              This mod has configurable options. Choose what to install — it all
+              happens in the background, no external app opens.
+            </p>
+            <div className="mod-manager__scroll">
+              {optionPrep.groups.map((group, gi) => (
+                <div
+                  className="mod-manager__opt-group"
+                  key={`${group.name}-${gi}`}
+                >
+                  <div className="mod-manager__opt-title">
+                    {group.name}
+                    {group.required && (
+                      <span className="mod-manager__opt-req"> (required)</span>
+                    )}
                   </div>
-                )}
-                <ul className="mod-manager__opt-list">
-                  {group.options.map((opt) => {
-                    const checked = (optionSel[gi] ?? []).includes(opt.folder);
-                    return (
-                      <li key={opt.folder}>
-                        <label className="mod-manager__opt-item">
-                          <input
-                            type={group.type === "single" ? "radio" : "checkbox"}
-                            name={`group-${gi}`}
-                            checked={checked}
-                            onChange={() => toggleOption(gi, opt.folder)}
-                          />
-                          <span>
-                            <span className="mod-manager__opt-name">
-                              {opt.name}
-                            </span>
-                            {opt.description && (
-                              <span className="mod-manager__opt-sub">
-                                {opt.description}
+                  {group.description && (
+                    <div className="mod-manager__opt-desc">
+                      {group.description}
+                    </div>
+                  )}
+                  <ul className="mod-manager__opt-list">
+                    {group.options.map((opt) => {
+                      const checked = (optionSel[gi] ?? []).includes(
+                        opt.folder
+                      );
+                      return (
+                        <li key={opt.folder}>
+                          <label className="mod-manager__opt-item">
+                            <input
+                              type={
+                                group.type === "single" ? "radio" : "checkbox"
+                              }
+                              name={`group-${gi}`}
+                              checked={checked}
+                              onChange={() => toggleOption(gi, opt.folder)}
+                            />
+                            <span>
+                              <span className="mod-manager__opt-name">
+                                {opt.name}
                               </span>
-                            )}
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+                              {opt.description && (
+                                <span className="mod-manager__opt-sub">
+                                  {opt.description}
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="mod-manager__opt-actions">
+              <Button
+                theme="outline"
+                onClick={cancelOptions}
+                disabled={finalizing}
+              >
+                Cancel
+              </Button>
+              <Button
+                theme="primary"
+                onClick={confirmOptions}
+                disabled={!canConfirm || finalizing}
+              >
+                {finalizing ? "Installing…" : "Install"}
+              </Button>
+            </div>
           </div>
-          <div className="mod-manager__opt-actions">
-            <Button theme="outline" onClick={cancelOptions} disabled={finalizing}>
-              Cancel
-            </Button>
-            <Button
-              theme="primary"
-              onClick={confirmOptions}
-              disabled={!canConfirm || finalizing}
-            >
-              {finalizing ? "Installing…" : "Install"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-      {progressOverlay}
+        </Modal>
+        {progressOverlay}
       </>
     );
   }
@@ -384,84 +397,88 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
     const imgs = detail.gallery;
     return (
       <>
-      <Modal
-        visible
-        className="modal--mod-manager"
-        title={detail.name}
-        onClose={onClose}
-        large
-      >
-        <div className="mod-manager mod-manager--detail">
-          <button
-            type="button"
-            className="mod-manager__back"
-            onClick={() => setDetail(null)}
-          >
-            <ChevronLeftIcon size={14} /> Back to browse
-          </button>
-
-          {imgs.length > 0 && (
-            <div className="mod-manager__gallery">
-              <img src={imgs[galleryIndex]} alt={detail.name} />
-              {imgs.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    className="mod-manager__gallery-nav mod-manager__gallery-nav--prev"
-                    onClick={() =>
-                      setGalleryIndex(
-                        (i) => (i - 1 + imgs.length) % imgs.length
-                      )
-                    }
-                  >
-                    <ChevronLeftIcon size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    className="mod-manager__gallery-nav mod-manager__gallery-nav--next"
-                    onClick={() => setGalleryIndex((i) => (i + 1) % imgs.length)}
-                  >
-                    <ChevronRightIcon size={18} />
-                  </button>
-                  <span className="mod-manager__gallery-count">
-                    {galleryIndex + 1} / {imgs.length}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="mod-manager__detail-head">
-            <span className="mod-manager__card-stats">
-              {detail.submitter ? `by ${detail.submitter}` : ""}
-              <HeartIcon size={12} /> {detail.likes}
-              <EyeIcon size={12} /> {detail.views}
-            </span>
+        <Modal
+          visible
+          className="modal--mod-manager"
+          title={detail.name}
+          onClose={onClose}
+          large
+        >
+          <div className="mod-manager mod-manager--detail">
             <button
               type="button"
-              className="mod-manager__install"
-              disabled={installingId === detail.id || installedIds.has(detail.id)}
-              onClick={() => runInstall(detail.id, detail.name)}
+              className="mod-manager__back"
+              onClick={() => setDetail(null)}
             >
-              <DownloadIcon size={13} />
-              <span>
-                {installedIds.has(detail.id)
-                  ? "Installed"
-                  : installingId === detail.id
-                    ? "Installing…"
-                    : "Install"}
-              </span>
+              <ChevronLeftIcon size={14} /> Back to browse
             </button>
-          </div>
 
-          <div className="mod-manager__description">
-            {detailLoading
-              ? "Loading description…"
-              : htmlToText(detail.description) || "No description provided."}
+            {imgs.length > 0 && (
+              <div className="mod-manager__gallery">
+                <img src={imgs[galleryIndex]} alt={detail.name} />
+                {imgs.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      className="mod-manager__gallery-nav mod-manager__gallery-nav--prev"
+                      onClick={() =>
+                        setGalleryIndex(
+                          (i) => (i - 1 + imgs.length) % imgs.length
+                        )
+                      }
+                    >
+                      <ChevronLeftIcon size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      className="mod-manager__gallery-nav mod-manager__gallery-nav--next"
+                      onClick={() =>
+                        setGalleryIndex((i) => (i + 1) % imgs.length)
+                      }
+                    >
+                      <ChevronRightIcon size={18} />
+                    </button>
+                    <span className="mod-manager__gallery-count">
+                      {galleryIndex + 1} / {imgs.length}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="mod-manager__detail-head">
+              <span className="mod-manager__card-stats">
+                {detail.submitter ? `by ${detail.submitter}` : ""}
+                <HeartIcon size={12} /> {detail.likes}
+                <EyeIcon size={12} /> {detail.views}
+              </span>
+              <button
+                type="button"
+                className="mod-manager__install"
+                disabled={
+                  installingId === detail.id || installedIds.has(detail.id)
+                }
+                onClick={() => runInstall(detail.id, detail.name)}
+              >
+                <DownloadIcon size={13} />
+                <span>
+                  {installedIds.has(detail.id)
+                    ? "Installed"
+                    : installingId === detail.id
+                      ? "Installing…"
+                      : "Install"}
+                </span>
+              </button>
+            </div>
+
+            <div className="mod-manager__description">
+              {detailLoading
+                ? "Loading description…"
+                : htmlToText(detail.description) || "No description provided."}
+            </div>
           </div>
-        </div>
-      </Modal>
-      {progressOverlay}
+        </Modal>
+        {progressOverlay}
       </>
     );
   }
@@ -469,133 +486,250 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
   // ── Browse / Manage ─────────────────────────────────────────────────────────
   return (
     <>
-    <Modal
-      visible
-      className="modal--mod-manager"
-      title="Mod manager"
-      onClose={onClose}
-      large
-    >
-      <div className="mod-manager">
-        <div className="mod-manager__tabs">
-          <button
-            type="button"
-            className={`mod-manager__tab ${tab === "browse" ? "mod-manager__tab--active" : ""}`}
-            onClick={() => setTab("browse")}
-          >
-            Browse mods
-          </button>
-          <button
-            type="button"
-            className={`mod-manager__tab ${tab === "manage" ? "mod-manager__tab--active" : ""}`}
-            onClick={() => setTab("manage")}
-          >
-            Installed ({installed.length})
-          </button>
-        </div>
+      <Modal
+        visible
+        className="modal--mod-manager"
+        title="Mod manager"
+        onClose={onClose}
+        large
+      >
+        <div className="mod-manager">
+          <div className="mod-manager__tabs">
+            <button
+              type="button"
+              className={`mod-manager__tab ${tab === "browse" ? "mod-manager__tab--active" : ""}`}
+              onClick={() => setTab("browse")}
+            >
+              Browse mods
+            </button>
+            <button
+              type="button"
+              className={`mod-manager__tab ${tab === "manage" ? "mod-manager__tab--active" : ""}`}
+              onClick={() => setTab("manage")}
+            >
+              Installed ({installed.length})
+            </button>
+          </div>
 
-        {tab === "browse" ? (
-          <>
-            <div className="mod-manager__controls">
-              <div className="mod-manager__search">
-                <SearchIcon size={14} />
-                <input
-                  placeholder="Search mods…"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
+          {tab === "browse" ? (
+            <>
+              <div className="mod-manager__controls">
+                <div className="mod-manager__search">
+                  <SearchIcon size={14} />
+                  <input
+                    placeholder="Search mods…"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                  />
+                </div>
+                <SettingSelect
+                  ariaLabel="Sort mods"
+                  value={sort}
+                  disabled={Boolean(search)}
+                  options={[
+                    { value: "likes", label: "Most liked" },
+                    { value: "downloads", label: "Most downloaded" },
+                    { value: "newest", label: "Newest" },
+                    { value: "updated", label: "Recently updated" },
+                  ]}
+                  onChange={(v) => {
+                    setPage(1);
+                    setSort(v as Sort);
+                  }}
+                />
+                <SettingSelect
+                  ariaLabel="Filter by category"
+                  value={categoryId != null ? String(categoryId) : ""}
+                  disabled={Boolean(search)}
+                  options={[
+                    { value: "", label: "All categories" },
+                    ...categories.map((c) => ({
+                      value: String(c.id),
+                      label: c.name,
+                    })),
+                  ]}
+                  onChange={(v) => {
+                    setPage(1);
+                    setCategoryId(v ? Number(v) : null);
+                  }}
                 />
               </div>
-              <SettingSelect
-                ariaLabel="Sort mods"
-                value={sort}
-                disabled={Boolean(search)}
-                options={[
-                  { value: "likes", label: "Most liked" },
-                  { value: "downloads", label: "Most downloaded" },
-                  { value: "newest", label: "Newest" },
-                  { value: "updated", label: "Recently updated" },
-                ]}
-                onChange={(v) => {
-                  setPage(1);
-                  setSort(v as Sort);
-                }}
-              />
-              <SettingSelect
-                ariaLabel="Filter by category"
-                value={categoryId != null ? String(categoryId) : ""}
-                disabled={Boolean(search)}
-                options={[
-                  { value: "", label: "All categories" },
-                  ...categories.map((c) => ({
-                    value: String(c.id),
-                    label: c.name,
-                  })),
-                ]}
-                onChange={(v) => {
-                  setPage(1);
-                  setCategoryId(v ? Number(v) : null);
-                }}
-              />
-            </div>
 
-            <div className="mod-manager__scroll">
-              {loading ? (
-                <p className="mod-manager__muted">Loading mods…</p>
-              ) : mods.length === 0 ? (
-                <p className="mod-manager__muted">No mods found.</p>
-              ) : (
-                <ul className="mod-manager__grid">
-                  {mods.map((mod) => (
-                    <li key={mod.id} className="mod-manager__card">
-                      <button
-                        type="button"
-                        className="mod-manager__thumb"
-                        onClick={() => openDetail(mod)}
-                        title={`View ${mod.name}`}
-                      >
-                        {mod.imageUrl ? (
-                          <img
-                            src={mod.imageUrl}
-                            alt={mod.name}
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="mod-manager__thumb-placeholder" />
-                        )}
-                      </button>
-                      <div className="mod-manager__card-body">
+              <div className="mod-manager__scroll">
+                {loading ? (
+                  <p className="mod-manager__muted">Loading mods…</p>
+                ) : mods.length === 0 ? (
+                  <p className="mod-manager__muted">No mods found.</p>
+                ) : (
+                  <ul className="mod-manager__grid">
+                    {mods.map((mod) => (
+                      <li key={mod.id} className="mod-manager__card">
                         <button
                           type="button"
-                          className="mod-manager__card-name"
-                          title={mod.name}
+                          className="mod-manager__thumb"
                           onClick={() => openDetail(mod)}
+                          title={`View ${mod.name}`}
                         >
-                          {mod.name}
+                          {mod.imageUrl ? (
+                            <img
+                              src={mod.imageUrl}
+                              alt={mod.name}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="mod-manager__thumb-placeholder" />
+                          )}
                         </button>
-                        <span className="mod-manager__card-meta">
-                          {mod.category ?? "Mod"}
-                          {mod.submitter ? ` · ${mod.submitter}` : ""}
+                        <div className="mod-manager__card-body">
+                          <button
+                            type="button"
+                            className="mod-manager__card-name"
+                            title={mod.name}
+                            onClick={() => openDetail(mod)}
+                          >
+                            {mod.name}
+                          </button>
+                          <span className="mod-manager__card-meta">
+                            {mod.category ?? "Mod"}
+                            {mod.submitter ? ` · ${mod.submitter}` : ""}
+                          </span>
+                          <span className="mod-manager__card-stats">
+                            <HeartIcon size={12} /> {mod.likes}
+                            <EyeIcon size={12} /> {mod.views}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="mod-manager__install"
+                          disabled={
+                            installingId === mod.id || installedIds.has(mod.id)
+                          }
+                          onClick={() => runInstall(mod.id, mod.name)}
+                        >
+                          <DownloadIcon size={13} />
+                          <span>
+                            {installedIds.has(mod.id)
+                              ? "Installed"
+                              : installingId === mod.id
+                                ? "Installing…"
+                                : "Install"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {!search && (
+                <div className="mod-manager__pager">
+                  <button
+                    type="button"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  <span>Page {page}</span>
+                  <button
+                    type="button"
+                    disabled={loading || mods.length === 0}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="mod-manager__scroll">
+              <div className="mod-manager__modpack-actions">
+                <button
+                  type="button"
+                  className="mod-manager__pack-btn"
+                  onClick={async () => {
+                    const res = await window.electron.exportModpack(
+                      game.shop,
+                      game.objectId
+                    );
+                    if (res.ok) showSuccessToast("Modpack exported");
+                    else if (!res.canceled)
+                      showErrorToast(res.reason ?? "Export failed");
+                  }}
+                >
+                  <UploadIcon size={13} /> Export modpack
+                </button>
+                <button
+                  type="button"
+                  className="mod-manager__pack-btn"
+                  onClick={async () => {
+                    const res = await window.electron.importModpack(
+                      game.shop,
+                      game.objectId
+                    );
+                    if (res.ok) {
+                      showSuccessToast("Modpack imported");
+                      await loadInstalled();
+                    } else if (!res.canceled)
+                      showErrorToast(res.reason ?? "Import failed");
+                  }}
+                >
+                  <DownloadIcon size={13} /> Import modpack
+                </button>
+                <button
+                  type="button"
+                  className="mod-manager__pack-btn mod-manager__pack-btn--danger"
+                  title="Clear all installed mods and reset UKMM (use if the list is stuck or out of sync)"
+                  onClick={async () => {
+                    const res = await window.electron.resetMods(
+                      game.shop,
+                      game.objectId
+                    );
+                    if (res.ok) {
+                      showSuccessToast("Mods reset");
+                      await loadInstalled();
+                    } else {
+                      showErrorToast(res.reason ?? "Reset failed");
+                    }
+                  }}
+                >
+                  <TrashIcon size={13} /> Reset all
+                </button>
+              </div>
+              {installed.length === 0 ? (
+                <p className="mod-manager__muted">
+                  No mods installed yet — install some from the Browse tab.
+                </p>
+              ) : (
+                <ul className="mod-manager__installed">
+                  {installed.map((mod, index) => (
+                    <li
+                      key={`${mod.gbModId}-${index}`}
+                      className="mod-manager__installed-item"
+                    >
+                      <div className="mod-manager__installed-thumb">
+                        {mod.thumbnailUrl && (
+                          <img src={mod.thumbnailUrl} alt={mod.name} />
+                        )}
+                      </div>
+                      <div className="mod-manager__installed-body">
+                        <span className="mod-manager__card-name">
+                          {mod.name}
                         </span>
-                        <span className="mod-manager__card-stats">
-                          <HeartIcon size={12} /> {mod.likes}
-                          <EyeIcon size={12} /> {mod.views}
+                        <span className="mod-manager__card-meta">
+                          Installed{" "}
+                          {new Date(mod.installedAt).toLocaleDateString()}
                         </span>
                       </div>
                       <button
                         type="button"
-                        className="mod-manager__install"
-                        disabled={
-                          installingId === mod.id || installedIds.has(mod.id)
-                        }
-                        onClick={() => runInstall(mod.id, mod.name)}
+                        className="mod-manager__remove"
+                        disabled={uninstallingIdx === index}
+                        onClick={() => handleUninstall(index)}
                       >
-                        <DownloadIcon size={13} />
+                        <TrashIcon size={13} />
                         <span>
-                          {installedIds.has(mod.id)
-                            ? "Installed"
-                            : installingId === mod.id
-                              ? "Installing…"
-                              : "Install"}
+                          {uninstallingIdx === index ? "Removing…" : "Remove"}
                         </span>
                       </button>
                     </li>
@@ -603,124 +737,9 @@ export function ModManagerModal({ game, onClose }: Readonly<Props>) {
                 </ul>
               )}
             </div>
-
-            {!search && (
-              <div className="mod-manager__pager">
-                <button
-                  type="button"
-                  disabled={page <= 1 || loading}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Previous
-                </button>
-                <span>Page {page}</span>
-                <button
-                  type="button"
-                  disabled={loading || mods.length === 0}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="mod-manager__scroll">
-            <div className="mod-manager__modpack-actions">
-              <button
-                type="button"
-                className="mod-manager__pack-btn"
-                onClick={async () => {
-                  const res = await window.electron.exportModpack(
-                    game.shop,
-                    game.objectId
-                  );
-                  if (res.ok) showSuccessToast("Modpack exported");
-                  else if (!res.canceled)
-                    showErrorToast(res.reason ?? "Export failed");
-                }}
-              >
-                <UploadIcon size={13} /> Export modpack
-              </button>
-              <button
-                type="button"
-                className="mod-manager__pack-btn"
-                onClick={async () => {
-                  const res = await window.electron.importModpack(
-                    game.shop,
-                    game.objectId
-                  );
-                  if (res.ok) {
-                    showSuccessToast("Modpack imported");
-                    await loadInstalled();
-                  } else if (!res.canceled)
-                    showErrorToast(res.reason ?? "Import failed");
-                }}
-              >
-                <DownloadIcon size={13} /> Import modpack
-              </button>
-              <button
-                type="button"
-                className="mod-manager__pack-btn mod-manager__pack-btn--danger"
-                title="Clear all installed mods and reset UKMM (use if the list is stuck or out of sync)"
-                onClick={async () => {
-                  const res = await window.electron.resetMods(
-                    game.shop,
-                    game.objectId
-                  );
-                  if (res.ok) {
-                    showSuccessToast("Mods reset");
-                    await loadInstalled();
-                  } else {
-                    showErrorToast(res.reason ?? "Reset failed");
-                  }
-                }}
-              >
-                <TrashIcon size={13} /> Reset all
-              </button>
-            </div>
-            {installed.length === 0 ? (
-              <p className="mod-manager__muted">
-                No mods installed yet — install some from the Browse tab.
-              </p>
-            ) : (
-              <ul className="mod-manager__installed">
-                {installed.map((mod, index) => (
-                  <li
-                    key={`${mod.gbModId}-${index}`}
-                    className="mod-manager__installed-item"
-                  >
-                    <div className="mod-manager__installed-thumb">
-                      {mod.thumbnailUrl && (
-                        <img src={mod.thumbnailUrl} alt={mod.name} />
-                      )}
-                    </div>
-                    <div className="mod-manager__installed-body">
-                      <span className="mod-manager__card-name">{mod.name}</span>
-                      <span className="mod-manager__card-meta">
-                        Installed{" "}
-                        {new Date(mod.installedAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="mod-manager__remove"
-                      disabled={uninstallingIdx === index}
-                      onClick={() => handleUninstall(index)}
-                    >
-                      <TrashIcon size={13} />
-                      <span>
-                        {uninstallingIdx === index ? "Removing…" : "Remove"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-    </Modal>
+          )}
+        </div>
+      </Modal>
       {progressOverlay}
     </>
   );

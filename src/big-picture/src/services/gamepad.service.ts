@@ -668,7 +668,7 @@ export class GamepadService {
     const raw = gamepad.axes[mapping.axis];
     if (raw === undefined) return null;
 
-    const angle = ((raw * 360) % 360 + 360) % 360;
+    const angle = (((raw * 360) % 360) + 360) % 360;
     const isPressed = (() => {
       switch (mapping.direction) {
         case "up":

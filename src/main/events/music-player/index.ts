@@ -1,17 +1,16 @@
-import type {
-  MusicTrack,
-  MusicPlayerState,
-  RepeatMode,
-} from "@types";
+import type { MusicTrack, MusicPlayerState, RepeatMode } from "@types";
 import { overlayMusicPlayer } from "@main/services/overlay-music-player";
 import { registerEvent } from "../register-event";
 
-registerEvent("musicSearch", (_event, query: string): Promise<MusicTrack[]> =>
-  overlayMusicPlayer.search(query)
+registerEvent(
+  "musicSearch",
+  (_event, query: string): Promise<MusicTrack[]> =>
+    overlayMusicPlayer.search(query)
 );
 
-registerEvent("musicGetState", (): MusicPlayerState =>
-  overlayMusicPlayer.getState()
+registerEvent(
+  "musicGetState",
+  (): MusicPlayerState => overlayMusicPlayer.getState()
 );
 
 registerEvent(
@@ -20,21 +19,15 @@ registerEvent(
     overlayMusicPlayer.setQueue(tracks, startIndex)
 );
 
-registerEvent(
-  "musicAddToQueue",
-  (_event, track: MusicTrack): void =>
-    overlayMusicPlayer.addToQueue(track)
+registerEvent("musicAddToQueue", (_event, track: MusicTrack): void =>
+  overlayMusicPlayer.addToQueue(track)
 );
 
-registerEvent(
-  "musicRemoveFromQueue",
-  (_event, index: number): void =>
-    overlayMusicPlayer.removeFromQueue(index)
+registerEvent("musicRemoveFromQueue", (_event, index: number): void =>
+  overlayMusicPlayer.removeFromQueue(index)
 );
 
-registerEvent("musicClearQueue", (): void =>
-  overlayMusicPlayer.clearQueue()
-);
+registerEvent("musicClearQueue", (): void => overlayMusicPlayer.clearQueue());
 
 registerEvent(
   "musicPlay",
@@ -42,40 +35,28 @@ registerEvent(
     overlayMusicPlayer.play(index)
 );
 
-registerEvent("musicPause", (): void =>
-  overlayMusicPlayer.pause()
-);
+registerEvent("musicPause", (): void => overlayMusicPlayer.pause());
 
-registerEvent("musicResume", (): void =>
-  overlayMusicPlayer.resume()
-);
+registerEvent("musicResume", (): void => overlayMusicPlayer.resume());
 
-registerEvent("musicStop", (): void =>
-  overlayMusicPlayer.stop()
-);
+registerEvent("musicStop", (): void => overlayMusicPlayer.stop());
 
 registerEvent(
   "musicNext",
-  async (): Promise<MusicTrack | null> =>
-    overlayMusicPlayer.next()
+  async (): Promise<MusicTrack | null> => overlayMusicPlayer.next()
 );
 
 registerEvent(
   "musicPrevious",
-  async (): Promise<MusicTrack | null> =>
-    overlayMusicPlayer.previous()
+  async (): Promise<MusicTrack | null> => overlayMusicPlayer.previous()
 );
 
-registerEvent(
-  "musicSetShuffle",
-  (_event, enabled: boolean): void =>
-    overlayMusicPlayer.setShuffle(enabled)
+registerEvent("musicSetShuffle", (_event, enabled: boolean): void =>
+  overlayMusicPlayer.setShuffle(enabled)
 );
 
-registerEvent(
-  "musicSetRepeat",
-  (_event, mode: RepeatMode): void =>
-    overlayMusicPlayer.setRepeat(mode)
+registerEvent("musicSetRepeat", (_event, mode: RepeatMode): void =>
+  overlayMusicPlayer.setRepeat(mode)
 );
 
 registerEvent(

@@ -142,7 +142,8 @@ const generateMissingMetadata = async (
           if (merged.logoImageUrl) found.push("logo");
           results.push({
             title: game.title,
-            coverUrl: merged.coverImageUrl ?? merged.libraryHeroImageUrl ?? null,
+            coverUrl:
+              merged.coverImageUrl ?? merged.libraryHeroImageUrl ?? null,
             what: found.length ? `Found: ${found.join(", ")}` : "Updated art",
           });
           updated++;

@@ -188,55 +188,56 @@ export const LibraryGameCard = memo(function LibraryGameCard({
             sees exactly two children — otherwise the badge gets centered in the
             leftover space whenever the achievements bar is also rendered. */}
         <div className="library-game-card__bottom-section">
-        {lastPlayedLabel && (
-          <div
-            className="library-game-card__cloud-save"
-            title={`Last played: ${new Date(game.lastTimePlayed!).toLocaleString()}`}
-          >
-            <HistoryIcon size={10} />
-            <span>{lastPlayedLabel}</span>
-          </div>
-        )}
+          {lastPlayedLabel && (
+            <div
+              className="library-game-card__cloud-save"
+              title={`Last played: ${new Date(game.lastTimePlayed!).toLocaleString()}`}
+            >
+              <HistoryIcon size={10} />
+              <span>{lastPlayedLabel}</span>
+            </div>
+          )}
 
-        {(game.achievementCount ?? 0) > 0 && (
-          <div
-            className={`library-game-card__achievements${
-              (game.unlockedAchievementCount ?? 0) >=
-                (game.achievementCount ?? 0) && (game.achievementCount ?? 0) > 0
-                ? " library-game-card__achievements--platinum"
-                : ""
-            }`}
-          >
-            <div className="library-game-card__achievement-header">
-              <div className="library-game-card__achievements-gap">
-                <TrophyIcon
-                  size={13}
-                  className="library-game-card__achievement-trophy"
-                />
-                <span className="library-game-card__achievement-count">
-                  {game.unlockedAchievementCount ?? 0} /{" "}
-                  {game.achievementCount ?? 0}
+          {(game.achievementCount ?? 0) > 0 && (
+            <div
+              className={`library-game-card__achievements${
+                (game.unlockedAchievementCount ?? 0) >=
+                  (game.achievementCount ?? 0) &&
+                (game.achievementCount ?? 0) > 0
+                  ? " library-game-card__achievements--platinum"
+                  : ""
+              }`}
+            >
+              <div className="library-game-card__achievement-header">
+                <div className="library-game-card__achievements-gap">
+                  <TrophyIcon
+                    size={13}
+                    className="library-game-card__achievement-trophy"
+                  />
+                  <span className="library-game-card__achievement-count">
+                    {game.unlockedAchievementCount ?? 0} /{" "}
+                    {game.achievementCount ?? 0}
+                  </span>
+                </div>
+                <span className="library-game-card__achievement-percentage">
+                  {Math.round(
+                    ((game.unlockedAchievementCount ?? 0) /
+                      (game.achievementCount ?? 1)) *
+                      100
+                  )}
+                  %
                 </span>
               </div>
-              <span className="library-game-card__achievement-percentage">
-                {Math.round(
-                  ((game.unlockedAchievementCount ?? 0) /
-                    (game.achievementCount ?? 1)) *
-                    100
-                )}
-                %
-              </span>
+              <div className="library-game-card__achievement-progress">
+                <div
+                  className="library-game-card__achievement-bar"
+                  style={{
+                    width: `${((game.unlockedAchievementCount ?? 0) / (game.achievementCount ?? 1)) * 100}%`,
+                  }}
+                />
+              </div>
             </div>
-            <div className="library-game-card__achievement-progress">
-              <div
-                className="library-game-card__achievement-bar"
-                style={{
-                  width: `${((game.unlockedAchievementCount ?? 0) / (game.achievementCount ?? 1)) * 100}%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
+          )}
         </div>
       </div>
 

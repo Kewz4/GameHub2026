@@ -387,7 +387,12 @@ export class OverlayManager {
     if (this.targetPid) {
       const bounds = NativeAddon.getProcessWindowBounds(this.targetPid);
       if (bounds && bounds.width > 0 && bounds.height > 0) {
-        return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+        return {
+          x: bounds.x,
+          y: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+        };
       }
     }
     return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;

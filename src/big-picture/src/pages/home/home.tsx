@@ -452,7 +452,9 @@ export default function Home() {
   );
 
   const getPreviousRegionAbove = useCallback(
-    (sectionId: Exclude<HomeSectionId, "hero">): {
+    (
+      sectionId: Exclude<HomeSectionId, "hero">
+    ): {
       type: "region";
       regionId: string;
       entryDirection: "right";
@@ -492,7 +494,11 @@ export default function Home() {
   );
 
   const getRecommendedGameNavigationOverrides = useCallback(
-    (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => ({
+    (
+      _game: ShopAssets,
+      index: number,
+      games: ShopAssets[]
+    ): FocusOverrides => ({
       ...(index === 0
         ? {
             left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
@@ -518,7 +524,11 @@ export default function Home() {
   );
 
   const getClassicsGameNavigationOverrides = useCallback(
-    (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => ({
+    (
+      _game: ShopAssets,
+      index: number,
+      games: ShopAssets[]
+    ): FocusOverrides => ({
       ...(index === 0
         ? {
             left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
@@ -546,7 +556,11 @@ export default function Home() {
   const becauseCount = becauseYouPlayed.length;
   const getBecauseGameNavigationOverrides = useCallback(
     (shelfIndex: number) =>
-      (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => {
+      (
+        _game: ShopAssets,
+        index: number,
+        games: ShopAssets[]
+      ): FocusOverrides => {
         const isFirstShelf = shelfIndex === 0;
         const isLastShelf = shelfIndex === becauseCount - 1;
 

@@ -35,9 +35,7 @@ export const setCachedArtifacts = async (
   artifacts: unknown[]
 ): Promise<void> => {
   memory = { userId, artifacts, cachedAt: Date.now() };
-  await db
-    .put(CACHE_KEY, memory, { valueEncoding: "json" })
-    .catch(() => {});
+  await db.put(CACHE_KEY, memory, { valueEncoding: "json" }).catch(() => {});
 };
 
 /** Drop the cache (after upload/delete) so the next read recomputes. */

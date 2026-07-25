@@ -56,9 +56,8 @@ body.overlay-window {
 }
 
 .overlay-panel {
-  width: min(920px, 92vw);
-  max-height: 88vh;
-  overflow: auto;
+  width: min(1280px, 96vw);
+  height: min(90vh, 960px);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -126,9 +125,31 @@ body.overlay-window {
 }
 
 .overlay-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1;
+  min-height: 0;
+  display: flex;
   gap: 14px;
+  overflow: hidden;
+}
+
+.overlay-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+
+  &--left {
+    width: 240px;
+    flex: none;
+  }
+  &--center {
+    flex: 1;
+    min-width: 0;
+  }
+  &--right {
+    width: 240px;
+    flex: none;
+  }
 }
 
 .overlay-card {
@@ -139,12 +160,31 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 
+  &--perf {
+    flex: none;
+  }
   &--ach {
-    grid-row: span 2;
+    flex: 1;
+    min-height: 0;
+  }
+  &--friends {
+    flex: none;
+  }
+  &--music {
+    flex: 1;
+    min-height: 0;
+  }
+  &--mixer {
+    flex: 1;
+    min-height: 0;
+  }
+  &--pins {
+    flex: none;
   }
   &--notes {
-    grid-column: 1 / -1;
+    flex: none;
   }
 
   &__head {
@@ -224,6 +264,8 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  overflow-y: auto;
 
   &__item {
     display: flex;
@@ -347,7 +389,10 @@ body.overlay-window {
 
 // Music player card.
 .overlay-card--music {
-  grid-row: span 2;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .overlay-music__tabs {
@@ -382,6 +427,8 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
+  min-height: 0;
 }
 .overlay-music__np-top {
   display: flex;
@@ -488,6 +535,8 @@ body.overlay-window {
   gap: 6px;
   border-top: 1px solid var(--brd);
   padding-top: 10px;
+  flex: 1;
+  min-height: 0;
 }
 .overlay-music__queue-head {
   display: flex;
@@ -519,7 +568,7 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  max-height: 160px;
+  flex: 1;
   overflow-y: auto;
 }
 .overlay-music__queue-item {
@@ -588,6 +637,8 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 .overlay-music__search-input {
   width: 100%;
@@ -607,7 +658,7 @@ body.overlay-window {
   color: var(--faint);
 }
 .overlay-music__search-results {
-  max-height: 260px;
+  flex: 1;
   overflow-y: auto;
 }
 .overlay-music__search-list {
@@ -687,6 +738,8 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
 }
 .overlay-music__plist-new {
   align-self: flex-start;
@@ -747,7 +800,7 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  max-height: 200px;
+  flex: 1;
   overflow-y: auto;
 }
 .overlay-music__plist-item {
@@ -814,6 +867,8 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  overflow-y: auto;
 }
 .overlay-friend {
   display: flex;
@@ -919,7 +974,7 @@ body.overlay-window {
   display: flex;
   flex-direction: column;
   gap: 11px;
-  max-height: 188px;
+  flex: 1;
   overflow-y: auto;
 }
 .overlay-mixer__row {

@@ -66,11 +66,8 @@ export function App() {
 
   const { clearDownload, setLastPacket, lastPacket } = useDownload();
 
-  const {
-    fetchUserDetails,
-    updateUserDetails,
-    clearUserDetails,
-  } = useUserDetails();
+  const { fetchUserDetails, updateUserDetails, clearUserDetails } =
+    useUserDetails();
 
   const dispatch = useAppDispatch();
 

@@ -1,10 +1,8 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { promisify } from "node:util";
-import path from "node:path";
-import fs from "node:fs";
 import axios from "axios";
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const youtubedl = require("youtube-dl-exec");
 import { db, levelKeys } from "@main/level";
 import type {
   MusicTrack,
@@ -13,8 +11,6 @@ import type {
   RepeatMode,
 } from "@types";
 import { logger } from "./logger";
-
-const execFileAsync = promisify(execFile);
 
 const DEEZER_API = "https://api.deezer.com";
 
@@ -27,20 +23,6 @@ interface DeezerTrack {
   preview?: string;
 }
 
-const findYtdlp = (): string => {
-  const bundled = path.join(
-    __dirname,
-    "../../node_modules/youtube-dl-exec/bin/yt-dlp.exe"
-  );
-  if (fs.existsSync(bundled)) return bundled;
-  const local = path.join(
-    __dirname,
-    "../../../node_modules/youtube-dl-exec/bin/yt-dlp.exe"
-  );
-  if (fs.existsSync(local)) return local;
-  return "yt-dlp.exe";
-};
-
 export class OverlayMusicPlayer {
   private queue: MusicTrack[] = [];
   private currentIndex = -1;
@@ -48,16 +30,8 @@ export class OverlayMusicPlayer {
   private repeat: RepeatMode = "none";
   private state: "playing" | "paused" | "stopped" = "stopped";
   private audioUrl: string | null = null;
-  private ytdlpPath: string | null = null;
 
   readonly events = new EventEmitter();
-
-  private getYtdlp(): string {
-    if (!this.ytdlpPath) {
-      this.ytdlpPath = findYtdlp();
-    }
-    return this.ytdlpPath;
-  }
 
   private notify() {
     this.events.emit("state", this.getState());
@@ -98,44 +72,35 @@ export class OverlayMusicPlayer {
 
   async resolveAudio(track: MusicTrack): Promise<string | null> {
     try {
-      const yt = this.getYtdlp();
       const searchQuery = `${track.title} ${track.artist}`;
 
-      const { stdout: searchOut } = await execFileAsync(
-        yt,
-        [
-          `ytsearch1:${searchQuery}`,
-          "--dump-single-json",
-          "--no-warnings",
-          "--flat-playlist",
-          "--no-check-certificates",
-        ],
+      const searchResult = await youtubedl(
+        `ytsearch1:${searchQuery}`,
+        {
+          dumpSingleJson: true,
+          noWarnings: true,
+          flatPlaylist: true,
+          noCheckCertificates: true,
+        },
         { timeout: 15000 }
       );
 
-      const searchResult = JSON.parse(searchOut);
       const videoId = searchResult.id || searchResult.entries?.[0]?.id;
       if (!videoId) return null;
 
-      const { stdout: audioOut } = await execFileAsync(
-        yt,
-        [
-          `https://www.youtube.com/watch?v=${videoId}`,
-          "--dump-single-json",
-          "--format",
-          "bestaudio[ext=m4a]/bestaudio",
-          "--no-warnings",
-          "--no-check-certificates",
-          "--prefer-free-formats",
-          "--add-header",
-          "referer:youtube.com",
-          "--add-header",
-          "user-agent:Mozilla/5.0",
-        ],
+      const audioResult = await youtubedl(
+        `https://www.youtube.com/watch?v=${videoId}`,
+        {
+          dumpSingleJson: true,
+          format: "bestaudio[ext=m4a]/bestaudio",
+          noWarnings: true,
+          noCheckCertificates: true,
+          preferFreeFormats: true,
+          addHeader: ["referer:youtube.com", "user-agent:Mozilla/5.0"],
+        },
         { timeout: 20000 }
       );
 
-      const audioResult = JSON.parse(audioOut);
       this.audioUrl = audioResult.url || null;
       return this.audioUrl;
     } catch (err) {

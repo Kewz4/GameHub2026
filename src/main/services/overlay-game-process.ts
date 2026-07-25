@@ -1,7 +1,10 @@
 import type { Game } from "@types";
 
 import { NativeAddon } from "./native-addon";
-import { prioritizeVisibleOverlayProcesses, rankOverlayGameProcesses } from "./overlay-game-process-ranking";
+import {
+  prioritizeVisibleOverlayProcesses,
+  rankOverlayGameProcesses,
+} from "./overlay-game-process-ranking";
 
 const getOverlayProcessTargets = (game: Game) =>
   [game.executablePath, ...(game.trackingExecutablePaths ?? [])].filter(
