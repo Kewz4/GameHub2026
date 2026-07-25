@@ -336,7 +336,7 @@ function onOpenGame(game: Game) {
   // RetroAchievements live polling for RA-capable emulated games.
   RaWatcherManager.startPolling(game).catch(() => {});
 
-  // Activate the in-game overlay for this session (Shift+F3 / hold-Guide,
+  // Activate the in-game overlay for this session (Shift+F3 / Guide,
   // performance HUD, achievements/friends/notes). No-op when the overlay is
   // disabled in preferences.
   OverlayManager.setActiveGame(game);

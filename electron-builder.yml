@@ -21,6 +21,12 @@ extraResources:
   # protocol inside the emulation controller tab).
   - from: resources/controller-testers
     to: controller-testers
+  # Pinned, checksum-verified standalone resolver. Unlike yt-dlp's generic Unix
+  # zipapp, these platform assets do not depend on a system Python installation.
+  - from: yt-dlp
+    to: yt-dlp
+    filter:
+      - yt-dlp*
   - from: node_modules/create-desktop-shortcuts/src/windows.vbs
   - from: resources/achievement.wav
 files:
@@ -50,6 +56,16 @@ win:
     # non-overlay build doesn't fail packaging.
     - from: presentmon
       to: presentmon
+    # Exact-window gameplay capture is encoded by Chromium; this pinned LGPL
+    # helper only joins the rolling, self-contained WebM segments on save.
+    - from: ffmpeg
+      to: ffmpeg
+      filter:
+        - ffmpeg.exe
+        - manifest.json
+        - LICENSE-*.txt
+    - from: resources/FFMPEG-NOTICE.txt
+      to: ffmpeg/FFMPEG-NOTICE.txt
     # Patched UKMM headless binary for BOTW mod install/deploy (built in CI).
     # Directory+filter form so a missing binary (build skipped/failed) doesn't
     # error packaging — the app just reports mod support as unavailable.

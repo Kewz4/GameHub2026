@@ -26,6 +26,8 @@ import type {
   DownloadLayoutState,
   EmulatorSystem,
   ClassicsDiscUpdate,
+  GameRecorderCaptureCommand,
+  GameRecorderSegmentMetadata,
 } from "@types";
 import type { AuthPage } from "@shared";
 import type { AxiosProgressEvent } from "axios";
@@ -1722,6 +1724,45 @@ contextBridge.exposeInMainWorld("electron", {
     return () =>
       ipcRenderer.removeListener("on-overlay-gamepad-action", listener);
   },
+  /* ── Gameplay recorder / Instant Replay ─────────────────────────────── */
+  gameRecorderGetPreferences: () =>
+    ipcRenderer.invoke("gameRecorderGetPreferences"),
+  gameRecorderGetState: () => ipcRenderer.invoke("gameRecorderGetState"),
+  gameRecorderStart: () => ipcRenderer.invoke("gameRecorderStart"),
+  gameRecorderStop: () => ipcRenderer.invoke("gameRecorderStop"),
+  gameRecorderSaveReplay: () => ipcRenderer.invoke("gameRecorderSaveReplay"),
+  gameRecorderOpenOutputDirectory: () =>
+    ipcRenderer.invoke("gameRecorderOpenOutputDirectory"),
+  onGameRecorderState: (
+    cb: (state: import("@types").GameRecorderState) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: import("@types").GameRecorderState
+    ) => cb(state);
+    ipcRenderer.on("on-game-recorder-state", listener);
+    return () => ipcRenderer.removeListener("on-game-recorder-state", listener);
+  },
+  onGameRecorderCaptureCommand: (
+    cb: (command: GameRecorderCaptureCommand) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      command: GameRecorderCaptureCommand
+    ) => cb(command);
+    ipcRenderer.on("on-game-recorder-capture-command", listener);
+    return () =>
+      ipcRenderer.removeListener("on-game-recorder-capture-command", listener);
+  },
+  gameRecorderCommitSegment: (
+    metadata: GameRecorderSegmentMetadata,
+    payload: ArrayBuffer
+  ) => ipcRenderer.invoke("gameRecorderCommitSegment", metadata, payload),
+  gameRecorderCaptureError: (message: string) =>
+    ipcRenderer.invoke("gameRecorderCaptureError", message),
+  gameRecorderCaptureReady: () =>
+    ipcRenderer.invoke("gameRecorderCaptureReady"),
+
   /* ── Spotify (overlay Now-playing) ──────────────────────────────────── */
   spotifyGetStatus: () =>
     ipcRenderer.invoke("spotifyGetStatus") as Promise<
@@ -1762,7 +1803,10 @@ contextBridge.exposeInMainWorld("electron", {
       import("@types").MusicTrack | null
     >,
   musicPause: () => ipcRenderer.invoke("musicPause"),
-  musicResume: () => ipcRenderer.invoke("musicResume"),
+  musicResume: () =>
+    ipcRenderer.invoke("musicResume") as Promise<
+      import("@types").MusicTrack | null
+    >,
   musicStop: () => ipcRenderer.invoke("musicStop"),
   musicNext: () =>
     ipcRenderer.invoke("musicNext") as Promise<

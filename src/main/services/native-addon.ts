@@ -38,9 +38,16 @@ type HydraNativeModule = {
     parameters: string,
     workingDirectory: string
   ) => boolean;
+  launchElevatedPresentmon: (
+    executable: string,
+    outputFile: string,
+    targetPid: number,
+    sessionName: string
+  ) => Promise<boolean>;
+  stopElevatedPresentmon: () => boolean;
   // BrowserWindow overlay placement (Windows-only; no-op fallbacks elsewhere).
   getProcessWindowBounds: (pid: number) => NativeWindowBounds | null;
-  placeOverlayWindow: (windowHandle: number, pid: number) => boolean;
+  placeOverlayWindow: (windowHandle: Buffer, pid: number) => boolean;
   focusProcessWindow: (pid: number) => boolean;
   // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
   getAudioSessions: () => NativeAudioSession[];
@@ -60,6 +67,8 @@ export type NativeWindowBounds = {
   y: number;
   width: number;
   height: number;
+  windowId?: string;
+  window_id?: string;
 };
 
 export type SystemProcessMap = {
@@ -375,19 +384,51 @@ export class NativeAddon {
     }
   }
 
+  public static launchElevatedPresentMon(
+    executable: string,
+    outputFile: string,
+    targetPid: number,
+    sessionName: string
+  ): Promise<boolean> {
+    try {
+      return this.load().launchElevatedPresentmon(
+        executable,
+        outputFile,
+        targetPid,
+        sessionName
+      );
+    } catch (error) {
+      logger.error("Failed to launch elevated PresentMon", error);
+      return Promise.resolve(false);
+    }
+  }
+
+  public static stopElevatedPresentMon(): boolean {
+    try {
+      return this.load().stopElevatedPresentmon();
+    } catch {
+      return false;
+    }
+  }
+
   // ── BrowserWindow overlay window placement (Windows only) ─────────────────
   // Find the game window for a given PID and get its client-area bounds, or
   // place the overlay window over it. Non-Windows builds return safe defaults.
 
   public static getProcessWindowBounds(pid: number): NativeWindowBounds | null {
     try {
-      return this.load().getProcessWindowBounds(pid) ?? null;
+      const bounds = this.load().getProcessWindowBounds(pid);
+      if (!bounds) return null;
+      return {
+        ...bounds,
+        windowId: bounds.windowId ?? bounds.window_id,
+      };
     } catch {
       return null;
     }
   }
 
-  public static placeOverlayWindow(windowHandle: number, pid: number): boolean {
+  public static placeOverlayWindow(windowHandle: Buffer, pid: number): boolean {
     try {
       return this.load().placeOverlayWindow(windowHandle, pid);
     } catch {

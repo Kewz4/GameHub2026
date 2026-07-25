@@ -3,9 +3,9 @@ import { db, levelKeys } from "@main/level";
 import { HydraApi } from "@main/services/hydra-api";
 import { R2Sync } from "@main/services/r2-sync";
 import { logger } from "@main/services";
-import { WindowManager } from "@main/services/window-manager";
 import type { UserPreferences, UserProfile } from "@types";
 import type { SettingsBackup } from "./backup-settings-to-cloud";
+import { BrowserWindow } from "electron";
 
 const restoreSettingsFromCloud = async (): Promise<{
   restored: boolean;
@@ -43,7 +43,11 @@ const restoreSettingsFromCloud = async (): Promise<{
       valueEncoding: "json",
     });
 
-    WindowManager.sendToAppWindows("on-user-preferences-updated", merged);
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send("on-user-preferences-updated", merged);
+      }
+    }
     logger.info("[SettingsSync] Settings restored from cloud backup");
     return { restored: true, updatedAt: backup.updatedAt };
   } catch (err) {

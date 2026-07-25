@@ -53,6 +53,13 @@ export interface HydraOverlayPerformance {
   onePercentLow: number | null;
   frameTimeMs: number | null;
   updatedAt: number;
+  captureStatus?:
+    | "waiting"
+    | "capturing"
+    | "permission-required"
+    | "unavailable"
+    | "error";
+  captureMessage?: string | null;
 }
 
 export type HydraOverlayGamepadAction =

@@ -216,7 +216,7 @@ export interface UserPreferences {
    *  rows. Emulated games use the local dataset rating; Steam games are
    *  classified from Steam's appdetails and cached. */
   hideMatureGames?: boolean;
-  /** In-game overlay (Shift+F3 / hold-Guide) — master switch + performance HUD
+  /** In-game overlay (Shift+F3 / Guide press) — master switch + performance HUD
    *  rows. Mirrors HydraOverlayPreferences; resolved via
    *  resolveHydraOverlayPreferences with all-on defaults. */
   overlayEnabled?: boolean;
@@ -225,6 +225,16 @@ export interface UserPreferences {
   overlayPerformanceShowAverageFps?: boolean;
   overlayPerformanceShowFrameTime?: boolean;
   overlayPerformanceShowOnePercentLow?: boolean;
+  /** Opt-in gameplay capture. Instant replay remains separately disabled until
+   *  the user explicitly enables its rolling buffer. */
+  gameRecorderEnabled?: boolean;
+  gameRecorderResolution?: import("./game-recorder.types").GameRecorderResolution;
+  gameRecorderFps?: import("./game-recorder.types").GameRecorderFps;
+  gameRecorderInstantReplayEnabled?: boolean;
+  gameRecorderReplayDurationSeconds?: import("./game-recorder.types").GameRecorderReplayDuration;
+  gameRecorderCaptureAudio?: boolean;
+  /** Machine-local path; intentionally excluded from cloud preference backup. */
+  gameRecorderOutputDirectory?: string | null;
   /** Spotify app client ID (public, PKCE) for the overlay's Now-playing widget.
    *  The user registers their own Spotify app and pastes its client ID here. */
   spotifyClientId?: string | null;

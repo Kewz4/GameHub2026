@@ -18,7 +18,10 @@ export function SelectField({
   options = [{ key: "-", value: value?.toString() || "-", label: "-" }],
   theme = "primary",
   onChange,
+  onFocus,
+  onBlur,
   className,
+  ...props
 }: Readonly<SelectProps>) {
   const [isFocused, setIsFocused] = useState(false);
   const id = useId();
@@ -37,11 +40,18 @@ export function SelectField({
         })}
       >
         <select
+          {...props}
           id={id}
           value={value}
           className="select-field__option"
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          onFocus={(event) => {
+            setIsFocused(true);
+            onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setIsFocused(false);
+            onBlur?.(event);
+          }}
           onChange={onChange}
         >
           {options.map((option) => (

@@ -22,6 +22,7 @@ import resources from "@locales";
 
 import { logger } from "./logger";
 import { addCookieInterceptor } from "./cookies";
+import { injectCustomCss, removeCustomCss } from "./helpers";
 import * as Sentry from "@sentry/react";
 import { levelDBService } from "./services/leveldb.service";
 import Catalogue from "./pages/catalogue/catalogue";
@@ -42,6 +43,7 @@ import GameLauncher from "./pages/game-launcher/game-launcher";
 import Installer from "./pages/installer/installer";
 import UpdateChecker from "./pages/update-checker/update-checker";
 import Overlay from "./pages/overlay/overlay";
+import GameRecorderCapture from "./pages/game-recorder-capture/game-recorder-capture";
 import ConsolePage from "./pages/console/console";
 import FriendsWindow from "./pages/friends-window/friends-window";
 import AuthWindow from "./pages/auth-window/auth-window";
@@ -95,12 +97,32 @@ const userPreferences = (await levelDBService.get(
   "json"
 )) as { language?: string; themeMode?: string } | null;
 
+const applyActiveCustomTheme = async () => {
+  const themes = (await levelDBService.values("themes").catch(() => [])) as {
+    isActive?: boolean;
+    code?: string;
+  }[];
+  const activeTheme = themes.find((theme) => theme.isActive);
+  if (activeTheme?.code) injectCustomCss(activeTheme.code);
+  else removeCustomCss();
+};
+
 // Stamp the colour scheme before first paint so light-mode users don't see a
 // dark flash on cold start (the CSS keys off this attribute on <html>).
 document.documentElement.setAttribute(
   "data-theme-mode",
   userPreferences?.themeMode ?? "dark"
 );
+await applyActiveCustomTheme();
+globalThis.electron.onCustomThemeUpdated(() => {
+  void applyActiveCustomTheme();
+});
+globalThis.electron.onUserPreferencesUpdated((preferences) => {
+  document.documentElement.setAttribute(
+    "data-theme-mode",
+    preferences?.themeMode ?? "dark"
+  );
+});
 
 if (userPreferences?.language) {
   await i18n.changeLanguage(userPreferences.language);
@@ -146,6 +168,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/overlay" element={<Overlay />} />
             <Route path="/overlay-fps" element={<Overlay />} />
             <Route path="/overlay-toast" element={<Overlay />} />
+            <Route
+              path="/game-recorder-capture"
+              element={<GameRecorderCapture />}
+            />
 
             <Route path="/big-picture" element={<BigPictureApp />}>
               <Route index element={<BigPictureHome />} />

@@ -34,7 +34,6 @@ import type {
   AchievementNotificationInfo,
   Game,
   DiskUsage,
-  NetworkInterface,
   DownloadSource,
   LocalNotification,
   ProtonVersion,
@@ -1225,6 +1224,28 @@ declare global {
     onOverlayGamepadAction: (
       cb: (action: import("@types").HydraOverlayGamepadAction) => void
     ) => () => void;
+    gameRecorderGetPreferences: () => Promise<
+      import("@types").GameRecorderState
+    >;
+    gameRecorderGetState: () => Promise<import("@types").GameRecorderState>;
+    gameRecorderStart: () => Promise<import("@types").GameRecorderState>;
+    gameRecorderStop: () => Promise<import("@types").GameRecorderSaveResult>;
+    gameRecorderSaveReplay: () => Promise<
+      import("@types").GameRecorderSaveResult
+    >;
+    gameRecorderOpenOutputDirectory: () => Promise<void>;
+    onGameRecorderState: (
+      cb: (state: import("@types").GameRecorderState) => void
+    ) => () => void;
+    onGameRecorderCaptureCommand: (
+      cb: (command: import("@types").GameRecorderCaptureCommand) => void
+    ) => () => void;
+    gameRecorderCommitSegment: (
+      metadata: import("@types").GameRecorderSegmentMetadata,
+      payload: ArrayBuffer
+    ) => Promise<void>;
+    gameRecorderCaptureError: (message: string) => Promise<void>;
+    gameRecorderCaptureReady: () => Promise<void>;
     spotifyGetStatus: () => Promise<import("@types").SpotifyStatus>;
     spotifyLogin: () => Promise<import("@types").SpotifyStatus>;
     spotifyLogout: () => Promise<import("@types").SpotifyStatus>;
@@ -1656,7 +1677,7 @@ declare global {
     musicClearQueue: () => Promise<void>;
     musicPlay: (index?: number) => Promise<import("@types").MusicTrack | null>;
     musicPause: () => Promise<void>;
-    musicResume: () => Promise<void>;
+    musicResume: () => Promise<import("@types").MusicTrack | null>;
     musicStop: () => Promise<void>;
     musicNext: () => Promise<import("@types").MusicTrack | null>;
     musicPrevious: () => Promise<import("@types").MusicTrack | null>;

@@ -37,7 +37,10 @@ registerEvent(
 
 registerEvent("musicPause", (): void => overlayMusicPlayer.pause());
 
-registerEvent("musicResume", (): void => overlayMusicPlayer.resume());
+registerEvent(
+  "musicResume",
+  async (): Promise<MusicTrack | null> => overlayMusicPlayer.resume()
+);
 
 registerEvent("musicStop", (): void => overlayMusicPlayer.stop());
 

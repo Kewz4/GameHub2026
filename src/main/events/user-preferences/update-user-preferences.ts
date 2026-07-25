@@ -2,11 +2,11 @@ import { registerEvent } from "../register-event";
 
 import type { UserPreferences } from "@types";
 import i18next from "i18next";
+import { BrowserWindow } from "electron";
 import { defaultDownloadsPath } from "@main/constants";
 import { db, levelKeys } from "@main/level";
 import { patchUserProfile } from "../profile/update-profile";
 import { DownloadManager } from "@main/services";
-import { WindowManager } from "@main/services/window-manager";
 import { OverlayManager } from "@main/services/overlay-manager";
 import { getDownloadDirectoryPreferences } from "@shared";
 
@@ -58,10 +58,14 @@ const updateUserPreferences = async (
     }
   );
 
-  WindowManager.sendToAppWindows(
-    "on-user-preferences-updated",
-    updatedPreferences
-  );
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send(
+        "on-user-preferences-updated",
+        updatedPreferences
+      );
+    }
+  }
 
   // Apply overlay-preference changes to the active game session immediately
   // (toggle the overlay / performance HUD without needing a relaunch).

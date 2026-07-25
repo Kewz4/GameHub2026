@@ -7,14 +7,14 @@ use image::codecs::gif::GifDecoder;
 use image::codecs::png::PngDecoder;
 use image::codecs::webp::WebPDecoder;
 use image::{AnimationDecoder, ImageFormat, ImageReader};
-use napi::bindgen_prelude::Error;
+use napi::bindgen_prelude::{Buffer, Error};
 use napi_derive::napi;
 use sysinfo::{ProcessesToUpdate, System};
 use uuid::Uuid;
 
 // ── In-game overlay (ported from Hydra PR #2579) ─────────────────────────────
 // Windows-only shortcut detection (Shift+F3 via raw input + a registered
-// hotkey), XInput gamepad polling for the controller chord/navigation, plus the
+// hotkey), XInput gamepad polling for Guide/navigation, plus the
 // process-access / foreground-pid / elevation helpers the injected overlay uses
 // to pick and attach to the running game. All Windows-gated; no-ops elsewhere.
 #[cfg(target_os = "windows")]
@@ -41,11 +41,14 @@ use windows_sys::Win32::Security::{
     GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
 };
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::LibraryLoader::{
+    FreeLibrary, GetModuleHandleW, GetProcAddress, LoadLibraryExW,
+};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_CREATE_THREAD,
+    GetCurrentProcess, GetExitCodeProcess, OpenProcess, OpenProcessToken, PROCESS_CREATE_THREAD,
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE,
+    TerminateProcess,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
@@ -57,14 +60,16 @@ use windows_sys::Win32::UI::Input::{
     RIDEV_INPUTSINK, RID_INPUT, RIM_TYPEKEYBOARD,
 };
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+use windows_sys::Win32::UI::Shell::{
+    ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
+};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, EnumWindows, GetClientRect,
     GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW, GetWindowThreadProcessId,
     IsIconic, IsWindowVisible, RegisterClassW, SetForegroundWindow, SetWindowPos, ShowWindow,
-    TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST, MSG, SW_SHOWNORMAL,
-    SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_RESTORE, WM_HOTKEY, WM_INPUT, WNDCLASSW, WS_EX_TOOLWINDOW,
+    TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST, MSG, SW_HIDE,
+    SW_SHOWNORMAL, SWP_NOACTIVATE, SW_RESTORE, WM_HOTKEY, WM_INPUT, WNDCLASSW, WS_EX_TOOLWINDOW,
 };
 
 // Per-app volume mixer (Core Audio) — higher-level `windows` COM bindings.
@@ -116,12 +121,24 @@ struct XInputState {
     gamepad: XInputGamepad,
 }
 
+#[cfg(target_os = "windows")]
+type XInputGetStateFn = unsafe extern "system" fn(u32, *mut XInputState) -> u32;
+
+#[cfg(target_os = "windows")]
+static XINPUT_GET_STATE_EX: OnceLock<Option<XInputGetStateFn>> = OnceLock::new();
+#[cfg(target_os = "windows")]
+static ELEVATED_PRESENTMON_PROCESS: OnceLock<Mutex<Option<usize>>> = OnceLock::new();
+
 #[napi(object)]
 pub struct NativeWindowBounds {
     pub x: i32,
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    // HWND is pointer-sized. Expose it as a decimal string so JavaScript never
+    // loses precision and Electron's `window:HWND:0` capture source can be
+    // matched to the exact game window.
+    pub window_id: String,
 }
 
 #[cfg(target_os = "windows")]
@@ -130,6 +147,7 @@ struct WindowSearch {
     window: HWND,
     bounds: RECT,
     area: i64,
+    allow_minimized: bool,
 }
 
 #[cfg(target_os = "windows")]
@@ -137,7 +155,10 @@ unsafe extern "system" fn find_process_window(window: HWND, parameter: LPARAM) -
     let search = unsafe { &mut *(parameter as *mut WindowSearch) };
     let mut pid = 0;
     unsafe { GetWindowThreadProcessId(window, &mut pid) };
-    if pid != search.pid || unsafe { IsWindowVisible(window) } == 0 {
+    if pid != search.pid
+        || unsafe { IsWindowVisible(window) } == 0
+        || (!search.allow_minimized && unsafe { IsIconic(window) } != 0)
+    {
         return 1;
     }
     if unsafe { GetWindowLongW(window, GWL_EXSTYLE) } as u32 & WS_EX_TOOLWINDOW != 0 {
@@ -172,12 +193,13 @@ unsafe extern "system" fn find_process_window(window: HWND, parameter: LPARAM) -
 }
 
 #[cfg(target_os = "windows")]
-fn process_window(pid: u32) -> Option<(HWND, RECT)> {
+fn find_best_process_window(pid: u32, allow_minimized: bool) -> Option<(HWND, RECT)> {
     let mut search = WindowSearch {
         pid,
         window: null_mut(),
         bounds: unsafe { zeroed() },
         area: 0,
+        allow_minimized,
     };
     unsafe {
         EnumWindows(
@@ -189,9 +211,79 @@ fn process_window(pid: u32) -> Option<(HWND, RECT)> {
 }
 
 #[cfg(target_os = "windows")]
+fn process_window(pid: u32) -> Option<(HWND, RECT)> {
+    find_best_process_window(pid, false)
+}
+
+#[cfg(target_os = "windows")]
 #[link(name = "Xinput9_1_0")]
 extern "system" {
     fn XInputGetState(user_index: u32, state: *mut XInputState) -> u32;
+}
+
+#[cfg(target_os = "windows")]
+fn extended_xinput_get_state() -> Option<XInputGetStateFn> {
+    *XINPUT_GET_STATE_EX.get_or_init(|| {
+        // The documented XInputGetState entry point intentionally omits the
+        // Guide button. Desktop XInput DLLs expose the otherwise identical
+        // extended entry point at ordinal 100. Resolve it at runtime so the
+        // standard XInput 9.1.0 path remains a safe fallback.
+        const LOAD_LIBRARY_SEARCH_SYSTEM32: u32 = 0x0000_0800;
+        const XINPUT_GET_STATE_EX_ORDINAL: usize = 100;
+
+        for dll_name in ["xinput1_4.dll", "xinput1_3.dll"] {
+            let wide_name: Vec<u16> = dll_name
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+            let module = unsafe {
+                LoadLibraryExW(
+                    wide_name.as_ptr(),
+                    null_mut(),
+                    LOAD_LIBRARY_SEARCH_SYSTEM32,
+                )
+            };
+            if module.is_null() {
+                continue;
+            }
+
+            let procedure = unsafe {
+                GetProcAddress(
+                    module,
+                    XINPUT_GET_STATE_EX_ORDINAL as *const u8,
+                )
+            };
+            if let Some(procedure) = procedure {
+                // Keep the module loaded for the process lifetime: the cached
+                // function pointer is only valid while its DLL remains loaded.
+                let get_state = unsafe {
+                    std::mem::transmute::<
+                        unsafe extern "system" fn() -> isize,
+                        XInputGetStateFn,
+                    >(procedure)
+                };
+                return Some(get_state);
+            }
+
+            unsafe {
+                FreeLibrary(module);
+            }
+        }
+
+        None
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn get_xinput_state(user_index: u32, state: &mut XInputState) -> u32 {
+    if let Some(get_state) = extended_xinput_get_state() {
+        let result = unsafe { get_state(user_index, state) };
+        if result == 0 {
+            return result;
+        }
+    }
+
+    unsafe { XInputGetState(user_index, state) }
 }
 
 #[napi]
@@ -484,6 +576,121 @@ pub fn launch_elevated(executable: String, parameters: String, working_directory
     false
 }
 
+#[cfg(target_os = "windows")]
+fn stop_elevated_presentmon_process() -> bool {
+    let process_slot = ELEVATED_PRESENTMON_PROCESS.get_or_init(|| Mutex::new(None));
+    let mut process_slot = process_slot
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let Some(raw_handle) = *process_slot else {
+        return true;
+    };
+
+    let process_handle = raw_handle as *mut std::ffi::c_void;
+    let mut exit_code = 0;
+    const STILL_ACTIVE: u32 = 259;
+    let already_exited =
+        unsafe { GetExitCodeProcess(process_handle, &mut exit_code) } != 0
+            && exit_code != STILL_ACTIVE;
+    if already_exited || unsafe { TerminateProcess(process_handle, 0) } != 0 {
+        unsafe {
+            CloseHandle(process_handle);
+        }
+        *process_slot = None;
+        return true;
+    }
+
+    // Keep the only process handle when termination is denied or transiently
+    // fails. A later stop can retry instead of orphaning the elevated session.
+    false
+}
+
+#[cfg(target_os = "windows")]
+fn quote_presentmon_argument(value: &str) -> String {
+    // Windows paths cannot contain a quote, but escape it defensively so the
+    // function remains safe if it is reused for a session name.
+    format!("\"{}\"", value.replace('"', "\\\""))
+}
+
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub async fn launch_elevated_presentmon(
+    executable: String,
+    output_file: String,
+    target_pid: u32,
+    session_name: String,
+) -> bool {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        if target_pid == 0 {
+            return false;
+        }
+
+        // Retain the elevated process handle so GameHub can stop the collector
+        // during target changes, preference changes, updates, and shutdown.
+        if !stop_elevated_presentmon_process() {
+            return false;
+        }
+        let parameters = format!(
+            "--process_id {} --output_file {} --no_console_stats --exclude_dropped \
+             --terminate_on_proc_exit --session_name {} --stop_existing_session",
+            target_pid,
+            quote_presentmon_argument(&output_file),
+            quote_presentmon_argument(&session_name),
+        );
+        let working_directory = Path::new(&executable)
+            .parent()
+            .and_then(Path::to_str)
+            .unwrap_or("")
+            .to_owned();
+        let verb: Vec<u16> = "runas\0".encode_utf16().collect();
+        let executable: Vec<u16> = executable
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let parameters: Vec<u16> = parameters
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let working_directory: Vec<u16> = working_directory
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut execute_info: SHELLEXECUTEINFOW = zeroed();
+        execute_info.cbSize = size_of::<SHELLEXECUTEINFOW>() as u32;
+        execute_info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+        execute_info.lpVerb = verb.as_ptr();
+        execute_info.lpFile = executable.as_ptr();
+        execute_info.lpParameters = parameters.as_ptr();
+        execute_info.lpDirectory = working_directory.as_ptr();
+        execute_info.nShow = SW_HIDE;
+        if ShellExecuteExW(&mut execute_info) == 0 || execute_info.hProcess.is_null() {
+            return false;
+        }
+
+        let process_slot = ELEVATED_PRESENTMON_PROCESS.get_or_init(|| Mutex::new(None));
+        let mut process_slot = process_slot
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *process_slot = Some(execute_info.hProcess as usize);
+        true
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
+#[napi]
+pub fn stop_elevated_presentmon() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        return stop_elevated_presentmon_process();
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
 #[napi]
 pub fn get_overlay_gamepad_buttons() -> u32 {
     #[cfg(target_os = "windows")]
@@ -495,9 +702,10 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
         const DPAD_RIGHT: u16 = 0x0008;
         const STICK_THRESHOLD: i16 = 12_000;
 
+        let mut first_connected_buttons = None;
         for user_index in 0..4 {
             let mut state = XInputState::default();
-            let result = unsafe { XInputGetState(user_index, &mut state) };
+            let result = get_xinput_state(user_index, &mut state);
             if result != ERROR_SUCCESS {
                 continue;
             }
@@ -513,8 +721,15 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
             } else if state.gamepad.thumb_lx > STICK_THRESHOLD {
                 buttons |= DPAD_RIGHT;
             }
-            return u32::from(buttons);
+
+            let buttons = u32::from(buttons);
+            first_connected_buttons.get_or_insert(buttons);
+            if buttons != 0 {
+                return buttons;
+            }
         }
+
+        return first_connected_buttons.unwrap_or(0);
     }
 
     0
@@ -523,22 +738,29 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
 #[napi]
 pub fn get_process_window_bounds(_pid: u32) -> Option<NativeWindowBounds> {
     #[cfg(target_os = "windows")]
-    if let Some((_, bounds)) = process_window(_pid) {
+    if let Some((window, bounds)) = process_window(_pid) {
         return Some(NativeWindowBounds {
             x: bounds.left,
             y: bounds.top,
             width: bounds.right - bounds.left,
             height: bounds.bottom - bounds.top,
+            window_id: (window as usize).to_string(),
         });
     }
     None
 }
 
 #[napi]
-pub fn place_overlay_window(_window_handle: i64, _pid: u32) -> bool {
+pub fn place_overlay_window(_window_handle: Buffer, _pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     if let Some((_, bounds)) = process_window(_pid) {
-        let overlay = _window_handle as HWND;
+        if _window_handle.is_empty() {
+            return false;
+        }
+        let mut raw_handle = [0_u8; size_of::<usize>()];
+        let byte_count = raw_handle.len().min(_window_handle.len());
+        raw_handle[..byte_count].copy_from_slice(&_window_handle[..byte_count]);
+        let overlay = usize::from_ne_bytes(raw_handle) as HWND;
         if overlay.is_null() {
             return false;
         }
@@ -550,7 +772,7 @@ pub fn place_overlay_window(_window_handle: i64, _pid: u32) -> bool {
                 bounds.top,
                 bounds.right - bounds.left,
                 bounds.bottom - bounds.top,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                SWP_NOACTIVATE,
             ) != 0
         };
     }
@@ -560,7 +782,7 @@ pub fn place_overlay_window(_window_handle: i64, _pid: u32) -> bool {
 #[napi]
 pub fn focus_process_window(_pid: u32) -> bool {
     #[cfg(target_os = "windows")]
-    if let Some((window, _)) = process_window(_pid) {
+    if let Some((window, _)) = find_best_process_window(_pid, true) {
         unsafe {
             if IsIconic(window) != 0 {
                 ShowWindow(window, SW_RESTORE);

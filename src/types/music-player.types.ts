@@ -18,14 +18,26 @@ export interface MusicPlaylist {
 
 export type RepeatMode = "none" | "one" | "all";
 
+export type MusicPlaybackState =
+  | "stopped"
+  | "resolving"
+  | "playing"
+  | "paused"
+  | "error";
+
+export type MusicAudioSource = "youtube" | "deezer-preview";
+
 export interface MusicPlayerState {
   queue: MusicTrack[];
   currentIndex: number;
   nowPlaying: MusicTrack | null;
-  state: "playing" | "paused" | "stopped";
+  state: MusicPlaybackState;
   shuffle: boolean;
   repeat: RepeatMode;
   progressMs: number;
   durationMs: number;
   audioUrl: string | null;
+  audioSource: MusicAudioSource | null;
+  playbackError: string | null;
+  playbackNotice: string | null;
 }

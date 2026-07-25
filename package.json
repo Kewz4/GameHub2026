@@ -1,6 +1,6 @@
 {
   "name": "hydralauncher",
-  "version": "1.1.19",
+  "version": "1.1.20",
   "description": "GameHub",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
@@ -28,7 +28,7 @@
     "build:python-rpc": "python3 python_rpc/setup.py build || python python_rpc/setup.py build",
     "build:unpack": "npm run build && npm run build:python-rpc && electron-builder --dir",
     "download-binaries": "node scripts/download-launcher-binaries.cjs",
-    "build:win": "npm run build:native && npm run build:python-rpc && node scripts/download-launcher-binaries.cjs win32 && node scripts/build-ukmm.cjs win32 && electron-vite build && electron-builder --win",
+    "build:win": "npm run build:native && npm run build:python-rpc && node scripts/download-ffmpeg.cjs && node scripts/download-launcher-binaries.cjs win32 && node scripts/build-ukmm.cjs win32 && electron-vite build && electron-builder --win",
     "build:mac": "npm run build:native && npm run build:python-rpc && node scripts/download-launcher-binaries.cjs darwin && electron-vite build && electron-builder --mac",
     "build:linux": "npm run build:native && npm run build:python-rpc && node scripts/download-launcher-binaries.cjs linux && electron-vite build && electron-builder --linux",
     "dev:big-picture": "vite dev src/big-picture",
@@ -116,7 +116,6 @@
     "ws": "^8.20.1",
     "yaml": "^2.8.3",
     "yup": "^1.5.0",
-    "youtube-dl-exec": "^3.1.8",
     "zustand": "^5.0.12"
   },
   "devDependencies": {

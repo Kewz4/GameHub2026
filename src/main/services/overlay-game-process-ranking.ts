@@ -10,13 +10,38 @@ export type OverlayProcess = {
 export type OverlayProcessCandidate = OverlayProcess & { score: number };
 
 const normalizePath = (value: string) => path.normalize(value).toLowerCase();
+const PROTOCOL_PATH = /^[a-z][a-z\d+.-]*:\/\//i;
+const UNREAL_SHIPPING_EXECUTABLE = /(?:^|-)(?:win64|wingdk)-shipping\.exe$/i;
+const AUXILIARY_EXECUTABLE =
+  /(?:crash|report|uninstall|updat(?:e|er)|launcher|bootstrap|easyanticheat|eac|battleye|beservice)/i;
+
+const isWithinDirectory = (candidate: string, directory: string) => {
+  const relative = path.relative(directory, candidate);
+  return (
+    relative.length > 0 &&
+    relative !== ".." &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
+};
 
 export const rankOverlayGameProcesses = (
   processes: OverlayProcess[],
   targets: string[],
-  foregroundPid = 0
+  foregroundPid = 0,
+  preferredPid = 0,
+  lockPreferredPid = false
 ): OverlayProcessCandidate[] => {
-  const normalizedTargets = targets.map(normalizePath);
+  const normalizedTargets = targets
+    .filter((target) => !PROTOCOL_PATH.test(target))
+    .map(normalizePath);
+  const installRoots = [
+    ...new Set(
+      normalizedTargets
+        .map((target) => path.dirname(target))
+        .filter((directory) => directory && directory !== ".")
+    ),
+  ];
 
   return processes
     .map((candidate): OverlayProcessCandidate | null => {
@@ -35,8 +60,28 @@ export const rankOverlayGameProcesses = (
         }
       }
 
+      if (score === 0 && executable) {
+        const executableName = path.basename(executable);
+        const isSameInstall =
+          !AUXILIARY_EXECUTABLE.test(executableName) &&
+          installRoots.some((directory) =>
+            isWithinDirectory(executable, directory)
+          );
+        if (isSameInstall && UNREAL_SHIPPING_EXECUTABLE.test(executableName)) {
+          score = 6_500;
+        } else if (isSameInstall && candidate.pid === foregroundPid) {
+          score = 4_000;
+        }
+      }
+
       if (score === 0) return null;
-      if (candidate.pid === foregroundPid) score += 750;
+      // While the overlay owns foreground, Windows reports Electron rather
+      // than the game as foreground. Keep the already-validated render process
+      // selected until its visible window disappears; otherwise a still-open
+      // launcher with an exact configured path can steal the overlay.
+      if (candidate.pid === preferredPid)
+        score += lockPreferredPid ? 100_000 : 2_000;
+      if (candidate.pid === foregroundPid) score += 50_000;
 
       return { ...candidate, score };
     })

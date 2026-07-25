@@ -325,7 +325,7 @@ app.whenReady().then(async () => {
   electronApp.setAppUserModelId("io.gamehub.launcher");
 
   // Wire the in-game overlay (perf HUD via PresentMon, injected surface via
-  // asdf-overlay, Shift+F3 / hold-Guide toggle). Idempotent; safe on all OSes.
+  // asdf-overlay, Shift+F3 / Guide toggle). Idempotent; safe on all OSes.
   OverlayManager.initialize();
 
   protocol.handle("local", (request) => {
