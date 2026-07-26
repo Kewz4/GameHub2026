@@ -19,7 +19,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      should_release: ${{ steps.config.outputs.should_release }}
+      tag: ${{ steps.config.outputs.tag }}
+      version: ${{ steps.config.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release configuration
+        id: config
+        shell: bash
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_RELEASE: ${{ startsWith(github.event.head_commit.message, 'release:') }}
+          VERSION_OVERRIDE: ${{ github.event.inputs.version }}
+        run: |
+          SHOULD_RELEASE=false
+          if [ "$IS_TAG" = "true" ] || [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$COMMIT_RELEASE" = "true" ]; then
+            SHOULD_RELEASE=true
+          fi
+
+          if [ "$IS_TAG" = "true" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="$VERSION_OVERRIDE"
+            if [ -z "$VERSION" ]; then VERSION=$(node -p "require('./package.json').version"); fi
+            VERSION="${VERSION#v}"
+            TAG="v${VERSION}"
+          fi
+
+          {
+            echo "should_release=$SHOULD_RELEASE"
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare private draft release
+        if: steps.config.outputs.should_release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.config.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+            if [ "$IS_DRAFT" != "true" ]; then
+              echo "Release $TAG is already published; refusing to replace it."
+              exit 1
+            fi
+
+            RELEASE_ID=$(gh release view "$TAG" --json databaseId --jq '.databaseId')
+            while read -r ASSET_ID; do
+              if [ -n "$ASSET_ID" ]; then
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID"
+              fi
+            done < <(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].id')
+            gh release edit "$TAG" --draft --target "$GITHUB_SHA" --title "GameHub $TAG"
+          else
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "GameHub $TAG" --generate-notes
+          fi
+
   build:
+    needs: prepare_release
     strategy:
       matrix:
         include:
@@ -162,10 +231,38 @@ jobs:
           npx electron-builder --linux AppImage --config electron-builder.yml
           if [ ! -f ../dist/GameHub-WebSetup.AppImage ]; then echo "web setup AppImage missing"; exit 1; fi
 
-      - name: Upload artifact
-        # Non-fatal for ordinary branch builds. The release job downloads both
-        # named artifacts explicitly, so a missing upload prevents publication
-        # instead of creating a partial Windows-only or Linux-only release.
+      - name: Upload release assets to private draft
+        if: needs.prepare_release.outputs.should_release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare_release.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ASSETS=(dist/*.exe dist/*.zip dist/latest.yml dist/latest.yml.blockmap)
+          else
+            ASSETS=(dist/*.AppImage dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.sh dist/latest-linux.yml)
+          fi
+
+          if [ "${#ASSETS[@]}" -eq 0 ]; then
+            echo "No release assets were produced for ${{ runner.os }}."
+            exit 1
+          fi
+          for ASSET in "${ASSETS[@]}"; do
+            if [ ! -s "$ASSET" ]; then
+              echo "Release asset is empty: $ASSET"
+              exit 1
+            fi
+          done
+
+          printf 'Uploading %s release assets to private draft %s\n' "${#ASSETS[@]}" "$TAG"
+          gh release upload "$TAG" "${ASSETS[@]}" --clobber
+
+      - name: Upload ordinary CI artifact
+        if: needs.prepare_release.outputs.should_release != 'true'
+        # Convenience downloads for non-release builds remain non-fatal because
+        # repository artifact quota must not invalidate an otherwise good build.
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -176,53 +273,54 @@ jobs:
           retention-days: 5
 
   release:
-    # Never publish until every platform in the build matrix has succeeded.
-    # This is especially important for native Windows/Rust changes: a Linux
-    # success must not create a release when the Windows addon failed to build.
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
+    # Each matrix runner uploads to a private draft. Only a successful complete
+    # matrix can reach this job and make that draft public, so neither a platform
+    # failure nor Actions artifact quota can create a partial public release.
+    needs: [prepare_release, build]
+    if: needs.prepare_release.outputs.should_release == 'true' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Download Windows release assets
-        uses: actions/download-artifact@v4
-        with:
-          name: hydra-windows
-          path: release-assets
-
-      - name: Download Linux release assets
-        uses: actions/download-artifact@v4
-        with:
-          name: hydra-linux
-          path: release-assets
-
-      - name: Resolve release tag
-        id: reltag
+      - name: Verify complete draft release
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare_release.outputs.tag }}
+          VERSION: ${{ needs.prepare_release.outputs.version }}
         run: |
-          if [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          else
-            V="${{ github.event.inputs.version }}"
-            if [ -z "$V" ]; then V=$(node -p "require('./package.json').version"); fi
-            echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "Expected $TAG to remain private until matrix verification."
+            exit 1
           fi
 
-      - name: Create/update GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: false
-          name: GameHub ${{ steps.reltag.outputs.tag }}
-          tag_name: ${{ steps.reltag.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          files: release-assets/**/*
+          REQUIRED_ASSETS=(
+            "GameHub-${VERSION}-win.zip"
+            "GameHub-Setup-${VERSION}.exe"
+            "GameHub-WebSetup.exe"
+            "GameHub-WebSetup.AppImage"
+            "hydralauncher-${VERSION}.AppImage"
+            "hydralauncher-${VERSION}.x86_64.rpm"
+            "hydralauncher_${VERSION}_amd64.deb"
+            "latest.yml"
+            "latest-linux.yml"
+          )
+          ASSET_NAMES=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+          for REQUIRED_ASSET in "${REQUIRED_ASSETS[@]}"; do
+            if ! grep -Fqx "$REQUIRED_ASSET" <<< "$ASSET_NAMES"; then
+              echo "Draft release is missing required asset: $REQUIRED_ASSET"
+              exit 1
+            fi
+          done
+
+      - name: Publish verified release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare_release.outputs.tag }}
+        run: |
+          gh release edit "$TAG" --draft=false --latest --target "$GITHUB_SHA" --title "GameHub $TAG"
