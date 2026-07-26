@@ -99,7 +99,6 @@ jobs:
               dist/*.exe
               dist/*.zip
               dist/latest.yml
-              dist/latest.yml.blockmap
           - os: ubuntu-latest
             build_cmd: yarn build:linux -- --publish never
             artifact_name: hydra-linux
@@ -240,7 +239,7 @@ jobs:
         run: |
           shopt -s nullglob
           if [ "${{ runner.os }}" = "Windows" ]; then
-            ASSETS=(dist/*.exe dist/*.zip dist/latest.yml dist/latest.yml.blockmap)
+            ASSETS=(dist/*.exe dist/*.zip dist/latest.yml)
           else
             ASSETS=(dist/*.AppImage dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.sh dist/latest-linux.yml)
           fi
