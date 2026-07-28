@@ -417,6 +417,10 @@ export class OverlayManager {
           this.placeWindowOverGame(overlayWindow, delayedBounds);
           overlayWindow.moveTop();
           overlayWindow.focus();
+          // A fullscreen game commonly grabs the foreground straight back after
+          // being covered. Re-assert it, otherwise the game keeps keyboard,
+          // mouse and controller input while the overlay is on screen.
+          this.claimForeground(overlayWindow);
         }
       }, 75);
     };

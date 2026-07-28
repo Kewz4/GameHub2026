@@ -123,6 +123,7 @@ export class GameRecorderManager {
   private static captureRetryAfter = 0;
   private static segmentDirectory: string | null = null;
   private static segmentSequence = 0;
+  private static loggedSegmentCodec: string | null = null;
   private static segments: RecorderSegment[] = [];
   private static recordingStartedAt: number | null = null;
   private static recordingSegments: RecorderSegment[] = [];
@@ -432,6 +433,19 @@ export class GameRecorderManager {
       outputFps: Number(metadata?.outputFps) || 0,
       container,
     };
+    // Log the negotiated encoder once per capture session: whether MediaRecorder
+    // accepted hardware H.264 or silently fell back to software VP9 is the
+    // difference between smooth and stuttering output, and is otherwise
+    // invisible.
+    if (this.loggedSegmentCodec !== mimeType) {
+      this.loggedSegmentCodec = mimeType;
+      logger.info("Game recorder encoding", {
+        mimeType,
+        container,
+        output: `${segment.outputWidth}x${segment.outputHeight}@${segment.outputFps}`,
+        hardwareAccelerated: /avc1|hvc1|hev1|mp4/i.test(mimeType),
+      });
+    }
     this.segments.push(segment);
     if (
       this.recordingStartedAt !== null &&

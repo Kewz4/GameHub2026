@@ -99,12 +99,6 @@ type CaptureStreamPipeline = {
   dispose: () => void;
 };
 
-const VIDEO_READY_TIMEOUT_MS = 5_000;
-const FRAME_RATE_EPSILON = 0.01;
-const FRAME_RATE_SAMPLE_MS = 2_000;
-const MINIMUM_SUSTAINED_FRAME_RATE_RATIO = 0.95;
-const MAX_CONSECUTIVE_SLOW_SAMPLES = 3;
-
 const isPositiveFinite = (value: number | undefined): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > 0;
 
@@ -116,317 +110,60 @@ const stopStreams = (...streams: Array<MediaStream | null>) => {
   tracks.forEach((track) => track.stop());
 };
 
-const waitForVideoData = async (video: HTMLVideoElement) => {
-  if (
-    video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
-    video.videoWidth > 0 &&
-    video.videoHeight > 0
-  ) {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const cleanup = () => {
-      window.clearTimeout(timeoutId);
-      video.removeEventListener("loadeddata", handleReady);
-      video.removeEventListener("resize", handleReady);
-      video.removeEventListener("error", handleError);
-    };
-    const handleReady = () => {
-      if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
-      cleanup();
-      resolve();
-    };
-    const handleError = () => {
-      const detail = video.error?.message;
-      cleanup();
-      reject(
-        new Error(
-          detail
-            ? `The game capture could not be decoded: ${detail}`
-            : "The game capture could not provide a video frame."
-        )
-      );
-    };
-    const timeoutId = window.setTimeout(() => {
-      cleanup();
-      reject(
-        new Error(
-          "The game capture did not provide a video frame within five seconds."
-        )
-      );
-    }, VIDEO_READY_TIMEOUT_MS);
-
-    video.addEventListener("loadeddata", handleReady);
-    video.addEventListener("resize", handleReady);
-    video.addEventListener("error", handleError);
-  });
-};
-
+/**
+ * Prepare the capture stream for MediaRecorder.
+ *
+ * This deliberately records the stream Chromium gives us, untouched. An earlier
+ * version re-drew every frame into a 2D canvas to force an exact output size,
+ * but that check ("does the source match the request?") compared the reported
+ * frame rate to the target within 0.01 fps, which a live desktop capture never
+ * satisfies — so the canvas path ran for every recording. Each frame then went
+ * GPU capture -> <video> -> drawImage on the main thread -> captureStream, on a
+ * setTimeout clock that is neither frame-accurate nor immune to throttling.
+ * That is what produced the dropped frames and stutter.
+ *
+ * The capturer already scales to the constrained resolution on the GPU
+ * (applyVideoConstraints ran before this), so there is nothing left to do per
+ * frame: no JS runs between the capturer and the encoder.
+ */
 const createCaptureStreamPipeline = async (
   sourceStream: MediaStream,
-  configuration: GameRecorderPreferences,
-  onRuntimeError: (message: string) => void
+  configuration: GameRecorderPreferences
 ): Promise<CaptureStreamPipeline> => {
   const sourceTrack = sourceStream.getVideoTracks()[0];
   if (!sourceTrack) throw new Error("The game window did not provide video.");
 
-  const requestedDimensions = getGameRecorderTargetDimensions(
-    configuration.resolution
-  );
-  const sourceSettings = sourceTrack.getSettings();
-  const sourceWidth = sourceSettings.width;
-  const sourceHeight = sourceSettings.height;
-  const sourceFrameRate = sourceSettings.frameRate;
-  const hasKnownSourceDimensions =
-    isPositiveFinite(sourceWidth) && isPositiveFinite(sourceHeight);
-  const dimensionsMatch =
-    requestedDimensions === null
-      ? hasKnownSourceDimensions
-      : sourceWidth === requestedDimensions.width &&
-        sourceHeight === requestedDimensions.height;
-  const frameRateMatches =
-    isPositiveFinite(sourceFrameRate) &&
-    Math.abs(sourceFrameRate - configuration.fps) <= FRAME_RATE_EPSILON;
+  // Tell the encoder this is high-motion video rather than static content, so
+  // it spends its bitrate on temporal detail instead of preserving sharp edges.
+  sourceTrack.contentHint = "motion";
+  sourceStream.getAudioTracks().forEach((track) => {
+    track.contentHint = "music";
+  });
 
-  // Preserve a direct, lossless capture path when Chromium proves that the
-  // backend honored every selected setting. Unknown or mismatched settings are
-  // normalized below instead of silently recording a lower mode.
-  if (dimensionsMatch && frameRateMatches && hasKnownSourceDimensions) {
-    sourceTrack.contentHint = "motion";
-    sourceStream
-      .getAudioTracks()
-      .forEach((track) => (track.contentHint = "music"));
-    let disposed = false;
-    return {
-      stream: sourceStream,
-      outputSettings: {
-        width: sourceWidth,
-        height: sourceHeight,
-        frameRate: configuration.fps,
-        normalized: false,
-      },
-      dispose: () => {
-        if (disposed) return;
-        disposed = true;
-        stopStreams(sourceStream);
-      },
-    };
-  }
+  const settings = sourceTrack.getSettings();
+  const requested = getGameRecorderTargetDimensions(configuration.resolution);
+  const width = isPositiveFinite(settings.width)
+    ? settings.width
+    : (requested?.width ?? 1_920);
+  const height = isPositiveFinite(settings.height)
+    ? settings.height
+    : (requested?.height ?? 1_080);
 
-  const video = document.createElement("video");
-  video.autoplay = true;
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = "auto";
-  video.disablePictureInPicture = true;
-  video.srcObject = sourceStream;
-
-  let canvasStream: MediaStream | null = null;
-  let outputStream: MediaStream | null = null;
-  let frameTimer: number | null = null;
   let disposed = false;
-
-  const dispose = () => {
-    if (disposed) return;
-    disposed = true;
-    if (frameTimer !== null) {
-      window.clearTimeout(frameTimer);
-      frameTimer = null;
-    }
-    video.pause();
-    video.srcObject = null;
-    stopStreams(outputStream, canvasStream, sourceStream);
+  return {
+    stream: sourceStream,
+    outputSettings: {
+      width,
+      height,
+      frameRate: configuration.fps,
+      normalized: false,
+    },
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      stopStreams(sourceStream);
+    },
   };
-
-  try {
-    await video.play();
-    await waitForVideoData(video);
-
-    const targetWidth = requestedDimensions?.width ?? video.videoWidth;
-    const targetHeight = requestedDimensions?.height ?? video.videoHeight;
-    if (!isPositiveFinite(targetWidth) || !isPositiveFinite(targetHeight)) {
-      throw new Error(
-        "The recorder could not determine the game window's output resolution."
-      );
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(targetWidth);
-    canvas.height = Math.round(targetHeight);
-    const context = canvas.getContext("2d", {
-      alpha: false,
-      desynchronized: true,
-    });
-    if (!context) {
-      throw new Error(
-        "Canvas video normalization is unavailable in this renderer."
-      );
-    }
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
-
-    const drawFrame = () => {
-      const currentSourceWidth = video.videoWidth;
-      const currentSourceHeight = video.videoHeight;
-      if (currentSourceWidth <= 0 || currentSourceHeight <= 0) {
-        throw new Error("The game capture stopped providing video frames.");
-      }
-      const scale = Math.min(
-        canvas.width / currentSourceWidth,
-        canvas.height / currentSourceHeight
-      );
-      const drawWidth = Math.max(1, Math.round(currentSourceWidth * scale));
-      const drawHeight = Math.max(1, Math.round(currentSourceHeight * scale));
-      const drawX = Math.floor((canvas.width - drawWidth) / 2);
-      const drawY = Math.floor((canvas.height - drawHeight) / 2);
-
-      // Never crop or stretch gameplay. Non-matching aspect ratios receive
-      // neutral letterboxing/pillarboxing inside the exact configured output.
-      context.fillStyle = "#000";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(video, drawX, drawY, drawWidth, drawHeight);
-    };
-
-    drawFrame();
-    canvasStream = canvas.captureStream(0);
-    const canvasTrack = canvasStream.getVideoTracks()[0] as
-      | CanvasCaptureMediaStreamTrack
-      | undefined;
-    if (!canvasTrack || typeof canvasTrack.requestFrame !== "function") {
-      throw new Error(
-        "This Chromium build cannot guarantee the selected recorder frame rate."
-      );
-    }
-    canvasTrack.contentHint = "motion";
-
-    const canvasSettings = canvasTrack.getSettings();
-    if (
-      (isPositiveFinite(canvasSettings.width) &&
-        canvasSettings.width !== canvas.width) ||
-      (isPositiveFinite(canvasSettings.height) &&
-        canvasSettings.height !== canvas.height)
-    ) {
-      throw new Error(
-        `The recorder requested ${canvas.width}×${canvas.height}, but Chromium created ${canvasSettings.width ?? "unknown"}×${canvasSettings.height ?? "unknown"}.`
-      );
-    }
-
-    sourceStream
-      .getAudioTracks()
-      .forEach((track) => (track.contentHint = "music"));
-    outputStream = new MediaStream([
-      canvasTrack,
-      ...sourceStream.getAudioTracks(),
-    ]);
-
-    const frameIntervalMs = 1_000 / configuration.fps;
-    let nextFrameAt = performance.now();
-    let sampleStartedAt = nextFrameAt;
-    let sampledFrames = 0;
-    let consecutiveSlowSamples = 0;
-    let runtimeFailed = false;
-
-    const failRuntime = (message: string) => {
-      if (runtimeFailed || disposed) return;
-      runtimeFailed = true;
-      if (frameTimer !== null) {
-        window.clearTimeout(frameTimer);
-        frameTimer = null;
-      }
-      onRuntimeError(message);
-    };
-
-    const scheduleNextFrame = () => {
-      if (disposed || runtimeFailed) return;
-      frameTimer = window.setTimeout(
-        emitFrame,
-        Math.max(0, nextFrameAt - performance.now())
-      );
-    };
-
-    const emitFrame = () => {
-      frameTimer = null;
-      if (disposed || runtimeFailed) return;
-
-      const now = performance.now();
-      if (now + 0.25 < nextFrameAt) {
-        scheduleNextFrame();
-        return;
-      }
-
-      try {
-        drawFrame();
-        canvasTrack.requestFrame();
-      } catch (error) {
-        failRuntime(
-          error instanceof Error
-            ? error.message
-            : "The recorder could not normalize the game video."
-        );
-        return;
-      }
-
-      sampledFrames += 1;
-      nextFrameAt += frameIntervalMs;
-      if (nextFrameAt < now - frameIntervalMs) {
-        const skippedIntervals =
-          Math.floor((now - nextFrameAt) / frameIntervalMs) + 1;
-        nextFrameAt += skippedIntervals * frameIntervalMs;
-      }
-
-      const sampleElapsedMs = now - sampleStartedAt;
-      if (sampleElapsedMs >= FRAME_RATE_SAMPLE_MS) {
-        const sustainedFrameRate = (sampledFrames * 1_000) / sampleElapsedMs;
-        if (
-          sustainedFrameRate <
-          configuration.fps * MINIMUM_SUSTAINED_FRAME_RATE_RATIO
-        ) {
-          consecutiveSlowSamples += 1;
-        } else {
-          consecutiveSlowSamples = 0;
-        }
-        sampleStartedAt = now;
-        sampledFrames = 0;
-
-        if (consecutiveSlowSamples >= MAX_CONSECUTIVE_SLOW_SAMPLES) {
-          failRuntime(
-            `The recorder could not sustain ${configuration.fps} FPS at ${canvas.width}×${canvas.height}. Reduce the selected resolution or frame rate.`
-          );
-          return;
-        }
-      }
-
-      scheduleNextFrame();
-    };
-
-    // Request the first encoded canvas frame immediately, then maintain a
-    // drift-corrected fixed cadence. Repeated source frames are intentional
-    // when a game renders below the selected output FPS.
-    canvasTrack.requestFrame();
-    sampledFrames = 1;
-    nextFrameAt += frameIntervalMs;
-    scheduleNextFrame();
-
-    return {
-      stream: outputStream,
-      outputSettings: {
-        width: canvas.width,
-        height: canvas.height,
-        frameRate: configuration.fps,
-        normalized: true,
-      },
-      dispose: () => {
-        dispose();
-        // Release the backing GPU surface after its capture track is stopped.
-        canvas.width = 1;
-        canvas.height = 1;
-      },
-    };
-  } catch (error) {
-    dispose();
-    throw error;
-  }
 };
 
 class CaptureController {
@@ -480,15 +217,7 @@ class CaptureController {
       // Normalize the capture to the exact selected resolution/frame rate when
       // Chromium could not honor them directly. The pipeline may hand back a
       // canvas-backed stream, so everything below records `pipeline.stream`.
-      const pipeline = await createCaptureStreamPipeline(
-        stream,
-        configuration,
-        (message) => {
-          if (generation !== this.startGeneration || !this.active) return;
-          this.stop();
-          void window.electron.gameRecorderCaptureError(message);
-        }
-      );
+      const pipeline = await createCaptureStreamPipeline(stream, configuration);
 
       if (generation !== this.startGeneration) {
         pipeline.dispose();

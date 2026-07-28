@@ -27,6 +27,62 @@ use windows_sys::Win32::System::Threading::{
 #[cfg(target_os = "windows")]
 const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
 
+/// Session names used by earlier GameHub builds, cleared on every start so a
+/// session leaked before this fix shipped cannot block capture forever.
+#[cfg(target_os = "windows")]
+const LEGACY_SESSION_NAMES: &[&str] = &["GameHubOverlayPresentMon"];
+
+/// Stop an ETW trace session by name via the OS trace controller.
+///
+/// `logman stop <name> -ets` deletes a running real-time session. It is part of
+/// Windows, needs no PresentMon cooperation, and succeeds whether or not the
+/// session exists (a missing session is simply a non-zero exit we ignore).
+#[cfg(target_os = "windows")]
+fn stop_trace_session(session_name: &str) {
+    let Ok(mut child) = Command::new("logman")
+        .args([
+            OsString::from("stop"),
+            OsString::from(session_name),
+            OsString::from("-ets"),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+    else {
+        return;
+    };
+
+    // Bounded so a wedged controller can never block the capture.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => break,
+            Ok(None) => {}
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            break;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Append a diagnostic line in UTF-16LE.
+///
+/// PresentMon writes its own console output to this file as UTF-16LE. Writing
+/// our lines as UTF-8 left the file mixed-encoding, so whichever one the reader
+/// guessed wrong came out as mojibake.
+#[cfg(target_os = "windows")]
+fn write_diagnostic_line(file: &mut std::fs::File, line: &str) {
+    let mut bytes = Vec::with_capacity((line.len() + 2) * 2);
+    for unit in format!("{line}\r\n").encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    let _ = file.write_all(&bytes);
+}
+
 #[cfg(target_os = "windows")]
 fn diagnostic_path(output_path: &Path) -> PathBuf {
     PathBuf::from(format!("{}.log", output_path.to_string_lossy()))
@@ -97,41 +153,19 @@ fn run() -> Result<(), String> {
 
     // An ETW trace session outlives the process that created it, and GameHub
     // stops a capture by terminating PresentMon (target change, overlay
-    // disabled, shutdown), so PresentMon never gets to close its own session.
-    // The next run then finds the stale session, and --stop_existing_session
-    // makes PresentMon stop it and exit *without capturing* — which is why
-    // every later launch reported no frame samples.
+    // disabled, shutdown), so PresentMon never closes its own session. A later
+    // run then finds the stale session and refuses to start:
     //
-    // Reap the stale session in its own throwaway invocation first. Whether it
-    // reports success or that nothing was running, the name is free afterwards,
-    // so the real capture below starts a fresh session and records normally.
-    let reaper = Command::new(&presentmon)
-        .args([
-            OsString::from("--session_name"),
-            OsString::from(session_name.clone()),
-            OsString::from("--stop_existing_session"),
-            OsString::from("--no_console_stats"),
-        ])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn();
-    if let Ok(mut reaper) = reaper {
-        // Bounded: never let a wedged reaper block the capture.
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            match reaper.try_wait() {
-                Ok(Some(_)) => break,
-                Err(_) => break,
-                Ok(None) => {}
-            }
-            if Instant::now() >= deadline {
-                let _ = reaper.kill();
-                let _ = reaper.wait();
-                break;
-            }
-            thread::sleep(Duration::from_millis(50));
-        }
+    //   error: a trace session named "..." is already running.
+    //
+    // Asking PresentMon to clear it does not work — invoked with only a session
+    // name it has no capture to perform, exits non-zero, and leaves the session
+    // registered. Stop it with the OS's own ETW controller instead, which is
+    // what `logman ... -ets` is for and does not depend on PresentMon's CLI
+    // semantics. This also clears sessions leaked by earlier GameHub builds.
+    stop_trace_session(&session_name);
+    for legacy in LEGACY_SESSION_NAMES {
+        stop_trace_session(legacy);
     }
 
     // PresentMon opens --output_file without FILE_SHARE_READ, which prevents
@@ -148,7 +182,7 @@ fn run() -> Result<(), String> {
             OsString::from("--v1_metrics"),
             OsString::from("--terminate_on_proc_exit"),
             OsString::from("--session_name"),
-            OsString::from(session_name),
+            OsString::from(session_name.clone()),
         ])
         .stdout(Stdio::from(output))
         .stderr(Stdio::from(child_stderr))
@@ -160,7 +194,10 @@ fn run() -> Result<(), String> {
         match child.try_wait() {
             Ok(Some(status)) => {
                 let mut diagnostic = diagnostic;
-                let _ = writeln!(diagnostic, "PresentMon exited with status {status}");
+                write_diagnostic_line(
+                    &mut diagnostic,
+                    &format!("PresentMon exited with status {status}"),
+                );
                 break;
             }
             Ok(None) => {}
@@ -194,6 +231,9 @@ fn run() -> Result<(), String> {
                 let _ = child.kill();
                 let _ = child.wait();
             }
+            // A terminated PresentMon leaves its session registered; drop it
+            // here so the next capture never has to reap anything.
+            stop_trace_session(&session_name);
             break;
         }
         thread::sleep(Duration::from_millis(100));
@@ -210,7 +250,7 @@ fn main() {
             if let Ok(mut diagnostic) =
                 open_shared_output(&diagnostic_path(Path::new(&output)))
             {
-                let _ = writeln!(diagnostic, "{error}");
+                write_diagnostic_line(&mut diagnostic, &error);
             }
         }
         std::process::exit(1);

@@ -22,7 +22,12 @@ const MAX_SAMPLES = 600;
 const CAPTURE_START_TIMEOUT = 12_000;
 const STALE_SAMPLE_TIMEOUT = 3_000;
 const SWAP_CHAIN_STALE_TIMEOUT = 5_000;
-const PRESENTMON_SESSION_NAME = "GameHubOverlayPresentMon";
+// A unique ETW session name per capture run. A trace session outlives the
+// process that created it, so a fixed name lets one leaked session block every
+// later capture ("a trace session named ... is already running"). The bridge
+// also stops this name, and the legacy fixed name, before starting.
+const presentMonSessionName = (targetPid: number, runId: number) =>
+  `GameHubOverlayPresentMon-${process.pid}-${targetPid}-${runId}`;
 const PRESENTMON_SHA256 =
   "9bec3083069f58f911e6a512f4806db51a27bd096103087bc1d05ef54c80a191";
 const PERMISSION_MESSAGE =
@@ -249,7 +254,7 @@ export class OverlayFpsMonitor {
       presentMonPath,
       outputFile,
       targetPid,
-      PRESENTMON_SESSION_NAME
+      presentMonSessionName(targetPid, captureRunId)
     );
     if (
       generation !== this.generation ||
