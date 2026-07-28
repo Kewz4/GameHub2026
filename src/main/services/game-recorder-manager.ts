@@ -46,6 +46,11 @@ type RecorderSegment = {
   mimeType: string;
   bytes: number;
   hasAudio: boolean;
+  /** Geometry actually encoded into this segment, reported by the capture
+   *  renderer. Segments are only stream-copy concatenated with matching ones. */
+  outputWidth: number;
+  outputHeight: number;
+  outputFps: number;
 };
 
 type PendingSave = {
@@ -417,6 +422,9 @@ export class GameRecorderManager {
       mimeType,
       bytes: bytes.length,
       hasAudio: Boolean(metadata?.hasAudio),
+      outputWidth: Number(metadata?.outputWidth) || 0,
+      outputHeight: Number(metadata?.outputHeight) || 0,
+      outputFps: Number(metadata?.outputFps) || 0,
     };
     this.segments.push(segment);
     if (
@@ -546,10 +554,42 @@ export class GameRecorderManager {
     }
   }
 
+  /**
+   * Segments are concatenated with `-c:v copy`, which silently produces a
+   * corrupt file when the encoded geometry changes mid-list. A non-normalized
+   * capture follows the game window, so its dimensions can change without any
+   * preference change. Keep the newest contiguous run that shares geometry and
+   * drop the older, incompatible tail.
+   */
+  private static selectCompatibleSegments(selected: RecorderSegment[]) {
+    const newest = selected[selected.length - 1];
+    if (!newest?.outputWidth || !newest?.outputHeight) return selected;
+
+    let firstCompatible = selected.length - 1;
+    while (firstCompatible > 0) {
+      const candidate = selected[firstCompatible - 1];
+      const matches =
+        candidate.outputWidth === newest.outputWidth &&
+        candidate.outputHeight === newest.outputHeight &&
+        candidate.outputFps === newest.outputFps &&
+        candidate.hasAudio === newest.hasAudio;
+      if (!matches) break;
+      firstCompatible -= 1;
+    }
+
+    if (firstCompatible === 0) return selected;
+
+    logger.warn(
+      `Dropping ${firstCompatible} recorder segment(s) recorded at a different output geometry than ${newest.outputWidth}×${newest.outputHeight}@${newest.outputFps}.`
+    );
+    return selected.slice(firstCompatible);
+  }
+
   private static async saveSegments(
-    selected: RecorderSegment[],
+    inputSegments: RecorderSegment[],
     kind: "Recording" | "Replay"
   ): Promise<GameRecorderSaveResult> {
+    const selected = this.selectCompatibleSegments(inputSegments);
     if (!selected.length) {
       const error =
         kind === "Replay"

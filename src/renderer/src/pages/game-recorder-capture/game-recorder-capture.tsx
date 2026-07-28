@@ -482,14 +482,37 @@ class CaptureController {
           .catch(() => undefined);
       }
 
-      this.stream = stream;
+      // Normalize the capture to the exact selected resolution/frame rate when
+      // Chromium could not honor them directly. The pipeline may hand back a
+      // canvas-backed stream, so everything below records `pipeline.stream`.
+      const pipeline = await createCaptureStreamPipeline(
+        stream,
+        configuration,
+        (message) => {
+          if (generation !== this.startGeneration || !this.active) return;
+          this.stop();
+          void window.electron.gameRecorderCaptureError(message);
+        }
+      );
+
+      if (generation !== this.startGeneration) {
+        pipeline.dispose();
+        return;
+      }
+
+      const outputStream = pipeline.stream;
+      this.stream = outputStream;
+      this.streamCleanups.set(outputStream, pipeline.dispose);
       this.active = true;
+
+      // Watch the source track: a normalized canvas track keeps producing
+      // frames even after the game window disappears.
       videoTrack.addEventListener(
         "ended",
         () => {
           if (
             generation !== this.startGeneration ||
-            this.stream !== stream ||
+            this.stream !== outputStream ||
             !this.active
           ) {
             return;
@@ -501,7 +524,12 @@ class CaptureController {
         },
         { once: true }
       );
-      this.startSegment(configuration, generation, stream);
+      this.startSegment(
+        configuration,
+        generation,
+        outputStream,
+        pipeline.outputSettings
+      );
     } catch (error) {
       this.active = false;
       this.closeStream();
@@ -514,7 +542,8 @@ class CaptureController {
   private startSegment(
     configuration: GameRecorderPreferences,
     generation: number,
-    stream: MediaStream
+    stream: MediaStream,
+    outputSettings: CaptureOutputSettings
   ) {
     if (
       !this.active ||
@@ -525,12 +554,13 @@ class CaptureController {
     }
 
     const mimeType = chooseMimeType();
-    const videoSettings = stream.getVideoTracks()[0]?.getSettings();
+    // The pipeline's settings are authoritative: for a normalized capture the
+    // canvas dimensions are what actually gets encoded.
     const videoBitsPerSecond = getGameRecorderVideoBitrate(
       configuration,
       {
-        width: videoSettings?.width,
-        height: videoSettings?.height,
+        width: outputSettings.width,
+        height: outputSettings.height,
       },
       mimeType
     );
@@ -572,7 +602,7 @@ class CaptureController {
           generation === this.startGeneration &&
           this.stream === stream
         ) {
-          this.startSegment(configuration, generation, stream);
+          this.startSegment(configuration, generation, stream, outputSettings);
         } else {
           this.closeStream(stream);
         }
@@ -589,6 +619,10 @@ class CaptureController {
               endedAt,
               mimeType: blob.type || "video/webm",
               hasAudio,
+              outputWidth: outputSettings.width,
+              outputHeight: outputSettings.height,
+              outputFps: outputSettings.frameRate,
+              normalizedOutput: outputSettings.normalized,
             };
             return window.electron.gameRecorderCommitSegment(metadata, payload);
           })
@@ -629,7 +663,17 @@ class CaptureController {
   }
 
   private closeStream(stream = this.stream) {
-    stream?.getTracks().forEach((track) => track.stop());
+    if (!stream) return;
+    // dispose() tears down the whole pipeline (source, canvas and output
+    // streams plus the frame timer); stopping the output tracks alone would
+    // leave the underlying display capture running.
+    const dispose = this.streamCleanups.get(stream);
+    if (dispose) {
+      this.streamCleanups.delete(stream);
+      dispose();
+    } else {
+      stream.getTracks().forEach((track) => track.stop());
+    }
     if (this.stream === stream) this.stream = null;
   }
 }
