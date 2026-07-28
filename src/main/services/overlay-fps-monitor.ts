@@ -595,7 +595,26 @@ export class OverlayFpsMonitor {
   private readPresentMonDiagnostic(diagnosticFile: string) {
     try {
       if (!fs.existsSync(diagnosticFile)) return null;
-      const diagnostic = fs.readFileSync(diagnosticFile, "utf8").trim();
+      const buffer = fs.readFileSync(diagnosticFile);
+      if (!buffer.length) return null;
+
+      // PresentMon writes its console diagnostics as UTF-16LE (with or without
+      // a BOM). Decoding those bytes as UTF-8 produces a NUL between every
+      // character, which made the collector error unreadable in the logs.
+      const hasUtf16Bom =
+        buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe;
+      const looksUtf16 =
+        hasUtf16Bom ||
+        (buffer.length >= 4 &&
+          buffer[1] === 0x00 &&
+          buffer[3] === 0x00 &&
+          buffer[0] !== 0x00);
+      const decoded = looksUtf16
+        ? buffer.subarray(hasUtf16Bom ? 2 : 0).toString("utf16le")
+        : buffer.toString("utf8");
+
+      // Drop any stray NULs left by a mis-detected encoding.
+      const diagnostic = decoded.split("\u0000").join("").trim();
       return diagnostic ? diagnostic.slice(-4_000) : null;
     } catch {
       return null;

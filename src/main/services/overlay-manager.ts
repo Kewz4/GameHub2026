@@ -22,12 +22,16 @@ import { findOverlayGameProcesses } from "./overlay-game-process";
 import { overlayFpsMonitor } from "./overlay-fps-monitor";
 import { WindowManager } from "./window-manager";
 import { GameRecorderManager } from "./game-recorder-manager";
+import { GameProcessControlManager } from "./game-process-control-manager";
 
 const PREFERRED_SHORTCUT = "Shift+F3";
 const FALLBACK_SHORTCUT = "Control+Shift+F3";
 const CONTROLLER_SHORTCUT = "Guide";
-const TOAST_WIDTH = 620;
-const TOAST_HEIGHT = 190;
+// The toast is a single line of text, so it is sized wide and short: the extra
+// width keeps the shortcut hint on one line instead of wrapping (and being
+// clipped), and the reduced height keeps it out of the way of the game.
+const TOAST_WIDTH = 820;
+const TOAST_HEIGHT = 118;
 const TOAST_MARGIN = 24;
 const FPS_WIDTH = 218;
 const FPS_HEIGHT = 116;
@@ -402,6 +406,7 @@ export class OverlayManager {
       overlayWindow.moveTop();
       overlayWindow.focus();
       overlayWindow.webContents.send("on-overlay-shown");
+      this.applyPauseWhileOpen(true);
       setTimeout(() => {
         if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
           const delayedBounds = this.getTargetBounds();
@@ -433,15 +438,48 @@ export class OverlayManager {
     this.hideOverlayWindow(false, false);
   }
 
+  /**
+   * Optionally suspend the game while the overlay is open.
+   *
+   * The overlay is a separate always-on-top window, not something painted into
+   * the game's swap chain, so the game keeps polling XInput underneath it and
+   * reacts to every stick and button press meant for the overlay. XInput has no
+   * concept of focus and cannot be captured exclusively, so the only reliable
+   * way to stop that is to stop the process from running. Suspending the tree
+   * also freezes the game clock, which is what a player expects from a pause.
+   *
+   * Resume is best-effort but heavily guarded: GameProcessControlManager rolls
+   * back partial suspends and force-resumes before the app quits, so a crash
+   * with the overlay open cannot leave a permanently frozen game.
+   */
+  private static applyPauseWhileOpen(open: boolean) {
+    if (!this.preferences.overlayPauseGameWhileOpen) return;
+    const game = this.activeGame;
+    if (!game) return;
+    const action = open
+      ? GameProcessControlManager.pause(game, this.targetPid)
+      : GameProcessControlManager.resume(game);
+    void Promise.resolve(action).catch((error) =>
+      logger.warn(
+        `Could not ${open ? "pause" : "resume"} the game for the overlay`,
+        error
+      )
+    );
+  }
+
   private static hideOverlayWindow(
     restoreGameFocus: boolean,
     showPinnedPerformance: boolean
   ) {
     const overlayWindow = this.overlayWindow;
+    const wasVisible = Boolean(
+      overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
+    );
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.hide();
       overlayWindow.setAlwaysOnTop(false);
     }
+    if (wasVisible) this.applyPauseWhileOpen(false);
     if (
       showPinnedPerformance &&
       this.activeGame &&

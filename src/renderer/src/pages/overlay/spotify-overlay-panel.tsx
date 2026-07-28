@@ -11,6 +11,7 @@ import type {
   SpotifyStatus,
 } from "@types";
 import SpotifyIcon from "@renderer/assets/icons/spotify.svg?react";
+import { OverlaySelect } from "./overlay-select";
 import {
   AlertCircle,
   CheckCircle2,
@@ -1129,29 +1130,23 @@ export function SpotifyOverlayPanel({
                 Spotify Connect device
               </label>
               <div className="spotify-overlay-panel__device-controls">
-                <select
-                  id={`${panelId}-device`}
+                <OverlaySelect
+                  ariaLabel="Spotify Connect device"
                   value={selectedDeviceId}
                   disabled={!devices.length || Boolean(pendingAction)}
-                  onChange={(event) =>
-                    setSelectedDeviceId(event.currentTarget.value)
+                  onChange={(deviceId) => setSelectedDeviceId(deviceId)}
+                  options={
+                    devices.length
+                      ? devices.map((device) => ({
+                          value: device.id ?? "",
+                          label: `${device.name}${
+                            device.isActive ? " — active" : ""
+                          }${device.isRestricted ? " — restricted" : ""}`,
+                          disabled: !device.id || device.isRestricted,
+                        }))
+                      : [{ value: "", label: "No devices found" }]
                   }
-                >
-                  {!devices.length ? (
-                    <option value="">No devices found</option>
-                  ) : null}
-                  {devices.map((device) => (
-                    <option
-                      key={device.id || device.name}
-                      value={device.id ?? ""}
-                      disabled={!device.id || device.isRestricted}
-                    >
-                      {device.name}
-                      {device.isActive ? " — active" : ""}
-                      {device.isRestricted ? " — restricted" : ""}
-                    </option>
-                  ))}
-                </select>
+                />
                 <button
                   type="button"
                   className="spotify-overlay-panel__button"
@@ -1452,6 +1447,13 @@ export function SpotifyOverlayPanel({
             role="tablist"
             aria-label="Spotify sections"
           >
+            <span
+              className="overlay-tab-bumper overlay-tab-bumper--left"
+              aria-hidden="true"
+              title="Previous tab (LB)"
+            >
+              LB
+            </span>
             {(
               [
                 ["browse", "Browse", <Library key="browse" size={15} />],
@@ -1480,6 +1482,13 @@ export function SpotifyOverlayPanel({
                 ) : null}
               </button>
             ))}
+            <span
+              className="overlay-tab-bumper overlay-tab-bumper--right"
+              aria-hidden="true"
+              title="Next tab (RB)"
+            >
+              RB
+            </span>
           </div>
 
           <div className="spotify-overlay-panel__tab-content">
@@ -1568,19 +1577,18 @@ export function SpotifyOverlayPanel({
                       }
                     />
                   </label>
-                  <select
-                    aria-label="Spotify search result type"
+                  <OverlaySelect
+                    ariaLabel="Spotify search result type"
                     value={searchScope}
-                    onChange={(event) =>
-                      setSearchScope(event.currentTarget.value as SearchScope)
-                    }
-                  >
-                    <option value="all">All results</option>
-                    <option value="track">Tracks</option>
-                    <option value="playlist">Playlists</option>
-                    <option value="show">Shows</option>
-                    <option value="episode">Episodes</option>
-                  </select>
+                    onChange={(scope) => setSearchScope(scope as SearchScope)}
+                    options={[
+                      { value: "all", label: "All results" },
+                      { value: "track", label: "Tracks" },
+                      { value: "playlist", label: "Playlists" },
+                      { value: "show", label: "Shows" },
+                      { value: "episode", label: "Episodes" },
+                    ]}
+                  />
                   <button
                     type="submit"
                     className="spotify-overlay-panel__button spotify-overlay-panel__button--primary"

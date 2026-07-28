@@ -15,7 +15,7 @@ use std::process::{Command, Stdio};
 #[cfg(target_os = "windows")]
 use std::thread;
 #[cfg(target_os = "windows")]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::CloseHandle;
@@ -95,6 +95,45 @@ fn run() -> Result<(), String> {
         .try_clone()
         .map_err(|error| format!("could not clone diagnostic output: {error}"))?;
 
+    // An ETW trace session outlives the process that created it, and GameHub
+    // stops a capture by terminating PresentMon (target change, overlay
+    // disabled, shutdown), so PresentMon never gets to close its own session.
+    // The next run then finds the stale session, and --stop_existing_session
+    // makes PresentMon stop it and exit *without capturing* — which is why
+    // every later launch reported no frame samples.
+    //
+    // Reap the stale session in its own throwaway invocation first. Whether it
+    // reports success or that nothing was running, the name is free afterwards,
+    // so the real capture below starts a fresh session and records normally.
+    let reaper = Command::new(&presentmon)
+        .args([
+            OsString::from("--session_name"),
+            OsString::from(session_name.clone()),
+            OsString::from("--stop_existing_session"),
+            OsString::from("--no_console_stats"),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn();
+    if let Ok(mut reaper) = reaper {
+        // Bounded: never let a wedged reaper block the capture.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match reaper.try_wait() {
+                Ok(Some(_)) => break,
+                Err(_) => break,
+                Ok(None) => {}
+            }
+            if Instant::now() >= deadline {
+                let _ = reaper.kill();
+                let _ = reaper.wait();
+                break;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     // PresentMon opens --output_file without FILE_SHARE_READ, which prevents
     // the normal-integrity GameHub process from tailing an elevated capture.
     // Its stdout mode flushes every CSV row, while Rust-created files use the
@@ -110,7 +149,6 @@ fn run() -> Result<(), String> {
             OsString::from("--terminate_on_proc_exit"),
             OsString::from("--session_name"),
             OsString::from(session_name),
-            OsString::from("--stop_existing_session"),
         ])
         .stdout(Stdio::from(output))
         .stderr(Stdio::from(child_stderr))
@@ -135,8 +173,27 @@ fn run() -> Result<(), String> {
         // A normal stop writes the signal file. Monitoring GameHub's parent
         // PID also prevents an elevated collector surviving an app crash.
         if stop_path.exists() || !parent_is_running(parent_pid) {
-            let _ = child.kill();
-            let _ = child.wait();
+            // Ask PresentMon to end the capture itself first: a terminated
+            // PresentMon leaves its ETW session registered, which the reaper
+            // above then has to clean up on the next launch. Closing stdout
+            // makes it observe a broken pipe and shut the session down.
+            drop(child.stdout.take());
+            let deadline = Instant::now() + Duration::from_secs(2);
+            let mut exited = false;
+            while Instant::now() < deadline {
+                match child.try_wait() {
+                    Ok(Some(_)) => {
+                        exited = true;
+                        break;
+                    }
+                    Err(_) => break,
+                    Ok(None) => thread::sleep(Duration::from_millis(50)),
+                }
+            }
+            if !exited {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
             break;
         }
         thread::sleep(Duration::from_millis(100));

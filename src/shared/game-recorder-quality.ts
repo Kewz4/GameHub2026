@@ -26,6 +26,39 @@ const MIN_VIDEO_BITRATE = 8_000_000;
 const MAX_VIDEO_BITRATE = 180_000_000;
 const VP9_BITS_PER_PIXEL_PER_FRAME = 0.3;
 const VP8_BITS_PER_PIXEL_PER_FRAME = 0.4;
+// H.264/HEVC are encoded by the GPU's dedicated encoder rather than libvpx on
+// the CPU, so they sustain high frame rates — but H.264 needs more bits than
+// VP9 for the same quality, and gameplay is the worst case for a fixed target.
+const H264_BITS_PER_PIXEL_PER_FRAME = 0.45;
+const HEVC_BITS_PER_PIXEL_PER_FRAME = 0.32;
+
+/**
+ * MediaRecorder codec preference, best first.
+ *
+ * VP9/VP8 in Chromium are software-encoded by libvpx: at 1080p60 and above the
+ * encoder cannot keep pace with the capture, so MediaRecorder silently drops
+ * frames and the clip looks stuttery and soft no matter how high the bitrate
+ * target is. H.264 (and HEVC where present) go through the platform's hardware
+ * video encoder instead, which sustains the full frame rate. WebM/VP9 is kept
+ * as the fallback for machines that expose no hardware encoder.
+ */
+export const GAME_RECORDER_MIME_CANDIDATES = [
+  // H.264 High profile, level 5.2 (covers 4K60) + AAC-LC.
+  'video/mp4;codecs="avc1.640034,mp4a.40.2"',
+  'video/mp4;codecs="avc1.64002A,mp4a.40.2"',
+  'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+  "video/mp4",
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus",
+  "video/webm",
+] as const;
+
+export type GameRecorderContainer = "mp4" | "webm";
+
+export const getGameRecorderContainer = (
+  mimeType: string | null | undefined
+): GameRecorderContainer =>
+  mimeType?.toLowerCase().includes("mp4") ? "mp4" : "webm";
 
 export const getGameRecorderTargetDimensions = (
   resolution: GameRecorderResolution
@@ -63,9 +96,15 @@ export const getGameRecorderVideoBitrate = (
     actualDimensions.height > 0
       ? actualDimensions.height
       : fallbackHeight;
-  const bitsPerPixel = mimeType?.includes("vp9")
-    ? VP9_BITS_PER_PIXEL_PER_FRAME
-    : VP8_BITS_PER_PIXEL_PER_FRAME;
+  const codecs = mimeType?.toLowerCase() ?? "";
+  const bitsPerPixel =
+    codecs.includes("hvc1") || codecs.includes("hev1")
+      ? HEVC_BITS_PER_PIXEL_PER_FRAME
+      : codecs.includes("avc1") || codecs.includes("mp4")
+        ? H264_BITS_PER_PIXEL_PER_FRAME
+        : codecs.includes("vp9")
+          ? VP9_BITS_PER_PIXEL_PER_FRAME
+          : VP8_BITS_PER_PIXEL_PER_FRAME;
 
   return Math.round(
     Math.min(

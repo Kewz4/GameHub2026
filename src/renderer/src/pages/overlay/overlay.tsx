@@ -68,6 +68,7 @@ import type {
 } from "@types";
 import { useAppSelector } from "@renderer/hooks";
 import { OverlayWidgetFrame } from "./overlay-widget-frame";
+import { OverlaySelect } from "./overlay-select";
 import { SpotifyOverlayPanel } from "./spotify-overlay-panel";
 import {
   OVERLAY_WIDGET_IDS,
@@ -1204,7 +1205,7 @@ export default function Overlay() {
       <div className="overlay overlay--toast">
         <div className="overlay-toast">
           <span className="overlay-toast__dot" />
-          <div>
+          <div className="overlay-toast__body">
             <strong>Overlay ready</strong>
             <p>
               Press <kbd>{context?.shortcut ?? "Shift+F3"}</kbd> or press the
@@ -1625,24 +1626,24 @@ export default function Overlay() {
 
                   {recorderState?.configuration.instantReplayEnabled && (
                     <div className="overlay-capture__replay">
-                      <label>
+                      <div className="overlay-capture__replay-length">
                         <span>Instant Replay length</span>
-                        <select
+                        <OverlaySelect
+                          ariaLabel="Instant Replay length"
                           value={
                             recorderState.configuration.replayDurationSeconds
                           }
-                          onChange={(event) =>
-                            updateReplayDuration(
-                              Number(event.target.value) as 15 | 30 | 45 | 60
-                            )
+                          onChange={(seconds) =>
+                            updateReplayDuration(seconds as 15 | 30 | 45 | 60)
                           }
-                        >
-                          <option value={15}>Last 15 seconds</option>
-                          <option value={30}>Last 30 seconds</option>
-                          <option value={45}>Last 45 seconds</option>
-                          <option value={60}>Last 60 seconds</option>
-                        </select>
-                      </label>
+                          options={[
+                            { value: 15, label: "Last 15 seconds" },
+                            { value: 30, label: "Last 30 seconds" },
+                            { value: 45, label: "Last 45 seconds" },
+                            { value: 60, label: "Last 60 seconds" },
+                          ]}
+                        />
+                      </div>
                       <div className="overlay-capture__buffer">
                         <span
                           style={{
@@ -1755,6 +1756,13 @@ export default function Overlay() {
                       role="tablist"
                       aria-label="Music player views"
                     >
+                      <span
+                        className="overlay-tab-bumper overlay-tab-bumper--left"
+                        aria-hidden="true"
+                        title="Previous tab (LB)"
+                      >
+                        LB
+                      </span>
                       <button
                         id="overlay-music-tab-now-playing"
                         type="button"
@@ -1794,6 +1802,13 @@ export default function Overlay() {
                         <ListMusic size={14} />
                         Playlists
                       </button>
+                      <span
+                        className="overlay-tab-bumper overlay-tab-bumper--right"
+                        aria-hidden="true"
+                        title="Next tab (RB)"
+                      >
+                        RB
+                      </span>
                     </div>
 
                     {musicTab === "now-playing" && (

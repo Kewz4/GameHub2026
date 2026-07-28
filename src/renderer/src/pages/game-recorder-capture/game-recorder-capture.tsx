@@ -8,21 +8,18 @@ import {
   GAME_RECORDER_AUDIO_BITRATE,
   GAME_RECORDER_AUDIO_CHANNELS,
   GAME_RECORDER_AUDIO_SAMPLE_RATE,
+  GAME_RECORDER_MIME_CANDIDATES,
   GAME_RECORDER_SEGMENT_DURATION_MS,
   getGameRecorderTargetDimensions,
   getGameRecorderVideoBitrate,
 } from "@shared";
 
-const chooseMimeType = () => {
-  const candidates = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm",
-  ];
-  return candidates.find((candidate) =>
+// Prefer the hardware-encoded H.264/MP4 path; see GAME_RECORDER_MIME_CANDIDATES
+// for why software VP9 is only a fallback.
+const chooseMimeType = () =>
+  GAME_RECORDER_MIME_CANDIDATES.find((candidate) =>
     MediaRecorder.isTypeSupported(candidate)
   );
-};
 
 const getVideoConstraints = (
   configuration: GameRecorderPreferences
@@ -392,9 +389,7 @@ const createCaptureStreamPipeline = async (
         sampleStartedAt = now;
         sampledFrames = 0;
 
-        if (
-          consecutiveSlowSamples >= MAX_CONSECUTIVE_SLOW_SAMPLES
-        ) {
+        if (consecutiveSlowSamples >= MAX_CONSECUTIVE_SLOW_SAMPLES) {
           failRuntime(
             `The recorder could not sustain ${configuration.fps} FPS at ${canvas.width}×${canvas.height}. Reduce the selected resolution or frame rate.`
           );

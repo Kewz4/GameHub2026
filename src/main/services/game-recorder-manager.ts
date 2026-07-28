@@ -5,7 +5,9 @@ import {
   GAME_RECORDER_AUDIO_BITRATE,
   GAME_RECORDER_AUDIO_CHANNELS,
   GAME_RECORDER_AUDIO_SAMPLE_RATE,
+  getGameRecorderContainer,
   resolveGameRecorderPreferences,
+  type GameRecorderContainer,
 } from "@shared";
 import type {
   Game,
@@ -51,6 +53,8 @@ type RecorderSegment = {
   outputWidth: number;
   outputHeight: number;
   outputFps: number;
+  /** Container MediaRecorder produced (mp4 for the hardware H.264 path). */
+  container: GameRecorderContainer;
 };
 
 type PendingSave = {
@@ -407,11 +411,12 @@ export class GameRecorderManager {
         : Buffer.from(new Uint8Array(payload));
     if (!bytes.length) return;
 
+    const container = getGameRecorderContainer(mimeType);
     const directory = await this.ensureSegmentDirectory();
     const fileName = `segment-${String(this.segmentSequence++).padStart(
       8,
       "0"
-    )}.webm`;
+    )}.${container}`;
     const segmentPath = path.join(directory, fileName);
     await fs.promises.writeFile(segmentPath, bytes);
 
@@ -425,6 +430,7 @@ export class GameRecorderManager {
       outputWidth: Number(metadata?.outputWidth) || 0,
       outputHeight: Number(metadata?.outputHeight) || 0,
       outputFps: Number(metadata?.outputFps) || 0,
+      container,
     };
     this.segments.push(segment);
     if (
@@ -572,7 +578,8 @@ export class GameRecorderManager {
         candidate.outputWidth === newest.outputWidth &&
         candidate.outputHeight === newest.outputHeight &&
         candidate.outputFps === newest.outputFps &&
-        candidate.hasAudio === newest.hasAudio;
+        candidate.hasAudio === newest.hasAudio &&
+        candidate.container === newest.container;
       if (!matches) break;
       firstCompatible -= 1;
     }
@@ -621,11 +628,12 @@ export class GameRecorderManager {
       const gameDirectory = path.join(outputRoot, gameTitle);
       await fs.promises.mkdir(gameDirectory, { recursive: true });
 
+      const container = selected[0]?.container ?? "webm";
       outputPath = path.join(
         gameDirectory,
         `${gameTitle} ${kind} ${timestampForFile()}-${crypto
           .randomBytes(3)
-          .toString("hex")}.webm`
+          .toString("hex")}.${container}`
       );
       const directory = await this.ensureSegmentDirectory();
       listPath = path.join(
@@ -645,6 +653,38 @@ export class GameRecorderManager {
       await fs.promises.writeFile(listPath, concatText, "utf8");
 
       const hasAudio = selected[0]?.hasAudio ?? false;
+      // Opus is a WebM codec; an MP4 container needs AAC. The video stream is
+      // always copied, so the hardware-encoded H.264 is preserved bit for bit.
+      const audioArguments =
+        container === "mp4"
+          ? [
+              "-c:a",
+              "aac",
+              "-b:a",
+              String(GAME_RECORDER_AUDIO_BITRATE),
+              "-ar",
+              String(GAME_RECORDER_AUDIO_SAMPLE_RATE),
+              "-ac",
+              String(GAME_RECORDER_AUDIO_CHANNELS),
+              "-af",
+              `aresample=${GAME_RECORDER_AUDIO_SAMPLE_RATE}:async=1000:first_pts=0`,
+            ]
+          : [
+              "-c:a",
+              "libopus",
+              "-b:a",
+              String(GAME_RECORDER_AUDIO_BITRATE),
+              "-ar",
+              String(GAME_RECORDER_AUDIO_SAMPLE_RATE),
+              "-ac",
+              String(GAME_RECORDER_AUDIO_CHANNELS),
+              "-vbr",
+              "on",
+              "-compression_level",
+              "10",
+              "-af",
+              `aresample=${GAME_RECORDER_AUDIO_SAMPLE_RATE}:async=1000:first_pts=0`,
+            ];
       await this.runFfmpeg(ffmpegPath, [
         "-hide_banner",
         "-loglevel",
@@ -662,24 +702,10 @@ export class GameRecorderManager {
         ...(hasAudio ? ["-map", "0:a:0?"] : []),
         "-c:v",
         "copy",
-        ...(hasAudio
-          ? [
-              "-c:a",
-              "libopus",
-              "-b:a",
-              String(GAME_RECORDER_AUDIO_BITRATE),
-              "-ar",
-              String(GAME_RECORDER_AUDIO_SAMPLE_RATE),
-              "-ac",
-              String(GAME_RECORDER_AUDIO_CHANNELS),
-              "-vbr",
-              "on",
-              "-compression_level",
-              "10",
-              "-af",
-              `aresample=${GAME_RECORDER_AUDIO_SAMPLE_RATE}:async=1000:first_pts=0`,
-            ]
-          : []),
+        ...(hasAudio ? audioArguments : []),
+        // Players should be able to open the clip before the whole file is
+        // read; without this an MP4's index sits at the end of the file.
+        ...(container === "mp4" ? ["-movflags", "+faststart"] : []),
         "-n",
         outputPath,
       ]);
