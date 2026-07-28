@@ -13,6 +13,7 @@ import { SettingsExclusionList } from "./settings-exclusion-list";
 import { SettingsRiot } from "./settings-riot";
 import { SettingsUbisoft } from "./settings-ubisoft";
 import { SettingsEa } from "./settings-ea";
+import { SettingsSpotify } from "./settings-spotify";
 import { useAppSelector } from "@renderer/hooks";
 import { HelperText, SectionHeading } from "@renderer/components";
 
@@ -151,6 +152,23 @@ export function SettingsContextIntegrations() {
 
   return (
     <div className="settings-context-panel">
+      <div className="settings-context-panel__group">
+        <SectionHeading
+          title="Music providers"
+          hint="Choose an optional music source while GameHub Music remains the default."
+        />
+        <div className="settings-integration-list">
+          <IntegrationItem
+            id="spotify"
+            title="Spotify Connect"
+            expanded={expanded.has("spotify")}
+            onToggle={toggle}
+          >
+            <SettingsSpotify />
+          </IntegrationItem>
+        </div>
+      </div>
+
       <div className="settings-context-panel__group">
         <SectionHeading
           title="Libraries"

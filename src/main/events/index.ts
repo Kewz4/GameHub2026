@@ -19,6 +19,7 @@ import "./misc";
 import "./notifications";
 import "./overlay";
 import "./game-recorder";
+import "./game-process-control";
 import "./music-player";
 import "./spotify";
 import "./profile";

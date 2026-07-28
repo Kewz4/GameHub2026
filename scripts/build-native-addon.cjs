@@ -20,6 +20,10 @@ const cargoTargetDir = path.join(
 );
 const outputDir = path.join(projectRoot, "hydra-native");
 const outputNodePath = path.join(outputDir, "hydra-native.node");
+const outputPresentMonBridgePath = path.join(
+  outputDir,
+  "presentmon-bridge.exe"
+);
 
 const sourceLibraryNameByPlatform = {
   linux: "libhydra_native.so",
@@ -106,6 +110,20 @@ const build = async () => {
 
   fs.mkdirSync(outputDir, { recursive: true });
   fs.copyFileSync(sourceLibraryPath, outputNodePath);
+
+  if (process.platform === "win32") {
+    const sourcePresentMonBridgePath = path.join(
+      cargoTargetDir,
+      "release",
+      "presentmon-bridge.exe"
+    );
+    if (!fs.existsSync(sourcePresentMonBridgePath)) {
+      throw new Error(
+        `PresentMon bridge build output not found at ${sourcePresentMonBridgePath}`
+      );
+    }
+    fs.copyFileSync(sourcePresentMonBridgePath, outputPresentMonBridgePath);
+  }
 
   await copySidecarLibrariesOnWindows(path.dirname(sourceLibraryPath));
   await ensureDepsResolvableOnLinux();

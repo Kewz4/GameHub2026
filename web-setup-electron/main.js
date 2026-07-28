@@ -1,23 +1,24 @@
-const {
-  app,
-  BrowserWindow,
-  ipcMain,
-  shell,
-  dialog,
-} = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
 const path = require("path");
 const https = require("https");
 const fs = require("fs");
 const os = require("os");
 const { exec, execFile, spawn } = require("child_process");
 const { promisify } = require("util");
+const packageMetadata = require("./package.json");
 
 const execAsync = promisify(exec);
 
 const REPO = "Kewz4/GameHub2026";
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
+const ASSET_API_PATH_PREFIX = `/repos/${REPO}/releases/assets/`;
+const UPDATER_TOKEN =
+  process.env.GAMEHUB_UPDATER_GH_TOKEN ||
+  packageMetadata.gamehubUpdaterToken ||
+  "";
 const WINDOW_WIDTH = 560;
 const WINDOW_HEIGHT = 420;
+const MAX_HTTPS_REDIRECTS = 5;
 
 let mainWindow = null;
 
@@ -42,15 +43,33 @@ function createWindow() {
   mainWindow.loadFile("index.html");
 }
 
-function httpsGet(url, headers = {}) {
+function httpsGet(url, headers = {}, redirectCount = 0) {
   return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(url);
+    const requestHeaders = {
+      "User-Agent": "GameHub-WebSetup",
+      ...headers,
+    };
+
+    // The repository is private. Authenticate only requests sent directly to
+    // GitHub's API; asset API requests redirect to a signed CDN URL, and the
+    // read-only token must never follow that cross-origin redirect.
+    delete requestHeaders.Authorization;
+    delete requestHeaders.authorization;
+    if (
+      parsedUrl.protocol === "https:" &&
+      parsedUrl.hostname === "api.github.com"
+    ) {
+      if (UPDATER_TOKEN) {
+        requestHeaders.Authorization = `Bearer ${UPDATER_TOKEN}`;
+      }
+      requestHeaders["X-GitHub-Api-Version"] = "2022-11-28";
+    }
+
     const req = https.get(
-      url,
+      parsedUrl,
       {
-        headers: {
-          "User-Agent": "GameHub-WebSetup",
-          ...headers,
-        },
+        headers: requestHeaders,
       },
       (res) => {
         if (
@@ -58,7 +77,19 @@ function httpsGet(url, headers = {}) {
           res.statusCode < 400 &&
           res.headers.location
         ) {
-          httpsGet(res.headers.location, headers).then(resolve, reject);
+          res.resume();
+          if (redirectCount >= MAX_HTTPS_REDIRECTS) {
+            reject(new Error("Too many redirects while downloading GameHub."));
+            return;
+          }
+          const redirectUrl = new URL(
+            res.headers.location,
+            parsedUrl
+          ).toString();
+          httpsGet(redirectUrl, headers, redirectCount + 1).then(
+            resolve,
+            reject
+          );
           return;
         }
         if (res.statusCode !== 200) {
@@ -73,14 +104,27 @@ function httpsGet(url, headers = {}) {
 }
 
 async function httpsGetJSON(url) {
-  const res = await httpsGet(url, { Accept: "application/json" });
+  const res = await httpsGet(url, {
+    Accept: "application/vnd.github+json",
+  });
   let data = "";
   for await (const chunk of res) data += chunk;
   return JSON.parse(data);
 }
 
 async function downloadFile(url, destPath, onProgress) {
-  const res = await httpsGet(url);
+  const assetUrl = new URL(url);
+  if (
+    assetUrl.protocol !== "https:" ||
+    assetUrl.hostname !== "api.github.com" ||
+    !assetUrl.pathname.startsWith(ASSET_API_PATH_PREFIX)
+  ) {
+    throw new Error("GameHub refused an untrusted release asset URL.");
+  }
+
+  const res = await httpsGet(url, {
+    Accept: "application/octet-stream",
+  });
   const total = parseInt(res.headers["content-length"] || "0", 10);
   let downloaded = 0;
 
@@ -105,12 +149,17 @@ async function downloadFile(url, destPath, onProgress) {
 }
 
 async function getLatestRelease() {
+  if (!UPDATER_TOKEN) {
+    throw new Error(
+      "This WebSetup build is missing private release access. Download the full GameHub installer instead."
+    );
+  }
   const release = await httpsGetJSON(API_URL);
   return {
     tag: release.tag_name,
     assets: (release.assets || []).map((a) => ({
       name: a.name,
-      url: a.browser_download_url,
+      url: a.url,
       size: a.size,
     })),
   };
@@ -122,6 +171,28 @@ function findAsset(assets, pattern, exclude) {
   return assets.find(
     (a) => regex.test(a.name) && (!excludeRegex || !excludeRegex.test(a.name))
   );
+}
+
+function resolveLinuxPackageManager() {
+  let distribution = "";
+  try {
+    distribution = fs.readFileSync("/etc/os-release", "utf8").toLowerCase();
+  } catch {}
+
+  if (fs.existsSync("/usr/bin/apt-get")) return "apt";
+  if (fs.existsSync("/usr/bin/dnf")) return "dnf";
+  if (fs.existsSync("/usr/bin/zypper")) return "zypper";
+
+  if (
+    /(?:^|\n)(?:id|id_like)=.*(?:debian|ubuntu|mint|pop)/m.test(distribution)
+  ) {
+    return "apt";
+  }
+  if (/(?:^|\n)(?:id|id_like)=.*(?:fedora|rhel|centos)/m.test(distribution)) {
+    return "dnf";
+  }
+  if (/(?:^|\n)(?:id|id_like)=.*suse/m.test(distribution)) return "zypper";
+  return "appimage";
 }
 
 async function extractZip(zipPath, destDir) {
@@ -167,9 +238,10 @@ async function performInstall(event, release) {
   } else if (platform === "linux") {
     const debAsset = findAsset(release.assets, "\\.deb$");
     const rpmAsset = findAsset(release.assets, "\\.rpm$");
-    const appImageAsset = findAsset(release.assets, "\\.appimage$");
+    const appImageAsset = findAsset(release.assets, "\\.appimage$", "websetup");
+    const packageManager = resolveLinuxPackageManager();
 
-    if (debAsset) {
+    if (packageManager === "apt" && debAsset) {
       const debPath = path.join(tmpDir, debAsset.name);
       event.reply("setup:status", `Downloading ${debAsset.name}...`);
       await downloadFile(debAsset.url, debPath, (progress) => {
@@ -178,14 +250,21 @@ async function performInstall(event, release) {
       event.reply("setup:status", "Installing (needs sudo)...");
       await execAsync(`sudo apt-get install -y "${debPath}"`);
       event.reply("setup:done", { mode: "install" });
-    } else if (rpmAsset) {
+    } else if (
+      (packageManager === "dnf" || packageManager === "zypper") &&
+      rpmAsset
+    ) {
       const rpmPath = path.join(tmpDir, rpmAsset.name);
       event.reply("setup:status", `Downloading ${rpmAsset.name}...`);
       await downloadFile(rpmAsset.url, rpmPath, (progress) => {
         event.reply("setup:progress", progress);
       });
       event.reply("setup:status", "Installing (needs sudo)...");
-      await execAsync(`sudo dnf install -y "${rpmPath}"`);
+      await execAsync(
+        packageManager === "zypper"
+          ? `sudo zypper --non-interactive install "${rpmPath}"`
+          : `sudo dnf install -y "${rpmPath}"`
+      );
       event.reply("setup:done", { mode: "install" });
     } else if (appImageAsset) {
       const appPath = path.join(
@@ -198,10 +277,9 @@ async function performInstall(event, release) {
       const binDir = path.join(os.homedir(), ".local", "bin");
       fs.mkdirSync(path.dirname(appPath), { recursive: true });
       fs.mkdirSync(binDir, { recursive: true });
-      fs.mkdirSync(
-        path.join(os.homedir(), ".local", "share", "applications"),
-        { recursive: true }
-      );
+      fs.mkdirSync(path.join(os.homedir(), ".local", "share", "applications"), {
+        recursive: true,
+      });
 
       event.reply("setup:status", `Downloading ${appImageAsset.name}...`);
       await downloadFile(appImageAsset.url, appPath, (progress) => {
@@ -221,7 +299,13 @@ Type=Application
 Categories=Game;
 MimeType=x-scheme-handler/hydralauncher;`;
       fs.writeFileSync(
-        path.join(os.homedir(), ".local", "share", "applications", "gamehub.desktop"),
+        path.join(
+          os.homedir(),
+          ".local",
+          "share",
+          "applications",
+          "gamehub.desktop"
+        ),
         desktopEntry
       );
 
@@ -269,9 +353,8 @@ async function performPortable(event, release, targetDir) {
 
     event.reply("setup:done", { mode: "portable", path: targetDir });
   } else if (platform === "linux") {
-    const asset = findAsset(release.assets, "\\.appimage$");
-    if (!asset)
-      throw new Error("No AppImage found in release " + release.tag);
+    const asset = findAsset(release.assets, "\\.appimage$", "websetup");
+    if (!asset) throw new Error("No AppImage found in release " + release.tag);
 
     const appPath = path.join(targetDir, "GameHub.AppImage");
     fs.mkdirSync(targetDir, { recursive: true });

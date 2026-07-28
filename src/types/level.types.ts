@@ -238,6 +238,9 @@ export interface UserPreferences {
   /** Spotify app client ID (public, PKCE) for the overlay's Now-playing widget.
    *  The user registers their own Spotify app and pastes its client ID here. */
   spotifyClientId?: string | null;
+  /** Music remains on GameHub's built-in provider unless the user explicitly
+   *  opts into the experimental Spotify Connect controller. */
+  musicProvider?: import("./spotify.types").MusicProvider;
   /** Apps pinned to the overlay's quick launcher (launch Discord/OBS/etc.
    *  without leaving the game). */
   pinnedApps?: import("./overlay.types").PinnedApp[];

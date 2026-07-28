@@ -1,15 +1,25 @@
 import { db } from "../level";
 
-/** Stored Spotify OAuth tokens (Authorization Code + PKCE). The client ID is
- *  configured separately in user preferences; only the tokens live here. */
-export interface SpotifyAuth {
+/** Legacy row from the original Spotify proof-of-concept. Read only so it can
+ *  be migrated into Electron safeStorage on the next launch. */
+export interface SpotifyLegacyAuth {
   accessToken: string;
   refreshToken: string;
-  /** Epoch ms after which the access token must be refreshed. */
   expiresAt: number;
 }
 
-export const spotifyAuthSublevel = db.sublevel<string, SpotifyAuth>(
+/** OAuth material is encrypted as one authenticated OS-protected payload.
+ *  Neither access nor refresh tokens are left as LevelDB JSON fields. */
+export interface SpotifyEncryptedAuth {
+  version: 2;
+  encryptedPayload: string;
+  /** Non-secret timestamp used to show the six-month reconnect deadline. */
+  authorizedAt: number;
+}
+
+export type SpotifyStoredAuth = SpotifyLegacyAuth | SpotifyEncryptedAuth;
+
+export const spotifyAuthSublevel = db.sublevel<string, SpotifyStoredAuth>(
   "spotifyAuth",
   { valueEncoding: "json" }
 );

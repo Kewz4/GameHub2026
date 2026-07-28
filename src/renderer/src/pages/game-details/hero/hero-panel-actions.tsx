@@ -10,24 +10,23 @@ import {
   ShareAndroidIcon,
 } from "@primer/octicons-react";
 import { Button, Modal } from "@renderer/components";
-import { XCircle } from "lucide-react";
+import { PauseCircle, PlayCircle, XCircle } from "lucide-react";
 import {
   useDownload,
   useLibrary,
   useToast,
   useUserDetails,
 } from "@renderer/hooks";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { gameDetailsContext } from "@renderer/context";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
 import { getClassicsLaunchErrorCode } from "@renderer/helpers";
 import { systemForGame } from "@renderer/pages/library/console-filter";
-import type { EmulatorSystem } from "@types";
+import type { EmulatorSystem, GameProcessControlState } from "@types";
 
 import "./hero-panel-actions.scss";
-import { useEffect } from "react";
 
 export function HeroPanelActions() {
   const [toggleLibraryGameDisabled, setToggleLibraryGameDisabled] =
@@ -64,6 +63,36 @@ export function HeroPanelActions() {
   const navigate = useNavigate();
 
   const { t } = useTranslation("game_details");
+  const [gameProcessState, setGameProcessState] =
+    useState<GameProcessControlState | null>(null);
+  const [gameProcessBusy, setGameProcessBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isGameRunning || !game) {
+      setGameProcessState(null);
+      return;
+    }
+
+    let active = true;
+    const applyState = (state: GameProcessControlState) => {
+      if (
+        active &&
+        state.shop === game.shop &&
+        state.objectId === game.objectId
+      ) {
+        setGameProcessState(state);
+      }
+    };
+    void window.electron
+      .getActiveGameProcessState()
+      .then(applyState)
+      .catch(() => undefined);
+    const unsubscribe = window.electron.onGameProcessControlState(applyState);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [game, isGameRunning]);
 
   // For console/emulated games, track whether the emulator is installed so the
   // action button can say "Set up emulator" and the download can warn first.
@@ -305,6 +334,25 @@ export function HeroPanelActions() {
     if (game) window.electron.closeGame(game.shop, game.objectId);
   };
 
+  const toggleGamePaused = () => {
+    if (!gameProcessState || gameProcessBusy) return;
+    setGameProcessBusy(true);
+    const request =
+      gameProcessState.status === "paused"
+        ? window.electron.resumeActiveGame()
+        : window.electron.pauseActiveGame();
+    void request
+      .then(setGameProcessState)
+      .catch(() =>
+        showErrorToast(
+          gameProcessState.status === "paused"
+            ? "Could not resume the game"
+            : "Could not pause the game"
+        )
+      )
+      .finally(() => setGameProcessBusy(false));
+  };
+
   const handleShareGame = () => {
     const targetShop = shop;
     const targetObjectId = objectId;
@@ -404,15 +452,39 @@ export function HeroPanelActions() {
 
     if (isGameRunning) {
       return (
-        <Button
-          onClick={closeGame}
-          theme="outline"
-          disabled={deleting}
-          className="hero-panel-actions__action"
-        >
-          <XCircle size={18} />
-          {t("close")}
-        </Button>
+        <>
+          <Button
+            onClick={toggleGamePaused}
+            theme="outline"
+            disabled={
+              deleting ||
+              gameProcessBusy ||
+              (!gameProcessState?.canPause && !gameProcessState?.canResume)
+            }
+            className="hero-panel-actions__action"
+            title={
+              gameProcessState?.status === "paused"
+                ? "Resume the suspended game process"
+                : "Pause the game process"
+            }
+          >
+            {gameProcessState?.status === "paused" ? (
+              <PlayCircle size={18} />
+            ) : (
+              <PauseCircle size={18} />
+            )}
+            {gameProcessState?.status === "paused" ? "Resume" : "Pause"}
+          </Button>
+          <Button
+            onClick={closeGame}
+            theme="outline"
+            disabled={deleting}
+            className="hero-panel-actions__action"
+          >
+            <XCircle size={18} />
+            {t("close")}
+          </Button>
+        </>
       );
     }
 

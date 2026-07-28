@@ -14,7 +14,6 @@ import {
   MuteIcon,
   NoteIcon,
   PeopleIcon,
-  PinIcon,
   PlusIcon,
   SearchIcon,
   SyncIcon,
@@ -25,18 +24,28 @@ import {
   XIcon,
 } from "@primer/octicons-react";
 import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
   CircleAlert,
   Circle,
+  Clock3,
+  EyeOff,
   FolderOpen,
   History,
+  LayoutGrid,
   ListMusic,
   Music2,
   Pause,
+  PlayCircle,
   Play,
+  Power,
   Repeat,
   Repeat1,
   RotateCcw,
   Shuffle,
+  SlidersHorizontal,
   SkipBack,
   SkipForward,
   Square,
@@ -45,6 +54,7 @@ import {
 import type {
   AudioSession,
   GameRecorderState,
+  GameProcessControlState,
   HydraOverlayContext,
   HydraOverlayGamepadAction,
   HydraOverlayPerformance,
@@ -56,12 +66,30 @@ import type {
   RepeatMode,
   UserFriend,
 } from "@types";
+import { useAppSelector } from "@renderer/hooks";
 import { OverlayWidgetFrame } from "./overlay-widget-frame";
-import { type OverlayWidgetId, useOverlayLayout } from "./use-overlay-layout";
+import { SpotifyOverlayPanel } from "./spotify-overlay-panel";
+import {
+  OVERLAY_WIDGET_IDS,
+  type OverlayWidgetId,
+  useOverlayLayout,
+} from "./use-overlay-layout";
 import "./overlay.scss";
 
 type OverlayMode = "hidden" | "toast" | "pinned" | "full";
 type MusicTab = "now-playing" | "search" | "playlists";
+type AchievementFilter = "all" | "unlocked" | "locked" | "hidden" | "missable";
+
+const WIDGET_LABELS: Record<OverlayWidgetId, string> = {
+  performance: "Performance",
+  achievements: "Achievements",
+  capture: "Capture",
+  music: "Music",
+  friends: "Friends",
+  mixer: "Volume mixer",
+  "quick-launch": "Quick launch",
+  notes: "Notes",
+};
 
 const formatSessionTime = (startedAt: number) => {
   if (!startedAt) return "0:00";
@@ -71,6 +99,88 @@ const formatSessionTime = (startedAt: number) => {
   const s = seconds % 60;
   const pad = (value: number) => String(value).padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+};
+
+const padClockPart = (value: number) => String(value).padStart(2, "0");
+
+const OverlayLocalClock = () => {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let timeoutId: number | undefined;
+
+    const scheduleNextMinute = () => {
+      const currentTime = Date.now();
+      const delay = 60_000 - (currentTime % 60_000) + 50;
+      timeoutId = window.setTimeout(tick, delay);
+    };
+    const tick = () => {
+      setNow(new Date());
+      scheduleNextMinute();
+    };
+    const refresh = () => {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      tick();
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+
+    scheduleNextMinute();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, []);
+
+  const clockText = now.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const shortDateText = now.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const longDateText = now.toLocaleDateString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const machineTime = `${padClockPart(now.getHours())}:${padClockPart(now.getMinutes())}`;
+  const machineDate = [
+    now.getFullYear(),
+    padClockPart(now.getMonth() + 1),
+    padClockPart(now.getDate()),
+  ].join("-");
+
+  return (
+    <div
+      className="overlay-header__clock"
+      role="group"
+      aria-label="Local date and time"
+    >
+      <div className="overlay-header__clock-row">
+        <Clock3 size={12} aria-hidden="true" focusable="false" />
+        <time dateTime={machineTime} aria-label={`Local time: ${clockText}`}>
+          {clockText}
+        </time>
+      </div>
+      <div className="overlay-header__clock-row overlay-header__clock-row--date">
+        <CalendarDays size={12} aria-hidden="true" focusable="false" />
+        <time
+          dateTime={machineDate}
+          aria-label={`Today's date: ${longDateText}`}
+        >
+          {shortDateText}
+        </time>
+      </div>
+    </div>
+  );
 };
 
 const metricValue = (value: number | null) =>
@@ -88,7 +198,12 @@ const CONTROLLER_FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
   "select:not([disabled])",
   "[tabindex]:not([tabindex='-1'])",
+  "[data-controller-item]",
 ].join(",");
+
+const registerControllerItem = (element: HTMLElement | null) => {
+  if (element) element.tabIndex = -1;
+};
 
 const getControllerElements = () =>
   Array.from(
@@ -211,8 +326,32 @@ const adjustControllerRange = (
   input.dispatchEvent(new Event("change", { bubbles: true }));
 };
 
+const adjustControllerSelect = (
+  select: HTMLSelectElement,
+  direction: "previous" | "next"
+) => {
+  const enabledOptions = Array.from(select.options).filter(
+    (option) => !option.disabled
+  );
+  const currentIndex = enabledOptions.findIndex(
+    (option) => option.value === select.value
+  );
+  const offset = direction === "next" ? 1 : -1;
+  const next =
+    enabledOptions[
+      Math.min(enabledOptions.length - 1, Math.max(0, currentIndex + offset))
+    ];
+  if (!next || next.value === select.value) return;
+  select.value = next.value;
+  select.dispatchEvent(new Event("input", { bubbles: true }));
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+};
+
 export default function Overlay() {
   const location = useLocation();
+  const musicProvider =
+    useAppSelector((state) => state.userPreferences.value?.musicProvider) ??
+    "gamehub";
   const initialMode: OverlayMode = location.pathname.includes("overlay-fps")
     ? "pinned"
     : location.pathname.includes("overlay-toast")
@@ -232,18 +371,43 @@ export default function Overlay() {
   const [recorderState, setRecorderState] = useState<GameRecorderState | null>(
     null
   );
+  const [gameProcessState, setGameProcessState] =
+    useState<GameProcessControlState | null>(null);
+  const [gameProcessBusy, setGameProcessBusy] = useState(false);
   const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
+  const [widgetMenuOpen, setWidgetMenuOpen] = useState(false);
+  const [achievementFilter, setAchievementFilter] =
+    useState<AchievementFilter>("all");
+  const [expandedMixerPid, setExpandedMixerPid] = useState<number | null>(null);
+  const controllerRangeEditRef = useRef<HTMLInputElement | null>(null);
+  const controllerSelectEditRef = useRef<HTMLSelectElement | null>(null);
+  const rendererReadySentRef = useRef(false);
+  const contextRequestIdRef = useRef(0);
   const draggingPidRef = useRef<number | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const {
     beginWidgetDrag,
+    beginWidgetResize,
+    cycleWidgetSize,
     focusWidget,
     getWidgetStyle,
+    isWidgetVisible,
     layoutLocked,
     registerWidget,
     resetLayout,
     setLayoutLocked,
+    setWidgetVisible,
   } = useOverlayLayout(workspaceRef);
+
+  const widgetFrameProps = {
+    layoutLocked,
+    registerWidget,
+    onBeginDrag: beginWidgetDrag,
+    onBeginResize: beginWidgetResize,
+    onCycleSize: cycleWidgetSize,
+    onFocus: focusWidget,
+    onHide: (id: OverlayWidgetId) => setWidgetVisible(id, false),
+  };
 
   // ── Music player state ─────────────────────────────────────────────────────
   const [musicState, setMusicState] = useState<MusicPlayerState | null>(null);
@@ -255,16 +419,10 @@ export default function Overlay() {
   const [creatingPlaylist, setCreatingPlaylist] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [localProgressMs, setLocalProgressMs] = useState(0);
-  const [audioDurationMs, setAudioDurationMs] = useState(0);
-  const [playerVolume, setPlayerVolume] = useState(0.8);
-  const [playerMuted, setPlayerMuted] = useState(false);
+  const [musicVolumeOpen, setMusicVolumeOpen] = useState(false);
   const [localPlaybackError, setLocalPlaybackError] = useState<string | null>(
     null
   );
-  const audioRetryCount = useRef(0);
-  const lastAudioUrl = useRef<string | null>(null);
   const [playlistMenuTrackId, setPlaylistMenuTrackId] = useState<string | null>(
     null
   );
@@ -286,13 +444,13 @@ export default function Overlay() {
       .catch(() => undefined);
   }, []);
 
-  // Poll music state while full overlay is open.
+  // The launcher owns the persistent audio elements. The overlay only consumes
+  // pushed state and sends controls, avoiding duplicate playback windows.
   useEffect(() => {
     if (mode !== "full") return;
     refreshMusicState();
     refreshPlaylists();
-    const id = setInterval(refreshMusicState, 2000);
-    return () => clearInterval(id);
+    return window.electron.onMusicState(setMusicState);
   }, [mode, refreshMusicState, refreshPlaylists]);
 
   // ── Search with debounce ────────────────────────────────────────────────────
@@ -314,114 +472,6 @@ export default function Overlay() {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
   }, [searchQuery]);
-
-  // ── Audio playback ──────────────────────────────────────────────────────────
-  const audioUrl = musicState?.audioUrl;
-  const audioState = musicState?.state;
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (audioState === "playing" && audioUrl) {
-      if (audio.src !== audioUrl) {
-        audio.src = audioUrl;
-        audio.load();
-      }
-      audio.play().catch(() => {
-        setLocalPlaybackError(
-          "GameHub could not start audio playback. Try Play again."
-        );
-      });
-    } else if (audioState === "paused") {
-      audio.pause();
-    } else if (
-      audioState === "stopped" ||
-      audioState === "resolving" ||
-      audioState === "error"
-    ) {
-      audio.pause();
-      if (audioState === "stopped" || audioState === "error") {
-        audio.removeAttribute("src");
-        audio.load();
-      }
-    }
-  }, [audioUrl, audioState]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.volume = playerVolume;
-    audio.muted = playerMuted;
-  }, [playerMuted, playerVolume]);
-
-  useEffect(() => {
-    if (lastAudioUrl.current !== audioUrl) {
-      lastAudioUrl.current = audioUrl ?? null;
-      audioRetryCount.current = 0;
-      setLocalPlaybackError(null);
-    }
-  }, [audioUrl]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onTimeUpdate = () => {
-      setLocalProgressMs(audio.currentTime * 1000);
-    };
-
-    const onLoadedMetadata = () => {
-      setLocalProgressMs(0);
-      setAudioDurationMs(
-        Number.isFinite(audio.duration) ? audio.duration * 1000 : 0
-      );
-      setLocalPlaybackError(null);
-    };
-
-    const onEnded = () => {
-      window.electron
-        .musicNext()
-        .then(refreshMusicState)
-        .catch(() => undefined);
-    };
-
-    const onError = () => {
-      const index = musicState?.currentIndex ?? -1;
-      if (index >= 0 && audioRetryCount.current < 1) {
-        audioRetryCount.current += 1;
-        setLocalPlaybackError("Refreshing the audio stream…");
-        window.electron
-          .musicPlay(index)
-          .then(refreshMusicState)
-          .catch(() => {
-            setLocalPlaybackError(
-              "This track is not playable right now. Try another result."
-            );
-          });
-        return;
-      }
-      setLocalPlaybackError(
-        "This audio stream stopped responding. Try Play to refresh it."
-      );
-    };
-
-    const onCanPlay = () => setLocalPlaybackError(null);
-
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("loadedmetadata", onLoadedMetadata);
-    audio.addEventListener("ended", onEnded);
-    audio.addEventListener("error", onError);
-    audio.addEventListener("canplay", onCanPlay);
-
-    return () => {
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-      audio.removeEventListener("ended", onEnded);
-      audio.removeEventListener("error", onError);
-      audio.removeEventListener("canplay", onCanPlay);
-    };
-  }, [musicState?.currentIndex, refreshMusicState]);
 
   const handlePauseResume = useCallback(() => {
     if (!musicState) return;
@@ -484,8 +534,6 @@ export default function Overlay() {
           }
         : prev
     );
-    setLocalProgressMs(0);
-    setAudioDurationMs(0);
   }, []);
 
   const handleShuffleToggle = useCallback(() => {
@@ -547,13 +595,12 @@ export default function Overlay() {
   const handleRetryPlayback = useCallback(() => {
     const index = musicState?.currentIndex ?? -1;
     if (index < 0) return;
-    audioRetryCount.current = 0;
     setLocalPlaybackError(null);
     setMusicState((current) =>
       current ? { ...current, state: "resolving" } : current
     );
     window.electron
-      .musicPlay(index)
+      .musicRefreshCurrent()
       .then(refreshMusicState)
       .catch(() =>
         setLocalPlaybackError(
@@ -573,7 +620,6 @@ export default function Overlay() {
   );
 
   const handleClearQueue = useCallback(() => {
-    audioRef.current?.pause();
     window.electron.musicClearQueue().catch(() => undefined);
     setMusicState((prev) =>
       prev
@@ -587,20 +633,21 @@ export default function Overlay() {
           }
         : prev
     );
-    setLocalProgressMs(0);
-    setAudioDurationMs(0);
   }, []);
 
-  const handleSeek = useCallback((progressMs: number) => {
-    const audio = audioRef.current;
-    if (!audio || !Number.isFinite(audio.duration)) return;
-    const nextSeconds = Math.min(
-      audio.duration,
-      Math.max(0, progressMs / 1000)
-    );
-    audio.currentTime = nextSeconds;
-    setLocalProgressMs(nextSeconds * 1000);
-  }, []);
+  const handleSeek = useCallback(
+    (progressMs: number) => {
+      const nextProgressMs = Math.min(
+        musicState?.durationMs ?? progressMs,
+        Math.max(0, progressMs)
+      );
+      setMusicState((current) =>
+        current ? { ...current, progressMs: nextProgressMs } : current
+      );
+      void window.electron.musicSeek(nextProgressMs);
+    },
+    [musicState?.durationMs]
+  );
 
   const handleCreatePlaylist = useCallback(() => {
     if (!newPlaylistName.trim()) return;
@@ -658,16 +705,18 @@ export default function Overlay() {
   );
 
   // ── General overlay state ───────────────────────────────────────────────────
-  const refreshContext = useCallback(() => {
-    window.electron
-      .getOverlayContext()
-      .then((next) => {
-        if (next) {
-          setContext(next);
-          setPerformance(next.performance);
-        }
-      })
-      .catch(() => undefined);
+  const refreshContext = useCallback(async () => {
+    const requestId = ++contextRequestIdRef.current;
+    rendererReadySentRef.current = false;
+    try {
+      const next = await window.electron.getOverlayContext();
+      if (requestId !== contextRequestIdRef.current || !next) return false;
+      setContext(next);
+      setPerformance(next.performance);
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
   const refreshRecorderState = useCallback(() => {
@@ -714,9 +763,74 @@ export default function Overlay() {
     refreshRecorderState,
   ]);
 
+  const updateReplayDuration = useCallback(
+    (seconds: 15 | 30 | 45 | 60) => {
+      setRecorderState((current) =>
+        current
+          ? {
+              ...current,
+              configuration: {
+                ...current.configuration,
+                replayDurationSeconds: seconds,
+              },
+            }
+          : current
+      );
+      void window.electron
+        .updateUserPreferences({
+          gameRecorderReplayDurationSeconds: seconds,
+        })
+        .then(refreshRecorderState)
+        .catch(() =>
+          setRecorderNotice("Could not update the Instant Replay length.")
+        );
+    },
+    [refreshRecorderState]
+  );
+
+  const toggleGamePaused = useCallback(() => {
+    if (!gameProcessState || gameProcessBusy) return;
+    const action =
+      gameProcessState.status === "paused"
+        ? window.electron.resumeActiveGame()
+        : window.electron.pauseActiveGame();
+    setGameProcessBusy(true);
+    void action
+      .then(setGameProcessState)
+      .finally(() => setGameProcessBusy(false));
+  }, [gameProcessBusy, gameProcessState]);
+
+  const closeActiveGame = useCallback(() => {
+    if (!gameProcessState?.canClose || gameProcessBusy) return;
+    setGameProcessBusy(true);
+    void window.electron
+      .closeActiveGame()
+      .then(setGameProcessState)
+      .finally(() => setGameProcessBusy(false));
+  }, [gameProcessBusy, gameProcessState?.canClose]);
+
+  const stopControllerRangeEdit = useCallback(() => {
+    controllerRangeEditRef.current?.removeAttribute("data-controller-editing");
+    controllerRangeEditRef.current = null;
+    controllerSelectEditRef.current?.removeAttribute("data-controller-editing");
+    controllerSelectEditRef.current = null;
+  }, []);
+
   const handleControllerAction = useCallback(
     (action: HydraOverlayGamepadAction) => {
       if (action === "back") {
+        if (controllerRangeEditRef.current || controllerSelectEditRef.current) {
+          stopControllerRangeEdit();
+          return;
+        }
+        if (widgetMenuOpen) {
+          setWidgetMenuOpen(false);
+          return;
+        }
+        if (musicVolumeOpen) {
+          setMusicVolumeOpen(false);
+          return;
+        }
         if (playlistMenuTrackId) {
           setPlaylistMenuTrackId(null);
           return;
@@ -748,7 +862,9 @@ export default function Overlay() {
 
       if (action === "previous-tab" || action === "next-tab") {
         const tabs = Array.from(
-          document.querySelectorAll<HTMLButtonElement>(".overlay-music__tab")
+          document.querySelectorAll<HTMLButtonElement>(
+            ".overlay-music__tab, .spotify-overlay-panel__tab"
+          )
         ).filter((tab) => tab.getBoundingClientRect().width > 0);
         if (!tabs.length) return;
         const activeIndex = Math.max(
@@ -764,22 +880,32 @@ export default function Overlay() {
 
       const active = document.activeElement;
       if (action === "accept") {
+        if (active instanceof HTMLInputElement && active.type === "range") {
+          if (controllerRangeEditRef.current === active) {
+            stopControllerRangeEdit();
+          } else {
+            stopControllerRangeEdit();
+            controllerRangeEditRef.current = active;
+            active.setAttribute("data-controller-editing", "true");
+          }
+          return;
+        }
+        if (active instanceof HTMLSelectElement) {
+          if (controllerSelectEditRef.current === active) {
+            stopControllerRangeEdit();
+          } else {
+            stopControllerRangeEdit();
+            controllerSelectEditRef.current = active;
+            active.setAttribute("data-controller-editing", "true");
+          }
+          return;
+        }
         if (
           active instanceof HTMLButtonElement ||
           (active instanceof HTMLInputElement &&
             ["button", "checkbox", "radio", "submit"].includes(active.type))
         ) {
           active.click();
-        } else if (
-          active instanceof HTMLInputElement ||
-          active instanceof HTMLTextAreaElement
-        ) {
-          active.focus({ preventScroll: true });
-        } else if (active instanceof HTMLSelectElement) {
-          active.click();
-        } else {
-          const recovered = focusControllerDefault(focusWidget);
-          if (recovered instanceof HTMLButtonElement) recovered.click();
         }
         return;
       }
@@ -787,19 +913,56 @@ export default function Overlay() {
       if (
         active instanceof HTMLInputElement &&
         active.type === "range" &&
+        controllerRangeEditRef.current === active &&
         (action === "left" || action === "right")
       ) {
         adjustControllerRange(active, action);
         return;
       }
 
+      if (
+        active instanceof HTMLSelectElement &&
+        controllerSelectEditRef.current === active
+      ) {
+        adjustControllerSelect(
+          active,
+          action === "left" || action === "up" ? "previous" : "next"
+        );
+        return;
+      }
+
+      stopControllerRangeEdit();
       moveControllerFocus(action, focusWidget);
     },
-    [creatingPlaylist, expandedPlaylistId, focusWidget, playlistMenuTrackId]
+    [
+      creatingPlaylist,
+      expandedPlaylistId,
+      focusWidget,
+      musicVolumeOpen,
+      playlistMenuTrackId,
+      stopControllerRangeEdit,
+      widgetMenuOpen,
+    ]
   );
 
   useEffect(() => {
-    refreshContext();
+    if (mode !== "full") return;
+    let active = true;
+    void window.electron
+      .getActiveGameProcessState()
+      .then((state) => active && setGameProcessState(state))
+      .catch(() => undefined);
+    const unsubscribe = window.electron.onGameProcessControlState((state) => {
+      if (active) setGameProcessState(state);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [mode]);
+
+  useEffect(() => {
+    void refreshContext();
     refreshRecorderState();
     window.electron
       .getOverlayNote()
@@ -809,14 +972,14 @@ export default function Overlay() {
     const unsubscribers = [
       window.electron.onOverlayMode((next) => setMode(next as OverlayMode)),
       window.electron.onOverlayShown(() => {
-        if (initialMode === "full") {
+        void refreshContext().then((loaded) => {
+          if (!loaded || initialMode !== "full") return;
           setMode("full");
           window.requestAnimationFrame(() => {
             document.body.classList.add("overlay-controller-navigation");
             focusControllerDefault(focusWidget);
           });
-        }
-        refreshContext();
+        });
       }),
       window.electron.onOverlayPerformance((value) => setPerformance(value)),
       window.electron.onOverlayPerformancePin((pinned) => {
@@ -836,6 +999,31 @@ export default function Overlay() {
     refreshRecorderState,
   ]);
 
+  useEffect(() => {
+    if (
+      initialMode !== "full" ||
+      mode !== "full" ||
+      !context ||
+      rendererReadySentRef.current
+    ) {
+      return;
+    }
+
+    const requestId = contextRequestIdRef.current;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        if (requestId !== contextRequestIdRef.current) return;
+        rendererReadySentRef.current = true;
+        void window.electron.overlayRendererReady();
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [context, initialMode, mode]);
+
   const [, forceTick] = useState(0);
   useEffect(() => {
     if (mode === "hidden") return;
@@ -845,16 +1033,27 @@ export default function Overlay() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") void window.electron.closeHydraOverlay();
+      if (event.key !== "Escape") return;
+      if (controllerRangeEditRef.current) {
+        stopControllerRangeEdit();
+      } else if (widgetMenuOpen) {
+        setWidgetMenuOpen(false);
+      } else if (musicVolumeOpen) {
+        setMusicVolumeOpen(false);
+      } else {
+        void window.electron.closeHydraOverlay();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [musicVolumeOpen, stopControllerRangeEdit, widgetMenuOpen]);
 
   useEffect(() => {
     document.body.classList.add("overlay-window");
-    const usePointerNavigation = () =>
+    const usePointerNavigation = () => {
       document.body.classList.remove("overlay-controller-navigation");
+      stopControllerRangeEdit();
+    };
     window.addEventListener("pointerdown", usePointerNavigation);
     return () => {
       window.removeEventListener("pointerdown", usePointerNavigation);
@@ -863,7 +1062,7 @@ export default function Overlay() {
         "overlay-controller-navigation"
       );
     };
-  }, []);
+  }, [stopControllerRangeEdit]);
 
   // Pinned quick-launch apps.
   useEffect(() => {
@@ -938,7 +1137,7 @@ export default function Overlay() {
     const load = () =>
       window.electron.hydraApi
         .get<ProfileFriends>("/profile/friends", {
-          params: { take: 12, skip: 0 },
+          params: { take: 100, skip: 0 },
         })
         .then((res) => active && setFriends(res.friends ?? []))
         .catch(() => undefined);
@@ -1020,10 +1219,19 @@ export default function Overlay() {
   const game = context?.game;
   const achievements = context?.achievements ?? [];
   const unlocked = achievements.filter((a) => a.unlocked).length;
+  const filteredAchievements = achievements.filter((achievement) => {
+    if (achievementFilter === "unlocked") return achievement.unlocked;
+    if (achievementFilter === "locked") return !achievement.unlocked;
+    if (achievementFilter === "hidden") return achievement.hidden;
+    if (achievementFilter === "missable") return achievement.missable;
+    return true;
+  });
 
   const nowPlaying = musicState?.nowPlaying;
-  const displayDurationMs =
-    audioDurationMs > 0 ? audioDurationMs : (musicState?.durationMs ?? 0);
+  const displayDurationMs = musicState?.durationMs ?? 0;
+  const localProgressMs = musicState?.progressMs ?? 0;
+  const playerVolume = musicState?.volume ?? 0.8;
+  const playerMuted = musicState?.muted ?? false;
   const npProgress =
     nowPlaying && displayDurationMs > 0
       ? Math.min(100, (localProgressMs / displayDurationMs) * 100)
@@ -1044,7 +1252,7 @@ export default function Overlay() {
             ) : (
               <div className="overlay-header__cover overlay-header__cover--empty" />
             )}
-            <div>
+            <div className="overlay-header__identity">
               <h1 className="overlay-header__title">
                 {game?.title ?? "In-game overlay"}
               </h1>
@@ -1054,11 +1262,115 @@ export default function Overlay() {
                 {context?.user ? ` · ${context.user.displayName}` : ""}
               </p>
             </div>
+            <OverlayLocalClock />
           </div>
           <div className="overlay-header__actions">
             <div className="overlay-header__shortcut">
               <kbd>{context?.shortcut ?? "Shift+F3"}</kbd>
               <span>Close overlay</span>
+            </div>
+            {(gameProcessState?.canPause ||
+              gameProcessState?.canResume ||
+              gameProcessState?.canClose) && (
+              <div
+                className="overlay-header__process"
+                aria-label="Game process controls"
+              >
+                <button
+                  type="button"
+                  className="overlay-header__process-button"
+                  onClick={toggleGamePaused}
+                  disabled={
+                    gameProcessBusy ||
+                    (!gameProcessState.canPause && !gameProcessState.canResume)
+                  }
+                  title={
+                    gameProcessState.status === "paused"
+                      ? "Resume game"
+                      : "Pause game"
+                  }
+                  aria-label={
+                    gameProcessState.status === "paused"
+                      ? "Resume game"
+                      : "Pause game"
+                  }
+                >
+                  {gameProcessState.status === "paused" ? (
+                    <PlayCircle size={16} />
+                  ) : (
+                    <Pause size={16} />
+                  )}
+                  <span>
+                    {gameProcessState.status === "paused" ? "Resume" : "Pause"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="overlay-header__process-button overlay-header__process-button--danger"
+                  onClick={closeActiveGame}
+                  disabled={gameProcessBusy || !gameProcessState.canClose}
+                  title="Close game"
+                  aria-label="Close game"
+                >
+                  <Power size={15} />
+                  <span>Close game</span>
+                </button>
+              </div>
+            )}
+            <div className="overlay-widget-menu-wrap">
+              <button
+                type="button"
+                className={`overlay-header__widget-button ${widgetMenuOpen ? "is-active" : ""}`}
+                onClick={() => setWidgetMenuOpen((open) => !open)}
+                aria-expanded={widgetMenuOpen}
+                aria-controls="overlay-widget-menu"
+              >
+                <LayoutGrid size={16} />
+                <span>Widgets</span>
+                <ChevronDown size={13} />
+              </button>
+              {widgetMenuOpen && (
+                <div
+                  id="overlay-widget-menu"
+                  className="overlay-widget-menu"
+                  role="group"
+                  aria-label="Show or hide overlay widgets"
+                >
+                  <div className="overlay-widget-menu__heading">
+                    <strong>Overlay widgets</strong>
+                    <small>Choose what appears in game</small>
+                  </div>
+                  {OVERLAY_WIDGET_IDS.map((widgetId) => {
+                    const unavailable =
+                      widgetId === "performance" && !performanceEnabled;
+                    return (
+                      <label
+                        key={widgetId}
+                        className={unavailable ? "is-disabled" : ""}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isWidgetVisible(widgetId) && !unavailable}
+                          disabled={unavailable}
+                          onChange={(event) =>
+                            setWidgetVisible(widgetId, event.target.checked)
+                          }
+                        />
+                        <span>{WIDGET_LABELS[widgetId]}</span>
+                        {unavailable && <small>Disabled in settings</small>}
+                      </label>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="overlay-widget-menu__reset"
+                    onClick={resetLayout}
+                  >
+                    <SyncIcon size={14} />
+                    Restore default layout
+                  </button>
+                </div>
+              )}
             </div>
             <button
               type="button"
@@ -1096,21 +1408,26 @@ export default function Overlay() {
 
         <div className="overlay-grid" ref={workspaceRef}>
           <div className="overlay-col overlay-col--left">
-            {performanceEnabled && (
+            {performanceEnabled && isWidgetVisible("performance") && (
               <OverlayWidgetFrame
                 widgetId="performance"
                 className="overlay-card--perf"
                 title="Performance"
                 icon={<GraphIcon size={16} />}
                 widgetStyle={getWidgetStyle("performance")}
-                layoutLocked={layoutLocked}
-                registerWidget={registerWidget}
-                onBeginDrag={beginWidgetDrag}
-                onFocus={focusWidget}
+                {...widgetFrameProps}
                 headerActions={
-                  <label className="overlay-pin">
+                  <label
+                    className="overlay-pin"
+                    title={
+                      context?.performancePinned
+                        ? "Unpin performance HUD"
+                        : "Pin performance HUD"
+                    }
+                  >
                     <input
                       type="checkbox"
+                      aria-label="Pin performance HUD"
                       checked={context?.performancePinned ?? false}
                       onChange={(event) =>
                         void window.electron.setOverlayPerformancePinned(
@@ -1118,7 +1435,7 @@ export default function Overlay() {
                         )
                       }
                     />
-                    Pin HUD
+                    <span>Pin HUD</span>
                   </label>
                 }
               >
@@ -1153,775 +1470,979 @@ export default function Overlay() {
               </OverlayWidgetFrame>
             )}
 
-            <OverlayWidgetFrame
-              widgetId="achievements"
-              className="overlay-card--ach"
-              title="Achievements"
-              icon={<TrophyIcon size={16} />}
-              meta={`${unlocked}/${achievements.length}`}
-              widgetStyle={getWidgetStyle("achievements")}
-              layoutLocked={layoutLocked}
-              registerWidget={registerWidget}
-              onBeginDrag={beginWidgetDrag}
-              onFocus={focusWidget}
-            >
-              <ul className="overlay-ach">
-                {achievements.slice(0, 6).map((achievement) => (
-                  <li
-                    key={achievement.name}
-                    className={`overlay-ach__item ${achievement.unlocked ? "is-unlocked" : ""}`}
-                  >
-                    <img src={achievement.icon} alt="" loading="lazy" />
-                    <div>
-                      <p>{achievement.displayName}</p>
-                      <small>{achievement.description}</small>
-                    </div>
-                  </li>
-                ))}
-                {achievements.length === 0 && (
-                  <li className="overlay-ach__empty">
-                    No achievements tracked for this game.
-                  </li>
-                )}
-              </ul>
-            </OverlayWidgetFrame>
+            {isWidgetVisible("achievements") && (
+              <OverlayWidgetFrame
+                widgetId="achievements"
+                className="overlay-card--ach"
+                title="Achievements"
+                icon={<TrophyIcon size={16} />}
+                meta={`${unlocked}/${achievements.length}`}
+                widgetStyle={getWidgetStyle("achievements")}
+                {...widgetFrameProps}
+              >
+                <div
+                  className="overlay-ach__filters"
+                  role="group"
+                  aria-label="Filter achievements"
+                >
+                  {(
+                    [
+                      ["all", "All"],
+                      ["unlocked", "Unlocked"],
+                      ["locked", "Locked"],
+                      ["hidden", "Hidden"],
+                      ["missable", "Missable"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={achievementFilter === value ? "is-active" : ""}
+                      aria-pressed={achievementFilter === value}
+                      onClick={() => setAchievementFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <ul className="overlay-ach">
+                  {filteredAchievements.map((achievement) => (
+                    <li
+                      key={achievement.name}
+                      ref={registerControllerItem}
+                      data-controller-item
+                      className={`overlay-ach__item ${
+                        achievement.unlocked ? "is-unlocked" : ""
+                      } ${achievement.hidden ? "is-hidden" : ""}`}
+                    >
+                      <img
+                        src={
+                          achievement.unlocked
+                            ? achievement.icon
+                            : achievement.icongray || achievement.icon
+                        }
+                        alt=""
+                        loading="lazy"
+                      />
+                      <div className="overlay-ach__body">
+                        <p>{achievement.displayName}</p>
+                        <small>
+                          {achievement.description ||
+                            (achievement.hidden
+                              ? "Hidden achievement"
+                              : "No description available")}
+                        </small>
+                        <span className="overlay-ach__badges">
+                          {achievement.unlocked ? (
+                            <em className="is-unlocked">
+                              <CheckCircle2 size={11} />
+                              Unlocked
+                            </em>
+                          ) : (
+                            <em>Locked</em>
+                          )}
+                          {achievement.hidden && (
+                            <em>
+                              <EyeOff size={11} />
+                              Hidden
+                            </em>
+                          )}
+                          {achievement.missable && (
+                            <em className="is-missable">
+                              <AlertTriangle size={11} />
+                              Missable
+                            </em>
+                          )}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                  {filteredAchievements.length === 0 && (
+                    <li className="overlay-ach__empty">
+                      {achievements.length === 0
+                        ? "No achievements tracked for this game."
+                        : "No achievements match this filter."}
+                    </li>
+                  )}
+                </ul>
+              </OverlayWidgetFrame>
+            )}
           </div>
 
           <div className="overlay-col overlay-col--center">
-            <OverlayWidgetFrame
-              widgetId="capture"
-              className="overlay-card--capture"
-              title="Capture"
-              icon={<Video size={16} />}
-              meta={
-                recorderState?.status === "recording"
-                  ? "Recording"
-                  : recorderState?.status === "saving"
-                    ? "Saving"
-                    : recorderState?.configuration.instantReplayEnabled
-                      ? `${Math.floor(recorderState.bufferedSeconds)}s buffered`
-                      : "Instant Replay off"
-              }
-              widgetStyle={getWidgetStyle("capture")}
-              layoutLocked={layoutLocked}
-              registerWidget={registerWidget}
-              onBeginDrag={beginWidgetDrag}
-              onFocus={focusWidget}
-            >
-              <div className="overlay-capture">
-                <div className="overlay-capture__status">
-                  <span
-                    className={`overlay-capture__dot overlay-capture__dot--${
-                      recorderState?.status ?? "waiting"
-                    }`}
-                    aria-hidden="true"
-                  />
-                  <div>
-                    <strong>
-                      {recorderState?.status === "recording"
-                        ? `Recording ${formatSessionTime(
-                            recorderState.recordingStartedAt ?? Date.now()
-                          )}`
-                        : recorderState?.status === "buffering"
-                          ? "Instant Replay is ready"
-                          : recorderState?.status === "saving"
-                            ? "Saving clip"
-                            : recorderState?.status === "disabled"
-                              ? "Capture is disabled"
-                              : recorderState?.status === "error"
-                                ? "Capture needs attention"
-                                : "Gameplay recorder"}
-                    </strong>
-                    <small>
-                      {recorderNotice ??
-                        recorderState?.errorMessage ??
-                        recorderState?.statusMessage ??
-                        `${recorderState?.configuration.resolution ?? "1080p"} · ${
-                          recorderState?.configuration.fps ?? 60
-                        } FPS`}
-                    </small>
-                  </div>
-                </div>
-
-                {recorderState?.configuration.instantReplayEnabled && (
-                  <div className="overlay-capture__buffer">
+            {isWidgetVisible("capture") && (
+              <OverlayWidgetFrame
+                widgetId="capture"
+                className="overlay-card--capture"
+                title="Capture"
+                icon={<Video size={16} />}
+                meta={
+                  recorderState?.status === "recording"
+                    ? "Recording"
+                    : recorderState?.status === "saving"
+                      ? "Saving"
+                      : recorderState?.configuration.instantReplayEnabled
+                        ? `${Math.floor(recorderState.bufferedSeconds)}s buffered`
+                        : "Instant Replay off"
+                }
+                widgetStyle={getWidgetStyle("capture")}
+                {...widgetFrameProps}
+              >
+                <div className="overlay-capture">
+                  <div className="overlay-capture__status">
                     <span
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          (recorderState.bufferedSeconds /
-                            recorderState.configuration.replayDurationSeconds) *
-                            100
-                        )}%`,
-                      }}
+                      className={`overlay-capture__dot overlay-capture__dot--${
+                        recorderState?.status ?? "waiting"
+                      }`}
+                      aria-hidden="true"
                     />
+                    <div>
+                      <strong>
+                        {recorderState?.status === "recording"
+                          ? `Recording ${formatSessionTime(
+                              recorderState.recordingStartedAt ?? Date.now()
+                            )}`
+                          : recorderState?.status === "buffering"
+                            ? "Instant Replay is ready"
+                            : recorderState?.status === "saving"
+                              ? "Saving clip"
+                              : recorderState?.status === "disabled"
+                                ? "Capture is disabled"
+                                : recorderState?.status === "error"
+                                  ? "Capture needs attention"
+                                  : "Gameplay recorder"}
+                      </strong>
+                      <small>
+                        {recorderNotice ??
+                          recorderState?.errorMessage ??
+                          recorderState?.statusMessage ??
+                          `${recorderState?.configuration.resolution ?? "1080p"} · ${
+                            recorderState?.configuration.fps ?? 60
+                          } FPS`}
+                      </small>
+                    </div>
                   </div>
-                )}
 
-                <div className="overlay-capture__actions">
-                  {recorderState?.status === "recording" ? (
+                  {recorderState?.configuration.instantReplayEnabled && (
+                    <div className="overlay-capture__replay">
+                      <label>
+                        <span>Instant Replay length</span>
+                        <select
+                          value={
+                            recorderState.configuration.replayDurationSeconds
+                          }
+                          onChange={(event) =>
+                            updateReplayDuration(
+                              Number(event.target.value) as 15 | 30 | 45 | 60
+                            )
+                          }
+                        >
+                          <option value={15}>Last 15 seconds</option>
+                          <option value={30}>Last 30 seconds</option>
+                          <option value={45}>Last 45 seconds</option>
+                          <option value={60}>Last 60 seconds</option>
+                        </select>
+                      </label>
+                      <div className="overlay-capture__buffer">
+                        <span
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (recorderState.bufferedSeconds /
+                                recorderState.configuration
+                                  .replayDurationSeconds) *
+                                100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="overlay-capture__actions">
+                    {recorderState?.status === "recording" ? (
+                      <button
+                        type="button"
+                        className="overlay-capture__button overlay-capture__button--recording"
+                        onClick={stopGameplayRecording}
+                      >
+                        <Square size={14} fill="currentColor" />
+                        Stop & save
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="overlay-capture__button"
+                        onClick={startGameplayRecording}
+                        disabled={
+                          !recorderState ||
+                          [
+                            "disabled",
+                            "unavailable",
+                            "waiting",
+                            "saving",
+                            "error",
+                          ].includes(recorderState.status)
+                        }
+                      >
+                        <Circle size={14} fill="currentColor" />
+                        Record
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      className="overlay-capture__button overlay-capture__button--recording"
-                      onClick={stopGameplayRecording}
-                    >
-                      <Square size={14} fill="currentColor" />
-                      Stop & save
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="overlay-capture__button"
-                      onClick={startGameplayRecording}
+                      className="overlay-capture__button overlay-capture__button--primary"
+                      data-controller-default
+                      onClick={saveInstantReplay}
                       disabled={
-                        !recorderState ||
-                        [
-                          "disabled",
-                          "unavailable",
-                          "waiting",
-                          "saving",
-                          "error",
-                        ].includes(recorderState.status)
+                        !recorderState?.configuration.instantReplayEnabled ||
+                        !recorderState.bufferedSeconds ||
+                        recorderState.status === "saving"
                       }
                     >
-                      <Circle size={14} fill="currentColor" />
-                      Record
+                      <History size={15} />
+                      Save last{" "}
+                      {recorderState?.configuration.replayDurationSeconds ?? 30}
+                      s
                     </button>
-                  )}
 
-                  <button
-                    type="button"
-                    className="overlay-capture__button overlay-capture__button--primary"
-                    data-controller-default
-                    onClick={saveInstantReplay}
-                    disabled={
-                      !recorderState?.configuration.instantReplayEnabled ||
-                      !recorderState.bufferedSeconds ||
-                      recorderState.status === "saving"
-                    }
-                  >
-                    <History size={15} />
-                    Save last{" "}
-                    {recorderState?.configuration.replayDurationSeconds ?? 30}s
-                  </button>
-
-                  <button
-                    type="button"
-                    className="overlay-capture__folder"
-                    onClick={() =>
-                      void window.electron.gameRecorderOpenOutputDirectory()
-                    }
-                    title="Open capture folder"
-                    aria-label="Open capture folder"
-                  >
-                    <FolderOpen size={15} />
-                  </button>
+                    <button
+                      type="button"
+                      className="overlay-capture__folder"
+                      onClick={() =>
+                        void window.electron.gameRecorderOpenOutputDirectory()
+                      }
+                      title="Open capture folder"
+                      aria-label="Open capture folder"
+                    >
+                      <FolderOpen size={15} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </OverlayWidgetFrame>
+              </OverlayWidgetFrame>
+            )}
 
-            <OverlayWidgetFrame
-              widgetId="music"
-              className="overlay-card--music"
-              title="Music"
-              icon={<Music2 size={16} />}
-              meta={
-                musicState?.audioSource === "deezer-preview"
-                  ? "30-second preview"
-                  : musicState?.audioSource === "youtube"
-                    ? "Full track"
-                    : undefined
-              }
-              widgetStyle={getWidgetStyle("music")}
-              layoutLocked={layoutLocked}
-              registerWidget={registerWidget}
-              onBeginDrag={beginWidgetDrag}
-              onFocus={focusWidget}
-            >
-              <div
-                className="overlay-music__tabs"
-                role="tablist"
-                aria-label="Music player views"
+            {isWidgetVisible("music") && (
+              <OverlayWidgetFrame
+                widgetId="music"
+                className="overlay-card--music"
+                title="Music"
+                icon={<Music2 size={16} />}
+                meta={
+                  musicProvider === "spotify"
+                    ? "Spotify Connect"
+                    : musicState?.audioSource === "deezer-preview"
+                      ? "30-second preview"
+                      : musicState?.audioSource === "youtube"
+                        ? "Full track"
+                        : undefined
+                }
+                widgetStyle={getWidgetStyle("music")}
+                {...widgetFrameProps}
               >
-                <button
-                  id="overlay-music-tab-now-playing"
-                  type="button"
-                  role="tab"
-                  aria-selected={musicTab === "now-playing"}
-                  aria-controls="overlay-music-panel-now-playing"
-                  tabIndex={musicTab === "now-playing" ? 0 : -1}
-                  className={`overlay-music__tab ${musicTab === "now-playing" ? "is-active" : ""}`}
-                  onClick={() => setMusicTab("now-playing")}
-                >
-                  <Music2 size={14} />
-                  Now playing
-                </button>
-                <button
-                  id="overlay-music-tab-search"
-                  type="button"
-                  role="tab"
-                  aria-selected={musicTab === "search"}
-                  aria-controls="overlay-music-panel-search"
-                  tabIndex={musicTab === "search" ? 0 : -1}
-                  className={`overlay-music__tab ${musicTab === "search" ? "is-active" : ""}`}
-                  onClick={() => setMusicTab("search")}
-                >
-                  <SearchIcon size={14} />
-                  Search
-                </button>
-                <button
-                  id="overlay-music-tab-playlists"
-                  type="button"
-                  role="tab"
-                  aria-selected={musicTab === "playlists"}
-                  aria-controls="overlay-music-panel-playlists"
-                  tabIndex={musicTab === "playlists" ? 0 : -1}
-                  className={`overlay-music__tab ${musicTab === "playlists" ? "is-active" : ""}`}
-                  onClick={() => setMusicTab("playlists")}
-                >
-                  <ListMusic size={14} />
-                  Playlists
-                </button>
-              </div>
+                {musicProvider === "spotify" ? (
+                  <SpotifyOverlayPanel
+                    isActive={mode === "full"}
+                    onOpenSettings={() =>
+                      void window.electron.spotifyOpenSettings()
+                    }
+                  />
+                ) : (
+                  <>
+                    <div
+                      className="overlay-music__tabs"
+                      role="tablist"
+                      aria-label="Music player views"
+                    >
+                      <button
+                        id="overlay-music-tab-now-playing"
+                        type="button"
+                        role="tab"
+                        aria-selected={musicTab === "now-playing"}
+                        aria-controls="overlay-music-panel-now-playing"
+                        tabIndex={musicTab === "now-playing" ? 0 : -1}
+                        className={`overlay-music__tab ${musicTab === "now-playing" ? "is-active" : ""}`}
+                        onClick={() => setMusicTab("now-playing")}
+                      >
+                        <Music2 size={14} />
+                        Now playing
+                      </button>
+                      <button
+                        id="overlay-music-tab-search"
+                        type="button"
+                        role="tab"
+                        aria-selected={musicTab === "search"}
+                        aria-controls="overlay-music-panel-search"
+                        tabIndex={musicTab === "search" ? 0 : -1}
+                        className={`overlay-music__tab ${musicTab === "search" ? "is-active" : ""}`}
+                        onClick={() => setMusicTab("search")}
+                      >
+                        <SearchIcon size={14} />
+                        Search
+                      </button>
+                      <button
+                        id="overlay-music-tab-playlists"
+                        type="button"
+                        role="tab"
+                        aria-selected={musicTab === "playlists"}
+                        aria-controls="overlay-music-panel-playlists"
+                        tabIndex={musicTab === "playlists" ? 0 : -1}
+                        className={`overlay-music__tab ${musicTab === "playlists" ? "is-active" : ""}`}
+                        onClick={() => setMusicTab("playlists")}
+                      >
+                        <ListMusic size={14} />
+                        Playlists
+                      </button>
+                    </div>
 
-              {musicTab === "now-playing" && (
-                <div
-                  id="overlay-music-panel-now-playing"
-                  className="overlay-music__np"
-                  role="tabpanel"
-                  aria-labelledby="overlay-music-tab-now-playing"
-                >
-                  {nowPlaying ? (
-                    <>
-                      <div className="overlay-music__np-top">
-                        {nowPlaying.coverArt ? (
-                          <img
-                            className="overlay-music__np-art"
-                            src={nowPlaying.coverArt}
-                            alt=""
-                          />
-                        ) : (
-                          <div className="overlay-music__np-art overlay-music__np-art--empty" />
-                        )}
-                        <div className="overlay-music__np-body">
-                          <p className="overlay-music__np-track">
-                            {nowPlaying.title}
-                          </p>
-                          <p className="overlay-music__np-artist">
-                            {nowPlaying.artist}
-                          </p>
-                          <p className="overlay-music__np-album">
-                            {nowPlaying.album}
-                          </p>
-                        </div>
-                      </div>
-                      <input
-                        className="overlay-music__np-bar"
-                        type="range"
-                        min={0}
-                        max={Math.max(1, displayDurationMs)}
-                        step={250}
-                        value={Math.min(localProgressMs, displayDurationMs)}
-                        onChange={(event) =>
-                          handleSeek(Number(event.target.value))
-                        }
-                        style={
-                          {
-                            "--track-progress": `${npProgress}%`,
-                          } as CSSProperties
-                        }
-                        aria-label="Track position"
-                      />
-                      <div className="overlay-music__np-time">
-                        <span>{formatDuration(localProgressMs / 1000)}</span>
-                        <span>{formatDuration(displayDurationMs / 1000)}</span>
-                      </div>
-                      {playbackError && (
-                        <div className="overlay-music__error" role="status">
-                          <CircleAlert size={15} aria-hidden="true" />
-                          <span>{playbackError}</span>
-                          <button
-                            type="button"
-                            onClick={handleRetryPlayback}
-                            title="Retry playback"
-                          >
-                            <RotateCcw size={14} />
-                            Retry
-                          </button>
-                        </div>
-                      )}
-                      {!playbackError && musicState.playbackNotice && (
-                        <div className="overlay-music__notice" role="status">
-                          <CircleAlert size={14} aria-hidden="true" />
-                          <span>{musicState.playbackNotice}</span>
-                        </div>
-                      )}
-                      <div className="overlay-music__np-ctrls">
-                        <button
-                          type="button"
-                          className={`overlay-music__mode ${musicState.shuffle ? "is-active" : ""}`}
-                          onClick={handleShuffleToggle}
-                          title={
-                            musicState.shuffle
-                              ? "Disable shuffle"
-                              : "Enable shuffle"
-                          }
-                          aria-label={
-                            musicState.shuffle
-                              ? "Disable shuffle"
-                              : "Enable shuffle"
-                          }
-                        >
-                          <Shuffle size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handlePrevious}
-                          aria-label="Previous track"
-                          title="Previous track"
-                        >
-                          <SkipBack size={18} fill="currentColor" />
-                        </button>
-                        <button
-                          type="button"
-                          className={`overlay-music__play ${musicState.state === "resolving" ? "is-loading" : ""}`}
-                          data-controller-default
-                          onClick={handlePauseResume}
-                          disabled={musicState.state === "resolving"}
-                          aria-label={
-                            musicState.state === "playing" ? "Pause" : "Play"
-                          }
-                        >
-                          {musicState.state === "resolving" ? (
-                            <span className="overlay-music__spinner" />
-                          ) : musicState.state === "playing" ? (
-                            <Pause size={19} fill="currentColor" />
-                          ) : (
-                            <Play size={19} fill="currentColor" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleNext}
-                          aria-label="Next track"
-                          title="Next track"
-                        >
-                          <SkipForward size={18} fill="currentColor" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleStop}
-                          aria-label="Stop"
-                          title="Stop"
-                        >
-                          <Square size={16} fill="currentColor" />
-                        </button>
-                        <button
-                          type="button"
-                          className={`overlay-music__mode ${musicState.repeat !== "none" ? "is-active" : ""}`}
-                          onClick={handleRepeatCycle}
-                          title={`Repeat: ${musicState.repeat}`}
-                          aria-label={`Repeat: ${musicState.repeat}`}
-                        >
-                          {musicState.repeat === "one" ? (
-                            <Repeat1 size={17} />
-                          ) : (
-                            <Repeat size={17} />
-                          )}
-                        </button>
-                        <div className="overlay-music__volume">
-                          <button
-                            type="button"
-                            onClick={() => setPlayerMuted((muted) => !muted)}
-                            aria-label={
-                              playerMuted ? "Unmute music" : "Mute music"
-                            }
-                            title={playerMuted ? "Unmute music" : "Mute music"}
-                          >
-                            {playerMuted || playerVolume === 0 ? (
-                              <MuteIcon size={16} />
-                            ) : (
-                              <UnmuteIcon size={16} />
-                            )}
-                          </button>
-                          <input
-                            type="range"
-                            min={0}
-                            max={100}
-                            value={Math.round(playerVolume * 100)}
-                            onChange={(event) => {
-                              const nextVolume =
-                                Number(event.target.value) / 100;
-                              setPlayerVolume(nextVolume);
-                              if (nextVolume > 0) setPlayerMuted(false);
-                            }}
-                            aria-label="Music volume"
-                          />
-                        </div>
-                      </div>
-                      {musicState.queue.length > 0 && (
-                        <div className="overlay-music__queue">
-                          <div className="overlay-music__queue-head">
-                            <span>Up next ({musicState.queue.length})</span>
-                            <button
-                              type="button"
-                              className="overlay-music__queue-clear"
-                              onClick={handleClearQueue}
-                            >
-                              <TrashIcon size={12} />
-                              Clear
-                            </button>
-                          </div>
-                          <ul className="overlay-music__queue-list">
-                            {musicState.queue.map((track, i) => (
-                              <li
-                                key={`${track.id}-${i}`}
-                                className={`overlay-music__queue-item ${i === musicState.currentIndex ? "is-current" : ""}`}
-                              >
-                                <button
-                                  type="button"
-                                  className="overlay-music__queue-main"
-                                  onClick={() => handlePlayQueueIndex(i)}
-                                  aria-label={`Play ${track.title}`}
-                                >
-                                  {track.coverArt ? (
-                                    <img
-                                      className="overlay-music__queue-art"
-                                      src={track.coverArt}
-                                      alt=""
-                                    />
-                                  ) : (
-                                    <div className="overlay-music__queue-art overlay-music__queue-art--empty" />
-                                  )}
-                                  <div className="overlay-music__queue-body">
-                                    <span className="overlay-music__queue-title">
-                                      {track.title}
-                                    </span>
-                                    <span className="overlay-music__queue-artist">
-                                      {track.artist}
-                                    </span>
-                                  </div>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="overlay-music__queue-rm"
-                                  onClick={() => handleRemoveFromQueue(i)}
-                                  aria-label="Remove from queue"
-                                >
-                                  <XIcon size={12} />
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p className="overlay-ach__empty">
-                      Nothing playing. Search for a track to get started.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {musicTab === "search" && (
-                <div
-                  id="overlay-music-panel-search"
-                  className="overlay-music__search"
-                  role="tabpanel"
-                  aria-labelledby="overlay-music-tab-search"
-                >
-                  <label className="overlay-music__search-field">
-                    <SearchIcon size={16} aria-hidden="true" />
-                    <input
-                      className="overlay-music__search-input"
-                      type="text"
-                      placeholder="Search tracks and artists"
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                    />
-                  </label>
-                  <div className="overlay-music__search-results">
-                    {searching ? (
-                      <p className="overlay-ach__empty">Searching…</p>
-                    ) : searchResults.length > 0 ? (
-                      <ul className="overlay-music__search-list">
-                        {searchResults.map((track) => (
-                          <li
-                            key={track.id}
-                            className="overlay-music__search-item"
-                          >
-                            {track.coverArt ? (
-                              <img
-                                className="overlay-music__search-art"
-                                src={track.coverArt}
-                                alt=""
-                              />
-                            ) : (
-                              <div className="overlay-music__search-art overlay-music__search-art--empty" />
-                            )}
-                            <div className="overlay-music__search-body">
-                              <span className="overlay-music__search-title">
-                                {track.title}
+                    {musicTab === "now-playing" && (
+                      <div
+                        id="overlay-music-panel-now-playing"
+                        className="overlay-music__np"
+                        role="tabpanel"
+                        aria-labelledby="overlay-music-tab-now-playing"
+                      >
+                        {nowPlaying ? (
+                          <>
+                            <div className="overlay-music__np-top">
+                              {nowPlaying.coverArt ? (
+                                <img
+                                  className="overlay-music__np-art"
+                                  src={nowPlaying.coverArt}
+                                  alt=""
+                                />
+                              ) : (
+                                <div className="overlay-music__np-art overlay-music__np-art--empty" />
+                              )}
+                              <div className="overlay-music__np-body">
+                                <p className="overlay-music__np-track">
+                                  {nowPlaying.title}
+                                </p>
+                                <p className="overlay-music__np-artist">
+                                  {nowPlaying.artist}
+                                </p>
+                                <p className="overlay-music__np-album">
+                                  {nowPlaying.album}
+                                </p>
+                              </div>
+                            </div>
+                            <input
+                              className="overlay-music__np-bar"
+                              type="range"
+                              min={0}
+                              max={Math.max(1, displayDurationMs)}
+                              step={250}
+                              value={Math.min(
+                                localProgressMs,
+                                displayDurationMs
+                              )}
+                              onChange={(event) =>
+                                handleSeek(Number(event.target.value))
+                              }
+                              style={
+                                {
+                                  "--track-progress": `${npProgress}%`,
+                                } as CSSProperties
+                              }
+                              aria-label="Track position"
+                            />
+                            <div className="overlay-music__np-time">
+                              <span>
+                                {formatDuration(localProgressMs / 1000)}
                               </span>
-                              <span className="overlay-music__search-artist">
-                                {track.artist}
+                              <span>
+                                {formatDuration(displayDurationMs / 1000)}
                               </span>
                             </div>
-                            <div className="overlay-music__search-actions">
-                              <button
-                                type="button"
-                                className="overlay-music__search-play"
-                                onClick={() => handlePlayTrack(track)}
-                                title={`Play ${track.title}`}
+                            {playbackError && (
+                              <div
+                                className="overlay-music__error"
+                                role="status"
                               >
-                                <Play size={13} fill="currentColor" />
-                                Play
-                              </button>
-                              <button
-                                type="button"
-                                className="overlay-music__search-add"
-                                onClick={() => handleAddToQueue(track)}
-                                title="Add to queue"
-                              >
-                                <PlusIcon size={13} />
-                                Queue
-                              </button>
-                              <div className="overlay-music__search-plist">
+                                <CircleAlert size={15} aria-hidden="true" />
+                                <span>{playbackError}</span>
                                 <button
                                   type="button"
-                                  className="overlay-music__search-plist-btn"
-                                  title="Add to playlist"
-                                  aria-label="Add to playlist"
-                                  aria-expanded={
-                                    playlistMenuTrackId === track.id
-                                  }
-                                  onClick={() =>
-                                    setPlaylistMenuTrackId((current) =>
-                                      current === track.id ? null : track.id
-                                    )
-                                  }
+                                  onClick={handleRetryPlayback}
+                                  title="Retry playback"
                                 >
-                                  <ListMusic size={14} />
+                                  <RotateCcw size={14} />
+                                  Retry
                                 </button>
-                                {playlistMenuTrackId === track.id && (
-                                  <div className="overlay-music__search-plist-drop">
-                                    {playlists.length > 0 ? (
-                                      playlists.map((pl) => (
-                                        <button
-                                          key={pl.id}
-                                          type="button"
-                                          onClick={() => {
-                                            handleAddToPlaylist(pl.id, track);
-                                            setPlaylistMenuTrackId(null);
-                                          }}
-                                        >
-                                          <PlusIcon size={12} />
-                                          {pl.name}
-                                        </button>
-                                      ))
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setMusicTab("playlists");
-                                          setCreatingPlaylist(true);
-                                          setPlaylistMenuTrackId(null);
-                                        }}
-                                      >
-                                        <PlusIcon size={12} />
-                                        Create a playlist
-                                      </button>
-                                    )}
+                              </div>
+                            )}
+                            {!playbackError && musicState.playbackNotice && (
+                              <div
+                                className="overlay-music__notice"
+                                role="status"
+                              >
+                                <CircleAlert size={14} aria-hidden="true" />
+                                <span>{musicState.playbackNotice}</span>
+                              </div>
+                            )}
+                            <div className="overlay-music__np-ctrls">
+                              <button
+                                type="button"
+                                className={`overlay-music__mode ${musicState.shuffle ? "is-active" : ""}`}
+                                onClick={handleShuffleToggle}
+                                title={
+                                  musicState.shuffle
+                                    ? "Disable shuffle"
+                                    : "Enable shuffle"
+                                }
+                                aria-label={
+                                  musicState.shuffle
+                                    ? "Disable shuffle"
+                                    : "Enable shuffle"
+                                }
+                              >
+                                <Shuffle size={17} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handlePrevious}
+                                aria-label="Previous track"
+                                title="Previous track"
+                              >
+                                <SkipBack size={18} fill="currentColor" />
+                              </button>
+                              <button
+                                type="button"
+                                className={`overlay-music__play ${musicState.state === "resolving" ? "is-loading" : ""}`}
+                                data-controller-default
+                                onClick={handlePauseResume}
+                                disabled={musicState.state === "resolving"}
+                                aria-label={
+                                  musicState.state === "playing"
+                                    ? "Pause"
+                                    : "Play"
+                                }
+                              >
+                                {musicState.state === "resolving" ? (
+                                  <span className="overlay-music__spinner" />
+                                ) : musicState.state === "playing" ? (
+                                  <Pause size={19} fill="currentColor" />
+                                ) : (
+                                  <Play size={19} fill="currentColor" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleNext}
+                                aria-label="Next track"
+                                title="Next track"
+                              >
+                                <SkipForward size={18} fill="currentColor" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleStop}
+                                aria-label="Stop"
+                                title="Stop"
+                              >
+                                <Square size={16} fill="currentColor" />
+                              </button>
+                              <button
+                                type="button"
+                                className={`overlay-music__mode ${musicState.repeat !== "none" ? "is-active" : ""}`}
+                                onClick={handleRepeatCycle}
+                                title={`Repeat: ${musicState.repeat}`}
+                                aria-label={`Repeat: ${musicState.repeat}`}
+                              >
+                                {musicState.repeat === "one" ? (
+                                  <Repeat1 size={17} />
+                                ) : (
+                                  <Repeat size={17} />
+                                )}
+                              </button>
+                              <div
+                                className={`overlay-music__volume ${musicVolumeOpen ? "is-open" : ""}`}
+                              >
+                                <button
+                                  type="button"
+                                  className="overlay-music__volume-trigger"
+                                  onClick={() =>
+                                    setMusicVolumeOpen((open) => !open)
+                                  }
+                                  aria-expanded={musicVolumeOpen}
+                                  aria-controls="overlay-music-volume-controls"
+                                  aria-label="Adjust music volume"
+                                  title="Adjust music volume"
+                                >
+                                  {playerMuted || playerVolume === 0 ? (
+                                    <MuteIcon size={16} />
+                                  ) : (
+                                    <UnmuteIcon size={16} />
+                                  )}
+                                  <span>
+                                    {playerMuted
+                                      ? "Muted"
+                                      : `${Math.round(playerVolume * 100)}%`}
+                                  </span>
+                                </button>
+                                {musicVolumeOpen && (
+                                  <div
+                                    id="overlay-music-volume-controls"
+                                    className="overlay-music__volume-panel"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setMusicState((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                muted: !playerMuted,
+                                              }
+                                            : current
+                                        );
+                                        void window.electron.musicSetVolume(
+                                          playerVolume,
+                                          !playerMuted
+                                        );
+                                      }}
+                                      aria-label={
+                                        playerMuted
+                                          ? "Unmute music"
+                                          : "Mute music"
+                                      }
+                                      title={
+                                        playerMuted
+                                          ? "Unmute music"
+                                          : "Mute music"
+                                      }
+                                    >
+                                      {playerMuted ? (
+                                        <MuteIcon size={15} />
+                                      ) : (
+                                        <UnmuteIcon size={15} />
+                                      )}
+                                    </button>
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={100}
+                                      value={Math.round(playerVolume * 100)}
+                                      onChange={(event) => {
+                                        const nextVolume =
+                                          Number(event.target.value) / 100;
+                                        setMusicState((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                volume: nextVolume,
+                                                muted:
+                                                  nextVolume > 0
+                                                    ? false
+                                                    : current.muted,
+                                              }
+                                            : current
+                                        );
+                                        void window.electron.musicSetVolume(
+                                          nextVolume,
+                                          nextVolume > 0 ? false : playerMuted
+                                        );
+                                      }}
+                                      aria-label="Music volume. Press Select to adjust, then Select again when done."
+                                    />
                                   </div>
                                 )}
                               </div>
                             </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : searchQuery.trim() ? (
-                      <p className="overlay-ach__empty">No results found.</p>
-                    ) : null}
-                  </div>
-                </div>
-              )}
+                            {musicState.queue.length > 0 && (
+                              <div className="overlay-music__queue">
+                                <div className="overlay-music__queue-head">
+                                  <span>
+                                    Up next ({musicState.queue.length})
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="overlay-music__queue-clear"
+                                    onClick={handleClearQueue}
+                                  >
+                                    <TrashIcon size={12} />
+                                    Clear
+                                  </button>
+                                </div>
+                                <ul className="overlay-music__queue-list">
+                                  {musicState.queue.map((track, i) => (
+                                    <li
+                                      key={`${track.id}-${i}`}
+                                      className={`overlay-music__queue-item ${i === musicState.currentIndex ? "is-current" : ""}`}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="overlay-music__queue-main"
+                                        onClick={() => handlePlayQueueIndex(i)}
+                                        aria-label={`Play ${track.title}`}
+                                      >
+                                        {track.coverArt ? (
+                                          <img
+                                            className="overlay-music__queue-art"
+                                            src={track.coverArt}
+                                            alt=""
+                                          />
+                                        ) : (
+                                          <div className="overlay-music__queue-art overlay-music__queue-art--empty" />
+                                        )}
+                                        <div className="overlay-music__queue-body">
+                                          <span className="overlay-music__queue-title">
+                                            {track.title}
+                                          </span>
+                                          <span className="overlay-music__queue-artist">
+                                            {track.artist}
+                                          </span>
+                                        </div>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="overlay-music__queue-rm"
+                                        onClick={() => handleRemoveFromQueue(i)}
+                                        aria-label="Remove from queue"
+                                      >
+                                        <XIcon size={12} />
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="overlay-ach__empty">
+                            Nothing playing. Search for a track to get started.
+                          </p>
+                        )}
+                      </div>
+                    )}
 
-              {musicTab === "playlists" && (
-                <div
-                  id="overlay-music-panel-playlists"
-                  className="overlay-music__playlists"
-                  role="tabpanel"
-                  aria-labelledby="overlay-music-tab-playlists"
-                >
-                  {creatingPlaylist ? (
-                    <div className="overlay-music__plist-create">
-                      <input
-                        className="overlay-music__plist-input"
-                        type="text"
-                        placeholder="Playlist name…"
-                        value={newPlaylistName}
-                        onChange={(event) =>
-                          setNewPlaylistName(event.target.value)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") handleCreatePlaylist();
-                          if (event.key === "Escape") {
-                            setCreatingPlaylist(false);
-                            setNewPlaylistName("");
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="overlay-music__plist-save"
-                        onClick={handleCreatePlaylist}
+                    {musicTab === "search" && (
+                      <div
+                        id="overlay-music-panel-search"
+                        className="overlay-music__search"
+                        role="tabpanel"
+                        aria-labelledby="overlay-music-tab-search"
                       >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        className="overlay-music__plist-cancel"
-                        onClick={() => {
-                          setCreatingPlaylist(false);
-                          setNewPlaylistName("");
-                        }}
+                        <label className="overlay-music__search-field">
+                          <SearchIcon size={16} aria-hidden="true" />
+                          <input
+                            className="overlay-music__search-input"
+                            type="text"
+                            placeholder="Search tracks and artists"
+                            value={searchQuery}
+                            onChange={(event) =>
+                              setSearchQuery(event.target.value)
+                            }
+                          />
+                        </label>
+                        <div className="overlay-music__search-results">
+                          {searching ? (
+                            <p className="overlay-ach__empty">Searching…</p>
+                          ) : searchResults.length > 0 ? (
+                            <ul className="overlay-music__search-list">
+                              {searchResults.map((track) => (
+                                <li
+                                  key={track.id}
+                                  className="overlay-music__search-item"
+                                >
+                                  {track.coverArt ? (
+                                    <img
+                                      className="overlay-music__search-art"
+                                      src={track.coverArt}
+                                      alt=""
+                                    />
+                                  ) : (
+                                    <div className="overlay-music__search-art overlay-music__search-art--empty" />
+                                  )}
+                                  <div className="overlay-music__search-body">
+                                    <span className="overlay-music__search-title">
+                                      {track.title}
+                                    </span>
+                                    <span className="overlay-music__search-artist">
+                                      {track.artist}
+                                    </span>
+                                  </div>
+                                  <div className="overlay-music__search-actions">
+                                    <button
+                                      type="button"
+                                      className="overlay-music__search-play"
+                                      onClick={() => handlePlayTrack(track)}
+                                      title={`Play ${track.title}`}
+                                    >
+                                      <Play size={13} fill="currentColor" />
+                                      Play
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="overlay-music__search-add"
+                                      onClick={() => handleAddToQueue(track)}
+                                      title="Add to queue"
+                                    >
+                                      <PlusIcon size={13} />
+                                      Queue
+                                    </button>
+                                    <div className="overlay-music__search-plist">
+                                      <button
+                                        type="button"
+                                        className="overlay-music__search-plist-btn"
+                                        title="Add to playlist"
+                                        aria-label="Add to playlist"
+                                        aria-expanded={
+                                          playlistMenuTrackId === track.id
+                                        }
+                                        onClick={() =>
+                                          setPlaylistMenuTrackId((current) =>
+                                            current === track.id
+                                              ? null
+                                              : track.id
+                                          )
+                                        }
+                                      >
+                                        <ListMusic size={14} />
+                                      </button>
+                                      {playlistMenuTrackId === track.id && (
+                                        <div className="overlay-music__search-plist-drop">
+                                          {playlists.length > 0 ? (
+                                            playlists.map((pl) => (
+                                              <button
+                                                key={pl.id}
+                                                type="button"
+                                                onClick={() => {
+                                                  handleAddToPlaylist(
+                                                    pl.id,
+                                                    track
+                                                  );
+                                                  setPlaylistMenuTrackId(null);
+                                                }}
+                                              >
+                                                <PlusIcon size={12} />
+                                                {pl.name}
+                                              </button>
+                                            ))
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setMusicTab("playlists");
+                                                setCreatingPlaylist(true);
+                                                setPlaylistMenuTrackId(null);
+                                              }}
+                                            >
+                                              <PlusIcon size={12} />
+                                              Create a playlist
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : searchQuery.trim() ? (
+                            <p className="overlay-ach__empty">
+                              No results found.
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
+
+                    {musicTab === "playlists" && (
+                      <div
+                        id="overlay-music-panel-playlists"
+                        className="overlay-music__playlists"
+                        role="tabpanel"
+                        aria-labelledby="overlay-music-tab-playlists"
                       >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className="overlay-music__plist-new"
-                      onClick={() => setCreatingPlaylist(true)}
-                    >
-                      <PlusIcon size={14} />
-                      New playlist
-                    </button>
-                  )}
-                  {playlists.length > 0 ? (
-                    <ul className="overlay-music__plist-list">
-                      {playlists.map((pl) => (
-                        <li key={pl.id} className="overlay-music__plist-item">
-                          <div className="overlay-music__plist-row">
+                        {creatingPlaylist ? (
+                          <div className="overlay-music__plist-create">
+                            <input
+                              className="overlay-music__plist-input"
+                              type="text"
+                              placeholder="Playlist name…"
+                              value={newPlaylistName}
+                              onChange={(event) =>
+                                setNewPlaylistName(event.target.value)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter")
+                                  handleCreatePlaylist();
+                                if (event.key === "Escape") {
+                                  setCreatingPlaylist(false);
+                                  setNewPlaylistName("");
+                                }
+                              }}
+                            />
                             <button
                               type="button"
-                              className="overlay-music__plist-info"
-                              onClick={() =>
-                                setExpandedPlaylistId((current) =>
-                                  current === pl.id ? null : pl.id
-                                )
-                              }
-                              aria-expanded={expandedPlaylistId === pl.id}
+                              className="overlay-music__plist-save"
+                              onClick={handleCreatePlaylist}
                             >
-                              <span className="overlay-music__plist-name">
-                                {pl.name}
-                              </span>
-                              <span className="overlay-music__plist-count">
-                                {pl.tracks.length} tracks
-                              </span>
+                              Save
                             </button>
-                            <div className="overlay-music__plist-actions">
-                              <button
-                                type="button"
-                                className="overlay-music__plist-play"
-                                onClick={() => handlePlayPlaylist(pl.id)}
-                                aria-label={`Play ${pl.name}`}
-                                disabled={pl.tracks.length === 0}
-                              >
-                                <Play size={13} fill="currentColor" />
-                              </button>
-                              <button
-                                type="button"
-                                className="overlay-music__plist-del"
-                                onClick={() => handleDeletePlaylist(pl.id)}
-                                aria-label={`Delete ${pl.name}`}
-                              >
-                                <TrashIcon size={13} />
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              className="overlay-music__plist-cancel"
+                              onClick={() => {
+                                setCreatingPlaylist(false);
+                                setNewPlaylistName("");
+                              }}
+                            >
+                              Cancel
+                            </button>
                           </div>
-                          {expandedPlaylistId === pl.id && (
-                            <div className="overlay-music__plist-tracks">
-                              {pl.tracks.length > 0 ? (
-                                pl.tracks.map((track, index) => (
-                                  <div
-                                    key={`${track.id}-${index}`}
-                                    className="overlay-music__plist-track"
+                        ) : (
+                          <button
+                            type="button"
+                            className="overlay-music__plist-new"
+                            onClick={() => setCreatingPlaylist(true)}
+                          >
+                            <PlusIcon size={14} />
+                            New playlist
+                          </button>
+                        )}
+                        {playlists.length > 0 ? (
+                          <ul className="overlay-music__plist-list">
+                            {playlists.map((pl) => (
+                              <li
+                                key={pl.id}
+                                className="overlay-music__plist-item"
+                              >
+                                <div className="overlay-music__plist-row">
+                                  <button
+                                    type="button"
+                                    className="overlay-music__plist-info"
+                                    onClick={() =>
+                                      setExpandedPlaylistId((current) =>
+                                        current === pl.id ? null : pl.id
+                                      )
+                                    }
+                                    aria-expanded={expandedPlaylistId === pl.id}
                                   >
+                                    <span className="overlay-music__plist-name">
+                                      {pl.name}
+                                    </span>
+                                    <span className="overlay-music__plist-count">
+                                      {pl.tracks.length} tracks
+                                    </span>
+                                  </button>
+                                  <div className="overlay-music__plist-actions">
                                     <button
                                       type="button"
-                                      className="overlay-music__plist-track-main"
-                                      onClick={() => {
-                                        window.electron
-                                          .musicPlayPlaylist(pl.id, index)
-                                          .then(() => {
-                                            setMusicTab("now-playing");
-                                            refreshMusicState();
-                                          })
-                                          .catch(() => undefined);
-                                      }}
+                                      className="overlay-music__plist-play"
+                                      onClick={() => handlePlayPlaylist(pl.id)}
+                                      aria-label={`Play ${pl.name}`}
+                                      disabled={pl.tracks.length === 0}
                                     >
-                                      <span className="overlay-music__plist-track-idx">
-                                        {index + 1}
-                                      </span>
-                                      <span className="overlay-music__plist-track-title">
-                                        {track.title}
-                                      </span>
-                                      <span className="overlay-music__plist-track-artist">
-                                        {track.artist}
-                                      </span>
+                                      <Play size={13} fill="currentColor" />
                                     </button>
                                     <button
                                       type="button"
-                                      className="overlay-music__plist-track-remove"
+                                      className="overlay-music__plist-del"
                                       onClick={() =>
-                                        handleRemoveFromPlaylist(pl.id, index)
+                                        handleDeletePlaylist(pl.id)
                                       }
-                                      aria-label={`Remove ${track.title} from ${pl.name}`}
+                                      aria-label={`Delete ${pl.name}`}
                                     >
-                                      <XIcon size={12} />
+                                      <TrashIcon size={13} />
                                     </button>
                                   </div>
-                                ))
-                              ) : (
-                                <p className="overlay-ach__empty">
-                                  Add tracks from Search.
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="overlay-ach__empty">
-                      No playlists yet. Create one to save your favorite tracks.
-                    </p>
-                  )}
-                </div>
-              )}
-            </OverlayWidgetFrame>
+                                </div>
+                                {expandedPlaylistId === pl.id && (
+                                  <div className="overlay-music__plist-tracks">
+                                    {pl.tracks.length > 0 ? (
+                                      pl.tracks.map((track, index) => (
+                                        <div
+                                          key={`${track.id}-${index}`}
+                                          className="overlay-music__plist-track"
+                                        >
+                                          <button
+                                            type="button"
+                                            className="overlay-music__plist-track-main"
+                                            onClick={() => {
+                                              window.electron
+                                                .musicPlayPlaylist(pl.id, index)
+                                                .then(() => {
+                                                  setMusicTab("now-playing");
+                                                  refreshMusicState();
+                                                })
+                                                .catch(() => undefined);
+                                            }}
+                                          >
+                                            <span className="overlay-music__plist-track-idx">
+                                              {index + 1}
+                                            </span>
+                                            <span className="overlay-music__plist-track-title">
+                                              {track.title}
+                                            </span>
+                                            <span className="overlay-music__plist-track-artist">
+                                              {track.artist}
+                                            </span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="overlay-music__plist-track-remove"
+                                            onClick={() =>
+                                              handleRemoveFromPlaylist(
+                                                pl.id,
+                                                index
+                                              )
+                                            }
+                                            aria-label={`Remove ${track.title} from ${pl.name}`}
+                                          >
+                                            <XIcon size={12} />
+                                          </button>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="overlay-ach__empty">
+                                        Add tracks from Search.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="overlay-ach__empty">
+                            No playlists yet. Create one to save your favorite
+                            tracks.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </OverlayWidgetFrame>
+            )}
           </div>
 
           <div className="overlay-col overlay-col--right">
-            {context?.user && friends.length > 0 && (
+            {isWidgetVisible("friends") && (
               <OverlayWidgetFrame
                 widgetId="friends"
                 className="overlay-card--friends"
                 title="Friends"
                 icon={<PeopleIcon size={16} />}
-                meta={`${friends.filter((friend) => friend.isOnline).length} online`}
+                meta={
+                  context?.user
+                    ? `${friends.filter((friend) => friend.isOnline).length} online`
+                    : "Sign in required"
+                }
                 widgetStyle={getWidgetStyle("friends")}
-                layoutLocked={layoutLocked}
-                registerWidget={registerWidget}
-                onBeginDrag={beginWidgetDrag}
-                onFocus={focusWidget}
+                {...widgetFrameProps}
               >
                 <ul className="overlay-friends">
-                  {friends.slice(0, 6).map((friend) => (
-                    <li key={friend.id} className="overlay-friend">
+                  {friends.map((friend) => (
+                    <li
+                      key={friend.id}
+                      ref={registerControllerItem}
+                      className="overlay-friend"
+                      data-controller-item
+                    >
                       {friend.profileImageUrl ? (
                         <img
                           className="overlay-friend__av"
@@ -1946,11 +2467,21 @@ export default function Overlay() {
                       />
                     </li>
                   ))}
+                  {!context?.user && (
+                    <li className="overlay-ach__empty">
+                      Sign in to GameHub to see friend activity.
+                    </li>
+                  )}
+                  {context?.user && friends.length === 0 && (
+                    <li className="overlay-ach__empty">
+                      No friends are available right now.
+                    </li>
+                  )}
                 </ul>
               </OverlayWidgetFrame>
             )}
 
-            {audioSessions.length > 0 && (
+            {isWidgetVisible("mixer") && (
               <OverlayWidgetFrame
                 widgetId="mixer"
                 className="overlay-card--mixer"
@@ -1958,10 +2489,7 @@ export default function Overlay() {
                 icon={<UnmuteIcon size={16} />}
                 meta={audioSessions.length}
                 widgetStyle={getWidgetStyle("mixer")}
-                layoutLocked={layoutLocked}
-                registerWidget={registerWidget}
-                onBeginDrag={beginWidgetDrag}
-                onFocus={focusWidget}
+                {...widgetFrameProps}
               >
                 <ul className="overlay-mixer">
                   {audioSessions.map((session) => (
@@ -1989,119 +2517,142 @@ export default function Overlay() {
                         )}
                       </button>
                       <div className="overlay-mixer__body">
-                        <div className="overlay-mixer__label">
+                        <button
+                          type="button"
+                          className="overlay-mixer__adjust"
+                          aria-expanded={expandedMixerPid === session.pid}
+                          aria-controls={`overlay-mixer-slider-${session.pid}`}
+                          onClick={() =>
+                            setExpandedMixerPid((current) =>
+                              current === session.pid ? null : session.pid
+                            )
+                          }
+                        >
                           <span className="overlay-mixer__name">
                             {session.name}
                           </span>
                           <span className="overlay-mixer__pct">
                             {Math.round(session.volume * 100)}
                           </span>
-                        </div>
-                        <input
-                          className="overlay-mixer__slider"
-                          type="range"
-                          min={0}
-                          max={100}
-                          value={Math.round(session.volume * 100)}
-                          onPointerDown={() => {
-                            draggingPidRef.current = session.pid;
-                          }}
-                          onPointerUp={() => {
-                            draggingPidRef.current = null;
-                          }}
-                          onChange={(event) =>
-                            changeSessionVolume(
-                              session.pid,
-                              Number(event.target.value) / 100
-                            )
-                          }
-                          aria-label={`${session.name} volume`}
-                        />
+                          <SlidersHorizontal size={13} />
+                        </button>
+                        {expandedMixerPid === session.pid && (
+                          <input
+                            id={`overlay-mixer-slider-${session.pid}`}
+                            className="overlay-mixer__slider"
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={Math.round(session.volume * 100)}
+                            onPointerDown={() => {
+                              draggingPidRef.current = session.pid;
+                            }}
+                            onPointerUp={() => {
+                              draggingPidRef.current = null;
+                            }}
+                            onChange={(event) =>
+                              changeSessionVolume(
+                                session.pid,
+                                Number(event.target.value) / 100
+                              )
+                            }
+                            aria-label={`${session.name} volume. Press Select to adjust, then Select again when done.`}
+                          />
+                        )}
                       </div>
                     </li>
                   ))}
+                  {audioSessions.length === 0 && (
+                    <li className="overlay-ach__empty">
+                      No app audio sessions detected.
+                    </li>
+                  )}
                 </ul>
               </OverlayWidgetFrame>
             )}
 
-            <OverlayWidgetFrame
-              widgetId="quick-launch"
-              className="overlay-card--pins"
-              title="Quick launch"
-              icon={<AppsIcon size={16} />}
-              meta={pinnedApps.length}
-              widgetStyle={getWidgetStyle("quick-launch")}
-              layoutLocked={layoutLocked}
-              registerWidget={registerWidget}
-              onBeginDrag={beginWidgetDrag}
-              onFocus={focusWidget}
-            >
-              <div className="overlay-pins">
-                {pinnedApps.map((app) => (
+            {isWidgetVisible("quick-launch") && (
+              <OverlayWidgetFrame
+                widgetId="quick-launch"
+                className="overlay-card--pins"
+                title="Quick launch"
+                icon={<AppsIcon size={16} />}
+                meta={pinnedApps.length}
+                widgetStyle={getWidgetStyle("quick-launch")}
+                {...widgetFrameProps}
+              >
+                <div className="overlay-pins">
+                  {pinnedApps.map((app) => (
+                    <button
+                      key={app.path}
+                      type="button"
+                      className="overlay-pin-tile"
+                      onClick={() =>
+                        void window.electron.launchPinnedApp(app.path)
+                      }
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        unpinApp(app.path);
+                      }}
+                      title={`${app.name} — right-click to unpin`}
+                    >
+                      <span
+                        className="overlay-pin-tile__glyph"
+                        aria-hidden="true"
+                      >
+                        {app.iconUrl ? (
+                          <img
+                            className="overlay-pin-tile__icon"
+                            src={app.iconUrl}
+                            alt=""
+                            draggable={false}
+                          />
+                        ) : (
+                          <AppsIcon size={17} />
+                        )}
+                      </span>
+                      <span className="overlay-pin-tile__label">
+                        {app.name}
+                      </span>
+                    </button>
+                  ))}
                   <button
-                    key={app.path}
                     type="button"
-                    className="overlay-pin-tile"
-                    onClick={() =>
-                      void window.electron.launchPinnedApp(app.path)
-                    }
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      unpinApp(app.path);
-                    }}
-                    title={`${app.name} — right-click to unpin`}
+                    className="overlay-pin-tile overlay-pin-tile--add"
+                    onClick={pinApp}
                   >
                     <span
                       className="overlay-pin-tile__glyph"
                       aria-hidden="true"
                     >
-                      <PinIcon size={17} />
+                      <PlusIcon size={18} />
                     </span>
-                    <span className="overlay-pin-tile__label">{app.name}</span>
+                    <span className="overlay-pin-tile__label">Pin app</span>
                   </button>
-                ))}
-                <button
-                  type="button"
-                  className="overlay-pin-tile overlay-pin-tile--add"
-                  onClick={pinApp}
-                >
-                  <span className="overlay-pin-tile__glyph" aria-hidden="true">
-                    <PlusIcon size={18} />
-                  </span>
-                  <span className="overlay-pin-tile__label">Pin app</span>
-                </button>
-              </div>
-            </OverlayWidgetFrame>
+                </div>
+              </OverlayWidgetFrame>
+            )}
 
-            <OverlayWidgetFrame
-              widgetId="notes"
-              className="overlay-card--notes"
-              title="Notes"
-              icon={<NoteIcon size={16} />}
-              meta={noteSaved ? "Saved" : "Saving…"}
-              widgetStyle={getWidgetStyle("notes")}
-              layoutLocked={layoutLocked}
-              registerWidget={registerWidget}
-              onBeginDrag={beginWidgetDrag}
-              onFocus={focusWidget}
-            >
-              <textarea
-                className="overlay-notes"
-                value={note}
-                placeholder="Jot down a code, a boss strategy, where you left off…"
-                onChange={(event) => handleNoteChange(event.target.value)}
-              />
-            </OverlayWidgetFrame>
+            {isWidgetVisible("notes") && (
+              <OverlayWidgetFrame
+                widgetId="notes"
+                className="overlay-card--notes"
+                title="Notes"
+                icon={<NoteIcon size={16} />}
+                meta={noteSaved ? "Saved" : "Saving…"}
+                widgetStyle={getWidgetStyle("notes")}
+                {...widgetFrameProps}
+              >
+                <textarea
+                  className="overlay-notes"
+                  value={note}
+                  placeholder="Jot down a code, a boss strategy, where you left off…"
+                  onChange={(event) => handleNoteChange(event.target.value)}
+                />
+              </OverlayWidgetFrame>
+            )}
           </div>
         </div>
-
-        <audio ref={audioRef} preload="none">
-          <track kind="captions" />
-        </audio>
-        <footer className="overlay-foot">
-          Press <kbd>{context?.shortcut ?? "Shift+F3"}</kbd> or{" "}
-          <kbd>{context?.controllerShortcut ?? "Guide"}</kbd> once to close
-        </footer>
       </div>
     </div>
   );

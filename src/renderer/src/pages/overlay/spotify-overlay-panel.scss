@@ -1,0 +1,1105 @@
+.spotify-overlay-panel {
+  --spotify-green: #1ed760;
+  --spotify-green-hover: #35e276;
+  --spotify-black: #050505;
+  --spotify-surface: #111;
+  --spotify-surface-raised: #181818;
+  --spotify-border: rgba(255, 255, 255, 0.12);
+  --spotify-text: #f4f4f4;
+  --spotify-muted: rgba(255, 255, 255, 0.62);
+  --spotify-faint: rgba(255, 255, 255, 0.42);
+
+  container-type: inline-size;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--spotify-text);
+  background:
+    radial-gradient(
+      circle at 82% -20%,
+      color-mix(in srgb, var(--spotify-green) 8%, transparent),
+      transparent 34%
+    ),
+    var(--spotify-black);
+  font-family: "Noto Sans", system-ui, sans-serif;
+
+  &__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  button {
+    color: inherit;
+  }
+
+  :where(button, input, select):focus-visible {
+    outline: 2px solid var(--spotify-green);
+    outline-offset: 3px;
+  }
+
+  input[type="range"][data-controller-editing="true"],
+  select[data-controller-editing="true"] {
+    outline: 2px solid var(--spotify-green);
+    outline-offset: 4px;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+  }
+
+  &__header {
+    flex: 0 0 auto;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--spotify-border);
+    background: rgba(5, 5, 5, 0.92);
+  }
+
+  &__attribution {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    > span {
+      min-width: 0;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    strong {
+      color: #fff;
+      font-size: 14px;
+      font-weight: 760;
+      letter-spacing: -0.01em;
+    }
+
+    small {
+      color: var(--spotify-muted);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+  }
+
+  &__spotify-mark {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+  }
+
+  &__account {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--spotify-muted);
+    font-size: 10px;
+
+    > img,
+    &-placeholder {
+      width: 24px;
+      height: 24px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--spotify-border);
+      border-radius: 50%;
+      background: var(--spotify-surface-raised);
+      object-fit: cover;
+    }
+
+    > span:not(.spotify-overlay-panel__account-placeholder) {
+      max-width: 116px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__icon-button,
+  &__card-action,
+  &__transport-button,
+  &__mode-button,
+  &__play-button {
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--spotify-border);
+    cursor: pointer;
+    transition:
+      color 120ms ease,
+      border-color 120ms ease,
+      background 120ms ease,
+      transform 120ms ease;
+
+    &:not(:disabled):hover {
+      border-color: rgba(255, 255, 255, 0.26);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    &:not(:disabled):active {
+      transform: translateY(1px);
+    }
+  }
+
+  &__icon-button {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    color: var(--spotify-muted);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  &__button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 0 11px;
+    border: 1px solid var(--spotify-border);
+    border-radius: 8px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.07);
+    font-size: 10.5px;
+    font-weight: 680;
+    cursor: pointer;
+
+    &:not(:disabled):hover {
+      border-color: rgba(255, 255, 255, 0.26);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    &--primary {
+      border-color: var(--spotify-green);
+      color: var(--spotify-black);
+      background: var(--spotify-green);
+
+      &:not(:disabled):hover {
+        border-color: var(--spotify-green-hover);
+        color: var(--spotify-black);
+        background: var(--spotify-green-hover);
+      }
+    }
+  }
+
+  &__state {
+    min-height: 180px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 24px;
+    color: var(--spotify-muted);
+    text-align: center;
+
+    > svg:not(.spotify-overlay-panel__spinner) {
+      color: var(--spotify-faint);
+    }
+
+    strong {
+      color: #fff;
+      font-size: 13px;
+    }
+
+    span {
+      max-width: 420px;
+      color: var(--spotify-muted);
+      font-size: 10.5px;
+      line-height: 1.5;
+    }
+
+    small {
+      color: var(--spotify-faint);
+      font-size: 9px;
+    }
+
+    &-error {
+      color: #ff9292 !important;
+    }
+  }
+
+  &__now-playing {
+    position: relative;
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(190px, 0.7fr);
+    gap: 8px 16px;
+    padding: 12px;
+    border-bottom: 1px solid var(--spotify-border);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.055),
+      rgba(255, 255, 255, 0.018)
+    );
+  }
+
+  &__now-main {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+
+  &__now-art {
+    width: 68px;
+    height: 68px;
+    flex: 0 0 auto;
+    border-radius: 6px;
+    background: var(--spotify-surface-raised);
+    object-fit: contain;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.36);
+
+    &--empty {
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--spotify-border);
+      color: var(--spotify-faint);
+      background: var(--spotify-surface-raised);
+    }
+  }
+
+  &__now-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+
+    > small {
+      color: var(--spotify-green);
+      font-size: 8.5px;
+      font-weight: 750;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    > strong,
+    > span {
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > strong {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 740;
+    }
+
+    > span {
+      color: var(--spotify-muted);
+      font-size: 10.5px;
+    }
+  }
+
+  &__text-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    color: var(--spotify-muted);
+    font-size: 9.5px;
+    cursor: pointer;
+
+    &:hover {
+      color: #fff;
+    }
+  }
+
+  &__device {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+    gap: 4px;
+
+    > label {
+      color: var(--spotify-muted);
+      font-size: 9px;
+      font-weight: 680;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    > small {
+      overflow: hidden;
+      color: var(--spotify-faint);
+      font-size: 8.5px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__device-controls {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+
+    select {
+      width: 100%;
+      min-width: 0;
+      min-height: 34px;
+      padding: 0 28px 0 9px;
+      border: 1px solid var(--spotify-border);
+      border-radius: 8px;
+      color: #fff;
+      background: var(--spotify-surface-raised);
+      font-size: 10px;
+      cursor: pointer;
+
+      option {
+        color: #fff;
+        background: #151515;
+      }
+    }
+  }
+
+  &__progress {
+    min-width: 0;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 10px;
+
+    input {
+      width: 100%;
+      min-width: 0;
+      height: 4px;
+      grid-column: 1 / -1;
+      accent-color: var(--spotify-green);
+      cursor: pointer;
+    }
+
+    &-time {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      color: var(--spotify-faint);
+      font-size: 8px;
+    }
+  }
+
+  &__transport {
+    min-width: 0;
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+  }
+
+  &__transport-button,
+  &__mode-button {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    color: var(--spotify-muted);
+    background: rgba(255, 255, 255, 0.045);
+  }
+
+  &__mode-button.is-active {
+    border-color: color-mix(in srgb, var(--spotify-green) 55%, transparent);
+    color: var(--spotify-green);
+    background: color-mix(in srgb, var(--spotify-green) 12%, transparent);
+  }
+
+  &__play-button {
+    width: 42px;
+    height: 42px;
+    border-color: var(--spotify-green);
+    border-radius: 50%;
+    color: var(--spotify-black);
+    background: var(--spotify-green);
+    box-shadow: 0 6px 18px rgba(30, 215, 96, 0.16);
+
+    &:not(:disabled):hover {
+      border-color: var(--spotify-green-hover);
+      color: var(--spotify-black);
+      background: var(--spotify-green-hover);
+      transform: scale(1.04);
+    }
+
+    &:not(:disabled):active {
+      transform: scale(0.98);
+    }
+  }
+
+  &__volume {
+    position: relative;
+  }
+
+  &__volume-popover {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 9px);
+    z-index: 20;
+    width: 190px;
+    min-height: 40px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 32px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--spotify-border);
+    border-radius: 9px;
+    color: var(--spotify-muted);
+    background: #111;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+
+    input {
+      width: 100%;
+      min-width: 0;
+      accent-color: var(--spotify-green);
+    }
+
+    > span:last-child {
+      color: #fff;
+      font-size: 9px;
+      font-weight: 680;
+      text-align: right;
+    }
+  }
+
+  &__error {
+    flex: 0 0 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    margin: 8px 12px 0;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 98, 98, 0.3);
+    border-radius: 8px;
+    color: #ff9292;
+    background: rgba(164, 38, 38, 0.16);
+
+    > div {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    strong,
+    span {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    strong {
+      color: #ffd1d1;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    span {
+      color: rgba(255, 209, 209, 0.72);
+      font-size: 8.5px;
+      line-height: 1.4;
+    }
+  }
+
+  &__feedback {
+    min-height: 21px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 3px 12px;
+    color: var(--spotify-green);
+    font-size: 9px;
+  }
+
+  &__tabs {
+    min-height: 40px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 3px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--spotify-border);
+    background: rgba(5, 5, 5, 0.88);
+  }
+
+  &__tab {
+    position: relative;
+    min-width: 84px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 12px;
+    border: 0;
+    color: var(--spotify-muted);
+    background: transparent;
+    font-size: 10px;
+    font-weight: 680;
+    cursor: pointer;
+
+    &::after {
+      position: absolute;
+      right: 10px;
+      bottom: -1px;
+      left: 10px;
+      height: 2px;
+      content: "";
+      background: transparent;
+    }
+
+    &:hover,
+    &.is-active {
+      color: #fff;
+    }
+
+    &.is-active::after {
+      background: var(--spotify-green);
+    }
+
+    > span {
+      min-width: 17px;
+      height: 17px;
+      display: inline-grid;
+      place-items: center;
+      padding: 0 4px;
+      border-radius: 999px;
+      color: var(--spotify-black);
+      background: var(--spotify-green);
+      font-size: 8px;
+    }
+  }
+
+  &__tab-content {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  &__browse,
+  &__search,
+  &__queue {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+  }
+
+  &__browse,
+  &__search-results,
+  &__queue {
+    padding: 10px 12px 14px;
+  }
+
+  &__shelf {
+    min-width: 0;
+
+    + .spotify-overlay-panel__shelf {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    > header,
+    .spotify-overlay-panel__queue-up-next > header {
+      min-height: 26px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px;
+
+      > div {
+        min-width: 0;
+      }
+
+      h3 {
+        color: #fff;
+        font-size: 11px;
+        font-weight: 720;
+      }
+
+      p {
+        margin-top: 2px;
+        color: var(--spotify-faint);
+        font-size: 8.5px;
+        line-height: 1.4;
+      }
+
+      > span {
+        min-width: 20px;
+        height: 20px;
+        display: grid;
+        place-items: center;
+        padding: 0 5px;
+        border: 1px solid var(--spotify-border);
+        border-radius: 999px;
+        color: var(--spotify-muted);
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 8px;
+      }
+    }
+  }
+
+  &__content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 6px;
+  }
+
+  &__content-card {
+    min-width: 0;
+    min-height: 64px;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.032);
+
+    &:focus-within,
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.055);
+    }
+  }
+
+  &__content-art {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 5px;
+    color: var(--spotify-faint);
+    background: var(--spotify-surface-raised);
+    object-fit: contain;
+
+    &--empty {
+      border: 1px solid var(--spotify-border);
+    }
+  }
+
+  &__content-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    strong,
+    span,
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    strong {
+      color: #fff;
+      font-size: 10px;
+      font-weight: 690;
+    }
+
+    span {
+      color: var(--spotify-muted);
+      font-size: 8.5px;
+    }
+
+    small {
+      color: var(--spotify-faint);
+      font-size: 7.5px;
+    }
+  }
+
+  &__content-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &__card-action {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+
+    &--primary {
+      border-color: var(--spotify-green);
+      color: var(--spotify-black);
+      background: var(--spotify-green);
+
+      &:not(:disabled):hover {
+        border-color: var(--spotify-green-hover);
+        color: var(--spotify-black);
+        background: var(--spotify-green-hover);
+      }
+    }
+  }
+
+  &__empty-row {
+    padding: 10px;
+    border: 1px dashed var(--spotify-border);
+    border-radius: 8px;
+    color: var(--spotify-faint);
+    font-size: 9px;
+    text-align: center;
+  }
+
+  &__search {
+    padding: 10px 12px 14px;
+  }
+
+  &__search-form {
+    position: sticky;
+    top: -10px;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) 126px auto;
+    gap: 7px;
+    padding: 10px 0;
+    background: linear-gradient(180deg, var(--spotify-black) 72%, transparent);
+
+    > label {
+      min-width: 0;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      border: 1px solid var(--spotify-border);
+      border-radius: 8px;
+      color: var(--spotify-faint);
+      background: var(--spotify-surface-raised);
+
+      &:focus-within {
+        border-color: color-mix(in srgb, var(--spotify-green) 70%, transparent);
+      }
+
+      input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        color: #fff;
+        background: transparent;
+        font-size: 10.5px;
+
+        &::placeholder {
+          color: var(--spotify-faint);
+        }
+      }
+    }
+
+    > select {
+      min-width: 0;
+      min-height: 36px;
+      padding: 0 28px 0 9px;
+      border: 1px solid var(--spotify-border);
+      border-radius: 8px;
+      color: #fff;
+      background: var(--spotify-surface-raised);
+      font-size: 10px;
+
+      option {
+        color: #fff;
+        background: #151515;
+      }
+    }
+  }
+
+  &__queue {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+
+    &-current,
+    &-up-next {
+      > header {
+        min-height: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+
+        h3 {
+          color: #fff;
+          font-size: 11px;
+        }
+
+        > span {
+          color: var(--spotify-muted);
+          font-size: 9px;
+        }
+      }
+    }
+
+    &-up-next ol {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    &-up-next li {
+      min-width: 0;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 7px;
+      border: 1px solid rgba(255, 255, 255, 0.065);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.028);
+
+      &:focus-within,
+      &:hover {
+        border-color: rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.05);
+      }
+    }
+
+    &-index {
+      width: 18px;
+      flex: 0 0 auto;
+      color: var(--spotify-faint);
+      font-size: 8px;
+      text-align: center;
+    }
+
+    &-art {
+      width: 36px;
+      height: 36px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border-radius: 4px;
+      color: var(--spotify-faint);
+      background: var(--spotify-surface-raised);
+      object-fit: contain;
+
+      &--empty {
+        border: 1px solid var(--spotify-border);
+      }
+    }
+
+    &-copy {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+
+      strong,
+      small {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      strong {
+        color: #fff;
+        font-size: 9.5px;
+      }
+
+      small {
+        color: var(--spotify-muted);
+        font-size: 8px;
+      }
+    }
+  }
+
+  &__footer {
+    min-height: 31px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-top: 1px solid var(--spotify-border);
+    color: var(--spotify-faint);
+    background: rgba(5, 5, 5, 0.94);
+    font-size: 7.5px;
+
+    > span:nth-of-type(1) {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &-divider {
+      width: 1px;
+      height: 12px;
+      flex: 0 0 auto;
+      background: var(--spotify-border);
+    }
+  }
+
+  &__spinner {
+    animation: spotify-overlay-spin 0.8s linear infinite;
+  }
+}
+
+@container (max-width: 560px) {
+  .spotify-overlay-panel {
+    &__now-playing {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &__device,
+    &__progress,
+    &__transport {
+      grid-column: 1;
+    }
+
+    &__now-art {
+      width: 58px;
+      height: 58px;
+    }
+
+    &__search-form {
+      grid-template-columns: minmax(0, 1fr) auto;
+
+      > select {
+        grid-column: 1;
+      }
+
+      > button {
+        grid-column: 2;
+        grid-row: 1 / 3;
+      }
+    }
+
+    &__content-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &__footer > span:nth-of-type(n + 2),
+    &__footer > svg:last-of-type {
+      display: none;
+    }
+  }
+}
+
+@container (max-width: 360px) {
+  .spotify-overlay-panel {
+    &__header {
+      padding-inline: 8px;
+    }
+
+    &__account > span:not(.spotify-overlay-panel__account-placeholder) {
+      display: none;
+    }
+
+    &__tabs {
+      padding-inline: 5px;
+    }
+
+    &__tab {
+      min-width: 0;
+      flex: 1;
+      padding-inline: 6px;
+    }
+
+    &__now-playing,
+    &__browse,
+    &__search,
+    &__queue {
+      padding-inline: 8px;
+    }
+
+    &__transport {
+      gap: 4px;
+    }
+
+    &__transport-button,
+    &__mode-button {
+      width: 32px;
+      height: 32px;
+    }
+
+    &__device-controls {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    &__error {
+      grid-template-columns: auto minmax(0, 1fr);
+
+      > button {
+        grid-column: 1 / -1;
+      }
+    }
+
+    &__content-card {
+      grid-template-columns: 42px minmax(0, 1fr);
+    }
+
+    &__content-art {
+      width: 42px;
+      height: 42px;
+    }
+
+    &__content-actions {
+      grid-column: 1 / -1;
+      justify-content: flex-end;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spotify-overlay-panel {
+    &__icon-button,
+    &__card-action,
+    &__transport-button,
+    &__mode-button,
+    &__play-button {
+      transition: none;
+    }
+  }
+}
+
+@keyframes spotify-overlay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

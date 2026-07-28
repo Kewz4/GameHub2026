@@ -42,6 +42,11 @@ registerEvent(
   async (): Promise<MusicTrack | null> => overlayMusicPlayer.resume()
 );
 
+registerEvent(
+  "musicRefreshCurrent",
+  async (): Promise<MusicTrack | null> => overlayMusicPlayer.refreshCurrent()
+);
+
 registerEvent("musicStop", (): void => overlayMusicPlayer.stop());
 
 registerEvent(
@@ -60,6 +65,22 @@ registerEvent("musicSetShuffle", (_event, enabled: boolean): void =>
 
 registerEvent("musicSetRepeat", (_event, mode: RepeatMode): void =>
   overlayMusicPlayer.setRepeat(mode)
+);
+
+registerEvent(
+  "musicSetVolume",
+  (_event, volume: number, muted?: boolean): void =>
+    overlayMusicPlayer.setVolume(volume, muted)
+);
+
+registerEvent("musicSeek", (_event, progressMs: number): void =>
+  overlayMusicPlayer.seek(progressMs)
+);
+
+registerEvent(
+  "musicReportPlaybackProgress",
+  (_event, progressMs: number, durationMs: number): void =>
+    overlayMusicPlayer.reportPlaybackProgress(progressMs, durationMs)
 );
 
 registerEvent(

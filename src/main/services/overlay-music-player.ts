@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
 import axios from "axios";
-import { app } from "electron";
+import { app, BrowserWindow } from "electron";
 import { db, levelKeys } from "@main/level";
 import type {
   MusicAudioSource,
@@ -17,10 +17,14 @@ import type {
 import { logger } from "./logger";
 
 const DEEZER_API = "https://api.deezer.com";
-const YT_DLP_SEARCH_TIMEOUT_MS = 15_000;
-const YT_DLP_RESOLVE_TIMEOUT_MS = 25_000;
+const YOUTUBE_SEARCH_URL = "https://www.youtube.com/results";
+const YOUTUBE_SEARCH_TIMEOUT_MS = 7_000;
+const YT_DLP_RESOLVE_TIMEOUT_MS = 22_000;
 const YT_DLP_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
 const DEEZER_PREVIEW_DURATION_MS = 30_000;
+const AUDIO_CACHE_TTL_MS = 20 * 60_000;
+const AUDIO_CACHE_MAX_ENTRIES = 32;
+const PLAYBACK_PROGRESS_BROADCAST_INTERVAL_MS = 500;
 
 interface DeezerTrack {
   id: number;
@@ -31,19 +35,10 @@ interface DeezerTrack {
   preview?: string;
 }
 
-interface YoutubeSearchEntry {
-  id?: string;
-  title?: string;
-  duration?: number | null;
-}
-
-interface YoutubeSearchResult {
-  entries?: YoutubeSearchEntry[];
-}
-
 interface YoutubeAudioResult {
   url?: string;
   duration?: number | null;
+  entries?: YoutubeAudioResult[];
 }
 
 interface ResolvedAudio {
@@ -53,8 +48,12 @@ interface ResolvedAudio {
   notice: string | null;
 }
 
+interface CachedAudio {
+  audio: ResolvedAudio;
+  expiresAt: number;
+}
+
 class AudioResolverUnavailableError extends Error {}
-class AudioResolutionCancelledError extends Error {}
 
 const getYtDlpFilename = () =>
   process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
@@ -114,39 +113,6 @@ const getHttpsUrl = (value: unknown): string | null => {
   }
 };
 
-const selectSearchEntry = (
-  entries: YoutubeSearchEntry[],
-  expectedDurationSeconds: number
-): YoutubeSearchEntry | null => {
-  const playable = entries.filter(
-    (entry) =>
-      typeof entry.id === "string" && /^[A-Za-z0-9_-]{6,20}$/.test(entry.id)
-  );
-  if (!playable.length) return null;
-  if (!Number.isFinite(expectedDurationSeconds) || expectedDurationSeconds <= 0)
-    return playable[0];
-
-  const tolerance = Math.max(20, expectedDurationSeconds * 0.35);
-  const closeMatches = playable.filter(
-    (entry) =>
-      typeof entry.duration === "number" &&
-      Math.abs(entry.duration - expectedDurationSeconds) <= tolerance
-  );
-  const pool = closeMatches.length ? closeMatches : playable;
-
-  return [...pool].sort((a, b) => {
-    const aDelta =
-      typeof a.duration === "number"
-        ? Math.abs(a.duration - expectedDurationSeconds)
-        : Number.MAX_SAFE_INTEGER;
-    const bDelta =
-      typeof b.duration === "number"
-        ? Math.abs(b.duration - expectedDurationSeconds)
-        : Number.MAX_SAFE_INTEGER;
-    return aDelta - bDelta;
-  })[0];
-};
-
 export class OverlayMusicPlayer {
   private queue: MusicTrack[] = [];
   private currentIndex = -1;
@@ -160,13 +126,33 @@ export class OverlayMusicPlayer {
   private resolvedDurationMs = 0;
   private resolvedTrack: MusicTrack | null = null;
   private resolutionGeneration = 0;
-  private resolutionAbortController: AbortController | null = null;
+  private playbackId = 0;
+  private progressMs = 0;
+  private volume = 0.8;
+  private muted = false;
+  private seekId = 0;
+  private preloadedNextIndex = -1;
+  private preloadedTrack: MusicTrack | null = null;
+  private preloadedAudio: ResolvedAudio | null = null;
+  private audioCache = new Map<string, CachedAudio>();
+  private resolutionPromises = new Map<string, Promise<ResolvedAudio>>();
+  private preloadGeneration = 0;
+  private lastProgressBroadcastAt = 0;
   private ytdlpPath: string | null | undefined;
 
   readonly events = new EventEmitter();
 
   private notify() {
-    this.events.emit("state", this.getState());
+    const state = this.getState();
+    this.events.emit("state", state);
+    for (const window of BrowserWindow.getAllWindows()) {
+      try {
+        if (window.isDestroyed() || window.webContents.isDestroyed()) continue;
+        window.webContents.send("on-music-state", state);
+      } catch {
+        // A short-lived overlay window can close between enumeration and send.
+      }
+    }
   }
 
   getState(): MusicPlayerState {
@@ -182,7 +168,7 @@ export class OverlayMusicPlayer {
       state: this.state,
       shuffle: this.shuffleEnabled,
       repeat: this.repeat,
-      progressMs: 0,
+      progressMs: this.progressMs,
       durationMs:
         this.resolvedDurationMs ||
         (nowPlaying ? Math.max(0, nowPlaying.duration * 1000) : 0),
@@ -190,6 +176,13 @@ export class OverlayMusicPlayer {
       audioSource: this.audioSource,
       playbackError: this.playbackError,
       playbackNotice: this.playbackNotice,
+      playbackId: this.playbackId,
+      preloadedNextIndex: this.preloadedNextIndex,
+      preloadedAudioUrl: this.preloadedAudio?.url ?? null,
+      preloadedAudioSource: this.preloadedAudio?.source ?? null,
+      volume: this.volume,
+      muted: this.muted,
+      seekId: this.seekId,
     };
   }
 
@@ -201,7 +194,14 @@ export class OverlayMusicPlayer {
         `${DEEZER_API}/search/track`,
         { params: { q: normalizedQuery, limit: 20 }, timeout: 8000 }
       );
-      return (data.data || []).map(this.mapDeezerTrack);
+      const tracks = (data.data || []).map(this.mapDeezerTrack);
+      // The first result is selected most often. Start resolving it while the
+      // user is still reading the result list so a subsequent Play click can
+      // reuse the same in-flight request or the completed cache entry.
+      if (tracks[0]) {
+        void this.resolveAudioCached(tracks[0]).catch(() => undefined);
+      }
+      return tracks;
     } catch (err) {
       logger.warn("Deezer search failed", err);
       return [];
@@ -226,45 +226,57 @@ export class OverlayMusicPlayer {
   ): Promise<ResolvedAudio> {
     const binaryPath = this.getYtDlp();
     const searchQuery = `${track.artist} - ${track.title} official audio`;
-    const searchOutput = await runYtDlp(
-      binaryPath,
-      [
-        `ytsearch5:${searchQuery}`,
-        "--dump-single-json",
-        "--flat-playlist",
-        "--no-warnings",
-        "--no-progress",
-      ],
-      YT_DLP_SEARCH_TIMEOUT_MS,
-      signal
-    );
-    if (signal.aborted) throw new AudioResolutionCancelledError();
-    const searchResult = parseJson<YoutubeSearchResult>(searchOutput);
-    const entry = selectSearchEntry(searchResult.entries ?? [], track.duration);
-    if (!entry?.id) {
-      throw new Error("YouTube search returned no playable result");
+    let videoId: string | null = null;
+    try {
+      const { data } = await axios.get<string>(YOUTUBE_SEARCH_URL, {
+        params: { search_query: searchQuery, hl: "en" },
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132 Safari/537.36",
+        },
+        responseType: "text",
+        timeout: YOUTUBE_SEARCH_TIMEOUT_MS,
+        maxContentLength: 4 * 1024 * 1024,
+        signal,
+      });
+      videoId = /"videoId":"([A-Za-z0-9_-]{11})"/.exec(data)?.[1] ?? null;
+    } catch (err) {
+      if (signal.aborted) throw err;
+      logger.debug("Fast YouTube music search unavailable; using yt-dlp", {
+        track: track.title,
+        err: String(err),
+      });
     }
 
+    // YouTube's search page supplies the video id in well under a second in
+    // normal conditions, leaving yt-dlp to perform only the media extraction.
+    // ytsearch remains a reliable fallback if the page shape ever changes.
+    const target = videoId
+      ? `https://www.youtube.com/watch?v=${videoId}`
+      : `ytsearch1:${searchQuery}`;
     const audioOutput = await runYtDlp(
       binaryPath,
       [
-        `https://www.youtube.com/watch?v=${entry.id}`,
+        target,
         "--dump-single-json",
+        "--playlist-end",
+        "1",
         "--no-playlist",
         "--format",
-        "bestaudio[ext=m4a]/bestaudio",
+        "bestaudio[acodec^=opus]/bestaudio[ext=m4a]/bestaudio",
         "--no-warnings",
         "--no-progress",
         "--socket-timeout",
-        "10",
+        "8",
         "--retries",
-        "2",
+        "1",
       ],
       YT_DLP_RESOLVE_TIMEOUT_MS,
       signal
     );
-    if (signal.aborted) throw new AudioResolutionCancelledError();
-    const audioResult = parseJson<YoutubeAudioResult>(audioOutput);
+    if (signal.aborted) throw new Error("Audio resolution was cancelled");
+    const output = parseJson<YoutubeAudioResult>(audioOutput);
+    const audioResult = output.entries?.[0] ?? output;
     const url = getHttpsUrl(audioResult.url);
     if (!url) throw new Error("yt-dlp returned no secure audio URL");
 
@@ -286,9 +298,7 @@ export class OverlayMusicPlayer {
     try {
       return await this.resolveYoutubeAudio(track, signal);
     } catch (err) {
-      if (signal.aborted || err instanceof AudioResolutionCancelledError) {
-        throw new AudioResolutionCancelledError();
-      }
+      if (signal.aborted) throw err;
       logger.warn("yt-dlp audio resolution failed", {
         track: track.title,
         err: String(err),
@@ -311,6 +321,82 @@ export class OverlayMusicPlayer {
     }
   }
 
+  private getTrackCacheKey(track: MusicTrack) {
+    return `${track.id}\u0000${track.artist}\u0000${track.title}`;
+  }
+
+  private trimAudioCache() {
+    const now = Date.now();
+    for (const [key, cached] of this.audioCache) {
+      if (cached.expiresAt <= now) this.audioCache.delete(key);
+    }
+
+    while (this.audioCache.size > AUDIO_CACHE_MAX_ENTRIES) {
+      const oldestKey = this.audioCache.keys().next().value as
+        | string
+        | undefined;
+      if (!oldestKey) break;
+      this.audioCache.delete(oldestKey);
+    }
+  }
+
+  private getCachedAudio(track: MusicTrack): ResolvedAudio | null {
+    const key = this.getTrackCacheKey(track);
+    const cached = this.audioCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      // Refresh insertion order so recently used streams stay in the LRU.
+      this.audioCache.delete(key);
+      this.audioCache.set(key, cached);
+      return cached.audio;
+    }
+    if (cached) this.audioCache.delete(key);
+    return null;
+  }
+
+  private resolveAudioCached(track: MusicTrack): Promise<ResolvedAudio> {
+    const key = this.getTrackCacheKey(track);
+    const cached = this.getCachedAudio(track);
+    if (cached) return Promise.resolve(cached);
+
+    const pending = this.resolutionPromises.get(key);
+    if (pending) return pending;
+
+    const controller = new AbortController();
+    const resolution = this.resolveAudio(track, controller.signal)
+      .then((audio) => {
+        this.audioCache.set(key, {
+          audio,
+          expiresAt: Date.now() + AUDIO_CACHE_TTL_MS,
+        });
+        this.trimAudioCache();
+        return audio;
+      })
+      .finally(() => {
+        if (this.resolutionPromises.get(key) === resolution) {
+          this.resolutionPromises.delete(key);
+        }
+      });
+
+    this.resolutionPromises.set(key, resolution);
+    return resolution;
+  }
+
+  private activateResolvedTrack(track: MusicTrack, resolved: ResolvedAudio) {
+    this.audioUrl = resolved.url;
+    this.audioSource = resolved.source;
+    this.resolvedDurationMs = resolved.durationMs;
+    this.resolvedTrack = track;
+    this.playbackNotice = resolved.notice;
+    this.playbackError = null;
+    this.state = "playing";
+    this.playbackId += 1;
+  }
+
+  private invalidateCachedAudio(track: MusicTrack | null) {
+    if (!track) return;
+    this.audioCache.delete(this.getTrackCacheKey(track));
+  }
+
   private clearResolvedPlayback() {
     this.audioUrl = null;
     this.audioSource = null;
@@ -320,17 +406,104 @@ export class OverlayMusicPlayer {
     this.playbackNotice = null;
   }
 
-  private abortResolution() {
-    const controller = this.resolutionAbortController;
-    this.resolutionAbortController = null;
-    controller?.abort();
+  private clearPreloadedPlayback() {
+    this.preloadGeneration += 1;
+    this.preloadedNextIndex = -1;
+    this.preloadedTrack = null;
+    this.preloadedAudio = null;
+  }
+
+  private getNextIndexForPreload() {
+    if (this.queue.length === 0 || this.currentIndex < 0) return -1;
+    if (this.repeat === "one") return -1;
+
+    if (this.shuffleEnabled && this.queue.length > 1) {
+      if (
+        this.preloadedNextIndex >= 0 &&
+        this.preloadedNextIndex < this.queue.length &&
+        this.preloadedNextIndex !== this.currentIndex
+      ) {
+        return this.preloadedNextIndex;
+      }
+
+      let nextIndex = this.currentIndex;
+      while (nextIndex === this.currentIndex) {
+        nextIndex = Math.floor(Math.random() * this.queue.length);
+      }
+      return nextIndex;
+    }
+
+    const sequentialIndex = this.currentIndex + 1;
+    if (sequentialIndex < this.queue.length) return sequentialIndex;
+    return this.repeat === "all" ? 0 : -1;
+  }
+
+  private scheduleNextPreload() {
+    const nextIndex = this.getNextIndexForPreload();
+    if (nextIndex < 0) {
+      if (this.preloadedNextIndex >= 0 || this.preloadedAudio) {
+        this.clearPreloadedPlayback();
+        this.notify();
+      }
+      return;
+    }
+
+    const track = this.queue[nextIndex];
+    if (
+      this.preloadedNextIndex === nextIndex &&
+      this.preloadedTrack === track
+    ) {
+      return;
+    }
+
+    const generation = ++this.preloadGeneration;
+    this.preloadedNextIndex = nextIndex;
+    this.preloadedTrack = track;
+    this.preloadedAudio = null;
+    void this.resolveAudioCached(track)
+      .then((audio) => {
+        if (
+          generation !== this.preloadGeneration ||
+          this.queue[nextIndex] !== track ||
+          this.preloadedNextIndex !== nextIndex
+        ) {
+          return;
+        }
+        this.preloadedAudio = audio;
+        this.notify();
+      })
+      .catch((err) => {
+        if (generation !== this.preloadGeneration) return;
+        logger.warn("Could not preload the next music track", {
+          track: track.title,
+          err: String(err),
+        });
+        this.preloadedNextIndex = -1;
+        this.preloadedTrack = null;
+        this.preloadedAudio = null;
+        this.notify();
+      });
+  }
+
+  private warmCurrentAndNext() {
+    const current = this.queue[this.currentIndex];
+    if (current) {
+      void this.resolveAudioCached(current).catch((err) => {
+        logger.warn("Could not warm the current music track", {
+          track: current.title,
+          err: String(err),
+        });
+      });
+    }
+    this.scheduleNextPreload();
   }
 
   private stopPlayback() {
     this.resolutionGeneration += 1;
-    this.abortResolution();
     this.state = "stopped";
+    this.progressMs = 0;
     this.clearResolvedPlayback();
+    this.clearPreloadedPlayback();
   }
 
   setQueue(tracks: MusicTrack[], startIndex = 0) {
@@ -344,6 +517,7 @@ export class OverlayMusicPlayer {
         : -1;
     this.stopPlayback();
     this.notify();
+    this.warmCurrentAndNext();
   }
 
   addToQueue(track: MusicTrack) {
@@ -352,6 +526,7 @@ export class OverlayMusicPlayer {
       this.currentIndex = 0;
     }
     this.notify();
+    this.warmCurrentAndNext();
   }
 
   removeFromQueue(index: number) {
@@ -364,6 +539,7 @@ export class OverlayMusicPlayer {
       return;
     const removedCurrent = safeIndex === this.currentIndex;
     this.queue.splice(safeIndex, 1);
+    this.clearPreloadedPlayback();
     if (this.queue.length === 0) {
       this.currentIndex = -1;
       this.stopPlayback();
@@ -374,6 +550,7 @@ export class OverlayMusicPlayer {
       this.stopPlayback();
     }
     this.notify();
+    this.warmCurrentAndNext();
   }
 
   clearQueue() {
@@ -383,7 +560,7 @@ export class OverlayMusicPlayer {
     this.notify();
   }
 
-  async play(index?: number): Promise<MusicTrack | null> {
+  async play(index?: number, forceRefresh = false): Promise<MusicTrack | null> {
     if (index !== undefined) {
       const safeIndex = Math.trunc(index);
       if (
@@ -411,37 +588,41 @@ export class OverlayMusicPlayer {
       return track;
     }
 
-    this.abortResolution();
+    if (forceRefresh) this.invalidateCachedAudio(track);
+    const cached = forceRefresh ? null : this.getCachedAudio(track);
+    if (cached) {
+      this.resolutionGeneration += 1;
+      this.progressMs = 0;
+      this.clearResolvedPlayback();
+      this.clearPreloadedPlayback();
+      this.activateResolvedTrack(track, cached);
+      this.notify();
+      this.scheduleNextPreload();
+      return track;
+    }
+
     const generation = ++this.resolutionGeneration;
-    const resolutionController = new AbortController();
-    this.resolutionAbortController = resolutionController;
     this.state = "resolving";
+    this.progressMs = 0;
     this.clearResolvedPlayback();
+    this.clearPreloadedPlayback();
     this.notify();
+    this.scheduleNextPreload();
 
     try {
-      const resolved = await this.resolveAudio(
-        track,
-        resolutionController.signal
-      );
+      const resolved = await this.resolveAudioCached(track);
       if (
         generation !== this.resolutionGeneration ||
         this.queue[this.currentIndex] !== track
       ) {
         return null;
       }
-      this.audioUrl = resolved.url;
-      this.audioSource = resolved.source;
-      this.resolvedDurationMs = resolved.durationMs;
-      this.resolvedTrack = track;
-      this.playbackNotice = resolved.notice;
-      this.playbackError = null;
-      this.state = "playing";
+      this.activateResolvedTrack(track, resolved);
       this.notify();
+      this.scheduleNextPreload();
       return track;
     } catch (err) {
       if (
-        resolutionController.signal.aborted ||
         generation !== this.resolutionGeneration ||
         this.queue[this.currentIndex] !== track
       ) {
@@ -455,11 +636,14 @@ export class OverlayMusicPlayer {
           : "GameHub couldn't resolve a playable audio stream for this track.";
       this.notify();
       return null;
-    } finally {
-      if (this.resolutionAbortController === resolutionController) {
-        this.resolutionAbortController = null;
-      }
     }
+  }
+
+  async refreshCurrent(): Promise<MusicTrack | null> {
+    if (this.currentIndex < 0 || this.currentIndex >= this.queue.length) {
+      return null;
+    }
+    return this.play(this.currentIndex, true);
   }
 
   pause() {
@@ -494,7 +678,14 @@ export class OverlayMusicPlayer {
     }
 
     let nextIndex: number;
-    if (this.shuffleEnabled && this.queue.length > 1) {
+    if (
+      this.shuffleEnabled &&
+      this.preloadedNextIndex >= 0 &&
+      this.preloadedNextIndex < this.queue.length &&
+      this.preloadedNextIndex !== this.currentIndex
+    ) {
+      nextIndex = this.preloadedNextIndex;
+    } else if (this.shuffleEnabled && this.queue.length > 1) {
       do {
         nextIndex = Math.floor(Math.random() * this.queue.length);
       } while (nextIndex === this.currentIndex);
@@ -540,12 +731,55 @@ export class OverlayMusicPlayer {
 
   setShuffle(enabled: boolean) {
     this.shuffleEnabled = enabled;
+    this.clearPreloadedPlayback();
     this.notify();
+    this.scheduleNextPreload();
   }
 
   setRepeat(mode: RepeatMode) {
     this.repeat = mode;
+    this.clearPreloadedPlayback();
     this.notify();
+    this.scheduleNextPreload();
+  }
+
+  setVolume(volume: number, muted?: boolean) {
+    if (Number.isFinite(volume)) {
+      this.volume = Math.max(0, Math.min(1, volume));
+    }
+    if (typeof muted === "boolean") this.muted = muted;
+    this.notify();
+  }
+
+  seek(progressMs: number) {
+    if (!Number.isFinite(progressMs)) return;
+    const durationMs =
+      this.resolvedDurationMs ||
+      Math.max(0, (this.queue[this.currentIndex]?.duration ?? 0) * 1000);
+    this.progressMs = Math.max(
+      0,
+      Math.min(progressMs, durationMs || progressMs)
+    );
+    this.seekId += 1;
+    this.notify();
+  }
+
+  reportPlaybackProgress(progressMs: number, durationMs: number) {
+    if (this.state !== "playing" && this.state !== "paused") return;
+    if (!Number.isFinite(progressMs) || progressMs < 0) return;
+    this.progressMs = progressMs;
+    if (Number.isFinite(durationMs) && durationMs > 0) {
+      this.resolvedDurationMs = durationMs;
+    }
+
+    const now = Date.now();
+    if (
+      now - this.lastProgressBroadcastAt >=
+      PLAYBACK_PROGRESS_BROADCAST_INTERVAL_MS
+    ) {
+      this.lastProgressBroadcastAt = now;
+      this.notify();
+    }
   }
 
   async getPlaylists(): Promise<MusicPlaylist[]> {

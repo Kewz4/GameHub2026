@@ -212,10 +212,12 @@ jobs:
         shell: pwsh
         env:
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+          MAIN_VITE_UPDATER_GH_TOKEN: ${{ secrets.UPDATER_GH_TOKEN }}
         run: |
           cd web-setup-electron
-          npm install --no-audit --no-fund
-          npx electron-builder --win portable --config electron-builder.yml
+          if ([string]::IsNullOrWhiteSpace($env:MAIN_VITE_UPDATER_GH_TOKEN)) { throw "UPDATER_GH_TOKEN is required for private-repository WebSetup builds" }
+          npm ci --no-audit --no-fund
+          npx electron-builder --win portable --config electron-builder.yml "-c.extraMetadata.gamehubUpdaterToken=$env:MAIN_VITE_UPDATER_GH_TOKEN"
           if (-not (Test-Path "../dist/GameHub-WebSetup.exe")) { throw "web setup exe missing" }
 
       - name: Build web-setup bootstrapper (Linux)
@@ -224,10 +226,12 @@ jobs:
         shell: bash
         env:
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+          MAIN_VITE_UPDATER_GH_TOKEN: ${{ secrets.UPDATER_GH_TOKEN }}
         run: |
           cd web-setup-electron
-          npm install --no-audit --no-fund
-          npx electron-builder --linux AppImage --config electron-builder.yml
+          if [ -z "$MAIN_VITE_UPDATER_GH_TOKEN" ]; then echo "UPDATER_GH_TOKEN is required for private-repository WebSetup builds"; exit 1; fi
+          npm ci --no-audit --no-fund
+          npx electron-builder --linux AppImage --config electron-builder.yml "-c.extraMetadata.gamehubUpdaterToken=$MAIN_VITE_UPDATER_GH_TOKEN"
           if [ ! -f ../dist/GameHub-WebSetup.AppImage ]; then echo "web setup AppImage missing"; exit 1; fi
 
       - name: Upload release assets to private draft

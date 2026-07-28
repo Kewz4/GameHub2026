@@ -57,4 +57,10 @@ export interface GameRecorderSegmentMetadata {
   startedAt: number;
   endedAt: number;
   mimeType: string;
+  hasAudio: boolean;
+  /** Dimensions and cadence actually supplied to MediaRecorder. */
+  outputWidth: number;
+  outputHeight: number;
+  outputFps: GameRecorderFps;
+  normalizedOutput: boolean;
 }

@@ -3,6 +3,7 @@ export * from "./steam";
 export * from "./steam-250";
 export * from "./window-manager";
 export * from "./overlay-manager";
+export * from "./game-process-control-manager";
 export * from "./download";
 export * from "./download-layout-state";
 export * from "./download-orchestrator";

@@ -22,6 +22,7 @@ export * from "./constants";
 export * from "./controller-support";
 export * from "./overlay-preferences";
 export * from "./game-recorder-preferences";
+export * from "./game-recorder-quality";
 export * from "./download-directories";
 export * from "./html-sanitizer";
 export * from "./language-flags";

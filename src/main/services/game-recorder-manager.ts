@@ -2,6 +2,9 @@ import { isStaging } from "@main/constants";
 import { db, levelKeys } from "@main/level";
 import {
   DEFAULT_GAME_RECORDER_PREFERENCES,
+  GAME_RECORDER_AUDIO_BITRATE,
+  GAME_RECORDER_AUDIO_CHANNELS,
+  GAME_RECORDER_AUDIO_SAMPLE_RATE,
   resolveGameRecorderPreferences,
 } from "@shared";
 import type {
@@ -30,7 +33,10 @@ import { WindowManager } from "./window-manager";
 
 const TARGET_POLL_INTERVAL_MS = 750;
 const CAPTURE_RETRY_DELAY_MS = 5_000;
-const SAVE_FLUSH_TIMEOUT_MS = 6_000;
+// A capped 4K/120 segment can still be tens of megabytes. Give Chromium IPC
+// and slower recording drives enough time to commit the boundary before
+// declaring a save failure.
+const SAVE_FLUSH_TIMEOUT_MS = 15_000;
 const SEGMENT_RETENTION_MARGIN_MS = 6_000;
 
 type RecorderSegment = {
@@ -39,6 +45,7 @@ type RecorderSegment = {
   endedAt: number;
   mimeType: string;
   bytes: number;
+  hasAudio: boolean;
 };
 
 type PendingSave = {
@@ -94,6 +101,7 @@ const sourceMatchesWindow = (
 
 export class GameRecorderManager {
   private static preferences = DEFAULT_GAME_RECORDER_PREFERENCES;
+  private static spotifySystemAudioBlocked = false;
   private static activeGame: Game | null = null;
   private static targetPid = 0;
   private static targetWindowId: string | null = null;
@@ -133,7 +141,7 @@ export class GameRecorderManager {
 
   public static async applyUserPreferences(preferences: UserPreferences) {
     const previous = this.preferences;
-    this.preferences = resolveGameRecorderPreferences(preferences);
+    this.preferences = this.resolvePreferences(preferences);
     this.errorMessage = null;
 
     if (!this.preferences.enabled) {
@@ -158,6 +166,8 @@ export class GameRecorderManager {
       previous.resolution !== this.preferences.resolution ||
       previous.fps !== this.preferences.fps ||
       previous.captureGameAudio !== this.preferences.captureGameAudio;
+    const replayDurationChanged =
+      previous.replayDurationSeconds !== this.preferences.replayDurationSeconds;
 
     if (
       !this.preferences.instantReplayEnabled &&
@@ -166,8 +176,33 @@ export class GameRecorderManager {
       await this.clearRollingSegments(false);
     }
 
-    if (captureConfigurationChanged && this.captureActive) {
-      this.stopCaptureEngine();
+    if (captureConfigurationChanged) {
+      // Never concatenate segments created with different dimensions, frame
+      // rates, or audio layouts. Finish an active manual recording under its
+      // original capture configuration, then start a fresh replay buffer.
+      let recordingSplitFailed = false;
+      if (this.recordingStartedAt !== null) {
+        const splitResult = await this.stopRecording();
+        if (!splitResult.ok) {
+          recordingSplitFailed = true;
+          logger.warn(
+            "Could not finish recording before applying capture settings",
+            splitResult.error
+          );
+        }
+      }
+      if (this.captureActive) this.stopCaptureEngine();
+      await this.clearRollingSegments(!recordingSplitFailed);
+      if (recordingSplitFailed) {
+        this.publishState(
+          "Capture settings will apply after the current recording is stopped."
+        );
+        return;
+      }
+    }
+
+    if (replayDurationChanged) {
+      await this.trimRollingSegments();
     }
 
     await this.reconcileCapture();
@@ -189,7 +224,7 @@ export class GameRecorderManager {
         valueEncoding: "json",
       })
       .catch(() => null);
-    this.preferences = resolveGameRecorderPreferences(savedPreferences);
+    this.preferences = this.resolvePreferences(savedPreferences);
     if (this.preferences.enabled) {
       this.startTargetPolling();
       await this.refreshTarget();
@@ -258,9 +293,23 @@ export class GameRecorderManager {
                   ? "Recording is paused while the game is in the background."
                   : this.preferences.instantReplayEnabled && !this.captureActive
                     ? "Instant replay pauses while the game is in the background."
-                    : null),
+                    : this.spotifySystemAudioBlocked
+                      ? "System audio is disabled while Spotify Connect is selected, so Spotify music cannot enter gameplay recordings."
+                      : null),
       errorMessage: this.errorMessage,
     };
+  }
+
+  private static resolvePreferences(
+    userPreferences: UserPreferences | null
+  ): GameRecorderPreferences {
+    const resolved = resolveGameRecorderPreferences(userPreferences);
+    this.spotifySystemAudioBlocked = Boolean(
+      userPreferences?.musicProvider === "spotify" && resolved.captureGameAudio
+    );
+    return this.spotifySystemAudioBlocked
+      ? { ...resolved, captureGameAudio: false }
+      : resolved;
   }
 
   public static async startRecording() {
@@ -367,6 +416,7 @@ export class GameRecorderManager {
       endedAt,
       mimeType,
       bytes: bytes.length,
+      hasAudio: Boolean(metadata?.hasAudio),
     };
     this.segments.push(segment);
     if (
@@ -554,10 +604,13 @@ export class GameRecorderManager {
       ].join("\n");
       await fs.promises.writeFile(listPath, concatText, "utf8");
 
+      const hasAudio = selected[0]?.hasAudio ?? false;
       await this.runFfmpeg(ffmpegPath, [
         "-hide_banner",
         "-loglevel",
         "error",
+        "-fflags",
+        "+genpts",
         "-f",
         "concat",
         "-safe",
@@ -565,9 +618,28 @@ export class GameRecorderManager {
         "-i",
         listPath,
         "-map",
-        "0",
-        "-c",
+        "0:v:0",
+        ...(hasAudio ? ["-map", "0:a:0?"] : []),
+        "-c:v",
         "copy",
+        ...(hasAudio
+          ? [
+              "-c:a",
+              "libopus",
+              "-b:a",
+              String(GAME_RECORDER_AUDIO_BITRATE),
+              "-ar",
+              String(GAME_RECORDER_AUDIO_SAMPLE_RATE),
+              "-ac",
+              String(GAME_RECORDER_AUDIO_CHANNELS),
+              "-vbr",
+              "on",
+              "-compression_level",
+              "10",
+              "-af",
+              `aresample=${GAME_RECORDER_AUDIO_SAMPLE_RATE}:async=1000:first_pts=0`,
+            ]
+          : []),
         "-n",
         outputPath,
       ]);

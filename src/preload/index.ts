@@ -1679,6 +1679,7 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("getOverlayContext") as Promise<
       import("@types").HydraOverlayContext | null
     >,
+  overlayRendererReady: () => ipcRenderer.invoke("overlayRendererReady"),
   closeHydraOverlay: () => ipcRenderer.invoke("closeHydraOverlay"),
   setOverlayPerformancePinned: (pinned: boolean) =>
     ipcRenderer.invoke("setOverlayPerformancePinned", pinned),
@@ -1723,6 +1724,34 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("on-overlay-gamepad-action", listener);
     return () =>
       ipcRenderer.removeListener("on-overlay-gamepad-action", listener);
+  },
+  /* ── Active game process controls ───────────────────────────────────── */
+  getActiveGameProcessState: () =>
+    ipcRenderer.invoke("getActiveGameProcessState") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  pauseActiveGame: () =>
+    ipcRenderer.invoke("pauseActiveGame") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  resumeActiveGame: () =>
+    ipcRenderer.invoke("resumeActiveGame") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  closeActiveGame: () =>
+    ipcRenderer.invoke("closeActiveGame") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  onGameProcessControlState: (
+    cb: (state: import("@types").GameProcessControlState) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: import("@types").GameProcessControlState
+    ) => cb(state);
+    ipcRenderer.on("on-game-process-control-state", listener);
+    return () =>
+      ipcRenderer.removeListener("on-game-process-control-state", listener);
   },
   /* ── Gameplay recorder / Instant Replay ─────────────────────────────── */
   gameRecorderGetPreferences: () =>
@@ -1780,9 +1809,55 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("spotifyGetNowPlaying") as Promise<
       import("@types").SpotifyNowPlaying | null
     >,
+  spotifyGetPlayback: () =>
+    ipcRenderer.invoke("spotifyGetPlayback") as Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPlaybackState | null
+      >
+    >,
+  spotifyGetDevices: () =>
+    ipcRenderer.invoke("spotifyGetDevices") as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyDevice[]>
+    >,
+  spotifyGetQueue: () =>
+    ipcRenderer.invoke("spotifyGetQueue") as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyQueue>
+    >,
+  spotifyGetHome: () =>
+    ipcRenderer.invoke("spotifyGetHome") as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyHome>
+    >,
+  spotifySearch: (query: string) =>
+    ipcRenderer.invoke("spotifySearch", query) as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifySearchResults>
+    >,
+  spotifyGetPlaylistItems: (playlistId: string, offset?: number) =>
+    ipcRenderer.invoke(
+      "spotifyGetPlaylistItems",
+      playlistId,
+      offset
+    ) as Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPage<import("@types").SpotifyContentItem>
+      >
+    >,
+  spotifyPlaybackCommand: (command: import("@types").SpotifyPlaybackCommand) =>
+    ipcRenderer.invoke("spotifyPlaybackCommand", command) as Promise<
+      import("@types").SpotifyResult<true>
+    >,
+  spotifySetSaved: (uri: string, saved: boolean) =>
+    ipcRenderer.invoke("spotifySetSaved", uri, saved) as Promise<
+      import("@types").SpotifyResult<true>
+    >,
+  spotifyLibraryContains: (uris: string[]) =>
+    ipcRenderer.invoke("spotifyLibraryContains", uris) as Promise<
+      import("@types").SpotifyResult<Record<string, boolean>>
+    >,
+  spotifyOpenSettings: () =>
+    ipcRenderer.invoke("spotifyOpenSettings") as Promise<void>,
   spotifyControl: (action: import("@types").SpotifyControlAction) =>
     ipcRenderer.invoke("spotifyControl", action) as Promise<boolean>,
-  /* ── Music player (overlay, Deezer + yt-dlp) ─────────────────────────── */
+  /* ── Shared music player (launcher + overlay, Deezer + yt-dlp) ───────── */
   musicSearch: (query: string) =>
     ipcRenderer.invoke("musicSearch", query) as Promise<
       import("@types").MusicTrack[]
@@ -1791,6 +1866,14 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("musicGetState") as Promise<
       import("@types").MusicPlayerState
     >,
+  onMusicState: (cb: (state: import("@types").MusicPlayerState) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: import("@types").MusicPlayerState
+    ) => cb(state);
+    ipcRenderer.on("on-music-state", listener);
+    return () => ipcRenderer.removeListener("on-music-state", listener);
+  },
   musicSetQueue: (tracks: import("@types").MusicTrack[], startIndex?: number) =>
     ipcRenderer.invoke("musicSetQueue", tracks, startIndex),
   musicAddToQueue: (track: import("@types").MusicTrack) =>
@@ -1807,6 +1890,10 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("musicResume") as Promise<
       import("@types").MusicTrack | null
     >,
+  musicRefreshCurrent: () =>
+    ipcRenderer.invoke("musicRefreshCurrent") as Promise<
+      import("@types").MusicTrack | null
+    >,
   musicStop: () => ipcRenderer.invoke("musicStop"),
   musicNext: () =>
     ipcRenderer.invoke("musicNext") as Promise<
@@ -1820,6 +1907,12 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("musicSetShuffle", enabled),
   musicSetRepeat: (mode: import("@types").RepeatMode) =>
     ipcRenderer.invoke("musicSetRepeat", mode),
+  musicSetVolume: (volume: number, muted?: boolean) =>
+    ipcRenderer.invoke("musicSetVolume", volume, muted),
+  musicSeek: (progressMs: number) =>
+    ipcRenderer.invoke("musicSeek", progressMs),
+  musicReportPlaybackProgress: (progressMs: number, durationMs: number) =>
+    ipcRenderer.invoke("musicReportPlaybackProgress", progressMs, durationMs),
   musicGetPlaylists: () =>
     ipcRenderer.invoke("musicGetPlaylists") as Promise<
       import("@types").MusicPlaylist[]

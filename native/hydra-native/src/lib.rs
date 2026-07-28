@@ -3,6 +3,9 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::{cmp::Ordering, collections::HashMap};
 
+#[cfg(target_os = "windows")]
+use std::collections::{HashSet, VecDeque};
+
 use image::codecs::gif::GifDecoder;
 use image::codecs::png::PngDecoder;
 use image::codecs::webp::WebPDecoder;
@@ -34,7 +37,8 @@ use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::{
-    CloseHandle, FreeLibrary, GetLastError, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM,
+    CloseHandle, FreeLibrary, GetLastError, HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT,
+    RECT, WPARAM,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
@@ -47,10 +51,15 @@ use windows_sys::Win32::System::LibraryLoader::{
     GetModuleHandleW, GetProcAddress, LoadLibraryExW,
 };
 #[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+    TH32CS_SNAPPROCESS,
+};
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, GetExitCodeProcess, OpenProcess, OpenProcessToken, PROCESS_CREATE_THREAD,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE,
-    TerminateProcess,
+    GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess, OpenProcess, OpenProcessToken,
+    WaitForSingleObject, PROCESS_CREATE_THREAD, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, TerminateProcess,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
@@ -129,7 +138,16 @@ type XInputGetStateFn = unsafe extern "system" fn(u32, *mut XInputState) -> u32;
 #[cfg(target_os = "windows")]
 static XINPUT_GET_STATE_EX: OnceLock<Option<XInputGetStateFn>> = OnceLock::new();
 #[cfg(target_os = "windows")]
-static ELEVATED_PRESENTMON_PROCESS: OnceLock<Mutex<Option<usize>>> = OnceLock::new();
+static ELEVATED_PRESENTMON_PROCESS: OnceLock<Mutex<Option<ElevatedPresentMonProcess>>> =
+    OnceLock::new();
+#[cfg(target_os = "windows")]
+const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
+
+#[cfg(target_os = "windows")]
+struct ElevatedPresentMonProcess {
+    handle: usize,
+    stop_file: String,
+}
 
 #[napi(object)]
 pub struct NativeWindowBounds {
@@ -584,20 +602,32 @@ fn stop_elevated_presentmon_process() -> bool {
     let mut process_slot = process_slot
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let Some(raw_handle) = *process_slot else {
+    let Some(process) = process_slot.as_ref() else {
         return true;
     };
 
-    let process_handle = raw_handle as *mut std::ffi::c_void;
+    let process_handle = process.handle as *mut std::ffi::c_void;
     let mut exit_code = 0;
     const STILL_ACTIVE: u32 = 259;
     let already_exited =
         unsafe { GetExitCodeProcess(process_handle, &mut exit_code) } != 0
             && exit_code != STILL_ACTIVE;
-    if already_exited || unsafe { TerminateProcess(process_handle, 0) } != 0 {
+
+    // Ask the elevated bridge to stop PresentMon first. The bridge owns the
+    // child handle and can terminate it even when GameHub remains at normal
+    // integrity. If it does not exit promptly, retain the existing hard-stop
+    // fallback for the bridge itself.
+    if !already_exited {
+        let _ = std::fs::write(&process.stop_file, b"stop");
+    }
+    let exited_after_signal =
+        already_exited || unsafe { WaitForSingleObject(process_handle, 2_000) } == 0;
+    if exited_after_signal || unsafe { TerminateProcess(process_handle, 0) } != 0 {
         unsafe {
             CloseHandle(process_handle);
         }
+        let stop_file = process.stop_file.clone();
+        let _ = std::fs::remove_file(stop_file);
         *process_slot = None;
         return true;
     }
@@ -633,20 +663,43 @@ pub async fn launch_elevated_presentmon(
         if !stop_elevated_presentmon_process() {
             return false;
         }
+
+        // The console application's --output_file handle is exclusive, so a
+        // normal-integrity GameHub process cannot tail it while PresentMon is
+        // elevated. Launch our tiny elevated bridge instead: it captures
+        // PresentMon's row-flushed --output_stdout into a share-readable file.
+        let Some(resources_directory) = Path::new(&executable)
+            .parent()
+            .and_then(Path::parent)
+        else {
+            return false;
+        };
+        let bridge_executable = resources_directory
+            .join("hydra-native")
+            .join("presentmon-bridge.exe");
+        if !bridge_executable.is_file() {
+            return false;
+        }
+        let stop_file = format!("{output_file}.stop");
+        let _ = std::fs::remove_file(&stop_file);
         let parameters = format!(
-            "--process_id {} --output_file {} --no_console_stats --exclude_dropped \
-             --terminate_on_proc_exit --session_name {} --stop_existing_session",
-            target_pid,
+            "{} {} {} {} {} {}",
+            quote_presentmon_argument(&executable),
             quote_presentmon_argument(&output_file),
+            quote_presentmon_argument(&stop_file),
+            std::process::id(),
+            target_pid,
             quote_presentmon_argument(&session_name),
         );
-        let working_directory = Path::new(&executable)
+        let working_directory = bridge_executable
             .parent()
             .and_then(Path::to_str)
             .unwrap_or("")
             .to_owned();
         let verb: Vec<u16> = "runas\0".encode_utf16().collect();
-        let executable: Vec<u16> = executable
+        let bridge_executable: Vec<u16> = bridge_executable
+            .as_os_str()
+            .to_string_lossy()
             .encode_utf16()
             .chain(std::iter::once(0))
             .collect();
@@ -662,7 +715,7 @@ pub async fn launch_elevated_presentmon(
         execute_info.cbSize = size_of::<SHELLEXECUTEINFOW>() as u32;
         execute_info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
         execute_info.lpVerb = verb.as_ptr();
-        execute_info.lpFile = executable.as_ptr();
+        execute_info.lpFile = bridge_executable.as_ptr();
         execute_info.lpParameters = parameters.as_ptr();
         execute_info.lpDirectory = working_directory.as_ptr();
         execute_info.nShow = SW_HIDE;
@@ -674,7 +727,10 @@ pub async fn launch_elevated_presentmon(
         let mut process_slot = process_slot
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        *process_slot = Some(execute_info.hProcess as usize);
+        *process_slot = Some(ElevatedPresentMonProcess {
+            handle: execute_info.hProcess as usize,
+            stop_file,
+        });
         true
     }
 
@@ -693,6 +749,156 @@ pub fn stop_elevated_presentmon() -> bool {
     false
 }
 
+#[napi(object)]
+pub struct NativeProcessControlResult {
+    pub succeeded_pids: Vec<u32>,
+    pub failed_pids: Vec<u32>,
+    pub unsupported: bool,
+    pub error: Option<String>,
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "ntdll")]
+extern "system" {
+    fn NtSuspendProcess(process_handle: *mut std::ffi::c_void) -> i32;
+    fn NtResumeProcess(process_handle: *mut std::ffi::c_void) -> i32;
+}
+
+#[cfg(target_os = "windows")]
+fn collect_process_tree(root_pid: u32) -> Vec<u32> {
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return vec![root_pid];
+        }
+
+        let mut children_by_parent: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut entry: PROCESSENTRY32W = zeroed();
+        entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                children_by_parent
+                    .entry(entry.th32ParentProcessID)
+                    .or_default()
+                    .push(entry.th32ProcessID);
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+
+        let mut result = Vec::new();
+        let mut seen = HashSet::new();
+        let mut pending = VecDeque::from([root_pid]);
+        while let Some(pid) = pending.pop_front() {
+            if pid == 0 || !seen.insert(pid) {
+                continue;
+            }
+            result.push(pid);
+            if let Some(children) = children_by_parent.get(&pid) {
+                pending.extend(children.iter().copied());
+            }
+        }
+        result
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn control_one_process(pid: u32, action: &str) -> bool {
+    const PROCESS_SUSPEND_RESUME: u32 = 0x0800;
+    unsafe {
+        let rights = match action {
+            "suspend" | "resume" => PROCESS_SUSPEND_RESUME | SYNCHRONIZE_ACCESS,
+            "terminate" => PROCESS_TERMINATE | SYNCHRONIZE_ACCESS,
+            _ => return false,
+        };
+        let handle = OpenProcess(rights, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        let succeeded = match action {
+            "suspend" => NtSuspendProcess(handle) >= 0,
+            "resume" => NtResumeProcess(handle) >= 0,
+            "terminate" => TerminateProcess(handle, 0) != 0,
+            _ => false,
+        };
+        CloseHandle(handle);
+        succeeded
+    }
+}
+
+/// Applies an action only to a validated root PID and its descendants. The
+/// renderer never supplies this PID: the main-process service resolves it from
+/// the active game's tracked render target before calling into native code.
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn control_process_tree(root_pid: u32, action: String) -> NativeProcessControlResult {
+    #[cfg(target_os = "windows")]
+    {
+        if root_pid <= 4 || root_pid == unsafe { GetCurrentProcessId() } {
+            return NativeProcessControlResult {
+                succeeded_pids: Vec::new(),
+                failed_pids: vec![root_pid],
+                unsupported: false,
+                error: Some("unsafe process target rejected".to_string()),
+            };
+        }
+        if !matches!(action.as_str(), "suspend" | "resume" | "terminate") {
+            return NativeProcessControlResult {
+                succeeded_pids: Vec::new(),
+                failed_pids: vec![root_pid],
+                unsupported: false,
+                error: Some("unsupported process action".to_string()),
+            };
+        }
+
+        let mut process_tree = collect_process_tree(root_pid);
+        let current_pid = unsafe { GetCurrentProcessId() };
+        if process_tree.contains(&current_pid) {
+            return NativeProcessControlResult {
+                succeeded_pids: Vec::new(),
+                failed_pids: process_tree,
+                unsupported: false,
+                error: Some("process tree contains GameHub and was rejected".to_string()),
+            };
+        }
+        // Stop descendants before their parent so the target cannot spawn more
+        // children while a suspend/close operation is being applied.
+        if matches!(action.as_str(), "suspend" | "terminate") {
+            process_tree.reverse();
+        }
+
+        let mut succeeded_pids = Vec::new();
+        let mut failed_pids = Vec::new();
+        for pid in process_tree {
+            if control_one_process(pid, &action) {
+                succeeded_pids.push(pid);
+            } else {
+                failed_pids.push(pid);
+            }
+        }
+        NativeProcessControlResult {
+            error: if failed_pids.is_empty() {
+                None
+            } else {
+                Some("one or more game processes denied the requested action".to_string())
+            },
+            succeeded_pids,
+            failed_pids,
+            unsupported: false,
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    NativeProcessControlResult {
+        succeeded_pids: Vec::new(),
+        failed_pids: vec![root_pid],
+        unsupported: true,
+        error: Some("process pause and resume are only available on Windows".to_string()),
+    }
+}
+
 #[napi]
 pub fn get_overlay_gamepad_buttons() -> u32 {
     #[cfg(target_os = "windows")]
@@ -704,7 +910,10 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
         const DPAD_RIGHT: u16 = 0x0008;
         const STICK_THRESHOLD: i16 = 12_000;
 
-        let mut first_connected_buttons = None;
+        // Treat every connected controller as an input source. Returning the
+        // first non-idle pad loses Guide presses from another pad whenever the
+        // first one is holding a direction.
+        let mut combined_buttons = 0_u32;
         for user_index in 0..4 {
             let mut state = XInputState::default();
             let result = get_xinput_state(user_index, &mut state);
@@ -724,14 +933,10 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
                 buttons |= DPAD_RIGHT;
             }
 
-            let buttons = u32::from(buttons);
-            first_connected_buttons.get_or_insert(buttons);
-            if buttons != 0 {
-                return buttons;
-            }
+            combined_buttons |= u32::from(buttons);
         }
 
-        return first_connected_buttons.unwrap_or(0);
+        return combined_buttons;
     }
 
     #[cfg(not(target_os = "windows"))]

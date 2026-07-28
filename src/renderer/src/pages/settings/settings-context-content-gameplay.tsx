@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Button,
   CheckboxField,
+  HelperText,
   SelectField,
   TextField,
 } from "@renderer/components";
@@ -14,7 +15,6 @@ import type {
   GameRecorderFps,
   GameRecorderReplayDuration,
   GameRecorderResolution,
-  SpotifyStatus,
 } from "@types";
 
 import "./settings-behavior.scss";
@@ -43,20 +43,14 @@ export function SettingsContextContentGameplay() {
     gameRecorderReplayDurationSeconds: 30 as GameRecorderReplayDuration,
     gameRecorderCaptureAudio: true,
     gameRecorderOutputDirectory: null as string | null,
-    spotifyClientId: "",
   });
 
-  const [spotifyStatus, setSpotifyStatus] = useState<SpotifyStatus | null>(
-    null
-  );
   const [resolvedRecorderOutputDirectory, setResolvedRecorderOutputDirectory] =
     useState("");
+  const spotifySystemAudioBlocked =
+    userPreferences?.musicProvider === "spotify";
 
   useEffect(() => {
-    window.electron
-      .spotifyGetStatus()
-      .then(setSpotifyStatus)
-      .catch(() => undefined);
     window.electron
       .gameRecorderGetPreferences()
       .then((state) =>
@@ -91,35 +85,12 @@ export function SettingsContextContentGameplay() {
         userPreferences.gameRecorderCaptureAudio ?? true,
       gameRecorderOutputDirectory:
         userPreferences.gameRecorderOutputDirectory ?? null,
-      spotifyClientId: userPreferences.spotifyClientId ?? "",
     });
   }, [userPreferences]);
 
   const handleChange = (values: Partial<typeof form>) => {
     setForm((prev) => ({ ...prev, ...values }));
     updateUserPreferences(values);
-  };
-
-  const saveSpotifyClientId = () => {
-    updateUserPreferences({ spotifyClientId: form.spotifyClientId || null });
-    window.electron
-      .spotifyGetStatus()
-      .then(setSpotifyStatus)
-      .catch(() => undefined);
-  };
-
-  const connectSpotify = () => {
-    window.electron
-      .spotifyLogin()
-      .then(setSpotifyStatus)
-      .catch(() => undefined);
-  };
-
-  const disconnectSpotify = () => {
-    window.electron
-      .spotifyLogout()
-      .then(setSpotifyStatus)
-      .catch(() => undefined);
   };
 
   const chooseRecorderOutputDirectory = async () => {
@@ -321,14 +292,24 @@ export function SettingsContextContentGameplay() {
 
         <CheckboxField
           label={t("capture_game_audio")}
-          checked={form.gameRecorderCaptureAudio}
-          disabled={!form.gameRecorderEnabled}
+          checked={
+            spotifySystemAudioBlocked ? false : form.gameRecorderCaptureAudio
+          }
+          disabled={!form.gameRecorderEnabled || spotifySystemAudioBlocked}
           onChange={() =>
             handleChange({
               gameRecorderCaptureAudio: !form.gameRecorderCaptureAudio,
             })
           }
         />
+        {spotifySystemAudioBlocked && (
+          <HelperText tone="danger">
+            System audio is disabled while Spotify Connect is selected. This
+            keeps Spotify music out of gameplay recordings and Instant Replay;
+            switch back to GameHub Music to restore your saved game-audio
+            preference.
+          </HelperText>
+        )}
 
         <TextField
           label={t("capture_output_directory")}
@@ -355,41 +336,6 @@ export function SettingsContextContentGameplay() {
         >
           {t("open_capture_folder")}
         </Button>
-      </div>
-
-      <div className="settings-context-panel__group">
-        <h3>{t("spotify_overlay")}</h3>
-
-        <TextField
-          label={t("spotify_client_id")}
-          value={form.spotifyClientId ?? ""}
-          onChange={(event) =>
-            setForm((prev) => ({
-              ...prev,
-              spotifyClientId: event.target.value,
-            }))
-          }
-          placeholder="0123456789abcdef0123456789abcdef"
-          rightContent={
-            <Button type="button" onClick={saveSpotifyClientId}>
-              {t("save_changes")}
-            </Button>
-          }
-          hint={t("spotify_client_id_hint")}
-        />
-
-        {spotifyStatus?.connected ? (
-          <Button theme="outline" onClick={disconnectSpotify}>
-            {t("spotify_disconnect")}
-          </Button>
-        ) : (
-          <Button
-            onClick={connectSpotify}
-            disabled={!spotifyStatus?.configured}
-          >
-            {t("spotify_connect")}
-          </Button>
-        )}
       </div>
     </div>
   );

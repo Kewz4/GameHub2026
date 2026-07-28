@@ -1,4 +1,5 @@
 import { GrabberIcon } from "@primer/octicons-react";
+import { EyeOff, Maximize2 } from "lucide-react";
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -22,7 +23,13 @@ type OverlayWidgetFrameProps = {
     id: OverlayWidgetId,
     event: ReactPointerEvent<HTMLElement>
   ) => void;
+  onBeginResize: (
+    id: OverlayWidgetId,
+    event: ReactPointerEvent<HTMLElement>
+  ) => void;
+  onCycleSize: (id: OverlayWidgetId) => void;
   onFocus: (id: OverlayWidgetId) => void;
+  onHide: (id: OverlayWidgetId) => void;
   registerWidget: (id: OverlayWidgetId, node: HTMLElement | null) => void;
 };
 
@@ -34,7 +41,10 @@ export const OverlayWidgetFrame = ({
   layoutLocked,
   meta,
   onBeginDrag,
+  onBeginResize,
+  onCycleSize,
   onFocus,
+  onHide,
   registerWidget,
   title,
   widgetId,
@@ -63,6 +73,25 @@ export const OverlayWidgetFrame = ({
         </div>
         <div className="overlay-card__tools">
           {headerActions}
+          <button
+            type="button"
+            className="overlay-widget__tool"
+            onClick={() => onCycleSize(widgetId)}
+            aria-label={`Cycle ${title} widget size`}
+            title="Cycle widget size"
+            disabled={layoutLocked}
+          >
+            <Maximize2 size={14} />
+          </button>
+          <button
+            type="button"
+            className="overlay-widget__tool"
+            onClick={() => onHide(widgetId)}
+            aria-label={`Hide ${title} widget`}
+            title="Hide widget"
+          >
+            <EyeOff size={14} />
+          </button>
           <span
             className={`overlay-widget__drag ${layoutLocked ? "is-locked" : ""}`}
             aria-hidden="true"
@@ -77,6 +106,14 @@ export const OverlayWidgetFrame = ({
         </div>
       </header>
       {children}
+      <span
+        className={`overlay-widget__resize ${layoutLocked ? "is-locked" : ""}`}
+        aria-hidden="true"
+        title={layoutLocked ? "Unlock the layout to resize" : "Resize widget"}
+        onPointerDown={(event) => onBeginResize(widgetId, event)}
+      >
+        <Maximize2 size={13} />
+      </span>
     </section>
   );
 };

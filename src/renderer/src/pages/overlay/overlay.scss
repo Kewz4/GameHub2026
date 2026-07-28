@@ -1113,6 +1113,13 @@ body.overlay-widget-dragging * {
   font-weight: 800;
   font-size: 15px;
 }
+.overlay-pin-tile__icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
 .overlay-pin-tile__label {
   font-size: 10.5px;
   color: var(--muted);
@@ -2185,5 +2192,634 @@ body.overlay-controller-navigation
     input {
       display: none;
     }
+  }
+}
+
+// Freeform workspace: the game and action areas are compact floating docks,
+// leaving the full game window available for movable widgets.
+body.overlay-widget-resizing,
+body.overlay-widget-resizing * {
+  cursor: nwse-resize !important;
+  user-select: none !important;
+}
+
+.overlay-panel {
+  display: block;
+  background: none;
+}
+
+.overlay-header {
+  position: absolute;
+  inset: 12px 12px auto;
+  min-height: 0;
+  padding: 0;
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  pointer-events: none;
+
+  &__game,
+  &__actions {
+    pointer-events: auto;
+    border: 1px solid var(--color-border);
+    background: color-mix(
+      in srgb,
+      var(--color-dark-background) 91%,
+      transparent
+    );
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(22px) saturate(1.1);
+  }
+
+  &__game {
+    max-width: min(46vw, 580px);
+    padding: 7px 12px 7px 7px;
+    border-radius: var(--radius-lg);
+  }
+
+  &__identity {
+    min-width: 0;
+  }
+
+  &__clock {
+    flex: none;
+    display: grid;
+    gap: 2px;
+    margin-left: auto;
+    padding-left: 11px;
+    border-left: 1px solid var(--color-border);
+    color: var(--color-text-bright);
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+  }
+
+  &__clock-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    min-height: 14px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+
+    svg {
+      flex: none;
+      color: currentColor;
+      stroke-width: 1.8;
+    }
+
+    &--date {
+      color: var(--color-text-muted);
+      font-size: 10px;
+      font-weight: 600;
+    }
+  }
+
+  &__cover {
+    width: 38px;
+    height: 38px;
+  }
+
+  &__title {
+    max-width: 36ch;
+    font-size: 14px;
+  }
+
+  &__meta {
+    margin-top: 1px;
+    font-size: 11px;
+  }
+
+  &__actions {
+    position: relative;
+    gap: 5px;
+    padding: 5px;
+    border-radius: var(--radius-lg);
+  }
+
+  &__shortcut {
+    margin: 0 3px 0 4px;
+  }
+
+  &__button {
+    width: 32px;
+    height: 32px;
+  }
+
+  &__widget-button {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 650;
+    cursor: pointer;
+
+    &:hover,
+    &.is-active {
+      color: var(--color-text-bright);
+      border-color: var(--color-border);
+      background: var(--color-surface-hover);
+    }
+  }
+
+  &__process {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding-right: 4px;
+    border-right: 1px solid var(--color-border);
+  }
+
+  &__process-button {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+
+    &--danger:hover:not(:disabled) {
+      color: var(--color-danger);
+      background: color-mix(in srgb, var(--color-danger) 11%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+  }
+}
+
+.overlay-close {
+  width: 32px;
+  height: 32px;
+}
+
+.overlay-grid {
+  position: absolute;
+  inset: 0;
+  margin: 10px;
+}
+
+.overlay-card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  padding: 11px;
+
+  &--perf,
+  &--ach,
+  &--capture,
+  &--music,
+  &--friends,
+  &--mixer,
+  &--pins,
+  &--notes {
+    max-height: none;
+  }
+
+  &__head {
+    flex: none;
+  }
+}
+
+.overlay-widget-menu-wrap {
+  position: relative;
+}
+
+.overlay-widget-menu {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 9px);
+  right: 0;
+  width: 270px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-dark-background) 97%, transparent);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(24px);
+
+  &__heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 7px 8px;
+    border-bottom: 1px solid var(--color-border);
+
+    strong {
+      color: var(--color-text-bright);
+      font-size: 12.5px;
+    }
+
+    small {
+      color: var(--color-text-faint);
+      font-size: 10.5px;
+    }
+  }
+
+  label {
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 7px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 11.5px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-surface-hover);
+    }
+
+    &.is-disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    input {
+      accent-color: var(--color-text-bright);
+    }
+
+    span {
+      flex: 1;
+    }
+
+    small {
+      color: var(--color-text-faint);
+      font-size: 9.5px;
+    }
+  }
+
+  &__reset {
+    width: 100%;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 5px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+  }
+}
+
+.overlay-widget__tool {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+}
+
+.overlay-card--perf .overlay-pin span {
+  display: none;
+}
+
+.overlay-widget__resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: 0.58;
+
+  &:hover {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+    opacity: 1;
+  }
+
+  &.is-locked {
+    pointer-events: none;
+    opacity: 0;
+  }
+}
+
+.overlay-ach__filters {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  flex: none;
+
+  button {
+    min-height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text-faint);
+    background: var(--color-surface);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 650;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover,
+    &.is-active {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+
+    &.is-active {
+      border-color: var(--color-text-bright);
+    }
+  }
+}
+
+.overlay-ach__item {
+  align-items: flex-start;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background: var(--color-surface);
+  }
+}
+
+.overlay-ach__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.overlay-ach__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+
+  em {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 5px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text-faint);
+    background: var(--color-surface);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 650;
+
+    &.is-unlocked {
+      color: var(--color-text-bright);
+    }
+
+    &.is-missable {
+      color: var(--color-warning);
+    }
+  }
+}
+
+.overlay-capture__replay {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--color-text-muted);
+    font-size: 10.5px;
+  }
+
+  select {
+    min-height: 30px;
+    padding: 0 28px 0 9px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-bright);
+    background: var(--color-surface);
+    font: inherit;
+    font-size: 10.5px;
+    cursor: pointer;
+
+    &[data-controller-editing="true"] {
+      outline: 2px solid var(--color-text-bright);
+      outline-offset: 3px;
+    }
+  }
+}
+
+.overlay-mixer__adjust {
+  width: 100%;
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded="true"] {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+
+  svg {
+    color: var(--color-text-faint);
+  }
+}
+
+.overlay-mixer__mute {
+  color: var(--color-text-bright);
+  background: var(--color-surface);
+}
+
+.overlay-mixer__slider {
+  margin: 6px 4px 3px;
+
+  &[data-controller-editing="true"] {
+    outline: 2px solid var(--color-text-bright);
+    outline-offset: 5px;
+  }
+}
+
+.overlay-music__volume {
+  position: relative;
+  min-width: 0;
+  margin-left: auto;
+
+  .overlay-music__volume-trigger {
+    width: auto;
+    min-width: 58px;
+    padding: 0 8px;
+    display: inline-flex;
+    gap: 5px;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+
+    span {
+      font-size: 10px;
+      font-weight: 650;
+    }
+  }
+
+  &-panel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 40;
+    width: 170px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-dark-background);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.42);
+
+    input {
+      flex: 1;
+      min-width: 0;
+
+      &[data-controller-editing="true"] {
+        outline: 2px solid var(--color-text-bright);
+        outline-offset: 5px;
+      }
+    }
+  }
+}
+
+// Primary music controls use a light branded surface with dark glyphs. The
+// previous white-on-white combination made Play and queue actions disappear.
+.overlay-music__np-ctrls .overlay-music__play,
+.overlay-music__search-play,
+.overlay-music__plist-save {
+  color: var(--color-dark-background) !important;
+  border-color: var(--color-text-bright) !important;
+  background: var(--color-text-bright) !important;
+
+  &:hover {
+    color: var(--color-dark-background) !important;
+    background: color-mix(
+      in srgb,
+      var(--color-text-bright) 86%,
+      var(--color-background)
+    ) !important;
+  }
+}
+
+.overlay-music__search-add,
+.overlay-music__search-plist-btn {
+  color: var(--color-text-bright);
+  background: var(--color-surface);
+}
+
+.overlay-music__np-bar[data-controller-editing="true"] {
+  outline: 2px solid var(--color-text-bright);
+  outline-offset: 5px;
+}
+
+.overlay-foot {
+  display: none;
+}
+
+.overlay--toast {
+  overflow: hidden;
+}
+
+.overlay-toast {
+  inset: 12px;
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  align-items: flex-start;
+
+  > div {
+    min-width: 0;
+  }
+
+  p {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 900px), (max-height: 640px) {
+  .overlay-header {
+    inset: 8px 8px auto;
+  }
+
+  .overlay-header__game {
+    max-width: 42vw;
+  }
+
+  .overlay-header__clock {
+    gap: 1px;
+    padding-left: 8px;
+  }
+
+  .overlay-header__shortcut,
+  .overlay-header__widget-button span,
+  .overlay-header__process-button span {
+    display: none;
+  }
+
+  .overlay-grid {
+    margin: 7px;
   }
 }

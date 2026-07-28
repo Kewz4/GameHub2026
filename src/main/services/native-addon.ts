@@ -45,6 +45,17 @@ type HydraNativeModule = {
     sessionName: string
   ) => Promise<boolean>;
   stopElevatedPresentmon: () => boolean;
+  controlProcessTree: (
+    rootPid: number,
+    action: "suspend" | "resume" | "terminate"
+  ) => {
+    succeededPids?: number[];
+    succeeded_pids?: number[];
+    failedPids?: number[];
+    failed_pids?: number[];
+    unsupported: boolean;
+    error?: string | null;
+  };
   // BrowserWindow overlay placement (Windows-only; no-op fallbacks elsewhere).
   getProcessWindowBounds: (pid: number) => NativeWindowBounds | null;
   placeOverlayWindow: (windowHandle: Buffer, pid: number) => boolean;
@@ -69,6 +80,13 @@ export type NativeWindowBounds = {
   height: number;
   windowId?: string;
   window_id?: string;
+};
+
+export type NativeProcessControlResult = {
+  succeededPids: number[];
+  failedPids: number[];
+  unsupported: boolean;
+  error: string | null;
 };
 
 export type SystemProcessMap = {
@@ -408,6 +426,29 @@ export class NativeAddon {
       return this.load().stopElevatedPresentmon();
     } catch {
       return false;
+    }
+  }
+
+  public static controlProcessTree(
+    rootPid: number,
+    action: "suspend" | "resume" | "terminate"
+  ): NativeProcessControlResult {
+    try {
+      const result = this.load().controlProcessTree(rootPid, action);
+      return {
+        succeededPids: result.succeededPids ?? result.succeeded_pids ?? [],
+        failedPids: result.failedPids ?? result.failed_pids ?? [],
+        unsupported: result.unsupported,
+        error: result.error ?? null,
+      };
+    } catch (error) {
+      logger.error("Failed to control active game process tree", error);
+      return {
+        succeededPids: [],
+        failedPids: rootPid > 0 ? [rootPid] : [],
+        unsupported: process.platform !== "win32",
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 

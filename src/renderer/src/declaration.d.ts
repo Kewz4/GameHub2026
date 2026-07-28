@@ -1211,6 +1211,7 @@ declare global {
     getOverlayContext: () => Promise<
       import("@types").HydraOverlayContext | null
     >;
+    overlayRendererReady: () => Promise<void>;
     closeHydraOverlay: () => Promise<void>;
     setOverlayPerformancePinned: (pinned: boolean) => Promise<void>;
     getOverlayNote: () => Promise<string>;
@@ -1223,6 +1224,15 @@ declare global {
     onOverlayPerformancePin: (cb: (pinned: boolean) => void) => () => void;
     onOverlayGamepadAction: (
       cb: (action: import("@types").HydraOverlayGamepadAction) => void
+    ) => () => void;
+    getActiveGameProcessState: () => Promise<
+      import("@types").GameProcessControlState
+    >;
+    pauseActiveGame: () => Promise<import("@types").GameProcessControlState>;
+    resumeActiveGame: () => Promise<import("@types").GameProcessControlState>;
+    closeActiveGame: () => Promise<import("@types").GameProcessControlState>;
+    onGameProcessControlState: (
+      cb: (state: import("@types").GameProcessControlState) => void
     ) => () => void;
     gameRecorderGetPreferences: () => Promise<
       import("@types").GameRecorderState
@@ -1252,6 +1262,44 @@ declare global {
     spotifyGetNowPlaying: () => Promise<
       import("@types").SpotifyNowPlaying | null
     >;
+    spotifyGetPlayback: () => Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPlaybackState | null
+      >
+    >;
+    spotifyGetDevices: () => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyDevice[]>
+    >;
+    spotifyGetQueue: () => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyQueue>
+    >;
+    spotifyGetHome: () => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyHome>
+    >;
+    spotifySearch: (
+      query: string
+    ) => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifySearchResults>
+    >;
+    spotifyGetPlaylistItems: (
+      playlistId: string,
+      offset?: number
+    ) => Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPage<import("@types").SpotifyContentItem>
+      >
+    >;
+    spotifyPlaybackCommand: (
+      command: import("@types").SpotifyPlaybackCommand
+    ) => Promise<import("@types").SpotifyResult<true>>;
+    spotifySetSaved: (
+      uri: string,
+      saved: boolean
+    ) => Promise<import("@types").SpotifyResult<true>>;
+    spotifyLibraryContains: (
+      uris: string[]
+    ) => Promise<import("@types").SpotifyResult<Record<string, boolean>>>;
+    spotifyOpenSettings: () => Promise<void>;
     spotifyControl: (
       action: import("@types").SpotifyControlAction
     ) => Promise<boolean>;
@@ -1665,9 +1713,12 @@ declare global {
       options: { width: number; height: number; preserveAnimation?: boolean }
     ) => Promise<string | null>;
 
-    /* Music player (overlay, Deezer + yt-dlp) */
+    /* Shared music player (launcher + overlay, Deezer + yt-dlp) */
     musicSearch: (query: string) => Promise<import("@types").MusicTrack[]>;
     musicGetState: () => Promise<import("@types").MusicPlayerState>;
+    onMusicState: (
+      cb: (state: import("@types").MusicPlayerState) => void
+    ) => () => void;
     musicSetQueue: (
       tracks: import("@types").MusicTrack[],
       startIndex?: number
@@ -1678,11 +1729,18 @@ declare global {
     musicPlay: (index?: number) => Promise<import("@types").MusicTrack | null>;
     musicPause: () => Promise<void>;
     musicResume: () => Promise<import("@types").MusicTrack | null>;
+    musicRefreshCurrent: () => Promise<import("@types").MusicTrack | null>;
     musicStop: () => Promise<void>;
     musicNext: () => Promise<import("@types").MusicTrack | null>;
     musicPrevious: () => Promise<import("@types").MusicTrack | null>;
     musicSetShuffle: (enabled: boolean) => Promise<void>;
     musicSetRepeat: (mode: import("@types").RepeatMode) => Promise<void>;
+    musicSetVolume: (volume: number, muted?: boolean) => Promise<void>;
+    musicSeek: (progressMs: number) => Promise<void>;
+    musicReportPlaybackProgress: (
+      progressMs: number,
+      durationMs: number
+    ) => Promise<void>;
     musicGetPlaylists: () => Promise<import("@types").MusicPlaylist[]>;
     musicCreatePlaylist: (
       name: string

@@ -55,6 +55,7 @@ export class OverlayFpsMonitor {
   private waitingForFreshSamples = false;
   private presentMonFilePoll: NodeJS.Timeout | null = null;
   private presentMonOutputFile: string | null = null;
+  private presentMonDiagnosticFile: string | null = null;
   private presentMonFileOffset = 0;
   private presentMonFilePending = "";
   private presentMonColumns: ReturnType<
@@ -228,12 +229,15 @@ export class OverlayFpsMonitor {
       outputDirectory,
       `frames-${process.pid}-${targetPid}-${generation}-${captureRunId}.csv`
     );
+    const diagnosticFile = `${outputFile}.log`;
     try {
       fs.rmSync(outputFile, { force: true });
+      fs.rmSync(diagnosticFile, { force: true });
     } catch {
       // A stale diagnostic file is harmless; PresentMon will truncate it.
     }
     this.presentMonOutputFile = outputFile;
+    this.presentMonDiagnosticFile = diagnosticFile;
     this.presentMonFileOffset = 0;
     this.presentMonFilePending = "";
     this.presentMonColumns = null;
@@ -254,12 +258,16 @@ export class OverlayFpsMonitor {
     ) {
       if (started) NativeAddon.stopElevatedPresentMon();
       this.presentMonOutputFile = null;
+      this.presentMonDiagnosticFile = null;
       this.removePresentMonFile(outputFile);
+      this.removePresentMonFile(diagnosticFile);
       return;
     }
     if (!started) {
       this.presentMonOutputFile = null;
+      this.presentMonDiagnosticFile = null;
       this.removePresentMonFile(outputFile);
+      this.removePresentMonFile(diagnosticFile);
       this.resetSamples();
       this.publishState("permission-required", PERMISSION_MESSAGE);
       logger.warn(
@@ -288,15 +296,19 @@ export class OverlayFpsMonitor {
         generation === this.generation &&
         this.lastSampleAt === 0
       ) {
+        const diagnostic = this.readPresentMonDiagnostic(diagnosticFile);
         this.stopCaptureProcess();
         this.resetSamples();
         this.publishState(
           "error",
-          "PresentMon started as administrator but this game did not expose frame samples."
+          diagnostic
+            ? "PresentMon could not capture this game's frames. Check GameHub logs for the collector error."
+            : "PresentMon started as administrator but this game did not expose frame samples."
         );
         logger.warn("Elevated PresentMon produced no frame samples", {
           pid: targetPid,
           executable: this.targetExecutable,
+          diagnostic,
         });
       }
     }, CAPTURE_START_TIMEOUT);
@@ -573,8 +585,21 @@ export class OverlayFpsMonitor {
     this.captureRunId += 1;
     NativeAddon.stopElevatedPresentMon();
     const outputFile = this.presentMonOutputFile;
+    const diagnosticFile = this.presentMonDiagnosticFile;
     this.presentMonOutputFile = null;
+    this.presentMonDiagnosticFile = null;
     if (outputFile) this.removePresentMonFile(outputFile);
+    if (diagnosticFile) this.removePresentMonFile(diagnosticFile);
+  }
+
+  private readPresentMonDiagnostic(diagnosticFile: string) {
+    try {
+      if (!fs.existsSync(diagnosticFile)) return null;
+      const diagnostic = fs.readFileSync(diagnosticFile, "utf8").trim();
+      return diagnostic ? diagnostic.slice(-4_000) : null;
+    } catch {
+      return null;
+    }
   }
 
   private removePresentMonFile(outputFile: string, attempt = 0) {
@@ -596,7 +621,9 @@ export class OverlayFpsMonitor {
       if (
         !entry.isFile() ||
         !entry.name.startsWith("frames-") ||
-        !entry.name.endsWith(".csv")
+        ![".csv", ".csv.log", ".csv.stop"].some((extension) =>
+          entry.name.endsWith(extension)
+        )
       ) {
         continue;
       }

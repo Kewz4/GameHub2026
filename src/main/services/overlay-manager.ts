@@ -83,6 +83,12 @@ export class OverlayManager {
   private static targetExecutable: string | null = null;
   private static activationToastPending = false;
   private static activationToastShown = false;
+  private static overlayRendererReady = false;
+  private static overlayContextGeneration = 0;
+  private static rendererContextGeneration = -1;
+  private static overlayRendererReadyWaiters = new Set<
+    (ready: boolean) => void
+  >();
 
   public static initialize() {
     GameRecorderManager.initialize();
@@ -104,6 +110,7 @@ export class OverlayManager {
     this.activeGame = game;
     this.sessionStartedAt = Date.now();
     this.performancePinned = false;
+    this.invalidateOverlayRendererContext(true);
     void GameRecorderManager.setActiveGame(game);
     void this.configureActiveGame(game);
   }
@@ -193,6 +200,7 @@ export class OverlayManager {
 
     this.activeGame = null;
     this.sessionStartedAt = 0;
+    this.invalidateOverlayRendererContext(false);
     this.stopActiveServices();
     void GameRecorderManager.clearActiveGame(game);
   }
@@ -200,6 +208,7 @@ export class OverlayManager {
   public static async getContext(): Promise<HydraOverlayContext | null> {
     const game = this.activeGame;
     if (!game) return null;
+    const contextGeneration = this.overlayContextGeneration;
 
     const [user, achievements, assets] = await Promise.all([
       db
@@ -209,7 +218,15 @@ export class OverlayManager {
       getGameAssets(game.objectId, game.shop).catch(() => null),
     ]);
 
-    return {
+    if (
+      contextGeneration !== this.overlayContextGeneration ||
+      this.activeGame?.objectId !== game.objectId ||
+      this.activeGame.shop !== game.shop
+    ) {
+      return null;
+    }
+
+    const context: HydraOverlayContext = {
       game: {
         title: game.title,
         objectId: game.objectId,
@@ -251,11 +268,73 @@ export class OverlayManager {
         },
       },
     };
+    this.rendererContextGeneration = contextGeneration;
+    return context;
   }
 
   public static toggleOverlay() {
     if (!this.activeGame || !this.servicesActive) return;
     void this.toggleOverlayWindow();
+  }
+
+  public static markRendererReady() {
+    if (this.rendererContextGeneration !== this.overlayContextGeneration) {
+      return;
+    }
+    this.overlayRendererReady = true;
+    for (const resolve of this.overlayRendererReadyWaiters) resolve(true);
+    this.overlayRendererReadyWaiters.clear();
+  }
+
+  private static waitForRendererReady(contextGeneration: number) {
+    if (contextGeneration !== this.overlayContextGeneration) {
+      return Promise.resolve(false);
+    }
+    if (
+      this.overlayRendererReady &&
+      this.rendererContextGeneration === contextGeneration
+    ) {
+      return Promise.resolve(true);
+    }
+    return new Promise<boolean>((resolve) => {
+      this.overlayRendererReadyWaiters.add(resolve);
+    });
+  }
+
+  private static resetOverlayRendererReadiness() {
+    this.overlayContextGeneration += 1;
+    this.overlayRendererReady = false;
+    this.rendererContextGeneration = -1;
+    for (const resolve of this.overlayRendererReadyWaiters) resolve(false);
+    this.overlayRendererReadyWaiters.clear();
+  }
+
+  private static requestOverlayRendererContext() {
+    const overlayWindow = this.overlayWindow;
+    if (
+      !overlayWindow ||
+      overlayWindow.isDestroyed() ||
+      overlayWindow.webContents.isDestroyed()
+    ) {
+      return;
+    }
+    overlayWindow.webContents.send("on-overlay-mode", "hidden");
+    if (!overlayWindow.webContents.isLoadingMainFrame()) {
+      overlayWindow.webContents.send("on-overlay-shown");
+    }
+  }
+
+  private static invalidateOverlayRendererContext(requestRefresh: boolean) {
+    this.resetOverlayRendererReadiness();
+    if (requestRefresh) {
+      this.requestOverlayRendererContext();
+    } else if (
+      this.overlayWindow &&
+      !this.overlayWindow.isDestroyed() &&
+      !this.overlayWindow.webContents.isDestroyed()
+    ) {
+      this.overlayWindow.webContents.send("on-overlay-mode", "hidden");
+    }
   }
 
   private static async toggleOverlayWindow() {
@@ -289,9 +368,25 @@ export class OverlayManager {
     this.lastToggleAt = now;
 
     const overlayWindow = this.ensureOverlayWindow(targetBounds);
+    if (
+      !this.overlayRendererReady &&
+      !overlayWindow.webContents.isLoadingMainFrame()
+    ) {
+      this.requestOverlayRendererContext();
+    }
 
-    const show = () => {
-      if (overlayWindow.isDestroyed() || !this.activeGame) return;
+    const show = async () => {
+      const contextGeneration = this.overlayContextGeneration;
+      const rendererReady = await this.waitForRendererReady(contextGeneration);
+      if (
+        !rendererReady ||
+        contextGeneration !== this.overlayContextGeneration ||
+        overlayWindow.isDestroyed() ||
+        this.activeGame?.objectId !== game.objectId ||
+        this.activeGame.shop !== game.shop
+      ) {
+        return;
+      }
       const currentBounds = this.getTargetBounds();
       if (!currentBounds || !this.isTargetForeground(false)) return;
       this.activationToastPending = false;
@@ -331,6 +426,11 @@ export class OverlayManager {
 
   public static hideOverlay() {
     this.hideOverlayWindow(true, true);
+  }
+
+  /** Hide for a launcher navigation without returning focus to the game. */
+  public static hideOverlayForMainWindow() {
+    this.hideOverlayWindow(false, false);
   }
 
   private static hideOverlayWindow(
@@ -398,6 +498,9 @@ export class OverlayManager {
     });
 
     overlayWindow.removeMenu();
+    overlayWindow.webContents.on("did-start-loading", () => {
+      this.resetOverlayRendererReadiness();
+    });
     WindowManager.loadWindowURL(overlayWindow, "overlay");
 
     if ((!app.isPackaged || isStaging) && process.env.HYDRA_OVERLAY_DEVTOOLS) {
@@ -406,6 +509,10 @@ export class OverlayManager {
 
     overlayWindow.on("closed", () => {
       this.overlayWindow = null;
+      this.overlayRendererReady = false;
+      this.rendererContextGeneration = -1;
+      for (const resolve of this.overlayRendererReadyWaiters) resolve(false);
+      this.overlayRendererReadyWaiters.clear();
     });
     overlayWindow.on("blur", () => {
       setTimeout(() => this.synchronizeTargetWindows(), 50);
@@ -562,14 +669,12 @@ export class OverlayManager {
     if (
       this.activationToastPending &&
       !this.activationToastShown &&
-      !this.toastWindow
+      !this.toastWindow &&
+      (!this.overlayWindow || this.overlayRendererReady)
     ) {
       this.showActivationToast(bounds);
     } else if (this.toastWindow?.isVisible()) {
-      this.toastWindow.setPosition(
-        bounds.x + bounds.width - TOAST_WIDTH - TOAST_MARGIN,
-        bounds.y + TOAST_MARGIN
-      );
+      this.toastWindow.setBounds(this.getActivationToastBounds(bounds));
     }
 
     if (this.performancePinned) {
@@ -578,6 +683,33 @@ export class OverlayManager {
       this.fpsWindow.hide();
       this.fpsWindow.setAlwaysOnTop(false);
     }
+  }
+
+  private static getActivationToastBounds(
+    targetBounds: Electron.Rectangle
+  ): Electron.Rectangle {
+    const horizontalInset = Math.min(
+      TOAST_MARGIN,
+      Math.floor(Math.max(0, targetBounds.width - TOAST_WIDTH) / 2)
+    );
+    const verticalInset = Math.min(
+      TOAST_MARGIN,
+      Math.floor(Math.max(0, targetBounds.height - TOAST_HEIGHT) / 2)
+    );
+    const width = Math.max(
+      1,
+      Math.min(TOAST_WIDTH, targetBounds.width - horizontalInset * 2)
+    );
+    const height = Math.max(
+      1,
+      Math.min(TOAST_HEIGHT, targetBounds.height - verticalInset * 2)
+    );
+    return {
+      x: targetBounds.x + targetBounds.width - horizontalInset - width,
+      y: targetBounds.y + verticalInset,
+      width,
+      height,
+    };
   }
 
   private static showActivationToast(targetBounds: Electron.Rectangle) {
@@ -589,12 +721,10 @@ export class OverlayManager {
       return;
     }
     this.destroyToast();
+    const toastBounds = this.getActivationToastBounds(targetBounds);
 
     const toastWindow = new BrowserWindow({
-      x: targetBounds.x + targetBounds.width - TOAST_WIDTH - TOAST_MARGIN,
-      y: targetBounds.y + TOAST_MARGIN,
-      width: TOAST_WIDTH,
-      height: TOAST_HEIGHT,
+      ...toastBounds,
       show: false,
       transparent: true,
       backgroundColor: "#00000000",
@@ -623,10 +753,7 @@ export class OverlayManager {
       }
       this.activationToastPending = false;
       this.activationToastShown = true;
-      toastWindow.setPosition(
-        bounds.x + bounds.width - TOAST_WIDTH - TOAST_MARGIN,
-        bounds.y + TOAST_MARGIN
-      );
+      toastWindow.setBounds(this.getActivationToastBounds(bounds));
       toastWindow.setAlwaysOnTop(true, "screen-saver", 1);
       toastWindow.showInactive();
       setTimeout(() => {

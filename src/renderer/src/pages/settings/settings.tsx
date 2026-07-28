@@ -54,15 +54,11 @@ export default function Settings() {
         label: t("content_gameplay"),
         icon: <PlayIcon size={16} />,
       },
-      ...(userDetails
-        ? [
-            {
-              id: "integrations" as const,
-              label: t("integrations"),
-              icon: <CloudIcon size={16} />,
-            },
-          ]
-        : []),
+      {
+        id: "integrations" as const,
+        label: t("integrations"),
+        icon: <CloudIcon size={16} />,
+      },
       {
         id: "achievements" as const,
         label: t("achievements"),

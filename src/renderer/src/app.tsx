@@ -39,6 +39,7 @@ import { ArchiveDeletionModal } from "./pages/downloads/archive-deletion-error-m
 import { AchievementSupportModal } from "./pages/downloads/achievement-support-modal";
 import { Onboarding } from "./pages/onboarding/onboarding";
 import { AddFriendModal } from "./pages/profile/profile-content/add-friend-modal";
+import { MusicMiniPlayer } from "./components/music-mini-player/music-mini-player";
 
 import type { GameShop, UserPreferences } from "@types";
 import "./app.scss";
@@ -568,6 +569,8 @@ export function App() {
         onClose={handleToastClose}
         duration={toast.duration}
       />
+
+      <MusicMiniPlayer />
 
       <ArchiveDeletionModal
         visible={showArchiveDeletionModal}

@@ -14,6 +14,7 @@ const PROTOCOL_PATH = /^[a-z][a-z\d+.-]*:\/\//i;
 const UNREAL_SHIPPING_EXECUTABLE = /(?:^|-)(?:win64|wingdk)-shipping\.exe$/i;
 const AUXILIARY_EXECUTABLE =
   /(?:crash|report|uninstall|updat(?:e|er)|launcher|bootstrap|easyanticheat|eac|battleye|beservice)/i;
+const FOREGROUND_PROCESS_BONUS = 5_000;
 
 const isWithinDirectory = (candidate: string, directory: string) => {
   const relative = path.relative(directory, candidate);
@@ -81,7 +82,11 @@ export const rankOverlayGameProcesses = (
       // launcher with an exact configured path can steal the overlay.
       if (candidate.pid === preferredPid)
         score += lockPreferredPid ? 100_000 : 2_000;
-      if (candidate.pid === foregroundPid) score += 50_000;
+      // Foreground is a useful signal for launcher -> render-child handoff,
+      // but it must not overpower an exact configured executable. A huge
+      // foreground bonus previously let unrelated utilities in the install
+      // directory steal the target and restart PresentMon every two seconds.
+      if (candidate.pid === foregroundPid) score += FOREGROUND_PROCESS_BONUS;
 
       return { ...candidate, score };
     })

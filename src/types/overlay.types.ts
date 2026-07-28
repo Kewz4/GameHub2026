@@ -76,6 +76,12 @@ export type HydraOverlayGamepadAction =
 export interface PinnedApp {
   name: string;
   path: string;
+  /**
+   * The operating system's icon for the pinned executable or shortcut.
+   * Optional because pinned apps saved by older GameHub versions only contain
+   * the name and path.
+   */
+  iconUrl?: string | null;
 }
 
 /** A running app's audio session, surfaced by the overlay volume mixer. */

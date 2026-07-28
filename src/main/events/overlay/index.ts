@@ -1,4 +1,4 @@
-import { dialog, shell } from "electron";
+import { app as electronApp, dialog, shell } from "electron";
 import path from "node:path";
 import type { AudioSession, PinnedApp, UserPreferences } from "@types";
 import { OverlayManager } from "@main/services/overlay-manager";
@@ -13,17 +13,47 @@ const readPreferences = () =>
     })
     .catch(() => null);
 
+const pinnedAppIconCache = new Map<string, Promise<string | null>>();
+
+const getPinnedAppIcon = (appPath: string) => {
+  const cached = pinnedAppIconCache.get(appPath);
+  if (cached) return cached;
+
+  const icon = electronApp
+    .getFileIcon(appPath, { size: "large" })
+    .then((image) => (image.isEmpty() ? null : image.toDataURL()))
+    .catch(() => null);
+  pinnedAppIconCache.set(appPath, icon);
+  return icon;
+};
+
+const hydratePinnedApps = (apps: PinnedApp[]): Promise<PinnedApp[]> =>
+  Promise.all(
+    apps.map(async ({ name, path: appPath }) => ({
+      name,
+      path: appPath,
+      iconUrl: await getPinnedAppIcon(appPath),
+    }))
+  );
+
 const writePinnedApps = async (apps: PinnedApp[]) => {
+  // Keep large data URLs out of preferences. Icons are resolved from Windows
+  // when the quick-launch list is requested and cached for this app session.
+  const storedApps = apps.map(({ name, path: appPath }) => ({
+    name,
+    path: appPath,
+  }));
   const prefs = (await readPreferences()) ?? {};
   await db.put<string, UserPreferences>(
     levelKeys.userPreferences,
-    { ...prefs, pinnedApps: apps },
+    { ...prefs, pinnedApps: storedApps },
     { valueEncoding: "json" }
   );
-  return apps;
+  return hydratePinnedApps(storedApps);
 };
 
 registerEvent("getOverlayContext", () => OverlayManager.getContext());
+registerEvent("overlayRendererReady", () => OverlayManager.markRendererReady());
 registerEvent("closeHydraOverlay", () => OverlayManager.hideOverlay());
 registerEvent("setOverlayPerformancePinned", (_event, pinned: boolean) =>
   OverlayManager.setPerformancePinned(Boolean(pinned))
@@ -49,7 +79,8 @@ registerEvent("saveOverlayNote", async (_event, note: string) => {
 // ── Pinned-apps quick launcher ──────────────────────────────────────────────
 registerEvent(
   "getPinnedApps",
-  async (): Promise<PinnedApp[]> => (await readPreferences())?.pinnedApps ?? []
+  async (): Promise<PinnedApp[]> =>
+    hydratePinnedApps((await readPreferences())?.pinnedApps ?? [])
 );
 
 registerEvent("launchPinnedApp", (_event, appPath: string) =>
@@ -58,6 +89,7 @@ registerEvent("launchPinnedApp", (_event, appPath: string) =>
 
 registerEvent("removePinnedApp", async (_event, appPath: string) => {
   const apps = (await readPreferences())?.pinnedApps ?? [];
+  pinnedAppIconCache.delete(appPath);
   return writePinnedApps(apps.filter((app) => app.path !== appPath));
 });
 
@@ -72,7 +104,7 @@ registerEvent("pickPinnedApp", async (): Promise<PinnedApp[]> => {
   });
   const picked = result.filePaths[0];
   if (result.canceled || !picked)
-    return (await readPreferences())?.pinnedApps ?? [];
+    return hydratePinnedApps((await readPreferences())?.pinnedApps ?? []);
 
   const name = path.basename(picked).replace(/\.(exe|lnk|bat|cmd)$/i, "");
   const apps = (await readPreferences())?.pinnedApps ?? [];

@@ -40,4 +40,24 @@ export interface MusicPlayerState {
   audioSource: MusicAudioSource | null;
   playbackError: string | null;
   playbackNotice: string | null;
+  /**
+   * Changes whenever the active audio element should start from the beginning,
+   * including replaying the same URL in repeat-one mode.
+   */
+  playbackId: number;
+  /**
+   * The next deterministic queue entry is resolved while the current song is
+   * playing. Renderers can buffer this URL in a second audio element and swap
+   * it in without waiting for yt-dlp when Next is pressed.
+   */
+  preloadedNextIndex: number;
+  preloadedAudioUrl: string | null;
+  preloadedAudioSource: MusicAudioSource | null;
+  volume: number;
+  muted: boolean;
+  /**
+   * Incremented for explicit cross-window seek requests. The audio host reports
+   * progress without changing this value.
+   */
+  seekId: number;
 }

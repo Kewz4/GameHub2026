@@ -20,6 +20,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test:spotify": "node --test scripts/tests/spotify-helpers.test.ts",
     "build:native": "node ./scripts/build-native-addon.cjs",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
