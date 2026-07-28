@@ -60,6 +60,7 @@ type HydraNativeModule = {
   getProcessWindowBounds: (pid: number) => NativeWindowBounds | null;
   placeOverlayWindow: (windowHandle: Buffer, pid: number) => boolean;
   focusProcessWindow: (pid: number) => boolean;
+  forceForegroundWindow: (windowHandle: number) => boolean;
   // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
   getAudioSessions: () => NativeAudioSession[];
   setAudioSessionVolume: (pid: number, volume: number) => boolean;
@@ -480,6 +481,22 @@ export class NativeAddon {
   public static focusProcessWindow(pid: number): boolean {
     try {
       return this.load().focusProcessWindow(pid);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Take the foreground for the overlay window.
+   *
+   * This is what stops the game responding to the controller: XInput 1.4 only
+   * reports real state to the focused application, so once the overlay owns the
+   * foreground the game reads neutral input on its own. Electron's focus() is
+   * not sufficient over a fullscreen game because of Windows' foreground lock.
+   */
+  public static forceForegroundWindow(windowHandle: number): boolean {
+    try {
+      return this.load().forceForegroundWindow(windowHandle);
     } catch {
       return false;
     }

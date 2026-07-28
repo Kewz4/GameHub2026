@@ -36,7 +36,6 @@ export function SettingsContextContentGameplay() {
     enableNewDownloadOptionsBadges: true,
     overlayEnabled: true,
     overlayPerformanceEnabled: true,
-    overlayPauseGameWhileOpen: false,
     gameRecorderEnabled: false,
     gameRecorderResolution: "1080p" as GameRecorderResolution,
     gameRecorderFps: 60 as GameRecorderFps,
@@ -75,8 +74,6 @@ export function SettingsContextContentGameplay() {
       overlayEnabled: userPreferences.overlayEnabled ?? true,
       overlayPerformanceEnabled:
         userPreferences.overlayPerformanceEnabled ?? true,
-      overlayPauseGameWhileOpen:
-        userPreferences.overlayPauseGameWhileOpen ?? false,
       gameRecorderEnabled: userPreferences.gameRecorderEnabled ?? false,
       gameRecorderResolution: userPreferences.gameRecorderResolution ?? "1080p",
       gameRecorderFps: userPreferences.gameRecorderFps ?? 60,
@@ -207,21 +204,6 @@ export function SettingsContextContentGameplay() {
             })
           }
         />
-
-        <CheckboxField
-          label="Pause the game while the overlay is open"
-          checked={form.overlayPauseGameWhileOpen}
-          onChange={() =>
-            handleChange({
-              overlayPauseGameWhileOpen: !form.overlayPauseGameWhileOpen,
-            })
-          }
-        />
-        <p className="settings-context-panel__description">
-          Suspends the game while the overlay is open so your controller only
-          drives the overlay. Leave this off for online games — a suspended game
-          will be disconnected by the server.
-        </p>
       </div>
 
       <div className="settings-context-panel__group">

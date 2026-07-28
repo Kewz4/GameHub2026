@@ -7,7 +7,6 @@ export const DEFAULT_HYDRA_OVERLAY_PREFERENCES: HydraOverlayPreferences = {
   overlayPerformanceShowAverageFps: true,
   overlayPerformanceShowFrameTime: true,
   overlayPerformanceShowOnePercentLow: true,
-  overlayPauseGameWhileOpen: false,
 };
 
 export const resolveHydraOverlayPreferences = (
@@ -22,7 +21,4 @@ export const resolveHydraOverlayPreferences = (
     preferences?.overlayPerformanceShowFrameTime ?? true,
   overlayPerformanceShowOnePercentLow:
     preferences?.overlayPerformanceShowOnePercentLow ?? true,
-  // Off by default: suspending the game is safe for single-player titles but
-  // will disconnect anything online, so the user opts in.
-  overlayPauseGameWhileOpen: preferences?.overlayPauseGameWhileOpen ?? false,
 });

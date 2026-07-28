@@ -225,7 +225,6 @@ export interface UserPreferences {
   overlayPerformanceShowAverageFps?: boolean;
   overlayPerformanceShowFrameTime?: boolean;
   overlayPerformanceShowOnePercentLow?: boolean;
-  overlayPauseGameWhileOpen?: boolean;
   /** Opt-in gameplay capture. Instant replay remains separately disabled until
    *  the user explicitly enables its rolling buffer. */
   gameRecorderEnabled?: boolean;

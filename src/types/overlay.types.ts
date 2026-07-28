@@ -7,9 +7,6 @@ export interface HydraOverlayPreferences {
   overlayPerformanceShowAverageFps: boolean;
   overlayPerformanceShowFrameTime: boolean;
   overlayPerformanceShowOnePercentLow: boolean;
-  /** Suspend the game's process tree while the overlay is open, so it stops
-   *  reading the controller and the overlay has input to itself. */
-  overlayPauseGameWhileOpen: boolean;
 }
 
 export interface HydraOverlayPerformanceRows {

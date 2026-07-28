@@ -76,12 +76,17 @@ use windows_sys::Win32::UI::Shell::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, EnumWindows, GetClientRect,
-    GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW, GetWindowThreadProcessId,
-    IsIconic, IsWindowVisible, RegisterClassW, SetForegroundWindow, SetWindowPos, ShowWindow,
-    TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST, MSG, SW_HIDE,
-    SW_SHOWNORMAL, SWP_NOACTIVATE, SW_RESTORE, WM_HOTKEY, WM_INPUT, WNDCLASSW, WS_EX_TOOLWINDOW,
+    BringWindowToTop, CreateWindowExW, DefWindowProcW, DispatchMessageW, EnumWindows,
+    GetClientRect, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW,
+    GetWindowThreadProcessId, IsIconic, IsWindowVisible, RegisterClassW, SetForegroundWindow,
+    SetWindowPos, ShowWindow, TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST,
+    MSG, SW_HIDE, SW_SHOWNORMAL, SWP_NOACTIVATE, SW_RESTORE, WM_HOTKEY, WM_INPUT, WNDCLASSW,
+    WS_EX_TOOLWINDOW,
 };
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetActiveWindow;
 
 // Per-app volume mixer (Core Audio) — higher-level `windows` COM bindings.
 #[cfg(target_os = "windows")]
@@ -1000,6 +1005,63 @@ pub fn focus_process_window(_pid: u32) -> bool {
             return SetForegroundWindow(window) != 0;
         }
     }
+    false
+}
+
+/// Force the overlay window to become the foreground window.
+///
+/// This is what actually stops the game reacting to the controller while the
+/// overlay is open. XInput 1.4 gates input on window focus by itself — per
+/// Microsoft, XInputEnable is "Deprecated [on Windows 10 or later], as game
+/// controller input is automatically enabled/disabled by the system based on
+/// the application window focus" — so an unfocused game reads neutral state
+/// without anything being hooked or suspended.
+///
+/// Electron's `BrowserWindow.focus()` is not enough over a fullscreen game:
+/// Windows' foreground lock makes SetForegroundWindow fail for a process that
+/// does not already own the foreground. Attaching our input queue to the
+/// foreground window's thread lifts that restriction for the duration of the
+/// call, which is the long-standing documented workaround.
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn force_foreground_window(window_handle: f64) -> bool {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let window = window_handle as isize as HWND;
+        if window.is_null() {
+            return false;
+        }
+        if IsIconic(window) != 0 {
+            ShowWindow(window, SW_RESTORE);
+        }
+
+        let foreground = GetForegroundWindow();
+        if foreground == window {
+            return true;
+        }
+
+        let current_thread = GetCurrentThreadId();
+        let foreground_thread = if foreground.is_null() {
+            0
+        } else {
+            GetWindowThreadProcessId(foreground, std::ptr::null_mut())
+        };
+
+        let attached = foreground_thread != 0
+            && foreground_thread != current_thread
+            && AttachThreadInput(current_thread, foreground_thread, 1) != 0;
+
+        BringWindowToTop(window);
+        let focused = SetForegroundWindow(window) != 0;
+        SetActiveWindow(window);
+
+        if attached {
+            AttachThreadInput(current_thread, foreground_thread, 0);
+        }
+        return focused || GetForegroundWindow() == window;
+    }
+
+    #[cfg(not(target_os = "windows"))]
     false
 }
 

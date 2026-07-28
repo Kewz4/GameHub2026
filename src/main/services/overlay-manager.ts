@@ -22,7 +22,6 @@ import { findOverlayGameProcesses } from "./overlay-game-process";
 import { overlayFpsMonitor } from "./overlay-fps-monitor";
 import { WindowManager } from "./window-manager";
 import { GameRecorderManager } from "./game-recorder-manager";
-import { GameProcessControlManager } from "./game-process-control-manager";
 
 const PREFERRED_SHORTCUT = "Shift+F3";
 const FALLBACK_SHORTCUT = "Control+Shift+F3";
@@ -406,7 +405,7 @@ export class OverlayManager {
       overlayWindow.moveTop();
       overlayWindow.focus();
       overlayWindow.webContents.send("on-overlay-shown");
-      this.applyPauseWhileOpen(true);
+      this.claimForeground(overlayWindow);
       setTimeout(() => {
         if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
           const delayedBounds = this.getTargetBounds();
@@ -439,32 +438,38 @@ export class OverlayManager {
   }
 
   /**
-   * Optionally suspend the game while the overlay is open.
+   * Claim the foreground so the game stops reading the controller.
    *
-   * The overlay is a separate always-on-top window, not something painted into
-   * the game's swap chain, so the game keeps polling XInput underneath it and
-   * reacts to every stick and button press meant for the overlay. XInput has no
-   * concept of focus and cannot be captured exclusively, so the only reliable
-   * way to stop that is to stop the process from running. Suspending the tree
-   * also freezes the game clock, which is what a player expects from a pause.
+   * XInput already does the right thing here: Microsoft deprecated
+   * XInputEnable on Windows 10+ because "game controller input is
+   * automatically enabled/disabled by the system based on the application
+   * window focus". Once the overlay genuinely owns the foreground, an XInput
+   * 1.4 game reads neutral state without anything being hooked or suspended.
    *
-   * Resume is best-effort but heavily guarded: GameProcessControlManager rolls
-   * back partial suspends and force-resumes before the app quits, so a crash
-   * with the overlay open cannot leave a permanently frozen game.
+   * The catch is that Electron's focus() loses to Windows' foreground lock
+   * over a fullscreen game, leaving the overlay merely on top while the game
+   * keeps focus — and keeps reacting to the stick. The native helper attaches
+   * to the foreground thread's input queue first, which is the documented way
+   * to make SetForegroundWindow succeed.
+   *
+   * Games that ship the older XInput 1.3 redistributable do not get the
+   * system's focus gating and will still see input; blocking those would mean
+   * hooking the API inside the game process, which is what Steam does.
    */
-  private static applyPauseWhileOpen(open: boolean) {
-    if (!this.preferences.overlayPauseGameWhileOpen) return;
-    const game = this.activeGame;
-    if (!game) return;
-    const action = open
-      ? GameProcessControlManager.pause(game, this.targetPid)
-      : GameProcessControlManager.resume(game);
-    void Promise.resolve(action).catch((error) =>
-      logger.warn(
-        `Could not ${open ? "pause" : "resume"} the game for the overlay`,
-        error
-      )
-    );
+  private static claimForeground(overlayWindow: BrowserWindow) {
+    if (process.platform !== "win32" || overlayWindow.isDestroyed()) return;
+    try {
+      const handle = overlayWindow.getNativeWindowHandle();
+      // HWND is pointer-sized; Electron hands it over as raw little-endian
+      // bytes, so read the full 64 bits on x64.
+      const hwnd =
+        handle.length >= 8
+          ? Number(handle.readBigUInt64LE(0))
+          : handle.readUInt32LE(0);
+      if (hwnd) NativeAddon.forceForegroundWindow(hwnd);
+    } catch (error) {
+      logger.warn("Could not bring the overlay to the foreground", error);
+    }
   }
 
   private static hideOverlayWindow(
@@ -472,14 +477,10 @@ export class OverlayManager {
     showPinnedPerformance: boolean
   ) {
     const overlayWindow = this.overlayWindow;
-    const wasVisible = Boolean(
-      overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()
-    );
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.hide();
       overlayWindow.setAlwaysOnTop(false);
     }
-    if (wasVisible) this.applyPauseWhileOpen(false);
     if (
       showPinnedPerformance &&
       this.activeGame &&
