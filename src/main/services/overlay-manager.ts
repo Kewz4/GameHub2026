@@ -35,6 +35,10 @@ const TOAST_MARGIN = 24;
 const FPS_WIDTH = 218;
 const FPS_HEIGHT = 116;
 const TOGGLE_DEBOUNCE_MS = 350;
+// Taking the foreground can lose a race with a fullscreen game, so retry a
+// bounded number of times before accepting that the game kept input.
+const OVERLAY_FOREGROUND_ATTEMPTS = 4;
+const OVERLAY_FOREGROUND_RETRY_MS = 120;
 const GAMEPAD_REPEAT_DELAY_MS = 360;
 const GAMEPAD_REPEAT_INTERVAL_MS = 105;
 
@@ -460,7 +464,7 @@ export class OverlayManager {
    * system's focus gating and will still see input; blocking those would mean
    * hooking the API inside the game process, which is what Steam does.
    */
-  private static claimForeground(overlayWindow: BrowserWindow) {
+  private static claimForeground(overlayWindow: BrowserWindow, attempt = 0) {
     if (process.platform !== "win32" || overlayWindow.isDestroyed()) return;
     try {
       const handle = overlayWindow.getNativeWindowHandle();
@@ -470,7 +474,38 @@ export class OverlayManager {
         handle.length >= 8
           ? Number(handle.readBigUInt64LE(0))
           : handle.readUInt32LE(0);
-      if (hwnd) NativeAddon.forceForegroundWindow(hwnd);
+      if (!hwnd) {
+        logger.warn("Overlay window has no native handle to focus");
+        return;
+      }
+
+      const claimed = NativeAddon.forceForegroundWindow(hwnd);
+      const foregroundPid = NativeAddon.getForegroundProcessId();
+      const won = claimed && foregroundPid !== this.targetPid;
+
+      // Report the outcome rather than assume it. If the game keeps the
+      // foreground, it also keeps keyboard, mouse and controller input, and
+      // that is invisible from the app side without this.
+      logger[won || attempt >= OVERLAY_FOREGROUND_ATTEMPTS ? "info" : "warn"](
+        "Overlay foreground claim",
+        {
+          attempt,
+          claimed,
+          foregroundPid,
+          gamePid: this.targetPid,
+          overlayHasForeground: won,
+        }
+      );
+
+      // A fullscreen game frequently wins the race on the first try, so retry
+      // a bounded number of times before giving up.
+      if (!won && attempt < OVERLAY_FOREGROUND_ATTEMPTS) {
+        setTimeout(() => {
+          if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
+            this.claimForeground(overlayWindow, attempt + 1);
+          }
+        }, OVERLAY_FOREGROUND_RETRY_MS);
+      }
     } catch (error) {
       logger.warn("Could not bring the overlay to the foreground", error);
     }
