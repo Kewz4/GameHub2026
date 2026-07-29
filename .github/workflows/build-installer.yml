@@ -190,10 +190,6 @@ jobs:
           # give the build an 8 GB heap.
           NODE_OPTIONS: --max-old-space-size=8192
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Read-only token embedded in the build so the auto-updater can read
-          # releases/assets from the PRIVATE repo. Add it in repo Settings →
-          # Secrets and variables → Actions as UPDATER_GH_TOKEN.
-          MAIN_VITE_UPDATER_GH_TOKEN: ${{ secrets.UPDATER_GH_TOKEN }}
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL || 'https://hydra-api-us-east-1.losbroxas.org' }}
           MAIN_VITE_AUTH_URL: ${{ vars.MAIN_VITE_AUTH_URL || 'https://auth.hydralauncher.gg' }}
@@ -212,12 +208,10 @@ jobs:
         shell: pwsh
         env:
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
-          MAIN_VITE_UPDATER_GH_TOKEN: ${{ secrets.UPDATER_GH_TOKEN }}
         run: |
           cd web-setup-electron
-          if ([string]::IsNullOrWhiteSpace($env:MAIN_VITE_UPDATER_GH_TOKEN)) { throw "UPDATER_GH_TOKEN is required for private-repository WebSetup builds" }
           npm ci --no-audit --no-fund
-          npx electron-builder --win portable --config electron-builder.yml "-c.extraMetadata.gamehubUpdaterToken=$env:MAIN_VITE_UPDATER_GH_TOKEN"
+          npx electron-builder --win portable --config electron-builder.yml
           if (-not (Test-Path "../dist/GameHub-WebSetup.exe")) { throw "web setup exe missing" }
 
       - name: Build web-setup bootstrapper (Linux)
@@ -226,12 +220,10 @@ jobs:
         shell: bash
         env:
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
-          MAIN_VITE_UPDATER_GH_TOKEN: ${{ secrets.UPDATER_GH_TOKEN }}
         run: |
           cd web-setup-electron
-          if [ -z "$MAIN_VITE_UPDATER_GH_TOKEN" ]; then echo "UPDATER_GH_TOKEN is required for private-repository WebSetup builds"; exit 1; fi
           npm ci --no-audit --no-fund
-          npx electron-builder --linux AppImage --config electron-builder.yml "-c.extraMetadata.gamehubUpdaterToken=$MAIN_VITE_UPDATER_GH_TOKEN"
+          npx electron-builder --linux AppImage --config electron-builder.yml
           if [ ! -f ../dist/GameHub-WebSetup.AppImage ]; then echo "web setup AppImage missing"; exit 1; fi
 
       - name: Upload release assets to private draft

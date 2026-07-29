@@ -12,20 +12,17 @@ import { logger } from "./logger";
 
 const { autoUpdater } = updater;
 
-/** Read-only GitHub token injected at build time (see vite-env.d.ts). Required
- *  because the release repo is private. */
-const UPDATER_TOKEN = import.meta.env.MAIN_VITE_UPDATER_GH_TOKEN;
-
-/** Headers for GitHub API / asset requests. When downloading a private-repo
- *  asset, the API redirects to a signed CDN URL on another origin; per the
- *  fetch spec the Authorization header is dropped on that cross-origin
- *  redirect, so the token never leaks to the CDN. */
+/** Headers for GitHub API / asset requests.
+ *
+ *  The release repo is public, so these are unauthenticated. Earlier builds
+ *  embedded a read-only PAT here because releases were private; that shipped a
+ *  credential inside every installer, which is untenable now that the
+ *  installers themselves are publicly downloadable. */
 function githubHeaders(
   extra: Record<string, string> = {}
 ): Record<string, string> {
   return {
     "User-Agent": "GameHub-Updater/2.0",
-    ...(UPDATER_TOKEN ? { Authorization: `Bearer ${UPDATER_TOKEN}` } : {}),
     ...extra,
   };
 }
@@ -281,8 +278,6 @@ export class UpdateCheckerManager {
     if (!apiRes.ok) throw new Error(`GitHub API returned ${apiRes.status}`);
 
     const release = (await apiRes.json()) as {
-      // `url` is the API asset endpoint (works for private repos with the
-      // token); `browser_download_url` needs an authenticated browser session.
       assets: Array<{
         name: string;
         url: string;
@@ -303,9 +298,10 @@ export class UpdateCheckerManager {
     const zipPath = path.join(tmpDir, "gamehub-update.zip");
     const extractDir = path.join(tmpDir, "gamehub-update");
 
-    // Download via the asset API endpoint (not browser_download_url) so the
-    // request is authenticated for the private repo. `Accept: octet-stream`
-    // makes GitHub return the binary (302 → signed CDN URL).
+    // Kept on the asset API endpoint rather than browser_download_url: with
+    // `Accept: octet-stream` GitHub answers with the binary (302 → CDN), and
+    // staying on api.github.com keeps this path identical for public and
+    // private releases, so it survives the repo ever going private again.
     const zipRes = await fetch(zipAsset.url, {
       headers: githubHeaders({ Accept: "application/octet-stream" }),
     });

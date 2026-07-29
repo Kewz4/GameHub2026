@@ -5,17 +5,15 @@ const fs = require("fs");
 const os = require("os");
 const { exec, execFile, spawn } = require("child_process");
 const { promisify } = require("util");
-const packageMetadata = require("./package.json");
 
 const execAsync = promisify(exec);
 
 const REPO = "Kewz4/GameHub2026";
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
 const ASSET_API_PATH_PREFIX = `/repos/${REPO}/releases/assets/`;
-const UPDATER_TOKEN =
-  process.env.GAMEHUB_UPDATER_GH_TOKEN ||
-  packageMetadata.gamehubUpdaterToken ||
-  "";
+// The release repo is public, so the releases feed and asset downloads both
+// resolve anonymously. Earlier builds embedded a read-only PAT here; that
+// shipped a credential inside a publicly downloadable installer.
 const WINDOW_WIDTH = 560;
 const WINDOW_HEIGHT = 420;
 const MAX_HTTPS_REDIRECTS = 5;
@@ -52,17 +50,14 @@ function httpsGet(url, headers = {}, redirectCount = 0) {
     };
 
     // The repository is private. Authenticate only requests sent directly to
-    // GitHub's API; asset API requests redirect to a signed CDN URL, and the
-    // read-only token must never follow that cross-origin redirect.
+    // GitHub's API; asset API requests redirect to a signed CDN URL, which must
+    // never carry an Authorization header across that cross-origin hop.
     delete requestHeaders.Authorization;
     delete requestHeaders.authorization;
     if (
       parsedUrl.protocol === "https:" &&
       parsedUrl.hostname === "api.github.com"
     ) {
-      if (UPDATER_TOKEN) {
-        requestHeaders.Authorization = `Bearer ${UPDATER_TOKEN}`;
-      }
       requestHeaders["X-GitHub-Api-Version"] = "2022-11-28";
     }
 
@@ -149,11 +144,6 @@ async function downloadFile(url, destPath, onProgress) {
 }
 
 async function getLatestRelease() {
-  if (!UPDATER_TOKEN) {
-    throw new Error(
-      "This WebSetup build is missing private release access. Download the full GameHub installer instead."
-    );
-  }
   const release = await httpsGetJSON(API_URL);
   return {
     tag: release.tag_name,
