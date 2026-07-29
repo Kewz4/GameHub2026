@@ -19,7 +19,9 @@ import {
 
 const UPDATE_INTERVAL = 500;
 const MAX_SAMPLES = 600;
-const CAPTURE_START_TIMEOUT = 12_000;
+// The elevated bridge clears any stale ETW session before starting PresentMon,
+// and a game can take a few seconds to present its first frames after launch.
+const CAPTURE_START_TIMEOUT = 20_000;
 const STALE_SAMPLE_TIMEOUT = 3_000;
 const SWAP_CHAIN_STALE_TIMEOUT = 5_000;
 // A unique ETW session name per capture run. A trace session outlives the
@@ -268,6 +270,13 @@ export class OverlayFpsMonitor {
       this.removePresentMonFile(diagnosticFile);
       return;
     }
+    logger.info("Elevated PresentMon launched", {
+      pid: targetPid,
+      executable: this.targetExecutable,
+      session: presentMonSessionName(targetPid, captureRunId),
+      started,
+    });
+
     if (!started) {
       this.presentMonOutputFile = null;
       this.presentMonDiagnosticFile = null;

@@ -168,6 +168,21 @@ fn run() -> Result<(), String> {
         stop_trace_session(legacy);
     }
 
+    // Always leave a trace of what was attempted. An empty diagnostic file
+    // previously meant "PresentMon printed nothing", which is indistinguishable
+    // from "the bridge never got that far".
+    {
+        let mut diagnostic = diagnostic
+            .try_clone()
+            .map_err(|error| format!("could not clone diagnostic output: {error}"))?;
+        write_diagnostic_line(
+            &mut diagnostic,
+            &format!(
+                "bridge: starting PresentMon for pid {target_pid}, session \"{session_name}\""
+            ),
+        );
+    }
+
     // PresentMon opens --output_file without FILE_SHARE_READ, which prevents
     // the normal-integrity GameHub process from tailing an elevated capture.
     // Its stdout mode flushes every CSV row, while Rust-created files use the

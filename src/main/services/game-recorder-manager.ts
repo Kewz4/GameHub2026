@@ -21,6 +21,7 @@ import {
   BrowserWindow,
   app,
   desktopCapturer,
+  screen,
   shell,
   type DesktopCapturerSource,
 } from "electron";
@@ -841,7 +842,10 @@ export class GameRecorderManager {
     const canCapture =
       wantsCapture &&
       process.platform === "win32" &&
-      Boolean(this.activeGame && this.targetPid && this.targetWindowId) &&
+      // A window id is no longer required: capture prefers the display the
+      // game occupies, and an exclusive-fullscreen game often exposes no
+      // per-window source at all.
+      Boolean(this.activeGame && this.targetPid) &&
       gameIsForeground &&
       Date.now() >= this.captureRetryAfter;
 
@@ -852,11 +856,7 @@ export class GameRecorderManager {
     if (this.captureActive) return;
 
     const captureWindow = await this.ensureCaptureWindow();
-    if (
-      !this.activeGame ||
-      !this.targetWindowId ||
-      captureWindow.isDestroyed()
-    ) {
+    if (!this.activeGame || !this.targetPid || captureWindow.isDestroyed()) {
       return;
     }
     if (!this.captureRendererReady) {
@@ -872,6 +872,72 @@ export class GameRecorderManager {
       configuration: this.preferences,
     });
     this.publishState();
+  }
+
+  /**
+   * Pick what the recorder captures, preferring the display the game is on.
+   *
+   * Window capture was the only option here, and it is the wrong one for a
+   * fullscreen DirectX game on Windows: it goes through the slow per-window
+   * path, drops frames under load, and frequently exposes no source at all for
+   * an exclusive-fullscreen swap chain — which is why capture failed outright
+   * with "found no capture source". Screen capture is served by DXGI desktop
+   * duplication on the GPU, which is the same class of path OBS's Display
+   * Capture uses and holds a steady frame rate.
+   *
+   * For a fullscreen game the display and the window show the same pixels, so
+   * this costs nothing. Window capture stays as the fallback for a windowed
+   * game, where it keeps other windows out of the recording.
+   */
+  private static async resolveCaptureSource(): Promise<DesktopCapturerSource | null> {
+    const windowId = this.targetWindowId;
+    const bounds = this.targetPid
+      ? NativeAddon.getProcessWindowBounds(this.targetPid)
+      : null;
+
+    const [screens, windows] = await Promise.all([
+      desktopCapturer
+        .getSources({
+          types: ["screen"],
+          thumbnailSize: { width: 0, height: 0 },
+        })
+        .catch(() => [] as DesktopCapturerSource[]),
+      desktopCapturer
+        .getSources({
+          types: ["window"],
+          thumbnailSize: { width: 0, height: 0 },
+          fetchWindowIcons: false,
+        })
+        .catch(() => [] as DesktopCapturerSource[]),
+    ]);
+
+    const windowSource = windowId
+      ? (windows.find((candidate) =>
+          sourceMatchesWindow(candidate, windowId)
+        ) ?? null)
+      : null;
+
+    if (screens.length) {
+      // Match the display the game occupies; fall back to the first screen on
+      // a single-monitor setup or when the bounds are unavailable.
+      const display = bounds
+        ? screen.getDisplayMatching({
+            x: bounds.x,
+            y: bounds.y,
+            width: Math.max(1, bounds.width),
+            height: Math.max(1, bounds.height),
+          })
+        : null;
+      const screenSource =
+        (display
+          ? screens.find(
+              (candidate) => candidate.display_id === String(display.id)
+            )
+          : null) ?? screens[0];
+      if (screenSource) return screenSource;
+    }
+
+    return windowSource;
   }
 
   private static async ensureCaptureWindow() {
@@ -901,23 +967,20 @@ export class GameRecorderManager {
       captureWindow.webContents.session.setDisplayMediaRequestHandler(
         async (_request, callback) => {
           try {
-            const windowId = this.targetWindowId;
-            if (!windowId) {
-              callback({});
-              return;
-            }
-            const sources = await desktopCapturer.getSources({
-              types: ["window"],
-              thumbnailSize: { width: 0, height: 0 },
-              fetchWindowIcons: false,
-            });
-            const source = sources.find((candidate) =>
-              sourceMatchesWindow(candidate, windowId)
-            );
+            const source = await this.resolveCaptureSource();
             if (!source) {
+              logger.error(
+                "Recorder found no capture source for the game window",
+                { pid: this.targetPid, windowId: this.targetWindowId }
+              );
               callback({});
               return;
             }
+            logger.info("Game recorder capture source", {
+              id: source.id,
+              name: source.name,
+              kind: source.id.startsWith("screen") ? "screen" : "window",
+            });
             callback({
               video: source,
               ...(this.preferences.captureGameAudio
