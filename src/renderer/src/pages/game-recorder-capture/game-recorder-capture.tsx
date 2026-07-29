@@ -10,6 +10,7 @@ import {
   GAME_RECORDER_AUDIO_SAMPLE_RATE,
   GAME_RECORDER_MIME_CANDIDATES,
   GAME_RECORDER_SEGMENT_DURATION_MS,
+  getGameRecorderContainer,
   getGameRecorderTargetDimensions,
   getGameRecorderVideoBitrate,
 } from "@shared";
@@ -20,6 +21,74 @@ const chooseMimeType = () =>
   GAME_RECORDER_MIME_CANDIDATES.find((candidate) =>
     MediaRecorder.isTypeSupported(candidate)
   );
+
+/**
+ * Rebase a fragmented-MP4 media fragment onto a zero timeline.
+ *
+ * Every `moof` carries a `tfdt` whose baseMediaDecodeTime is measured from the
+ * start of the recording session, so the 40th fragment claims to begin two
+ * minutes in. Pairing such a fragment with the init segment yields a file that
+ * plays but reports a duration counted from session start, which would change
+ * how the concatenator lays segments out on the timeline. Zeroing the field
+ * makes each committed segment start at 0 — exactly like the self-contained
+ * files the restart-based path used to produce — so the main process keeps
+ * working unchanged.
+ */
+const rebaseFragment = (
+  bytes: Uint8Array<ArrayBuffer>
+): Uint8Array<ArrayBuffer> => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const typeAt = (offset: number) =>
+    String.fromCharCode(
+      bytes[offset + 4],
+      bytes[offset + 5],
+      bytes[offset + 6],
+      bytes[offset + 7]
+    );
+
+  // `moof` and `traf` are containers; `tfdt` is the leaf holding the time.
+  const found: { offset: number; version: number; value: bigint }[] = [];
+  const walk = (start: number, end: number) => {
+    let offset = start;
+    while (offset + 8 <= end) {
+      const size = view.getUint32(offset);
+      if (size < 8 || offset + size > end) return;
+      const type = typeAt(offset);
+      if (type === "moof" || type === "traf") {
+        walk(offset + 8, offset + size);
+      } else if (type === "tfdt") {
+        const version = bytes[offset + 8];
+        found.push({
+          offset,
+          version,
+          value:
+            version === 1
+              ? view.getBigUint64(offset + 12)
+              : BigInt(view.getUint32(offset + 12)),
+        });
+      }
+      offset += size;
+    }
+  };
+
+  walk(0, bytes.length);
+  if (!found.length) return bytes;
+
+  // One chunk can hold several moof/mdat pairs, and each track has its own
+  // tfdt. Only the common base may be removed — zeroing them all individually
+  // would stack every fragment and every track at time 0 and produce a file
+  // the demuxer rejects.
+  const base = found.reduce(
+    (lowest, entry) => (entry.value < lowest ? entry.value : lowest),
+    found[0].value
+  );
+  for (const entry of found) {
+    const rebased = entry.value - base;
+    if (entry.version === 1) view.setBigUint64(entry.offset + 12, rebased);
+    else view.setUint32(entry.offset + 12, Number(rebased));
+  }
+  return bytes;
+};
 
 const getVideoConstraints = (
   configuration: GameRecorderPreferences
@@ -173,6 +242,8 @@ class CaptureController {
   private segmentTimer: number | null = null;
   private active = false;
   private startGeneration = 0;
+  /** True while a single fragmented-MP4 recorder spans the whole session. */
+  private continuous = false;
 
   public async handle(command: GameRecorderCaptureCommand) {
     if (command.type === "start" && command.configuration) {
@@ -298,6 +369,96 @@ class CaptureController {
     this.recorder = recorder;
     const chunks: Blob[] = [];
     const segmentStartedAt = Date.now();
+
+    const commitSegment = (blob: Blob, startedAt: number, endedAt: number) =>
+      blob
+        .arrayBuffer()
+        .then((payload) => {
+          const metadata: GameRecorderSegmentMetadata = {
+            startedAt,
+            endedAt,
+            mimeType: blob.type || mimeType || "video/webm",
+            hasAudio,
+            outputWidth: outputSettings.width,
+            outputHeight: outputSettings.height,
+            outputFps: outputSettings.frameRate,
+            normalizedOutput: outputSettings.normalized,
+          };
+          return window.electron.gameRecorderCommitSegment(metadata, payload);
+        })
+        .catch((error) =>
+          window.electron.gameRecorderCaptureError(
+            error instanceof Error ? error.message : String(error)
+          )
+        );
+
+    // Fragmented MP4 lets one encoder run for the whole session. Chromium emits
+    // the first chunk as `ftyp`+`moov` — an init segment carrying no media —
+    // and every later chunk as `moof`+`mdat` fragments, so prepending the init
+    // to a fragment reproduces a self-contained file without duplicating a
+    // single frame. The previous approach stopped and recreated the recorder
+    // every few seconds, and re-initializing the hardware H.264 encode session
+    // dropped frames at every boundary. WebM cannot do this (its first chunk
+    // already contains media), so it keeps the restart-based rotation below.
+    if (getGameRecorderContainer(mimeType) === "mp4") {
+      this.continuous = true;
+      let initSegment: Blob | null = null;
+      let sliceStartedAt = segmentStartedAt;
+
+      recorder.addEventListener("dataavailable", (event) => {
+        if (!event.data.size) return;
+        if (!initSegment) {
+          initSegment = event.data;
+          sliceStartedAt = Date.now();
+          return;
+        }
+        const endedAt = Date.now();
+        const startedAt = sliceStartedAt;
+        sliceStartedAt = endedAt;
+        const init = initSegment;
+        void event.data
+          .arrayBuffer()
+          .then((fragment) =>
+            commitSegment(
+              new Blob([init, rebaseFragment(new Uint8Array(fragment))], {
+                type: recorder.mimeType || mimeType,
+              }),
+              startedAt,
+              endedAt
+            )
+          )
+          .catch((error) =>
+            window.electron.gameRecorderCaptureError(
+              error instanceof Error ? error.message : String(error)
+            )
+          );
+      });
+      recorder.addEventListener(
+        "error",
+        (event) => {
+          const message =
+            "error" in event && event.error instanceof Error
+              ? event.error.message
+              : "The browser media encoder stopped unexpectedly.";
+          void window.electron.gameRecorderCaptureError(message);
+        },
+        { once: true }
+      );
+      recorder.addEventListener(
+        "stop",
+        () => {
+          if (this.recorder === recorder) this.recorder = null;
+          this.closeStream(stream);
+        },
+        { once: true }
+      );
+      // The timeslice makes `dataavailable` fire on a cadence without ever
+      // tearing the encoder down.
+      recorder.start(GAME_RECORDER_SEGMENT_DURATION_MS);
+      return;
+    }
+
+    this.continuous = false;
     recorder.addEventListener("dataavailable", (event) => {
       if (event.data.size > 0) chunks.push(event.data);
     });
@@ -332,29 +493,13 @@ class CaptureController {
         }
 
         if (!chunks.length) return;
-        const blob = new Blob(chunks, {
-          type: recorder.mimeType || mimeType || "video/webm",
-        });
-        void blob
-          .arrayBuffer()
-          .then((payload) => {
-            const metadata: GameRecorderSegmentMetadata = {
-              startedAt: segmentStartedAt,
-              endedAt,
-              mimeType: blob.type || "video/webm",
-              hasAudio,
-              outputWidth: outputSettings.width,
-              outputHeight: outputSettings.height,
-              outputFps: outputSettings.frameRate,
-              normalizedOutput: outputSettings.normalized,
-            };
-            return window.electron.gameRecorderCommitSegment(metadata, payload);
-          })
-          .catch((error) =>
-            window.electron.gameRecorderCaptureError(
-              error instanceof Error ? error.message : String(error)
-            )
-          );
+        void commitSegment(
+          new Blob(chunks, {
+            type: recorder.mimeType || mimeType || "video/webm",
+          }),
+          segmentStartedAt,
+          endedAt
+        );
       },
       { once: true }
     );
@@ -370,9 +515,12 @@ class CaptureController {
       window.clearTimeout(this.segmentTimer);
       this.segmentTimer = null;
     }
-    if (this.recorder?.state === "recording") {
-      this.recorder.stop();
-    }
+    if (this.recorder?.state !== "recording") return;
+    // A flush must not cost frames. In continuous mode `requestData()` emits
+    // everything buffered so far and leaves the encoder running; only the
+    // restart-based WebM path has to stop to close its container.
+    if (this.continuous) this.recorder.requestData();
+    else this.recorder.stop();
   }
 
   private stop() {

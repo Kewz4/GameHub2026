@@ -187,13 +187,18 @@ fn run() -> Result<(), String> {
     // the normal-integrity GameHub process from tailing an elevated capture.
     // Its stdout mode flushes every CSV row, while Rust-created files use the
     // Windows standard library's share-read/share-write/share-delete defaults.
+    // `--exclude_dropped` is deliberately NOT passed. It drops every frame
+    // PresentMon does not consider "displayed", and for a composited borderless
+    // window that classification can exclude the entire capture, which is
+    // indistinguishable from PresentMon not tracking the process at all. The
+    // consumer computes frame times from whatever rows arrive, so the extra
+    // rows cost nothing.
     let mut child = Command::new(&presentmon)
         .args([
             OsString::from("--process_id"),
             OsString::from(target_pid.to_string()),
             OsString::from("--output_stdout"),
             OsString::from("--no_console_stats"),
-            OsString::from("--exclude_dropped"),
             OsString::from("--v1_metrics"),
             OsString::from("--terminate_on_proc_exit"),
             OsString::from("--session_name"),
@@ -205,13 +210,40 @@ fn run() -> Result<(), String> {
         .spawn()
         .map_err(|error| format!("could not start PresentMon: {error}"))?;
 
+    // A silent PresentMon is ambiguous: it can mean the process wrote nothing,
+    // or that it wrote plenty and the consumer could not read it. Sampling the
+    // CSV's own byte count from inside the elevated bridge separates the two —
+    // whatever this reports is what PresentMon actually produced.
+    let started_at = Instant::now();
+    let mut next_heartbeat = Duration::from_secs(2);
+    let mut heartbeat_log = diagnostic
+        .try_clone()
+        .map_err(|error| format!("could not clone diagnostic output: {error}"))?;
+
     loop {
+        let elapsed = started_at.elapsed();
+        if elapsed >= next_heartbeat && next_heartbeat <= Duration::from_secs(20) {
+            let csv_bytes = fs::metadata(&output_path).map(|meta| meta.len()).unwrap_or(0);
+            write_diagnostic_line(
+                &mut heartbeat_log,
+                &format!(
+                    "bridge: t={}s csv_bytes={csv_bytes}",
+                    elapsed.as_secs()
+                ),
+            );
+            next_heartbeat += Duration::from_secs(4);
+        }
+
         match child.try_wait() {
             Ok(Some(status)) => {
+                let csv_bytes = fs::metadata(&output_path).map(|meta| meta.len()).unwrap_or(0);
                 let mut diagnostic = diagnostic;
                 write_diagnostic_line(
                     &mut diagnostic,
-                    &format!("PresentMon exited with status {status}"),
+                    &format!(
+                        "PresentMon exited with status {status} after {}s, csv_bytes={csv_bytes}",
+                        elapsed.as_secs()
+                    ),
                 );
                 break;
             }
