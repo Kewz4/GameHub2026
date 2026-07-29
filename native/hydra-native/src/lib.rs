@@ -1529,13 +1529,35 @@ pub fn set_overlay_input_block(blocked: bool) -> bool {
 /// sequence. Injecting the same DLL twice is harmless — the loader returns the
 /// already-mapped module and no second worker thread starts — so callers may
 /// retry without tracking state.
+#[napi(object)]
+pub struct InputHookInjection {
+    pub injected: bool,
+    /// Which step failed, so a refusal can be told apart from a crash: an
+    /// "open" failure is a protected or higher-integrity process, "thread" is
+    /// usually antivirus blocking CreateRemoteThread, and "load" means the
+    /// game's loader rejected the DLL (most often a bitness mismatch).
+    pub stage: String,
+    /// GetLastError at the point of failure, 0 on success.
+    pub error_code: u32,
+}
+
 #[napi]
 #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn inject_input_hook(pid: u32, dll_path: String) -> bool {
+pub fn inject_input_hook(pid: u32, dll_path: String) -> InputHookInjection {
     #[cfg(target_os = "windows")]
     unsafe {
+        let fail = |stage: &str| InputHookInjection {
+            injected: false,
+            stage: stage.to_string(),
+            error_code: GetLastError(),
+        };
+
         if pid == 0 || !Path::new(&dll_path).is_file() {
-            return false;
+            return InputHookInjection {
+                injected: false,
+                stage: "missing-dll".to_string(),
+                error_code: 0,
+            };
         }
 
         let process = OpenProcess(
@@ -1548,7 +1570,7 @@ pub fn inject_input_hook(pid: u32, dll_path: String) -> bool {
             pid,
         );
         if process.is_null() {
-            return false;
+            return fail("open");
         }
 
         let path = wide_string(&dll_path);
@@ -1561,8 +1583,9 @@ pub fn inject_input_hook(pid: u32, dll_path: String) -> bool {
             PAGE_READWRITE,
         );
         if remote.is_null() {
+            let outcome = fail("allocate");
             CloseHandle(process);
-            return false;
+            return outcome;
         }
 
         let mut written = 0usize;
@@ -1588,7 +1611,11 @@ pub fn inject_input_hook(pid: u32, dll_path: String) -> bool {
             None
         };
 
-        let mut injected = false;
+        let mut outcome = if wrote {
+            fail("loader-address")
+        } else {
+            fail("write")
+        };
         if let Some(loader) = loader {
             let thread = CreateRemoteThread(
                 process,
@@ -1602,25 +1629,41 @@ pub fn inject_input_hook(pid: u32, dll_path: String) -> bool {
                 0,
                 null_mut(),
             );
-            if !thread.is_null() {
-                // Bounded: a game wedged in its loader lock must not wedge the
-                // launcher too.
-                WaitForSingleObject(thread, 5_000);
+            if thread.is_null() {
+                outcome = fail("thread");
+            } else {
+                // This blocks the caller, which is Electron's main thread, so
+                // the bound is deliberately short: a game holding its loader
+                // lock must not freeze the launcher's IPC and rendering with
+                // it. LoadLibraryW on an already-resident DLL returns almost
+                // instantly, and a slower load still succeeds — it is only the
+                // success *report* that is lost on timeout.
+                WaitForSingleObject(thread, 1_200);
                 let mut exit_code = 0u32;
                 // LoadLibraryW returns the module handle, truncated to 32 bits
                 // in a thread exit code — non-zero still means it loaded.
-                if GetExitCodeThread(thread, &mut exit_code) != 0 && exit_code != 0 {
-                    injected = true;
-                }
+                outcome = if GetExitCodeThread(thread, &mut exit_code) != 0 && exit_code != 0 {
+                    InputHookInjection {
+                        injected: true,
+                        stage: "ok".to_string(),
+                        error_code: 0,
+                    }
+                } else {
+                    fail("load")
+                };
                 CloseHandle(thread);
             }
         }
 
         VirtualFreeEx(process, remote, 0, MEM_RELEASE);
         CloseHandle(process);
-        injected
+        outcome
     }
 
     #[cfg(not(target_os = "windows"))]
-    false
+    InputHookInjection {
+        injected: false,
+        stage: "unsupported".to_string(),
+        error_code: 0,
+    }
 }

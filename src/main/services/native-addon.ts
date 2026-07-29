@@ -63,7 +63,10 @@ type HydraNativeModule = {
   forceForegroundWindow: (windowHandle: number) => boolean;
   createOverlayInputGate: () => boolean;
   setOverlayInputBlock: (blocked: boolean) => boolean;
-  injectInputHook: (pid: number, dllPath: string) => boolean;
+  injectInputHook: (
+    pid: number,
+    dllPath: string
+  ) => { injected: boolean; stage: string; errorCode: number };
   // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
   getAudioSessions: () => NativeAudioSession[];
   setAudioSessionVolume: (pid: number, volume: number) => boolean;
@@ -543,14 +546,29 @@ export class NativeAddon {
    * Inject the input gate into `pid`. Safe to call repeatedly: loading the same
    * DLL twice returns the existing module without starting a second worker.
    */
-  public static injectInputHook(pid: number): boolean {
-    if (process.platform !== "win32" || !pid) return false;
+  public static injectInputHook(pid: number): {
+    injected: boolean;
+    stage: string;
+    errorCode: number;
+  } {
+    if (process.platform !== "win32" || !pid) {
+      return { injected: false, stage: "unsupported", errorCode: 0 };
+    }
     try {
       const dllPath = this.resolveInputHookPath();
-      if (!fs.existsSync(dllPath)) return false;
+      // Distinguished from an injection refusal on purpose: a missing file
+      // means the DLL was not packaged, which is a build problem, not a
+      // permissions one.
+      if (!fs.existsSync(dllPath)) {
+        return { injected: false, stage: "not-packaged", errorCode: 0 };
+      }
       return this.load().injectInputHook(pid, dllPath);
-    } catch {
-      return false;
+    } catch (error) {
+      return {
+        injected: false,
+        stage: `threw: ${error instanceof Error ? error.message : String(error)}`,
+        errorCode: 0,
+      };
     }
   }
 

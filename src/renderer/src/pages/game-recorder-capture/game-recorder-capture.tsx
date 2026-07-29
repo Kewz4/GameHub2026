@@ -412,8 +412,14 @@ class CaptureController {
           sliceStartedAt = Date.now();
           return;
         }
-        const endedAt = Date.now();
+        // Chromium can deliver the init segment and the first fragment in the
+        // same task, and a flush emits one immediately after the previous
+        // slice, so two events can land on the same millisecond. The main
+        // process rejects a segment whose end is not after its start, which
+        // silently dropped those. Advance by at least a millisecond to keep
+        // the slice boundaries strictly increasing.
         const startedAt = sliceStartedAt;
+        const endedAt = Math.max(Date.now(), startedAt + 1);
         sliceStartedAt = endedAt;
         const init = initSegment;
         void event.data

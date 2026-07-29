@@ -361,20 +361,36 @@ export class OverlayManager {
     }
 
     const game = this.activeGame;
-    if (!game) return;
+    if (!game) {
+      logger.warn("Overlay toggle ignored", { reason: "no active game" });
+      return;
+    }
     await this.refreshTargetProcess(game);
     if (
       !this.activeGame ||
       this.activeGame.objectId !== game.objectId ||
       this.activeGame.shop !== game.shop
     ) {
+      logger.warn("Overlay toggle ignored", { reason: "active game changed" });
       return;
     }
     const targetBounds = this.getTargetBounds();
-    if (!targetBounds || !this.isTargetForeground(false)) return;
+    // Every early return here looks identical from outside — the shortcut
+    // simply does nothing — so name the one that fired.
+    if (!targetBounds || !this.isTargetForeground(false)) {
+      logger.warn("Overlay toggle ignored", {
+        reason: !targetBounds ? "no target bounds" : "target not foreground",
+        targetPid: this.targetPid,
+        foregroundPid: NativeAddon.getForegroundProcessId(),
+      });
+      return;
+    }
 
     const now = Date.now();
-    if (now - this.lastToggleAt < TOGGLE_DEBOUNCE_MS) return;
+    if (now - this.lastToggleAt < TOGGLE_DEBOUNCE_MS) {
+      logger.warn("Overlay toggle ignored", { reason: "debounced" });
+      return;
+    }
     this.lastToggleAt = now;
 
     const overlayWindow = this.ensureOverlayWindow(targetBounds);
@@ -395,10 +411,20 @@ export class OverlayManager {
         this.activeGame?.objectId !== game.objectId ||
         this.activeGame.shop !== game.shop
       ) {
+        logger.warn("Overlay show aborted", {
+          rendererReady,
+          contextChanged: contextGeneration !== this.overlayContextGeneration,
+          destroyed: overlayWindow.isDestroyed(),
+        });
         return;
       }
       const currentBounds = this.getTargetBounds();
-      if (!currentBounds || !this.isTargetForeground(false)) return;
+      if (!currentBounds || !this.isTargetForeground(false)) {
+        logger.warn("Overlay show aborted", {
+          reason: !currentBounds ? "no target bounds" : "target not foreground",
+        });
+        return;
+      }
       this.activationToastPending = false;
       this.activationToastShown = true;
       this.destroyToast();
@@ -569,12 +595,13 @@ export class OverlayManager {
     if (this.inputHookPid === pid) return;
     // Creating the shared flag before injecting means the hook finds it on its
     // first look instead of retrying.
-    NativeAddon.createOverlayInputGate();
-    const injected = NativeAddon.injectInputHook(pid);
-    this.inputHookPid = injected ? pid : 0;
-    logger[injected ? "info" : "warn"]("Overlay input hook injection", {
+    const gate = NativeAddon.createOverlayInputGate();
+    const result = NativeAddon.injectInputHook(pid);
+    this.inputHookPid = result.injected ? pid : 0;
+    logger[result.injected ? "info" : "warn"]("Overlay input hook injection", {
       pid,
-      injected,
+      gate,
+      ...result,
     });
   }
 
