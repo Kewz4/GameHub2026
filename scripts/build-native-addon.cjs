@@ -24,6 +24,18 @@ const outputPresentMonBridgePath = path.join(
   outputDir,
   "presentmon-bridge.exe"
 );
+// Injected into the game to gate XInput / GetAsyncKeyState / raw input while
+// the overlay is open. A separate crate because Cargo allows only one [lib]
+// per package, but it shares hydra-native's target directory so CI's Rust
+// cache and electron-builder's `!native/hydra-native/target` exclusion both
+// keep covering it.
+const inputHookManifestPath = path.join(
+  projectRoot,
+  "native",
+  "gamehub-inputhook",
+  "Cargo.toml"
+);
+const outputInputHookPath = path.join(outputDir, "gamehub-inputhook.dll");
 
 const sourceLibraryNameByPlatform = {
   linux: "libhydra_native.so",
@@ -123,6 +135,27 @@ const build = async () => {
       );
     }
     fs.copyFileSync(sourcePresentMonBridgePath, outputPresentMonBridgePath);
+
+    console.log("Building gamehub-inputhook (overlay input gate)...");
+    await run("cargo", [
+      "build",
+      "--release",
+      "--manifest-path",
+      inputHookManifestPath,
+      "--target-dir",
+      cargoTargetDir,
+    ]);
+    const sourceInputHookPath = path.join(
+      cargoTargetDir,
+      "release",
+      "gamehub_inputhook.dll"
+    );
+    if (!fs.existsSync(sourceInputHookPath)) {
+      throw new Error(
+        `Input hook build output not found at ${sourceInputHookPath}`
+      );
+    }
+    fs.copyFileSync(sourceInputHookPath, outputInputHookPath);
   }
 
   await copySidecarLibrariesOnWindows(path.dirname(sourceLibraryPath));

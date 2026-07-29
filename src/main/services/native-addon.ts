@@ -61,6 +61,9 @@ type HydraNativeModule = {
   placeOverlayWindow: (windowHandle: Buffer, pid: number) => boolean;
   focusProcessWindow: (pid: number) => boolean;
   forceForegroundWindow: (windowHandle: number) => boolean;
+  createOverlayInputGate: () => boolean;
+  setOverlayInputBlock: (blocked: boolean) => boolean;
+  injectInputHook: (pid: number, dllPath: string) => boolean;
   // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
   getAudioSessions: () => NativeAudioSession[];
   setAudioSessionVolume: (pid: number, volume: number) => boolean;
@@ -487,16 +490,65 @@ export class NativeAddon {
   }
 
   /**
-   * Take the foreground for the overlay window.
+   * Take the foreground for the overlay window, so keystrokes and clicks route
+   * to the overlay's own widgets. Electron's focus() is not sufficient over a
+   * fullscreen game because of Windows' foreground lock.
    *
-   * This is what stops the game responding to the controller: XInput 1.4 only
-   * reports real state to the focused application, so once the overlay owns the
-   * foreground the game reads neutral input on its own. Electron's focus() is
-   * not sufficient over a fullscreen game because of Windows' foreground lock.
+   * This does NOT stop the game reading input, which was the original claim
+   * here. Logging proved otherwise: the overlay wins the foreground on the
+   * first attempt (`overlayHasForeground: true`) and games keep responding,
+   * because XInput 1.3 does no focus gating, `GetAsyncKeyState` is global, and
+   * `RIDEV_INPUTSINK` raw input is a request for background delivery. Gating
+   * those is what setOverlayInputBlock + injectInputHook are for.
    */
   public static forceForegroundWindow(windowHandle: number): boolean {
     try {
       return this.load().forceForegroundWindow(windowHandle);
+    } catch {
+      return false;
+    }
+  }
+
+  // ── In-game input gate ────────────────────────────────────────────────────
+  // A DLL injected into the game answers XInput / GetAsyncKeyState / raw input
+  // with neutral state while a shared flag is set, which is the only way to
+  // take input off a game that does not honour focus. Every entry point below
+  // is best-effort: injection legitimately fails (a protected process, a
+  // bitness mismatch, an antivirus block) and the overlay must still open.
+
+  private static resolveInputHookPath() {
+    const root = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    return path.join(root, "hydra-native", "gamehub-inputhook.dll");
+  }
+
+  /** Create the shared flag. Idempotent; call before injecting. */
+  public static createOverlayInputGate(): boolean {
+    try {
+      return this.load().createOverlayInputGate();
+    } catch {
+      return false;
+    }
+  }
+
+  /** Gate or ungate the game's input. Takes effect on the game's next poll. */
+  public static setOverlayInputBlock(blocked: boolean): boolean {
+    try {
+      return this.load().setOverlayInputBlock(blocked);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Inject the input gate into `pid`. Safe to call repeatedly: loading the same
+   * DLL twice returns the existing module without starting a second worker.
+   */
+  public static injectInputHook(pid: number): boolean {
+    if (process.platform !== "win32" || !pid) return false;
+    try {
+      const dllPath = this.resolveInputHookPath();
+      if (!fs.existsSync(dllPath)) return false;
+      return this.load().injectInputHook(pid, dllPath);
     } catch {
       return false;
     }

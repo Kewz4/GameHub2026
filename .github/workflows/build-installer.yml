@@ -144,7 +144,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             native/hydra-native/target
-          key: ${{ runner.os }}-cargo-hydra-native-${{ hashFiles('native/hydra-native/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-hydra-native-${{ hashFiles('native/hydra-native/Cargo.lock', 'native/gamehub-inputhook/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-hydra-native-
 

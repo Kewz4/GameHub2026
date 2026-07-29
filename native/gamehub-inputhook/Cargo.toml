@@ -1,0 +1,31 @@
+[package]
+name = "gamehub-inputhook"
+version = "0.1.0"
+edition = "2021"
+
+# Injected into the running game, so it must be a plain system DLL with no
+# Node/napi surface — hence a separate crate from hydra-native rather than a
+# second [lib] target, which Cargo does not allow.
+[lib]
+name = "gamehub_inputhook"
+crate-type = ["cdylib"]
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Memory",
+  "Win32_System_Threading",
+  "Win32_UI_Input",
+  "Win32_UI_Input_KeyboardAndMouse",
+] }
+
+[profile.release]
+# This code runs inside somebody else's process. A Rust panic unwinding into a
+# game's stack is undefined behaviour, so abort instead — and every hook below
+# is additionally written to be panic-free.
+panic = "abort"
+opt-level = "s"
+strip = true

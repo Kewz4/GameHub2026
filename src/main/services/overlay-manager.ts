@@ -88,6 +88,9 @@ export class OverlayManager {
   private static targetRefreshPending = false;
   private static lastTargetRefreshAt = 0;
   private static targetExecutable: string | null = null;
+  /** PID the input gate is currently loaded into, 0 when not injected. */
+  private static inputHookPid = 0;
+  private static inputBlocked = false;
   private static activationToastPending = false;
   private static activationToastShown = false;
   private static overlayRendererReady = false;
@@ -410,6 +413,7 @@ export class OverlayManager {
       overlayWindow.focus();
       overlayWindow.webContents.send("on-overlay-shown");
       this.claimForeground(overlayWindow);
+      this.setGameInputBlocked(true);
       setTimeout(() => {
         if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
           const delayedBounds = this.getTargetBounds();
@@ -520,6 +524,9 @@ export class OverlayManager {
       overlayWindow.hide();
       overlayWindow.setAlwaysOnTop(false);
     }
+    // Hand input back before anything else: leaving the gate set would leave
+    // the game unplayable, so it must clear even on the early-return paths.
+    this.setGameInputBlocked(false);
     if (
       showPinnedPerformance &&
       this.activeGame &&
@@ -531,6 +538,44 @@ export class OverlayManager {
     if (!restoreGameFocus) return;
     const pid = this.targetPid;
     if (pid) setTimeout(() => NativeAddon.focusProcessWindow(pid), 25);
+  }
+
+  /**
+   * Gate the game's input while the overlay is on screen.
+   *
+   * Foreground alone does not do this — measured: the overlay wins the
+   * foreground on the first attempt and games keep responding, because XInput
+   * 1.3 never gates on focus, `GetAsyncKeyState` is global, and a window
+   * registered with `RIDEV_INPUTSINK` is explicitly asking for background
+   * input. The injected hook answers all three with neutral state while this
+   * flag is set.
+   */
+  private static setGameInputBlocked(blocked: boolean) {
+    if (process.platform !== "win32") return;
+    if (this.inputBlocked === blocked) return;
+    this.inputBlocked = blocked;
+    if (!NativeAddon.setOverlayInputBlock(blocked)) {
+      logger.warn("Overlay input gate unavailable", { blocked });
+    }
+  }
+
+  /**
+   * Load the input gate into the game. Best effort by design: a protected or
+   * 32-bit process, or an antivirus block, must not stop the overlay opening —
+   * it just means the game keeps reading input while the overlay is up.
+   */
+  private static injectInputHook(pid: number) {
+    if (process.platform !== "win32" || !pid) return;
+    if (this.inputHookPid === pid) return;
+    // Creating the shared flag before injecting means the hook finds it on its
+    // first look instead of retrying.
+    NativeAddon.createOverlayInputGate();
+    const injected = NativeAddon.injectInputHook(pid);
+    this.inputHookPid = injected ? pid : 0;
+    logger[injected ? "info" : "warn"]("Overlay input hook injection", {
+      pid,
+      injected,
+    });
   }
 
   public static setPerformancePinned(pinned: boolean) {
@@ -633,6 +678,7 @@ export class OverlayManager {
         if (this.preferences.overlayPerformanceEnabled) {
           overlayFpsMonitor.setTargetProcess(targetPid, targetExecutable);
         }
+        this.injectInputHook(targetPid);
       }
       return this.targetPid;
     } finally {
@@ -882,6 +928,10 @@ export class OverlayManager {
     this.performance = emptyPerformance();
     this.targetPid = 0;
     this.targetExecutable = null;
+    // hideOverlayWindow above already cleared the gate; drop the injection
+    // record too so a relaunch of the same game re-injects into the new
+    // process rather than trusting a PID that has since been recycled.
+    this.inputHookPid = 0;
     this.activationToastPending = false;
     this.activationToastShown = false;
   }

@@ -56,10 +56,18 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     TH32CS_SNAPPROCESS,
 };
 #[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Memory::{
+    CreateFileMappingW, MapViewOfFile, VirtualAllocEx, VirtualFreeEx, FILE_MAP_WRITE, MEM_COMMIT,
+    MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE,
+};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Diagnostics::Debug::WriteProcessMemory;
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess, OpenProcess, OpenProcessToken,
-    WaitForSingleObject, PROCESS_CREATE_THREAD, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, TerminateProcess,
+    CreateRemoteThread, GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess,
+    GetExitCodeThread, OpenProcess, OpenProcessToken, WaitForSingleObject, PROCESS_CREATE_THREAD,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ,
+    PROCESS_VM_WRITE, TerminateProcess,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
@@ -1436,4 +1444,183 @@ fn mime_type_from_image_format(format: Option<ImageFormat>) -> Option<&'static s
         Some(ImageFormat::Avif) => Some("image/avif"),
         _ => None,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Overlay input gate
+// ---------------------------------------------------------------------------
+//
+// Focus is not enough to stop a game reading input — measured, not assumed: the
+// overlay reliably wins Win32 foreground and games keep responding, because
+// XInput 1.3, GetAsyncKeyState and RIDEV_INPUTSINK raw input all ignore focus.
+// The gate therefore lives inside the game: gamehub-inputhook is injected and
+// answers those APIs with neutral state while this flag is set. The launcher
+// only owns the flag and the injection.
+
+/// Shared with the injected DLL, which opens the same name read-only.
+#[cfg(target_os = "windows")]
+const INPUT_GATE_MAPPING_NAME: &str = "Local\\GameHubOverlayInputBlock";
+
+#[cfg(target_os = "windows")]
+static INPUT_GATE_VIEW: OnceLock<usize> = OnceLock::new();
+
+#[cfg(target_os = "windows")]
+fn wide_string(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// Create the shared flag. Idempotent: repeated calls reuse the first view.
+#[napi]
+pub fn create_overlay_input_gate() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        if INPUT_GATE_VIEW.get().is_some() {
+            return true;
+        }
+        unsafe {
+            let mapping = CreateFileMappingW(
+                INVALID_HANDLE_VALUE,
+                null(),
+                PAGE_READWRITE,
+                0,
+                size_of::<u32>() as u32,
+                wide_string(INPUT_GATE_MAPPING_NAME).as_ptr(),
+            );
+            if mapping.is_null() {
+                return false;
+            }
+            let view = MapViewOfFile(mapping, FILE_MAP_WRITE, 0, 0, size_of::<u32>());
+            // The mapping object outlives the handle as long as the view is
+            // held, and the view is never unmapped.
+            CloseHandle(mapping);
+            if view.Value.is_null() {
+                return false;
+            }
+            std::ptr::write_volatile(view.Value as *mut u32, 0);
+            let _ = INPUT_GATE_VIEW.set(view.Value as usize);
+            true
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
+/// Set or clear the gate. The injected DLL polls this on the game's input path,
+/// so the effect is immediate and needs no IPC round trip.
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn set_overlay_input_block(blocked: bool) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        let Some(view) = INPUT_GATE_VIEW.get() else {
+            return false;
+        };
+        unsafe { std::ptr::write_volatile(*view as *mut u32, u32::from(blocked)) };
+        true
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
+/// Load gamehub-inputhook into `pid` via the standard
+/// VirtualAllocEx + WriteProcessMemory + CreateRemoteThread(LoadLibraryW)
+/// sequence. Injecting the same DLL twice is harmless — the loader returns the
+/// already-mapped module and no second worker thread starts — so callers may
+/// retry without tracking state.
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn inject_input_hook(pid: u32, dll_path: String) -> bool {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        if pid == 0 || !Path::new(&dll_path).is_file() {
+            return false;
+        }
+
+        let process = OpenProcess(
+            PROCESS_CREATE_THREAD
+                | PROCESS_QUERY_LIMITED_INFORMATION
+                | PROCESS_VM_OPERATION
+                | PROCESS_VM_READ
+                | PROCESS_VM_WRITE,
+            0,
+            pid,
+        );
+        if process.is_null() {
+            return false;
+        }
+
+        let path = wide_string(&dll_path);
+        let bytes = path.len() * size_of::<u16>();
+        let remote = VirtualAllocEx(
+            process,
+            null(),
+            bytes,
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_READWRITE,
+        );
+        if remote.is_null() {
+            CloseHandle(process);
+            return false;
+        }
+
+        let mut written = 0usize;
+        let wrote = WriteProcessMemory(
+            process,
+            remote,
+            path.as_ptr() as *const std::ffi::c_void,
+            bytes,
+            &mut written,
+        ) != 0
+            && written == bytes;
+
+        // LoadLibraryW sits at the same address in every process on a given
+        // boot, so kernel32's local address is valid in the target.
+        let loader = if wrote {
+            let kernel32 = GetModuleHandleW(wide_string("kernel32.dll").as_ptr());
+            if kernel32.is_null() {
+                None
+            } else {
+                GetProcAddress(kernel32, c"LoadLibraryW".as_ptr() as *const u8)
+            }
+        } else {
+            None
+        };
+
+        let mut injected = false;
+        if let Some(loader) = loader {
+            let thread = CreateRemoteThread(
+                process,
+                null(),
+                0,
+                Some(std::mem::transmute::<
+                    unsafe extern "system" fn() -> isize,
+                    unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
+                >(loader)),
+                remote,
+                0,
+                null_mut(),
+            );
+            if !thread.is_null() {
+                // Bounded: a game wedged in its loader lock must not wedge the
+                // launcher too.
+                WaitForSingleObject(thread, 5_000);
+                let mut exit_code = 0u32;
+                // LoadLibraryW returns the module handle, truncated to 32 bits
+                // in a thread exit code — non-zero still means it loaded.
+                if GetExitCodeThread(thread, &mut exit_code) != 0 && exit_code != 0 {
+                    injected = true;
+                }
+                CloseHandle(thread);
+            }
+        }
+
+        VirtualFreeEx(process, remote, 0, MEM_RELEASE);
+        CloseHandle(process);
+        injected
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
 }
