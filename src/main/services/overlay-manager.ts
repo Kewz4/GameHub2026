@@ -39,6 +39,19 @@ const TOGGLE_DEBOUNCE_MS = 350;
 // bounded number of times before accepting that the game kept input.
 const OVERLAY_FOREGROUND_ATTEMPTS = 4;
 const OVERLAY_FOREGROUND_RETRY_MS = 120;
+/**
+ * The renderer handshake is racy and used to fail permanently when it lost.
+ *
+ * getContext() awaits three slow reads (user, achievements, assets). If the
+ * overlay page reloads during that window the context generation moves on, the
+ * fetch returns null, and rendererContextGeneration is never assigned — so the
+ * renderer never reports ready and nothing ever asks it again. The overlay then
+ * cannot be opened at all until something else reloads it, which is exactly the
+ * "shortcut does nothing" failure. Re-drive the handshake instead of aborting,
+ * and bound the wait so a renderer that never answers cannot hang the toggle.
+ */
+const RENDERER_READY_ATTEMPTS = 4;
+const RENDERER_READY_TIMEOUT_MS = 1_500;
 const GAMEPAD_REPEAT_DELAY_MS = 360;
 const GAMEPAD_REPEAT_INTERVAL_MS = 105;
 
@@ -311,6 +324,36 @@ export class OverlayManager {
     });
   }
 
+  /**
+   * Wait for the renderer, re-requesting the context whenever a reload
+   * invalidates the generation mid-handshake. Returns false only if the window
+   * died or the renderer stayed silent across every attempt.
+   */
+  private static async acquireRendererContext(overlayWindow: BrowserWindow) {
+    for (let attempt = 0; attempt < RENDERER_READY_ATTEMPTS; attempt += 1) {
+      const generation = this.overlayContextGeneration;
+      const ready = await Promise.race([
+        this.waitForRendererReady(generation),
+        new Promise<boolean>((resolve) =>
+          setTimeout(() => resolve(false), RENDERER_READY_TIMEOUT_MS)
+        ),
+      ]);
+      if (ready && generation === this.overlayContextGeneration) return true;
+      if (
+        overlayWindow.isDestroyed() ||
+        overlayWindow.webContents.isDestroyed()
+      )
+        return false;
+      logger.warn("Overlay renderer context retry", {
+        attempt,
+        ready,
+        contextChanged: generation !== this.overlayContextGeneration,
+      });
+      this.requestOverlayRendererContext();
+    }
+    return false;
+  }
+
   private static resetOverlayRendererReadiness() {
     this.overlayContextGeneration += 1;
     this.overlayRendererReady = false;
@@ -402,19 +445,17 @@ export class OverlayManager {
     }
 
     const show = async () => {
-      const contextGeneration = this.overlayContextGeneration;
-      const rendererReady = await this.waitForRendererReady(contextGeneration);
+      const rendererReady = await this.acquireRendererContext(overlayWindow);
       if (
         !rendererReady ||
-        contextGeneration !== this.overlayContextGeneration ||
         overlayWindow.isDestroyed() ||
         this.activeGame?.objectId !== game.objectId ||
         this.activeGame.shop !== game.shop
       ) {
         logger.warn("Overlay show aborted", {
           rendererReady,
-          contextChanged: contextGeneration !== this.overlayContextGeneration,
           destroyed: overlayWindow.isDestroyed(),
+          gameChanged: this.activeGame?.objectId !== game.objectId,
         });
         return;
       }
