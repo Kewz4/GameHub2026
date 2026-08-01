@@ -187,22 +187,40 @@ fn run() -> Result<(), String> {
     // the normal-integrity GameHub process from tailing an elevated capture.
     // Its stdout mode flushes every CSV row, while Rust-created files use the
     // Windows standard library's share-read/share-write/share-delete defaults.
-    // `--exclude_dropped` is deliberately NOT passed. It drops every frame
-    // PresentMon does not consider "displayed", and for a composited borderless
-    // window that classification can exclude the entire capture, which is
-    // indistinguishable from PresentMon not tracking the process at all. The
-    // consumer computes frame times from whatever rows arrive, so the extra
-    // rows cost nothing.
+    // The `--no_track_*` flags are the difference between rows and silence.
+    //
+    // By default PresentMon correlates every present with a display event
+    // before emitting its row, and also collects GPU and input-latency
+    // telemetry. Those need providers this process could not get here: the
+    // collector started cleanly, wrote its UTF-16LE byte-order mark, and then
+    // produced not one further byte — no header, no rows — for the full
+    // capture window, across two unrelated engines. Nothing is ever
+    // "complete", so nothing is ever written. Turning off display, GPU and
+    // input tracking leaves plain present events, which is all the consumer
+    // needs: it derives frame time from msBetweenPresents when
+    // msBetweenDisplayChange is absent.
+    //
+    // `--v1_metrics` is dropped for the same reason — matching the invocation
+    // upstream Hydra uses, which is known to produce output. The column
+    // resolver reads the header by name and accepts either schema, so no
+    // parsing change is required.
+    //
+    // `--exclude_dropped` stays out: it discards every frame not considered
+    // displayed, which for a composited borderless window can exclude the
+    // whole capture.
     let mut child = Command::new(&presentmon)
         .args([
             OsString::from("--process_id"),
             OsString::from(target_pid.to_string()),
             OsString::from("--output_stdout"),
             OsString::from("--no_console_stats"),
-            OsString::from("--v1_metrics"),
+            OsString::from("--no_track_display"),
+            OsString::from("--no_track_gpu"),
+            OsString::from("--no_track_input"),
             OsString::from("--terminate_on_proc_exit"),
             OsString::from("--session_name"),
             OsString::from(session_name.clone()),
+            OsString::from("--stop_existing_session"),
         ])
         .stdout(Stdio::from(output))
         .stderr(Stdio::from(child_stderr))
