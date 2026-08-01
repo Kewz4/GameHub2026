@@ -136,7 +136,11 @@ export class OverlayManager {
     this.performancePinned = false;
     this.invalidateOverlayRendererContext(true);
     void GameRecorderManager.setActiveGame(game);
-    void this.configureActiveGame(game);
+    // Rejections here used to vanish: a throw anywhere in the preference read
+    // or service start left the overlay unarmed with nothing in the log.
+    void this.configureActiveGame(game).catch((error) =>
+      logger.error("Overlay could not be configured for the active game", error)
+    );
   }
 
   public static applyUserPreferences(preferences: UserPreferences) {
@@ -180,7 +184,11 @@ export class OverlayManager {
       return;
     }
     this.readPreferences(preferences);
-    if (this.preferences.overlayEnabled) this.startActiveServices(game);
+    if (!this.preferences.overlayEnabled) {
+      logger.warn("Overlay disabled in preferences", { title: game.title });
+      return;
+    }
+    this.startActiveServices(game);
   }
 
   private static startActiveServices(game: Game) {
@@ -307,7 +315,16 @@ export class OverlayManager {
   }
 
   public static toggleOverlay() {
-    if (!this.activeGame || !this.servicesActive) return;
+    if (!this.activeGame || !this.servicesActive) {
+      // The outermost gate, and the only one that still returned in total
+      // silence — every "Overlay toggle ignored" line added in v1.1.28 sits
+      // behind it, so this is precisely the shape of "I press the shortcut,
+      // nothing happens, and the log says nothing at all".
+      logger.warn("Overlay toggle ignored", {
+        reason: this.activeGame ? "services not active" : "no active game",
+      });
+      return;
+    }
     void this.toggleOverlayWindow();
   }
 
@@ -1050,38 +1067,47 @@ export class OverlayManager {
     this.fpsWindow = null;
   }
 
+  /**
+   * Arm every shortcut path we have rather than the first one that reports
+   * success.
+   *
+   * This used to return as soon as the native raw-input watcher started, so on
+   * Windows the OS hotkey was never registered and that watcher became a single
+   * point of failure: if its event counter stopped advancing, the shortcut did
+   * nothing whatsoever — and did it silently, because toggleOverlay() is only
+   * ever reached once one of these fires. Registering both is safe: a double
+   * toggle is absorbed by TOGGLE_DEBOUNCE_MS.
+   */
   private static registerShortcut(nativeKeyboardActive: boolean) {
     this.unregisterShortcut();
 
     this.registeredShortcut = PREFERRED_SHORTCUT;
-    if (process.platform === "win32" && nativeKeyboardActive) {
-      logger.info("Using native Windows Hydra overlay shortcut watcher");
-      return;
-    }
+    const nativeWatcher = process.platform === "win32" && nativeKeyboardActive;
 
-    if (
-      globalShortcut.register(PREFERRED_SHORTCUT, () => this.toggleOverlay())
-    ) {
-      this.registeredWithElectron = true;
-      return;
-    }
+    let osHotkey = globalShortcut.register(PREFERRED_SHORTCUT, () =>
+      this.toggleOverlay()
+    );
 
-    if (process.platform === "win32") {
-      logger.warn(
-        "Shift+F3 OS registration failed; native overlay polling remains active"
+    // Shift+F3 is rarely taken on Windows; elsewhere it collides often enough
+    // to be worth a second choice.
+    if (!osHotkey && process.platform !== "win32") {
+      osHotkey = globalShortcut.register(FALLBACK_SHORTCUT, () =>
+        this.toggleOverlay()
       );
-      return;
+      if (osHotkey) this.registeredShortcut = FALLBACK_SHORTCUT;
     }
 
-    if (
-      globalShortcut.register(FALLBACK_SHORTCUT, () => this.toggleOverlay())
-    ) {
-      this.registeredShortcut = FALLBACK_SHORTCUT;
-      this.registeredWithElectron = true;
-      return;
-    }
+    if (osHotkey) this.registeredWithElectron = true;
 
-    logger.warn("Could not register a global Hydra overlay shortcut");
+    logger.info("Hydra overlay shortcut armed", {
+      shortcut: this.registeredShortcut,
+      nativeWatcher,
+      osHotkey,
+    });
+
+    if (!nativeWatcher && !osHotkey) {
+      logger.warn("Could not register a global Hydra overlay shortcut");
+    }
   }
 
   private static unregisterShortcut() {
