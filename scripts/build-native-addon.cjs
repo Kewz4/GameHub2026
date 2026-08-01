@@ -36,6 +36,10 @@ const inputHookManifestPath = path.join(
   "Cargo.toml"
 );
 const outputInputHookPath = path.join(outputDir, "gamehub-inputhook.dll");
+// Elevated helper: registered once as a Scheduled Task at RunLevel Highest so
+// injection and PresentMon get an administrator token without prompting on
+// every game launch.
+const outputBrokerPath = path.join(outputDir, "gamehub-overlay-broker.exe");
 
 const sourceLibraryNameByPlatform = {
   linux: "libhydra_native.so",
@@ -156,6 +160,18 @@ const build = async () => {
       );
     }
     fs.copyFileSync(sourceInputHookPath, outputInputHookPath);
+
+    const sourceBrokerPath = path.join(
+      cargoTargetDir,
+      "release",
+      "gamehub-overlay-broker.exe"
+    );
+    if (!fs.existsSync(sourceBrokerPath)) {
+      throw new Error(
+        `Overlay broker build output not found at ${sourceBrokerPath}`
+      );
+    }
+    fs.copyFileSync(sourceBrokerPath, outputBrokerPath);
   }
 
   await copySidecarLibrariesOnWindows(path.dirname(sourceLibraryPath));

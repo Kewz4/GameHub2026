@@ -18,6 +18,7 @@ import { getUnlockedAchievements } from "@main/events/user/get-unlocked-achievem
 import { getGameAssets } from "@main/events/catalogue/get-game-assets";
 import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
+import { OverlayBroker } from "./overlay-broker";
 import { findOverlayGameProcesses } from "./overlay-game-process";
 import { overlayFpsMonitor } from "./overlay-fps-monitor";
 import { WindowManager } from "./window-manager";
@@ -638,11 +639,40 @@ export class OverlayManager {
     // first look instead of retrying.
     const gate = NativeAddon.createOverlayInputGate();
     const result = NativeAddon.injectInputHook(pid);
-    this.inputHookPid = result.injected ? pid : 0;
-    logger[result.injected ? "info" : "warn"]("Overlay input hook injection", {
-      pid,
-      gate,
-      ...result,
+    if (result.injected) {
+      this.inputHookPid = pid;
+      logger.info("Overlay input hook injection", { pid, gate, ...result });
+      return;
+    }
+
+    // ERROR_ACCESS_DENIED on OpenProcess means the game runs at a higher
+    // integrity level than the launcher — common for repacks that start
+    // elevated. Nothing an unelevated process can do reaches it, so hand the
+    // job to the broker, which holds an administrator token.
+    const deniedByIntegrity = result.stage === "open" && result.errorCode === 5;
+    if (!deniedByIntegrity) {
+      this.inputHookPid = 0;
+      logger.warn("Overlay input hook injection", { pid, gate, ...result });
+      return;
+    }
+
+    void OverlayBroker.request(
+      "inject",
+      String(pid),
+      OverlayBroker.inputHookPath()
+    ).then((reply) => {
+      // Reply shape: OK<TAB>injected<TAB>stage<TAB>errorCode
+      const injected = reply?.ok === true && reply.fields[0] === "true";
+      this.inputHookPid = injected ? pid : 0;
+      logger[injected ? "info" : "warn"]("Overlay input hook injection", {
+        pid,
+        gate,
+        via: "broker",
+        injected,
+        stage: reply?.fields[1] ?? "no-reply",
+        errorCode: Number(reply?.fields[2] ?? 0),
+        unelevatedStage: result.stage,
+      });
     });
   }
 

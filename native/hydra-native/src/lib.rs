@@ -12,10 +12,13 @@ use image::codecs::webp::WebPDecoder;
 use image::{AnimationDecoder, ImageFormat, ImageReader};
 use napi::bindgen_prelude::{Buffer, Error};
 use napi_derive::napi;
+
+#[cfg(target_os = "windows")]
+mod win_inject;
 use sysinfo::{ProcessesToUpdate, System};
 use uuid::Uuid;
 
-// ── In-game overlay (ported from Hydra PR #2579) ─────────────────────────────
+// ── In-game overlay ──────────────────────────────────────────────────────────
 // Windows-only shortcut detection (Shift+F3 via raw input + a registered
 // hotkey), XInput gamepad polling for Guide/navigation, plus the
 // process-access / foreground-pid / elevation helpers the injected overlay uses
@@ -57,17 +60,13 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Memory::{
-    CreateFileMappingW, MapViewOfFile, VirtualAllocEx, VirtualFreeEx, FILE_MAP_WRITE, MEM_COMMIT,
-    MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE,
+    CreateFileMappingW, MapViewOfFile, FILE_MAP_WRITE, PAGE_READWRITE,
 };
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::System::Diagnostics::Debug::WriteProcessMemory;
-#[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
-    CreateRemoteThread, GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess,
-    GetExitCodeThread, OpenProcess, OpenProcessToken, WaitForSingleObject, PROCESS_CREATE_THREAD,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ,
-    PROCESS_VM_WRITE, TerminateProcess,
+    GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess, OpenProcess, OpenProcessToken,
+    WaitForSingleObject, PROCESS_CREATE_THREAD, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, TerminateProcess,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
@@ -1545,119 +1544,16 @@ pub struct InputHookInjection {
 #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
 pub fn inject_input_hook(pid: u32, dll_path: String) -> InputHookInjection {
     #[cfg(target_os = "windows")]
-    unsafe {
-        let fail = |stage: &str| InputHookInjection {
-            injected: false,
-            stage: stage.to_string(),
-            error_code: GetLastError(),
-        };
-
-        if pid == 0 || !Path::new(&dll_path).is_file() {
-            return InputHookInjection {
-                injected: false,
-                stage: "missing-dll".to_string(),
-                error_code: 0,
-            };
+    {
+        // Unelevated fast path. A game running at higher integrity than the
+        // launcher fails here with stage "open" / ERROR_ACCESS_DENIED, which is
+        // the caller's cue to go through the elevated broker instead.
+        let outcome = win_inject::inject_dll(pid, &dll_path);
+        InputHookInjection {
+            injected: outcome.injected,
+            stage: outcome.stage.to_string(),
+            error_code: outcome.error_code,
         }
-
-        let process = OpenProcess(
-            PROCESS_CREATE_THREAD
-                | PROCESS_QUERY_LIMITED_INFORMATION
-                | PROCESS_VM_OPERATION
-                | PROCESS_VM_READ
-                | PROCESS_VM_WRITE,
-            0,
-            pid,
-        );
-        if process.is_null() {
-            return fail("open");
-        }
-
-        let path = wide_string(&dll_path);
-        let bytes = path.len() * size_of::<u16>();
-        let remote = VirtualAllocEx(
-            process,
-            null(),
-            bytes,
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_READWRITE,
-        );
-        if remote.is_null() {
-            let outcome = fail("allocate");
-            CloseHandle(process);
-            return outcome;
-        }
-
-        let mut written = 0usize;
-        let wrote = WriteProcessMemory(
-            process,
-            remote,
-            path.as_ptr() as *const std::ffi::c_void,
-            bytes,
-            &mut written,
-        ) != 0
-            && written == bytes;
-
-        // LoadLibraryW sits at the same address in every process on a given
-        // boot, so kernel32's local address is valid in the target.
-        let loader = if wrote {
-            let kernel32 = GetModuleHandleW(wide_string("kernel32.dll").as_ptr());
-            if kernel32.is_null() {
-                None
-            } else {
-                GetProcAddress(kernel32, c"LoadLibraryW".as_ptr() as *const u8)
-            }
-        } else {
-            None
-        };
-
-        let mut outcome = if wrote {
-            fail("loader-address")
-        } else {
-            fail("write")
-        };
-        if let Some(loader) = loader {
-            let thread = CreateRemoteThread(
-                process,
-                null(),
-                0,
-                Some(std::mem::transmute::<
-                    unsafe extern "system" fn() -> isize,
-                    unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
-                >(loader)),
-                remote,
-                0,
-                null_mut(),
-            );
-            if thread.is_null() {
-                outcome = fail("thread");
-            } else {
-                // This blocks the caller, which is Electron's main thread, so
-                // the bound is deliberately short: a game holding its loader
-                // lock must not freeze the launcher's IPC and rendering with
-                // it. LoadLibraryW on an already-resident DLL returns almost
-                // instantly, and a slower load still succeeds — it is only the
-                // success *report* that is lost on timeout.
-                WaitForSingleObject(thread, 1_200);
-                let mut exit_code = 0u32;
-                // LoadLibraryW returns the module handle, truncated to 32 bits
-                // in a thread exit code — non-zero still means it loaded.
-                outcome = if GetExitCodeThread(thread, &mut exit_code) != 0 && exit_code != 0 {
-                    InputHookInjection {
-                        injected: true,
-                        stage: "ok".to_string(),
-                        error_code: 0,
-                    }
-                } else {
-                    fail("load")
-                };
-                CloseHandle(thread);
-            }
-        }
-
-        VirtualFreeEx(process, remote, 0, MEM_RELEASE);
-        CloseHandle(process);
-        outcome
     }
 
     #[cfg(not(target_os = "windows"))]
