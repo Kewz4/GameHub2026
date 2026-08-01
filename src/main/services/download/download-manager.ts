@@ -80,6 +80,8 @@ export class DownloadManager {
   private static downloadingGameId: string | null = null;
   private static jsDownloader: JsHttpDownloader | null = null;
   private static usingJsDownloader = false;
+  /** Prevent background status polls from endlessly respawning a missing RPC. */
+  private static rpcAvailable = true;
   private static isPreparingDownload = false;
   private static allDebridBatch: AllDebridBatchState | null = null;
   /** Throttles the free-space read, which touches the filesystem. */
@@ -382,9 +384,22 @@ export class DownloadManager {
     download?: Download,
     downloadsToSeed?: Download[]
   ) {
-    await PythonRPC.spawn();
+    try {
+      await PythonRPC.spawn();
+      this.rpcAvailable = true;
+    } catch (error) {
+      this.rpcAvailable = false;
+      throw error;
+    }
 
-    await this.applyNetworkInterface();
+    // Preference/database failures after a successful spawn must not mark a
+    // live RPC process unavailable and hide an active torrent from polling.
+    await this.applyNetworkInterface().catch((error) => {
+      logger.error(
+        "[DownloadManager] Could not apply the saved network interface",
+        error
+      );
+    });
 
     if (downloadsToSeed?.length) {
       for (const seedDownload of downloadsToSeed) {
@@ -400,7 +415,12 @@ export class DownloadManager {
       });
     }
 
-    await this.applyDownloadSpeedLimit();
+    await this.applyDownloadSpeedLimit().catch((error) => {
+      logger.error(
+        "[DownloadManager] Could not apply the saved speed limit",
+        error
+      );
+    });
   }
 
   private static async getDownloadStatusFromJs(): Promise<DownloadProgress | null> {
@@ -633,9 +653,11 @@ export class DownloadManager {
   }
 
   private static async getDownloadStatus(): Promise<DownloadProgress | null> {
+    if (!this.downloadingGameId) return null;
     if (this.usingJsDownloader) {
       return this.getDownloadStatusFromJs();
     }
+    if (!this.rpcAvailable) return null;
     return this.getDownloadStatusFromRpc();
   }
 
@@ -1099,6 +1121,11 @@ export class DownloadManager {
   }
 
   public static async getSeedStatus() {
+    if (!this.rpcAvailable) {
+      WindowManager.sendToAppWindows("on-seeding-status", []);
+      return;
+    }
+
     let seedStatus: LibtorrentPayload[] = [];
 
     try {
@@ -1224,6 +1251,7 @@ export class DownloadManager {
       url,
       save_path: download.downloadPath,
     });
+    this.rpcAvailable = true;
   }
 
   static async pauseSeeding(downloadKey: string) {
@@ -2172,6 +2200,7 @@ export class DownloadManager {
         await PythonRPC.rpc.call("action", payload, {
           timeout: isSelectiveTorrentStart ? 60_000 : 10_000,
         });
+        this.rpcAvailable = true;
 
         const downloadWasCancelledOrReplaced =
           this.downloadingGameId !== downloadId;

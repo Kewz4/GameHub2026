@@ -1,5 +1,66 @@
 import type { HydraOverlayPerformance } from "@types";
 
+export type PresentMonTextEncoding = "utf8" | "utf16le";
+
+export type DecodedPresentMonChunk = {
+  encoding: PresentMonTextEncoding | null;
+  text: string;
+  bytesConsumed: number;
+};
+
+/**
+ * PresentMon's file output is UTF-8, but its Windows `--output_stdout` stream
+ * is UTF-16LE. The elevated bridge redirects that console stream to disk, so
+ * decoding it as UTF-8 leaves a NUL between every character and the CSV header
+ * can never be recognized.
+ *
+ * The file is tailed while it is being written. Keep an incomplete UTF-16 code
+ * unit for the next poll instead of advancing the offset and losing one byte.
+ */
+export const decodePresentMonTextChunk = (
+  buffer: Buffer,
+  currentEncoding: PresentMonTextEncoding | null
+): DecodedPresentMonChunk => {
+  if (!buffer.length) {
+    return { encoding: currentEncoding, text: "", bytesConsumed: 0 };
+  }
+
+  let encoding = currentEncoding;
+  let start = 0;
+
+  if (!encoding) {
+    if (buffer.length < 2) {
+      return { encoding: null, text: "", bytesConsumed: 0 };
+    }
+
+    if (buffer[0] === 0xff && buffer[1] === 0xfe) {
+      encoding = "utf16le";
+      start = 2;
+    } else if (buffer[0] === 0xef && buffer[1] === 0xbb) {
+      if (buffer.length < 3) {
+        return { encoding: null, text: "", bytesConsumed: 0 };
+      }
+      encoding = "utf8";
+      if (buffer[2] === 0xbf) start = 3;
+    } else {
+      // PresentMon normally emits a BOM. Retain a conservative heuristic for
+      // console hosts which omit it but still write wide characters.
+      encoding = buffer[1] === 0x00 ? "utf16le" : "utf8";
+    }
+  }
+
+  let end = buffer.length;
+  if (encoding === "utf16le" && (end - start) % 2 !== 0) {
+    end -= 1;
+  }
+
+  return {
+    encoding,
+    text: buffer.subarray(start, end).toString(encoding),
+    bytesConsumed: end,
+  };
+};
+
 export type PresentMonFrameTimeColumns = {
   displayChange: number;
   presents: number;

@@ -8,6 +8,7 @@ import YAML from "yaml";
 import cp from "node:child_process";
 import { SystemPath } from "./system-path";
 import { logger } from "./logger";
+import { resolveLudusaviPathMatches } from "./ludusavi-path-discovery";
 
 export class Ludusavi {
   private static ludusaviResourcesPath = app.isPackaged
@@ -249,58 +250,17 @@ export class Ludusavi {
     );
 
     // For paths still containing <storeUserId> or other unknown variables,
-    // try globbing: replace the unresolved segment with "*" and check for
-    // the first matching directory on disk.
+    // scan every matching directory so saves from multiple local profiles are
+    // not silently discarded.
     const resolved: string[] = [];
     for (const p of expanded) {
       if (!p.includes("<")) {
         resolved.push(p);
       } else {
-        const globbed = await this.resolveByGlob(p);
-        if (globbed) resolved.push(globbed);
+        resolved.push(...resolveLudusaviPathMatches(p));
       }
     }
-    return resolved;
-  }
-
-  /**
-   * Replace remaining `<variable>` tokens with a wildcard scan: split the
-   * path at the first unresolved segment, list entries in the last known-good
-   * directory, and recursively try each candidate until a match is found.
-   */
-  private static resolveByGlob(template: string): string | null {
-    try {
-      // Find the index of the first path separator before an unresolved token
-      const parts = template.replace(/\\/g, "/").split("/");
-      const wildcardIdx = parts.findIndex((p) => p.includes("<"));
-      if (wildcardIdx < 0) return null;
-
-      const knownBase = parts.slice(0, wildcardIdx).join(path.sep);
-      if (!fs.existsSync(knownBase)) return null;
-
-      // Collect remaining template suffix after the wildcard segment(s)
-      const suffixParts = parts
-        .slice(wildcardIdx + 1)
-        .filter((p) => !p.includes("<"));
-      const suffix = suffixParts.join(path.sep);
-
-      const candidates = fs
-        .readdirSync(knownBase, { withFileTypes: true })
-        .filter((e) => e.isDirectory())
-        .map((e) => path.join(knownBase, e.name, suffix));
-
-      return (
-        candidates.find((c) => {
-          try {
-            return fs.statSync(c).isDirectory();
-          } catch {
-            return false;
-          }
-        }) ?? null
-      );
-    } catch {
-      return null;
-    }
+    return [...new Set(resolved)];
   }
 
   /**

@@ -820,6 +820,19 @@ export default function Overlay() {
   const handleControllerAction = useCallback(
     (action: HydraOverlayGamepadAction) => {
       if (action === "back") {
+        const openOverlaySelect = document.querySelector<HTMLButtonElement>(
+          '.overlay-select__trigger[aria-expanded="true"]'
+        );
+        if (openOverlaySelect) {
+          openOverlaySelect.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "Escape",
+              bubbles: true,
+              cancelable: true,
+            })
+          );
+          return;
+        }
         if (controllerRangeEditRef.current || controllerSelectEditRef.current) {
           stopControllerRangeEdit();
           return;
@@ -880,6 +893,45 @@ export default function Overlay() {
       }
 
       const active = document.activeElement;
+
+      if (
+        active instanceof HTMLButtonElement &&
+        active.classList.contains("overlay-select__trigger") &&
+        (action === "left" || action === "right")
+      ) {
+        active.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: action === "left" ? "ArrowLeft" : "ArrowRight",
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+        return;
+      }
+
+      if (
+        active instanceof HTMLButtonElement &&
+        active.classList.contains("overlay-select__option") &&
+        ["up", "down", "left", "right"].includes(action)
+      ) {
+        const key =
+          action === "up"
+            ? "ArrowUp"
+            : action === "down"
+              ? "ArrowDown"
+              : action === "left"
+                ? "ArrowLeft"
+                : "ArrowRight";
+        active.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key,
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+        return;
+      }
+
       if (action === "accept") {
         if (active instanceof HTMLInputElement && active.type === "range") {
           if (controllerRangeEditRef.current === active) {
@@ -1034,7 +1086,7 @@ export default function Overlay() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
       if (controllerRangeEditRef.current) {
         stopControllerRangeEdit();
       } else if (widgetMenuOpen) {

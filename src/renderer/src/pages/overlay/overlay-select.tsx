@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDown } from "lucide-react";
 
 /**
  * Portal the open list up to the overlay root.
@@ -84,12 +85,45 @@ export function OverlaySelect<T extends string | number>({
     enabled.findIndex((option) => option.value === value)
   );
 
+  const focusOption = useCallback(
+    (index: number) => {
+      if (!enabled.length) return;
+      const nextIndex = (index + enabled.length) % enabled.length;
+      setActiveIndex(nextIndex);
+      window.requestAnimationFrame(() => {
+        listRef.current
+          ?.querySelector<HTMLElement>(
+            `[data-overlay-select-index="${nextIndex}"]`
+          )
+          ?.focus({ preventScroll: true });
+      });
+    },
+    [enabled.length]
+  );
+
+  const close = useCallback((restoreTriggerFocus = false) => {
+    setOpen(false);
+    if (restoreTriggerFocus) {
+      window.requestAnimationFrame(() =>
+        triggerRef.current?.focus({ preventScroll: true })
+      );
+    }
+  }, []);
+
+  const openList = useCallback(() => {
+    // Seed the active option before the portaled list mounts. Updating it in
+    // an effect leaves one frame where the first option receives focus, so a
+    // fast keyboard/controller direction can step from the wrong value.
+    setActiveIndex(selectedIndex);
+    setOpen(true);
+  }, [selectedIndex]);
+
   const commit = useCallback(
     (next: T) => {
       if (next !== value) onChange(next);
-      setOpen(false);
+      close(true);
     },
-    [onChange, value]
+    [close, onChange, value]
   );
 
   const step = useCallback(
@@ -104,20 +138,19 @@ export function OverlaySelect<T extends string | number>({
     [enabled, onChange, selectedIndex, value]
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setActiveIndex(selectedIndex);
-  }, [open, selectedIndex]);
-
   // Close when focus or a click lands outside; the overlay has no backdrop to
   // catch this for us.
   useEffect(() => {
     if (!open) return;
+    const isInsideSelect = (target: EventTarget | null) =>
+      target instanceof Node &&
+      (Boolean(rootRef.current?.contains(target)) ||
+        Boolean(listRef.current?.contains(target)));
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!isInsideSelect(event.target)) close();
     };
     const onFocusIn = (event: FocusEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!isInsideSelect(event.target)) close();
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("focusin", onFocusIn, true);
@@ -125,14 +158,19 @@ export function OverlaySelect<T extends string | number>({
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("focusin", onFocusIn, true);
     };
-  }, [open]);
+  }, [close, open]);
 
   useEffect(() => {
-    if (!open) return;
-    listRef.current
-      ?.querySelector<HTMLElement>('[data-active="true"]')
-      ?.scrollIntoView({ block: "nearest" });
-  }, [open, activeIndex]);
+    if (!open || !anchor) return;
+    const frame = window.requestAnimationFrame(() => {
+      const activeOption = listRef.current?.querySelector<HTMLElement>(
+        `[data-overlay-select-index="${activeIndex}"]`
+      );
+      activeOption?.scrollIntoView({ block: "nearest" });
+      activeOption?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeIndex, anchor, open]);
 
   // The list is portaled out of the widget, so its position is measured from
   // the trigger. Flip above the trigger when there is no room below.
@@ -176,9 +214,10 @@ export function OverlaySelect<T extends string | number>({
         className="overlay-select__trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={listId}
         aria-label={ariaLabel}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => (open ? close() : openList())}
         onKeyDown={(event) => {
           if (event.key === "ArrowRight") {
             event.preventDefault();
@@ -192,19 +231,22 @@ export function OverlaySelect<T extends string | number>({
             event.key === " "
           ) {
             event.preventDefault();
-            setOpen(true);
+            openList();
           } else if (event.key === "Escape" && open) {
             event.preventDefault();
-            setOpen(false);
+            event.stopPropagation();
+            close(true);
           }
         }}
       >
         <span className="overlay-select__value">
           {selected?.label ?? String(value)}
         </span>
-        <span className="overlay-select__caret" aria-hidden="true">
-          ▾
-        </span>
+        <ChevronDown
+          className="overlay-select__caret"
+          size={13}
+          aria-hidden="true"
+        />
       </button>
 
       {open &&
@@ -216,6 +258,7 @@ export function OverlaySelect<T extends string | number>({
             className="overlay-select__list"
             role="listbox"
             id={listId}
+            aria-label={ariaLabel}
             tabIndex={-1}
             style={{
               left: `${anchor.left}px`,
@@ -233,6 +276,9 @@ export function OverlaySelect<T extends string | number>({
                   type="button"
                   role="option"
                   aria-selected={option.value === value}
+                  data-overlay-select-index={
+                    enabledIndex >= 0 ? enabledIndex : undefined
+                  }
                   data-active={
                     enabledIndex === activeIndex ? "true" : undefined
                   }
@@ -245,9 +291,33 @@ export function OverlaySelect<T extends string | number>({
                     enabledIndex >= 0 && setActiveIndex(enabledIndex)
                   }
                   onKeyDown={(event) => {
-                    if (event.key === "Escape") {
+                    if (
+                      event.key === "ArrowDown" ||
+                      event.key === "ArrowRight"
+                    ) {
                       event.preventDefault();
-                      setOpen(false);
+                      focusOption(enabledIndex + 1);
+                    } else if (
+                      event.key === "ArrowUp" ||
+                      event.key === "ArrowLeft"
+                    ) {
+                      event.preventDefault();
+                      focusOption(enabledIndex - 1);
+                    } else if (event.key === "Home") {
+                      event.preventDefault();
+                      focusOption(0);
+                    } else if (event.key === "End") {
+                      event.preventDefault();
+                      focusOption(enabled.length - 1);
+                    } else if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      commit(option.value);
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      close(true);
+                    } else if (event.key === "Tab") {
+                      close();
                     }
                   }}
                 >

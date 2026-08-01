@@ -104,6 +104,7 @@ export class OverlayManager {
   private static activationToastPending = false;
   private static activationToastShown = false;
   private static overlayRendererReady = false;
+  private static overlayTogglePending = false;
   private static overlayContextGeneration = 0;
   private static rendererContextGeneration = -1;
   private static overlayRendererReadyWaiters = new Set<
@@ -123,10 +124,38 @@ export class OverlayManager {
       this.activeGame?.objectId === game.objectId &&
       this.activeGame.shop === game.shop
     ) {
-      logger.info("Overlay active game unchanged", {
-        title: game.title,
-        servicesActive: this.servicesActive,
-      });
+      const previousGame = this.activeGame;
+      const targetDefinitionChanged =
+        previousGame.executablePath !== game.executablePath ||
+        previousGame.nativeExecutablePath !== game.nativeExecutablePath ||
+        JSON.stringify(previousGame.trackingExecutablePaths ?? []) !==
+          JSON.stringify(game.trackingExecutablePaths ?? []);
+      this.activeGame = game;
+      if (targetDefinitionChanged) {
+        logger.info("Overlay active game executable changed", {
+          title: game.title,
+          executable: game.nativeExecutablePath ?? game.executablePath ?? null,
+        });
+        void GameRecorderManager.setActiveGame(game);
+        this.lastTargetRefreshAt = 0;
+        if (this.servicesActive) {
+          void this.refreshTargetProcess(game).then(() =>
+            this.synchronizeTargetWindows()
+          );
+        }
+      }
+      // A transient preference/database/native failure can leave the game
+      // selected while its overlay services are down. Process-watcher will
+      // keep reporting the same game, so use that report as a re-arm attempt
+      // instead of leaving the session permanently without a shortcut.
+      if (!this.servicesActive) {
+        void this.configureActiveGame(game).catch((error) =>
+          logger.error(
+            "Overlay could not be reconfigured for the active game",
+            error
+          )
+        );
+      }
       return;
     }
 
@@ -206,8 +235,23 @@ export class OverlayManager {
     this.servicesActive = true;
     this.activationToastPending = true;
     this.activationToastShown = false;
-    const nativeKeyboardActive = this.startControllerPolling();
-    this.registerShortcut(nativeKeyboardActive);
+    // Electron must reserve Shift+F3 before the native raw-input fallback is
+    // started. The native watcher used to reserve the same OS hotkey first,
+    // making globalShortcut.register() fail against GameHub's own process.
+    const osHotkey = this.registerShortcut();
+    const nativeWatcher = this.startControllerPolling();
+    logger.info("Hydra overlay shortcut armed", {
+      shortcut: this.registeredShortcut,
+      nativeWatcher,
+      osHotkey,
+    });
+    if (!nativeWatcher && !osHotkey) {
+      logger.warn("Could not register a global Hydra overlay shortcut");
+      this.servicesActive = false;
+      this.stopControllerPolling();
+      this.unregisterShortcut();
+      return;
+    }
     if (this.preferences.overlayPerformanceEnabled) {
       overlayFpsMonitor.start(game, this.targetPid, this.targetExecutable);
     }
@@ -419,118 +463,141 @@ export class OverlayManager {
   }
 
   private static async toggleOverlayWindow() {
-    if (this.overlayWindow?.isVisible()) {
-      const now = Date.now();
-      if (now - this.lastToggleAt < TOGGLE_DEBOUNCE_MS) return;
-      this.lastToggleAt = now;
-      if (this.isTargetForeground(true)) {
-        this.hideOverlay();
-      } else {
-        this.hideOverlayWindow(false, false);
+    if (this.overlayTogglePending) {
+      logger.warn("Overlay toggle ignored", { reason: "toggle in progress" });
+      return;
+    }
+    this.overlayTogglePending = true;
+
+    try {
+      if (this.overlayWindow?.isVisible()) {
+        const now = Date.now();
+        if (now - this.lastToggleAt < TOGGLE_DEBOUNCE_MS) return;
+        this.lastToggleAt = now;
+        if (this.isTargetForeground(true)) {
+          this.hideOverlay();
+        } else {
+          this.hideOverlayWindow(false, false);
+        }
+        return;
       }
-      return;
-    }
 
-    const game = this.activeGame;
-    if (!game) {
-      logger.warn("Overlay toggle ignored", { reason: "no active game" });
-      return;
-    }
-    await this.refreshTargetProcess(game);
-    if (
-      !this.activeGame ||
-      this.activeGame.objectId !== game.objectId ||
-      this.activeGame.shop !== game.shop
-    ) {
-      logger.warn("Overlay toggle ignored", { reason: "active game changed" });
-      return;
-    }
-    const targetBounds = this.getTargetBounds();
-    // Every early return here looks identical from outside — the shortcut
-    // simply does nothing — so name the one that fired.
-    if (!targetBounds || !this.isTargetForeground(false)) {
-      logger.warn("Overlay toggle ignored", {
-        reason: !targetBounds ? "no target bounds" : "target not foreground",
-        targetPid: this.targetPid,
-        foregroundPid: NativeAddon.getForegroundProcessId(),
-      });
-      return;
-    }
-
-    const now = Date.now();
-    if (now - this.lastToggleAt < TOGGLE_DEBOUNCE_MS) {
-      logger.warn("Overlay toggle ignored", { reason: "debounced" });
-      return;
-    }
-    this.lastToggleAt = now;
-
-    const overlayWindow = this.ensureOverlayWindow(targetBounds);
-    if (
-      !this.overlayRendererReady &&
-      !overlayWindow.webContents.isLoadingMainFrame()
-    ) {
-      this.requestOverlayRendererContext();
-    }
-
-    const show = async () => {
-      const rendererReady = await this.acquireRendererContext(overlayWindow);
+      const game = this.activeGame;
+      if (!game) {
+        logger.warn("Overlay toggle ignored", { reason: "no active game" });
+        return;
+      }
+      await this.refreshTargetProcess(game);
       if (
-        !rendererReady ||
-        overlayWindow.isDestroyed() ||
-        this.activeGame?.objectId !== game.objectId ||
+        !this.activeGame ||
+        this.activeGame.objectId !== game.objectId ||
         this.activeGame.shop !== game.shop
       ) {
-        logger.warn("Overlay show aborted", {
-          rendererReady,
-          destroyed: overlayWindow.isDestroyed(),
-          gameChanged: this.activeGame?.objectId !== game.objectId,
+        logger.warn("Overlay toggle ignored", {
+          reason: "active game changed",
         });
         return;
       }
-      const currentBounds = this.getTargetBounds();
-      if (!currentBounds || !this.isTargetForeground(false)) {
-        logger.warn("Overlay show aborted", {
-          reason: !currentBounds ? "no target bounds" : "target not foreground",
+      const targetBounds = this.getTargetBounds();
+      // Every early return here looks identical from outside — the shortcut
+      // simply does nothing — so name the one that fired.
+      if (!targetBounds || !this.isTargetForeground(false)) {
+        logger.warn("Overlay toggle ignored", {
+          reason: !targetBounds ? "no target bounds" : "target not foreground",
+          targetPid: this.targetPid,
+          foregroundPid: NativeAddon.getForegroundProcessId(),
         });
         return;
       }
-      this.activationToastPending = false;
-      this.activationToastShown = true;
-      this.destroyToast();
-      this.fpsWindow?.hide();
-      this.fpsWindow?.setAlwaysOnTop(false);
-      this.placeWindowOverGame(overlayWindow, currentBounds);
-      overlayWindow.setAlwaysOnTop(false);
-      overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
-      overlayWindow.show();
-      this.placeWindowOverGame(overlayWindow, currentBounds);
-      overlayWindow.moveTop();
-      overlayWindow.focus();
-      overlayWindow.webContents.send("on-overlay-shown");
-      this.claimForeground(overlayWindow);
-      setTimeout(() => {
-        if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
-          const delayedBounds = this.getTargetBounds();
-          if (!delayedBounds || !this.isTargetForeground(true)) {
-            this.hideOverlayWindow(false, false);
-            return;
-          }
-          overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
-          this.placeWindowOverGame(overlayWindow, delayedBounds);
-          overlayWindow.moveTop();
-          overlayWindow.focus();
-          // A fullscreen game commonly grabs the foreground straight back after
-          // being covered. Re-assert it, otherwise the game keeps keyboard,
-          // mouse and controller input while the overlay is on screen.
-          this.claimForeground(overlayWindow);
-        }
-      }, 75);
-    };
 
-    if (overlayWindow.webContents.isLoadingMainFrame()) {
-      overlayWindow.webContents.once("did-finish-load", show);
-    } else {
-      show();
+      const now = Date.now();
+      if (now - this.lastToggleAt < TOGGLE_DEBOUNCE_MS) {
+        logger.warn("Overlay toggle ignored", { reason: "debounced" });
+        return;
+      }
+      this.lastToggleAt = now;
+
+      const overlayWindow = this.ensureOverlayWindow(targetBounds);
+      if (
+        !this.overlayRendererReady &&
+        !overlayWindow.webContents.isLoadingMainFrame()
+      ) {
+        this.requestOverlayRendererContext();
+      }
+
+      const show = async () => {
+        const rendererReady = await this.acquireRendererContext(overlayWindow);
+        if (
+          !rendererReady ||
+          overlayWindow.isDestroyed() ||
+          this.activeGame?.objectId !== game.objectId ||
+          this.activeGame.shop !== game.shop
+        ) {
+          logger.warn("Overlay show aborted", {
+            rendererReady,
+            destroyed: overlayWindow.isDestroyed(),
+            gameChanged: this.activeGame?.objectId !== game.objectId,
+          });
+          return;
+        }
+        const currentBounds = this.getTargetBounds();
+        if (!currentBounds || !this.isTargetForeground(false)) {
+          logger.warn("Overlay show aborted", {
+            reason: !currentBounds
+              ? "no target bounds"
+              : "target not foreground",
+          });
+          return;
+        }
+        this.activationToastPending = false;
+        this.activationToastShown = true;
+        this.destroyToast();
+        this.fpsWindow?.hide();
+        this.fpsWindow?.setAlwaysOnTop(false);
+        this.placeWindowOverGame(overlayWindow, currentBounds);
+        overlayWindow.setAlwaysOnTop(false);
+        overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
+        overlayWindow.show();
+        this.placeWindowOverGame(overlayWindow, currentBounds);
+        overlayWindow.moveTop();
+        overlayWindow.focus();
+        overlayWindow.webContents.send("on-overlay-shown");
+        this.claimForeground(overlayWindow);
+        setTimeout(() => {
+          if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
+            const delayedBounds = this.getTargetBounds();
+            if (!delayedBounds || !this.isTargetForeground(true)) {
+              this.hideOverlayWindow(false, false);
+              return;
+            }
+            overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
+            this.placeWindowOverGame(overlayWindow, delayedBounds);
+            overlayWindow.moveTop();
+            overlayWindow.focus();
+            // A fullscreen game commonly grabs the foreground straight back after
+            // being covered. Re-assert it, otherwise the game keeps keyboard,
+            // mouse and controller input while the overlay is on screen.
+            this.claimForeground(overlayWindow);
+          }
+        }, 75);
+      };
+
+      if (overlayWindow.webContents.isLoadingMainFrame()) {
+        await new Promise<void>((resolve) => {
+          const finish = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          const timeout = setTimeout(() => {
+            overlayWindow.webContents.removeListener("did-finish-load", finish);
+            resolve();
+          }, RENDERER_READY_TIMEOUT_MS);
+          overlayWindow.webContents.once("did-finish-load", finish);
+        });
+      }
+      await show();
+    } finally {
+      this.overlayTogglePending = false;
     }
   }
 
@@ -1078,36 +1145,33 @@ export class OverlayManager {
    * ever reached once one of these fires. Registering both is safe: a double
    * toggle is absorbed by TOGGLE_DEBOUNCE_MS.
    */
-  private static registerShortcut(nativeKeyboardActive: boolean) {
+  private static registerShortcut() {
     this.unregisterShortcut();
 
     this.registeredShortcut = PREFERRED_SHORTCUT;
-    const nativeWatcher = process.platform === "win32" && nativeKeyboardActive;
 
     let osHotkey = globalShortcut.register(PREFERRED_SHORTCUT, () =>
-      this.toggleOverlay()
+      this.handleShortcutTrigger("os-hotkey")
     );
 
     // Shift+F3 is rarely taken on Windows; elsewhere it collides often enough
     // to be worth a second choice.
     if (!osHotkey && process.platform !== "win32") {
       osHotkey = globalShortcut.register(FALLBACK_SHORTCUT, () =>
-        this.toggleOverlay()
+        this.handleShortcutTrigger("os-hotkey")
       );
       if (osHotkey) this.registeredShortcut = FALLBACK_SHORTCUT;
     }
 
     if (osHotkey) this.registeredWithElectron = true;
+    return osHotkey;
+  }
 
-    logger.info("Hydra overlay shortcut armed", {
-      shortcut: this.registeredShortcut,
-      nativeWatcher,
-      osHotkey,
-    });
-
-    if (!nativeWatcher && !osHotkey) {
-      logger.warn("Could not register a global Hydra overlay shortcut");
-    }
+  private static handleShortcutTrigger(
+    source: "os-hotkey" | "raw-input" | "guide" | "controller-chord"
+  ) {
+    logger.info("Overlay shortcut triggered", { source });
+    this.toggleOverlay();
   }
 
   private static unregisterShortcut() {
@@ -1134,10 +1198,12 @@ export class OverlayManager {
         (gamepadButtons & GAMEPAD_OVERLAY_CHORD) === GAMEPAD_OVERLAY_CHORD;
       const isTogglePressed = isGuidePressed || isFallbackChordPressed;
       if (keyboardEventCount !== this.keyboardEventCount) {
-        this.toggleOverlay();
+        this.handleShortcutTrigger("raw-input");
       }
       if (isTogglePressed && !this.wasControllerTogglePressed) {
-        this.toggleOverlay();
+        this.handleShortcutTrigger(
+          isGuidePressed ? "guide" : "controller-chord"
+        );
       }
       this.processGamepadNavigation(gamepadButtons);
       this.keyboardEventCount = keyboardEventCount;

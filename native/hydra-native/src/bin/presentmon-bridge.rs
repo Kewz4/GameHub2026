@@ -7,18 +7,28 @@ use std::fs::{self, OpenOptions};
 #[cfg(target_os = "windows")]
 use std::io::Write;
 #[cfg(target_os = "windows")]
+use std::mem::size_of;
+#[cfg(target_os = "windows")]
+use std::os::windows::io::AsRawHandle;
+#[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 use std::path::{Path, PathBuf};
 #[cfg(target_os = "windows")]
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 #[cfg(target_os = "windows")]
 use std::thread;
 #[cfg(target_os = "windows")]
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::Foundation::CloseHandle;
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::JobObjects::{
+    AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+    SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
     OpenProcess, WaitForSingleObject, CREATE_NO_WINDOW, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -26,6 +36,108 @@ use windows_sys::Win32::System::Threading::{
 
 #[cfg(target_os = "windows")]
 const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
+
+/// Owns PresentMon in a kill-on-close Job Object.
+///
+/// The elevated bridge is deliberately small, but GameHub may still have to
+/// terminate it after a failed stop signal or during shutdown. Keeping the
+/// collector in this job makes the kernel terminate PresentMon whenever the
+/// bridge handle table is torn down, including crashes and forced exits.
+#[cfg(target_os = "windows")]
+struct KillOnCloseJob {
+    handle: HANDLE,
+}
+
+#[cfg(target_os = "windows")]
+impl KillOnCloseJob {
+    fn create() -> Result<Self, String> {
+        unsafe {
+            let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if handle.is_null() {
+                return Err(format!(
+                    "could not create PresentMon job object: {}",
+                    GetLastError()
+                ));
+            }
+
+            let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if SetInformationJobObject(
+                handle,
+                JobObjectExtendedLimitInformation,
+                &limits as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION as *const _,
+                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            ) == 0
+            {
+                let error = GetLastError();
+                CloseHandle(handle);
+                return Err(format!(
+                    "could not configure PresentMon job object: {error}"
+                ));
+            }
+
+            Ok(Self { handle })
+        }
+    }
+
+    fn assign(&self, child: &Child) -> Result<(), String> {
+        let process = child.as_raw_handle() as HANDLE;
+        if unsafe { AssignProcessToJobObject(self.handle, process) } == 0 {
+            return Err(format!(
+                "could not contain PresentMon in job object: {}",
+                unsafe { GetLastError() }
+            ));
+        }
+        Ok(())
+    }
+
+    fn terminate(&self) -> bool {
+        unsafe { TerminateJobObject(self.handle, 0) != 0 }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for KillOnCloseJob {
+    fn drop(&mut self) {
+        unsafe {
+            CloseHandle(self.handle);
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wait_for_child_bounded(child: &mut Child, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Err(_) => return false,
+            Ok(None) => {}
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn terminate_presentmon_bounded(child: &mut Child, job: &mut Option<KillOnCloseJob>) {
+    let terminated_job = job.as_ref().is_some_and(KillOnCloseJob::terminate);
+    if !terminated_job {
+        let _ = child.kill();
+    }
+    if wait_for_child_bounded(child, Duration::from_secs(1)) {
+        return;
+    }
+
+    // A direct terminate is a useful fallback if the Job Object API failed.
+    // Closing the configured job is the final kernel-enforced containment; do
+    // not block the bridge indefinitely waiting for a damaged child handle.
+    let _ = child.kill();
+    drop(job.take());
+    let _ = wait_for_child_bounded(child, Duration::from_millis(500));
+}
 
 /// Session names used by earlier GameHub builds, cleared on every start so a
 /// session leaked before this fix shipped cannot block capture forever.
@@ -53,8 +165,9 @@ fn stop_trace_session(session_name: &str) {
         return;
     };
 
-    // Bounded so a wedged controller can never block the capture.
-    let deadline = Instant::now() + Duration::from_secs(5);
+    // Bounded so a wedged controller can never block the capture or outlive
+    // the launcher's six-second bridge shutdown allowance.
+    let deadline = Instant::now() + Duration::from_secs(2);
     loop {
         match child.try_wait() {
             Ok(Some(_)) | Err(_) => break,
@@ -121,7 +234,9 @@ fn parent_is_running(parent_pid: u32) -> bool {
 fn run() -> Result<(), String> {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     if args.len() != 6 {
-        return Err("expected PresentMon, output, stop, parent PID, target PID, and session".into());
+        return Err(
+            "expected PresentMon, output, stop, parent PID, target PID, and session".into(),
+        );
     }
 
     let presentmon = PathBuf::from(&args[0]);
@@ -141,7 +256,9 @@ fn run() -> Result<(), String> {
         return Err("invalid PresentMon bridge target".into());
     }
 
-    let _ = fs::remove_file(&stop_path);
+    // The launcher removes this unique stop file before elevation. Do not
+    // remove it here: a fast target change can signal stop after ShellExecute
+    // returns but before the bridge reaches this line.
     let output = open_shared_output(&output_path)
         .map_err(|error| format!("could not open shared CSV output: {error}"))?;
     let diagnostic_path = diagnostic_path(&output_path);
@@ -189,16 +306,11 @@ fn run() -> Result<(), String> {
     // Windows standard library's share-read/share-write/share-delete defaults.
     // The `--no_track_*` flags are the difference between rows and silence.
     //
-    // By default PresentMon correlates every present with a display event
-    // before emitting its row, and also collects GPU and input-latency
-    // telemetry. Those need providers this process could not get here: the
-    // collector started cleanly, wrote its UTF-16LE byte-order mark, and then
-    // produced not one further byte — no header, no rows — for the full
-    // capture window, across two unrelated engines. Nothing is ever
-    // "complete", so nothing is ever written. Turning off display, GPU and
-    // input tracking leaves plain present events, which is all the consumer
-    // needs: it derives frame time from msBetweenPresents when
-    // msBetweenDisplayChange is absent.
+    // Keep display tracking enabled. A real D3D11 matrix against Death Must Die
+    // showed that `--no_track_display` suppresses the stdout stream entirely
+    // (zero bytes), while retaining display correlation and disabling only GPU
+    // and input telemetry produces continuous rows. The consumer accepts both
+    // display-change and between-present frame-time columns.
     //
     // `--v1_metrics` is dropped for the same reason. The column resolver reads
     // the header by name and accepts either schema, so no parsing change is
@@ -207,13 +319,13 @@ fn run() -> Result<(), String> {
     // `--exclude_dropped` stays out: it discards every frame not considered
     // displayed, which for a composited borderless window can exclude the
     // whole capture.
+    let mut job = Some(KillOnCloseJob::create()?);
     let mut child = Command::new(&presentmon)
         .args([
             OsString::from("--process_id"),
             OsString::from(target_pid.to_string()),
             OsString::from("--output_stdout"),
             OsString::from("--no_console_stats"),
-            OsString::from("--no_track_display"),
             OsString::from("--no_track_gpu"),
             OsString::from("--no_track_input"),
             OsString::from("--terminate_on_proc_exit"),
@@ -226,6 +338,16 @@ fn run() -> Result<(), String> {
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|error| format!("could not start PresentMon: {error}"))?;
+    if let Err(error) = job
+        .as_ref()
+        .expect("job exists before assignment")
+        .assign(&child)
+    {
+        let _ = child.kill();
+        let _ = wait_for_child_bounded(&mut child, Duration::from_secs(1));
+        stop_trace_session(&session_name);
+        return Err(error);
+    }
 
     // A silent PresentMon is ambiguous: it can mean the process wrote nothing,
     // or that it wrote plenty and the consumer could not read it. Sampling the
@@ -240,20 +362,21 @@ fn run() -> Result<(), String> {
     loop {
         let elapsed = started_at.elapsed();
         if elapsed >= next_heartbeat && next_heartbeat <= Duration::from_secs(20) {
-            let csv_bytes = fs::metadata(&output_path).map(|meta| meta.len()).unwrap_or(0);
+            let csv_bytes = fs::metadata(&output_path)
+                .map(|meta| meta.len())
+                .unwrap_or(0);
             write_diagnostic_line(
                 &mut heartbeat_log,
-                &format!(
-                    "bridge: t={}s csv_bytes={csv_bytes}",
-                    elapsed.as_secs()
-                ),
+                &format!("bridge: t={}s csv_bytes={csv_bytes}", elapsed.as_secs()),
             );
             next_heartbeat += Duration::from_secs(4);
         }
 
         match child.try_wait() {
             Ok(Some(status)) => {
-                let csv_bytes = fs::metadata(&output_path).map(|meta| meta.len()).unwrap_or(0);
+                let csv_bytes = fs::metadata(&output_path)
+                    .map(|meta| meta.len())
+                    .unwrap_or(0);
                 let mut diagnostic = diagnostic;
                 write_diagnostic_line(
                     &mut diagnostic,
@@ -266,7 +389,8 @@ fn run() -> Result<(), String> {
             }
             Ok(None) => {}
             Err(error) => {
-                let _ = child.kill();
+                terminate_presentmon_bounded(&mut child, &mut job);
+                stop_trace_session(&session_name);
                 return Err(format!("could not monitor PresentMon: {error}"));
             }
         }
@@ -274,27 +398,10 @@ fn run() -> Result<(), String> {
         // A normal stop writes the signal file. Monitoring GameHub's parent
         // PID also prevents an elevated collector surviving an app crash.
         if stop_path.exists() || !parent_is_running(parent_pid) {
-            // Ask PresentMon to end the capture itself first: a terminated
-            // PresentMon leaves its ETW session registered, which the reaper
-            // above then has to clean up on the next launch. Closing stdout
-            // makes it observe a broken pipe and shut the session down.
-            drop(child.stdout.take());
-            let deadline = Instant::now() + Duration::from_secs(2);
-            let mut exited = false;
-            while Instant::now() < deadline {
-                match child.try_wait() {
-                    Ok(Some(_)) => {
-                        exited = true;
-                        break;
-                    }
-                    Err(_) => break,
-                    Ok(None) => thread::sleep(Duration::from_millis(50)),
-                }
-            }
-            if !exited {
-                let _ = child.kill();
-                let _ = child.wait();
-            }
+            // Terminate the whole contained job and wait only for a bounded
+            // interval. Closing the job handle remains a kernel-enforced final
+            // fallback if the child cannot be observed exiting normally.
+            terminate_presentmon_bounded(&mut child, &mut job);
             // A terminated PresentMon leaves its session registered; drop it
             // here so the next capture never has to reap anything.
             stop_trace_session(&session_name);
@@ -311,9 +418,7 @@ fn run() -> Result<(), String> {
 fn main() {
     if let Err(error) = run() {
         if let Some(output) = std::env::args_os().nth(2) {
-            if let Ok(mut diagnostic) =
-                open_shared_output(&diagnostic_path(Path::new(&output)))
-            {
+            if let Ok(mut diagnostic) = open_shared_output(&diagnostic_path(Path::new(&output))) {
                 write_diagnostic_line(&mut diagnostic, &error);
             }
         }

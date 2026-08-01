@@ -16,7 +16,7 @@ All created in `src/main/services/overlay-manager.ts`:
 | --------------- | ------ | -------------------------- | ----------- | --------- | ----------------- |
 | `overlayWindow` | full   | matches game window bounds | yes         | yes       | `#/overlay`       |
 | `fpsWindow`     | pinned | 218×116                    | yes         | no        | `#/overlay-fps`   |
-| `toastWindow`   | toast  | 620×190                    | yes         | no        | `#/overlay-toast` |
+| `toastWindow`   | toast  | up to 820×118              | yes         | no        | `#/overlay-toast` |
 
 **All windows** use:
 
@@ -33,8 +33,8 @@ Full overlay additionally disables `backgroundThrottling: false` (keeps performa
 
 - **Windows**: `overlay-manager.ts:placeWindowOverGame()` uses `NativeAddon.getProcessWindowBounds()` and `SetWindowPos` to match the detected game client window exactly. Foreground polling hides all overlay surfaces when the game is backgrounded.
 - **Linux**: Falls back to the primary display's work area.
-- **FPS window**: Always placed at top-left of the primary display.
-- **Toast window**: Top-right of the display showing the game, auto-destroys after 8 seconds.
+- **FPS window**: Placed inside the detected game client bounds and hidden as soon as that game loses foreground.
+- **Toast window**: Clamped inside the detected game client bounds, auto-destroys after 8 seconds, and is never shown while the game is backgrounded.
 
 ### Lifecycle
 
@@ -42,8 +42,8 @@ Called from `process-watcher.ts` (game detection loop, 2s interval):
 
 ```
 Game detected → OverlayManager.setActiveGame(game)
-               ├─ startControllerPolling() — 32ms Raw Input poll
-               ├─ registerShortcut() — Shift+F3 / native keyboard hook
+               ├─ registerShortcut() — Electron reserves Shift+F3 first
+               ├─ startControllerPolling() — 32ms Raw Input / Guide fallback
                ├─ overlayFpsMonitor.start() — PresentMon (Windows) / MangoHud (Linux)
                ├─ startTargetProcessPolling() — 250ms, tracks game window
                └─ showActivationToast() — 8s auto-dismiss
@@ -306,7 +306,7 @@ This integration is a Spotify Connect remote, not an embedded streaming client:
 
 ### Windows: PresentMon
 
-GameHub verifies the bundled PresentMon 2.5.1 hash, then elevates `presentmon-bridge.exe`. The bridge starts PresentMon with `--output_stdout` and writes row-flushed output into a normal share-readable CSV. This avoids the exclusive elevated `--output_file` handle that previously caused `EBUSY` on every poll. A stop file and GameHub-parent watchdog prevent an elevated collector from surviving shutdown or a crash.
+GameHub verifies the bundled PresentMon 2.5.1 hash, then elevates `presentmon-bridge.exe`. The bridge starts PresentMon with `--output_stdout`, keeps display tracking enabled for D3D11 compatibility, and writes row-flushed output into a normal share-readable CSV. PresentMon's stdout is UTF-16LE, so the tailer detects its BOM and preserves incomplete code units between polls. This avoids both the exclusive elevated `--output_file` handle that previously caused `EBUSY` and the NUL-separated CSV parsing failure. A stop file, GameHub-parent watchdog, and native child containment prevent an elevated collector from surviving shutdown or a crash.
 
 `src/main/services/overlay-fps-monitor.ts` parses the bridged CSV, selects the active swap chain, accumulates a rolling sample window, and calculates:
 

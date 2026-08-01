@@ -2893,7 +2893,7 @@ body.overlay-widget-resizing * {
 .overlay-select__list {
   position: fixed;
   // Above every widget card and the overlay header.
-  z-index: 1200;
+  z-index: 12000;
   max-height: 260px;
   overflow-y: auto;
   display: flex;
@@ -2985,7 +2985,11 @@ body.overlay-widget-resizing * {
 // While navigating with a controller, make the widget that owns focus obvious:
 // the focus ring alone is easy to lose across a screen-wide scatter of panels.
 body.overlay-controller-navigation .overlay-card:focus-within {
-  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  border-color: color-mix(
+    in srgb,
+    var(--color-primary) 55%,
+    var(--color-border)
+  );
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent),
     0 18px 48px rgba(0, 0, 0, 0.45);

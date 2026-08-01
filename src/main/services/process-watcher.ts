@@ -7,6 +7,7 @@ import { CloudSync } from "./cloud-sync";
 import { logger, networkLogger } from "./logger";
 import { PowerSaveBlockerManager } from "./power-save-blocker";
 import { OverlayManager } from "./overlay-manager";
+import fs from "node:fs";
 import path from "node:path";
 import { AchievementWatcherManager } from "./achievements/achievement-watcher-manager";
 import { RaWatcherManager } from "./achievements/retroachievements/ra-watcher-manager";
@@ -237,6 +238,7 @@ export const watchProcesses = async () => {
   );
 
   for (const game of games) {
+    let detectedGame = game;
     const gameKey = levelKeys.game(game.shop, game.objectId);
     // nativeExecutablePath is set for Legendary/GOG games so we can track their real process
     const executablePath = game.nativeExecutablePath ?? game.executablePath;
@@ -265,7 +267,15 @@ export const watchProcesses = async () => {
         .slice(matchPath.lastIndexOf(platform === "win32" ? "\\" : "/") + 1)
         .toLowerCase();
 
-      if (processMap.get(executable)?.has(matchPath)) return true;
+      const processPaths = processMap.get(executable);
+      if (
+        processPaths &&
+        [...processPaths].some(
+          (processPath) => processPath.toLowerCase() === matchPath.toLowerCase()
+        )
+      ) {
+        return true;
+      }
 
       if (platform === "linux") {
         return (
@@ -277,6 +287,56 @@ export const watchProcesses = async () => {
       return false;
     });
 
+    // A moved/re-extracted game or bootstrap executable can leave the library
+    // pointing at a path which is not the actual render process. On Windows,
+    // repair it only when exactly one same-name process is running in a strict
+    // child/parent directory of the configured location. This covers nested
+    // repacks without guessing between unrelated generic game.exe processes.
+    if (
+      !hasProcess &&
+      platform === "win32" &&
+      !isWindowsBatchFile(executablePath)
+    ) {
+      const executableName = path.basename(executablePath).toLowerCase();
+      const candidates = [...(processMap.get(executableName) ?? [])];
+      const previousDirectory = path.dirname(executablePath).toLowerCase();
+      const nearbyCandidates = candidates.filter((candidate) => {
+        const candidateDirectory = path.dirname(candidate).toLowerCase();
+        return (
+          candidateDirectory.startsWith(`${previousDirectory}${path.sep}`) ||
+          previousDirectory.startsWith(`${candidateDirectory}${path.sep}`)
+        );
+      });
+      // Never fall back to an arbitrary system-wide same-name process. Generic
+      // names such as game.exe are common, and persisting the wrong path would
+      // silently bind this library entry to another running game.
+      if (nearbyCandidates.length === 1) {
+        const repairedPath = nearbyCandidates[0];
+        const updatedGame = game.nativeExecutablePath
+          ? { ...game, nativeExecutablePath: repairedPath }
+          : { ...game, executablePath: repairedPath };
+        detectedGame = updatedGame;
+        hasProcess = true;
+        if (!fs.existsSync(executablePath)) {
+          await gamesSublevel.put(gameKey, updatedGame);
+          logger.info("Repaired moved game executable path", {
+            game: gameKey,
+            previousPath: executablePath,
+            executable: repairedPath,
+          });
+        } else if (!gamesPlaytime.has(gameKey)) {
+          // A valid bootstrap executable may launch a nested render process.
+          // Use that process for this session without permanently replacing a
+          // still-valid library path.
+          logger.info("Detected nested game render executable", {
+            game: gameKey,
+            configuredPath: executablePath,
+            executable: repairedPath,
+          });
+        }
+      }
+    }
+
     if (!hasProcess && platform === "linux") {
       hasProcess = hasLaunchedPidMatch(
         launchedGamePids.get(gameKey),
@@ -287,12 +347,12 @@ export const watchProcesses = async () => {
 
     if (hasProcess) {
       if (gamesPlaytime.has(gameKey)) {
-        onTickGame(game);
+        onTickGame(detectedGame);
       } else {
-        onOpenGame(game);
+        onOpenGame(detectedGame);
       }
     } else if (gamesPlaytime.has(gameKey)) {
-      onCloseGame(game);
+      onCloseGame(detectedGame);
     }
   }
 
@@ -422,6 +482,16 @@ function onTickGame(game: Game) {
   const gamePlaytime = gamesPlaytime.get(
     levelKeys.game(game.shop, game.objectId)
   )!;
+
+  const overlayGame = OverlayManager.getActiveGame();
+  if (
+    overlayGame?.objectId === game.objectId &&
+    overlayGame.shop === game.shop
+  ) {
+    // Refresh executable metadata and give a failed shortcut registration a
+    // chance to re-arm while this remains the active overlay session.
+    OverlayManager.setActiveGame(game);
+  }
 
   const delta = now - gamePlaytime.lastTick;
 

@@ -9,12 +9,14 @@ import { NativeAddon } from "./native-addon";
 import { getLinuxOverlayMetricsDirectory } from "./linux-overlay-launch";
 import {
   calculateOverlayPerformance,
+  decodePresentMonTextChunk,
   isPresentMonFrameTimeHeader,
   parseCsvRow,
   parseMangoHudFrameTimes,
   parsePresentMonSample,
   resolvePresentMonFrameTimeColumns,
   type PresentMonSample,
+  type PresentMonTextEncoding,
 } from "./overlay-performance-metrics";
 
 const UPDATE_INTERVAL = 500;
@@ -65,10 +67,12 @@ export class OverlayFpsMonitor {
   private presentMonDiagnosticFile: string | null = null;
   private presentMonFileOffset = 0;
   private presentMonFilePending = "";
+  private presentMonTextEncoding: PresentMonTextEncoding | null = null;
   private presentMonColumns: ReturnType<
     typeof resolvePresentMonFrameTimeColumns
   > | null = null;
   private captureRunId = 0;
+  private windowsCaptureRequestId = 0;
   private windowsLaunchQueue: Promise<void> = Promise.resolve();
   private swapChains = new Map<string, SwapChainSamples>();
   private activeSwapChain: string | null = null;
@@ -188,12 +192,25 @@ export class OverlayFpsMonitor {
   }
 
   private queueWindowsCapture(generation: number) {
+    const requestId = this.windowsCaptureRequestId;
+    const targetPid = this.targetPid;
+    const targetExecutable = this.targetExecutable;
     this.windowsLaunchQueue = this.windowsLaunchQueue
       .catch(() => undefined)
-      .then(() => this.startWindowsCapture(generation))
+      .then(() =>
+        this.startWindowsCapture(
+          generation,
+          requestId,
+          targetPid,
+          targetExecutable
+        )
+      )
       .catch((error) => {
         logger.error("Could not launch elevated PresentMon", error);
-        if (generation === this.generation) {
+        if (
+          generation === this.generation &&
+          requestId === this.windowsCaptureRequestId
+        ) {
           this.stopCaptureProcess();
           this.resetSamples();
           this.publishState(
@@ -204,14 +221,23 @@ export class OverlayFpsMonitor {
       });
   }
 
-  private async startWindowsCapture(generation: number) {
+  private async startWindowsCapture(
+    generation: number,
+    requestId: number,
+    targetPid: number,
+    targetExecutable: string | null
+  ) {
     const presentMonPath = this.presentMonPath;
-    const targetPid = this.targetPid;
-    if (generation !== this.generation || !presentMonPath || !targetPid) {
+    if (
+      generation !== this.generation ||
+      requestId !== this.windowsCaptureRequestId ||
+      targetPid !== this.targetPid ||
+      !presentMonPath ||
+      !targetPid
+    ) {
       return;
     }
 
-    this.stopCaptureProcess();
     this.resetSamples();
     this.publishState("waiting", "Starting PresentMon FPS capture…");
 
@@ -240,13 +266,24 @@ export class OverlayFpsMonitor {
     try {
       fs.rmSync(outputFile, { force: true });
       fs.rmSync(diagnosticFile, { force: true });
-    } catch {
-      // A stale diagnostic file is harmless; PresentMon will truncate it.
+      // Create both files at normal integrity. The elevated bridge truncates
+      // these existing files, preserving an ACL that the GameHub process can
+      // read even when UAC runs the helper under a different admin token.
+      fs.writeFileSync(outputFile, "");
+      fs.writeFileSync(diagnosticFile, "");
+    } catch (error) {
+      logger.error("Could not prepare PresentMon capture files", error);
+      this.publishState(
+        "error",
+        "GameHub could not prepare temporary FPS capture files."
+      );
+      return;
     }
     this.presentMonOutputFile = outputFile;
     this.presentMonDiagnosticFile = diagnosticFile;
     this.presentMonFileOffset = 0;
     this.presentMonFilePending = "";
+    this.presentMonTextEncoding = null;
     this.presentMonColumns = null;
 
     // Keep Electron at normal integrity. The native launcher requests UAC only
@@ -260,10 +297,13 @@ export class OverlayFpsMonitor {
     );
     if (
       generation !== this.generation ||
+      requestId !== this.windowsCaptureRequestId ||
       captureRunId !== this.captureRunId ||
       targetPid !== this.targetPid
     ) {
-      if (started) NativeAddon.stopElevatedPresentMon();
+      // This launch task owns the native slot until it returns; stop it here
+      // before a newer queued capture is allowed to launch.
+      if (started) await NativeAddon.stopElevatedPresentMon();
       this.presentMonOutputFile = null;
       this.presentMonDiagnosticFile = null;
       this.removePresentMonFile(outputFile);
@@ -272,7 +312,7 @@ export class OverlayFpsMonitor {
     }
     logger.info("Elevated PresentMon launched", {
       pid: targetPid,
-      executable: this.targetExecutable,
+      executable: targetExecutable,
       session: presentMonSessionName(targetPid, captureRunId),
       started,
     });
@@ -288,7 +328,7 @@ export class OverlayFpsMonitor {
         "Elevated PresentMon FPS capture was not approved or could not start",
         {
           pid: targetPid,
-          executable: this.targetExecutable,
+          executable: targetExecutable,
         }
       );
       return;
@@ -321,7 +361,7 @@ export class OverlayFpsMonitor {
         );
         logger.warn("Elevated PresentMon produced no frame samples", {
           pid: targetPid,
-          executable: this.targetExecutable,
+          executable: targetExecutable,
           diagnostic,
         });
       }
@@ -350,6 +390,7 @@ export class OverlayFpsMonitor {
       if (size < this.presentMonFileOffset) {
         this.presentMonFileOffset = 0;
         this.presentMonFilePending = "";
+        this.presentMonTextEncoding = null;
         this.presentMonColumns = null;
       }
       if (size === this.presentMonFileOffset) return;
@@ -357,13 +398,27 @@ export class OverlayFpsMonitor {
       const length = size - this.presentMonFileOffset;
       const buffer = Buffer.alloc(length);
       const descriptor = fs.openSync(outputFile, "r");
+      let bytesRead = 0;
       try {
-        fs.readSync(descriptor, buffer, 0, length, this.presentMonFileOffset);
+        bytesRead = fs.readSync(
+          descriptor,
+          buffer,
+          0,
+          length,
+          this.presentMonFileOffset
+        );
       } finally {
         fs.closeSync(descriptor);
       }
-      this.presentMonFileOffset = size;
-      this.consumePresentMonCsv(buffer.toString("utf8"), targetPid);
+      if (!bytesRead) return;
+      const decoded = decodePresentMonTextChunk(
+        buffer.subarray(0, bytesRead),
+        this.presentMonTextEncoding
+      );
+      if (!decoded.bytesConsumed) return;
+      this.presentMonTextEncoding = decoded.encoding;
+      this.presentMonFileOffset += decoded.bytesConsumed;
+      this.consumePresentMonCsv(decoded.text, targetPid);
     } catch (error) {
       logger.debug("Waiting for elevated PresentMon CSV output", error);
     }
@@ -595,9 +650,19 @@ export class OverlayFpsMonitor {
     this.presentMonFilePoll = null;
     this.presentMonFileOffset = 0;
     this.presentMonFilePending = "";
+    this.presentMonTextEncoding = null;
     this.presentMonColumns = null;
     this.captureRunId += 1;
-    NativeAddon.stopElevatedPresentMon();
+    this.windowsCaptureRequestId += 1;
+    // Native stop waits for the elevated bridge to reap PresentMon and its ETW
+    // session. Keep that work on the async native runtime and in the same queue
+    // as launches so Electron's main thread never blocks and a late stop cannot
+    // terminate a newer capture.
+    this.windowsLaunchQueue = this.windowsLaunchQueue
+      .catch(() => undefined)
+      .then(async () => {
+        await NativeAddon.stopElevatedPresentMon();
+      });
     const outputFile = this.presentMonOutputFile;
     const diagnosticFile = this.presentMonDiagnosticFile;
     this.presentMonOutputFile = null;

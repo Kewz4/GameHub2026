@@ -44,7 +44,7 @@ type HydraNativeModule = {
     targetPid: number,
     sessionName: string
   ) => Promise<boolean>;
-  stopElevatedPresentmon: () => boolean;
+  stopElevatedPresentmon: () => Promise<boolean>;
   controlProcessTree: (
     rootPid: number,
     action: "suspend" | "resume" | "terminate"
@@ -428,11 +428,17 @@ export class NativeAddon {
     }
   }
 
-  public static stopElevatedPresentMon(): boolean {
+  public static stopElevatedPresentMon(): Promise<boolean> {
     try {
-      return this.load().stopElevatedPresentmon();
-    } catch {
-      return false;
+      return this.load()
+        .stopElevatedPresentmon()
+        .catch((error) => {
+          logger.error("Failed to stop elevated PresentMon", error);
+          return false;
+        });
+    } catch (error) {
+      logger.error("Failed to stop elevated PresentMon", error);
+      return Promise.resolve(false);
     }
   }
 

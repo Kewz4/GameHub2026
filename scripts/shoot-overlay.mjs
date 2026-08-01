@@ -182,7 +182,7 @@ try {
         },
       },
     };
-    const recorderState = {
+    let recorderState = {
       status: "buffering",
       configuration: {
         enabled: true,
@@ -324,7 +324,7 @@ try {
       topTracks: spotifyPage([spotifyTrack]),
       recentTracks: spotifyPage([spotifyTrack]),
     };
-    const userPreferences = {
+    let userPreferences = {
       language: "en",
       themeMode: "dark",
       musicProvider: "spotify",
@@ -337,10 +337,16 @@ try {
       getVersion: async () => "1.1.20",
       isStaging: async () => false,
       updateUserPreferences: async (preferences) => {
-        Object.assign(userPreferences, preferences);
+        userPreferences = { ...userPreferences, ...preferences };
         if (preferences.gameRecorderReplayDurationSeconds) {
-          recorderState.configuration.replayDurationSeconds =
-            preferences.gameRecorderReplayDurationSeconds;
+          recorderState = {
+            ...recorderState,
+            configuration: {
+              ...recorderState.configuration,
+              replayDurationSeconds:
+                preferences.gameRecorderReplayDurationSeconds,
+            },
+          };
         }
       },
       onCustomThemeUpdated: listeners,
@@ -890,15 +896,66 @@ try {
     throw new Error("Pinned apps did not render their resolved icons.");
   }
 
-  const replayLength = page.locator(".overlay-capture__replay select");
+  const replayLength = page.getByRole("button", {
+    name: "Instant Replay length",
+  });
+
+  // The in-overlay listbox must work without an OS popup. Verify its keyboard
+  // path first, including focus moving into the portaled option list.
+  await replayLength.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".overlay-select__list");
+  await page.waitForFunction(() =>
+    document.activeElement?.classList.contains("overlay-select__option")
+  );
+  await page.keyboard.press("ArrowRight");
+  await page.waitForFunction(
+    () => document.activeElement?.textContent?.trim() === "Last 45 seconds"
+  );
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector(".overlay-capture__replay .overlay-select__value")
+        ?.textContent?.trim() === "Last 45 seconds"
+  );
+
+  // Controller A opens the same list, directions stay within its options, and
+  // A commits. This catches regressions where spatial navigation escapes into
+  // another widget because the list is rendered through a portal.
   await replayLength.focus();
   await page.evaluate(() => window.__emitOverlayGamepad?.("accept"));
+  await page.waitForSelector(".overlay-select__list");
+  await page.waitForFunction(() =>
+    document.activeElement?.classList.contains("overlay-select__option")
+  );
   await page.evaluate(() => window.__emitOverlayGamepad?.("right"));
+  await page.waitForFunction(
+    () => document.activeElement?.textContent?.trim() === "Last 60 seconds"
+  );
+  await page.evaluate(() => window.__emitOverlayGamepad?.("left"));
+  await page.waitForFunction(
+    () => document.activeElement?.textContent?.trim() === "Last 45 seconds"
+  );
   await page.evaluate(() => window.__emitOverlayGamepad?.("accept"));
   await page.waitForFunction(
     () =>
-      document.querySelector(".overlay-capture__replay select")?.value === "45"
+      document
+        .querySelector(".overlay-capture__replay .overlay-select__value")
+        ?.textContent?.trim() === "Last 45 seconds"
   );
+
+  // Controller Back closes only the open listbox, not the whole overlay.
+  await replayLength.focus();
+  await page.evaluate(() => window.__emitOverlayGamepad?.("accept"));
+  await page.waitForSelector(".overlay-select__list");
+  await page.evaluate(() => window.__emitOverlayGamepad?.("back"));
+  await page.waitForSelector(".overlay-select__list", { state: "detached" });
+  if (!(await page.locator(".overlay--full").count())) {
+    throw new Error(
+      "Controller Back closed the overlay instead of the select."
+    );
+  }
 
   await page.waitForTimeout(500);
   await page.screenshot({ path: output, fullPage: true });
@@ -907,8 +964,9 @@ try {
     width: document.documentElement.clientWidth,
     height: document.documentElement.clientHeight,
     widgets: document.querySelectorAll("[data-widget]").length,
-    replayLength: document.querySelector(".overlay-capture__replay select")
-      ?.value,
+    replayLength: document
+      .querySelector(".overlay-capture__replay .overlay-select__value")
+      ?.textContent?.trim(),
     footerBars: document.querySelectorAll(".overlay-foot").length,
     musicProvider:
       document.querySelector(".spotify-overlay-panel") !== null

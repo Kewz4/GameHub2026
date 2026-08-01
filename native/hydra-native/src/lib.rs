@@ -19,8 +19,8 @@ use sysinfo::{ProcessesToUpdate, System};
 use uuid::Uuid;
 
 // ── In-game overlay ──────────────────────────────────────────────────────────
-// Windows-only shortcut detection (Shift+F3 via raw input + a registered
-// hotkey), XInput gamepad polling for Guide/navigation, plus the
+// Windows-only shortcut detection (Shift+F3 via raw input), XInput gamepad
+// polling for Guide/navigation, plus the
 // process-access / foreground-pid / elevation helpers the injected overlay uses
 // to pick and attach to the running game. All Windows-gated; no-ops elsewhere.
 #[cfg(target_os = "windows")]
@@ -69,9 +69,7 @@ use windows_sys::Win32::System::Threading::{
     PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, TerminateProcess,
 };
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, RegisterHotKey, MOD_NOREPEAT, MOD_SHIFT,
-};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::{
     GetRawInputData, RegisterRawInputDevices, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER,
@@ -87,7 +85,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW,
     GetWindowThreadProcessId, IsIconic, IsWindowVisible, RegisterClassW, SetForegroundWindow,
     SetWindowPos, ShowWindow, TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST,
-    MSG, SW_HIDE, SW_SHOWNORMAL, SWP_NOACTIVATE, SW_RESTORE, WM_HOTKEY, WM_INPUT, WNDCLASSW,
+    MSG, SW_HIDE, SW_SHOWNORMAL, SWP_NOACTIVATE, SW_RESTORE, WM_INPUT, WNDCLASSW,
     WS_EX_TOOLWINDOW,
 };
 #[cfg(target_os = "windows")]
@@ -405,11 +403,6 @@ unsafe extern "system" fn raw_input_window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    if message == WM_HOTKEY {
-        record_overlay_shortcut();
-        return 0;
-    }
-
     if message == WM_INPUT {
         let mut input: RAWINPUT = unsafe { zeroed() };
         let mut size = size_of::<RAWINPUT>() as u32;
@@ -477,8 +470,6 @@ fn run_raw_input_thread(sender: mpsc::SyncSender<bool>) {
             let _ = sender.send(false);
             return;
         }
-
-        RegisterHotKey(window, 1, MOD_SHIFT | MOD_NOREPEAT, 0x72);
 
         let _ = sender.send(true);
         let mut message: MSG = zeroed();
@@ -632,8 +623,11 @@ fn stop_elevated_presentmon_process() -> bool {
     if !already_exited {
         let _ = std::fs::write(&process.stop_file, b"stop");
     }
+    // The bridge may need a moment to kill PresentMon and stop its ETW trace.
+    // Waiting longer than the bridge's cleanup path avoids terminating the
+    // bridge first and orphaning its elevated PresentMon child.
     let exited_after_signal =
-        already_exited || unsafe { WaitForSingleObject(process_handle, 2_000) } == 0;
+        already_exited || unsafe { WaitForSingleObject(process_handle, 6_000) } == 0;
     if exited_after_signal || unsafe { TerminateProcess(process_handle, 0) } != 0 {
         unsafe {
             CloseHandle(process_handle);
@@ -751,7 +745,7 @@ pub async fn launch_elevated_presentmon(
 }
 
 #[napi]
-pub fn stop_elevated_presentmon() -> bool {
+pub async fn stop_elevated_presentmon() -> bool {
     #[cfg(target_os = "windows")]
     {
         return stop_elevated_presentmon_process();

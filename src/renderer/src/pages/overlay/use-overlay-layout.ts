@@ -59,7 +59,7 @@ const DEFAULT_LAYOUT: OverlayLayout = {
   },
   achievements: {
     x: 0,
-    y: 0.56,
+    y: 0.6,
     z: 3,
     width: 0.23,
     height: 0.38,
