@@ -17,6 +17,8 @@ hydra-python-rpc/
 /presentmon/
 /artifacts/
 native/hydra-native/target/
+# Any native crate's build output, not just the first one that existed.
+native/*/target/
 .python-version
 
 # Sentry Config File
