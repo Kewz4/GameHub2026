@@ -18,7 +18,6 @@ import { getUnlockedAchievements } from "@main/events/user/get-unlocked-achievem
 import { getGameAssets } from "@main/events/catalogue/get-game-assets";
 import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
-import { OverlayBroker } from "./overlay-broker";
 import { findOverlayGameProcesses } from "./overlay-game-process";
 import { overlayFpsMonitor } from "./overlay-fps-monitor";
 import { WindowManager } from "./window-manager";
@@ -102,9 +101,6 @@ export class OverlayManager {
   private static targetRefreshPending = false;
   private static lastTargetRefreshAt = 0;
   private static targetExecutable: string | null = null;
-  /** PID the input gate is currently loaded into, 0 when not injected. */
-  private static inputHookPid = 0;
-  private static inputBlocked = false;
   private static activationToastPending = false;
   private static activationToastShown = false;
   private static overlayRendererReady = false;
@@ -481,7 +477,6 @@ export class OverlayManager {
       overlayWindow.focus();
       overlayWindow.webContents.send("on-overlay-shown");
       this.claimForeground(overlayWindow);
-      this.setGameInputBlocked(true);
       setTimeout(() => {
         if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
           const delayedBounds = this.getTargetBounds();
@@ -592,9 +587,6 @@ export class OverlayManager {
       overlayWindow.hide();
       overlayWindow.setAlwaysOnTop(false);
     }
-    // Hand input back before anything else: leaving the gate set would leave
-    // the game unplayable, so it must clear even on the early-return paths.
-    this.setGameInputBlocked(false);
     if (
       showPinnedPerformance &&
       this.activeGame &&
@@ -608,73 +600,13 @@ export class OverlayManager {
     if (pid) setTimeout(() => NativeAddon.focusProcessWindow(pid), 25);
   }
 
-  /**
-   * Gate the game's input while the overlay is on screen.
-   *
-   * Foreground alone does not do this — measured: the overlay wins the
-   * foreground on the first attempt and games keep responding, because XInput
-   * 1.3 never gates on focus, `GetAsyncKeyState` is global, and a window
-   * registered with `RIDEV_INPUTSINK` is explicitly asking for background
-   * input. The injected hook answers all three with neutral state while this
-   * flag is set.
-   */
-  private static setGameInputBlocked(blocked: boolean) {
-    if (process.platform !== "win32") return;
-    if (this.inputBlocked === blocked) return;
-    this.inputBlocked = blocked;
-    if (!NativeAddon.setOverlayInputBlock(blocked)) {
-      logger.warn("Overlay input gate unavailable", { blocked });
-    }
-  }
-
-  /**
-   * Load the input gate into the game. Best effort by design: a protected or
-   * 32-bit process, or an antivirus block, must not stop the overlay opening —
-   * it just means the game keeps reading input while the overlay is up.
-   */
-  private static injectInputHook(pid: number) {
-    if (process.platform !== "win32" || !pid) return;
-    if (this.inputHookPid === pid) return;
-    // Creating the shared flag before injecting means the hook finds it on its
-    // first look instead of retrying.
-    const gate = NativeAddon.createOverlayInputGate();
-    const result = NativeAddon.injectInputHook(pid);
-    if (result.injected) {
-      this.inputHookPid = pid;
-      logger.info("Overlay input hook injection", { pid, gate, ...result });
-      return;
-    }
-
-    // ERROR_ACCESS_DENIED on OpenProcess means the game runs at a higher
-    // integrity level than the launcher — common for repacks that start
-    // elevated. Nothing an unelevated process can do reaches it, so hand the
-    // job to the broker, which holds an administrator token.
-    const deniedByIntegrity = result.stage === "open" && result.errorCode === 5;
-    if (!deniedByIntegrity) {
-      this.inputHookPid = 0;
-      logger.warn("Overlay input hook injection", { pid, gate, ...result });
-      return;
-    }
-
-    void OverlayBroker.request(
-      "inject",
-      String(pid),
-      OverlayBroker.inputHookPath()
-    ).then((reply) => {
-      // Reply shape: OK<TAB>injected<TAB>stage<TAB>errorCode
-      const injected = reply?.ok === true && reply.fields[0] === "true";
-      this.inputHookPid = injected ? pid : 0;
-      logger[injected ? "info" : "warn"]("Overlay input hook injection", {
-        pid,
-        gate,
-        via: "broker",
-        injected,
-        stage: reply?.fields[1] ?? "no-reply",
-        errorCode: Number(reply?.fields[2] ?? 0),
-        unelevatedStage: result.stage,
-      });
-    });
-  }
+  // The in-process input gate (injection + shared flag) is deliberately NOT
+  // wired into the overlay lifecycle. It went in at v1.1.27 and the overlay
+  // stopped opening from that release onward; rather than keep guessing at the
+  // mechanism, the whole thing is disconnected so the lifecycle matches v1.1.26,
+  // which worked. The native gate, the hook DLL and the elevated broker all
+  // still ship and are reachable — they just are not driven from here until the
+  // overlay is confirmed healthy and they can be reintroduced one at a time.
 
   public static setPerformancePinned(pinned: boolean) {
     if (!this.preferences.overlayPerformanceEnabled) return;
@@ -776,7 +708,6 @@ export class OverlayManager {
         if (this.preferences.overlayPerformanceEnabled) {
           overlayFpsMonitor.setTargetProcess(targetPid, targetExecutable);
         }
-        this.injectInputHook(targetPid);
       }
       return this.targetPid;
     } finally {
@@ -1026,10 +957,6 @@ export class OverlayManager {
     this.performance = emptyPerformance();
     this.targetPid = 0;
     this.targetExecutable = null;
-    // hideOverlayWindow above already cleared the gate; drop the injection
-    // record too so a relaunch of the same game re-injects into the new
-    // process rather than trusting a PID that has since been recycled.
-    this.inputHookPid = 0;
     this.activationToastPending = false;
     this.activationToastShown = false;
   }
