@@ -123,6 +123,10 @@ export class OverlayManager {
       this.activeGame?.objectId === game.objectId &&
       this.activeGame.shop === game.shop
     ) {
+      logger.info("Overlay active game unchanged", {
+        title: game.title,
+        servicesActive: this.servicesActive,
+      });
       return;
     }
 
@@ -180,7 +184,17 @@ export class OverlayManager {
   }
 
   private static startActiveServices(game: Game) {
-    if (this.servicesActive || !this.preferences.overlayEnabled) return;
+    // Both of these used to return in silence, which is why "the shortcut does
+    // nothing" was indistinguishable from "the overlay was never armed".
+    if (this.servicesActive || !this.preferences.overlayEnabled) {
+      logger.warn("Overlay services not started", {
+        title: game.title,
+        alreadyActive: this.servicesActive,
+        overlayEnabled: this.preferences.overlayEnabled,
+      });
+      return;
+    }
+    logger.info("Overlay services starting", { title: game.title });
     this.servicesActive = true;
     this.activationToastPending = true;
     this.activationToastShown = false;
