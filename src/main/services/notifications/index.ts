@@ -105,6 +105,43 @@ export const publishDownloadCompleteNotification = async (game: Game) => {
   );
 };
 
+/**
+ * The download drive filled up. Worth a notification rather than a silent
+ * pause: the download stops making progress and the cause is off-screen.
+ */
+export const publishDownloadHaltedNotification = async (game: Game) => {
+  const userPreferences = await db.get<string, UserPreferences>(
+    levelKeys.userPreferences,
+    {
+      valueEncoding: "json",
+    }
+  );
+
+  const title = t("download_halted", { ns: "notifications" });
+  const body = t("not_enough_disk_space", {
+    ns: "notifications",
+    title: game.title,
+  });
+
+  if (userPreferences?.downloadNotificationsEnabled) {
+    new Notification({
+      title,
+      body,
+      icon: await downloadImage(game.iconUrl),
+    }).show();
+  }
+
+  await LocalNotificationManager.createNotification(
+    "DOWNLOAD_HALTED",
+    title,
+    body,
+    {
+      pictureUrl: game.iconUrl,
+      url: `/game/${game.shop}/${game.objectId}`,
+    }
+  );
+};
+
 export const publishNotificationDownloadFailed = async (
   gameTitle: string,
   reason: string

@@ -342,6 +342,16 @@ export function App() {
       window.electron.onDownloadsUpdated(() => {
         updateLibrary();
       }),
+      window.electron.onDownloadHalted((gameTitle) => {
+        updateLibrary();
+        showErrorToast(
+          t("download_halted_title", { ns: "downloads" }),
+          t("download_halted_description", {
+            ns: "downloads",
+            title: gameTitle,
+          })
+        );
+      }),
       window.electron.onSignOut(() => clearUserDetails()),
       window.electron.onExtractionProgress((shop, objectId, progress) => {
         dispatch(setExtractionProgress({ shop, objectId, progress }));

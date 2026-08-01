@@ -1,6 +1,9 @@
 import { Downloader, DownloadError, FILE_EXTENSIONS_TO_EXTRACT } from "@shared";
 import { WindowManager } from "../window-manager";
-import { publishDownloadCompleteNotification } from "../notifications";
+import {
+  publishDownloadCompleteNotification,
+  publishDownloadHaltedNotification,
+} from "../notifications";
 import type { Download, DownloadProgress, Game, UserPreferences } from "@types";
 import {
   GofileApi,
@@ -18,6 +21,10 @@ import {
   PauseDownloadPayload,
 } from "./types";
 import { calculateETA, getDirSize } from "./helpers";
+import {
+  DISK_SPACE_CHECK_INTERVAL_MS,
+  getDownloadDiskSpace,
+} from "./disk-space";
 import { RealDebridClient } from "./real-debrid";
 import path from "node:path";
 import fs from "node:fs";
@@ -75,6 +82,14 @@ export class DownloadManager {
   private static usingJsDownloader = false;
   private static isPreparingDownload = false;
   private static allDebridBatch: AllDebridBatchState | null = null;
+  /** Throttles the free-space read, which touches the filesystem. */
+  private static lastDiskSpaceCheck: {
+    downloadKey: string;
+    timestamp: number;
+  } | null = null;
+  /** True while the queue is parked because the target drive is full. */
+  private static queueHeldForDiskSpace = false;
+  private static lastQueueRetry = 0;
   private static maxDownloadSpeedBytesPerSecond: number | null = null;
   // Live caching progress reported by TorBox during the "preparing" phase, so
   // the UI can show a real bar + ETA while TorBox fetches the content.
@@ -625,6 +640,14 @@ export class DownloadManager {
   }
 
   public static async watchDownloads() {
+    // Freeing space should resume the queue without the user prodding it. This
+    // runs before the status check because a held queue has no active download
+    // to report, and a finished torrent that is still seeding keeps this poll
+    // alive — which is the only chance a held queue gets to notice.
+    if (this.queueHeldForDiskSpace) {
+      await this.retryQueueHeldForDiskSpace();
+    }
+
     const status = await this.getDownloadStatus();
     if (!status) return;
 
@@ -636,6 +659,8 @@ export class DownloadManager {
 
     if (!download || !game) return;
 
+    if (await this.haltDownloadIfStorageIsFull(download, game, gameId)) return;
+
     this.sendProgressUpdate(progress, status, game);
 
     const isComplete =
@@ -645,6 +670,88 @@ export class DownloadManager {
     if (isComplete) {
       await this.handleDownloadCompletion(download, game, gameId);
     }
+  }
+
+  /** Re-drive the queue on a timer while it is held for want of space. */
+  private static async retryQueueHeldForDiskSpace() {
+    const now = Date.now();
+    if (now - this.lastQueueRetry < DISK_SPACE_CHECK_INTERVAL_MS) return;
+    this.lastQueueRetry = now;
+    await this.processNextQueuedDownload();
+  }
+
+  /**
+   * Pause the active download when its drive can no longer hold it, rather
+   * than letting the downloader fail obscurely part-written. Returns true when
+   * the download was halted, so the caller stops treating it as live.
+   */
+  private static async haltDownloadIfStorageIsFull(
+    download: Download,
+    game: Game,
+    downloadKey: string
+  ) {
+    if (download.progress >= 1) return false;
+
+    const now = Date.now();
+    if (
+      this.lastDiskSpaceCheck?.downloadKey === downloadKey &&
+      now - this.lastDiskSpaceCheck.timestamp < DISK_SPACE_CHECK_INTERVAL_MS
+    ) {
+      return false;
+    }
+    this.lastDiskSpaceCheck = { downloadKey, timestamp: now };
+
+    const diskSpace = await getDownloadDiskSpace(download);
+    if (!diskSpace) {
+      logger.error(
+        `[DownloadManager] Failed to read free space for ${download.downloadPath}`
+      );
+      return false;
+    }
+    if (diskSpace.hasEnoughSpace) return false;
+
+    logger.warn(
+      `[DownloadManager] Halting ${downloadKey}: ${download.downloadPath} has ${diskSpace.freeBytes} bytes free, ${diskSpace.requiredBytes} needed`
+    );
+
+    // Cleared so the next attempt re-checks immediately instead of waiting out
+    // the interval it just consumed.
+    this.lastDiskSpaceCheck = null;
+
+    await this.pauseDownload(downloadKey);
+    WindowManager.sendToAppWindows("on-download-progress", null);
+
+    await downloadsSublevel.put(downloadKey, {
+      ...download,
+      status: "error",
+      queued: false,
+      pinnedToHero: false,
+      extracting: false,
+    });
+
+    const downloads = await downloadsSublevel.values().all();
+    const layoutState = await getDownloadLayoutStateRecord();
+    await setDownloadLayoutQueues(
+      downloads,
+      layoutState.queueOrder.filter((id) => id !== downloadKey),
+      [
+        downloadKey,
+        ...layoutState.pausedOrder.filter((id) => id !== downloadKey),
+      ]
+    );
+
+    WindowManager.sendDownloadsUpdated();
+    WindowManager.sendToAppWindows("on-download-halted", game.title);
+
+    await publishDownloadHaltedNotification(game).catch((error) => {
+      logger.error(
+        "[DownloadManager] Failed to publish download halted notification",
+        error
+      );
+    });
+
+    await this.processNextQueuedDownload();
+    return true;
   }
 
   private static sendProgressUpdate(
@@ -947,6 +1054,23 @@ export class DownloadManager {
     );
 
     if (nextItemOnQueue) {
+      // Starting a download onto a drive that cannot hold it just halts it a
+      // moment later, so hold the queue instead and re-check on a timer.
+      const diskSpace = await getDownloadDiskSpace(nextItemOnQueue);
+
+      if (diskSpace && !diskSpace.hasEnoughSpace) {
+        if (!this.queueHeldForDiskSpace) {
+          logger.warn(
+            `[DownloadManager] Keeping the queue on hold: ${nextItemOnQueue.downloadPath} has ${diskSpace.freeBytes} bytes free, ${diskSpace.requiredBytes} needed`
+          );
+          WindowManager.sendDownloadsUpdated();
+        }
+        this.queueHeldForDiskSpace = true;
+        return;
+      }
+
+      this.queueHeldForDiskSpace = false;
+
       await this.resumeDownload(nextItemOnQueue);
       // Atomically mark the newly-started item active and clear its queued
       // flag, instead of waiting for the next watch poll to persist it. This

@@ -694,7 +694,9 @@
     "peak": "PEAK",
     "files": "FILES",
     "move_up": "Move up",
-    "move_down": "Move down"
+    "move_down": "Move down",
+    "download_halted_title": "Download halted",
+    "download_halted_description": "{{title}} was paused because the drive ran out of space"
   },
   "classics_onboarding": {
     "title": "Play your console classics",
@@ -1281,6 +1283,8 @@
   },
   "notifications": {
     "download_complete": "Download complete",
+    "download_halted": "Download halted",
+    "not_enough_disk_space": "{{title}} was paused: not enough free disk space",
     "download_failed": "Download couldn't start",
     "download_failed_description": "{{title}}: {{reason}}",
     "game_ready_to_install": "{{title}} is ready to install",

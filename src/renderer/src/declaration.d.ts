@@ -141,6 +141,9 @@ declare global {
     onDownloadProgress: (
       cb: (value: DownloadProgress | null) => void
     ) => () => Electron.IpcRenderer;
+    onDownloadHalted: (
+      cb: (gameTitle: string) => void
+    ) => () => Electron.IpcRenderer;
     onSeedingStatus: (
       cb: (value: SeedingStatus[]) => void
     ) => () => Electron.IpcRenderer;

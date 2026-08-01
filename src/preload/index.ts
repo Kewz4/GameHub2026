@@ -110,6 +110,12 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("on-download-progress", listener);
     return () => ipcRenderer.removeListener("on-download-progress", listener);
   },
+  onDownloadHalted: (cb: (gameTitle: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, gameTitle: string) =>
+      cb(gameTitle);
+    ipcRenderer.on("on-download-halted", listener);
+    return () => ipcRenderer.removeListener("on-download-halted", listener);
+  },
   onHardDelete: (cb: () => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => cb();
     ipcRenderer.on("on-hard-delete", listener);

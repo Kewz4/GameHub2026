@@ -200,10 +200,9 @@ fn run() -> Result<(), String> {
     // needs: it derives frame time from msBetweenPresents when
     // msBetweenDisplayChange is absent.
     //
-    // `--v1_metrics` is dropped for the same reason — matching the invocation
-    // upstream Hydra uses, which is known to produce output. The column
-    // resolver reads the header by name and accepts either schema, so no
-    // parsing change is required.
+    // `--v1_metrics` is dropped for the same reason. The column resolver reads
+    // the header by name and accepts either schema, so no parsing change is
+    // required.
     //
     // `--exclude_dropped` stays out: it discards every frame not considered
     // displayed, which for a composited borderless window can exclude the

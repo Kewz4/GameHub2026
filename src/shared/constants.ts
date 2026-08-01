@@ -131,3 +131,12 @@ export const getGameExecutableFilters = (
 
 export const GAMEMODE_SITE_URL = "https://github.com/FeralInteractive/gamemode";
 export const MANGOHUD_SITE_URL = "https://github.com/flightlessmango/MangoHud";
+
+/**
+ * Headroom kept free on the download drive.
+ *
+ * A download is refused (or halted) unless the drive can hold the bytes still
+ * outstanding *plus* this much, so filling a disk to the last byte cannot take
+ * the rest of the system down with it.
+ */
+export const MINIMUM_FREE_DISK_SPACE_BYTES = 512 * 1024 * 1024;

@@ -472,6 +472,7 @@ export type NotificationType =
 export type LocalNotificationType =
   | "EXTRACTION_COMPLETE"
   | "DOWNLOAD_COMPLETE"
+  | "DOWNLOAD_HALTED"
   | "UPDATE_AVAILABLE"
   | "ACHIEVEMENT_UNLOCKED"
   | "SCAN_GAMES_COMPLETE"
