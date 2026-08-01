@@ -69,6 +69,12 @@ export interface EmulationArtifact {
   updatedAt: string;
 }
 
+export interface SaveArtifactRestoreMetadata {
+  homeDir: string | null;
+  winePrefixPath: string | null;
+  platform: string | null;
+}
+
 const enc = (v: string | undefined | null): string =>
   encodeURIComponent(v ?? "");
 const dec = (v: string | undefined | null): string => {
@@ -145,6 +151,8 @@ export class R2Sync {
           downloadoptiontitle: enc(metadata.downloadOptionTitle),
           hostname: enc(metadata.hostname),
           platform: metadata.platform ?? "",
+          homedir: enc(metadata.homeDir),
+          wineprefixpath: enc(metadata.winePrefixPath),
         },
       })
     );
@@ -208,6 +216,19 @@ export class R2Sync {
     } catch {
       return null;
     }
+  }
+
+  /** Source-machine paths needed to remap an artifact during restore. */
+  static async getSaveArtifactRestoreMetadata(
+    key: string
+  ): Promise<SaveArtifactRestoreMetadata> {
+    const head = await this.headArtifact(key);
+    const metadata = head?.Metadata ?? {};
+    return {
+      homeDir: dec(metadata.homedir) || null,
+      winePrefixPath: dec(metadata.wineprefixpath) || null,
+      platform: metadata.platform || null,
+    };
   }
 
   /** List save artifacts for a single game, newest first. */

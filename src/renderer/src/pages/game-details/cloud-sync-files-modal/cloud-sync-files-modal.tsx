@@ -28,7 +28,7 @@ export function CloudSyncFilesModal({
 
   const { t } = useTranslation("game_details");
 
-  const { showSuccessToast } = useToast();
+  const { showSuccessToast, showErrorToast } = useToast();
 
   const { register, setValue } = useForm<{
     customBackupPath: string | null;
@@ -63,30 +63,53 @@ export function CloudSyncFilesModal({
   }, [backupPreview]);
 
   const handleAddCustomPathClick = useCallback(async () => {
+    if (!objectId) return;
     const { filePaths } = await window.electron.showOpenDialog({
       properties: ["openDirectory"],
     });
 
     if (filePaths && filePaths.length > 0) {
-      const path = filePaths[0];
-      setValue("customBackupPath", path);
-
-      await window.electron.selectGameBackupPath(shop, objectId!, path);
-      showSuccessToast(t("custom_backup_location_set"));
-      getGameBackupPreview();
+      try {
+        const path = filePaths[0];
+        await window.electron.selectGameBackupPath(shop, objectId, path);
+        setValue("customBackupPath", path);
+        showSuccessToast(t("custom_backup_location_set"));
+        await getGameBackupPreview();
+      } catch (error) {
+        showErrorToast(
+          t("backup_failed"),
+          error instanceof Error ? error.message : String(error)
+        );
+      }
     }
-  }, [objectId, setValue, shop, showSuccessToast, getGameBackupPreview, t]);
+  }, [
+    objectId,
+    setValue,
+    shop,
+    showSuccessToast,
+    showErrorToast,
+    getGameBackupPreview,
+    t,
+  ]);
 
   const handleFileMappingMethodClick = useCallback(
-    (mappingOption: FileMappingMethod) => {
-      if (mappingOption === FileMappingMethod.Automatic) {
-        getGameBackupPreview();
-        window.electron.selectGameBackupPath(shop, objectId!, null);
+    async (mappingOption: FileMappingMethod) => {
+      if (mappingOption === FileMappingMethod.Automatic && objectId) {
+        try {
+          await window.electron.selectGameBackupPath(shop, objectId, null);
+          await getGameBackupPreview();
+        } catch (error) {
+          showErrorToast(
+            t("backup_failed"),
+            error instanceof Error ? error.message : String(error)
+          );
+          return;
+        }
       }
 
       setSelectedFileMappingMethod(mappingOption);
     },
-    [getGameBackupPreview, shop, objectId]
+    [getGameBackupPreview, shop, objectId, showErrorToast, t]
   );
 
   return (
@@ -123,7 +146,13 @@ export function CloudSyncFilesModal({
 
       <div className="cloud-sync-files-modal__custom-path">
         {selectedFileMappingMethod === FileMappingMethod.Automatic ? (
-          <p>{t("files_automatically_mapped")}</p>
+          backupPreview?.mappingError ? (
+            <p className="cloud-sync-files-modal__mapping-error" role="alert">
+              {backupPreview.mappingError}
+            </p>
+          ) : (
+            <p>{t("files_automatically_mapped")}</p>
+          )
         ) : (
           <TextField
             {...register("customBackupPath")}
@@ -143,6 +172,21 @@ export function CloudSyncFilesModal({
             }
           />
         )}
+
+        {!backupPreview?.mappingError &&
+        backupPreview?.resolvedPaths?.length ? (
+          <ul className="cloud-sync-files-modal__resolved-paths">
+            {backupPreview.resolvedPaths.map((resolvedPath) => (
+              <li key={resolvedPath}>{resolvedPath}</li>
+            ))}
+          </ul>
+        ) : null}
+
+        {backupPreview?.mappingWarning ? (
+          <p className="cloud-sync-files-modal__mapping-warning" role="status">
+            {backupPreview.mappingWarning}
+          </p>
+        ) : null}
 
         <ul className="cloud-sync-files-modal__file-list">
           {files.map((file) => (

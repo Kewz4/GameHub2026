@@ -1,6 +1,6 @@
 {
   "name": "hydralauncher",
-  "version": "1.1.37",
+  "version": "1.1.38",
   "description": "GameHub",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
@@ -22,7 +22,7 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test:spotify": "node --test scripts/tests/spotify-helpers.test.ts",
     "test:overlay": "node --test scripts/tests/overlay-performance-metrics.test.ts",
-    "test:cloud-sync": "node --test scripts/tests/cloud-sync-operation-guard.test.ts scripts/tests/ludusavi-path-discovery.test.ts",
+    "test:cloud-sync": "node --test scripts/tests/cloud-sync-operation-guard.test.ts scripts/tests/ludusavi-path-discovery.test.ts scripts/tests/ludusavi-game-mapping.test.ts scripts/tests/manual-save-path.test.ts scripts/tests/restore-path-safety.test.ts scripts/tests/emulator-save-paths.test.ts scripts/tests/emulator-title-id.test.ts",
     "build:native": "node ./scripts/build-native-addon.cjs",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",

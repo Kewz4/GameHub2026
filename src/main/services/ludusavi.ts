@@ -1,4 +1,9 @@
-import type { GameShop, LudusaviBackup, LudusaviConfig } from "@types";
+import type {
+  GameShop,
+  LudusaviBackup,
+  LudusaviConfig,
+  LudusaviCustomGame,
+} from "@types";
 
 import { app } from "electron";
 import fs from "node:fs";
@@ -8,9 +13,27 @@ import YAML from "yaml";
 import cp from "node:child_process";
 import { SystemPath } from "./system-path";
 import { logger } from "./logger";
-import { resolveLudusaviPathMatches } from "./ludusavi-path-discovery";
+import {
+  resolveLudusaviPathMatches,
+  toProspectiveLudusaviPath,
+} from "./ludusavi-path-discovery";
+import {
+  extractLudusaviManifestSaveMapping,
+  getBuiltInSaveOverride,
+  getLudusaviManifestOs,
+  isAcceptedLudusaviFuzzyScore,
+  resolveInstallDirFromExecutable,
+} from "./ludusavi-game-mapping";
+
+export interface LudusaviResolvedSaveMapping {
+  paths: string[];
+  registry: string[];
+}
 
 export class Ludusavi {
+  private static manifestCheckPromise: Promise<void> | null = null;
+  private static manifestCheckedThisSession = false;
+
   private static ludusaviResourcesPath = app.isPackaged
     ? path.join(process.resourcesPath, "ludusavi")
     : path.join(__dirname, "..", "..", "ludusavi");
@@ -33,6 +56,13 @@ export class Ludusavi {
     ) as LudusaviConfig;
 
     return config;
+  }
+
+  private static writeConfig(config: LudusaviConfig): void {
+    fs.writeFileSync(
+      path.join(this.configPath, "config.yaml"),
+      YAML.stringify(config)
+    );
   }
 
   public static async copyConfigFileToUserData() {
@@ -102,20 +132,35 @@ export class Ludusavi {
    * downloaded, and refresh it when it's older than a week so save locations
    * for new/updated games keep resolving.
    */
-  private static async ensureManifest(): Promise<void> {
-    const manifestPath = path.join(this.configPath, "manifest.yaml");
-    if (!fs.existsSync(manifestPath)) {
-      await this.updateManifest();
-      return;
-    }
-    try {
-      const ageMs = Date.now() - fs.statSync(manifestPath).mtimeMs;
-      if (ageMs > 7 * 24 * 60 * 60 * 1000) {
+  private static ensureManifest(): Promise<void> {
+    if (this.manifestCheckedThisSession) return Promise.resolve();
+    if (this.manifestCheckPromise) return this.manifestCheckPromise;
+
+    this.manifestCheckPromise = (async () => {
+      const manifestPath = path.join(this.configPath, "manifest.yaml");
+      if (!fs.existsSync(manifestPath)) {
         await this.updateManifest();
+        return;
       }
-    } catch {
-      // stat failed — keep the existing manifest
-    }
+      try {
+        const ageMs = Date.now() - fs.statSync(manifestPath).mtimeMs;
+        if (ageMs > 7 * 24 * 60 * 60 * 1000) {
+          await this.updateManifest();
+        }
+      } catch {
+        // stat failed — keep the existing manifest
+      }
+    })().finally(() => {
+      this.manifestCheckedThisSession = true;
+      this.manifestCheckPromise = null;
+    });
+
+    return this.manifestCheckPromise;
+  }
+
+  /** One de-duplicated startup/lazy manifest freshness check per app session. */
+  public static prepareManifest(): Promise<void> {
+    return this.ensureManifest();
   }
 
   /**
@@ -131,18 +176,32 @@ export class Ludusavi {
   ): Promise<string | null> {
     await this.ensureManifest();
 
-    const attempts: string[][] = [];
+    const attempts: { args: string[]; fuzzy: boolean }[] = [];
 
     if (shop === "steam" && objectId && /^\d+$/.test(objectId)) {
-      attempts.push(["find", "--api", "--steam-id", objectId]);
+      attempts.push({
+        args: ["find", "--api", "--steam-id", objectId],
+        fuzzy: false,
+      });
     }
     if (shop === "gog" && objectId && /^\d+$/.test(objectId)) {
-      attempts.push(["find", "--api", "--gog-id", objectId]);
+      attempts.push({
+        args: ["find", "--api", "--gog-id", objectId],
+        fuzzy: false,
+      });
     }
-    attempts.push(["find", "--api", "--fuzzy", title]);
+    attempts.push({
+      args: ["find", "--api", "--fuzzy", title],
+      fuzzy: true,
+    });
 
-    for (const findArgs of attempts) {
-      const args = ["--config", this.configPath, ...findArgs];
+    for (const attempt of attempts) {
+      const args = [
+        "--no-manifest-update",
+        "--config",
+        this.configPath,
+        ...attempt.args,
+      ];
       const result = await new Promise<string | null>((resolve) => {
         cp.execFile(
           this.binaryPath,
@@ -152,10 +211,21 @@ export class Ludusavi {
             if (err) return resolve(null);
             try {
               const parsed = JSON.parse(stdout) as {
-                games?: Record<string, unknown>;
+                games?: Record<string, { score?: number }>;
               };
-              const names = Object.keys(parsed.games ?? {});
-              resolve(names[0] ?? null);
+              const first = Object.entries(parsed.games ?? {})[0];
+              if (!first) return resolve(null);
+              const [name, metadata] = first;
+              if (
+                attempt.fuzzy &&
+                !isAcceptedLudusaviFuzzyScore(metadata.score ?? 0)
+              ) {
+                logger.warn(
+                  `[ludusavi] rejected low-confidence match "${title}" -> "${name}" (${(metadata.score ?? 0).toFixed(3)})`
+                );
+                return resolve(null);
+              }
+              resolve(name);
             } catch {
               resolve(null);
             }
@@ -178,10 +248,9 @@ export class Ludusavi {
   }
 
   /**
-   * Fast manifest-only save path lookup — no ludusavi binary invoked.
-   * Reads manifest.yaml directly and expands variables. Returns only
-   * fully-expanded paths (no templates). Falls back to the binary-based
-   * canonical-name lookup if the title doesn't match the manifest directly.
+   * Compatibility wrapper for callers that only need filesystem locations.
+   * Generated backup mappings should use `findSaveMappingFast` so registry
+   * saves are not silently dropped.
    */
   public static async findSavePathsFast(
     shop: GameShop,
@@ -189,31 +258,69 @@ export class Ludusavi {
     objectId?: string | null,
     executablePathOverride?: string | null
   ): Promise<string[]> {
+    const mapping = await this.findSaveMappingFast(
+      shop,
+      title,
+      objectId,
+      executablePathOverride
+    );
+    return mapping.paths;
+  }
+
+  /**
+   * Read one manifest section and resolve only entries whose `when` clauses
+   * apply to the current OS and game store. The exact-title path stays binary
+   * free; the Ludusavi binary is only used to resolve a canonical fallback.
+   */
+  public static async findSaveMappingFast(
+    shop: GameShop,
+    title: string,
+    objectId?: string | null,
+    executablePathOverride?: string | null
+  ): Promise<LudusaviResolvedSaveMapping> {
     await this.ensureManifest();
 
     const manifestPath = path.join(this.configPath, "manifest.yaml");
-    if (!fs.existsSync(manifestPath)) return [];
+    if (!fs.existsSync(manifestPath)) return { paths: [], registry: [] };
 
     // Try exact title first (no binary)
-    let { paths: rawPaths, installDirName } = this.extractPathsFromManifest(
-      manifestPath,
-      title
-    );
+    let {
+      paths: rawPaths,
+      registry: rawRegistry,
+      installDirName,
+    } = this.extractPathsFromManifest(manifestPath, title, shop);
 
-    // If not found, try canonical name via ludusavi binary (slower, one shot)
-    if (rawPaths.length === 0) {
-      const canonical = await this.findCanonicalName(shop, title, objectId);
-      if (canonical && canonical !== title) {
-        ({ paths: rawPaths, installDirName } = this.extractPathsFromManifest(
-          manifestPath,
-          canonical
-        ));
+    // Exact store-ID overrides take precedence over fuzzy title matching. They
+    // are intentionally tiny and only cover entries proven missing upstream.
+    if (rawPaths.length === 0 && rawRegistry.length === 0 && objectId) {
+      const override = getBuiltInSaveOverride(shop, objectId);
+      if (override) {
+        rawPaths = [...override.paths];
+        rawRegistry = [];
+        installDirName = override.installDirName;
       }
     }
 
-    if (rawPaths.length === 0) return [];
+    // If not found, try canonical name via ludusavi binary (slower, one shot)
+    if (rawPaths.length === 0 && rawRegistry.length === 0) {
+      const canonical = await this.findCanonicalName(shop, title, objectId);
+      if (canonical && canonical !== title) {
+        ({
+          paths: rawPaths,
+          registry: rawRegistry,
+          installDirName,
+        } = this.extractPathsFromManifest(manifestPath, canonical, shop));
+      }
+    }
 
-    // Resolve install dir: prefer executablePathOverride if it's a real file path
+    if (rawPaths.length === 0 && rawRegistry.length === 0) {
+      return { paths: [], registry: [] };
+    }
+
+    // Resolve install dir from the physical executable. The executable may be
+    // nested several folders below the game root (Khazan), or may be a shared
+    // launcher beside the real game directory (League of Legends), so use the
+    // manifest installDir name to find the matching ancestor/sibling first.
     const platformUrlPrefixes = [
       "steam://",
       "legendary://",
@@ -229,7 +336,10 @@ export class Ludusavi {
 
     let resolvedInstallDir: string | null = null;
     if (executablePathOverride && !isPlatformUrl) {
-      resolvedInstallDir = path.dirname(executablePathOverride);
+      resolvedInstallDir = resolveInstallDirFromExecutable(
+        executablePathOverride,
+        installDirName
+      );
     } else if (shop === "steam" && objectId) {
       resolvedInstallDir = await Promise.race([
         this.getSteamGameInstallDir(objectId),
@@ -257,10 +367,19 @@ export class Ludusavi {
       if (!p.includes("<")) {
         resolved.push(p);
       } else {
-        resolved.push(...resolveLudusaviPathMatches(p));
+        const matches = resolveLudusaviPathMatches(p);
+        if (matches.length > 0) {
+          resolved.push(...matches);
+        } else {
+          const prospective = toProspectiveLudusaviPath(p);
+          if (prospective) resolved.push(prospective);
+        }
       }
     }
-    return [...new Set(resolved)];
+    return {
+      paths: [...new Set(resolved)],
+      registry: [...new Set(rawRegistry)],
+    };
   }
 
   /**
@@ -283,7 +402,8 @@ export class Ludusavi {
 
     const { paths: rawPaths } = this.extractPathsFromManifest(
       manifestPath,
-      canonicalName
+      canonicalName,
+      shop
     );
     if (rawPaths.length === 0) return [];
 
@@ -303,13 +423,19 @@ export class Ludusavi {
   }
 
   /**
-   * Extract file path templates and installDir name for a game from manifest.yaml
-   * using a line-by-line scan. Avoids loading the entire multi-MB YAML into memory.
+   * Extract the applicable file, registry, and install-directory entries for a
+   * game. Only the selected game section is parsed as YAML, avoiding a large
+   * object graph for the multi-megabyte manifest.
    */
   private static extractPathsFromManifest(
     manifestPath: string,
-    gameName: string
-  ): { paths: string[]; installDirName: string | null } {
+    gameName: string,
+    shop: GameShop
+  ): {
+    paths: string[];
+    registry: string[];
+    installDirName: string | null;
+  } {
     const content = fs.readFileSync(manifestPath, "utf-8");
     const lines = content.split("\n");
 
@@ -324,7 +450,9 @@ export class Ludusavi {
         break;
       }
     }
-    if (gameStart === -1) return { paths: [], installDirName: null };
+    if (gameStart === -1) {
+      return { paths: [], registry: [], installDirName: null };
+    }
 
     // Collect lines that belong to this game's section (until next top-level key)
     const sectionLines: string[] = [];
@@ -334,72 +462,10 @@ export class Ludusavi {
       sectionLines.push(line);
     }
 
-    const paths: string[] = [];
-    let inFiles = false;
-    let inInstallDir = false;
-    let installDirName: string | null = null;
-    const filesIndent = /^(\s+)files:/;
-    const installDirIndent = /^(\s+)installDir:/;
-    let filesDepth = -1;
-    let installDirDepth = -1;
-
-    for (const line of sectionLines) {
-      // Detect installDir section
-      if (!inInstallDir && !inFiles) {
-        const m = installDirIndent.exec(line);
-        if (m) {
-          inInstallDir = true;
-          installDirDepth = m[1].length;
-          continue;
-        }
-      }
-
-      if (inInstallDir) {
-        const keyMatch = /^(\s+)"?([^":]+)"?\s*:/.exec(line);
-        if (keyMatch) {
-          const indent = keyMatch[1].length;
-          if (indent <= installDirDepth) {
-            inInstallDir = false;
-          } else if (indent === installDirDepth + 2 && !installDirName) {
-            installDirName = keyMatch[2].trim() || null;
-            continue;
-          }
-        } else {
-          const spaceCount = line.length - line.trimStart().length;
-          if (line.trim() && spaceCount <= installDirDepth)
-            inInstallDir = false;
-        }
-      }
-
-      // Detect files section
-      if (!inFiles) {
-        const m = filesIndent.exec(line);
-        if (m) {
-          inFiles = true;
-          filesDepth = m[1].length;
-          inInstallDir = false;
-        }
-        continue;
-      }
-
-      // A key at filesDepth+2 spaces is a path template entry
-      const keyMatch = /^(\s+)"?([^":]+)"?\s*:/.exec(line);
-      if (keyMatch) {
-        const indent = keyMatch[1].length;
-        if (indent <= filesDepth) break;
-        if (indent === filesDepth + 2) {
-          const raw = keyMatch[2].trim();
-          if (raw) paths.push(raw);
-        }
-      } else if (line.trim() === "" || /^\s*#/.test(line)) {
-        continue;
-      } else {
-        const spaceCount = line.length - line.trimStart().length;
-        if (spaceCount <= filesDepth) break;
-      }
-    }
-
-    return { paths, installDirName };
+    return extractLudusaviManifestSaveMapping(sectionLines, {
+      os: getLudusaviManifestOs(process.platform),
+      shop,
+    });
   }
 
   /** Expand ludusavi path template variables to real paths. */
@@ -532,6 +598,7 @@ export class Ludusavi {
   ): Promise<LudusaviBackup> {
     return new Promise((resolve, reject) => {
       const args = [
+        "--no-manifest-update",
         "--config",
         this.configPath,
         "backup",
@@ -631,9 +698,123 @@ export class Ludusavi {
     };
   }
 
+  /**
+   * Stable Ludusavi custom-game name for a user-selected save directory.
+   * Object IDs are only unique inside a shop, so the legacy objectId-only key
+   * could make two stores overwrite each other's manual mapping.
+   */
+  public static getManualGameKey(shop: GameShop, objectId: string): string {
+    return `gamehub-manual:${shop}:${objectId}`;
+  }
+
+  /**
+   * Find a manual save mapping. New shop-scoped keys win; an objectId-only
+   * mapping from older GameHub builds is migrated on first read so existing
+   * user selections keep working.
+   */
+  public static async getManualCustomGame(
+    shop: GameShop,
+    objectId: string
+  ): Promise<LudusaviCustomGame | null> {
+    const config = await this.getConfig();
+    const customGames = config.customGames ?? [];
+    const stableKey = this.getManualGameKey(shop, objectId);
+
+    const stable = customGames.find((game) => game.name === stableKey);
+    if (stable) {
+      return {
+        ...stable,
+        files: [...stable.files],
+        registry: [...(stable.registry ?? [])],
+      };
+    }
+
+    const legacy = customGames.find((game) => game.name === objectId);
+    if (!legacy) return null;
+
+    const migrated: LudusaviCustomGame = {
+      ...legacy,
+      name: stableKey,
+      files: [...legacy.files],
+      registry: [...(legacy.registry ?? [])],
+    };
+    config.customGames = customGames.filter(
+      (game) => game.name !== stableKey && game.name !== objectId
+    );
+    config.customGames.push(migrated);
+    this.writeConfig(config);
+    logger.info(
+      `[ludusavi] migrated manual save mapping for ${shop}:${objectId}`
+    );
+
+    return {
+      ...migrated,
+      files: [...migrated.files],
+      registry: [...migrated.registry],
+    };
+  }
+
+  /** Store a user-selected save directory under the stable shop-scoped key. */
+  public static async setManualCustomGame(
+    shop: GameShop,
+    objectId: string,
+    savePath: string
+  ): Promise<void> {
+    const config = await this.getConfig();
+    const stableKey = this.getManualGameKey(shop, objectId);
+    config.customGames = (config.customGames ?? []).filter(
+      (game) => game.name !== stableKey && game.name !== objectId
+    );
+    config.customGames.push({
+      name: stableKey,
+      files: [savePath],
+      registry: [],
+    });
+    this.writeConfig(config);
+  }
+
+  /** Clear both the current key and the objectId-only key used by old builds. */
+  public static async removeManualCustomGame(
+    shop: GameShop,
+    objectId: string
+  ): Promise<void> {
+    const config = await this.getConfig();
+    const stableKey = this.getManualGameKey(shop, objectId);
+    const customGames = config.customGames ?? [];
+    const filtered = customGames.filter(
+      (game) => game.name !== stableKey && game.name !== objectId
+    );
+    if (filtered.length === customGames.length) return;
+    config.customGames = filtered;
+    this.writeConfig(config);
+  }
+
+  /** Preview the exact manual mapping, bypassing title/fuzzy manifest lookup. */
+  public static async previewCustomGame(
+    shop: GameShop,
+    objectId: string,
+    winePrefix?: string | null
+  ): Promise<LudusaviBackup | null> {
+    const customGame = await this.getManualCustomGame(shop, objectId);
+    if (!customGame) return null;
+
+    const backupData = await this.backupGame(
+      shop,
+      customGame.name,
+      null,
+      winePrefix,
+      true
+    );
+    return {
+      ...backupData,
+      customBackupPath: customGame.files[0] ?? null,
+    };
+  }
+
   static async addCustomGame(
     title: string,
-    savePath: string | string[] | null
+    savePath: string | string[] | null,
+    registryPaths: string[] = []
   ) {
     const config = await this.getConfig();
     const filteredGames = config.customGames.filter(
@@ -645,19 +826,17 @@ export class Ludusavi {
       : savePath
         ? [savePath]
         : [];
-    if (files.length > 0) {
+    const registry = [...new Set(registryPaths.filter(Boolean))];
+    if (files.length > 0 || registry.length > 0) {
       filteredGames.push({
         name: title,
-        files,
-        registry: [],
+        files: [...new Set(files)],
+        registry,
       });
     }
 
     config.customGames = filteredGames;
 
-    fs.writeFileSync(
-      path.join(this.configPath, "config.yaml"),
-      YAML.stringify(config)
-    );
+    this.writeConfig(config);
   }
 }

@@ -199,6 +199,11 @@ export function CloudSyncPanel({
 
   const disableActions =
     uploadingBackup || restoringBackup || deletingArtifact || freezingArtifact;
+  const hasLaunchablePath = Boolean(
+    game?.executablePath ||
+      game?.selectedDiscPath ||
+      game?.discs?.some((disc) => Boolean(disc.path))
+  );
 
   return (
     <>
@@ -224,7 +229,7 @@ export function CloudSyncPanel({
             </div>
           }
           checked={automaticCloudSync}
-          disabled={!game?.executablePath}
+          disabled={!hasLaunchablePath}
           onChange={onToggleAutomaticCloudSync}
         />
       </div>

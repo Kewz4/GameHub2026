@@ -4,7 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { resolveLudusaviPathMatches } from "../../src/main/services/ludusavi-path-discovery.ts";
+import {
+  resolveLudusaviPathMatches,
+  toProspectiveLudusaviPath,
+} from "../../src/main/services/ludusavi-path-discovery.ts";
 
 test("returns every matching profile save directory", (t) => {
   const fixtureRoot = fs.mkdtempSync(
@@ -41,4 +44,38 @@ test("resolves multiple unresolved directory levels", (t) => {
   );
 
   assert.deepEqual(matches, [firstSave, secondSave]);
+});
+
+test("honors literal text around a profile token and preserves file globs", (t) => {
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "gamehub-ludusavi-discovery-")
+  );
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  const steamProfile = path.join(fixtureRoot, "Steam_12345");
+  const unrelatedProfile = path.join(fixtureRoot, "Epic_12345");
+  fs.mkdirSync(steamProfile, { recursive: true });
+  fs.mkdirSync(unrelatedProfile, { recursive: true });
+
+  assert.deepEqual(
+    resolveLudusaviPathMatches(
+      path.join(fixtureRoot, "Steam_<storeUserId>", "*.sav")
+    ),
+    [path.join(steamProfile, "*.sav")]
+  );
+});
+
+test("creates an absolute prospective profile glob when no save exists yet", (t) => {
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "gamehub-ludusavi-discovery-")
+  );
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+
+  assert.equal(
+    toProspectiveLudusaviPath(
+      path.join(fixtureRoot, "Steam_<storeUserId>", "*.sav")
+    ),
+    path.join(fixtureRoot, "Steam_*", "*.sav")
+  );
+  assert.equal(toProspectiveLudusaviPath("<base>/save.dat"), null);
 });

@@ -4,9 +4,9 @@ import {
   logger,
   WindowManager,
   Wine,
+  resolveSaveBackupPlan,
 } from "@main/services";
 import fs from "node:fs";
-import crypto from "node:crypto";
 import * as tar from "tar";
 import { registerEvent } from "../register-event";
 import path from "node:path";
@@ -17,6 +17,15 @@ import { gamesSublevel, levelKeys } from "@main/level";
 import YAML from "yaml";
 import { addTrailingSlash, normalizePath } from "@main/helpers";
 import { SystemPath } from "@main/services/system-path";
+import {
+  resolveEmulatorRestorePatterns,
+  systemForGame,
+} from "@main/services/emulators/emulator-save-dirs";
+import {
+  assertNoRegistryRestorePayload,
+  commitSaveRestoreJobs,
+  planSaveRestoreJobs,
+} from "./restore-path-safety";
 
 export const transformLudusaviBackupPathIntoWindowsPath = (
   backupPath: string,
@@ -36,86 +45,6 @@ export const addWinePrefixToWindowsPath = (
 };
 
 /**
- * When the same drive exists but the game folder was named differently on the
- * backup machine (e.g. "Neon Abyss" vs "NeonAbyss"), remap the mismatched
- * segment to the actual folder name from the current executablePath.
- */
-const remapGameFolderIfNeeded = (
-  destinationPath: string,
-  executablePath: string
-): string => {
-  const exeDir = path.dirname(executablePath);
-  const exeGameFolder = path.basename(exeDir);
-  const exeGameFolderNorm = exeGameFolder.toLowerCase().replace(/\s+/g, "");
-
-  const destSegments = destinationPath.split(/[\\/]/);
-  const idx = destSegments.findIndex(
-    (s) =>
-      s !== exeGameFolder &&
-      s.toLowerCase().replace(/\s+/g, "") === exeGameFolderNorm
-  );
-  if (idx === -1) return destinationPath;
-
-  const remapped = [...destSegments];
-  remapped[idx] = exeGameFolder;
-  // Re-join preserving original separator style
-  const sep = destinationPath.includes("\\") ? "\\" : "/";
-  return remapped.join(sep);
-};
-
-/**
- * Backups store absolute paths from the machine that created them. If the
- * destination's drive doesn't exist here (e.g. backup says E:\ but the game
- * lives on D:\), remap onto the game's current install dir — or at least onto
- * a drive that exists. Also normalizes game folder name differences (e.g.
- * "Neon Abyss" → "NeonAbyss") when the drive matches but path doesn't exist.
- */
-const remapMissingDrive = (
-  destinationPath: string,
-  executablePath?: string | null
-): string => {
-  const root = path.parse(destinationPath).root; // e.g. "E:\"
-  if (!root || fs.existsSync(root)) {
-    // Drive exists — still try to fix mismatched game folder name (e.g. spacing)
-    if (executablePath) {
-      return remapGameFolderIfNeeded(destinationPath, executablePath);
-    }
-    return destinationPath;
-  }
-  if (!executablePath) return destinationPath;
-
-  const exeDir = path.dirname(executablePath);
-
-  // If the destination contains the game's current folder name (fuzzy), graft
-  // the remainder onto the local install dir:
-  //   E:\Games\Neon Abyss\SavesDir + D:\Stuff\NeonAbyss\game.exe
-  //   → D:\Stuff\NeonAbyss\SavesDir
-  const exeGameFolder = path.basename(exeDir);
-  const exeGameFolderNorm = exeGameFolder.toLowerCase().replace(/\s+/g, "");
-  const destSegments = destinationPath.split(/[\\/]/);
-  const idx = destSegments.findIndex(
-    (s) => s.toLowerCase().replace(/\s+/g, "") === exeGameFolderNorm
-  );
-  if (idx !== -1) {
-    return path.join(exeDir, ...destSegments.slice(idx + 1));
-  }
-
-  // Otherwise just swap the dead drive for the game's drive
-  const exeRoot = path.parse(exeDir).root;
-  return path.join(exeRoot, destinationPath.slice(root.length));
-};
-
-/** rename with a cross-filesystem (EXDEV) copy+unlink fallback. */
-const moveFile = (src: string, dest: string) => {
-  try {
-    fs.renameSync(src, dest);
-  } catch {
-    fs.copyFileSync(src, dest);
-    fs.unlinkSync(src);
-  }
-};
-
-/**
  * Restore a Ludusavi backup ATOMICALLY (all-or-nothing), inspired by Hydra
  * PR #2538's native staged restore. The old code deleted each existing save
  * BEFORE moving the replacement in, with no rollback — so a crash, full disk,
@@ -131,7 +60,7 @@ const restoreLudusaviBackup = (
   homeDir: string,
   winePrefixPath?: string | null,
   artifactWinePrefixPath?: string | null,
-  executablePath?: string | null
+  allowedDestinationPaths: readonly string[] = []
 ) => {
   const gameBackupPath = path.join(backupPath, title);
   const mappingYamlPath = path.join(gameBackupPath, "mapping.yaml");
@@ -141,6 +70,7 @@ const restoreLudusaviBackup = (
     backups: LudusaviBackupMapping[];
     drives: Record<string, string>;
   };
+  assertNoRegistryRestorePayload(gameBackupPath, manifest.backups);
 
   const userProfilePath =
     CloudSync.getWindowsLikeUserProfilePath(winePrefixPath);
@@ -148,7 +78,7 @@ const restoreLudusaviBackup = (
   // 1. Resolve every (source, destination) pair up front, rejecting anything
   //    with a `..` traversal segment (artifacts can be authored on another
   //    machine — never let one write outside its resolved target).
-  const jobs: { sourcePath: string; destinationPath: string }[] = [];
+  const unplannedJobs: { sourcePath: string; destinationPath: string }[] = [];
   const hasTraversal = (p: string) =>
     p.split(/[\\/]/).some((seg) => seg === "..");
 
@@ -159,84 +89,38 @@ const restoreLudusaviBackup = (
         key
       );
       if (hasTraversal(sourcePathWithDrives) || hasTraversal(key)) {
-        logger.error(`Skipping path-traversal entry in restore: ${key}`);
-        return;
+        throw new Error(`Unsafe path-traversal entry in save artifact: ${key}`);
       }
 
       const sourcePath = path.join(gameBackupPath, sourcePathWithDrives);
-      const destinationPath = remapMissingDrive(
-        transformLudusaviBackupPathIntoWindowsPath(key, artifactWinePrefixPath)
-          .replace(
-            homeDir,
-            addWinePrefixToWindowsPath(userProfilePath, winePrefixPath)
-          )
-          .replace(
-            publicProfilePath,
-            addWinePrefixToWindowsPath(publicProfilePath, winePrefixPath)
-          ),
-        executablePath
-      );
+      const destinationPath = transformLudusaviBackupPathIntoWindowsPath(
+        key,
+        artifactWinePrefixPath
+      )
+        .replace(
+          homeDir,
+          addWinePrefixToWindowsPath(userProfilePath, winePrefixPath)
+        )
+        .replace(
+          publicProfilePath,
+          addWinePrefixToWindowsPath(publicProfilePath, winePrefixPath)
+        );
       if (fs.existsSync(sourcePath)) {
-        jobs.push({ sourcePath, destinationPath });
+        unplannedJobs.push({ sourcePath, destinationPath });
       }
     });
   });
-
-  // 2. Commit each file, moving any existing target aside first so it can be
-  //    restored on failure. Each record is tracked the MOMENT its backup is
-  //    made — BEFORE the replacement is moved in — so a failure between the two
-  //    steps still rolls the backup back (don't move `push` after the install).
-  const records: {
-    destinationPath: string;
-    backup: string | null;
-    installed: boolean;
-  }[] = [];
-  const suffix = `hydra-${crypto.randomUUID()}`;
-
-  try {
-    for (const { sourcePath, destinationPath } of jobs) {
-      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-
-      let backup: string | null = null;
-      if (fs.existsSync(destinationPath)) {
-        backup = `${destinationPath}.${suffix}.bak`;
-        moveFile(destinationPath, backup);
-      }
-
-      const record = { destinationPath, backup, installed: false };
-      records.push(record);
-
-      logger.info(`Restoring ${sourcePath} -> ${destinationPath}`);
-      moveFile(sourcePath, destinationPath);
-      record.installed = true;
-    }
-  } catch (err) {
-    // 3. Roll back in REVERSE: remove any file we installed, then put the
-    //    backup back. Leaves every save exactly as it was before the restore.
-    logger.error("Restore failed — rolling back", err);
-    for (const { destinationPath, backup, installed } of records.reverse()) {
-      try {
-        if (installed && fs.existsSync(destinationPath)) {
-          fs.rmSync(destinationPath);
-        }
-        if (backup && fs.existsSync(backup)) moveFile(backup, destinationPath);
-      } catch (rollbackErr) {
-        logger.error(`Rollback failed for ${destinationPath}`, rollbackErr);
-      }
-    }
-    throw err;
-  }
-
-  // 4. Whole set committed — drop the backups.
-  for (const { backup } of records) {
-    if (backup && fs.existsSync(backup)) {
-      try {
-        fs.rmSync(backup);
-      } catch {
-        /* best effort */
-      }
-    }
-  }
+  const jobs = planSaveRestoreJobs(
+    unplannedJobs,
+    allowedDestinationPaths,
+    gameBackupPath
+  );
+  commitSaveRestoreJobs(jobs, {
+    onInstall: ({ sourcePath, destinationPath }) =>
+      logger.info(`Restoring ${sourcePath} -> ${destinationPath}`),
+    onRollbackError: (destinationPath, error) =>
+      logger.error(`Rollback failed for ${destinationPath}`, error),
+  });
 };
 
 /**
@@ -255,6 +139,31 @@ export const restoreGameArtifact = async (
       game?.winePrefixPath,
       objectId
     );
+    const currentHomeDir = normalizePath(
+      CloudSync.getWindowsLikeUserProfilePath(effectiveWinePrefixPath)
+    );
+    const artifactMetadata =
+      await UploadcareSync.getSaveArtifactRestoreMetadata(gameArtifactId);
+
+    const plan = await resolveSaveBackupPlan(shop, objectId);
+    let allowedDestinationPaths =
+      plan.status === "ready" && plan.paths.length > 0 ? plan.paths : [];
+    if (
+      allowedDestinationPaths.length === 0 &&
+      (await systemForGame(shop, objectId))
+    ) {
+      allowedDestinationPaths = await resolveEmulatorRestorePatterns(
+        shop,
+        objectId
+      );
+    }
+    if (allowedDestinationPaths.length === 0) {
+      throw new Error(
+        plan.status === "unresolved"
+          ? plan.reason
+          : "No current per-game save destination is available for this artifact."
+      );
+    }
 
     // gameArtifactId is now an R2 object key (e.g. "users/x/saves/steam/1/..tar")
     // which contains slashes — sanitize before using it as a local filename so
@@ -301,12 +210,12 @@ export const restoreGameArtifact = async (
     restoreLudusaviBackup(
       backupPath,
       gameFolderName,
-      normalizePath(
-        CloudSync.getWindowsLikeUserProfilePath(effectiveWinePrefixPath)
-      ),
+      artifactMetadata.homeDir
+        ? normalizePath(artifactMetadata.homeDir)
+        : currentHomeDir,
       effectiveWinePrefixPath,
-      effectiveWinePrefixPath,
-      game?.executablePath
+      artifactMetadata.winePrefixPath ?? effectiveWinePrefixPath,
+      allowedDestinationPaths
     );
 
     fs.unlinkSync(zipLocation);

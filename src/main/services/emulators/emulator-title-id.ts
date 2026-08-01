@@ -25,6 +25,12 @@ import type { EmulatorSystem } from "@types";
 
 const HEX16 = /\b((?:0100|0004|0005)[0-9a-f]{12})\b/i;
 
+const formatLittleEndianTitleId = (value: Buffer): string =>
+  Buffer.from(value).reverse().toString("hex").toLowerCase();
+
+const isUsableTitleId = (value: string): boolean =>
+  /^[0-9a-f]{16}$/.test(value) && value !== "0".repeat(16);
+
 /** Read the Switch title id (16 hex) from an NSP's embedded ticket, if present. */
 function readNspTitleId(romPath: string): string | null {
   let fd: number | null = null;
@@ -73,6 +79,98 @@ function readNspTitleId(romPath: string): string | null {
   }
 }
 
+/**
+ * Convert a Switch update/AOC title id to the base application's title id.
+ *
+ * Switch updates use `base + 0x800`. AOC ids normally occupy the following
+ * 0x1000 block (`base + 0x1000 + index`). Some filename sets also use the
+ * older `...0c00` DLC convention that GameHub already recognises, so preserve
+ * compatibility with it as well. Base ids whose low 12 bits are zero are
+ * returned unchanged (including games such as Echoes of Wisdom whose base id
+ * ends in `c000`, rather than the often-assumed `0000`).
+ */
+export function normalizeSwitchTitleId(titleId: string): string | null {
+  const normalized = titleId.trim().toLowerCase();
+  if (!isUsableTitleId(normalized) || !normalized.startsWith("0100")) {
+    return null;
+  }
+
+  let numeric = BigInt(`0x${normalized}`);
+  const low = Number(numeric & 0xfffn);
+
+  if (low === 0x800) {
+    numeric -= 0x800n;
+  } else if (low > 0 && low < 0x800) {
+    // AOC ids live in the 0x1000 block immediately after the base title. Drop
+    // the content index and then step back to the application's block.
+    numeric = (numeric & ~0xfffn) - 0x1000n;
+  } else if (low === 0xc00) {
+    // Compatibility with the `...0c00` DLC naming convention accepted by the
+    // existing ROM classifier.
+    numeric -= 0xc00n;
+  }
+
+  return numeric.toString(16).padStart(16, "0");
+}
+
+/**
+ * Read a 3DS title id directly from an NCSD cartridge image (`.3ds`/`.cci`) or
+ * an NCCH executable image (`.cxi`). Both formats store the 64-bit id little
+ * endian in their fixed header. This avoids depending on filenames containing
+ * a title id, which normal No-Intro names generally do not.
+ */
+export function read3dsTitleId(romPath: string): string | null {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(romPath, "r");
+    const header = Buffer.alloc(0x200);
+    const read = fs.readSync(fd, header, 0, header.length, 0);
+    if (read < 0x120) return null;
+
+    const magic = header.toString("ascii", 0x100, 0x104);
+    if (magic === "NCCH") {
+      const titleId = formatLittleEndianTitleId(header.subarray(0x118, 0x120));
+      return isUsableTitleId(titleId) ? titleId : null;
+    }
+    if (magic !== "NCSD") return null;
+
+    // 0x108 in an NCSD header is the media id. It often equals the application
+    // id, but the authoritative program id lives in the first NCCH partition.
+    // Partition offsets begin at 0x120 and are expressed in 0x200-byte media
+    // units. Probe every declared partition and accept only a real NCCH header.
+    for (let partition = 0; partition < 8; partition++) {
+      const tableOffset = 0x120 + partition * 8;
+      const mediaUnitOffset = header.readUInt32LE(tableOffset);
+      if (mediaUnitOffset === 0) continue;
+
+      const partitionOffset = mediaUnitOffset * 0x200;
+      const ncch = Buffer.alloc(0x200);
+      const partitionRead = fs.readSync(
+        fd,
+        ncch,
+        0,
+        ncch.length,
+        partitionOffset
+      );
+      if (
+        partitionRead < 0x120 ||
+        ncch.toString("ascii", 0x100, 0x104) !== "NCCH"
+      ) {
+        continue;
+      }
+
+      const titleId = formatLittleEndianTitleId(ncch.subarray(0x118, 0x120));
+      if (isUsableTitleId(titleId)) return titleId;
+    }
+
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) fs.closeSync(fd);
+  }
+}
+
 /** Read a GameCube/Wii disc's 6-char game code from the header (raw images). */
 function readDiscGameCode(romPath: string): string | null {
   const ext = path.extname(romPath).toLowerCase();
@@ -106,12 +204,14 @@ export function resolveConsoleSaveNeedle(
 
   if (system === "switch") {
     const fromNsp = readNspTitleId(romPath);
-    if (fromNsp) return fromNsp;
+    if (fromNsp) return normalizeSwitchTitleId(fromNsp);
     const m = HEX16.exec(base);
-    return m ? m[1].toLowerCase() : null;
+    return m ? normalizeSwitchTitleId(m[1]) : null;
   }
 
   if (system === "n3ds") {
+    const fromImage = read3dsTitleId(romPath);
+    if (fromImage) return fromImage;
     const m = HEX16.exec(base);
     return m ? m[1].toLowerCase() : null;
   }
@@ -155,5 +255,51 @@ export function searchSaveTreeForNeedle(
       else stack.push(full);
     }
   }
+  return matches;
+}
+
+/**
+ * Azahar stores a 3DS title id as two adjacent directory components:
+ * `<high-8>/<low-8>` (for example `00040000/00033600`). A generic substring
+ * search for the full 16-hex id can therefore never match it. Return only the
+ * complete per-title directories whose two components form the requested id.
+ */
+export function searchAzaharSaveTreeForTitleId(
+  roots: string[],
+  titleId: string
+): string[] {
+  const wanted = titleId.toLowerCase();
+  if (!/^[0-9a-f]{16}$/.test(wanted)) return [];
+
+  const high = wanted.slice(0, 8);
+  const low = wanted.slice(8);
+  const matches: string[] = [];
+  const stack = [...roots];
+  let visited = 0;
+
+  while (stack.length && visited < 20_000) {
+    const dir = stack.pop()!;
+    visited++;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    const parentName = path.basename(dir).toLowerCase();
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const full = path.join(dir, entry.name);
+      if (parentName === high && entry.name.toLowerCase() === low) {
+        matches.push(full);
+        // This directory is already the isolated title root. Do not descend
+        // and accidentally return nested data/extdata folders as duplicates.
+        continue;
+      }
+      stack.push(full);
+    }
+  }
+
   return matches;
 }

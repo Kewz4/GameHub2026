@@ -13,8 +13,17 @@ import { getPs1MemcardDirs } from "./ps1-memcard-dirs";
 import { readGamesYml, buildPathToTitleIdIndex } from "./emulation-cloud-saves";
 import {
   resolveConsoleSaveNeedle,
+  searchAzaharSaveTreeForTitleId,
   searchSaveTreeForNeedle,
 } from "./emulator-title-id";
+import {
+  buildEmulatorRestorePatterns,
+  findRalibretroSaveFiles,
+  findRpcs3ProfileSaveRoots,
+  fingerprintSavePaths,
+  pathContainsFile,
+  resolveStoredGameRomPath,
+} from "./emulator-save-paths";
 
 /**
  * Resolves the on-disk save-data folders for the folder-based standalone
@@ -68,11 +77,15 @@ export const getEmulatorSaveRoots = (
       return system === "gc"
         ? [path.join(installDir, "User", "GC")]
         : [path.join(installDir, "User", "Wii")];
-    case "rpcs3":
-      // Per-game savedata folders live under this root; trophies excluded.
-      return [
-        path.join(installDir, "dev_hdd0", "home", "00000001", "savedata"),
-      ];
+    case "rpcs3": {
+      // Enumerate every RPCS3 home profile instead of silently ignoring saves
+      // outside the default 00000001 account. Preserve a creatable default for
+      // the open-folder UI when RPCS3 has not created a profile yet.
+      const profileRoots = findRpcs3ProfileSaveRoots(installDir);
+      return profileRoots.length > 0
+        ? profileRoots
+        : [path.join(installDir, "dev_hdd0", "home", "00000001", "savedata")];
+    }
     case "pcsx2": {
       // The memcard resolvers filter to dirs that EXIST, so before PCSX2 has
       // created a card they return [] — which would make the whole save
@@ -87,7 +100,8 @@ export const getEmulatorSaveRoots = (
       return dirs.length ? dirs : [path.join(installDir, "memcards")];
     }
     case "ralibretro":
-      // Flat per-ROM save files (.srm etc.) — small, backed up as one tree.
+      // Shared discovery root. The backup resolver narrows this to the current
+      // ROM's exact file(s); it is never registered wholesale.
       return [path.join(installDir, "Saves")];
     case "eden":
       // Eden (Yuzu/Sudachi derivative): in portable mode ALL data roots under
@@ -170,47 +184,76 @@ export const resolveEmulatorSaveLocation = async (
  * `games.yml` (its database of TITLE_ID → game path). We map the game's ROM path
  * to its PS3 title id, then keep only the savedata subfolders whose name carries
  * that id (PS3 savedata dirs are named `<TITLE_ID>...`). Returns null when the
- * title id can't be resolved (game not yet registered by RPCS3) so callers fall
- * back to the whole savedata tree.
+ * title id can't be resolved (game not yet registered by RPCS3); automatic
+ * backup treats that as unisolatable and does not capture a whole profile.
  */
 const resolvePs3SaveSubfolders = async (
   loc: EmulatorSaveLocation,
   shop: GameShop,
   objectId: string
 ): Promise<string[] | null> => {
+  const titleId = await resolvePs3TitleId(loc, shop, objectId);
+  if (!titleId) return null;
+
+  const subfolders: string[] = [];
+  for (const savedataRoot of loc.folders) {
+    try {
+      subfolders.push(
+        ...fs
+          .readdirSync(savedataRoot, { withFileTypes: true })
+          .filter(
+            (entry) =>
+              entry.isDirectory() &&
+              entry.name.toLowerCase().includes(titleId.toLowerCase())
+          )
+          .map((entry) => path.join(savedataRoot, entry.name))
+      );
+    } catch {
+      // This profile has no savedata directory yet.
+    }
+  }
+  return subfolders;
+};
+
+const resolvePs3TitleId = async (
+  loc: EmulatorSaveLocation,
+  shop: GameShop,
+  objectId: string
+): Promise<string | null> => {
   const game = await gamesSublevel
     .get(levelKeys.game(shop, objectId))
     .catch(() => null);
-  const romPath = game?.executablePath;
+  const romPath = resolveStoredGameRomPath(game);
   if (!romPath) return null;
 
   const index = buildPathToTitleIdIndex(await readGamesYml(loc.executablePath));
   const norm = path.normalize(romPath).replace(/[\\/]+$/, "");
-  const titleId =
+  let titleId =
     index.get(norm) ??
     index.get(path.basename(norm)) ??
     index.get(path.basename(path.dirname(norm))) ??
     null;
-  if (!titleId) return null;
-
-  const savedataRoot = loc.folders[0];
-  let subfolders: string[] = [];
-  try {
-    subfolders = fs
-      .readdirSync(savedataRoot, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && e.name.includes(titleId))
-      .map((e) => path.join(savedataRoot, e.name));
-  } catch {
-    // savedata root doesn't exist yet — no saves for this title.
+  if (!titleId && process.platform === "win32") {
+    const candidates = new Set(
+      [norm, path.basename(norm), path.basename(path.dirname(norm))].map((p) =>
+        p.toLowerCase()
+      )
+    );
+    for (const [candidate, candidateTitleId] of index) {
+      if (candidates.has(candidate.toLowerCase())) {
+        titleId = candidateTitleId;
+        break;
+      }
+    }
   }
-  return subfolders;
+  return titleId;
 };
 
 /**
  * Generic per-title narrowing for the id-based folder emulators (Switch / 3DS /
  * Wii): derive the game's platform id from its ROM, then search the save tree
- * for the folder(s) named with it. Returns null when the id can't be read or no
- * matching folder exists yet, so callers fall back to the console-wide root.
+ * for the folder(s) named with it. Returns null when the id can't be read and
+ * an empty array when the id is known but no matching save exists.
  */
 const resolveNeedleMatches = async (
   loc: EmulatorSaveLocation,
@@ -227,10 +270,12 @@ const resolveNeedleMatches = async (
   const game = await gamesSublevel
     .get(levelKeys.game(shop, objectId))
     .catch(() => null);
-  const needle = resolveConsoleSaveNeedle(loc.system, game?.executablePath);
+  const romPath = resolveStoredGameRomPath(game);
+  const needle = resolveConsoleSaveNeedle(loc.system, romPath);
   if (!needle) return null;
-  const matches = searchSaveTreeForNeedle(loc.folders, needle);
-  return matches.length > 0 ? matches : null;
+  return loc.system === "n3ds"
+    ? searchAzaharSaveTreeForTitleId(loc.folders, needle)
+    : searchSaveTreeForNeedle(loc.folders, needle);
 };
 
 /**
@@ -246,6 +291,17 @@ export const resolveEmulatorGameSaveFolder = async (
 ): Promise<string | null> => {
   const loc = await resolveEmulatorSaveLocation(shop, objectId);
   if (!loc) return null;
+
+  if (loc.binary === "ralibretro") {
+    const game = await gamesSublevel
+      .get(levelKeys.game(shop, objectId))
+      .catch(() => null);
+    const romPath = resolveStoredGameRomPath(game);
+    if (romPath) {
+      const saves = findRalibretroSaveFiles(loc.folders, romPath);
+      if (saves.length > 0) return path.dirname(saves[0]);
+    }
+  }
 
   if (loc.system === "wiiu") {
     const titleId = await resolveWiiuTitleId(shop, objectId);
@@ -291,49 +347,19 @@ export const resolveEmulatorGameSaveFolder = async (
 };
 
 /**
- * Cheap fingerprint of a set of save folders: file count + total bytes + newest
- * mtime, from a bounded walk. Used to SKIP the whole backup pipeline (ludusavi
+ * Cheap fingerprint of save files and/or folders: file count + total bytes +
+ * newest mtime, from a bounded walk. Used to SKIP the backup pipeline (ludusavi
  * scan → copy → tar → upload) when nothing changed since the last upload —
  * the common case when a session ends without new progress.
  */
 export const fingerprintSaveFolders = (folders: string[]): string => {
-  let files = 0;
-  let bytes = 0;
-  let newest = 0;
-  let visited = 0;
-  const stack = [...folders];
-  while (stack.length && visited < 20_000) {
-    const dir = stack.pop()!;
-    visited++;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const e of entries) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) stack.push(full);
-      else {
-        try {
-          const st = fs.statSync(full);
-          files += 1;
-          bytes += st.size;
-          if (st.mtimeMs > newest) newest = st.mtimeMs;
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-  }
-  return `${files}:${bytes}:${Math.floor(newest)}`;
+  return fingerprintSavePaths(folders);
 };
 
 /**
- * Folders to register with Ludusavi for a console game's backup. Cemu narrows
- * to the per-title folder (so a restore doesn't clobber every game's saves);
- * other emulators back up their whole save root (their per-title layout can't
- * be resolved reliably yet).
+ * Isolated paths to register with Ludusavi for a console game's backup. A
+ * mapper that cannot prove a per-game path returns no paths rather than risking
+ * a console-wide or shared-memory-card restore over unrelated games.
  */
 export const resolveEmulatorBackupFolders = async (
   shop: GameShop,
@@ -342,27 +368,109 @@ export const resolveEmulatorBackupFolders = async (
   const loc = await resolveEmulatorSaveLocation(shop, objectId);
   if (!loc) return [];
 
+  // RALibretro's Saves directory is shared by every core and game. Register
+  // only this ROM's exact save payload; if it has not saved yet, there is
+  // nothing safe to upload.
+  if (loc.binary === "ralibretro") {
+    const game = await gamesSublevel
+      .get(levelKeys.game(shop, objectId))
+      .catch(() => null);
+    const romPath = resolveStoredGameRomPath(game);
+    return romPath ? findRalibretroSaveFiles(loc.folders, romPath) : [];
+  }
+
+  // These formats use shared memory-card images. Uploading a whole card from a
+  // single game's automatic sync can overwrite unrelated games on restore;
+  // the dedicated memory-card manager is the safe per-save path instead.
+  if (
+    loc.binary === "pcsx2" ||
+    loc.binary === "duckstation" ||
+    (loc.binary === "dolphin" && loc.system === "gc")
+  ) {
+    return [];
+  }
+
   if (loc.system === "wiiu") {
-    const specific = await resolveEmulatorGameSaveFolder(shop, objectId);
-    if (specific && specific !== loc.folders[0] && fs.existsSync(specific)) {
-      return [specific];
-    }
+    const titleId = await resolveWiiuTitleId(shop, objectId);
+    if (!titleId || titleId.length !== 16) return [];
+    const titleRoot = path.join(
+      loc.folders[0],
+      titleId.slice(0, 8),
+      titleId.slice(8)
+    );
+    const userRoot = path.join(titleRoot, "user");
+    // A known Cemu title can already have its exact save container even when
+    // the first in-game save has not written a payload yet. Keep that precise
+    // per-title mapping visible (and usable for a future restore); upload still
+    // rejects an empty backup before anything reaches R2.
+    return fs.existsSync(userRoot) ? [userRoot] : [];
   }
 
-  // RPCS3: back up only this game's savedata folder(s) when resolvable — so a
-  // restore doesn't overwrite every PS3 game's saves.
+  // RPCS3: back up only this game's savedata folder(s), across every home
+  // profile. Never fall back to a whole profile when games.yml cannot identify
+  // the title or the game has no save.
   if (loc.binary === "rpcs3") {
-    const ps3 = await resolvePs3SaveSubfolders(loc, shop, objectId);
-    if (ps3 && ps3.length > 0) return ps3;
+    return (
+      (await resolvePs3SaveSubfolders(loc, shop, objectId))?.filter(
+        pathContainsFile
+      ) ?? []
+    );
   }
 
-  // Switch / 3DS / Wii: back up only this game's save folder(s) when its id
-  // resolves and the folder exists — otherwise the whole console tree.
+  // Switch / 3DS / Wii: only exact title-id matches are safe. `null` means the
+  // ROM format did not expose an id; an empty array means the id is known but
+  // this game has not saved yet. Neither case may capture the console-wide
+  // tree, which contains other games and emulator system data.
   const needleMatches = await resolveNeedleMatches(loc, shop, objectId);
-  if (needleMatches && needleMatches.length > 0) return needleMatches;
+  if (needleMatches) {
+    return needleMatches.filter(pathContainsFile);
+  }
 
-  // Only back up roots that actually exist — a game that never saved simply has
-  // nothing to back up (that's not an error). Filtering here also keeps Ludusavi
-  // from registering phantom paths.
-  return loc.folders.filter((dir) => fs.existsSync(dir));
+  return [];
+};
+
+/**
+ * Resolve exact destinations that are safe for restore even before this title
+ * has created a local save. Shared memory-card formats remain deliberately
+ * unsupported; their dedicated save manager is the only safe restore flow.
+ */
+export const resolveEmulatorRestorePatterns = async (
+  shop: GameShop,
+  objectId: string
+): Promise<string[]> => {
+  const loc = await resolveEmulatorSaveLocation(shop, objectId);
+  if (!loc) return [];
+  if (
+    loc.binary === "pcsx2" ||
+    loc.binary === "duckstation" ||
+    (loc.binary === "dolphin" && loc.system === "gc")
+  ) {
+    return [];
+  }
+
+  const game = await gamesSublevel
+    .get(levelKeys.game(shop, objectId))
+    .catch(() => null);
+  const romPath = resolveStoredGameRomPath(game);
+
+  let identity: string | null = null;
+  if (loc.system === "wiiu") {
+    identity = await resolveWiiuTitleId(shop, objectId);
+  } else if (loc.binary === "rpcs3") {
+    identity = await resolvePs3TitleId(loc, shop, objectId);
+  } else if (
+    loc.system === "switch" ||
+    loc.system === "n3ds" ||
+    loc.system === "wii"
+  ) {
+    identity = resolveConsoleSaveNeedle(loc.system, romPath);
+  }
+
+  return buildEmulatorRestorePatterns({
+    system: loc.system,
+    binary: loc.binary,
+    roots: loc.folders,
+    romPath,
+    identity,
+  });
 };

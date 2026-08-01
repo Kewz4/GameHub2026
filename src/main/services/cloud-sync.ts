@@ -2,7 +2,6 @@ import {
   db,
   levelKeys,
   gamesSublevel,
-  gamesShopAssetsSublevel,
 } from "@main/level";
 import type { UserPreferences } from "@types";
 import path from "node:path";
@@ -22,13 +21,13 @@ import i18next, { t } from "i18next";
 import { SystemPath } from "./system-path";
 import { Wine } from "./wine";
 import {
-  resolveEmulatorBackupFolders,
   fingerprintSaveFolders,
 } from "./emulators/emulator-save-dirs";
 import { invalidateCachedArtifacts } from "./cloud-artifacts-cache";
+import { resolveSaveBackupPlan } from "./save-backup-plan";
 
 /** Upload guardrails — a single game's save should never exceed these. */
-const MAX_SAVE_FILES = 50;
+const MAX_SAVE_FILES = 20_000;
 const MAX_SAVE_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
 
 export class CloudSync {
@@ -118,16 +117,6 @@ export class CloudSync {
     });
   }
 
-  private static async resolveGameTitle(
-    shop: GameShop,
-    objectId: string
-  ): Promise<string | null> {
-    const gameKey = levelKeys.game(shop, objectId);
-    const game = await gamesSublevel.get(gameKey).catch(() => null);
-    const assets = await gamesShopAssetsSublevel.get(gameKey).catch(() => null);
-    return game?.title ?? assets?.title ?? null;
-  }
-
   private static async bundleBackup(
     shop: GameShop,
     objectId: string,
@@ -144,43 +133,31 @@ export class CloudSync {
       }
     }
 
-    // Ludusavi's manifest is indexed by game title, not objectId
-    const gameTitle = await this.resolveGameTitle(shop, objectId);
-    if (!gameTitle) {
-      throw new Error(
-        `Cannot backup ${shop}:${objectId} — game title not found`
-      );
+    const plan = await resolveSaveBackupPlan(shop, objectId);
+    if (plan.status === "unresolved") {
+      throw new Error(plan.reason);
     }
 
-    // Resolve the canonical manifest name (exact-title matching is fragile)
-    const canonicalName =
-      (await Ludusavi.findCanonicalName(shop, gameTitle, objectId)) ??
-      gameTitle;
-
-    // Console/emulated games aren't in Ludusavi's manifest — their saves live in
-    // the (portable) emulator's save tree. Register those folders as a Ludusavi
-    // custom game keyed by the same name we back up under, so the existing
-    // backup → tar → cloud pipeline captures and restores them unchanged.
-    try {
-      const folders = await resolveEmulatorBackupFolders(shop, objectId);
-      if (folders.length > 0) {
-        await Ludusavi.addCustomGame(canonicalName, folders);
-      }
-    } catch (error) {
-      logger.error("Failed to register emulator save folders", {
-        shop,
-        objectId,
-        error,
-      });
-    }
-
-    await Ludusavi.backupGame(shop, canonicalName, backupPath, winePrefix);
+    const backupResult = await Ludusavi.backupGame(
+      shop,
+      plan.backupName,
+      backupPath,
+      winePrefix
+    );
 
     // Guardrails (adopted from PR #2538): a mis-scoped save folder — e.g. an
     // emulator save dir pointed at something huge — shouldn't balloon into an
     // unbounded upload. Abort loudly before tarring if the backup blows past
     // the caps rather than silently pushing gigabytes to the cloud.
     const { fileCount, totalBytes } = CloudSync.measureBackup(backupPath);
+    if (
+      backupResult.overall.totalGames === 0 ||
+      (fileCount === 0 && backupResult.overall.totalBytes === 0)
+    ) {
+      throw new Error(
+        `No save data was found for ${plan.title}. Start the game and create a save, or choose its save folder manually.`
+      );
+    }
     if (fileCount > MAX_SAVE_FILES || totalBytes > MAX_SAVE_BYTES) {
       throw new Error(
         `Refusing to upload ${shop}:${objectId} — save is too large ` +
@@ -250,9 +227,18 @@ export class CloudSync {
 
     let fingerprint: string | null = null;
     try {
-      const folders = await resolveEmulatorBackupFolders(shop, objectId);
-      if (folders.length > 0) {
-        fingerprint = fingerprintSaveFolders(folders);
+      const plan = await resolveSaveBackupPlan(shop, objectId);
+      if (plan.status === "unresolved") {
+        logger.info(
+          `[cloud-sync] skipping automatic backup for ${shop}:${objectId} — ${plan.reason}`
+        );
+        return;
+      }
+      if (
+        plan.paths.length > 0 &&
+        (plan.source === "emulator" || plan.source === "manual")
+      ) {
+        fingerprint = fingerprintSaveFolders(plan.paths);
         if (fingerprint && fingerprint === game?.lastCloudSaveFingerprint) {
           logger.info(
             `[cloud-sync] skipping automatic backup for ${shop}:${objectId} — saves unchanged`

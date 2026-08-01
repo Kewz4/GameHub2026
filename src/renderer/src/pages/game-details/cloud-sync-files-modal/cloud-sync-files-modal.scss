@@ -38,4 +38,28 @@
   &__custom-path {
     margin-top: calc(globals.$spacing-unit * 2);
   }
+
+  &__mapping-error {
+    padding: calc(globals.$spacing-unit * 1.5);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 45%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+    color: var(--color-danger);
+  }
+
+  &__mapping-warning {
+    margin-top: calc(globals.$spacing-unit * 1.5);
+    padding: calc(globals.$spacing-unit * 1.5);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+    color: var(--color-warning);
+  }
+
+  &__resolved-paths {
+    margin: calc(globals.$spacing-unit * 1.5) 0 0;
+    padding-left: calc(globals.$spacing-unit * 3);
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
 }

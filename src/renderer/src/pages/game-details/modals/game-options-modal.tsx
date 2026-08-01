@@ -194,11 +194,7 @@ export function GameOptionsModal({
   }, [visible]);
 
   useEffect(() => {
-    if (
-      visible &&
-      game.shop !== "custom" &&
-      window.electron.platform === "win32"
-    ) {
+    if (visible && window.electron.platform === "win32") {
       setLoadingSaveFolder(true);
       setSaveFolderPath(null);
       window.electron
