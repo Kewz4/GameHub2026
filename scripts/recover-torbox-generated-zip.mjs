@@ -244,7 +244,16 @@ async function torBoxJson(url, token) {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.success !== true) {
-    throw new Error(`TorBox API request failed (HTTP ${response.status})`);
+    const error = new Error(`TorBox API request failed (HTTP ${response.status})`);
+    error.status = response.status;
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const resetAt = Number(response.headers.get("x-ratelimit-reset"));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      error.retryAfterMs = retryAfter * 1_000;
+    } else if (Number.isFinite(resetAt) && resetAt > 0) {
+      error.retryAfterMs = Math.max(0, resetAt * 1_000 - Date.now());
+    }
+    throw error;
   }
   return payload.data;
 }
@@ -269,11 +278,23 @@ async function requestDownloadLink(token, webId, fileId) {
   url.searchParams.set("web_id", String(webId));
   if (fileId == null) url.searchParams.set("zip_link", "true");
   else url.searchParams.set("file_id", String(fileId));
-  const link = await torBoxJson(url, token);
-  if (typeof link !== "string" || !/^https:\/\//i.test(link)) {
-    throw new Error("TorBox returned an invalid download link");
+  for (let attempt = 1; attempt <= MAX_TRANSFER_RETRIES; attempt += 1) {
+    try {
+      const link = await torBoxJson(url, token);
+      if (typeof link !== "string" || !/^https:\/\//i.test(link)) {
+        throw new Error("TorBox returned an invalid download link");
+      }
+      return link;
+    } catch (error) {
+      if (error?.status !== 429 || attempt === MAX_TRANSFER_RETRIES) throw error;
+      const delay = Math.max(60_000, Number(error.retryAfterMs) || 0);
+      console.log(
+        `[recovery] TorBox API cooldown; retrying the signed-link request in ${Math.ceil(delay / 1000)}s (${attempt}/${MAX_TRANSFER_RETRIES})`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
-  return link;
+  throw new Error("TorBox did not provide a download link after its cooldown");
 }
 
 function parseContentRange(response) {
@@ -455,10 +476,13 @@ async function appendMissingRawBytes({
   let rawOffset = initialPayloadBytes;
   let bytesSinceSync = 0;
   let retry = 0;
+  let cachedLink = null;
 
   try {
     while (rawOffset < rawSize) {
       try {
+        cachedLink ??= await getRawLink();
+        const link = cachedLink;
         const segments = [];
         let segmentStart = rawOffset;
         while (
@@ -476,7 +500,7 @@ async function appendMissingRawBytes({
         const results = await Promise.allSettled(
           segments.map((segment) =>
             fetchExactRange(
-              getRawLink,
+              async () => link,
               segment.start,
               segment.end,
               rawSize
@@ -526,10 +550,13 @@ async function appendMissingRawBytes({
         const failed = results[contiguousResults];
         if (failed?.status === "rejected") throw failed.reason;
       } catch (error) {
+        cachedLink = null;
         retry += 1;
         if (retry > MAX_TRANSFER_RETRIES) throw error;
-        const delay = Math.min(1000 * 2 ** (retry - 1), 15000);
         const reason = error instanceof Error ? error.message : String(error);
+        const delay = reason.includes("HTTP 429")
+          ? 60_000
+          : Math.min(1000 * 2 ** (retry - 1), 15_000);
         console.log(
           `[recovery] connection interrupted (${reason}); refreshing the TorBox link and resuming in ${delay / 1000}s (${retry}/${MAX_TRANSFER_RETRIES})`
         );
@@ -576,7 +603,10 @@ async function runRecovery(options) {
 
   const rawSize = target.size;
   const getRawLink = () => requestDownloadLink(token, web.id, target.id);
-  const expectedZipSize = await getGeneratedZipSize(token, web.id);
+  const suppliedZipSize = Number(options.expected_zip_size);
+  const expectedZipSize = Number.isSafeInteger(suppliedZipSize) && suppliedZipSize > rawSize
+    ? suppliedZipSize
+    : await getGeneratedZipSize(token, web.id);
 
   if (
     initialStats.size === expectedZipSize &&
@@ -586,11 +616,12 @@ async function runRecovery(options) {
     return;
   }
 
+  const verificationLink = await getRawLink();
   const payloadBytes = await verifyPayloadIdentity({
     partialPath,
     header,
     rawSize,
-    getRawLink,
+    getRawLink: async () => verificationLink,
   });
   const remainingRaw = rawSize - payloadBytes;
   console.log(
