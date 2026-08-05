@@ -12,9 +12,52 @@ export type OverlayProcessCandidate = OverlayProcess & { score: number };
 const normalizePath = (value: string) => path.normalize(value).toLowerCase();
 const PROTOCOL_PATH = /^[a-z][a-z\d+.-]*:\/\//i;
 const UNREAL_SHIPPING_EXECUTABLE = /(?:^|-)(?:win64|wingdk)-shipping\.exe$/i;
+const LAUNCH_HELPER_EXECUTABLE =
+  /(?:steamclient[_-]?loader|(?:^|[-_.])(?:launcher|bootstrap)(?:[-_.]|$))/i;
 const AUXILIARY_EXECUTABLE =
-  /(?:crash|report|uninstall|updat(?:e|er)|launcher|bootstrap|easyanticheat|eac|battleye|beservice)/i;
+  /(?:crash|report|uninstall|updat(?:e|er)|launcher|bootstrap|steamclient[_-]?loader|easyanticheat|eac|battleye|beservice)/i;
 const FOREGROUND_PROCESS_BONUS = 5_000;
+// A foreground Unreal render child must beat an exact, still-running launch
+// helper (Khazan uses steamclient_loader_x64.exe as its configured entrypoint),
+// without letting a generic same-directory utility overpower an exact game.
+const UNREAL_FOREGROUND_RENDER_BONUS = 3_000;
+
+export const isOverlayLaunchHelperProcess = (
+  process: Pick<OverlayProcess, "exe" | "name">
+) =>
+  LAUNCH_HELPER_EXECUTABLE.test(
+    path.basename(process.exe ? normalizePath(process.exe) : process.name)
+  );
+
+/**
+ * Launch helpers remain valid session roots, but they are never render targets.
+ * Keeping this filter in the overlay consumer (rather than globally removing
+ * the processes) lets play-time/session tracking continue to follow them.
+ */
+export const excludeOverlayLaunchHelpers = <
+  T extends Pick<OverlayProcess, "exe" | "name">,
+>(
+  candidates: T[]
+) => candidates.filter((candidate) => !isOverlayLaunchHelperProcess(candidate));
+
+/**
+ * Select an actual render window, not merely the best executable-name match.
+ * When a game is minimized there may be no eligible visible window, so retain
+ * the already validated PID while it still exists. Never fall back to another
+ * hidden launcher after that PID exits.
+ */
+export const selectOverlayRenderProcess = <
+  T extends Pick<OverlayProcess, "pid">,
+>(
+  candidates: T[],
+  visiblePids: ReadonlySet<number>,
+  currentPid: number
+) =>
+  candidates.find((candidate) => visiblePids.has(candidate.pid)) ??
+  candidates.find(
+    (candidate) => currentPid > 0 && candidate.pid === currentPid
+  ) ??
+  null;
 
 const isWithinDirectory = (candidate: string, directory: string) => {
   const relative = path.relative(directory, candidate);
@@ -86,7 +129,15 @@ export const rankOverlayGameProcesses = (
       // but it must not overpower an exact configured executable. A huge
       // foreground bonus previously let unrelated utilities in the install
       // directory steal the target and restart PresentMon every two seconds.
-      if (candidate.pid === foregroundPid) score += FOREGROUND_PROCESS_BONUS;
+      if (candidate.pid === foregroundPid) {
+        score += FOREGROUND_PROCESS_BONUS;
+        if (
+          executable &&
+          UNREAL_SHIPPING_EXECUTABLE.test(path.basename(executable))
+        ) {
+          score += UNREAL_FOREGROUND_RENDER_BONUS;
+        }
+      }
 
       return { ...candidate, score };
     })

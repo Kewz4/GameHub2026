@@ -7,6 +7,7 @@ import "./autoupdater";
 import "./main-window-controls";
 import "./emulators";
 import "./friends";
+import "./file-explorer";
 import "./big-picture";
 import "./catalogue";
 import "./cloud-save";

@@ -280,7 +280,7 @@ const resolveNeedleMatches = async (
 
 /**
  * Resolve the single best save folder to OPEN for a specific game. For Cemu we
- * narrow to the exact per-title folder (mlc01/usr/save/<high>/<low>/user) when
+ * narrow to the exact per-title container (mlc01/usr/save/<high>/<low>) when
  * the game's title id is readable; otherwise (and for other emulators, whose
  * per-title id can't be derived without header parsing) we return the
  * console-wide save root, which still lands the user in the right place.
@@ -308,10 +308,8 @@ export const resolveEmulatorGameSaveFolder = async (
     if (titleId && titleId.length === 16) {
       const high = titleId.slice(0, 8);
       const low = titleId.slice(8);
-      const withUser = path.join(loc.folders[0], high, low, "user");
-      if (fs.existsSync(withUser)) return withUser;
-      const withoutUser = path.join(loc.folders[0], high, low);
-      if (fs.existsSync(withoutUser)) return withoutUser;
+      const titleRoot = path.join(loc.folders[0], high, low);
+      if (fs.existsSync(titleRoot)) return titleRoot;
     }
   }
 
@@ -398,12 +396,12 @@ export const resolveEmulatorBackupFolders = async (
       titleId.slice(0, 8),
       titleId.slice(8)
     );
-    const userRoot = path.join(titleRoot, "user");
     // A known Cemu title can already have its exact save container even when
     // the first in-game save has not written a payload yet. Keep that precise
-    // per-title mapping visible (and usable for a future restore); upload still
-    // rejects an empty backup before anything reaches R2.
-    return fs.existsSync(userRoot) ? [userRoot] : [];
+    // per-title mapping visible. The container includes both `meta` and `user`;
+    // backing up only `user` is not a complete Cemu title save and did not
+    // match the exact path exposed to the user in Game Details.
+    return fs.existsSync(titleRoot) ? [titleRoot] : [];
   }
 
   // RPCS3: back up only this game's savedata folder(s), across every home

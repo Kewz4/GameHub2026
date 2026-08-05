@@ -1,4 +1,9 @@
-import { Downloader, DownloadError, FILE_EXTENSIONS_TO_EXTRACT } from "@shared";
+import {
+  Downloader,
+  DownloadError,
+  FILE_EXTENSIONS_TO_EXTRACT,
+  shouldExtractCustomDownload,
+} from "@shared";
 import { WindowManager } from "../window-manager";
 import {
   publishDownloadCompleteNotification,
@@ -99,6 +104,7 @@ export class DownloadManager {
     progress: number;
     downloadSpeed: number;
     eta: number;
+    phase: "checking-cache" | "cached" | "preparing" | "direct-fallback";
   } | null = null;
   private static startGeneration = 0;
 
@@ -180,7 +186,9 @@ export class DownloadManager {
     return pathValue
       .split(/[\\/]+/)
       .map((segment) => this.sanitizeFilename(segment))
-      .filter(Boolean)
+      .filter(
+        (segment) => Boolean(segment) && segment !== "." && segment !== ".."
+      )
       .join("/");
   }
 
@@ -465,6 +473,7 @@ export class DownloadManager {
           progress: prep?.progress ?? 0,
           gameId: downloadId,
           download,
+          preparationPhase: prep?.phase ?? "checking-cache",
         };
       } catch {
         return null;
@@ -798,13 +807,29 @@ export class DownloadManager {
   ) {
     publishDownloadCompleteNotification(game);
 
+    // A signed/direct URL may not reveal its filename until Content-Disposition
+    // arrives. Re-evaluate extraction using the final on-disk name so a raw
+    // portable .exe becomes playable instead of being sent to 7-Zip. Installers
+    // are still kept as completed library downloads, but executable binding
+    // rejects them below.
+    const shouldExtract = download.customDownload
+      ? shouldExtractCustomDownload(
+          download.folderName,
+          download.automaticallyExtract
+        )
+      : download.automaticallyExtract;
+    const completedDownload =
+      shouldExtract === download.automaticallyExtract
+        ? download
+        : { ...download, automaticallyExtract: shouldExtract };
+
     const userPreferences = await db.get<string, UserPreferences | null>(
       levelKeys.userPreferences,
       { valueEncoding: "json" }
     );
 
     const shouldSeed = await this.updateDownloadStatus(
-      download,
+      completedDownload,
       gameId,
       userPreferences?.seedAfterDownloadComplete
     );
@@ -827,17 +852,17 @@ export class DownloadManager {
       });
     }
 
-    if (download.automaticallyExtract) {
+    if (shouldExtract) {
       const shouldPauseSeedingForExtraction =
         shouldSeed && download.downloader === Downloader.Torrent;
 
       if (shouldPauseSeedingForExtraction) {
         await this.cancelDownload(gameId);
 
-        void this.handleExtraction(download, game)
-          .finally(() => this.bindEmulatorRomIfNeeded(download))
+        void this.handleExtraction(completedDownload, game)
+          .finally(() => this.bindEmulatorRomIfNeeded(completedDownload))
           .finally(() => {
-            this.resumeSeeding(download).catch((error) => {
+            this.resumeSeeding(completedDownload).catch((error) => {
               logger.error(
                 "[DownloadManager] Failed to resume seeding after extraction",
                 error
@@ -845,15 +870,15 @@ export class DownloadManager {
             });
           });
       } else {
-        void this.handleExtraction(download, game).finally(() =>
-          this.bindEmulatorRomIfNeeded(download)
+        void this.handleExtraction(completedDownload, game).finally(() =>
+          this.bindEmulatorRomIfNeeded(completedDownload)
         );
       }
     } else {
       const gameFilesManager = new GameFilesManager(game.shop, game.objectId);
       gameFilesManager.searchAndBindExecutable();
       // Raw ROM (no archive) — bind it directly so the Play button appears.
-      void this.bindEmulatorRomIfNeeded(download);
+      void this.bindEmulatorRomIfNeeded(completedDownload);
     }
 
     await this.processNextQueuedDownload();
@@ -1031,6 +1056,7 @@ export class DownloadManager {
     this.usingJsDownloader = false;
     this.jsDownloader = null;
     this.allDebridBatch = null;
+    this.torboxPrepareStatus = null;
     WindowManager.mainWindow?.setProgressBar(-1);
     WindowManager.sendToAppWindows("on-download-progress", null);
 
@@ -1117,6 +1143,7 @@ export class DownloadManager {
       this.usingJsDownloader = false;
       this.jsDownloader = null;
       this.allDebridBatch = null;
+      this.torboxPrepareStatus = null;
     }
   }
 
@@ -1177,10 +1204,26 @@ export class DownloadManager {
   }
 
   static async pauseDownload(downloadKey = this.downloadingGameId) {
+    const isPreparingJsDownload =
+      downloadKey === this.downloadingGameId &&
+      this.usingJsDownloader &&
+      this.isPreparingDownload &&
+      this.jsDownloader === null;
+
+    if (isPreparingJsDownload) {
+      // There is no local transfer to pause yet. Invalidate the TorBox poll;
+      // resume will resolve the same persisted TorBox job and continue from its
+      // current server-side progress.
+      this.startGeneration += 1;
+      this.isPreparingDownload = false;
+      this.usingJsDownloader = false;
+      this.torboxPrepareStatus = null;
+    }
+
     if (this.usingJsDownloader && this.jsDownloader) {
       logger.log("[DownloadManager] Pausing JS download");
       this.jsDownloader.pauseDownload();
-    } else if (downloadKey) {
+    } else if (downloadKey && !isPreparingJsDownload) {
       await PythonRPC.rpc
         .call("action", {
           action: "pause",
@@ -1225,6 +1268,7 @@ export class DownloadManager {
       this.isPreparingDownload = false;
       this.usingJsDownloader = false;
       this.allDebridBatch = null;
+      this.torboxPrepareStatus = null;
     } else if (downloadKey) {
       await PythonRPC.rpc
         .call("action", { action: "cancel", game_id: downloadKey })
@@ -1561,9 +1605,15 @@ export class DownloadManager {
 
   private static async getTorBoxDownloadOptions(
     download: Download,
-    resumingFilename?: string
+    resumingFilename?: string,
+    shouldContinue?: () => boolean
   ) {
-    this.torboxPrepareStatus = { progress: 0, downloadSpeed: 0, eta: -1 };
+    this.torboxPrepareStatus = {
+      progress: 0,
+      downloadSpeed: 0,
+      eta: -1,
+      phase: "checking-cache",
+    };
 
     // Multi-host racing: when this repack offers several hoster mirrors (and the
     // primary isn't a magnet), add each to TorBox, sample throughput for ~10s,
@@ -1609,15 +1659,40 @@ export class DownloadManager {
       (p) => {
         this.torboxPrepareStatus = p;
       },
-      download.targetFileName
+      download.targetFileName,
+      shouldContinue,
+      !download.customDownload,
+      resumingFilename
     );
     this.torboxPrepareStatus = null;
     if (!url) return null;
-    return this.buildDownloadOptions(
+    const resolvedFilename = resumingFilename || name;
+    const safeFilename = resolvedFilename
+      ? this.sanitizeRelativePath(resolvedFilename) || undefined
+      : undefined;
+    const options = this.buildDownloadOptions(
       url,
       download.downloadPath,
-      resumingFilename || name
+      safeFilename
     );
+    return {
+      ...options,
+      refreshUrl: async () => {
+        const refreshed = await TorBoxClient.getDownloadInfo(
+          chosenUri,
+          download.fileIndices,
+          undefined,
+          download.targetFileName,
+          shouldContinue,
+          !download.customDownload,
+          resumingFilename
+        );
+        if (!refreshed.url) {
+          throw new Error("TorBox returned no refreshed download URL");
+        }
+        return refreshed.url;
+      },
+    };
   }
 
   private static async getHydraDownloadOptions(
@@ -2099,15 +2174,28 @@ export class DownloadManager {
           this.allDebridBatch = null;
           void (async () => {
             try {
-              const options = await this.getJsDownloadOptions(download);
+              const options = await this.getTorBoxDownloadOptions(
+                download,
+                download.folderName || undefined,
+                () =>
+                  this.downloadingGameId === downloadId &&
+                  this.startGeneration === myGeneration
+              );
               if (!options) {
-                logger.error(
-                  "[DownloadManager] TorBox returned no download options"
+                await this.handleRuntimeDownloadError(
+                  downloadId,
+                  new Error("TorBox returned no download options")
                 );
-                this.isPreparingDownload = false;
-                this.usingJsDownloader = false;
-                this.downloadingGameId = null;
-                WindowManager.sendDownloadsUpdated?.();
+                return;
+              }
+
+              if (
+                this.downloadingGameId !== downloadId ||
+                this.startGeneration !== myGeneration
+              ) {
+                logger.log(
+                  "[DownloadManager] TorBox preparation was superseded; aborting start"
+                );
                 return;
               }
               this.jsDownloader = new JsHttpDownloader();
@@ -2116,20 +2204,41 @@ export class DownloadManager {
               );
               this.isPreparingDownload = false;
               this.logResolvedUrl(options.url);
-              this.jsDownloader.startDownload(options).catch((err) => {
+              this.jsDownloader.startDownload(options).catch(async (err) => {
+                if (
+                  this.downloadingGameId !== downloadId ||
+                  this.startGeneration !== myGeneration
+                ) {
+                  logger.log(
+                    "[DownloadManager] Ignoring stale TorBox transfer error after pause/cancel"
+                  );
+                  return;
+                }
+
                 logger.error("[DownloadManager] JS download error:", err);
-                this.usingJsDownloader = false;
-                this.jsDownloader = null;
-                this.allDebridBatch = null;
+                await this.handleRuntimeDownloadError(downloadId, err);
               });
             } catch (err) {
-              this.isPreparingDownload = false;
-              this.usingJsDownloader = false;
-              this.downloadingGameId = null;
-              this.allDebridBatch = null;
-
+              if (
+                err instanceof Error &&
+                err.name === "TorBoxPreparationCancelledError"
+              ) {
+                logger.log(
+                  "[DownloadManager] TorBox preparation stopped after cancellation"
+                );
+                return;
+              }
+              if (
+                this.downloadingGameId !== downloadId ||
+                this.startGeneration !== myGeneration
+              ) {
+                logger.log(
+                  "[DownloadManager] Ignoring stale TorBox preparation error after pause/cancel"
+                );
+                return;
+              }
               logger.error("[DownloadManager] TorBox prepare error:", err);
-              WindowManager.sendDownloadsUpdated?.();
+              await this.handleRuntimeDownloadError(downloadId, err);
             }
           })();
         } else {

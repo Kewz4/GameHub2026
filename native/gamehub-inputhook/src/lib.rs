@@ -39,10 +39,10 @@
 #![cfg(windows)]
 
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, FALSE, HANDLE, HMODULE, INVALID_HANDLE_VALUE, TRUE,
+    CloseHandle, GetLastError, FALSE, HANDLE, HMODULE, INVALID_HANDLE_VALUE, TRUE, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, MODULEENTRY32W, TH32CS_SNAPMODULE,
@@ -54,7 +54,10 @@ use windows_sys::Win32::System::Memory::{
     MapViewOfFile, OpenFileMappingW, VirtualProtect, VirtualQuery, FILE_MAP_READ,
     MEMORY_BASIC_INFORMATION, PAGE_READWRITE,
 };
-use windows_sys::Win32::System::Threading::{CreateThread, Sleep};
+use windows_sys::Win32::System::Threading::{
+    CreateThread, GetCurrentProcessId, OpenProcess, Sleep, WaitForSingleObject,
+    PROCESS_QUERY_LIMITED_INFORMATION,
+};
 
 /// Name of the shared flag GameHub writes. Session-local: the launcher and the
 /// game it started always share a session, and `Global\` would demand
@@ -70,6 +73,15 @@ const FLAG_MAPPING_NAME: &[u16] = &[
 /// Set once the shared flag view is mapped; until then nothing is gated.
 static FLAG_VIEW: AtomicUsize = AtomicUsize::new(0);
 static HOOKS_READY: AtomicBool = AtomicBool::new(false);
+static HOOK_STATUS: AtomicU32 = AtomicU32::new(0);
+static OWNER_ALIVE: AtomicBool = AtomicBool::new(false);
+static OWNER_PID: AtomicU32 = AtomicU32::new(0);
+
+const INPUT_GATE_WORDS: usize = 3;
+const OWNER_PID_WORD: usize = 0;
+const TARGET_PID_WORD: usize = 1;
+const BLOCKED_WORD: usize = 2;
+const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
 
 /// Real implementations, captured before any patching.
 static REAL_XINPUT_GET_STATE: AtomicUsize = AtomicUsize::new(0);
@@ -93,9 +105,19 @@ fn blocking() -> bool {
     if view == 0 {
         return false;
     }
-    // Single aligned u32 written by the launcher; a relaxed volatile read is
-    // all this needs and it sits on the game's input hot path.
-    unsafe { std::ptr::read_volatile(view as *const u32) != 0 }
+    let words = view as *const u32;
+    // Aligned u32 stores are atomic on Windows. The launcher writes BLOCKED
+    // last, so any concurrent target transition fails open.
+    let blocked = unsafe { std::ptr::read_volatile(words.add(BLOCKED_WORD)) };
+    if blocked == 0 {
+        return false;
+    }
+    let owner = unsafe { std::ptr::read_volatile(words.add(OWNER_PID_WORD)) };
+    let target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
+    owner != 0
+        && owner == OWNER_PID.load(Ordering::Acquire)
+        && OWNER_ALIVE.load(Ordering::Acquire)
+        && target == unsafe { GetCurrentProcessId() }
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +253,7 @@ unsafe extern "system" fn hook_get_raw_input_buffer(
 
 /// Covers late binding: a game that resolves `XInputGetState` at runtime would
 /// otherwise sail straight past every patched IAT entry.
-unsafe extern "system" fn hook_get_proc_address(
-    module: HMODULE,
-    name: *const u8,
-) -> *const c_void {
+unsafe extern "system" fn hook_get_proc_address(module: HMODULE, name: *const u8) -> *const c_void {
     let real = REAL_GET_PROC_ADDRESS.load(Ordering::Acquire);
     if real == 0 {
         return std::ptr::null();
@@ -360,8 +379,12 @@ unsafe fn import_descriptors(base: usize) -> Option<*const ImageImportDescriptor
         return None;
     }
     let descriptors = base + rva as usize;
-    if !unsafe { readable(descriptors as *const c_void, std::mem::size_of::<ImageImportDescriptor>()) }
-    {
+    if !unsafe {
+        readable(
+            descriptors as *const c_void,
+            std::mem::size_of::<ImageImportDescriptor>(),
+        )
+    } {
         return None;
     }
     Some(descriptors as *const ImageImportDescriptor)
@@ -378,8 +401,12 @@ unsafe fn patch_module(base: usize, replacements: &[(usize, usize)]) -> usize {
 
     let mut patched = 0usize;
     loop {
-        if !unsafe { readable(descriptor as *const c_void, std::mem::size_of::<ImageImportDescriptor>()) }
-        {
+        if !unsafe {
+            readable(
+                descriptor as *const c_void,
+                std::mem::size_of::<ImageImportDescriptor>(),
+            )
+        } {
             break;
         }
         let entry = unsafe { std::ptr::read_unaligned(descriptor) };
@@ -396,8 +423,9 @@ unsafe fn patch_module(base: usize, replacements: &[(usize, usize)]) -> usize {
             if current == 0 {
                 break;
             }
-            if let Some((_, replacement)) =
-                replacements.iter().find(|(original, _)| *original == current)
+            if let Some((_, replacement)) = replacements
+                .iter()
+                .find(|(original, _)| *original == current)
             {
                 let mut previous = 0u32;
                 let protect_ok = unsafe {
@@ -433,7 +461,8 @@ unsafe fn patch_module(base: usize, replacements: &[(usize, usize)]) -> usize {
 /// Snapshot every module currently mapped into this process.
 fn loaded_modules() -> Vec<usize> {
     let mut bases = Vec::new();
-    let snapshot: HANDLE = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, 0) };
+    let snapshot: HANDLE =
+        unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId()) };
     if snapshot == INVALID_HANDLE_VALUE {
         return bases;
     }
@@ -485,13 +514,23 @@ fn resolve_ordinal(module: &str, ordinal: u16) -> usize {
 fn map_flag() -> bool {
     let mapping = unsafe { OpenFileMappingW(FILE_MAP_READ, FALSE, FLAG_MAPPING_NAME.as_ptr()) };
     if mapping.is_null() {
+        HOOK_STATUS.store(1_000 + unsafe { GetLastError() }, Ordering::Release);
         return false;
     }
-    let view = unsafe { MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, std::mem::size_of::<u32>()) };
+    let view = unsafe {
+        MapViewOfFile(
+            mapping,
+            FILE_MAP_READ,
+            0,
+            0,
+            std::mem::size_of::<u32>() * INPUT_GATE_WORDS,
+        )
+    };
     // The view stays valid after the handle closes, and holding the handle open
     // for the process lifetime buys nothing.
     unsafe { CloseHandle(mapping) };
     if view.Value.is_null() {
+        HOOK_STATUS.store(2_000 + unsafe { GetLastError() }, Ordering::Release);
         return false;
     }
     FLAG_VIEW.store(view.Value as usize, Ordering::Release);
@@ -561,7 +600,10 @@ fn replacement_table() -> Vec<(usize, usize)> {
         &REAL_GET_ASYNC_KEY_STATE,
         hook_get_async_key_state as GetAsyncKeyStateFn as usize,
     );
-    push(&REAL_GET_KEY_STATE, hook_get_key_state as GetKeyStateFn as usize);
+    push(
+        &REAL_GET_KEY_STATE,
+        hook_get_key_state as GetKeyStateFn as usize,
+    );
     push(
         &REAL_GET_KEYBOARD_STATE,
         hook_get_keyboard_state as GetKeyboardStateFn as usize,
@@ -574,7 +616,10 @@ fn replacement_table() -> Vec<(usize, usize)> {
         &REAL_GET_RAW_INPUT_BUFFER,
         hook_get_raw_input_buffer as GetRawInputBufferFn as usize,
     );
-    push(&REAL_GET_PROC_ADDRESS, hook_get_proc_address as GetProcAddressFn as usize);
+    push(
+        &REAL_GET_PROC_ADDRESS,
+        hook_get_proc_address as GetProcAddressFn as usize,
+    );
     table
 }
 
@@ -583,24 +628,69 @@ fn replacement_table() -> Vec<(usize, usize)> {
 /// IAT; a periodic sweep is far simpler and more robust than tracking
 /// LdrLoadDll.
 unsafe extern "system" fn worker(_parameter: *mut c_void) -> u32 {
+    HOOK_STATUS.store(3, Ordering::Release);
     for _ in 0..50 {
         if map_flag() {
+            HOOK_STATUS.store(4, Ordering::Release);
             break;
         }
         // The launcher may still be creating the mapping.
         unsafe { Sleep(100) };
     }
 
+    let mut monitored_owner = 0u32;
+    let mut owner_handle: HANDLE = std::ptr::null_mut();
+    let mut module_scan_tick = 0u32;
+
     loop {
-        capture_originals();
-        let table = replacement_table();
-        if !table.is_empty() {
-            for base in loaded_modules() {
-                unsafe { patch_module(base, &table) };
+        let view = FLAG_VIEW.load(Ordering::Acquire);
+        let owner = if view == 0 {
+            0
+        } else {
+            unsafe { std::ptr::read_volatile((view as *const u32).add(OWNER_PID_WORD)) }
+        };
+        if owner != monitored_owner {
+            OWNER_ALIVE.store(false, Ordering::Release);
+            OWNER_PID.store(0, Ordering::Release);
+            if !owner_handle.is_null() {
+                unsafe { CloseHandle(owner_handle) };
+                owner_handle = std::ptr::null_mut();
             }
-            HOOKS_READY.store(true, Ordering::Release);
+            monitored_owner = owner;
+            if owner != 0 {
+                owner_handle = unsafe {
+                    OpenProcess(
+                        SYNCHRONIZE_ACCESS | PROCESS_QUERY_LIMITED_INFORMATION,
+                        FALSE,
+                        owner,
+                    )
+                };
+                if !owner_handle.is_null() {
+                    OWNER_PID.store(owner, Ordering::Release);
+                }
+            }
         }
-        unsafe { Sleep(2_000) };
+        let owner_alive = !owner_handle.is_null()
+            && unsafe { WaitForSingleObject(owner_handle, 0) } == WAIT_TIMEOUT;
+        OWNER_ALIVE.store(owner_alive, Ordering::Release);
+
+        if module_scan_tick == 0 {
+            capture_originals();
+            let table = replacement_table();
+            HOOK_STATUS.store(100 + table.len() as u32, Ordering::Release);
+            if !table.is_empty() {
+                let modules = loaded_modules();
+                HOOK_STATUS.store(200 + modules.len() as u32, Ordering::Release);
+                for base in modules {
+                    unsafe { patch_module(base, &table) };
+                }
+                HOOKS_READY.store(true, Ordering::Release);
+            }
+        }
+        module_scan_tick = (module_scan_tick + 1) % 20;
+        // Check launcher liveness ten times per second; full module rescans
+        // retain the previous two-second cadence.
+        unsafe { Sleep(100) };
     }
 }
 
@@ -609,6 +699,7 @@ const DLL_PROCESS_ATTACH: u32 = 1;
 #[no_mangle]
 pub extern "system" fn DllMain(module: HMODULE, reason: u32, _reserved: *mut c_void) -> i32 {
     if reason == DLL_PROCESS_ATTACH {
+        HOOK_STATUS.store(1, Ordering::Release);
         // Nothing but thread creation happens under the loader lock; all real
         // work (which touches other modules) is deferred to the worker.
         unsafe { DisableThreadLibraryCalls(module) };
@@ -623,6 +714,7 @@ pub extern "system" fn DllMain(module: HMODULE, reason: u32, _reserved: *mut c_v
             )
         };
         if !handle.is_null() {
+            HOOK_STATUS.store(2, Ordering::Release);
             unsafe { CloseHandle(handle) };
         }
     }
@@ -640,3 +732,7 @@ pub extern "system" fn gamehub_input_hook_ready() -> i32 {
     }
 }
 
+#[no_mangle]
+pub extern "system" fn gamehub_input_hook_status() -> u32 {
+    HOOK_STATUS.load(Ordering::Acquire)
+}

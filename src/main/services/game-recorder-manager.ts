@@ -33,6 +33,7 @@ import { findOverlayGameProcesses } from "./overlay-game-process";
 import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
 import { WindowManager } from "./window-manager";
+import { isGameWindowDisplaySized } from "./game-recorder-capture-source";
 
 const TARGET_POLL_INTERVAL_MS = 750;
 const CAPTURE_RETRY_DELAY_MS = 5_000;
@@ -394,6 +395,24 @@ export class GameRecorderManager {
       captureWindow.webContents.id !== senderId
     ) {
       throw new Error("Recorder segment rejected from an unknown renderer.");
+    }
+
+    // Display capture can contain another app for the fraction of a polling
+    // interval after Alt+Tab. Refuse the whole unfinished slice while the game
+    // is not foreground; the prior committed slices remain valid and private.
+    const foregroundPid =
+      process.platform === "win32"
+        ? NativeAddon.getForegroundProcessId()
+        : this.targetPid;
+    if (
+      process.platform === "win32" &&
+      (!this.activeGame || !this.targetPid || foregroundPid !== this.targetPid)
+    ) {
+      logger.info("Dropping recorder segment captured outside the game", {
+        gamePid: this.targetPid,
+        foregroundPid,
+      });
+      return;
     }
 
     const startedAt = Number(metadata?.startedAt);
@@ -820,7 +839,7 @@ export class GameRecorderManager {
       const targetChanged =
         targetPid !== this.targetPid || targetWindowId !== this.targetWindowId;
 
-      if (targetChanged && this.captureActive) this.stopCaptureEngine();
+      if (targetChanged && this.captureActive) this.stopCaptureEngine(true);
       this.targetPid = targetPid;
       this.targetWindowId = targetWindowId;
       await this.reconcileCapture();
@@ -850,7 +869,7 @@ export class GameRecorderManager {
       Date.now() >= this.captureRetryAfter;
 
     if (!canCapture) {
-      if (this.captureActive) this.stopCaptureEngine();
+      if (this.captureActive) this.stopCaptureEngine(!gameIsForeground);
       return;
     }
     if (this.captureActive) return;
@@ -875,7 +894,7 @@ export class GameRecorderManager {
   }
 
   /**
-   * Pick what the recorder captures, preferring the display the game is on.
+   * Pick what the recorder captures, using display capture only for fullscreen.
    *
    * Window capture was the only option here, and it is the wrong one for a
    * fullscreen DirectX game on Windows: it goes through the slow per-window
@@ -886,8 +905,8 @@ export class GameRecorderManager {
    * Capture uses and holds a steady frame rate.
    *
    * For a fullscreen game the display and the window show the same pixels, so
-   * this costs nothing. Window capture stays as the fallback for a windowed
-   * game, where it keeps other windows out of the recording.
+   * this costs nothing. A windowed game must use its exact window source to
+   * keep the desktop and other apps out of the recording.
    */
   private static async resolveCaptureSource(): Promise<DesktopCapturerSource | null> {
     const windowId = this.targetWindowId;
@@ -917,27 +936,30 @@ export class GameRecorderManager {
         ) ?? null)
       : null;
 
-    if (screens.length) {
-      // Match the display the game occupies; fall back to the first screen on
-      // a single-monitor setup or when the bounds are unavailable.
-      const display = bounds
-        ? screen.getDisplayMatching({
-            x: bounds.x,
-            y: bounds.y,
-            width: Math.max(1, bounds.width),
-            height: Math.max(1, bounds.height),
-          })
-        : null;
-      const screenSource =
-        (display
-          ? screens.find(
-              (candidate) => candidate.display_id === String(display.id)
-            )
-          : null) ?? screens[0];
-      if (screenSource) return screenSource;
-    }
+    // Match the display the game occupies; fall back to the first screen only
+    // when per-window capture is unavailable (for example, an exclusive swap
+    // chain that does not appear in desktopCapturer's window list).
+    const display = bounds
+      ? screen.getDisplayMatching({
+          x: bounds.x,
+          y: bounds.y,
+          width: Math.max(1, bounds.width),
+          height: Math.max(1, bounds.height),
+        })
+      : null;
+    const screenSource =
+      (display
+        ? screens.find(
+            (candidate) => candidate.display_id === String(display.id)
+          )
+        : null) ??
+      screens[0] ??
+      null;
 
-    return windowSource;
+    if (windowSource && !isGameWindowDisplaySized(bounds, display)) {
+      return windowSource;
+    }
+    return screenSource ?? windowSource;
   }
 
   private static async ensureCaptureWindow() {
@@ -1037,16 +1059,17 @@ export class GameRecorderManager {
     return this.captureWindowReady;
   }
 
-  private static stopCaptureEngine() {
+  private static stopCaptureEngine(discardPending = false) {
     if (!this.captureActive) return;
     this.captureActive = false;
-    this.sendCaptureCommand({ type: "stop" });
+    this.sendCaptureCommand({ type: "stop", discardPending });
     this.publishState();
   }
 
   private static sendCaptureCommand(command: {
     type: "start" | "stop" | "flush";
     configuration?: GameRecorderPreferences;
+    discardPending?: boolean;
   }) {
     const captureWindow = this.captureWindow;
     if (!captureWindow || captureWindow.isDestroyed()) return;
@@ -1134,7 +1157,7 @@ export class GameRecorderManager {
 
   private static async endCurrentGameSession() {
     this.stopTargetPolling();
-    this.stopCaptureEngine();
+    this.stopCaptureEngine(true);
     this.activeGame = null;
     this.targetPid = 0;
     this.targetWindowId = null;

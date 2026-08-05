@@ -4,8 +4,13 @@ import { registerEvent } from "../register-event";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { launchClassicsGame, platformToSystem } from "@main/helpers";
 import { logger, NativeAddon } from "@main/services";
-import { restoreLatestCloudSave } from "./open-game";
+import {
+  prepareGameCloudSaveLaunch,
+  redirectBlockedGameCloudSaveLaunch,
+} from "./open-game";
 import type { GameShop } from "@types";
+import { clearCloudSaveLaunchGuard } from "@main/services/cloud-save/launch-guard";
+import { runWithCloudSaveLaunchGate } from "@main/services/cloud-save/operation-gate";
 
 const codedLaunchError = (
   code: string,
@@ -116,53 +121,67 @@ const openClassicsGame = async (
     }
   }
 
-  // Automatic cloud sync: restore the newest cloud save BEFORE the emulator
-  // spawns (awaited — the game can never start ahead of its restored save).
-  // Same helper + skip-when-local-is-newer logic as the PC launch path.
-  await restoreLatestCloudSave(shop, objectId);
-
-  try {
-    await launchClassicsGame({
-      shop,
-      objectId,
-      discPath: resolvedDiscPath,
-      system,
-    });
-  } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "EMULATOR_NOT_CONFIGURED"
-    ) {
-      throw Object.assign(
-        codedLaunchError(
-          "EMULATOR_NOT_CONFIGURED",
-          `EMULATOR_NOT_CONFIGURED: Emulator not configured for ${system}`,
-          { objectId, system }
-        ),
-        { system }
+  return runWithCloudSaveLaunchGate(objectId, shop, async () => {
+    // Emulator launches use the same mutually exclusive legacy/V2 pre-launch
+    // routing as native and store-URI games.
+    const preparation = await prepareGameCloudSaveLaunch(shop, objectId);
+    if (!preparation.shouldLaunch) {
+      await redirectBlockedGameCloudSaveLaunch(
+        shop,
+        objectId,
+        preparation.blockReason
       );
+      return;
     }
 
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "BIOS_NOT_CONFIGURED"
-    ) {
-      throw Object.assign(
-        codedLaunchError(
-          "BIOS_NOT_CONFIGURED",
-          `BIOS_NOT_CONFIGURED: BIOS not configured for ${system}`,
-          { objectId, system }
-        ),
-        { system }
+    try {
+      await launchClassicsGame({
+        shop,
+        objectId,
+        discPath: resolvedDiscPath,
+        system,
+      });
+    } catch (error) {
+      clearCloudSaveLaunchGuard(
+        objectId,
+        shop,
+        preparation.sessionToken ?? undefined
       );
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "EMULATOR_NOT_CONFIGURED"
+      ) {
+        throw Object.assign(
+          codedLaunchError(
+            "EMULATOR_NOT_CONFIGURED",
+            `EMULATOR_NOT_CONFIGURED: Emulator not configured for ${system}`,
+            { objectId, system }
+          ),
+          { system }
+        );
+      }
+
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "BIOS_NOT_CONFIGURED"
+      ) {
+        throw Object.assign(
+          codedLaunchError(
+            "BIOS_NOT_CONFIGURED",
+            `BIOS_NOT_CONFIGURED: BIOS not configured for ${system}`,
+            { objectId, system }
+          ),
+          { system }
+        );
+      }
+      logger.error("Failed to launch classics game", error);
+      throw error;
     }
-    logger.error("Failed to launch classics game", error);
-    throw error;
-  }
+  });
 };
 
 registerEvent("openClassicsGame", openClassicsGame);

@@ -225,7 +225,7 @@ import { PythonRPC } from "./services/python-rpc";
 import { controllerTestersPath } from "./constants";
 import { db, gamesSublevel, levelKeys } from "./level";
 import { GameShop, UserPreferences } from "@types";
-import { launchGame } from "./helpers";
+import { openGame } from "./events/library/open-game";
 import { loadState } from "./main";
 import { UpdateCheckerManager } from "./services/update-checker-manager";
 
@@ -504,6 +504,7 @@ app.whenReady().then(async () => {
     DownloadOrchestrator.onNetworkStatusChanged({
       online: true,
       switched: true,
+      forceReconnect: true,
     });
   });
 
@@ -565,12 +566,7 @@ const handleRunGame = async (shop: GameShop, objectId: string) => {
     WindowManager.createMainWindow();
   }
 
-  await launchGame({
-    shop,
-    objectId,
-    executablePath: game.executablePath,
-    launchOptions: game.launchOptions,
-  });
+  await openGame(null, shop, objectId, game.executablePath, game.launchOptions);
 };
 
 const handleDeepLinkPath = (uri?: string) => {

@@ -1,6 +1,41 @@
 @use "../../scss/globals.scss";
 
 .downloads {
+  &__page {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    flex-direction: column;
+    gap: calc(globals.$spacing-unit * 3);
+  }
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(globals.$spacing-unit * 3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    padding: calc(globals.$spacing-unit * 3);
+
+    h2,
+    p {
+      margin: 0;
+    }
+
+    p {
+      margin-top: calc(globals.$spacing-unit * 0.75);
+      color: var(--color-text-muted);
+      font-size: globals.$hint-font-size;
+    }
+
+    .button {
+      white-space: nowrap;
+    }
+  }
+
   &__container {
     display: flex;
     flex-direction: column;
@@ -27,10 +62,18 @@
   &__no-downloads {
     display: flex;
     width: 100%;
-    height: 100%;
+    flex: 1;
+    min-height: 320px;
     justify-content: center;
     align-items: center;
     flex-direction: column;
     gap: globals.$spacing-unit;
+  }
+}
+
+@media (max-width: 720px) {
+  .downloads__toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

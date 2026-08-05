@@ -117,16 +117,15 @@ mod broker {
         if unsafe { GetNamedPipeClientProcessId(pipe, &mut client_pid) } == 0 || client_pid == 0 {
             return None;
         }
-        let process =
-            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, client_pid) };
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, client_pid) };
         if process.is_null() {
             return None;
         }
         let mut buffer = vec![0u16; 32_768];
         let mut length = buffer.len() as u32;
-        let ok = unsafe {
-            QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length)
-        } != 0;
+        let ok =
+            unsafe { QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length) }
+                != 0;
         unsafe { CloseHandle(process) };
         if !ok {
             return None;

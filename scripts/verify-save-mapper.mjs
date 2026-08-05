@@ -262,10 +262,10 @@ try {
     { title: "Hyrule Warriors", path: "01002B00111A2000", data: true },
     { title: "Super Mario Odyssey", error: true },
     { title: "Echoes of Wisdom", error: true },
-    { title: "Breath of the Wild", path: "101c9500\\user", data: true },
+    { title: "Breath of the Wild", path: "00050000\\101c9500", data: true },
     {
       title: "Twilight Princess HD",
-      path: "00050000\\1019e600\\user",
+      path: "00050000\\1019e600",
       data: false,
     },
   ];

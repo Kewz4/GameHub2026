@@ -16,13 +16,7 @@ import {
   TrashIcon,
   UploadIcon,
 } from "@primer/octicons-react";
-import {
-  useAppSelector,
-  useDate,
-  useFormat,
-  useToast,
-  useUserDetails,
-} from "@renderer/hooks";
+import { useAppSelector, useDate, useFormat, useToast } from "@renderer/hooks";
 import { useTranslation } from "react-i18next";
 import { useRef } from "react";
 import { AxiosProgressEvent } from "axios";
@@ -57,7 +51,6 @@ export function CloudSyncPanel({
   const { t } = useTranslation("game_details");
   const { formatDate, formatDateTime } = useDate();
   const { formatNumber } = useFormat();
-  const { hasActiveSubscription } = useUserDetails();
 
   const {
     artifacts,
@@ -113,7 +106,7 @@ export function CloudSyncPanel({
   useEffect(() => {
     getGameBackupPreview();
     getGameArtifacts();
-  }, [getGameArtifacts, getGameBackupPreview, hasActiveSubscription]);
+  }, [getGameArtifacts, getGameBackupPreview]);
 
   const handleBackupInstallClick = async (artifactId: string) => {
     setBackupDownloadProgress(null);
@@ -199,11 +192,7 @@ export function CloudSyncPanel({
 
   const disableActions =
     uploadingBackup || restoringBackup || deletingArtifact || freezingArtifact;
-  const hasLaunchablePath = Boolean(
-    game?.executablePath ||
-      game?.selectedDiscPath ||
-      game?.discs?.some((disc) => Boolean(disc.path))
-  );
+  const hasLaunchablePath = Boolean(game);
 
   return (
     <>

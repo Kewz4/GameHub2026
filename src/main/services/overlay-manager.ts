@@ -19,9 +19,15 @@ import { getGameAssets } from "@main/events/catalogue/get-game-assets";
 import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
 import { findOverlayGameProcesses } from "./overlay-game-process";
+import {
+  excludeOverlayLaunchHelpers,
+  selectOverlayRenderProcess,
+} from "./overlay-game-process-ranking";
 import { overlayFpsMonitor } from "./overlay-fps-monitor";
 import { WindowManager } from "./window-manager";
 import { GameRecorderManager } from "./game-recorder-manager";
+import { OverlayBroker } from "./overlay-broker";
+import { OverlayInputGateController } from "./overlay-input-gate";
 
 const PREFERRED_SHORTCUT = "Shift+F3";
 const FALLBACK_SHORTCUT = "Control+Shift+F3";
@@ -110,9 +116,39 @@ export class OverlayManager {
   private static overlayRendererReadyWaiters = new Set<
     (ready: boolean) => void
   >();
+  private static inputGate = new OverlayInputGateController({
+    create: () => NativeAddon.createOverlayInputGate(),
+    set: (targetPid, blocked) =>
+      NativeAddon.setOverlayInputGate(targetPid, blocked),
+    inject: async (targetPid) => {
+      const direct = NativeAddon.injectInputHook(targetPid);
+      if (direct.injected) return true;
+
+      logger.warn("Direct overlay input-hook injection failed", {
+        targetPid,
+        stage: direct.stage,
+        errorCode: direct.errorCode,
+      });
+      if (!(await OverlayBroker.ensureInstalled())) return false;
+      const reply = await OverlayBroker.request(
+        "inject",
+        String(targetPid),
+        OverlayBroker.inputHookPath()
+      );
+      return Boolean(reply?.ok && reply.fields[0] === "true");
+    },
+    log: (level, message, details) => logger[level](message, details),
+  });
 
   public static initialize() {
     GameRecorderManager.initialize();
+    this.inputGate.initialize();
+    // Install the highest-integrity helper once. This is intentionally kicked
+    // off at launcher startup rather than when the user opens the overlay, so
+    // the one-time UAC prompt can never interrupt a live game.
+    if (process.platform === "win32") {
+      void OverlayBroker.ensureInstalled();
+    }
     overlayFpsMonitor.setUpdateHandler((metrics) =>
       this.updatePerformance(metrics)
     );
@@ -680,6 +716,9 @@ export class OverlayManager {
     restoreGameFocus: boolean,
     showPinnedPerformance: boolean
   ) {
+    // Clear the in-game hook before hiding or returning focus. This call is
+    // synchronous and fail-open, including when Electron's hide event is late.
+    this.inputGate.setOverlayState(false, false);
     const overlayWindow = this.overlayWindow;
     if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.hide();
@@ -697,14 +736,6 @@ export class OverlayManager {
     const pid = this.targetPid;
     if (pid) setTimeout(() => NativeAddon.focusProcessWindow(pid), 25);
   }
-
-  // The in-process input gate (injection + shared flag) is deliberately NOT
-  // wired into the overlay lifecycle. It went in at v1.1.27 and the overlay
-  // stopped opening from that release onward; rather than keep guessing at the
-  // mechanism, the whole thing is disconnected so the lifecycle matches v1.1.26,
-  // which worked. The native gate, the hook DLL and the elevated broker all
-  // still ship and are reachable — they just are not driven from here until the
-  // overlay is confirmed healthy and they can be reintroduced one at a time.
 
   public static setPerformancePinned(pinned: boolean) {
     if (!this.preferences.overlayPerformanceEnabled) return;
@@ -759,14 +790,25 @@ export class OverlayManager {
     }
 
     overlayWindow.on("closed", () => {
+      this.inputGate.setOverlayState(false, false);
       this.overlayWindow = null;
       this.overlayRendererReady = false;
       this.rendererContextGeneration = -1;
       for (const resolve of this.overlayRendererReadyWaiters) resolve(false);
       this.overlayRendererReadyWaiters.clear();
     });
+    overlayWindow.on("show", () => {
+      this.inputGate.setOverlayState(true, overlayWindow.isFocused());
+    });
+    overlayWindow.on("focus", () => {
+      this.inputGate.setOverlayState(true, true);
+    });
     overlayWindow.on("blur", () => {
+      this.inputGate.setOverlayState(false, false);
       setTimeout(() => this.synchronizeTargetWindows(), 50);
+    });
+    overlayWindow.on("hide", () => {
+      this.inputGate.setOverlayState(false, false);
     });
 
     this.overlayWindow = overlayWindow;
@@ -789,7 +831,22 @@ export class OverlayManager {
       ) {
         return this.targetPid;
       }
-      const target = candidates[0] ?? null;
+      // A configured executable may deliberately be a long-lived loader (for
+      // example Khazan's steamclient_loader_x64.exe). It owns the play session,
+      // but is not a render surface and must never receive overlay/PresentMon.
+      const eligibleCandidates = excludeOverlayLaunchHelpers(candidates);
+      const visiblePids = new Set(
+        eligibleCandidates
+          .filter((candidate) =>
+            Boolean(NativeAddon.getProcessWindowBounds(candidate.pid))
+          )
+          .map((candidate) => candidate.pid)
+      );
+      const target = selectOverlayRenderProcess(
+        eligibleCandidates,
+        visiblePids,
+        this.targetPid
+      );
       const targetPid = target?.pid ?? 0;
       const targetExecutable = target?.exe ?? null;
       const targetChanged =
@@ -799,6 +856,7 @@ export class OverlayManager {
       this.targetExecutable = targetExecutable;
       this.lastTargetRefreshAt = Date.now();
       if (targetChanged) {
+        this.inputGate.setTarget(targetPid);
         logger.info("GameHub overlay render target changed", {
           pid: targetPid,
           executable: targetExecutable,
@@ -1042,7 +1100,10 @@ export class OverlayManager {
   }
 
   private static stopActiveServices() {
-    if (!this.servicesActive) return;
+    // Cleanup is intentionally unconditional. A partial shortcut/controller
+    // startup failure can leave servicesActive false after PresentMon or one of
+    // the windows was already created, and early-returning here strands those
+    // resources until the launcher exits.
     this.servicesActive = false;
     this.hideOverlayWindow(false, false);
     this.destroyToast();
@@ -1053,6 +1114,7 @@ export class OverlayManager {
     this.destroyFpsWindow();
     this.performancePinned = false;
     this.performance = emptyPerformance();
+    this.inputGate.setTarget(0);
     this.targetPid = 0;
     this.targetExecutable = null;
     this.activationToastPending = false;
@@ -1265,6 +1327,8 @@ export class OverlayManager {
 
   private static dispose() {
     this.stopActiveServices();
+    this.inputGate.dispose();
+    void OverlayBroker.shutdown();
     this.performance = emptyPerformance();
   }
 }

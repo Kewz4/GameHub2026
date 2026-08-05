@@ -7,23 +7,44 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+anyhow = "1.0"
+blake3 = "=1.8.5"
+filetime = "0.2"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+globetter = "=0.2.0"
+globset = "=0.4.15"
 image = { version = "0.25.8", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
+indexmap = { version = "2.14", features = ["serde"] }
 mime_guess = "2.0.5"
 napi = { version = "3.5.2", default-features = false, features = ["napi8", "tokio_rt"] }
 napi-derive = "3.3.2"
+rayon = "=1.11.0"
+reqwest = { version = "0.13", features = ["stream"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+serde_yaml_ng = "0.10"
+sha2 = "0.10"
 sysinfo = "0.37.2"
+time = { version = "=0.3.44", features = ["parsing"] }
+tokio = { version = "1.52", features = ["fs", "rt", "sync", "macros"] }
+unicode-normalization = "0.1.25"
 uuid = { version = "1.11.0", features = ["v4"] }
+walkdir = "=2.5.0"
 
 # Windows-only APIs backing the in-game overlay: raw keyboard input for the
 # Shift+F3 shortcut, XInput for the
 # Guide button and navigation, and the process-access / token-elevation / ShellExecute
 # helpers the injected overlay uses to attach to the running game.
 [target.'cfg(windows)'.dependencies]
+known-folders = "=1.2.0"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_IO", "Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 # Higher-level COM bindings for the overlay's per-app volume mixer (Core Audio:
 # IAudioSessionManager2 / ISimpleAudioVolume). windows-sys' raw vtable COM is
 # too error-prone for this, so the ergonomic `windows` crate is used here.
 windows = { version = "0.61", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation"] }
+
+[dev-dependencies]
+tempfile = "3.27"
 
 [build-dependencies]
 napi-build = "2.3.1"

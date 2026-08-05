@@ -1,6 +1,6 @@
 import { registerEvent } from "../register-event";
-import { levelKeys, gamesSublevel } from "@main/level";
 import type { GameShop } from "@types";
+import { setLegacyCloudSaveAutomaticSyncEnabled } from "@main/services/cloud-save/automatic-sync-settings";
 
 const toggleAutomaticCloudSync = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -8,16 +8,11 @@ const toggleAutomaticCloudSync = async (
   objectId: string,
   automaticCloudSync: boolean
 ) => {
-  const gameKey = levelKeys.game(shop, objectId);
-
-  const game = await gamesSublevel.get(gameKey);
-
-  if (!game) return;
-
-  await gamesSublevel.put(gameKey, {
-    ...game,
-    automaticCloudSync,
-  });
+  await setLegacyCloudSaveAutomaticSyncEnabled(
+    objectId,
+    shop,
+    automaticCloudSync
+  );
 };
 
 registerEvent("toggleAutomaticCloudSync", toggleAutomaticCloudSync);

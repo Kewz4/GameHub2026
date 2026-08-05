@@ -18,6 +18,10 @@ import {
   type PresentMonSample,
   type PresentMonTextEncoding,
 } from "./overlay-performance-metrics";
+import {
+  getPresentMonRetry,
+  PRESENTMON_MAX_CAPTURE_ATTEMPTS,
+} from "./overlay-fps-retry";
 
 const UPDATE_INTERVAL = 500;
 const MAX_SAMPLES = 600;
@@ -59,6 +63,8 @@ export class OverlayFpsMonitor {
   private targetPid = 0;
   private targetExecutable: string | null = null;
   private captureWatchdog: NodeJS.Timeout | null = null;
+  private captureRetry: NodeJS.Timeout | null = null;
+  private captureAttempt = 0;
   private stalePoll: NodeJS.Timeout | null = null;
   private captureDiagnosticLogged = false;
   private waitingForFreshSamples = false;
@@ -207,17 +213,14 @@ export class OverlayFpsMonitor {
       )
       .catch((error) => {
         logger.error("Could not launch elevated PresentMon", error);
-        if (
-          generation === this.generation &&
-          requestId === this.windowsCaptureRequestId
-        ) {
-          this.stopCaptureProcess();
-          this.resetSamples();
-          this.publishState(
-            "error",
-            "PresentMon could not start with administrator rights."
-          );
-        }
+        this.handleWindowsCaptureFailure(
+          generation,
+          requestId,
+          targetPid,
+          targetExecutable,
+          "PresentMon could not start with administrator rights.",
+          error instanceof Error ? error.message : String(error)
+        );
       });
   }
 
@@ -238,8 +241,14 @@ export class OverlayFpsMonitor {
       return;
     }
 
+    const captureAttempt = ++this.captureAttempt;
     this.resetSamples();
-    this.publishState("waiting", "Starting PresentMon FPS capture…");
+    this.publishState(
+      "waiting",
+      captureAttempt > 1
+        ? `Restarting PresentMon FPS capture (attempt ${captureAttempt} of ${PRESENTMON_MAX_CAPTURE_ATTEMPTS})…`
+        : "Starting PresentMon FPS capture…"
+    );
 
     const captureRunId = ++this.captureRunId;
     const outputDirectory = path.join(
@@ -252,9 +261,13 @@ export class OverlayFpsMonitor {
       this.removeStalePresentMonFiles(outputDirectory);
     } catch (error) {
       logger.error("Could not prepare PresentMon output directory", error);
-      this.publishState(
-        "error",
-        "GameHub could not prepare temporary FPS capture files."
+      this.handleWindowsCaptureFailure(
+        generation,
+        requestId,
+        targetPid,
+        targetExecutable,
+        "GameHub could not prepare temporary FPS capture files.",
+        error instanceof Error ? error.message : String(error)
       );
       return;
     }
@@ -273,9 +286,13 @@ export class OverlayFpsMonitor {
       fs.writeFileSync(diagnosticFile, "");
     } catch (error) {
       logger.error("Could not prepare PresentMon capture files", error);
-      this.publishState(
-        "error",
-        "GameHub could not prepare temporary FPS capture files."
+      this.handleWindowsCaptureFailure(
+        generation,
+        requestId,
+        targetPid,
+        targetExecutable,
+        "GameHub could not prepare temporary FPS capture files.",
+        error instanceof Error ? error.message : String(error)
       );
       return;
     }
@@ -351,19 +368,16 @@ export class OverlayFpsMonitor {
         this.lastSampleAt === 0
       ) {
         const diagnostic = this.readPresentMonDiagnostic(diagnosticFile);
-        this.stopCaptureProcess();
-        this.resetSamples();
-        this.publishState(
-          "error",
+        this.handleWindowsCaptureFailure(
+          generation,
+          requestId,
+          targetPid,
+          targetExecutable,
           diagnostic
             ? "PresentMon could not capture this game's frames. Check GameHub logs for the collector error."
-            : "PresentMon started as administrator but this game did not expose frame samples."
+            : "PresentMon started as administrator but this game did not expose frame samples.",
+          diagnostic
         );
-        logger.warn("Elevated PresentMon produced no frame samples", {
-          pid: targetPid,
-          executable: targetExecutable,
-          diagnostic,
-        });
       }
     }, CAPTURE_START_TIMEOUT);
 
@@ -641,7 +655,62 @@ export class OverlayFpsMonitor {
     }
   }
 
-  private stopCaptureProcess() {
+  private handleWindowsCaptureFailure(
+    generation: number,
+    requestId: number,
+    targetPid: number,
+    targetExecutable: string | null,
+    finalMessage: string,
+    diagnostic: string | null
+  ) {
+    if (
+      generation !== this.generation ||
+      requestId !== this.windowsCaptureRequestId ||
+      targetPid !== this.targetPid
+    ) {
+      return;
+    }
+
+    const completedAttempts = this.captureAttempt;
+    const retry = getPresentMonRetry(completedAttempts);
+    this.stopCaptureProcess(true);
+    this.resetSamples();
+
+    logger.warn("Elevated PresentMon capture attempt failed", {
+      pid: targetPid,
+      executable: targetExecutable,
+      attempt: completedAttempts,
+      maxAttempts: PRESENTMON_MAX_CAPTURE_ATTEMPTS,
+      retryDelayMs: retry?.delayMs ?? null,
+      diagnostic,
+    });
+
+    if (!retry) {
+      this.publishState("error", finalMessage);
+      return;
+    }
+
+    this.publishState(
+      "waiting",
+      `PresentMon received no frames. Retrying capture (attempt ${retry.nextAttempt} of ${PRESENTMON_MAX_CAPTURE_ATTEMPTS})…`
+    );
+    this.captureRetry = setTimeout(() => {
+      this.captureRetry = null;
+      if (
+        generation !== this.generation ||
+        targetPid !== this.targetPid ||
+        !this.presentMonPath
+      ) {
+        return;
+      }
+      this.queueWindowsCapture(generation);
+    }, retry.delayMs);
+  }
+
+  private stopCaptureProcess(preserveRetryState = false) {
+    if (this.captureRetry) clearTimeout(this.captureRetry);
+    this.captureRetry = null;
+    if (!preserveRetryState) this.captureAttempt = 0;
     if (this.captureWatchdog) clearTimeout(this.captureWatchdog);
     if (this.stalePoll) clearInterval(this.stalePoll);
     this.captureWatchdog = null;

@@ -402,14 +402,15 @@ fn run() -> Result<(), String> {
             // interval. Closing the job handle remains a kernel-enforced final
             // fallback if the child cannot be observed exiting normally.
             terminate_presentmon_bounded(&mut child, &mut job);
-            // A terminated PresentMon leaves its session registered; drop it
-            // here so the next capture never has to reap anything.
-            stop_trace_session(&session_name);
             break;
         }
         thread::sleep(Duration::from_millis(100));
     }
 
+    // A terminated PresentMon leaves its session registered. Explicitly reap
+    // it on every exit path, including a normal target exit and collector
+    // builds that quit after an ETW error without unregistering the session.
+    stop_trace_session(&session_name);
     let _ = fs::remove_file(stop_path);
     Ok(())
 }

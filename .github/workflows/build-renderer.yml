@@ -41,5 +41,8 @@ jobs:
       - name: Build Renderer
         run: yarn build
         env:
+          MAIN_VITE_R2_CREDENTIALS_URL: ${{ vars.MAIN_VITE_R2_CREDENTIALS_URL }}
+          MAIN_VITE_R2_ENDPOINT: ${{ vars.MAIN_VITE_R2_ENDPOINT }}
+          MAIN_VITE_R2_BUCKET: ${{ vars.MAIN_VITE_R2_BUCKET || 'gamehub' }}
           RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL }}
           RENDERER_VITE_SENTRY_DSN: ${{ vars.SENTRY_DSN }}

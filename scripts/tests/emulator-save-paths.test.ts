@@ -174,6 +174,47 @@ test("uses exact current Switch profiles and leaves ambiguity for the planner", 
   });
 });
 
+test("emits concrete Switch and 3DS title roots for one initialized profile", async () => {
+  await withTempDir((dir) => {
+    const switchRoot = path.join(dir, "switch", "nand", "user", "save");
+    const switchProfile = path.join(
+      switchRoot,
+      "0000000000000000",
+      "A".repeat(32)
+    );
+    fs.mkdirSync(switchProfile, { recursive: true });
+    const switchTitleId = "01002b00111a2000";
+    assert.deepEqual(
+      buildEmulatorRestorePatterns({
+        system: "switch",
+        binary: "eden",
+        roots: [switchRoot],
+        identity: switchTitleId,
+      }),
+      [path.join(switchProfile, switchTitleId)]
+    );
+
+    const threeDsRoot = path.join(dir, "azahar", "user", "sdmc");
+    const threeDsTitleRoot = path.join(
+      threeDsRoot,
+      "Nintendo 3DS",
+      "A".repeat(32),
+      "B".repeat(32),
+      "title"
+    );
+    fs.mkdirSync(threeDsTitleRoot, { recursive: true });
+    assert.deepEqual(
+      buildEmulatorRestorePatterns({
+        system: "n3ds",
+        binary: "azahar",
+        roots: [threeDsRoot],
+        identity: "0004000000033600",
+      }),
+      [path.join(threeDsTitleRoot, "00040000", "00033600")]
+    );
+  });
+});
+
 test("preserves an artifact Switch profile only when the clean install has none", async () => {
   await withTempDir((dir) => {
     const root = path.join(dir, "nand", "user", "save");
@@ -254,10 +295,35 @@ test("builds prospective 3DS, Wii, and RPCS3 identity mappings", async () => {
   });
 });
 
+test("uses one exact empty RPCS3 title folder before falling back to a glob", async () => {
+  await withTempDir((dir) => {
+    const savedataRoot = path.join(
+      dir,
+      "dev_hdd0",
+      "home",
+      "00000001",
+      "savedata"
+    );
+    const titleRoot = path.join(savedataRoot, "BLES12345-PROFILE");
+    fs.mkdirSync(titleRoot, { recursive: true });
+
+    assert.deepEqual(
+      buildEmulatorRestorePatterns({
+        system: "ps3",
+        binary: "rpcs3",
+        roots: [savedataRoot],
+        identity: "BLES12345",
+      }),
+      [titleRoot]
+    );
+    assert.equal(fs.readdirSync(titleRoot).length, 0);
+  });
+});
+
 test("derives a clean Wii U title destination without creating it", async () => {
   await withTempDir((dir) => {
     const titleId = "00050000101c9500";
-    const expected = path.join(dir, "00050000", "101c9500", "user");
+    const expected = path.join(dir, "00050000", "101c9500");
     assert.deepEqual(
       buildEmulatorRestorePatterns({
         system: "wiiu",

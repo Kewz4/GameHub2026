@@ -23,7 +23,9 @@ export * from "./controller-support";
 export * from "./overlay-preferences";
 export * from "./game-recorder-preferences";
 export * from "./game-recorder-quality";
+export * from "./fragmented-mp4";
 export * from "./download-directories";
+export * from "./custom-download";
 export * from "./html-sanitizer";
 export * from "./language-flags";
 export * from "./use-hls-video";
@@ -244,3 +246,4 @@ export const generateAchievementCustomNotificationTest = (
     isPlatinum: options.isPlatinum ?? false,
   };
 };
+export * from "./cloud-save-access";

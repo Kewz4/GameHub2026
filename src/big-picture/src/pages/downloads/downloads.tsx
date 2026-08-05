@@ -12,6 +12,7 @@ import type { FocusOverrides } from "../../services";
 import { useNavigation, useNavigationScreenActions } from "../../hooks";
 import { BIG_PICTURE_HEADER_REGION_ID } from "../../layout";
 import {
+  Button,
   ContextMenu,
   type ContextMenuItem,
   DownloadsGameCard,
@@ -21,6 +22,7 @@ import {
   Typography,
   VerticalFocusGroup,
 } from "../../components";
+import { LinkSimpleIcon } from "@phosphor-icons/react";
 import {
   DOWNLOADS_PAGE_REGION_ID,
   DOWNLOADS_HERO_PAUSE_RESUME_BUTTON_ID,
@@ -38,6 +40,7 @@ import {
   type BigPictureDownloadListItem,
 } from "./use-big-picture-downloads-page-data";
 import { useNavigationSnapshot } from "../../stores";
+import { BigPictureCustomDownloadModal } from "./custom-download-modal";
 
 import "./downloads.scss";
 
@@ -354,10 +357,11 @@ function getHeroPrimaryFocusId() {
 }
 
 const DOWNLOADS_REGION_NAVIGATION_ORDER = {
-  hero: 0,
-  queue: 1,
-  paused: 2,
-  completed: 3,
+  toolbar: 0,
+  hero: 1,
+  queue: 2,
+  paused: 3,
+  completed: 4,
 } as const;
 
 function getRepresentativeFocusIdForPlacement(
@@ -962,6 +966,7 @@ export default function Downloads() {
   const [optimisticCommitState, setOptimisticCommitState] =
     useState<OptimisticCommitState | null>(null);
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  const [showCustomDownloadModal, setShowCustomDownloadModal] = useState(false);
   const [menuState, setMenuState] = useState<DownloadMenuState>({
     item: null,
     section: null,
@@ -2500,14 +2505,38 @@ export default function Downloads() {
 
   if (!hasDownloads) {
     return (
-      <div className="downloads-page downloads-page--empty">
-        <div className="downloads-page__empty-state">
-          <Typography variant="h2">No downloads yet</Typography>
-          <Typography className="downloads-page__empty-copy">
-            Start a download to see it here.
-          </Typography>
+      <VerticalFocusGroup regionId={DOWNLOADS_PAGE_REGION_ID} asChild>
+        <div className="downloads-page downloads-page--empty">
+          <BigPictureCustomDownloadModal
+            visible={showCustomDownloadModal}
+            onClose={() => setShowCustomDownloadModal(false)}
+          />
+          <VerticalFocusGroup
+            className="downloads-page__toolbar"
+            navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.toolbar}
+          >
+            <div>
+              <Typography variant="h3">Custom download</Typography>
+              <Typography className="downloads-page__toolbar-copy">
+                Send a direct link, magnet, or .torrent through TorBox.
+              </Typography>
+            </div>
+            <Button
+              focusId="downloads-add-custom"
+              icon={<LinkSimpleIcon size={20} />}
+              onClick={() => setShowCustomDownloadModal(true)}
+            >
+              Add link or torrent
+            </Button>
+          </VerticalFocusGroup>
+          <div className="downloads-page__empty-state">
+            <Typography variant="h2">No downloads yet</Typography>
+            <Typography className="downloads-page__empty-copy">
+              Start a download or add your own link to see it here.
+            </Typography>
+          </div>
         </div>
-      </div>
+      </VerticalFocusGroup>
     );
   }
 
@@ -2520,6 +2549,28 @@ export default function Downloads() {
           isCrossSectionMoveModePreview ? "true" : undefined
         }
       >
+        <BigPictureCustomDownloadModal
+          visible={showCustomDownloadModal}
+          onClose={() => setShowCustomDownloadModal(false)}
+        />
+        <VerticalFocusGroup
+          className="downloads-page__toolbar"
+          navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.toolbar}
+        >
+          <div>
+            <Typography variant="h3">Custom download</Typography>
+            <Typography className="downloads-page__toolbar-copy">
+              Send a direct link, magnet, or .torrent through TorBox.
+            </Typography>
+          </div>
+          <Button
+            focusId="downloads-add-custom"
+            icon={<LinkSimpleIcon size={20} />}
+            onClick={() => setShowCustomDownloadModal(true)}
+          >
+            Add link or torrent
+          </Button>
+        </VerticalFocusGroup>
         <>
           <DownloadsHero
             snapshot={displayedHeroSnapshot}

@@ -1,0 +1,266 @@
+import type {
+  CloudSaveOverview,
+  CloudSaveState,
+  CloudSaveSyncAction,
+  CloudSaveSyncProgressStage,
+  CloudSaveV2FileDetails,
+  GameShop,
+} from "@types";
+
+export type CloudSavePresentationTone =
+  | "synced"
+  | "outdated"
+  | "conflict"
+  | "neutral";
+
+export type CloudSavePresentationIcon =
+  | "cloud"
+  | "cloud-slash"
+  | "cloud-x"
+  | "spinner"
+  | "upload"
+  | "restore"
+  | "synced"
+  | "warning";
+
+export interface CloudSavePresentation {
+  labelKey: string;
+  icon: CloudSavePresentationIcon;
+  tone: CloudSavePresentationTone;
+}
+
+interface CloudSaveEmptySnapshotInput {
+  overview: CloudSaveOverview | null;
+  isLoading: boolean;
+  hasError: boolean;
+}
+
+export const shouldShowCloudSaveEmptySnapshot = ({
+  overview,
+  hasError,
+}: CloudSaveEmptySnapshotInput) =>
+  !hasError && overview !== null && overview.activeRemoteSnapshot === null;
+
+export const canOpenCloudSaveFileBrowser = (
+  overview: CloudSaveOverview | null
+) => overview !== null;
+
+export const hasCloudSaveDataToDelete = (
+  details: CloudSaveV2FileDetails | null
+) =>
+  details !== null &&
+  (details.activeSnapshot !== null ||
+    details.local.fileCount > 0 ||
+    details.customPaths.length > 0 ||
+    details.unresolvedCustomPaths.some(({ registered }) => registered));
+
+export type CloudSaveUploadLimitError = "snapshot-too-large" | "too-many-files";
+
+const getErrorMessage = (error: unknown) => {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  return "";
+};
+
+export const getCloudSaveUploadLimitError = (
+  error: unknown
+): CloudSaveUploadLimitError | null => {
+  const message = getErrorMessage(error);
+
+  if (message.includes("cloud_save_snapshot_too_large")) {
+    return "snapshot-too-large";
+  }
+  if (message.includes("cloud_save_too_many_files")) {
+    return "too-many-files";
+  }
+  return null;
+};
+
+interface GamePageOpenSyncInput {
+  overview: CloudSaveOverview | null;
+  shop: GameShop;
+  canUseCloudSaves: boolean;
+  hasExecutablePath: boolean;
+  isGameRunning: boolean;
+  isSyncing: boolean;
+  isInFlight: boolean;
+  isCompleted: boolean;
+}
+
+export const shouldSyncCloudSaveOnGamePage = ({
+  overview,
+  shop,
+  canUseCloudSaves,
+  hasExecutablePath,
+  isGameRunning,
+  isSyncing,
+  isInFlight,
+  isCompleted,
+}: GamePageOpenSyncInput) =>
+  (void shop, canUseCloudSaves) &&
+  hasExecutablePath &&
+  !isGameRunning &&
+  !isSyncing &&
+  !isInFlight &&
+  !isCompleted &&
+  overview?.isAutomaticSyncEnabled === true &&
+  overview.suggestedAction !== "none";
+
+interface CloudSavePresentationInput {
+  canUseCloudSaves: boolean;
+  hasExecutablePath: boolean;
+  isChecking: boolean;
+  isSyncing: boolean;
+  hasError: boolean;
+  state: CloudSaveState | null;
+  progressStage: CloudSaveSyncProgressStage | null;
+}
+
+const getSyncProgressIcon = (
+  progressStage: CloudSaveSyncProgressStage | null
+): CloudSavePresentationIcon => {
+  if (progressStage === "uploading") return "upload";
+  if (progressStage === "restoring") return "restore";
+  return "spinner";
+};
+
+export const getCloudSavePresentation = ({
+  canUseCloudSaves,
+  hasExecutablePath,
+  isChecking,
+  isSyncing,
+  hasError,
+  state,
+  progressStage,
+}: CloudSavePresentationInput): CloudSavePresentation => {
+  if (!canUseCloudSaves || !hasExecutablePath) {
+    return {
+      labelKey: "cloud_save",
+      icon: "cloud-slash",
+      tone: "neutral",
+    };
+  }
+
+  if (isSyncing) {
+    return {
+      labelKey: "cloud_save_v2_syncing",
+      icon: getSyncProgressIcon(progressStage),
+      tone: "neutral",
+    };
+  }
+
+  if (isChecking || (!state && !hasError)) {
+    return {
+      labelKey: "cloud_save_v2_checking",
+      icon: "spinner",
+      tone: "neutral",
+    };
+  }
+
+  if (hasError) {
+    return {
+      labelKey: "cloud_save_v2_unavailable",
+      icon: "cloud-x",
+      tone: "neutral",
+    };
+  }
+
+  switch (state) {
+    case "conflict":
+      return {
+        labelKey: "cloud_save_v2_conflict",
+        icon: "warning",
+        tone: "conflict",
+      };
+    case "partial":
+      return {
+        labelKey: "cloud_save_v2_partial",
+        icon: "warning",
+        tone: "outdated",
+      };
+    case "local-ahead":
+    case "remote-ahead":
+      return {
+        labelKey: "cloud_save_v2_outdated",
+        icon: "warning",
+        tone: "outdated",
+      };
+    case "synced":
+      return {
+        labelKey: "cloud_save_v2_synced",
+        icon: "synced",
+        tone: "synced",
+      };
+    case "untracked":
+    default:
+      return {
+        labelKey: "cloud_save",
+        icon: "cloud",
+        tone: "neutral",
+      };
+  }
+};
+
+export type CloudSavePanelAction =
+  | {
+      kind: "sync";
+      labelKey: string;
+      icon: "cloud" | "upload" | "restore";
+    }
+  | {
+      kind: "details";
+      labelKey: "cloud_save_v2_view_files";
+      icon: "details";
+    }
+  | {
+      kind: "verify";
+      labelKey: "cloud_save_v2_check_again";
+      icon: "refresh";
+    }
+  | { kind: "conflict" }
+  | { kind: "none" };
+
+export const getCloudSavePanelAction = (
+  state: CloudSaveState | null,
+  suggestedAction: CloudSaveSyncAction | null
+): CloudSavePanelAction => {
+  if (state === "conflict" || suggestedAction === "conflict") {
+    return { kind: "conflict" };
+  }
+  if (state === "partial") {
+    return {
+      kind: "details",
+      labelKey: "cloud_save_v2_view_files",
+      icon: "details",
+    };
+  }
+  if (suggestedAction === "merge") {
+    return {
+      kind: "sync",
+      labelKey: "cloud_save_v2_sync_now",
+      icon: "cloud",
+    };
+  }
+  if (suggestedAction === "upload") {
+    return {
+      kind: "sync",
+      labelKey: "cloud_save_v2_sync_to_remote",
+      icon: "upload",
+    };
+  }
+  if (suggestedAction === "restore") {
+    return {
+      kind: "sync",
+      labelKey: "cloud_save_v2_sync_from_remote",
+      icon: "restore",
+    };
+  }
+  if (state === "synced" || state === "untracked") {
+    return {
+      kind: "verify",
+      labelKey: "cloud_save_v2_check_again",
+      icon: "refresh",
+    };
+  }
+  return { kind: "none" };
+};

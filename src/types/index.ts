@@ -179,6 +179,29 @@ export interface StartGameDownloadPayload {
   /** Set for minerva/console downloads so main routes them into
    *  "Emulator Games/<platform>" and binds them to the right emulator. */
   emulatorSystem?: string | null;
+  /** Marks a user-supplied TorBox job created from Download Manager. */
+  customDownload?: {
+    sourceType: "link" | "magnet" | "torrent";
+  };
+}
+
+export interface StartCustomDownloadPayload {
+  title: string;
+  /** A direct http(s) URL or magnet. Empty when localTorrentPath is used. */
+  source: string;
+  /** Path returned by Electron's trusted open-file dialog. */
+  localTorrentPath?: string | null;
+  downloadPath: string;
+  automaticallyExtract: boolean;
+  automaticallyDeleteArchiveFiles: boolean;
+}
+
+export interface StartCustomDownloadResult {
+  ok: boolean;
+  error?: string;
+  objectId?: string;
+  shop?: GameShop;
+  queued?: boolean;
 }
 
 export interface UserFriend {
@@ -778,6 +801,7 @@ export * from "./download.types";
 export * from "./ludusavi.types";
 export * from "./how-long-to-beat.types";
 export * from "./level.types";
+export * from "./cloud-save.types";
 export * from "./theme.types";
 export * from "./emulator.types";
 export * from "./mods.types";

@@ -140,6 +140,10 @@ export interface Download {
   /** Console system for minerva/emulator downloads — drives the post-download
    *  ROM bind so the library entry becomes launchable. */
   emulatorSystem?: string | null;
+  /** Metadata for a link/magnet/.torrent submitted from Download Manager. */
+  customDownload?: {
+    sourceType: "link" | "magnet" | "torrent";
+  };
 }
 
 export interface DownloadLayoutState {
@@ -298,6 +302,15 @@ export interface UserPreferences {
   uploadcareSecretKey?: string | null;
   xboxXuid?: string | null;
   cloudSyncUserId?: string | null;
+  /** Authenticated account namespace that this installation is converging on. */
+  cloudSyncAccountUserId?: string | null;
+  /**
+   * High-entropy, pre-account cloud namespaces that still need a one-time R2
+   * copy. They are sent only to the authenticated credential broker and are
+   * removed after a verified migration.
+   */
+  cloudSyncLegacyUserIds?: string[] | null;
+  cloudSyncNamespaceMigrationPending?: boolean;
   onboardingComplete?: boolean;
   localProfileImageUrl?: string | null;
   localBackgroundImageUrl?: string | null;

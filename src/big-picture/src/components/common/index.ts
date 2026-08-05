@@ -47,6 +47,7 @@ export * from "./focus-carousel";
 export * from "./navigation-history-bridge";
 export * from "./toast";
 export * from "./virtual-keyboard";
+export * from "./file-explorer-modal";
 
 /* ── Stubs added for game-settings-modal compatibility ──────────────────── */
 import type { ReactNode } from "react";

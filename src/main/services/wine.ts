@@ -1,8 +1,27 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { SystemPath } from "./system-path";
+import {
+  getWinePrefixUserProfiles,
+  resolveWinePrefixPath,
+} from "./wine-prefix";
 
 export class Wine {
+  public static resolvePrefixPath(
+    winePrefixPath: string | null,
+    homeDir = os.homedir()
+  ) {
+    return resolveWinePrefixPath(winePrefixPath, homeDir);
+  }
+
+  public static getPrefixUserProfiles(
+    winePrefixPath: string,
+    homeDir = os.homedir()
+  ) {
+    return getWinePrefixUserProfiles(winePrefixPath, homeDir);
+  }
+
   public static getDefaultPrefixPath(): string | null {
     if (process.platform !== "linux") {
       return null;

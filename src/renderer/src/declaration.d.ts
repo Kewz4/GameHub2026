@@ -7,6 +7,8 @@ import type {
   SeedingStatus,
   UserPreferences,
   StartGameDownloadPayload,
+  StartCustomDownloadPayload,
+  StartCustomDownloadResult,
   RealDebridUser,
   PremiumizeUser,
   AllDebridUser,
@@ -68,6 +70,20 @@ import type {
   MemcardFormatState,
   MemcardRestoreResult,
   MemcardRestoreTarget,
+  CloudSaveAutomaticSyncModeChangedEvent,
+  CloudSaveAutomaticSyncEvent,
+  CloudSaveConflictResolution,
+  CloudSaveOverview,
+  CloudSaveV2FileDetails,
+  CloudSaveSyncProgressPayload,
+  SyncCloudSaveOnGamePageResult,
+  SyncGameCloudSaveResult,
+  SelectCloudSaveCustomPathResult,
+  CloudSaveCustomPathApproval,
+  CloudSaveModalSyncResult,
+  SelectCloudSaveCustomPathApprovalResult,
+  ConfirmCloudSaveCustomPathApprovalResult,
+  ConfirmCloudSaveCustomPathRebindApprovalResult,
 } from "@types";
 import type { AxiosProgressEvent } from "axios";
 
@@ -99,11 +115,112 @@ declare global {
     | { type: "applying" }
     | { type: "error"; message: string };
 
+  interface FileExplorerEntry {
+    name: string;
+    path: string;
+    isDirectory: boolean;
+    isFile: boolean;
+    extension: string;
+    size: number;
+  }
+
+  interface FileExplorerPathInfo {
+    exists: boolean;
+    isDirectory: boolean;
+    isFile: boolean;
+  }
+
   interface Electron {
+    onCloudSaveAutomaticSyncModeChanged: (
+      callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
+    ) => () => void;
+    onCloudSaveAutomaticSync: (
+      callback: (event: CloudSaveAutomaticSyncEvent) => void
+    ) => () => void;
+    getCloudSaveOverview: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<CloudSaveOverview>;
+    getCloudSaveV2FileDetails: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<CloudSaveV2FileDetails>;
+    deleteGameCloudSaveData: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<void>;
+    selectCloudSaveCustomPath: (
+      objectId: string,
+      shop: GameShop,
+      selectedPath?: string
+    ) => Promise<SelectCloudSaveCustomPathResult>;
+    createCloudSaveCustomPathRebindApproval: (
+      objectId: string,
+      shop: GameShop,
+      rawPath: string
+    ) => Promise<CloudSaveCustomPathApproval>;
+    confirmCloudSaveCustomPathRebindApproval: (
+      approvalId: string,
+      objectId: string,
+      shop: GameShop
+    ) => Promise<ConfirmCloudSaveCustomPathRebindApprovalResult>;
+    getPendingCloudSaveCustomPathApproval: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<CloudSaveCustomPathApproval | null>;
+    selectCloudSaveCustomPathApproval: (
+      approvalId: string,
+      selectedPath?: string
+    ) => Promise<SelectCloudSaveCustomPathApprovalResult>;
+    confirmCloudSaveCustomPathApproval: (
+      approvalId: string
+    ) => Promise<ConfirmCloudSaveCustomPathApprovalResult>;
+    dismissCloudSaveCustomPathApproval: (approvalId: string) => Promise<void>;
+    removeCloudSaveCustomPath: (
+      objectId: string,
+      shop: GameShop,
+      rawPath: string,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
+    setCloudSaveAutomaticSyncEnabled: (
+      objectId: string,
+      shop: GameShop,
+      enabled: boolean
+    ) => Promise<boolean>;
+    syncCloudSaveOnGamePage: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<SyncCloudSaveOnGamePageResult>;
+    syncGameCloudSave: (
+      objectId: string,
+      shop: GameShop,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
+    syncGameCloudSaveFromModal: (
+      objectId: string,
+      shop: GameShop,
+      approvalId: string | null,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<CloudSaveModalSyncResult>;
+    syncCloudSaveAfterCustomPathRebind: (
+      objectId: string,
+      shop: GameShop,
+      rawPath: string,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
+    resolveCloudSaveConflict: (
+      objectId: string,
+      shop: GameShop,
+      resolution: CloudSaveConflictResolution,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
     /* Torrenting */
     startGameDownload: (
       payload: StartGameDownloadPayload
     ) => Promise<{ ok: boolean; error?: string }>;
+    startCustomDownload: (
+      payload: StartCustomDownloadPayload
+    ) => Promise<StartCustomDownloadResult>;
     addGameToQueue: (
       payload: StartGameDownloadPayload
     ) => Promise<{ ok: boolean; error?: string }>;

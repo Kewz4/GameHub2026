@@ -17,8 +17,7 @@ import {
 import path from "node:path";
 import type { EmulatorSystem } from "@types";
 
-const startGameDownload = async (
-  _event: Electron.IpcMainInvokeEvent,
+export const startGameDownloadImpl = async (
   payload: StartGameDownloadPayload
 ) => {
   const {
@@ -52,7 +51,13 @@ const startGameDownload = async (
     `[Downloads] Start requested for ${gameKey} (downloader=${downloader})`
   );
 
-  await prepareGameEntry({ gameKey, title, objectId, shop });
+  await prepareGameEntry({
+    gameKey,
+    title,
+    objectId,
+    shop,
+    libraryOrigin: payload.customDownload ? "custom" : undefined,
+  });
   await DownloadManager.cancelDownload(gameKey);
 
   const download: Download = {
@@ -78,6 +83,7 @@ const startGameDownload = async (
     alternateUris,
     fileSize: selectedFilesSize ?? null,
     emulatorSystem: emulatorSystem ?? null,
+    customDownload: payload.customDownload,
   };
 
   try {
@@ -110,5 +116,10 @@ const startGameDownload = async (
     return handleDownloadError(err, downloader);
   }
 };
+
+const startGameDownload = async (
+  _event: Electron.IpcMainInvokeEvent,
+  payload: StartGameDownloadPayload
+) => startGameDownloadImpl(payload);
 
 registerEvent("startGameDownload", startGameDownload);

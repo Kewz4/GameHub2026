@@ -1,6 +1,6 @@
 export const PROGRESS_RESET_THRESHOLD_BYTES = 16 * 1024 * 1024;
 export const MAX_BUDGET_RESETS = 50;
-export const MAX_RESTARTS_FROM_ZERO = 3;
+export const MAX_RESUME_OVERLAP_BYTES = 1024 * 1024;
 
 export const RETRYABLE_ERROR_CODES = new Set([
   "ECONNRESET",
@@ -120,8 +120,13 @@ export function computeFileSize(input: {
 export interface ResumeAction {
   flags: "a" | "w";
   skipBytes: number;
-  restart: boolean;
   rangeIgnored: boolean;
+  rejectReason:
+    | "range-ignored"
+    | "missing-content-range"
+    | "range-gap"
+    | "excessive-overlap"
+    | null;
 }
 
 export function resolveResumeAction(input: {
@@ -130,39 +135,73 @@ export function resolveResumeAction(input: {
   partialStart: number | null;
 }): ResumeAction {
   if (input.startByte <= 0) {
-    return { flags: "w", skipBytes: 0, restart: false, rangeIgnored: false };
-  }
-
-  // Server ignored the Range request and is resending the whole file. Keep the
-  // partial and discard the prefix we already hold; this converges even on
-  // hosts that never honor Range, without throwing away downloaded progress.
-  if (input.status === 200) {
     return {
-      flags: "a",
-      skipBytes: input.startByte,
-      restart: false,
-      rangeIgnored: true,
+      flags: "w",
+      skipBytes: 0,
+      rangeIgnored: false,
+      rejectReason: null,
     };
   }
 
-  // Partial content: align to the server's actual Content-Range start.
-  if (input.partialStart !== null) {
-    if (input.partialStart > input.startByte) {
-      // Server started ahead of our data; appending would leave a gap.
-      return { flags: "w", skipBytes: 0, restart: true, rangeIgnored: false };
-    }
-    if (input.partialStart < input.startByte) {
-      // Server resent bytes we already hold; discard the overlap.
-      return {
-        flags: "a",
-        skipBytes: input.startByte - input.partialStart,
-        restart: false,
-        rangeIgnored: false,
-      };
-    }
+  // A resumed HTTP 200 means the server ignored Range and is resending the
+  // entire object. Never consume that body: doing so can waste tens of GB on
+  // every reconnect while appearing to make progress.
+  if (input.status === 200) {
+    return {
+      flags: "a",
+      skipBytes: 0,
+      rangeIgnored: true,
+      rejectReason: "range-ignored",
+    };
   }
 
-  return { flags: "a", skipBytes: 0, restart: false, rangeIgnored: false };
+  if (input.status !== 206 || input.partialStart === null) {
+    return {
+      flags: "a",
+      skipBytes: 0,
+      rangeIgnored: false,
+      rejectReason: "missing-content-range",
+    };
+  }
+
+  if (input.partialStart > input.startByte) {
+    // Appending would leave a hole. Preserve the partial instead of silently
+    // truncating it and starting over.
+    return {
+      flags: "a",
+      skipBytes: 0,
+      rangeIgnored: false,
+      rejectReason: "range-gap",
+    };
+  }
+
+  if (input.partialStart < input.startByte) {
+    const overlap = input.startByte - input.partialStart;
+    if (overlap > MAX_RESUME_OVERLAP_BYTES) {
+      return {
+        flags: "a",
+        skipBytes: 0,
+        rangeIgnored: false,
+        rejectReason: "excessive-overlap",
+      };
+    }
+
+    // A small aligned overlap is acceptable; only these already-present bytes
+    // are skipped, never an entire object returned with HTTP 200.
+    return {
+      flags: "a",
+      skipBytes: overlap,
+      rangeIgnored: false,
+      rejectReason: null,
+    };
+  }
+
+  return {
+    flags: "a",
+    skipBytes: 0,
+    rangeIgnored: false,
+    rejectReason: null,
+  };
 }
 
 export function applySkip(

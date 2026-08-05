@@ -3,7 +3,6 @@ import { createGame, trackGamePlaytime } from "./library-sync";
 import type { Game, GameRunning, UserPreferences } from "@types";
 import axios from "axios";
 import { db, gamesSublevel, levelKeys } from "@main/level";
-import { CloudSync } from "./cloud-sync";
 import { logger, networkLogger } from "./logger";
 import { PowerSaveBlockerManager } from "./power-save-blocker";
 import { OverlayManager } from "./overlay-manager";
@@ -21,10 +20,38 @@ import {
   type LinuxProcessInfo,
 } from "./linux-process-match";
 import { isWindowsBatchFile } from "@main/helpers/windows-batch-command";
+import { runAutomaticCloudSaveAfterExit } from "./cloud-save/automatic-sync-lifecycle";
+import {
+  clearCloudSaveLaunchGuard,
+  markCloudSaveLaunchSessionRunning,
+} from "./cloud-save/launch-guard";
+import {
+  clearAllExternalGameLaunches,
+  clearExternalGameLaunch,
+  confirmExternalLaunchProcess,
+  getExternalGameLaunch,
+  getPotentialExternalLaunchProcesses,
+  hasExternalGameLaunch,
+  hasTrackedExternalGameLaunches,
+  isExternalGameLaunchExpired,
+  markExternalGameLaunchSeen,
+  resetExternalLaunchObservation,
+  selectExternalLaunchProcess,
+  shouldWaitForExternalProcessHandoff,
+  withDiscoveredExecutablePath,
+  type ExternalGameLaunchState,
+  type ExternalGameProcess,
+  type ExternalProcessWindow,
+} from "./external-game-launch-tracker";
 
 export const gamesPlaytime = new Map<
   string,
-  { lastTick: number; firstTick: number; lastSyncTick: number }
+  {
+    lastTick: number;
+    firstTick: number;
+    lastSyncTick: number;
+    cloudSaveSessionToken?: string;
+  }
 >();
 
 /**
@@ -34,6 +61,22 @@ export const gamesPlaytime = new Map<
  * broadcast so the Play button flips to Close while the emulator is open.
  */
 const emulatorRunningGames = new Map<string, number>();
+
+/**
+ * Read-only session check shared by cloud-save mutation guards. This includes
+ * emulated games, whose child process is tracked separately from PC titles.
+ */
+export const isGameRunning = (
+  objectId: string,
+  shop: Game["shop"]
+): boolean => {
+  const gameKey = levelKeys.game(shop, objectId);
+  return (
+    gamesPlaytime.has(gameKey) ||
+    emulatorRunningGames.has(gameKey) ||
+    hasExternalGameLaunch(gameKey)
+  );
+};
 
 export const setEmulatorGameRunning = (
   gameKey: string,
@@ -122,43 +165,40 @@ export const gameExecutables = await getGameExecutables();
 const findGamePathByProcess = async (
   processMap: Map<string, Set<string>>,
   winePrefixMap: Map<string, string>,
-  gameId: string
-) => {
-  const executables = gameExecutables[gameId];
+  game: Game
+): Promise<Game | null> => {
+  const executables = gameExecutables[game.objectId] ?? [];
 
   for (const executable of executables) {
-    const executablewithoutExtension = executable.exe.replace(/\.exe$/i, "");
+    const executableName = executable.exe.toLowerCase();
+    const executablewithoutExtension = executableName.replace(/\.exe$/i, "");
 
     const pathSet =
-      processMap.get(executable.exe) ??
+      processMap.get(executableName) ??
       processMap.get(executablewithoutExtension);
 
     if (pathSet) {
       for (const path of pathSet) {
         if (
-          path.toLowerCase().endsWith(executable.name) ||
+          path.toLowerCase().endsWith(executable.name.toLowerCase()) ||
           path.toLowerCase().endsWith(executablewithoutExtension)
         ) {
-          const gameKey = levelKeys.game("steam", gameId);
-          const game = await gamesSublevel.get(gameKey);
+          const gameKey = levelKeys.game(game.shop, game.objectId);
+          const updatedGame = withDiscoveredExecutablePath(game, path);
 
-          if (game) {
-            const updatedGame: Game = {
-              ...game,
-              executablePath: path,
-            };
-
-            if (process.platform === "linux" && winePrefixMap.has(path)) {
-              updatedGame.winePrefixPath = winePrefixMap.get(path)!;
-            }
-
-            await gamesSublevel.put(gameKey, updatedGame);
-            logger.info("Set game path", gameKey, path);
+          if (process.platform === "linux" && winePrefixMap.has(path)) {
+            updatedGame.winePrefixPath = winePrefixMap.get(path)!;
           }
+
+          await gamesSublevel.put(gameKey, updatedGame);
+          logger.info("Set game path", gameKey, path);
+          return updatedGame;
         }
       }
     }
   }
+
+  return null;
 };
 
 const getSystemProcessMap = async () => {
@@ -175,6 +215,96 @@ const getSystemProcessMap = async () => {
   const winePrefixMap = new Map<string, string>(Object.entries(rawWineMap));
 
   return { processMap, winePrefixMap, linuxProcesses };
+};
+
+const sameExecutablePath = (left: string | null, right: string) =>
+  !!left &&
+  path.normalize(left).toLowerCase() === path.normalize(right).toLowerCase();
+
+const findProcessForPaths = (
+  processes: ExternalGameProcess[],
+  executablePaths: string[]
+) =>
+  processes.find((process) =>
+    executablePaths.some((executablePath) =>
+      sameExecutablePath(process.exe, executablePath)
+    )
+  ) ?? null;
+
+const discoverExternalLaunchProcess = (
+  state: ExternalGameLaunchState,
+  processes: ExternalGameProcess[]
+) => {
+  const possibleProcesses = getPotentialExternalLaunchProcesses(
+    state,
+    processes
+  );
+  const windows = new Map<number, ExternalProcessWindow>();
+
+  if (process.platform === "win32") {
+    for (const candidate of possibleProcesses) {
+      const bounds = NativeAddon.getProcessWindowBounds(candidate.pid);
+      if (bounds) windows.set(candidate.pid, bounds);
+    }
+  }
+
+  const match = selectExternalLaunchProcess({
+    state,
+    processes,
+    foregroundPid: NativeAddon.getForegroundProcessId(),
+    windows,
+    requireVisibleWindow: process.platform === "win32",
+  });
+
+  if (!match) {
+    resetExternalLaunchObservation(state.gameKey);
+    return null;
+  }
+
+  return confirmExternalLaunchProcess(state.gameKey, match)
+    ? match.process
+    : null;
+};
+
+const bindExternalProcessToGame = async (
+  game: Game,
+  process: ExternalGameProcess
+) => {
+  const executablePath = process.exe;
+  if (!executablePath || /^[a-z][a-z\d+.-]*:\/\//i.test(executablePath)) {
+    return game;
+  }
+
+  const previousNativePath = game.nativeExecutablePath;
+  const trackingExecutablePaths = [
+    ...(game.trackingExecutablePaths ?? []),
+    ...(previousNativePath && previousNativePath !== executablePath
+      ? [previousNativePath]
+      : []),
+  ].filter(
+    (candidate, index, values) =>
+      candidate !== executablePath && values.indexOf(candidate) === index
+  );
+
+  const updatedGame: Game = {
+    ...game,
+    // Keep the protocol in executablePath; it is still the launch command.
+    // nativeExecutablePath is detection-only for the spawned game process.
+    nativeExecutablePath: executablePath,
+    trackingExecutablePaths,
+    trackingExecutablePathsUpdatedAt: new Date(),
+  };
+
+  await gamesSublevel.put(
+    levelKeys.game(game.shop, game.objectId),
+    updatedGame
+  );
+  logger.info("Bound external game launch to visible process", {
+    gameKey: levelKeys.game(game.shop, game.objectId),
+    pid: process.pid,
+    executablePath,
+  });
+  return updatedGame;
 };
 
 const hasLinuxCompatibilityProcessMatch = (
@@ -236,20 +366,101 @@ export const watchProcesses = async () => {
   const pidToProcess = new Map<number, LinuxProcessInfo>(
     linuxProcesses.map((process) => [process.pid, process])
   );
+  const externalProcesses = hasTrackedExternalGameLaunches()
+    ? await NativeAddon.listProcesses()
+    : [];
 
   for (const game of games) {
     let detectedGame = game;
     const gameKey = levelKeys.game(game.shop, game.objectId);
+    let externalLaunch = getExternalGameLaunch(gameKey);
+
+    if (externalLaunch && isExternalGameLaunchExpired(externalLaunch)) {
+      clearExternalGameLaunch(gameKey);
+      clearCloudSaveLaunchGuard(
+        game.objectId,
+        game.shop,
+        externalLaunch.cloudSaveSessionToken ?? undefined
+      );
+      logger.warn(
+        "External game launch expired before a game process appeared",
+        {
+          gameKey,
+          protocolUrl: externalLaunch.protocolUrl,
+        }
+      );
+      externalLaunch = null;
+    }
+
     // nativeExecutablePath is set for Legendary/GOG games so we can track their real process
     const executablePath = game.nativeExecutablePath ?? game.executablePath;
     const isProtocolUrl = executablePath
-      ? /^[\w]+:\/\//.test(executablePath)
+      ? /^[a-z][a-z\d+.-]*:\/\//i.test(executablePath)
       : false;
     if (!executablePath || isProtocolUrl) {
       if (gameExecutables[game.objectId]) {
-        await findGamePathByProcess(processMap, winePrefixMap, game.objectId);
+        const manifestGame = await findGamePathByProcess(
+          processMap,
+          winePrefixMap,
+          game
+        );
+        if (manifestGame) {
+          detectedGame = manifestGame;
+          const process = findProcessForPaths(externalProcesses, [
+            manifestGame.nativeExecutablePath ??
+              manifestGame.executablePath ??
+              "",
+          ]);
+          if (process) launchedGamePids.set(gameKey, process.pid);
+          if (externalLaunch) {
+            markExternalGameLaunchSeen(gameKey, process);
+          }
+
+          if (gamesPlaytime.has(gameKey)) onTickGame(detectedGame);
+          else onOpenGame(detectedGame);
+          continue;
+        }
       }
 
+      if (externalLaunch) {
+        const boundProcess = externalLaunch.boundPid
+          ? (externalProcesses.find(
+              ({ pid }) => pid === externalLaunch?.boundPid
+            ) ?? null)
+          : null;
+
+        if (boundProcess) {
+          launchedGamePids.set(gameKey, boundProcess.pid);
+          markExternalGameLaunchSeen(gameKey, boundProcess);
+          if (gamesPlaytime.has(gameKey)) onTickGame(detectedGame);
+          else onOpenGame(detectedGame);
+          continue;
+        }
+
+        const discoveredProcess = discoverExternalLaunchProcess(
+          externalLaunch,
+          externalProcesses
+        );
+        if (discoveredProcess) {
+          detectedGame = await bindExternalProcessToGame(
+            detectedGame,
+            discoveredProcess
+          );
+          launchedGamePids.set(gameKey, discoveredProcess.pid);
+          if (gamesPlaytime.has(gameKey)) onTickGame(detectedGame);
+          else onOpenGame(detectedGame);
+          continue;
+        }
+
+        if (
+          gamesPlaytime.has(gameKey) &&
+          shouldWaitForExternalProcessHandoff(externalLaunch)
+        ) {
+          continue;
+        }
+      }
+
+      if (gamesPlaytime.has(gameKey)) onCloseGame(detectedGame);
       continue;
     }
 
@@ -345,6 +556,44 @@ export const watchProcesses = async () => {
       );
     }
 
+    if (externalLaunch) {
+      const boundProcess = externalLaunch.boundPid
+        ? (externalProcesses.find(
+            ({ pid }) => pid === externalLaunch?.boundPid
+          ) ?? null)
+        : null;
+      const exactProcess =
+        boundProcess ?? findProcessForPaths(externalProcesses, matchPaths);
+
+      if (exactProcess) {
+        hasProcess = true;
+        launchedGamePids.set(gameKey, exactProcess.pid);
+        markExternalGameLaunchSeen(gameKey, exactProcess);
+      } else if (hasProcess) {
+        // The compact process map proved the executable is alive even if the
+        // detailed PID enumeration was unavailable for this tick.
+        markExternalGameLaunchSeen(gameKey);
+      } else {
+        const discoveredProcess = discoverExternalLaunchProcess(
+          externalLaunch,
+          externalProcesses
+        );
+        if (discoveredProcess) {
+          detectedGame = await bindExternalProcessToGame(
+            detectedGame,
+            discoveredProcess
+          );
+          launchedGamePids.set(gameKey, discoveredProcess.pid);
+          hasProcess = true;
+        } else if (
+          gamesPlaytime.has(gameKey) &&
+          shouldWaitForExternalProcessHandoff(externalLaunch)
+        ) {
+          continue;
+        }
+      }
+    }
+
     if (hasProcess) {
       if (gamesPlaytime.has(gameKey)) {
         onTickGame(detectedGame);
@@ -382,11 +631,23 @@ export const watchProcesses = async () => {
 function onOpenGame(game: Game) {
   const now = performance.now();
   const gameKey = levelKeys.game(game.shop, game.objectId);
+  const externalLaunch = getExternalGameLaunch(gameKey);
+  const expectedSessionToken = externalLaunch?.cloudSaveSessionToken;
+  const cloudSaveSession = externalLaunch
+    ? expectedSessionToken
+      ? markCloudSaveLaunchSessionRunning(
+          game.objectId,
+          game.shop,
+          expectedSessionToken
+        )
+      : null
+    : markCloudSaveLaunchSessionRunning(game.objectId, game.shop);
 
   gamesPlaytime.set(gameKey, {
     lastTick: now,
     firstTick: now,
     lastSyncTick: now,
+    cloudSaveSessionToken: cloudSaveSession?.token,
   });
 
   logPlaytimeTrace("session-open", game, {
@@ -565,6 +826,7 @@ const onCloseGame = (game: Game) => {
   const now = performance.now();
   const gamePlaytime = gamesPlaytime.get(gameKey)!;
   gamesPlaytime.delete(gameKey);
+  clearExternalGameLaunch(gameKey);
   launchedGamePids.delete(gameKey);
   PowerSaveBlockerManager.markGameClosed(gameKey);
   RaWatcherManager.stopPolling(game);
@@ -588,20 +850,20 @@ const onCloseGame = (game: Game) => {
 
   gamesSublevel.put(gameKey, updatedGame);
 
-  // Automatic cloud sync: back up + upload the save on game close (runs for
-  // all shops including custom games). Failures are logged, not silent.
-  if (game.automaticCloudSync) {
-    CloudSync.uploadSaveGameIfChanged(
-      game.objectId,
-      game.shop,
-      CloudSync.getBackupLabel(true)
-    ).catch((err) => {
-      logger.error(
-        `[cloud-sync] automatic upload on close failed for ${game.shop}:${game.objectId}`,
-        err
-      );
+  // Resolve disabled | legacy | v2 once and invoke exactly one backend. This
+  // runs for every GameShop, including custom and store-URI titles.
+  void runAutomaticCloudSaveAfterExit(
+    game.objectId,
+    game.shop,
+    gamePlaytime.cloudSaveSessionToken
+  ).catch((error: unknown) => {
+    logger.error("[Cloud Save] Automatic post-exit sync failed", {
+      shop: game.shop,
+      objectId: game.objectId,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : String(error),
     });
-  }
+  });
 
   if (game.shop === "custom") return;
 
@@ -671,4 +933,5 @@ export const clearGamesPlaytime = async () => {
   }
 
   gamesPlaytime.clear();
+  clearAllExternalGameLaunches();
 };

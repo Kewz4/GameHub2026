@@ -9,6 +9,7 @@ import type {
 } from "@types";
 import { R2Sync } from "@main/services/r2-sync";
 import { db, levelKeys } from "@main/level";
+import { assertEmulationSaveKeyForUser } from "../cloud-save/game-artifact-key-policy";
 import {
   readSaveContents as readPs2SaveContents,
   buildPsuBuffer as buildPs2PsuBuffer,
@@ -220,6 +221,8 @@ export const listEmulationSaves = async (
 };
 
 export const deleteEmulationSave = async (saveId: string): Promise<void> => {
+  const userId = await getOrCreateUserId();
+  assertEmulationSaveKeyForUser(saveId, userId);
   await R2Sync.deleteEmulationSave(saveId);
 };
 
@@ -227,9 +230,10 @@ export const updateEmulationSaveLabel = async (
   saveId: string,
   label: string
 ): Promise<EmulationCloudSave> => {
+  const userId = await getOrCreateUserId();
+  assertEmulationSaveKeyForUser(saveId, userId);
   await R2Sync.updateEmulationSaveLabel(saveId, label);
   // Return a minimal updated record; callers only need the id/label shape.
-  const userId = await getOrCreateUserId();
   const artifacts = await R2Sync.listEmulationSaves(userId);
   const updated = artifacts.find((a) => a.id === saveId);
   if (updated) return artifactToCloudSave(updated);
@@ -257,6 +261,8 @@ export const updateEmulationSaveLabel = async (
 export const downloadEmulationSave = async (
   saveId: string
 ): Promise<Buffer> => {
+  const userId = await getOrCreateUserId();
+  assertEmulationSaveKeyForUser(saveId, userId);
   return R2Sync.downloadEmulationSave(saveId);
 };
 

@@ -5,6 +5,23 @@ import { Worker } from "node:worker_threads";
 
 import { app } from "electron";
 import type { ProcessPayload } from "./download/types";
+import type {
+  BuildLocalGameSnapshotPipelineInput,
+  BuildSnapshotAggregateHashInput,
+  CheckCloudSaveCustomPathOverlapInput,
+  CheckCloudSaveCustomPathOverlapResult,
+  DeleteLocalSaveTarget,
+  DeleteLocalSaveTargetsResult,
+  GameSaveRules,
+  GetSaveRulesForGameInput,
+  NativeLocalGameSnapshotPipelineResult,
+  ReplaceRestoreTarget,
+  ReplaceRestoreTargetsResult,
+  ResolveRestoreTargetsInput,
+  ResolveRestoreTargetsResult,
+  ShouldSkipRestoreFileInput,
+  VerifyDownloadedRestoreFileResult,
+} from "@types";
 
 import { logger } from "./logger";
 
@@ -21,6 +38,53 @@ type HydraNativeModule = {
     targetExtension?: string
   ) => NativeProcessProfileImageResponse;
   listProcesses: () => ProcessPayload[];
+  buildLocalGameSnapshotPipeline: (
+    input: BuildLocalGameSnapshotPipelineInput
+  ) => Promise<NativeLocalGameSnapshotPipelineResult>;
+  getSaveRulesForGame: (
+    input: GetSaveRulesForGameInput
+  ) => Promise<GameSaveRules>;
+  buildSnapshotAggregateHash: (
+    input: BuildSnapshotAggregateHashInput
+  ) => string;
+  checkCloudSaveCustomPathOverlap: (
+    input: CheckCloudSaveCustomPathOverlapInput
+  ) => CheckCloudSaveCustomPathOverlapResult;
+  uploadLocalSaveBlob: (
+    absolutePath: string,
+    uploadUrl: string,
+    contentLength: string,
+    checksumSha256: string
+  ) => Promise<void>;
+  resolveRestoreTargets: (
+    input: ResolveRestoreTargetsInput
+  ) => Promise<ResolveRestoreTargetsResult>;
+  downloadRestoreBlobToTemp: (
+    snapshotId: string,
+    hash: string,
+    expectedSizeBytes: number,
+    downloadUrl: string,
+    tempRoot: string
+  ) => Promise<string>;
+  verifyDownloadedRestoreFile: (
+    tempPath: string,
+    expectedHash: string
+  ) => Promise<VerifyDownloadedRestoreFileResult>;
+  shouldSkipRestoreFile: (
+    localPath: string,
+    expectedHash: string
+  ) => Promise<boolean>;
+  replaceRestoreTargets: (
+    files: ReplaceRestoreTarget[]
+  ) => Promise<ReplaceRestoreTargetsResult>;
+  deleteLocalSaveTargets: (
+    files: DeleteLocalSaveTarget[],
+    cleanupRootPaths?: string[]
+  ) => Promise<DeleteLocalSaveTargetsResult>;
+  cleanupRestoreTempSnapshot: (
+    snapshotId: string,
+    tempRoot: string
+  ) => Promise<void>;
   // In-game overlay natives (Windows-only; no-op fallbacks elsewhere).
   startOverlayKeyboardWatcher: () => boolean;
   getOverlayKeyboardEventCount: () => number;
@@ -63,6 +127,7 @@ type HydraNativeModule = {
   forceForegroundWindow: (windowHandle: number) => boolean;
   createOverlayInputGate: () => boolean;
   setOverlayInputBlock: (blocked: boolean) => boolean;
+  setOverlayInputGate: (targetPid: number, blocked: boolean) => boolean;
   injectInputHook: (
     pid: number,
     dllPath: string
@@ -548,6 +613,18 @@ export class NativeAddon {
     }
   }
 
+  /** Gate input only inside the selected render process. */
+  public static setOverlayInputGate(
+    targetPid: number,
+    blocked: boolean
+  ): boolean {
+    try {
+      return this.load().setOverlayInputGate(targetPid, blocked);
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Inject the input gate into `pid`. Safe to call repeatedly: loading the same
    * DLL twice returns the existing module without starting a second worker.
@@ -576,6 +653,96 @@ export class NativeAddon {
         errorCode: 0,
       };
     }
+  }
+
+  // ── Cloud Saves V2 native pipeline ───────────────────────────────────────
+
+  public static buildLocalGameSnapshotPipeline(
+    input: BuildLocalGameSnapshotPipelineInput
+  ) {
+    return this.load().buildLocalGameSnapshotPipeline(input);
+  }
+
+  public static getSaveRulesForGame(input: GetSaveRulesForGameInput) {
+    return this.load().getSaveRulesForGame(input);
+  }
+
+  public static checkCloudSaveCustomPathOverlap(
+    input: CheckCloudSaveCustomPathOverlapInput
+  ) {
+    return this.load().checkCloudSaveCustomPathOverlap(input);
+  }
+
+  public static buildSnapshotAggregateHash(
+    input: BuildSnapshotAggregateHashInput
+  ) {
+    return this.load().buildSnapshotAggregateHash(input);
+  }
+
+  public static uploadLocalSaveBlob(
+    absolutePath: string,
+    uploadUrl: string,
+    contentLength: string,
+    checksumSha256: string
+  ) {
+    return this.load().uploadLocalSaveBlob(
+      absolutePath,
+      uploadUrl,
+      contentLength,
+      checksumSha256
+    );
+  }
+
+  public static resolveRestoreTargets(input: ResolveRestoreTargetsInput) {
+    return this.load().resolveRestoreTargets(input);
+  }
+
+  public static downloadRestoreBlobToTemp(
+    snapshotId: string,
+    hash: string,
+    expectedSizeBytes: number,
+    downloadUrl: string,
+    tempRoot: string
+  ) {
+    return this.load().downloadRestoreBlobToTemp(
+      snapshotId,
+      hash,
+      expectedSizeBytes,
+      downloadUrl,
+      tempRoot
+    );
+  }
+
+  public static verifyDownloadedRestoreFile(
+    tempPath: string,
+    expectedHash: string
+  ) {
+    return this.load().verifyDownloadedRestoreFile(tempPath, expectedHash);
+  }
+
+  public static shouldSkipRestoreFile(input: ShouldSkipRestoreFileInput) {
+    return this.load().shouldSkipRestoreFile(
+      input.localPath,
+      input.expectedHash
+    );
+  }
+
+  public static replaceRestoreTargets(files: ReplaceRestoreTarget[]) {
+    return this.load().replaceRestoreTargets(files);
+  }
+
+  public static deleteLocalSaveTargets(
+    files: DeleteLocalSaveTarget[],
+    cleanupRootPaths?: string[]
+  ) {
+    return this.load().deleteLocalSaveTargets(files, cleanupRootPaths);
+  }
+
+  public static cleanupRestoreTempSnapshot(
+    snapshotId: string,
+    tempRoot: string
+  ) {
+    return this.load().cleanupRestoreTempSnapshot(snapshotId, tempRoot);
   }
 
   // ── Per-app volume mixer (Windows Core Audio) ─────────────────────────────

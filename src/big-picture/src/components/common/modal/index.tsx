@@ -25,6 +25,8 @@ export interface ModalProps {
   closeOnB?: boolean;
   ariaLabel?: string;
   animateLayout?: boolean;
+  /** Focus target used when this modal creates its navigation layer. */
+  initialFocusId?: string;
 }
 
 export const MODAL_OWNED_OVERLAY_ATTRIBUTE = "data-hydra-modal-owned-overlay";
@@ -43,6 +45,7 @@ export function Modal({
   closeOnB = true,
   ariaLabel = title,
   animateLayout = false,
+  initialFocusId,
 }: Readonly<ModalProps>) {
   const modalContentRef = useRef<HTMLDivElement | null>(null);
 
@@ -137,7 +140,10 @@ export function Modal({
                 layout: { duration: 0.4, ease: "easeInOut" },
               }}
             >
-              <NavigationLayer rootRegionId={modalContentRef.current?.id}>
+              <NavigationLayer
+                rootRegionId={modalContentRef.current?.id}
+                initialFocusId={initialFocusId}
+              >
                 <div className="modal__header">
                   {coverImage && (
                     <div className="modal__header-cover-image">

@@ -12,6 +12,8 @@ import { db } from "@main/level";
 import { levelKeys } from "@main/level/sublevels";
 import type { Auth, User } from "@types";
 import { WSClient } from "./ws";
+import { prepareCloudSaveAccountNamespace } from "./cloud-save-namespace-state";
+import { invalidateR2CredentialSession } from "./r2-credential-session";
 
 export interface HydraApiOptions {
   needsAuth?: boolean;
@@ -47,6 +49,15 @@ export class HydraApi {
     return this.userAuth.authToken !== "";
   }
 
+  /**
+   * Return a current bearer for trusted main-process service calls. The token
+   * is never exposed to a renderer and is refreshed before it is returned.
+   */
+  public static async getAccessToken() {
+    await this.validateOptions({ needsAuth: true });
+    return this.userAuth.authToken;
+  }
+
   public static hasActiveSubscription() {
     // Cloud saves and achievements are free for all logged-in users
     return this.isLoggedIn();
@@ -67,6 +78,7 @@ export class HydraApi {
       this.secondsToMilliseconds(expiresIn) -
       this.EXPIRATION_OFFSET_IN_MS;
 
+    invalidateR2CredentialSession();
     this.userAuth = {
       authToken: accessToken,
       refreshToken: refreshToken,
@@ -90,6 +102,10 @@ export class HydraApi {
       { valueEncoding: "json" }
     );
 
+    const previouslyPersistedUser = await db
+      .get<string, User>(levelKeys.user, { valueEncoding: "json" })
+      .catch(() => null);
+
     await getUserData().then(async (userDetails) => {
       if (userDetails?.subscription) {
         this.userAuth.subscription = {
@@ -98,25 +114,15 @@ export class HydraApi {
             : null,
         };
       }
-      // Anchor the cloud-storage namespace to the stable Hydra account id so
-      // R2 save/image folders survive reinstalls (a fresh random id would
-      // orphan every existing backup under a new folder).
       if (userDetails?.id) {
-        const prefs = await db
-          .get<
-            string,
-            Record<string, unknown> | null
-          >(levelKeys.userPreferences, { valueEncoding: "json" })
-          .catch(() => null);
-        if (prefs?.cloudSyncUserId !== userDetails.id) {
-          await db
-            .put(
-              levelKeys.userPreferences,
-              { ...(prefs ?? {}), cloudSyncUserId: userDetails.id },
-              { valueEncoding: "json" }
-            )
-            .catch(() => {});
-        }
+        await prepareCloudSaveAccountNamespace(
+          userDetails.id,
+          previouslyPersistedUser?.id ?? null
+        );
+        const { migratePendingCloudSaveAccountNamespace } = await import(
+          "./cloud-save-namespace-migration"
+        );
+        await migratePendingCloudSaveAccountNamespace();
       }
     });
 
@@ -139,6 +145,7 @@ export class HydraApi {
   }
 
   static handleSignOut() {
+    invalidateR2CredentialSession();
     this.userAuth = {
       authToken: "",
       refreshToken: "",
@@ -247,6 +254,17 @@ export class HydraApi {
 
     const updatedUserData = await getUserData();
 
+    if (updatedUserData?.id && this.isLoggedIn()) {
+      await prepareCloudSaveAccountNamespace(
+        updatedUserData.id,
+        user?.id ?? null
+      );
+      const { migratePendingCloudSaveAccountNamespace } = await import(
+        "./cloud-save-namespace-migration"
+      );
+      await migratePendingCloudSaveAccountNamespace();
+    }
+
     this.userAuth.subscription = updatedUserData?.subscription
       ? {
           expiresAt: updatedUserData.subscription.expiresAt,
@@ -317,12 +335,9 @@ export class HydraApi {
 
   private static readonly handleUnauthorizedError = (err) => {
     if (err instanceof AxiosError && err.response?.status === 401) {
-      logger.error(
-        "401 - Current credentials:",
-        this.userAuth,
-        err.response?.data
-      );
+      logger.error("401 - Clearing expired user credentials");
 
+      invalidateR2CredentialSession();
       this.userAuth = {
         authToken: "",
         expirationTimestamp: 0,

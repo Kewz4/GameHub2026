@@ -128,6 +128,18 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Validate release R2 credential broker
+        if: needs.prepare_release.outputs.should_release == 'true'
+        shell: bash
+        env:
+          R2_CREDENTIALS_URL: ${{ vars.MAIN_VITE_R2_CREDENTIALS_URL }}
+        run: |
+          if [ -z "$R2_CREDENTIALS_URL" ]; then
+            echo "MAIN_VITE_R2_CREDENTIALS_URL must be configured before publishing a release."
+            exit 1
+          fi
+          node -e 'const url = new URL(process.env.R2_CREDENTIALS_URL); if (url.protocol !== "https:") process.exit(1); const health = new URL("/health", url); fetch(health, { headers: { Accept: "application/json", "Cache-Control": "no-store" } }).then(async response => { const body = await response.json().catch(() => null); if (!response.ok || body?.ok !== true) throw new Error(`R2 credential broker is not ready (${response.status})`); }).catch(error => { console.error(error.message); process.exit(1); });'
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -196,6 +208,9 @@ jobs:
           MAIN_VITE_CHECKOUT_URL: ${{ vars.MAIN_VITE_CHECKOUT_URL || 'https://checkout.hydralauncher.gg' }}
           MAIN_VITE_WS_URL: ${{ vars.MAIN_VITE_WS_URL || 'wss://ws.hydralauncher.gg' }}
           MAIN_VITE_NIMBUS_API_URL: ${{ vars.MAIN_VITE_NIMBUS_API_URL || '' }}
+          MAIN_VITE_R2_CREDENTIALS_URL: ${{ vars.MAIN_VITE_R2_CREDENTIALS_URL || '' }}
+          MAIN_VITE_R2_ENDPOINT: ${{ vars.MAIN_VITE_R2_ENDPOINT || '' }}
+          MAIN_VITE_R2_BUCKET: ${{ vars.MAIN_VITE_R2_BUCKET || 'gamehub' }}
           RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
           MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
 

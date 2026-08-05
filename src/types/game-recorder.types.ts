@@ -51,6 +51,9 @@ export interface GameRecorderSaveResult {
 export interface GameRecorderCaptureCommand {
   type: "start" | "stop" | "flush";
   configuration?: GameRecorderPreferences;
+  /** Drop the encoder's current unfinished slice. Used when capture stops
+   * because another window became foreground, so desktop frames cannot leak. */
+  discardPending?: boolean;
 }
 
 export interface GameRecorderSegmentMetadata {

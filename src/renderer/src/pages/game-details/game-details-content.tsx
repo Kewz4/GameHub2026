@@ -16,11 +16,10 @@ import { GameReviews } from "./game-reviews";
 import { GameLogo } from "./game-logo";
 import { PlatformBadge } from "./platform-badge";
 
-import { AuthPage } from "@shared";
 import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
 
-import cloudIconAnimated from "@renderer/assets/icons/cloud-animated.gif";
 import { useUserDetails } from "@renderer/hooks";
+import { CloudSaveWidget } from "./cloud-save-v2";
 import "./game-details.scss";
 import "./hero.scss";
 
@@ -75,7 +74,7 @@ export function GameDetailsContent() {
     setGameOptionsInitialCategory,
   } = useContext(gameDetailsContext);
 
-  const { userDetails, hasActiveSubscription } = useUserDetails();
+  const { userDetails } = useUserDetails();
 
   const { getGameArtifacts } = useContext(cloudSyncContext);
 
@@ -131,22 +130,6 @@ export function GameDetailsContent() {
   useEffect(() => {
     setBackdropOpacity(1);
   }, [objectId]);
-
-  const handleCloudSaveButtonClick = () => {
-    if (!userDetails) {
-      window.electron.openAuthWindow(AuthPage.SignIn);
-      return;
-    }
-
-    if (!hasActiveSubscription) {
-      setGameOptionsInitialCategory("hydra_cloud");
-      setShowGameOptionsModal(true);
-      return;
-    }
-
-    setGameOptionsInitialCategory("hydra_cloud");
-    setShowGameOptionsModal(true);
-  };
 
   const handleEditGameClick = () => {
     setGameOptionsInitialCategory("assets");
@@ -228,22 +211,7 @@ export function GameDetailsContent() {
                   </button>
                 )}
 
-                {game?.shop !== "custom" && (
-                  <button
-                    type="button"
-                    className="game-details__cloud-sync-button"
-                    onClick={handleCloudSaveButtonClick}
-                  >
-                    <div className="game-details__cloud-icon-container">
-                      <img
-                        src={cloudIconAnimated}
-                        alt=""
-                        className="game-details__cloud-icon"
-                      />
-                    </div>
-                    {t("cloud_save")}
-                  </button>
-                )}
+                {game && objectId && <CloudSaveWidget />}
               </div>
             </div>
 

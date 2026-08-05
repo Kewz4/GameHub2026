@@ -1,6 +1,6 @@
 {
   "name": "hydralauncher",
-  "version": "1.1.38",
+  "version": "1.1.39",
   "description": "GameHub",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
@@ -22,7 +22,11 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test:spotify": "node --test scripts/tests/spotify-helpers.test.ts",
     "test:overlay": "node --test scripts/tests/overlay-performance-metrics.test.ts",
+    "test:recorder": "node --test scripts/tests/game-recorder.test.ts",
+    "test:r2-credentials": "node --test src/main/services/r2-credential-provider.test.ts",
+    "test:downloads": "tsx --test src/main/services/download/js-http-downloader-helpers.test.ts src/main/services/download/torbox-helpers.test.ts src/main/services/download-network-policy.test.ts && node --test scripts/tests/torbox-generated-zip-recovery.test.mjs",
     "test:cloud-sync": "node --test scripts/tests/cloud-sync-operation-guard.test.ts scripts/tests/ludusavi-path-discovery.test.ts scripts/tests/ludusavi-game-mapping.test.ts scripts/tests/manual-save-path.test.ts scripts/tests/restore-path-safety.test.ts scripts/tests/emulator-save-paths.test.ts scripts/tests/emulator-title-id.test.ts",
+    "test:cloud-save-v2": "tsx --test --test-concurrency=4 \"src/main/services/cloud-save/*.test.ts\" \"src/main/services/cloud-save-namespace-state.test.ts\" \"src/main/services/cloud-save-local-namespace-migration.test.ts\" \"src/renderer/src/pages/game-details/cloud-save-v2/*.test.ts\" \"src/big-picture/src/components/pages/game/cloud-save-v2/*.test.ts\" \"infra/r2-credentials-worker/src/index.test.ts\" scripts/tests/cloud-save-lifecycle-mode.test.ts scripts/tests/emulator-session-finalizer.test.ts",
     "build:native": "node ./scripts/build-native-addon.cjs",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
@@ -158,6 +162,7 @@
     "react-dom": "^18.2.0",
     "sass-embedded": "^1.80.6",
     "ts-node": "^10.9.2",
+    "tsx": "4.23.1",
     "typescript": "^5.3.3",
     "vite": "6.4.2",
     "vite-plugin-svgr": "^4.5.0"

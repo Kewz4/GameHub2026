@@ -33,12 +33,19 @@ const closeGame = async (
 
   const launchedPid = launchedGamePids.get(levelKeys.game(shop, objectId));
   const trackingPaths = game.trackingExecutablePaths?.filter(Boolean) ?? [];
-  const targetPaths =
-    game.executablePath && !isWindowsBatchFile(game.executablePath)
-      ? [game.executablePath, ...trackingPaths]
-      : trackingPaths;
+  const targetPaths = [
+    game.nativeExecutablePath,
+    ...(game.executablePath &&
+    !isWindowsBatchFile(game.executablePath) &&
+    !/^[a-z][a-z\d+.-]*:\/\//i.test(game.executablePath)
+      ? [game.executablePath]
+      : []),
+    ...trackingPaths,
+  ].filter((targetPath): targetPath is string => Boolean(targetPath));
 
   const gameProcesses = processes.filter((runningProcess) => {
+    if (runningProcess.pid === launchedPid) return true;
+
     const matchesTargetPath = targetPaths.some((targetPath) => {
       if (process.platform === "linux") {
         return processReferencesExecutable(
@@ -51,23 +58,16 @@ const closeGame = async (
         );
       }
 
-      return runningProcess.exe === targetPath;
+      return (
+        !!runningProcess.exe &&
+        path.normalize(runningProcess.exe).toLowerCase() ===
+          path.normalize(targetPath).toLowerCase()
+      );
     });
 
     if (matchesTargetPath) return true;
 
-    return (
-      process.platform === "linux" &&
-      runningProcess.pid === launchedPid &&
-      processReferencesExecutable(
-        {
-          cwd: runningProcess.cwd,
-          exe: runningProcess.exe,
-          appImagePath: runningProcess.environ?.APPIMAGE,
-        },
-        game.executablePath ?? ""
-      )
-    );
+    return false;
   });
 
   const linuxFallbackProcess =

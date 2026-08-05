@@ -1,3 +1,19 @@
+mod cloud_save;
+mod constants;
+
+pub use cloud_save::hashing::{build_snapshot_aggregate_hash, hash_local_save_file};
+pub use cloud_save::local_snapshot::build_local_game_snapshot;
+pub use cloud_save::manifest::get_save_rules_for_game;
+pub use cloud_save::path_resolution::resolve_save_rules;
+pub use cloud_save::pipeline::build_local_game_snapshot_pipeline;
+pub use cloud_save::restore::{
+    cleanup_restore_temp_snapshot, delete_local_save_targets, download_restore_blob_to_temp,
+    replace_restore_targets, resolve_restore_targets, should_skip_restore_file,
+    verify_downloaded_restore_file,
+};
+pub use cloud_save::save_scanner::scan_resolved_save_rules;
+pub use cloud_save::upload::upload_local_save_blob;
+
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -50,26 +66,29 @@ use windows_sys::Win32::Security::{
     GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
 };
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::System::LibraryLoader::{
-    GetModuleHandleW, GetProcAddress, LoadLibraryExW,
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-    TH32CS_SNAPPROCESS,
-};
+use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryExW};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Memory::{
-    CreateFileMappingW, MapViewOfFile, FILE_MAP_WRITE, PAGE_READWRITE,
+    CreateFileMappingW, MapViewOfFile, OpenFileMappingW, FILE_MAP_READ, FILE_MAP_WRITE,
+    PAGE_READWRITE,
 };
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess, OpenProcess, OpenProcessToken,
-    WaitForSingleObject, PROCESS_CREATE_THREAD, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE, TerminateProcess,
+    TerminateProcess, WaitForSingleObject, PROCESS_CREATE_THREAD,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ,
+    PROCESS_VM_WRITE,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetActiveWindow;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::{
     GetRawInputData, RegisterRawInputDevices, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER,
@@ -85,13 +104,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW,
     GetWindowThreadProcessId, IsIconic, IsWindowVisible, RegisterClassW, SetForegroundWindow,
     SetWindowPos, ShowWindow, TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST,
-    MSG, SW_HIDE, SW_SHOWNORMAL, SWP_NOACTIVATE, SW_RESTORE, WM_INPUT, WNDCLASSW,
-    WS_EX_TOOLWINDOW,
+    MSG, SWP_NOACTIVATE, SW_HIDE, SW_RESTORE, SW_SHOWNORMAL, WM_INPUT, WNDCLASSW, WS_EX_TOOLWINDOW,
 };
-#[cfg(target_os = "windows")]
-use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
-#[cfg(target_os = "windows")]
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetActiveWindow;
 
 // Per-app volume mixer (Core Audio) — higher-level `windows` COM bindings.
 #[cfg(target_os = "windows")]
@@ -262,35 +276,23 @@ fn extended_xinput_get_state() -> Option<XInputGetStateFn> {
         const XINPUT_GET_STATE_EX_ORDINAL: usize = 100;
 
         for dll_name in ["xinput1_4.dll", "xinput1_3.dll"] {
-            let wide_name: Vec<u16> = dll_name
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect();
+            let wide_name: Vec<u16> = dll_name.encode_utf16().chain(std::iter::once(0)).collect();
             let module = unsafe {
-                LoadLibraryExW(
-                    wide_name.as_ptr(),
-                    null_mut(),
-                    LOAD_LIBRARY_SEARCH_SYSTEM32,
-                )
+                LoadLibraryExW(wide_name.as_ptr(), null_mut(), LOAD_LIBRARY_SEARCH_SYSTEM32)
             };
             if module.is_null() {
                 continue;
             }
 
-            let procedure = unsafe {
-                GetProcAddress(
-                    module,
-                    XINPUT_GET_STATE_EX_ORDINAL as *const u8,
-                )
-            };
+            let procedure =
+                unsafe { GetProcAddress(module, XINPUT_GET_STATE_EX_ORDINAL as *const u8) };
             if let Some(procedure) = procedure {
                 // Keep the module loaded for the process lifetime: the cached
                 // function pointer is only valid while its DLL remains loaded.
                 let get_state = unsafe {
-                    std::mem::transmute::<
-                        unsafe extern "system" fn() -> isize,
-                        XInputGetStateFn,
-                    >(procedure)
+                    std::mem::transmute::<unsafe extern "system" fn() -> isize, XInputGetStateFn>(
+                        procedure,
+                    )
                 };
                 return Some(get_state);
             }
@@ -612,9 +614,8 @@ fn stop_elevated_presentmon_process() -> bool {
     let process_handle = process.handle as *mut std::ffi::c_void;
     let mut exit_code = 0;
     const STILL_ACTIVE: u32 = 259;
-    let already_exited =
-        unsafe { GetExitCodeProcess(process_handle, &mut exit_code) } != 0
-            && exit_code != STILL_ACTIVE;
+    let already_exited = unsafe { GetExitCodeProcess(process_handle, &mut exit_code) } != 0
+        && exit_code != STILL_ACTIVE;
 
     // Ask the elevated bridge to stop PresentMon first. The bridge owns the
     // child handle and can terminate it even when GameHub remains at normal
@@ -674,9 +675,7 @@ pub async fn launch_elevated_presentmon(
         // normal-integrity GameHub process cannot tail it while PresentMon is
         // elevated. Launch our tiny elevated bridge instead: it captures
         // PresentMon's row-flushed --output_stdout into a share-readable file.
-        let Some(resources_directory) = Path::new(&executable)
-            .parent()
-            .and_then(Path::parent)
+        let Some(resources_directory) = Path::new(&executable).parent().and_then(Path::parent)
         else {
             return false;
         };
@@ -1147,8 +1146,7 @@ impl Drop for ComGuard {
 
 #[cfg(target_os = "windows")]
 unsafe fn session_manager() -> windows::core::Result<IAudioSessionManager2> {
-    let enumerator: IMMDeviceEnumerator =
-        CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
     let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)?;
     device.Activate(CLSCTX_ALL, None)
 }
@@ -1174,7 +1172,10 @@ unsafe fn collect_sessions() -> windows::core::Result<Vec<AudioSession>> {
         let pid = control2.GetProcessId().unwrap_or(0);
         let simple: ISimpleAudioVolume = control.cast()?;
         let volume = simple.GetMasterVolume().unwrap_or(0.0);
-        let muted = simple.GetMute().map(|value| value.as_bool()).unwrap_or(false);
+        let muted = simple
+            .GetMute()
+            .map(|value| value.as_bool())
+            .unwrap_or(false);
         raw.push((pid, volume, muted));
     }
 
@@ -1454,8 +1455,17 @@ fn mime_type_from_image_format(format: Option<ImageFormat>) -> Option<&'static s
 #[cfg(target_os = "windows")]
 const INPUT_GATE_MAPPING_NAME: &str = "Local\\GameHubOverlayInputBlock";
 
+/// Cross-process layout, expressed as aligned u32 words so every update is an
+/// atomic Win32 store. Word order is owner PID, target PID, blocked flag.
+/// Writers always clear the blocked word first and set it last, so a torn
+/// update can only fail open.
+#[cfg(target_os = "windows")]
+const INPUT_GATE_WORDS: usize = 3;
+
 #[cfg(target_os = "windows")]
 static INPUT_GATE_VIEW: OnceLock<usize> = OnceLock::new();
+#[cfg(target_os = "windows")]
+static INPUT_GATE_MAPPING_HANDLE: OnceLock<usize> = OnceLock::new();
 
 #[cfg(target_os = "windows")]
 fn wide_string(text: &str) -> Vec<u16> {
@@ -1471,25 +1481,37 @@ pub fn create_overlay_input_gate() -> bool {
             return true;
         }
         unsafe {
+            let mapping_name = wide_string(INPUT_GATE_MAPPING_NAME);
             let mapping = CreateFileMappingW(
                 INVALID_HANDLE_VALUE,
                 null(),
                 PAGE_READWRITE,
                 0,
-                size_of::<u32>() as u32,
-                wide_string(INPUT_GATE_MAPPING_NAME).as_ptr(),
+                (size_of::<u32>() * INPUT_GATE_WORDS) as u32,
+                mapping_name.as_ptr(),
             );
             if mapping.is_null() {
                 return false;
             }
-            let view = MapViewOfFile(mapping, FILE_MAP_WRITE, 0, 0, size_of::<u32>());
-            // The mapping object outlives the handle as long as the view is
-            // held, and the view is never unmapped.
-            CloseHandle(mapping);
+            let view = MapViewOfFile(
+                mapping,
+                FILE_MAP_WRITE,
+                0,
+                0,
+                size_of::<u32>() * INPUT_GATE_WORDS,
+            );
             if view.Value.is_null() {
+                CloseHandle(mapping);
                 return false;
             }
-            std::ptr::write_volatile(view.Value as *mut u32, 0);
+            let words = view.Value as *mut u32;
+            std::ptr::write_volatile(words.add(2), 0);
+            std::ptr::write_volatile(words, GetCurrentProcessId());
+            std::ptr::write_volatile(words.add(1), 0);
+            // A mapped view keeps the section's bytes alive but not its name
+            // available to OpenFileMapping. Retain the creator handle for the
+            // launcher lifetime so injected processes can discover it.
+            let _ = INPUT_GATE_MAPPING_HANDLE.set(mapping as usize);
             let _ = INPUT_GATE_VIEW.set(view.Value as usize);
             true
         }
@@ -1499,22 +1521,62 @@ pub fn create_overlay_input_gate() -> bool {
     false
 }
 
-/// Set or clear the gate. The injected DLL polls this on the game's input path,
-/// so the effect is immediate and needs no IPC round trip.
+/// Diagnostic used by the native regression fixture to prove the named
+/// mapping is visible across a process boundary.
+#[napi]
+pub fn is_overlay_input_gate_visible() -> bool {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let name = wide_string(INPUT_GATE_MAPPING_NAME);
+        let mapping = OpenFileMappingW(FILE_MAP_READ, 0, name.as_ptr());
+        if mapping.is_null() {
+            return false;
+        }
+        CloseHandle(mapping);
+        return true;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
+/// Set or clear the gate for exactly one render process. The injected DLL also
+/// verifies that this launcher process is still alive; a launcher crash can
+/// therefore never strand a running game with its input blocked.
 #[napi]
 #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn set_overlay_input_block(blocked: bool) -> bool {
+pub fn set_overlay_input_gate(target_pid: u32, blocked: bool) -> bool {
     #[cfg(target_os = "windows")]
     {
         let Some(view) = INPUT_GATE_VIEW.get() else {
             return false;
         };
-        unsafe { std::ptr::write_volatile(*view as *mut u32, u32::from(blocked)) };
+        unsafe {
+            let words = *view as *mut u32;
+            // Fail open while owner/target are being changed.
+            std::ptr::write_volatile(words.add(2), 0);
+            std::ptr::write_volatile(words, GetCurrentProcessId());
+            std::ptr::write_volatile(words.add(1), target_pid);
+            if blocked && target_pid != 0 {
+                std::ptr::write_volatile(words.add(2), 1);
+            }
+        }
         true
     }
 
     #[cfg(not(target_os = "windows"))]
     false
+}
+
+/// Compatibility entry point for older renderer code. It can clear the gate,
+/// but deliberately refuses to create an unscoped block.
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn set_overlay_input_block(blocked: bool) -> bool {
+    if blocked {
+        return false;
+    }
+    set_overlay_input_gate(0, false)
 }
 
 /// Load gamehub-inputhook into `pid` via the standard

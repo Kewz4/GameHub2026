@@ -108,6 +108,34 @@ const findThreeDsTitleRoots = (roots: string[]): string[] => {
   return titleRoots.sort((left, right) => left.localeCompare(right));
 };
 
+const findRpcs3TitleSaveRoots = (
+  roots: string[],
+  identity: string
+): string[] => {
+  const normalizedIdentity = identity.toLowerCase();
+  const matches: string[] = [];
+
+  for (const root of roots) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (
+        entry.isDirectory() &&
+        entry.name.toLowerCase().startsWith(normalizedIdentity)
+      ) {
+        matches.push(path.join(root, entry.name));
+      }
+    }
+  }
+
+  return matches.sort((left, right) => left.localeCompare(right));
+};
+
 /**
  * Exact, prospective restore destinations for an emulator title. Unlike backup
  * discovery these may contain globs and do not require a save to exist yet, so
@@ -150,8 +178,7 @@ export const buildEmulatorRestorePatterns = ({
       path.join(
         root,
         normalizedIdentity.slice(0, 8),
-        normalizedIdentity.slice(8),
-        "user"
+        normalizedIdentity.slice(8)
       )
     );
   }
@@ -181,7 +208,10 @@ export const buildEmulatorRestorePatterns = ({
   }
 
   if (binary === "rpcs3" && /^[a-z0-9_-]+$/i.test(identity)) {
-    return roots.map((root) => path.join(root, `${identity}*`));
+    const exactTitleRoots = findRpcs3TitleSaveRoots(roots, identity);
+    return exactTitleRoots.length > 0
+      ? exactTitleRoots
+      : roots.map((root) => path.join(root, `${identity}*`));
   }
 
   return [];
