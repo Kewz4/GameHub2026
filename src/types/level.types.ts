@@ -52,6 +52,10 @@ export interface Game {
   customOriginalLibraryPath?: string | null;
   playTimeInMilliseconds: number;
   unsyncedDeltaPlayTimeInMilliseconds?: number;
+  /** Absolute playtime replacement awaiting Hydra acknowledgement (for
+   * imports/manual corrections, which cannot safely use the additive delta
+   * endpoint). */
+  pendingAbsolutePlayTimeInMilliseconds?: number | null;
   lastTimePlayed: Date | null;
   addedToLibraryAt?: Date | null;
   objectId: string;
@@ -234,6 +238,7 @@ export interface UserPreferences {
   gameRecorderEnabled?: boolean;
   gameRecorderResolution?: import("./game-recorder.types").GameRecorderResolution;
   gameRecorderFps?: import("./game-recorder.types").GameRecorderFps;
+  gameRecorderQualityPreset?: import("./game-recorder.types").GameRecorderQualityPreset;
   gameRecorderInstantReplayEnabled?: boolean;
   gameRecorderReplayDurationSeconds?: import("./game-recorder.types").GameRecorderReplayDuration;
   gameRecorderCaptureAudio?: boolean;
@@ -311,9 +316,23 @@ export interface UserPreferences {
    */
   cloudSyncLegacyUserIds?: string[] | null;
   cloudSyncNamespaceMigrationPending?: boolean;
+  /** Deferred legacy R2 namespace claims, isolated by authenticated account. */
+  cloudSyncNamespaceMigrationClaims?: Record<
+    string,
+    { activeUserId: string; legacyUserIds: string[] }
+  > | null;
   onboardingComplete?: boolean;
   localProfileImageUrl?: string | null;
   localBackgroundImageUrl?: string | null;
+  /** Account ownership for the machine-local avatar path and tombstone. */
+  localProfileImageUserId?: string | null;
+  /** Account ownership for the machine-local banner path and tombstone. */
+  localBackgroundImageUserId?: string | null;
+  /** One-time guard preventing unknown legacy paths from being claimed after an account switch. */
+  profileImageOwnershipMigrationVersion?: number;
+  /** Prevent a failed best-effort R2 delete from restoring an image the user removed. */
+  profileAvatarRemoved?: boolean;
+  profileBannerRemoved?: boolean;
   excludedGames?: ExcludedGame[];
   ubisoftTicket?: string | null;
   ubisoftUserId?: string | null;
@@ -328,6 +347,8 @@ export interface UserPreferences {
   // logged-in username (the auth cookies live in the persist:exophase session).
   exophaseEnabled?: boolean;
   exophaseUserId?: string | null;
+  /** Hydra account that owns the configured Exophase profiles/cache. */
+  exophaseHydraAccountId?: string | null;
   exophaseManagedPlatforms?: GameShop[] | null;
   // Additional PUBLIC Exophase profiles to sync alongside the logged-in account.
   // These need no login — only a public profile URL/username — and are read the

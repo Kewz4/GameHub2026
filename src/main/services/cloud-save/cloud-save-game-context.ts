@@ -6,6 +6,7 @@ import { logger } from "@main/services/logger";
 import { getSteamStoreUserContext } from "@main/services/steam-login-users";
 import type { CloudSavePathContext, GameShop } from "@types";
 
+import { resolveCloudSaveAppDataDir } from "./cloud-save-os-paths";
 import {
   resolveCloudSaveEnvironment,
   type CloudSavePrefixGenerationOverride,
@@ -62,13 +63,19 @@ export const getCloudSaveGameContext = async (
     overrides
   );
   const winePrefixPath = await Wine.resolvePrefixPath(requestedWinePrefixPath);
+  const homeDir = SystemPath.getPath("home");
   const pathContext: CloudSavePathContext = {
     shop,
     objectId,
     platform,
-    homeDir: SystemPath.getPath("home"),
+    homeDir,
     documentsDir: SystemPath.getPath("documents") || undefined,
-    appDataDir: SystemPath.getPath("appData") || undefined,
+    appDataDir: resolveCloudSaveAppDataDir({
+      platform,
+      homeDir,
+      electronAppDataDir: SystemPath.getPath("appData") || undefined,
+      windowsAppDataDir: process.env.APPDATA,
+    }),
     executablePath,
     winePrefixPath: winePrefixPath ?? undefined,
     steamPath,

@@ -117,7 +117,7 @@ const projectThroughExistingAncestor = (value: string): string | null => {
   const target = api.normalize(api.resolve(value));
   let current = target;
 
-  while (true) {
+  for (;;) {
     try {
       const real = fs.realpathSync(current);
       const tail = api.relative(current, target);

@@ -6,6 +6,7 @@ import type {
   CloudSaveV2LocalFile,
   CloudSaveV2RemoteFile,
 } from "@types";
+import { formatLocalPathForDisplay } from "../../../../../shared/path-presentation";
 
 interface CloudSaveV2FileTreeBranchBase {
   id: string;
@@ -89,24 +90,6 @@ const collapseForwardSeparators = (path: string) => {
   return collapsed;
 };
 
-export const formatCloudSaveV2LocalPath = (path: string) => {
-  const normalized = path.replaceAll("\\", "/");
-
-  if (normalized.toLowerCase().startsWith("//?/unc/")) {
-    return `\\\\${normalized.slice(8).replaceAll("/", "\\")}`;
-  }
-
-  const withoutExtendedPrefix = normalized.startsWith("//?/")
-    ? normalized.slice(4)
-    : normalized;
-
-  if (/^[a-zA-Z]:\//.test(withoutExtendedPrefix)) {
-    return withoutExtendedPrefix.replaceAll("/", "\\");
-  }
-
-  return path;
-};
-
 const getDirectoryPath = (path: string) => {
   const withoutTrailingSeparators = trimTrailingSeparators(path);
   const separatorIndex = Math.max(
@@ -139,7 +122,7 @@ const getLocalRootPath = (file: CloudSaveV2LocalFile) => {
 };
 
 const getLocalPathIdentity = (path: string) => {
-  const normalizedSeparators = formatCloudSaveV2LocalPath(path).replaceAll(
+  const normalizedSeparators = formatLocalPathForDisplay(path).replaceAll(
     "\\",
     "/"
   );

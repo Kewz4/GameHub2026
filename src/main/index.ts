@@ -76,6 +76,13 @@ process.on("unhandledRejection", (reason) => {
 // "GameHub-updater" instead of "hydralauncher-updater" for its temp dir.
 app.setName("GameHub");
 
+// Screenshot acceptance can launch the development build against a cloned
+// portable profile. Keep that explicitly opted-in process read-only: IPC and
+// LevelDB still work, while background account/library/achievement jobs that
+// could mutate external state stay disabled. Packaged builds cannot enable it.
+const isReadOnlyVisualQa =
+  !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true";
+
 // Auth backup dir: outside the install directory so NSIS updates never wipe it.
 const AUTH_BACKUP_DIR = path.join(
   process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local"),
@@ -425,6 +432,7 @@ app.whenReady().then(async () => {
   if (!app.isPackaged) {
     const {
       gamesSublevel: gs,
+      gameAchievementsSublevel,
       gamesShopAssetsSublevel,
       gamehubMetaSublevel,
       minervaCatalogueSublevel,
@@ -433,6 +441,7 @@ app.whenReady().then(async () => {
     } = await import("./level");
     (globalThis as Record<string, unknown>).__levelSublevels = {
       gamesSublevel: gs,
+      gameAchievementsSublevel,
       gamesShopAssetsSublevel,
       gamehubMetaSublevel,
       minervaCatalogueSublevel,
@@ -472,41 +481,52 @@ app.whenReady().then(async () => {
   // Run the rest of startup (Lock, library sync, HydraApi, Python RPC, …) in
   // the background. A failure here must not blank the window — the UI is
   // already up and the update checker drives the flow forward.
-  loadState().catch((err) => {
-    logger.error("loadState failed:", err);
-  });
-
-  // Populate the console/emulated ROM catalogue on first run so those games are
-  // searchable out of the box. GameHub Vault (community USA dumps) replaces the
-  // Minerva archive. No-ops once cached; never blocks startup.
-  import("./services/rom-sources/gamehub-dump-sources")
-    .then(({ ensureGameHubDumpCatalogue }) => ensureGameHubDumpCatalogue())
-    .catch((err) => logger.error("dump catalogue bootstrap failed:", err));
-
-  // Populate the hosted console metadata (art/genres) so emulated games render
-  // rich cards in search and the catalogue. No-ops once cached.
-  import("./services/rom-sources/gamehub-meta-sources")
-    .then(({ ensureGameHubMeta }) => ensureGameHubMeta())
-    .catch((err) => logger.error("gamehub-meta bootstrap failed:", err));
-
-  // Re-stamp saved controller mappings into each emulator's native config, so a
-  // controller set up in a past session survives a restart or an emulator
-  // reinstall. No-op for emulators the user never configured here.
-  import("./events/emulators/emulator-settings-events")
-    .then(({ reapplyControllerProfilesOnStartup }) =>
-      reapplyControllerProfilesOnStartup()
-    )
-    .catch((err) => logger.error("controller re-apply failed:", err));
-
-  // Suspend can outlive the 60s stall watchdog; reconnect right away instead
-  powerMonitor.on("resume", () => {
-    WSClient.reconnectNow();
-    DownloadOrchestrator.onNetworkStatusChanged({
-      online: true,
-      switched: true,
-      forceReconnect: true,
+  if (!isReadOnlyVisualQa) {
+    loadState().catch((err) => {
+      logger.error("loadState failed:", err);
     });
-  });
+
+    // Populate the console/emulated ROM catalogue on first run so those games are
+    // searchable out of the box. GameHub Vault (community USA dumps) replaces the
+    // Minerva archive. No-ops once cached; never blocks startup.
+    import("./services/rom-sources/gamehub-dump-sources")
+      .then(({ ensureGameHubDumpCatalogue }) => ensureGameHubDumpCatalogue())
+      .catch((err) => logger.error("dump catalogue bootstrap failed:", err));
+
+    // Populate the hosted console metadata (art/genres) so emulated games render
+    // rich cards in search and the catalogue. No-ops once cached.
+    import("./services/rom-sources/gamehub-meta-sources")
+      .then(({ ensureGameHubMeta }) => ensureGameHubMeta())
+      .catch((err) => logger.error("gamehub-meta bootstrap failed:", err));
+
+    // Re-stamp saved controller mappings into each emulator's native config, so a
+    // controller set up in a past session survives a restart or an emulator
+    // reinstall. No-op for emulators the user never configured here.
+    import("./events/emulators/emulator-settings-events")
+      .then(({ reapplyControllerProfilesOnStartup }) =>
+        reapplyControllerProfilesOnStartup()
+      )
+      .catch((err) => logger.error("controller re-apply failed:", err));
+
+    // Suspend can outlive the 60s stall watchdog; reconnect right away instead
+    powerMonitor.on("resume", () => {
+      WSClient.reconnectNow();
+      DownloadOrchestrator.onNetworkStatusChanged({
+        online: true,
+        switched: true,
+        forceReconnect: true,
+      });
+    });
+  } else {
+    // Load only the persisted account bearer/client. getUserData() has its own
+    // read-only branch and HydraApi skips namespace migration in this mode, so
+    // QA can list the account's R2 snapshots without starting sync/background
+    // jobs or mutating either the cloned database or remote storage.
+    const { HydraApi } = await import("./services/hydra-api");
+    await HydraApi.setupApi().catch((err) => {
+      logger.error("Read-only visual QA account bootstrap failed:", err);
+    });
+  }
 
   const language = await db
     .get<string, string>(levelKeys.language, {

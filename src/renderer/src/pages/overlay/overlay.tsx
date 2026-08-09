@@ -69,6 +69,10 @@ import type {
 import { useAppSelector } from "@renderer/hooks";
 import { OverlayWidgetFrame } from "./overlay-widget-frame";
 import { OverlaySelect } from "./overlay-select";
+import {
+  getOverlayRecorderTechnicalSummary,
+  getOverlayReplayPresentation,
+} from "./overlay-recorder-presentation";
 import { SpotifyOverlayPanel } from "./spotify-overlay-panel";
 import {
   OVERLAY_WIDGET_IDS,
@@ -727,6 +731,14 @@ export default function Overlay() {
       .catch(() => undefined);
   }, []);
 
+  const replayPresentation = useMemo(() => {
+    if (!recorderState) return null;
+    return getOverlayReplayPresentation(
+      recorderState.bufferedSeconds,
+      recorderState.configuration.replayDurationSeconds
+    );
+  }, [recorderState]);
+
   const startGameplayRecording = useCallback(() => {
     setRecorderNotice(null);
     void window.electron
@@ -754,15 +766,12 @@ export default function Overlay() {
     void window.electron.gameRecorderSaveReplay().then((result) => {
       setRecorderNotice(
         result.ok
-          ? `Last ${recorderState?.configuration.replayDurationSeconds ?? 30} seconds saved.`
+          ? `Last ${replayPresentation?.availableSeconds ?? 0} seconds saved.`
           : result.error
       );
       refreshRecorderState();
     });
-  }, [
-    recorderState?.configuration.replayDurationSeconds,
-    refreshRecorderState,
-  ]);
+  }, [replayPresentation?.availableSeconds, refreshRecorderState]);
 
   const updateReplayDuration = useCallback(
     (seconds: 15 | 30 | 45 | 60) => {
@@ -1258,7 +1267,7 @@ export default function Overlay() {
         <div className="overlay-toast">
           <span className="overlay-toast__dot" />
           <div className="overlay-toast__body">
-            <strong>Overlay ready</strong>
+            <strong>The overlay is ready</strong>
             <p>
               Press <kbd>{context?.shortcut ?? "Shift+F3"}</kbd> or press the
               Guide button once to open it.
@@ -1377,6 +1386,7 @@ export default function Overlay() {
                 onClick={() => setWidgetMenuOpen((open) => !open)}
                 aria-expanded={widgetMenuOpen}
                 aria-controls="overlay-widget-menu"
+                aria-label="Widgets"
               >
                 <LayoutGrid size={16} />
                 <span>Widgets</span>
@@ -1635,7 +1645,7 @@ export default function Overlay() {
                     : recorderState?.status === "saving"
                       ? "Saving"
                       : recorderState?.configuration.instantReplayEnabled
-                        ? `${Math.floor(recorderState.bufferedSeconds)}s buffered`
+                        ? replayPresentation?.bufferLabel
                         : "Instant Replay off"
                 }
                 widgetStyle={getWidgetStyle("capture")}
@@ -1656,7 +1666,7 @@ export default function Overlay() {
                               recorderState.recordingStartedAt ?? Date.now()
                             )}`
                           : recorderState?.status === "buffering"
-                            ? "Instant Replay is ready"
+                            ? replayPresentation?.statusLabel
                             : recorderState?.status === "saving"
                               ? "Saving clip"
                               : recorderState?.status === "disabled"
@@ -1669,9 +1679,12 @@ export default function Overlay() {
                         {recorderNotice ??
                           recorderState?.errorMessage ??
                           recorderState?.statusMessage ??
-                          `${recorderState?.configuration.resolution ?? "1080p"} · ${
-                            recorderState?.configuration.fps ?? 60
-                          } FPS`}
+                          (recorderState
+                            ? getOverlayRecorderTechnicalSummary(
+                                recorderState.captureDiagnostics,
+                                recorderState.configuration
+                              )
+                            : "Waiting for recorder status")}
                       </small>
                     </div>
                   </div>
@@ -1699,13 +1712,7 @@ export default function Overlay() {
                       <div className="overlay-capture__buffer">
                         <span
                           style={{
-                            width: `${Math.min(
-                              100,
-                              (recorderState.bufferedSeconds /
-                                recorderState.configuration
-                                  .replayDurationSeconds) *
-                                100
-                            )}%`,
+                            width: `${replayPresentation?.progressPercent ?? 0}%`,
                           }}
                         />
                       </div>
@@ -1755,9 +1762,7 @@ export default function Overlay() {
                       }
                     >
                       <History size={15} />
-                      Save last{" "}
-                      {recorderState?.configuration.replayDurationSeconds ?? 30}
-                      s
+                      {replayPresentation?.saveLabel ?? "Save Instant Replay"}
                     </button>
 
                     <button

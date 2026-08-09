@@ -129,6 +129,13 @@ export function UserLibraryGameCard({
       <li
         className="user-library-game__wrapper"
         title={isTooltipHovered ? undefined : game.title}
+        data-profile-game-key={`${game.shop}:${game.objectId}`}
+        data-profile-game-title={game.title}
+        data-profile-game-playtime={game.playTimeInSeconds ?? 0}
+        data-profile-game-achievements={game.unlockedAchievementCount ?? 0}
+        data-profile-game-last-played={
+          game.lastTimePlayed ? new Date(game.lastTimePlayed).getTime() : 0
+        }
       >
         <button
           type="button"
@@ -136,25 +143,6 @@ export function UserLibraryGameCard({
           onClick={() => navigate(buildUserGameDetailsPath(game))}
         >
           <div className="user-library-game__overlay">
-            {isMe && (
-              <div className="user-library-game__actions-container">
-                <button
-                  type="button"
-                  className="user-library-game__pin-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleGamePinned();
-                  }}
-                  disabled={isPinning}
-                >
-                  {game.isPinned ? (
-                    <PinSlashIcon size={12} />
-                  ) : (
-                    <PinIcon size={12} />
-                  )}
-                </button>
-              </div>
-            )}
             <div
               className="user-library-game__playtime"
               data-tooltip-place="top"
@@ -248,6 +236,31 @@ export function UserLibraryGameCard({
             />
           )}
         </button>
+        {isMe && (
+          <div className="user-library-game__actions-container">
+            <button
+              type="button"
+              className="user-library-game__pin-button"
+              aria-label={
+                game.isPinned
+                  ? t("unpin_game", {
+                      defaultValue: `Unpin ${game.title}`,
+                    })
+                  : t("pin_game", {
+                      defaultValue: `Pin ${game.title}`,
+                    })
+              }
+              onClick={() => toggleGamePinned()}
+              disabled={isPinning}
+            >
+              {game.isPinned ? (
+                <PinSlashIcon size={12} />
+              ) : (
+                <PinIcon size={12} />
+              )}
+            </button>
+          </div>
+        )}
       </li>
       <Tooltip
         id={game.objectId}

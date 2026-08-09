@@ -2,17 +2,21 @@ import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import "./profile-content.scss";
 
-export type ProfileTabType = "library" | "reviews";
+export type ProfileTabType = "library" | "achievements" | "reviews";
 
 interface ProfileTabsProps {
   activeTab: ProfileTabType;
   reviewsTotalCount: number;
+  achievementsTotalCount?: number;
+  showAchievements?: boolean;
   onTabChange: (tab: ProfileTabType) => void;
 }
 
 export function ProfileTabs({
   activeTab,
   reviewsTotalCount,
+  achievementsTotalCount = 0,
+  showAchievements = false,
   onTabChange,
 }: Readonly<ProfileTabsProps>) {
   const { t } = useTranslation("user_profile");
@@ -39,6 +43,29 @@ export function ProfileTabs({
           />
         )}
       </div>
+      {showAchievements && (
+        <div className="profile-content__tab-wrapper">
+          <button
+            type="button"
+            className={`profile-content__tab ${activeTab === "achievements" ? "profile-content__tab--active" : ""}`}
+            onClick={() => onTabChange("achievements")}
+          >
+            {t("achievements")}
+            {achievementsTotalCount > 0 && (
+              <span className="profile-content__tab-badge">
+                {achievementsTotalCount.toLocaleString()}
+              </span>
+            )}
+          </button>
+          {activeTab === "achievements" && (
+            <motion.div
+              className="profile-content__tab-underline"
+              layoutId="tab-underline"
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            />
+          )}
+        </div>
+      )}
       <div className="profile-content__tab-wrapper">
         <button
           type="button"

@@ -2,12 +2,34 @@ import assert from "node:assert/strict";
 import test from "node:test";
 const customDownloadModulePath = "./custom-download.ts";
 const {
+  CUSTOM_DOWNLOAD_ENTRY_OPTIONS,
   classifyCustomDownloadSource,
+  getCustomDownloadInputPresentation,
+  isCustomDownloadFormReady,
   isDirectExecutableUrl,
   normalizeCustomDownloadTitle,
   shouldExtractCustomDownload,
   suggestCustomDownloadTitle,
 } = await import(customDownloadModulePath);
+
+test("exposes every custom-download entry path to both download managers", () => {
+  assert.deepEqual(
+    CUSTOM_DOWNLOAD_ENTRY_OPTIONS.map((option) => option.intent),
+    ["link", "magnet", "torrent"]
+  );
+  assert.match(
+    getCustomDownloadInputPresentation("link").placeholder,
+    /^https:/
+  );
+  assert.match(
+    getCustomDownloadInputPresentation("magnet").placeholder,
+    /^magnet:/
+  );
+  assert.match(
+    getCustomDownloadInputPresentation("torrent").label,
+    /^\.torrent/
+  );
+});
 
 test("classifies magnets and validates their hash", () => {
   assert.equal(
@@ -98,4 +120,34 @@ test("only extracts recognized archives after the final filename is known", () =
   assert.equal(shouldExtractCustomDownload("Portable Game.exe", true), false);
   assert.equal(shouldExtractCustomDownload("setup.msi", true), false);
   assert.equal(shouldExtractCustomDownload("Portable Game.7z", false), false);
+});
+
+test("enables custom-download submission only for a complete valid form", () => {
+  const ready = {
+    hasTorBoxToken: true,
+    source: "https://downloads.example/Hades-II.zip",
+    localTorrentPath: null,
+    title: "Hades II",
+    downloadPath: "C:\\Games",
+  };
+
+  assert.equal(isCustomDownloadFormReady(ready), true);
+  assert.equal(isCustomDownloadFormReady({ ...ready, source: "" }), false);
+  assert.equal(isCustomDownloadFormReady({ ...ready, title: "" }), false);
+  assert.equal(
+    isCustomDownloadFormReady({ ...ready, downloadPath: "" }),
+    false
+  );
+  assert.equal(
+    isCustomDownloadFormReady({ ...ready, hasTorBoxToken: false }),
+    false
+  );
+  assert.equal(
+    isCustomDownloadFormReady({
+      ...ready,
+      source: "",
+      localTorrentPath: "C:\\Torrents\\Hades-II.torrent",
+    }),
+    true
+  );
 });

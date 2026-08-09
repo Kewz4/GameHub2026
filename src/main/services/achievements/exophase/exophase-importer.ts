@@ -36,6 +36,7 @@ import {
   matchAndSyncToHydraApiForNonLibraryGame,
   putCacheEntry,
   toDefinitions,
+  validateExophaseAccountScope,
 } from "./exophase-cache";
 import type { UserPreferences } from "@types";
 
@@ -492,6 +493,18 @@ export async function syncExophaseAccount(
     gamesWithAchievements: 0,
     totalUnlocked: 0,
   };
+
+  const accountScope = await validateExophaseAccountScope();
+  if (accountScope === "logged-out") {
+    return { ...result, error: "Sign in to Hydra before syncing Exophase." };
+  }
+  if (accountScope === "account-mismatch") {
+    return {
+      ...result,
+      error:
+        "These Exophase profiles belong to another Hydra account. Reconnect Exophase for this account.",
+    };
+  }
 
   const startedAt = new Date().toISOString();
   const prefs = await getPrefs();

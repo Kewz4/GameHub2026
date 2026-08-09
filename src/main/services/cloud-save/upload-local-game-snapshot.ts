@@ -14,6 +14,7 @@ type ProgressCallback = (progress: CloudSaveUploadProgress) => void;
 
 export interface PrepareLocalSnapshotOptions {
   baseVersion: number;
+  customPathRawPaths?: string[];
   variants?: SnapshotVariant[];
   files?: SnapshotFile[];
   aggregateHash?: string;
@@ -35,9 +36,6 @@ export const uploadLocalGameSnapshot = async (
     localSnapshotContext ??
     (await buildLocalGameSnapshotContext(objectId, shop));
   const files = options.files ?? context.files;
-  if (files.length === 0) {
-    return { pendingSnapshotId: null, uploadedFiles: 0, skippedFiles: 0 };
-  }
 
   const snapshot = await createRemoteSnapshotFromLocalState(
     objectId,

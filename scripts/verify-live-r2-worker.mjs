@@ -34,7 +34,8 @@ async function readHydraAuth(dataDir) {
       const auth = await database.get("auth");
       const accessToken = auth?.accessToken?.trim();
       const refreshToken = auth?.refreshToken?.trim();
-      if (!accessToken || !refreshToken) throw new Error("GameHub is not signed in");
+      if (!accessToken || !refreshToken)
+        throw new Error("GameHub is not signed in");
       return {
         accessToken,
         refreshToken,
@@ -51,7 +52,10 @@ async function readHydraAuth(dataDir) {
 async function refreshHydraBearer(hydraApi, refreshToken) {
   const response = await fetch(`${hydraApi.replace(/\/+$/, "")}/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
     body: JSON.stringify({ refreshToken }),
   });
   const body = await response.json().catch(() => null);
@@ -104,7 +108,9 @@ async function main() {
     typeof body?.sessionToken !== "string" ||
     !Number.isFinite(Date.parse(body?.expiresAt ?? ""))
   ) {
-    throw new Error(`Credential broker rejected the live check (HTTP ${response.status})`);
+    throw new Error(
+      `Credential broker rejected the live check (HTTP ${response.status})`
+    );
   }
 
   const client = new S3Client({

@@ -7,7 +7,13 @@ import {
   useLibrary,
 } from "@renderer/hooks";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { BinaryNotFoundModal } from "../shared-modals/binary-not-found-modal";
 import "./downloads.scss";
 import { DeleteGameModal } from "./delete-game-modal";
@@ -20,14 +26,24 @@ import {
   type SeedingStatus,
 } from "../../../../types";
 import { orderBy } from "lodash-es";
-import { ArrowDownIcon, LinkIcon } from "@primer/octicons-react";
-import { Button } from "@renderer/components";
+import { ArrowDownIcon, FileIcon, LinkIcon } from "@primer/octicons-react";
 import { CustomDownloadModal } from "./custom-download-modal";
+import {
+  CUSTOM_DOWNLOAD_ENTRY_OPTIONS,
+  type CustomDownloadEntryIntent,
+} from "@shared";
+import {
+  getAdjacentDownloadManagerTab,
+  type DownloadManagerTab,
+} from "./download-manager-tabs";
 
 export default function Downloads() {
   const { library, updateLibrary } = useLibrary();
   const { layoutState } = useDownloadLayout();
   const extraction = useAppSelector((state) => state.download.extraction);
+  const torBoxConnected = useAppSelector((state) =>
+    Boolean(state.userPreferences.value?.torBoxApiToken?.trim())
+  );
 
   const { t } = useTranslation("downloads");
 
@@ -35,7 +51,22 @@ export default function Downloads() {
 
   const [showBinaryNotFoundModal, setShowBinaryNotFoundModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showCustomDownloadModal, setShowCustomDownloadModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<DownloadManagerTab>("downloads");
+  const downloadsTabRef = useRef<HTMLButtonElement>(null);
+  const customTabRef = useRef<HTMLButtonElement>(null);
+  const [customDownloadIntent, setCustomDownloadIntent] =
+    useState<CustomDownloadEntryIntent | null>(null);
+
+  const handleManagerTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>
+  ) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
+    event.preventDefault();
+    const nextTab = getAdjacentDownloadManagerTab(activeTab, event.key);
+    setActiveTab(nextTab);
+    (nextTab === "downloads" ? downloadsTabRef : customTabRef).current?.focus();
+  };
 
   const { removeGameInstaller, pauseSeeding } = useDownload();
 
@@ -217,26 +248,114 @@ export default function Downloads() {
       />
 
       <CustomDownloadModal
-        visible={showCustomDownloadModal}
-        onClose={() => setShowCustomDownloadModal(false)}
-        onSubmitted={updateLibrary}
+        visible={customDownloadIntent !== null}
+        initialIntent={customDownloadIntent ?? "link"}
+        onClose={() => setCustomDownloadIntent(null)}
+        onSubmitted={() => {
+          setActiveTab("downloads");
+          void updateLibrary();
+        }}
       />
 
       <div className="downloads__page">
-        <div className="downloads__toolbar">
+        <header className="downloads__manager-header">
           <div>
-            <h2>{t("downloads")}</h2>
-            <p>Add your own link when a game has no listed repack.</p>
+            <h2>Download manager</h2>
+            <p>Manage transfers or submit your own TorBox source.</p>
           </div>
-          <Button onClick={() => setShowCustomDownloadModal(true)}>
-            <LinkIcon size={16} />
-            Add link or torrent
-          </Button>
-        </div>
+          <div
+            className="downloads__tabs"
+            role="tablist"
+            aria-label="Download manager views"
+          >
+            <button
+              ref={downloadsTabRef}
+              id="downloads-manager-tab-downloads"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "downloads"}
+              aria-controls="downloads-manager-panel-downloads"
+              tabIndex={activeTab === "downloads" ? 0 : -1}
+              className={activeTab === "downloads" ? "is-active" : ""}
+              onClick={() => setActiveTab("downloads")}
+              onKeyDown={handleManagerTabKeyDown}
+            >
+              <ArrowDownIcon size={16} />
+              Downloads
+            </button>
+            <button
+              ref={customTabRef}
+              id="downloads-manager-tab-custom"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "custom"}
+              aria-controls="downloads-manager-panel-custom"
+              tabIndex={activeTab === "custom" ? 0 : -1}
+              className={activeTab === "custom" ? "is-active" : ""}
+              onClick={() => setActiveTab("custom")}
+              onKeyDown={handleManagerTabKeyDown}
+            >
+              <LinkIcon size={16} />
+              Add custom
+            </button>
+          </div>
+        </header>
 
-        {hasItemsInLibrary ? (
+        {activeTab === "custom" ? (
+          <section
+            id="downloads-manager-panel-custom"
+            className="downloads__custom-panel"
+            role="tabpanel"
+            aria-labelledby="downloads-manager-tab-custom"
+          >
+            <div className="downloads__custom-heading">
+              <div>
+                <h2>Add a game download</h2>
+                <p>
+                  Pick the source you found. GameHub checks TorBox, downloads
+                  it, extracts supported archives, and adds the game to your
+                  library.
+                </p>
+              </div>
+              <span
+                className={`downloads__torbox-status ${
+                  torBoxConnected ? "is-connected" : ""
+                }`}
+              >
+                {torBoxConnected ? "TorBox connected" : "TorBox setup needed"}
+              </span>
+            </div>
+
+            <div className="downloads__custom-options">
+              {CUSTOM_DOWNLOAD_ENTRY_OPTIONS.map((option) => (
+                <button
+                  key={option.intent}
+                  type="button"
+                  onClick={() => setCustomDownloadIntent(option.intent)}
+                >
+                  <span className="downloads__custom-option-icon">
+                    {option.intent === "torrent" ? (
+                      <FileIcon size={22} />
+                    ) : (
+                      <LinkIcon size={22} />
+                    )}
+                  </span>
+                  <span>
+                    <strong>{option.title}</strong>
+                    <small>{option.description}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : hasItemsInLibrary ? (
           <section className="downloads__container">
-            <div className="downloads__groups">
+            <div
+              id="downloads-manager-panel-downloads"
+              className="downloads__groups"
+              role="tabpanel"
+              aria-labelledby="downloads-manager-tab-downloads"
+            >
               {downloadGroups.map((group) => (
                 <DownloadGroup
                   key={group.title}
@@ -251,7 +370,12 @@ export default function Downloads() {
             </div>
           </section>
         ) : (
-          <div className="downloads__no-downloads">
+          <div
+            id="downloads-manager-panel-downloads"
+            className="downloads__no-downloads"
+            role="tabpanel"
+            aria-labelledby="downloads-manager-tab-downloads"
+          >
             <div className="downloads__arrow-icon">
               <ArrowDownIcon size={24} />
             </div>

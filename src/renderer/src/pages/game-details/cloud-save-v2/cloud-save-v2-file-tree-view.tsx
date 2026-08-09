@@ -15,7 +15,7 @@ import type {
   CloudSaveV2LocalFile,
   CloudSaveV2RemoteFile,
 } from "@types";
-import { formatBytes } from "@shared";
+import { formatBytes, formatLocalPathForDisplay } from "@shared";
 import { useDate } from "@renderer/hooks";
 
 import type {
@@ -24,7 +24,6 @@ import type {
   CloudSaveV2FileTreeNode,
   CloudSaveV2FileTreeRoot,
 } from "./cloud-save-v2-file-tree";
-import { formatCloudSaveV2LocalPath } from "./cloud-save-v2-file-tree";
 
 interface CloudSaveV2FileTreeViewProps {
   roots: CloudSaveV2FileTreeRoot[];
@@ -419,12 +418,12 @@ export function CloudSaveV2FileTreeView({
     const unresolvedCustomPath =
       node.type === "root" ? node.unresolvedCustomPath : null;
     const localName = node.localDirectoryPath ?? node.name;
-    const displayLocalName = formatCloudSaveV2LocalPath(localName);
+    const displayLocalName = formatLocalPathForDisplay(localName);
     const displayLocalDirectoryPath = node.localDirectoryPath
-      ? formatCloudSaveV2LocalPath(node.localDirectoryPath)
+      ? formatLocalPathForDisplay(node.localDirectoryPath)
       : null;
     const unresolvedDisplayName = unresolvedCustomPath?.pathHint
-      ? formatCloudSaveV2LocalPath(unresolvedCustomPath.pathHint)
+      ? formatLocalPathForDisplay(unresolvedCustomPath.pathHint)
       : t("cloud_save_v2_unresolved_custom_path_name");
     const displayRootName = unresolvedCustomPath
       ? unresolvedDisplayName

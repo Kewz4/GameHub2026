@@ -82,7 +82,7 @@ try {
     for (let attempt = 0; attempt < 120; attempt++) {
       const mainWindowId = await app
         .evaluate(async () => {
-          const windowManager = globalThis.__windowManager;
+          const windowManager = global.__windowManager;
           if (
             windowManager &&
             (!windowManager.mainWindow ||
@@ -271,24 +271,33 @@ try {
   ];
 
   const inspect = async (game, expected) => {
-    const preview = await evaluateMain(
+    const details = await evaluateMain(
       ({ objectId, shop }) =>
-        window.electron.getGameBackupPreview(objectId, shop),
+        window.electron.getCloudSaveV2FileDetails(objectId, shop),
       game
     );
-    const mappedPaths = preview?.resolvedPaths ?? [];
-    const mappedFiles = Object.values(preview?.games ?? {}).flatMap((entry) =>
-      Object.keys(entry.files ?? {})
+    const mappedFiles = details?.local?.files ?? [];
+    const mappedPaths = mappedFiles.map((entry) => entry.absolutePath);
+    const warningCodes = Array.from(
+      new Set(
+        (details?.variants ?? []).flatMap(
+          (variant) => variant.warningCodes ?? []
+        )
+      )
     );
+    const error =
+      mappedFiles.length === 0 && warningCodes.length > 0
+        ? warningCodes.join(", ")
+        : null;
     const summary = {
       title: game.title,
       shop: game.shop,
       objectId: game.objectId,
-      source: preview?.mappingSource ?? null,
-      error: preview?.mappingError ?? null,
+      state: details?.state ?? null,
+      error,
       paths: mappedPaths,
       files: mappedFiles.length,
-      bytes: preview?.overall?.totalBytes ?? 0,
+      bytes: details?.local?.totalSizeBytes ?? 0,
     };
     results.push(summary);
     console.log(
@@ -312,8 +321,8 @@ try {
     ) {
       fail(`${game.title}: expected mapped path containing ${expected.path}`);
     }
-    if (expected.data && (preview?.overall?.totalGames ?? 0) === 0) {
-      fail(`${game.title}: real save data was not detected by preview`);
+    if (expected.data && mappedFiles.length === 0) {
+      fail(`${game.title}: real save data was not detected by V2 mapping`);
     }
   };
 

@@ -1,231 +1,221 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type {
-  CloudSaveMergeResult,
-  SnapshotFile,
-  SnapshotVariant,
-} from "@types";
+import type { RestoreManifestResponse, SnapshotVariant } from "@types";
 
 // @ts-ignore The Node ESM test runner requires the source extension.
 import {
-  executeCloudSaveCustomPathRemoval,
-  excludeCloudSaveRawPathsFromMerge,
-  isCloudSaveRawPathRemovable,
-} from "./custom-path-removal";
+  buildCloudSaveCustomPathRemovalProposal,
+  executeCloudSaveCustomPathRemoteRemoval,
+} from "./custom-path-removal.js";
 
-const variant = (id: string): SnapshotVariant => ({
-  variantId: id,
-  kind: "default",
-});
-
-const file = (rawPath: string, relativePath: string): SnapshotFile => ({
+const firstPath = "<custom><windows><winDocuments>/First";
+const secondPath = "<custom><windows><winDocuments>/Second";
+const firstVariant: SnapshotVariant = {
   variantId: "1".repeat(64),
-  rawPath,
-  relativePath,
-  hash: "a".repeat(64),
-  sizeBytes: 4,
-  lastModifiedAt: "2026-07-28T10:00:00.000Z",
+  kind: "default",
+};
+const secondVariant: SnapshotVariant = {
+  variantId: "2".repeat(64),
+  kind: "opaque-folder",
+  concreteFolderId: "Goldberg",
+};
+const manifest = (): Pick<
+  RestoreManifestResponse,
+  "customPathRawPaths" | "variants" | "files"
+> => ({
+  customPathRawPaths: [firstPath, secondPath],
+  variants: [firstVariant, secondVariant],
+  files: [
+    {
+      variantId: firstVariant.variantId,
+      rawPath: firstPath,
+      relativePath: "first.sav",
+      hash: "a".repeat(64),
+      sizeBytes: 1,
+      lastModifiedAt: "2026-08-02T00:00:00.000Z",
+    },
+    {
+      variantId: secondVariant.variantId,
+      rawPath: secondPath,
+      relativePath: "second.sav",
+      hash: "b".repeat(64),
+      sizeBytes: 2,
+      lastModifiedAt: "2026-08-02T00:00:00.000Z",
+    },
+  ],
 });
 
-describe("custom path removal proposal", () => {
-  const syncResult = {
-    trigger: "manual",
-    action: "upload",
-    initialState: "local-ahead",
-    finalState: "synced",
-    remoteHash: "a".repeat(64),
-    environmentId: "test",
-  } as const;
+describe("cloud save custom path removal proposal", () => {
+  it("removes the location, its files and now-unused variants", () => {
+    const proposal = buildCloudSaveCustomPathRemovalProposal(
+      manifest(),
+      firstPath
+    );
 
-  it("persists a registered local removal before mutating remote state", async () => {
+    assert.equal(proposal.changed, true);
+    assert.deepEqual(proposal.customPathRawPaths, [secondPath]);
+    assert.deepEqual(proposal.variants, [secondVariant]);
+    assert.equal(proposal.files.length, 1);
+    assert.equal(proposal.files[0].rawPath, secondPath);
+  });
+
+  it("deletes the remote snapshot when the final location is removed", async () => {
+    const current = manifest();
+    current.customPathRawPaths = [firstPath];
+    current.variants = [firstVariant];
+    current.files = [current.files[0]];
+
+    const proposal = buildCloudSaveCustomPathRemovalProposal(
+      current,
+      firstPath
+    );
+
+    assert.equal(proposal.changed, true);
+    assert.deepEqual(proposal.customPathRawPaths, []);
+    assert.deepEqual(proposal.variants, []);
+    assert.deepEqual(proposal.files, []);
+
+    const calls: string[] = [];
+    const result = await executeCloudSaveCustomPathRemoteRemoval({
+      proposal,
+      updateSnapshot: async () => {
+        calls.push("update");
+      },
+      deleteSnapshot: async () => {
+        calls.push("delete");
+      },
+    });
+
+    assert.equal(result, "snapshot-deleted");
+    assert.deepEqual(calls, ["delete"]);
+  });
+
+  it("updates the snapshot when any other tracked file remains", async () => {
+    const proposal = buildCloudSaveCustomPathRemovalProposal(
+      manifest(),
+      firstPath
+    );
     const calls: string[] = [];
 
-    const result = await executeCloudSaveCustomPathRemoval({
-      isRegistered: true,
-      unregister: async () => {
-        calls.push("unregister");
+    const result = await executeCloudSaveCustomPathRemoteRemoval({
+      proposal,
+      updateSnapshot: async () => {
+        calls.push("update");
       },
-      sync: async () => {
-        calls.push("sync");
-        return syncResult;
+      deleteSnapshot: async () => {
+        calls.push("delete");
       },
     });
 
-    assert.deepEqual(calls, ["unregister", "sync"]);
-    assert.equal(result, syncResult);
+    assert.equal(result, "snapshot-updated");
+    assert.deepEqual(calls, ["update"]);
   });
 
-  it("does not mutate remote state when local removal cannot be persisted", async () => {
-    let syncCalled = false;
-
-    await assert.rejects(
-      executeCloudSaveCustomPathRemoval({
-        isRegistered: true,
-        unregister: async () => {
-          throw new Error("leveldb unavailable");
-        },
-        sync: async () => {
-          syncCalled = true;
-          return syncResult;
-        },
-      }),
-      /leveldb unavailable/
+  it("keeps the normal update flow when an automatic save remains", async () => {
+    const current = manifest();
+    current.customPathRawPaths = [firstPath];
+    current.files[1].rawPath = "<winAppData>/Game";
+    const proposal = buildCloudSaveCustomPathRemovalProposal(
+      current,
+      firstPath
     );
+    const calls: string[] = [];
 
-    assert.equal(syncCalled, false);
-  });
-
-  it("keeps the local binding removed when remote mutation fails", async () => {
-    let registered = true;
-
-    await assert.rejects(
-      executeCloudSaveCustomPathRemoval({
-        isRegistered: true,
-        unregister: async () => {
-          registered = false;
-        },
-        sync: async () => {
-          throw new Error("remote unavailable");
-        },
-      }),
-      /remote unavailable/
-    );
-
-    assert.equal(registered, false);
-  });
-
-  it("removes a remote-only path without changing local bindings", async () => {
-    let unregisterCalled = false;
-
-    const result = await executeCloudSaveCustomPathRemoval({
-      isRegistered: false,
-      unregister: async () => {
-        unregisterCalled = true;
+    const result = await executeCloudSaveCustomPathRemoteRemoval({
+      proposal,
+      updateSnapshot: async () => {
+        calls.push("update");
       },
-      sync: async () => syncResult,
+      deleteSnapshot: async () => {
+        calls.push("delete");
+      },
     });
 
-    assert.equal(unregisterCalled, false);
-    assert.equal(result, syncResult);
+    assert.equal(result, "snapshot-updated");
+    assert.equal(proposal.files[0].rawPath, "<winAppData>/Game");
+    assert.deepEqual(calls, ["update"]);
   });
 
-  it("reports a remote conflict after keeping the local binding removed", async () => {
-    let registered = true;
+  it("updates an empty snapshot when another declared location remains", async () => {
+    const current = manifest();
+    current.files = [current.files[0]];
+    current.variants = [firstVariant];
+    const proposal = buildCloudSaveCustomPathRemovalProposal(
+      current,
+      firstPath
+    );
+    const calls: string[] = [];
+
+    const result = await executeCloudSaveCustomPathRemoteRemoval({
+      proposal,
+      updateSnapshot: async () => {
+        calls.push("update");
+      },
+      deleteSnapshot: async () => {
+        calls.push("delete");
+      },
+    });
+
+    assert.deepEqual(proposal.customPathRawPaths, [secondPath]);
+    assert.deepEqual(proposal.variants, []);
+    assert.deepEqual(proposal.files, []);
+    assert.equal(result, "snapshot-updated");
+    assert.deepEqual(calls, ["update"]);
+  });
+
+  it("rejects an empty snapshot with an orphaned variant", async () => {
+    let requested = false;
 
     await assert.rejects(
-      executeCloudSaveCustomPathRemoval({
-        isRegistered: true,
-        unregister: async () => {
-          registered = false;
+      executeCloudSaveCustomPathRemoteRemoval({
+        proposal: {
+          changed: true,
+          customPathRawPaths: [secondPath],
+          variants: [secondVariant],
+          files: [],
         },
-        sync: async () => ({
-          ...syncResult,
-          action: "conflict",
-          finalState: "conflict",
-        }),
+        updateSnapshot: async () => {
+          requested = true;
+        },
+        deleteSnapshot: async () => {
+          requested = true;
+        },
       }),
-      /cloud_save_custom_path_removal_conflict/
+      /cloud_save_custom_path_removal_invalid_empty_snapshot/
     );
-
-    assert.equal(registered, false);
+    assert.equal(requested, false);
   });
 
-  it("allows an exact legacy rawPath from the active snapshot without local registration", () => {
-    const rawPath = "<custom><windows>C:/Users/Hydra/AppData/Roaming/Game";
-    const otherRawPath = "<custom><windows><winAppData>/Other";
+  it("does not make a remote request when the location is already absent", async () => {
+    const proposal = buildCloudSaveCustomPathRemovalProposal(
+      manifest(),
+      "<custom><windows><winDocuments>/Missing"
+    );
+    const calls: string[] = [];
 
-    assert.equal(
-      isCloudSaveRawPathRemovable(rawPath, new Set(), [
-        { rawPath },
-        { rawPath: otherRawPath },
-      ]),
-      true
-    );
-    assert.equal(
-      isCloudSaveRawPathRemovable("<custom><windows>C:/Unknown", new Set(), [
-        { rawPath },
-      ]),
-      false
-    );
-    assert.equal(
-      isCloudSaveRawPathRemovable(otherRawPath, new Set([otherRawPath]), []),
-      true
-    );
+    const result = await executeCloudSaveCustomPathRemoteRemoval({
+      proposal,
+      updateSnapshot: async () => {
+        calls.push("update");
+      },
+      deleteSnapshot: async () => {
+        calls.push("delete");
+      },
+    });
+
+    assert.equal(result, "unchanged");
+    assert.deepEqual(calls, []);
   });
 
-  it("removes only the selected rawPath and does not schedule local deletion", () => {
-    const removed = file("<custom><windows><winDocuments>/Game", "slot.dat");
-    const kept = file("<winAppData>/Game", "settings.dat");
-    const entryId = (value: SnapshotFile) =>
-      JSON.stringify([value.variantId, value.rawPath, value.relativePath]);
-    const merge: CloudSaveMergeResult = {
-      variants: [variant(removed.variantId)],
-      files: [removed, kept],
-      conflicts: [
-        { entryId: entryId(removed), local: removed, remote: removed },
-      ],
-      restoreEntryIds: [entryId(removed)],
-      deleteRemoteEntryIds: [],
-      deleteLocalEntryIds: [entryId(removed)],
-      unresolvedRemoteEntryIds: [entryId(removed)],
-      partial: true,
-    };
-    const analysis = {
-      localSnapshot: {
-        files: [removed, kept],
-        coverage: [],
-      },
-      remoteManifest: {
-        files: [removed, kept],
-      },
-      anchor: {
-        entries: [removed, kept],
-      },
-      syncDirection: "bidirectional",
-    } as Parameters<typeof excludeCloudSaveRawPathsFromMerge>[0];
-
-    const result = excludeCloudSaveRawPathsFromMerge(
-      analysis,
-      merge,
-      new Set([removed.rawPath])
+  it("is idempotent after the location is already absent", () => {
+    const current = manifest();
+    const proposal = buildCloudSaveCustomPathRemovalProposal(
+      current,
+      "<custom><windows><winDocuments>/Missing"
     );
 
-    assert.deepEqual(result.files, [kept]);
-    assert.deepEqual(result.conflicts, []);
-    assert.deepEqual(result.restoreEntryIds, []);
-    assert.deepEqual(result.deleteLocalEntryIds, []);
-    assert.deepEqual(result.unresolvedRemoteEntryIds, []);
-    assert.deepEqual(result.deleteRemoteEntryIds, [entryId(removed)]);
-    assert.equal(result.partial, false);
-  });
-
-  it("produces an empty manifest when the selected path was the last one", () => {
-    const removed = file("<custom><linux>/home/hydra/game", "slot.dat");
-    const merge: CloudSaveMergeResult = {
-      variants: [variant(removed.variantId)],
-      files: [removed],
-      conflicts: [],
-      restoreEntryIds: [],
-      deleteRemoteEntryIds: [],
-      deleteLocalEntryIds: [],
-      unresolvedRemoteEntryIds: [],
-      partial: false,
-    };
-    const analysis = {
-      localSnapshot: { files: [removed], coverage: [] },
-      remoteManifest: { files: [removed] },
-      anchor: { entries: [removed] },
-      syncDirection: "bidirectional",
-    } as Parameters<typeof excludeCloudSaveRawPathsFromMerge>[0];
-
-    const result = excludeCloudSaveRawPathsFromMerge(
-      analysis,
-      merge,
-      new Set([removed.rawPath])
-    );
-
-    assert.deepEqual(result.files, []);
-    assert.deepEqual(result.variants, []);
+    assert.equal(proposal.changed, false);
+    assert.equal(proposal.files, current.files);
   });
 });

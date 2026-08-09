@@ -5,17 +5,11 @@ import { CloudSaveLaunchSessionStore } from "./launch-guard.js";
 import { finalizeCloudSaveLaunchSession } from "./launch-session-finalizer.js";
 
 describe("cloud save launch session finalizer", () => {
-  it("uses the pre-launch mode even when settings change during play", async () => {
+  it("retires a pre-V2 legacy session without running a backend", async () => {
     const store = new CloudSaveLaunchSessionStore();
     const session = store.start("game", "steam", "legacy");
     store.markPending("game", "steam", session.token);
     store.markRunning("game", "steam", session.token);
-
-    // This represents the user switching the persisted setting to V2 while the
-    // already-launched game is running. The session must remain legacy-owned.
-    let currentSetting = "legacy" as "legacy" | "v2";
-    currentSetting = "v2";
-    let legacyRuns = 0;
     let v2Runs = 0;
 
     const finalized = await finalizeCloudSaveLaunchSession(
@@ -23,9 +17,6 @@ describe("cloud save launch session finalizer", () => {
       "game",
       "steam",
       {
-        legacy: async () => {
-          legacyRuns += 1;
-        },
         v2: async () => {
           v2Runs += 1;
         },
@@ -33,10 +24,9 @@ describe("cloud save launch session finalizer", () => {
       session.token
     );
 
-    assert.equal(currentSetting, "v2");
     assert.equal(finalized?.mode, "legacy");
-    assert.equal(legacyRuns, 1);
     assert.equal(v2Runs, 0);
+    assert.equal(store.get("game", "steam"), null);
   });
 
   it("coalesces duplicate exits into exactly one backend invocation", async () => {
@@ -49,7 +39,6 @@ describe("cloud save launch session finalizer", () => {
     });
     let v2Runs = 0;
     const backends = {
-      legacy: async () => undefined,
       v2: async () => {
         v2Runs += 1;
         await backendPending;
@@ -90,9 +79,6 @@ describe("cloud save launch session finalizer", () => {
       "game",
       "custom",
       {
-        legacy: async () => {
-          runs += 1;
-        },
         v2: async () => {
           runs += 1;
         },
@@ -112,7 +98,7 @@ describe("cloud save launch session finalizer", () => {
       store,
       "game",
       "steam",
-      { legacy: async () => undefined, v2: async () => undefined },
+      { v2: async () => undefined },
       oldSession.token
     );
 
@@ -124,9 +110,6 @@ describe("cloud save launch session finalizer", () => {
       "game",
       "steam",
       {
-        legacy: async () => {
-          runs += 1;
-        },
         v2: async () => {
           runs += 1;
         },

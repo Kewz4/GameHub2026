@@ -3,6 +3,10 @@ import { registerEvent } from "../register-event";
 import { getGameAchievementData } from "@main/services/achievements/get-game-achievement-data";
 import { db, gameAchievementsSublevel, levelKeys } from "@main/level";
 import { AchievementWatcherManager } from "@main/services/achievements/achievement-watcher-manager";
+import {
+  canonicalizeAchievementDefinitions,
+  canonicalizeUnlockedAchievements,
+} from "@main/services/achievements/achievement-sync-policy";
 
 export const getUnlockedAchievements = async (
   objectId: string,
@@ -23,13 +27,14 @@ export const getUnlockedAchievements = async (
   const showHiddenAchievementsDescription =
     userPreferences?.showHiddenAchievementsDescription || false;
 
-  const achievementsData = await getGameAchievementData(
-    objectId,
-    shop,
-    useCachedData
+  const achievementsData = canonicalizeAchievementDefinitions(
+    await getGameAchievementData(objectId, shop, useCachedData)
   );
 
-  const unlockedAchievements = cachedAchievements?.unlockedAchievements ?? [];
+  const unlockedAchievements = canonicalizeUnlockedAchievements(
+    achievementsData,
+    cachedAchievements?.unlockedAchievements
+  );
   const achievementProgress = cachedAchievements?.achievementProgress ?? [];
 
   return achievementsData

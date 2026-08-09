@@ -70,7 +70,7 @@ export function GameSettingsModal({
 }: Readonly<GameSettingsModalProps>) {
   const { t } = useTranslation(["game_details", "header"]);
   const [activeTabId, setActiveTabId] = useState<GameSettingsTabId>("launch");
-  const { userDetails, hasActiveSubscription } = useUserDetails();
+  const { userDetails } = useUserDetails();
   const preferredAssets = useMemo(
     () => resolvePreferredGameAssets(game, null),
     [game]
@@ -111,7 +111,7 @@ export function GameSettingsModal({
     [game]
   );
 
-  const shouldShowCloudTab = userDetails !== null && hasActiveSubscription;
+  const shouldShowCloudTab = userDetails !== null;
 
   useEffect(() => {
     if (!shouldShowCloudTab && activeTabId === "hydra_cloud") {

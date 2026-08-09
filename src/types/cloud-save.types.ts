@@ -40,6 +40,8 @@ export type CloudSaveUnresolvedCustomPathState =
 
 export type CloudSaveUnresolvedCustomPathReason =
   | "environment-unavailable"
+  | "wine-prefix-unavailable"
+  | "wine-profile-unavailable"
   | "account-selection-required"
   | "legacy"
   | "foreign-platform"
@@ -160,17 +162,17 @@ export interface StoreUserContext {
 }
 
 export interface StoreUserIdentity {
-  kind: "default" | "validated-account" | "opaque-folder";
+  kind: "default" | "folder-profile" | "validated-account";
   store: string;
   steamId64?: string;
   accountId32?: string;
   concreteFolderId: string;
-  source: "active-login" | "known-login" | "folder-match" | "unbound-rule";
-  authority: "active" | "known" | "inferred";
+  source: KnownStoreAccount["source"] | "folder-match" | "unbound-rule";
+  authority: "active" | "known" | "inferred" | "literal";
 }
 
 export interface PortableStoreUserIdentity {
-  kind: "default" | "validated-account" | "opaque-folder";
+  kind: "default" | "folder-profile" | "validated-account";
   store: string;
   steamId64?: string;
   accountId32?: string;
@@ -204,7 +206,8 @@ export interface UserLocationCoverage {
     | "confirmed-missing"
     | "partial"
     | "failed"
-    | "unresolved";
+    | "unresolved"
+    | "foreign-environment";
   enumeratedCompletely: boolean;
   warningCodes: string[];
 }
@@ -280,6 +283,7 @@ export interface RestoreManifestResponse {
     id: string;
     version: number;
   };
+  customPathRawPaths: string[];
   variants: SnapshotVariant[];
   files: RestoreManifestFile[];
 }
@@ -313,9 +317,19 @@ export interface CloudSaveOverview extends CloudSaveStateResult {
   suggestedAction: CloudSaveSyncAction;
   discoveredVariantCount: number;
   unresolvedRemoteVariantCount: number;
+  unconfiguredCustomPathCount: number;
   warnings: UserLocationCoverage[];
 }
 
+/** The single active V2 snapshot shown in the account-wide Cloud Saves page. */
+export interface CloudSaveV2LibraryEntry extends RemoteSnapshotSummary {
+  shop: GameShop;
+  objectId: string;
+  gameTitle: string;
+  gameIconUrl: string | null;
+}
+
+/** `legacy` is retained only to migrate settings and retire old sessions. */
 export type CloudSaveAutomaticSyncMode = "disabled" | "legacy" | "v2";
 
 export interface CloudSaveAutomaticSyncModeChangedEvent {
@@ -476,7 +490,10 @@ export interface CloudSaveSyncIpcProgressPayload
 
 export interface ResolveRestoreTargetsInput extends CloudSavePathContext {
   approvedRules: Array<
-    Pick<CloudSaveRule, "kind" | "rawPath" | "source" | "preferredPath">
+    Pick<
+      CloudSaveRule,
+      "kind" | "rawPath" | "source" | "preferredPath" | "when"
+    >
   >;
   variants: SnapshotVariant[];
   files: RestoreManifestFile[];
@@ -488,14 +505,19 @@ export interface ResolvedRestoreTarget extends RestoreManifestFile {
   targetPath: string;
   restoreRootPath: string;
   action: RestorePlanActionKind;
+  observedHash?: string;
+  observedSizeBytes?: number;
+  observedLastModifiedAt?: string;
 }
 
 export type BlockedRestoreReason =
   | "blocked-user-not-found"
   | "blocked-user-ambiguous"
   | "blocked-rule-unavailable"
+  | "blocked-relative-path-incomplete"
   | "blocked-target-outside-root"
-  | "blocked-target-ambiguous";
+  | "blocked-target-ambiguous"
+  | "foreign-environment";
 
 export interface BlockedRestoreFile extends RestoreManifestFile {
   reason: BlockedRestoreReason;
@@ -504,6 +526,7 @@ export interface BlockedRestoreFile extends RestoreManifestFile {
 export interface ResolveRestoreTargetsResult {
   actions: ResolvedRestoreTarget[];
   blocked: BlockedRestoreFile[];
+  deferred: BlockedRestoreFile[];
 }
 
 export interface RestoreDownloadUrlFile extends RestoreManifestFile {
@@ -652,6 +675,7 @@ export interface LocalGameSnapshotContext
   extends LocalGameSnapshotPipelineResult {
   environmentId: string;
   pathContext: CloudSavePathContext;
+  customPathRawPaths: string[];
 }
 
 export interface NativeLocalGameSnapshotPipelineResult
@@ -664,6 +688,7 @@ export interface PrepareSnapshotRequest extends CloudSaveGameId {
   hostname?: string;
   snapshotHash: string;
   baseVersion: number;
+  customPathRawPaths: string[];
   variants: SnapshotVariant[];
   files: SnapshotFile[];
 }

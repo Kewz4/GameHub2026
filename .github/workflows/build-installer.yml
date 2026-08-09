@@ -62,6 +62,19 @@ jobs:
             echo "version=$VERSION"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Verify release version matches package.json
+        if: steps.config.outputs.should_release == 'true'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.config.outputs.version }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "Release version $RELEASE_VERSION does not match package.json version $PACKAGE_VERSION."
+            echo "Update package.json and use a matching tag or workflow-dispatch version."
+            exit 1
+          fi
+
       - name: Prepare private draft release
         if: steps.config.outputs.should_release == 'true'
         shell: bash
@@ -192,6 +205,26 @@ jobs:
 
       - name: Build Python RPC
         run: python python_rpc/setup.py build
+
+      - name: Run release test gates (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          yarn test:spotify
+          yarn test:r2-credentials
+          yarn test:downloads
+          yarn test:overlay
+          yarn test:recorder
+          yarn test:cloud-sync
+          yarn test:cloud-save-v2
+          yarn test:features
+
+      # Linux runs every deterministic recorder/container test. The real
+      # Electron MediaRecorder capture is covered by the Windows gate above
+      # and is skipped automatically on unsupported platforms.
+      - name: Run deterministic recorder tests (Linux)
+        if: runner.os == 'Linux'
+        run: yarn test:recorder
 
       - name: Build (${{ matrix.os }})
         run: ${{ matrix.build_cmd }}

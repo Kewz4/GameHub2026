@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { EmulatorSystem } from "@types";
 import { db } from "@main/level";
+import { logger } from "@main/services/logger";
 import {
   gamehubMetaSublevel,
   gamehubMetaKey,
@@ -43,7 +44,9 @@ function readLocalMeta(system: EmulatorSystem): HostedMetaFile | null {
     const file = path.join(LOCAL_META_DIR, `${system}.json`);
     if (!fs.existsSync(file)) return null;
     let raw = fs.readFileSync(file, "utf-8");
-    raw = raw.replace(/\x1b\[.*$/m, "").trimEnd();
+    const escapeCharacter = String.fromCharCode(27);
+    const escapeSequence = new RegExp(`${escapeCharacter}\\[.*$`, "m");
+    raw = raw.replace(escapeSequence, "").trimEnd();
     return JSON.parse(raw) as HostedMetaFile;
   } catch {
     return null;
@@ -167,7 +170,7 @@ export async function ensureGameHubMeta(): Promise<void> {
       await db.put(META_VERSION_KEY, META_VERSION, { valueEncoding: "json" });
     }
   } catch (err) {
-    console.warn("[gamehub-meta] version check failed:", err);
+    logger.warn("[gamehub-meta] version check failed:", err);
   }
 
   for (const system of META_SYSTEMS) {
@@ -175,7 +178,7 @@ export async function ensureGameHubMeta(): Promise<void> {
       if (await systemHasEntries(system)) continue;
       await syncGameHubMeta(system);
     } catch (err) {
-      console.warn(`[gamehub-meta] bootstrap failed for ${system}:`, err);
+      logger.warn(`[gamehub-meta] bootstrap failed for ${system}:`, err);
     }
   }
 }

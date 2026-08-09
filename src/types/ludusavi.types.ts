@@ -58,3 +58,49 @@ export interface LudusaviBackupMapping {
     hash?: string;
   } | null;
 }
+
+export interface LudusaviBackupLibraryTarget {
+  shop: import("./game.types").GameShop;
+  objectId: string;
+  title: string;
+}
+
+export interface LudusaviBackupScanEntry {
+  gameName: string;
+  folderPath: string;
+  mappingPath: string;
+  hasMappingYaml: true;
+  capturedAt: string;
+  fileCount: number;
+  totalSizeBytes: number;
+  suggestedGame: LudusaviBackupLibraryTarget | null;
+  matchReason: "gamehub-id" | "backup-folder-id" | "exact-title" | null;
+}
+
+export type LudusaviImportResult =
+  | {
+      ok: false;
+      status: "preview";
+      currentSnapshotId: string | null;
+      currentVersion: number;
+      wouldReplace: boolean;
+      aggregateHash: string;
+      fileCount: number;
+      totalSizeBytes: number;
+    }
+  | {
+      ok: true;
+      status: "imported" | "already-current";
+      snapshotId: string;
+      version: number;
+      fileCount: number;
+      totalSizeBytes: number;
+    }
+  | {
+      ok: false;
+      status: "confirmation-required";
+      expectedSnapshotId: string;
+      currentVersion: number;
+      fileCount: number;
+      totalSizeBytes: number;
+    };

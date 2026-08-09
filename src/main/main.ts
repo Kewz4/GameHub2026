@@ -259,7 +259,18 @@ export const loadState = async () => {
 
   // Sync all connected libraries on launch (non-blocking)
   import("@main/services/main-loop").then(({ syncAllLibraries }) => {
-    syncAllLibraries().catch(() => {});
+    syncAllLibraries()
+      .catch(() => {})
+      .finally(() => {
+        // Also audits persisted URLs for already-synced libraries. This is what
+        // repairs a dead CDN URL such as ARK's without requiring the user to
+        // press "Generate missing artwork" manually.
+        import("./events/library/generate-missing-metadata")
+          .then(({ generateMissingMetadataInternal }) =>
+            generateMissingMetadataInternal()
+          )
+          .catch(() => undefined);
+      });
   });
 
   CommonRedistManager.downloadCommonRedist();

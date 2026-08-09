@@ -186,9 +186,7 @@ describe("R2 credential broker legacy namespace claims", () => {
     const { claims } = await readCredentialResponse(successfulResponse);
     assert.equal(claims.scope, "object-read-write");
     assert.equal(claims.paths.prefixPaths.length, 2);
-    assert.ok(
-      claims.paths.prefixPaths.includes(`users/${legacyNamespaceId}/`)
-    );
+    assert.ok(claims.paths.prefixPaths.includes(`users/${legacyNamespaceId}/`));
     assert.deepEqual(claims.paths.objectPaths, []);
   });
 

@@ -1,4 +1,50 @@
 export type CustomDownloadSourceType = "link" | "magnet" | "torrent";
+export type CustomDownloadEntryIntent = CustomDownloadSourceType;
+
+export const CUSTOM_DOWNLOAD_ENTRY_OPTIONS = [
+  {
+    intent: "link",
+    title: "Direct link",
+    description: "Paste an HTTP download link for an archive or installer.",
+  },
+  {
+    intent: "magnet",
+    title: "Magnet link",
+    description: "Send a magnet to TorBox for an instant cache check.",
+  },
+  {
+    intent: "torrent",
+    title: ".torrent file",
+    description: "Choose a local .torrent file and submit it through TorBox.",
+  },
+] as const satisfies readonly {
+  intent: CustomDownloadEntryIntent;
+  title: string;
+  description: string;
+}[];
+
+export function getCustomDownloadInputPresentation(
+  intent: CustomDownloadEntryIntent
+) {
+  if (intent === "magnet") {
+    return {
+      label: "Magnet link",
+      placeholder: "magnet:?xt=urn:btih:…",
+    };
+  }
+
+  if (intent === "torrent") {
+    return {
+      label: ".torrent file or fallback link",
+      placeholder: "Attach a .torrent below, or paste its HTTPS link",
+    };
+  }
+
+  return {
+    label: "Direct download link",
+    placeholder: "https://…",
+  };
+}
 
 export interface ClassifiedCustomDownloadSource {
   type: Exclude<CustomDownloadSourceType, "torrent">;
@@ -102,6 +148,38 @@ export function normalizeCustomDownloadTitle(input: string) {
     throw new Error("The game name must be 160 characters or fewer");
   }
   return normalized;
+}
+
+export interface CustomDownloadFormReadinessInput {
+  hasTorBoxToken: boolean;
+  source: string;
+  localTorrentPath: string | null;
+  title: string;
+  downloadPath: string;
+}
+
+/**
+ * Keeps both download-manager forms disabled until the same minimum contract
+ * enforced by submission is already valid. This is intentionally side-effect
+ * free so controller and pointer UIs cannot present a misleading primary
+ * action that only fails after activation.
+ */
+export function isCustomDownloadFormReady({
+  hasTorBoxToken,
+  source,
+  localTorrentPath,
+  title,
+  downloadPath,
+}: CustomDownloadFormReadinessInput) {
+  if (!hasTorBoxToken || !downloadPath.trim()) return false;
+
+  try {
+    normalizeCustomDownloadTitle(title);
+    if (!localTorrentPath?.trim()) classifyCustomDownloadSource(source);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function suggestCustomDownloadTitle(

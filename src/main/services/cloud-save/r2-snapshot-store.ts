@@ -5,19 +5,32 @@ import {
   type R2CloudSaveV2ControlDocument,
   type R2CloudSaveV2SnapshotDocument,
 } from "@main/services/r2-sync";
-import { CloudSync } from "@main/services/cloud-sync";
 import type { GameShop } from "@types";
+import {
+  assertCloudSaveAccountSessionCurrent,
+  getCloudSaveAccountUserId,
+  runWithCloudSaveAccountSession,
+} from "./account-session";
 
-export const getCloudSaveR2UserId = () => CloudSync.getOrCreateUserId();
+export const getCloudSaveR2UserId = () => getCloudSaveAccountUserId();
+
+const withCloudSaveR2Account = async <T>(
+  operation: (userId: string) => Promise<T>
+) =>
+  runWithCloudSaveAccountSession(async () => {
+    const userId = await getCloudSaveR2UserId();
+    assertCloudSaveAccountSessionCurrent();
+    const result = await operation(userId);
+    assertCloudSaveAccountSessionCurrent();
+    return result;
+  });
 
 export const getR2ActiveCloudSaveSnapshot = async (
   objectId: string,
   shop: GameShop
 ) =>
-  R2Sync.getCloudSaveV2Head(
-    await getCloudSaveR2UserId(),
-    shop,
-    objectId
+  withCloudSaveR2Account((userId) =>
+    R2Sync.getCloudSaveV2Head(userId, shop, objectId)
   );
 
 export const getR2CloudSaveSnapshot = async (
@@ -26,12 +39,8 @@ export const getR2CloudSaveSnapshot = async (
   snapshotId: string,
   version: number
 ) =>
-  R2Sync.getCloudSaveV2Snapshot(
-    await getCloudSaveR2UserId(),
-    shop,
-    objectId,
-    snapshotId,
-    version
+  withCloudSaveR2Account((userId) =>
+    R2Sync.getCloudSaveV2Snapshot(userId, shop, objectId, snapshotId, version)
   );
 
 export const commitR2CloudSaveSnapshot = async (
@@ -39,11 +48,13 @@ export const commitR2CloudSaveSnapshot = async (
   expectedControl: R2CloudSaveV2ControlDocument | null,
   expectedHeadEtag: string | null
 ) =>
-  R2Sync.commitCloudSaveV2Snapshot(
-    await getCloudSaveR2UserId(),
-    document,
-    expectedControl,
-    expectedHeadEtag
+  withCloudSaveR2Account((userId) =>
+    R2Sync.commitCloudSaveV2Snapshot(
+      userId,
+      document,
+      expectedControl,
+      expectedHeadEtag
+    )
   );
 
 export const uploadR2CloudSaveBlob = async (
@@ -54,14 +65,16 @@ export const uploadR2CloudSaveBlob = async (
   sizeBytes: number,
   expectedEpoch: number
 ) =>
-  R2Sync.uploadCloudSaveV2Blob(
-    await getCloudSaveR2UserId(),
-    shop,
-    objectId,
-    absolutePath,
-    hash,
-    sizeBytes,
-    expectedEpoch
+  withCloudSaveR2Account((userId) =>
+    R2Sync.uploadCloudSaveV2Blob(
+      userId,
+      shop,
+      objectId,
+      absolutePath,
+      hash,
+      sizeBytes,
+      expectedEpoch
+    )
   );
 
 export const downloadR2CloudSaveBlob = async (
@@ -73,12 +86,14 @@ export const downloadR2CloudSaveBlob = async (
   if (path.basename(destinationPath) !== `${hash}.blob`) {
     throw new Error("cloud_save_invalid_restore_temp_path");
   }
-  return R2Sync.downloadCloudSaveV2Blob(
-    await getCloudSaveR2UserId(),
-    shop,
-    objectId,
-    hash,
-    destinationPath
+  return withCloudSaveR2Account((userId) =>
+    R2Sync.downloadCloudSaveV2Blob(
+      userId,
+      shop,
+      objectId,
+      hash,
+      destinationPath
+    )
   );
 };
 
@@ -87,11 +102,8 @@ export const beginR2CloudSaveGameDeletion = async (
   shop: GameShop,
   operationId: string
 ) =>
-  R2Sync.beginCloudSaveV2Deletion(
-    await getCloudSaveR2UserId(),
-    shop,
-    objectId,
-    operationId
+  withCloudSaveR2Account((userId) =>
+    R2Sync.beginCloudSaveV2Deletion(userId, shop, objectId, operationId)
   );
 
 export const deleteR2CloudSaveGameObjects = async (
@@ -99,11 +111,8 @@ export const deleteR2CloudSaveGameObjects = async (
   shop: GameShop,
   operationId: string
 ) =>
-  R2Sync.deleteCloudSaveV2GameObjects(
-    await getCloudSaveR2UserId(),
-    shop,
-    objectId,
-    operationId
+  withCloudSaveR2Account((userId) =>
+    R2Sync.deleteCloudSaveV2GameObjects(userId, shop, objectId, operationId)
   );
 
 export const finishR2CloudSaveGameDeletion = async (
@@ -111,9 +120,6 @@ export const finishR2CloudSaveGameDeletion = async (
   shop: GameShop,
   operationId: string
 ) =>
-  R2Sync.finishCloudSaveV2Deletion(
-    await getCloudSaveR2UserId(),
-    shop,
-    objectId,
-    operationId
+  withCloudSaveR2Account((userId) =>
+    R2Sync.finishCloudSaveV2Deletion(userId, shop, objectId, operationId)
   );

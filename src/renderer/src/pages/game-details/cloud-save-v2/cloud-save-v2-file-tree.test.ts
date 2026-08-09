@@ -16,7 +16,6 @@ const {
   buildCloudSaveV2ComparisonTree,
   buildCloudSaveV2LocalFileTree,
   filterCloudSaveV2Comparisons,
-  formatCloudSaveV2LocalPath,
 } = fileTree;
 
 const localFile = (
@@ -67,25 +66,6 @@ const unresolvedCustomPath = (
 });
 
 describe("cloud save V2 local file tree", () => {
-  it("formats Windows extended paths without changing Unix paths", () => {
-    assert.equal(
-      formatCloudSaveV2LocalPath("//?/C:/Users/Hydra/Saves/slot.dat"),
-      "C:\\Users\\Hydra\\Saves\\slot.dat"
-    );
-    assert.equal(
-      formatCloudSaveV2LocalPath("\\\\?\\C:\\Users\\Hydra\\Saves"),
-      "C:\\Users\\Hydra\\Saves"
-    );
-    assert.equal(
-      formatCloudSaveV2LocalPath("\\\\?\\UNC\\server\\share\\Saves"),
-      "\\\\server\\share\\Saves"
-    );
-    assert.equal(
-      formatCloudSaveV2LocalPath("/home/hydra/saves/slot.dat"),
-      "/home/hydra/saves/slot.dat"
-    );
-  });
-
   it("uses real Windows paths and normalizes mixed relative separators", () => {
     const [root] = buildCloudSaveV2LocalFileTree([
       localFile(

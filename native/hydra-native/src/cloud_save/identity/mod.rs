@@ -7,7 +7,7 @@ use crate::cloud_save::manifest::types::{CloudSaveRule, CloudSaveRuleCondition};
 
 pub const IDENTITY_VERSION: u32 = 1;
 pub const RULE_ID_VERSION: u32 = 1;
-pub const DISCOVERY_ENGINE_VERSION: u32 = 2;
+pub const DISCOVERY_ENGINE_VERSION: u32 = 4;
 
 const STEAM_INDIVIDUAL_ACCOUNT_BASE: u64 = 76_561_197_960_265_728;
 
@@ -246,17 +246,13 @@ pub fn store_user_identity(
     }
 
     StoreUserIdentity {
-        kind: "opaque-folder".to_string(),
+        kind: "folder-profile".to_string(),
         store: store.to_string(),
         steam_id64: None,
         account_id32: None,
         concrete_folder_id: concrete.to_string(),
-        source: if captured.is_some() {
-            "folder-match".to_string()
-        } else {
-            "unbound-rule".to_string()
-        },
-        authority: "inferred".to_string(),
+        source: "folder-match".to_string(),
+        authority: "literal".to_string(),
     }
 }
 
@@ -304,7 +300,6 @@ pub fn build_variant_id(
             concrete_folder_id: None,
         });
     }
-
     let normalized = normalize_text(&store_user.concrete_folder_id);
     let normalized = if case_sensitive {
         normalized
@@ -405,7 +400,28 @@ mod tests {
     }
 
     #[test]
-    fn steam_representations_share_a_variant() {
+    fn literal_profiles_keep_distinct_variant_ids() {
+        let steam_id64 = "76561198051718575";
+        let account_id32 = "91452847";
+        let context = StoreUserContext::default();
+        let steam_id_profile = portable_bindings(
+            "steam",
+            "814380",
+            store_user_identity("steam", Some(steam_id64), &context),
+        );
+        let account_id_profile = portable_bindings(
+            "steam",
+            "814380",
+            store_user_identity("steam", Some(account_id32), &context),
+        );
+        assert_ne!(
+            build_variant_id("steam:814380", &steam_id_profile, false),
+            build_variant_id("steam:814380", &account_id_profile, false)
+        );
+    }
+
+    #[test]
+    fn known_steam_representations_keep_the_shipped_account_variant() {
         let steam_id64 = "76561198051718575";
         let account_id32 = "91452847";
         let account = KnownStoreAccount {
@@ -418,7 +434,6 @@ mod tests {
             active: Some(account.clone()),
             known: vec![account],
         };
-        let namespace = "steam:814380";
         let for_64 = portable_bindings(
             "steam",
             "814380",
@@ -429,43 +444,35 @@ mod tests {
             "814380",
             store_user_identity("steam", Some(account_id32), &context),
         );
-        assert_eq!(
-            build_variant_id(namespace, &for_64, false),
-            build_variant_id(namespace, &for_32, false)
-        );
+        let variant_64 = build_snapshot_variant("steam:814380", &for_64, false);
+        let variant_32 = build_snapshot_variant("steam:814380", &for_32, false);
+        assert_eq!(variant_64.variant_id, variant_32.variant_id);
+        assert_eq!(variant_64.kind, "steam-account");
+        assert_eq!(variant_64.steam_id64.as_deref(), Some(steam_id64));
     }
 
     #[test]
-    fn remote_snapshot_account_hint_recognizes_both_steam_representations() {
+    fn numeric_profiles_remain_literal() {
         let steam_id64 = "76561199800542110";
         let account_id32 = "1840276382";
-        let account = KnownStoreAccount {
-            store: "steam".into(),
-            steam_id64: Some(steam_id64.into()),
-            account_id32: Some(account_id32.into()),
-            source: "remote-snapshot".into(),
-        };
-        let context = StoreUserContext {
-            active: None,
-            known: vec![account],
-        };
+        let context = StoreUserContext::default();
 
         for captured in [steam_id64, account_id32] {
             let identity = store_user_identity("steam", Some(captured), &context);
-            assert_eq!(identity.kind, "validated-account");
-            assert_eq!(identity.steam_id64.as_deref(), Some(steam_id64));
-            assert_eq!(identity.account_id32.as_deref(), Some(account_id32));
-            assert_eq!(identity.source, "remote-snapshot");
+            assert_eq!(identity.kind, "folder-profile");
+            assert!(identity.steam_id64.is_none());
+            assert!(identity.account_id32.is_none());
+            assert_eq!(identity.concrete_folder_id, captured);
+            assert_eq!(identity.source, "folder-match");
+            assert_eq!(identity.authority, "literal");
         }
     }
 
     #[test]
     fn builds_default_and_opaque_wire_variants_without_local_bindings() {
-        let default_bindings = portable_bindings(
-            "steam",
-            "1",
-            store_user_identity("steam", None, &StoreUserContext::default()),
-        );
+        let context = StoreUserContext::default();
+        let default_bindings =
+            portable_bindings("steam", "1", store_user_identity("steam", None, &context));
         let default = build_snapshot_variant("steam:1", &default_bindings, false);
         assert_eq!(default.kind, "default");
         assert!(default.steam_id64.is_none());
@@ -474,13 +481,40 @@ mod tests {
         let opaque_bindings = portable_bindings(
             "steam",
             "1",
-            store_user_identity("steam", Some("Goldberg"), &StoreUserContext::default()),
+            store_user_identity("steam", Some("Goldberg"), &context),
         );
         let opaque = build_snapshot_variant("steam:1", &opaque_bindings, false);
         assert_eq!(opaque.kind, "opaque-folder");
         assert_eq!(opaque.concrete_folder_id.as_deref(), Some("goldberg"));
         assert!(opaque.steam_id64.is_none());
         assert_ne!(default.variant_id, opaque.variant_id);
+    }
+
+    #[test]
+    fn preserves_existing_default_and_opaque_variant_ids() {
+        let context = StoreUserContext::default();
+        let default_bindings = portable_bindings(
+            "steam",
+            "1817070",
+            store_user_identity("steam", None, &context),
+        );
+        let default = build_snapshot_variant("steam:1817070", &default_bindings, false);
+        assert_eq!(
+            default.variant_id,
+            "6bb5b19456b48c65d5b6120154934d146013679fd8673e7d42694fff131774db"
+        );
+
+        let profile_bindings = portable_bindings(
+            "steam",
+            "1817070",
+            store_user_identity("steam", Some("76561197960271872"), &context),
+        );
+        let profile = build_snapshot_variant("steam:1817070", &profile_bindings, false);
+        assert_eq!(profile.kind, "opaque-folder");
+        assert_eq!(
+            profile.variant_id,
+            "82e6580b982018f47d8ce8e17656a22675f2277d2cdd0a11ae501b10c8a430e1"
+        );
     }
 
     #[test]

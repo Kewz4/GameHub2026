@@ -177,7 +177,7 @@ let _shuttingDown = false;
 let _currentOutPath = null;
 let _currentData = null;
 
-function setupGracefulShutdown() {
+function _setupGracefulShutdown() {
   const saveAndExit = (signal) => {
     if (_shuttingDown) return;
     _shuttingDown = true;
@@ -201,13 +201,13 @@ let _progressStart = Date.now();
 let _progressTotal = 0;
 let _progressDone = 0;
 
-function progressInit(total) {
+function _progressInit(total) {
   _progressTotal = total;
   _progressDone = 0;
   _progressStart = Date.now();
 }
 
-function progressTick() {
+function _progressTick() {
   _progressDone++;
   if (_progressDone % 50 === 0 || _progressDone === _progressTotal) {
     const elapsed = (Date.now() - _progressStart) / 1000;
@@ -252,7 +252,7 @@ async function waitForRamIfNeeded() {
   process.stdout.write(
     `⏸  low RAM (${avail} MB available < ${MIN_AVAILABLE_RAM_MB} MB threshold) — pausing until memory frees up…\n`
   );
-  while (true) {
+  for (;;) {
     await sleep(RAM_POLL_INTERVAL_MS);
     const now = availableRamMB();
     if (now >= MIN_AVAILABLE_RAM_MB) {

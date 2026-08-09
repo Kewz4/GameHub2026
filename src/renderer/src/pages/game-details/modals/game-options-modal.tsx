@@ -101,9 +101,6 @@ export function GameOptionsModal({
     useState(false);
   const [showChangePlaytimeModal, setShowChangePlaytimeModal] = useState(false);
   const [isDeletingAchievements, setIsDeletingAchievements] = useState(false);
-  const [automaticCloudSync, setAutomaticCloudSync] = useState(
-    game.automaticCloudSync ?? true
-  );
   const [creatingSteamShortcut, setCreatingSteamShortcut] = useState(false);
   const [saveFolderPath, setSaveFolderPath] = useState<string | null>(null);
   const [loadingSaveFolder, setLoadingSaveFolder] = useState(false);
@@ -784,24 +781,6 @@ export function GameOptionsModal({
     }
   };
 
-  const handleToggleAutomaticCloudSync = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setAutomaticCloudSync(event.target.checked);
-    const gameKey = getGameKey(game.shop, game.objectId);
-    const gameData = (await levelDBService.get(
-      gameKey,
-      "games"
-    )) as Game | null;
-    if (gameData)
-      await levelDBService.put(
-        gameKey,
-        { ...gameData, automaticCloudSync: event.target.checked },
-        "games"
-      );
-    updateGame();
-  };
-
   return (
     <>
       <DeleteGameModal
@@ -967,11 +946,7 @@ export function GameOptionsModal({
               />
             )}
             {selectedCategory === "hydra_cloud" && (
-              <HydraCloudSettingsSection
-                game={game}
-                automaticCloudSync={automaticCloudSync}
-                onToggleAutomaticCloudSync={handleToggleAutomaticCloudSync}
-              />
+              <HydraCloudSettingsSection />
             )}
             {selectedCategory === "compatibility" &&
               shouldShowWinePrefixConfiguration && (

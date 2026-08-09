@@ -669,7 +669,7 @@ export class TorBoxClient {
         ? resumingFilename
         : target
           ? target.short_name || target.name
-          : info?.name ?? web.name ?? undefined;
+          : (info?.name ?? web.name ?? undefined);
       logger.log(
         target && !legacyGeneratedZip
           ? `[torbox] resolved resumable web file url (fileId=${target.id})`

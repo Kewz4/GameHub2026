@@ -30,6 +30,7 @@ import "./user";
 import "./user-preferences";
 import "./library/transfer-game-files";
 import "./library/run-cloud-debugger";
+import "./misc/console-logs";
 import "./installer";
 
 import { isPortableVersion } from "@main/helpers";

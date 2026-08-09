@@ -4,14 +4,20 @@ import { HydraApi, logger } from "@main/services";
 import { gameAchievementsSublevel, gamesSublevel } from "@main/level";
 import { searchCatalogueForAchievements } from "@main/services/achievements/exophase/exophase-catalogue";
 import { resolveCanonicalUnlocked } from "@main/services/achievements/exophase/exophase-cache";
-import type { UnlockedAchievement, DebugIssue, CloudDebugReport } from "@types";
+import { syncAchievementsToHydraCloud } from "@main/services/achievements/achievement-cloud-sync";
+import type {
+  UnlockedAchievement,
+  DebugIssue,
+  CloudDebugReport,
+  GameShop,
+} from "@types";
 
 export type { DebugIssue, CloudDebugReport };
 
 type ProfileGame = {
   id: string;
   objectId: string;
-  shop: string;
+  shop: GameShop;
   title: string;
   achievementCount: number;
   unlockedAchievementCount: number;
@@ -19,9 +25,40 @@ type ProfileGame = {
   lastTimePlayed: Date | null;
 };
 
+export interface CloudDebuggerOptions {
+  /** false performs every read/match/comparison but never mutates local/cloud. */
+  repair?: boolean;
+}
+
+const isSupplementalLaunchboxContent = (game: {
+  shop: string;
+  objectId: string;
+}): boolean =>
+  game.shop === "launchbox" && /::(?:update|dlc)(?:::|$)/i.test(game.objectId);
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  worker: (value: T) => Promise<R>
+): Promise<R[]> {
+  const output = new Array<R>(values.length);
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex++;
+        output[index] = await worker(values[index]);
+      }
+    })
+  );
+  return output;
+}
+
 const runCloudDebugger = async (
-  _event: Electron.IpcMainInvokeEvent
+  _event: Electron.IpcMainInvokeEvent,
+  options: CloudDebuggerOptions = {}
 ): Promise<CloudDebugReport> => {
+  const repair = options.repair !== false;
   if (!HydraApi.isLoggedIn()) {
     return {
       checkedAt: new Date().toISOString(),
@@ -31,6 +68,7 @@ const runCloudDebugger = async (
       fixedCount: 0,
       unfixedCount: 0,
       notLoggedIn: true,
+      mode: repair ? "repair" : "audit",
     };
   }
 
@@ -38,12 +76,36 @@ const runCloudDebugger = async (
   const localGames = await gamesSublevel
     .values()
     .all()
-    .then((all) => all.filter((g) => !g.isDeleted && g.shop !== "custom"));
+    .then((all) =>
+      all.filter(
+        (g) =>
+          !g.isDeleted &&
+          g.shop !== "custom" &&
+          !isSupplementalLaunchboxContent(g)
+      )
+    );
 
   // --- 2. Load cloud library ---
-  let cloudGames = await HydraApi.get<ProfileGame[]>("/profile/games").catch(
-    () => [] as ProfileGame[]
-  );
+  let cloudGames: ProfileGame[];
+  try {
+    cloudGames = await HydraApi.get<ProfileGame[]>("/profile/games");
+  } catch (error) {
+    logger.error(
+      "[CloudDebugger] Aborted: the cloud library could not be loaded",
+      error
+    );
+    return {
+      checkedAt: new Date().toISOString(),
+      localCount: localGames.length,
+      cloudCount: 0,
+      issues: [],
+      fixedCount: 0,
+      unfixedCount: 0,
+      mode: repair ? "repair" : "audit",
+      error:
+        "Could not load the GameHub cloud library. No repair was attempted.",
+    };
+  }
 
   const issues: DebugIssue[] = [];
 
@@ -70,7 +132,8 @@ const runCloudDebugger = async (
   type UploadCandidate = {
     localKey: string;
     game: (typeof localGames)[number];
-    steamObjectId: string;
+    cloudShop: "steam" | "launchbox";
+    cloudObjectId: string;
   };
 
   const missingFromCloud = localGames.filter(
@@ -88,32 +151,63 @@ const runCloudDebugger = async (
 
   const candidates: UploadCandidate[] = [];
 
-  for (const g of missingFromCloud) {
+  const resolvedMissing = await mapWithConcurrency(
+    missingFromCloud,
+    6,
+    async (game) => {
+      if (game.shop === "steam" || game.shop === "launchbox") {
+        return { game, match: null, lookupFailed: false };
+      }
+      try {
+        const match = await searchCatalogueForAchievements(game.title);
+        return { game, match, lookupFailed: false };
+      } catch (error) {
+        logger.warn(
+          `[CloudDebugger] Catalogue lookup failed for "${game.title}"`,
+          error
+        );
+        return { game, match: null, lookupFailed: true };
+      }
+    }
+  );
+
+  for (const { game: g, match, lookupFailed } of resolvedMissing) {
     const localKey = `${g.shop}:${g.objectId}`;
 
-    if (g.shop === "steam") {
-      candidates.push({ localKey, game: g, steamObjectId: g.objectId });
+    if (g.shop === "steam" || g.shop === "launchbox") {
+      candidates.push({
+        localKey,
+        game: g,
+        cloudShop: g.shop,
+        cloudObjectId: g.objectId,
+      });
       issues.push({
         kind: "missing-from-cloud",
         gameTitle: g.title,
         shop: g.shop,
         objectId: g.objectId,
-        detail: `Local Steam game not in cloud (libraryOrigin=${g.libraryOrigin ?? "?"}, remoteId=${g.remoteId ?? "null"})`,
+        detail: `Local ${g.shop === "steam" ? "Steam" : "console"} game not in cloud (libraryOrigin=${g.libraryOrigin ?? "?"}, remoteId=${g.remoteId ?? "null"})`,
         fixed: false,
       });
       continue;
     }
 
-    // Non-Steam: resolve to a Steam catalogue entry by title.
-    const match = await searchCatalogueForAchievements(g.title).catch(
-      () => null
-    );
-
-    if (match && match.shop === "steam") {
+    if (lookupFailed) {
+      issues.push({
+        kind: "missing-from-cloud",
+        gameTitle: g.title,
+        shop: g.shop,
+        objectId: g.objectId,
+        detail: `Catalogue lookup failed for "${g.title}" after one retry — no match decision was made`,
+        fixed: false,
+        fixError: "Catalogue lookup failed — retry maintenance",
+      });
+    } else if (match && match.shop === "steam") {
       candidates.push({
         localKey,
         game: g,
-        steamObjectId: match.objectId,
+        cloudShop: "steam",
+        cloudObjectId: match.objectId,
       });
       issues.push({
         kind: "missing-from-cloud",
@@ -129,7 +223,7 @@ const runCloudDebugger = async (
         gameTitle: g.title,
         shop: g.shop,
         objectId: g.objectId,
-        detail: `No Steam catalogue match found for "${g.title}" — cannot upload to cloud`,
+        detail: `No safe Steam catalogue match found for "${g.title}" after inspecting up to 50 results — cannot upload to cloud`,
         fixed: false,
         fixError: "No Steam match",
       });
@@ -140,7 +234,7 @@ const runCloudDebugger = async (
   // already exist in the cloud as Steam (just link those instead).
   const toUpload = new Map<string, UploadCandidate>();
   for (const c of candidates) {
-    const cloudKey = `steam:${c.steamObjectId}`;
+    const cloudKey = `${c.cloudShop}:${c.cloudObjectId}`;
     if (cloudByKey.has(cloudKey)) {
       // Already in cloud under Steam — link it without re-uploading.
       localKeyToCloud.set(c.localKey, cloudByKey.get(cloudKey)!);
@@ -153,15 +247,15 @@ const runCloudDebugger = async (
       if (issue) issue.fixed = true;
       continue;
     }
-    if (!toUpload.has(c.steamObjectId)) toUpload.set(c.steamObjectId, c);
+    if (!toUpload.has(cloudKey)) toUpload.set(cloudKey, c);
   }
 
-  if (toUpload.size) {
+  if (repair && toUpload.size) {
     const uploadList = [...toUpload.values()];
     const toPayload = (c: UploadCandidate) => ({
-      objectId: c.steamObjectId,
+      objectId: c.cloudObjectId,
       playTimeInMilliseconds: Math.trunc(c.game.playTimeInMilliseconds),
-      shop: "steam",
+      shop: c.cloudShop,
       lastTimePlayed: c.game.lastTimePlayed
         ? new Date(c.game.lastTimePlayed).toISOString()
         : null,
@@ -187,7 +281,7 @@ const runCloudDebugger = async (
             .catch(() => false);
           if (!single) {
             logger.warn(
-              `[CloudDebugger] batch upload rejected steam:${c.steamObjectId} ("${c.game.title}")`
+              `[CloudDebugger] batch upload rejected ${c.cloudShop}:${c.cloudObjectId} ("${c.game.title}")`
             );
             const issue = issues.find(
               (i) =>
@@ -212,7 +306,7 @@ const runCloudDebugger = async (
   // Reconcile every candidate against the refreshed cloud, mark issue status,
   // stamp the local remoteId, and record the local→cloud mapping.
   for (const c of candidates) {
-    const cloudGame = cloudByKey.get(`steam:${c.steamObjectId}`);
+    const cloudGame = cloudByKey.get(`${c.cloudShop}:${c.cloudObjectId}`);
     const issue = issues.find(
       (i) =>
         i.kind === "missing-from-cloud" &&
@@ -229,14 +323,14 @@ const runCloudDebugger = async (
 
       // Stamp remoteId on the local game so future syncs link correctly.
       const current = await gamesSublevel.get(c.localKey).catch(() => null);
-      if (current && !current.remoteId) {
+      if (repair && current && current.remoteId !== cloudGame.id) {
         await gamesSublevel
           .put(c.localKey, { ...current, remoteId: cloudGame.id })
           .catch(() => {});
       }
     } else if (issue && !issue.fixError) {
       issue.fixed = false;
-      issue.fixError = "Batch upload failed";
+      issue.fixError = repair ? "Batch upload failed" : "Repair available";
     }
   }
 
@@ -310,18 +404,29 @@ const runCloudDebugger = async (
       };
 
       const freshGame = await gamesSublevel.get(key).catch(() => localGame);
-      const remoteId = freshGame?.remoteId ?? cloudGame.id;
+      const remoteId = cloudGame.id;
 
-      if (remoteId) {
-        const ok = await HydraApi.put("/profile/games/achievements", {
-          id: remoteId,
+      if (repair && freshGame && freshGame.remoteId !== remoteId) {
+        await gamesSublevel
+          .put(key, { ...freshGame, remoteId })
+          .catch(() => undefined);
+      }
+
+      if (remoteId && repair) {
+        const syncResult = await syncAchievementsToHydraCloud({
+          remoteId,
+          shop: cloudGame.shop,
+          objectId: cloudGame.objectId,
           achievements: canonicalUnlocked,
-        })
-          .then(() => true)
-          .catch(() => false);
+        });
+        const ok = ["synced", "unchanged"].includes(syncResult.status);
 
         issue.fixed = ok;
-        if (!ok) issue.fixError = "Achievement push failed";
+        if (!ok) {
+          issue.fixError = `Achievement push not completed (${syncResult.status})`;
+        }
+      } else if (!repair) {
+        issue.fixError = "Repair available";
       } else {
         issue.fixError = "No remoteId — game not linked to cloud";
       }
@@ -350,9 +455,15 @@ const runCloudDebugger = async (
       };
 
       const freshGame = await gamesSublevel.get(key).catch(() => localGame);
-      const remoteId = freshGame?.remoteId ?? cloudGame.id;
+      const remoteId = cloudGame.id;
 
-      if (remoteId) {
+      if (repair && freshGame && freshGame.remoteId !== remoteId) {
+        await gamesSublevel
+          .put(key, { ...freshGame, remoteId })
+          .catch(() => undefined);
+      }
+
+      if (remoteId && repair) {
         let remainingSeconds = Math.round((localMs - cloudMs) / 1000);
         const lastTimePlayed = localGame.lastTimePlayed
           ? new Date(localGame.lastTimePlayed).toISOString()
@@ -372,6 +483,8 @@ const runCloudDebugger = async (
 
         issue.fixed = ok;
         if (!ok) issue.fixError = "Playtime update failed";
+      } else if (!repair) {
+        issue.fixError = "Repair available";
       } else {
         issue.fixError = "No remoteId";
       }
@@ -394,6 +507,7 @@ const runCloudDebugger = async (
     issues,
     fixedCount,
     unfixedCount,
+    mode: repair ? "repair" : "audit",
   };
 };
 

@@ -482,6 +482,7 @@ export function CloudSaveV2FileBrowserModal({
             : t("cloud_save_v2_files_modal_description")
         }
         className={`cloud-save-v2__file-browser-modal ${titleIsConflict ? "cloud-save-v2__file-browser-modal--comparison" : ""}`}
+        noAnimation
         onClose={() => {
           if (!isChangingCustomPaths && !isDeletingCloudSave) onClose();
         }}

@@ -1,6 +1,7 @@
 use napi_derive::napi;
 
 use crate::cloud_save::identity::{SnapshotVariant, StoreUserContext};
+use crate::cloud_save::manifest::types::CloudSaveRuleCondition;
 
 #[napi(object)]
 #[derive(Clone)]
@@ -20,6 +21,7 @@ pub struct ApprovedRestoreRule {
     pub raw_path: String,
     pub source: String,
     pub preferred_path: Option<String>,
+    pub when: Vec<CloudSaveRuleCondition>,
 }
 
 #[napi(object)]
@@ -50,6 +52,9 @@ pub struct ResolvedRestoreTarget {
     pub size_bytes: f64,
     pub last_modified_at: String,
     pub action: String,
+    pub observed_hash: Option<String>,
+    pub observed_size_bytes: Option<f64>,
+    pub observed_last_modified_at: Option<String>,
 }
 
 #[napi(object)]
@@ -67,6 +72,7 @@ pub struct BlockedRestoreFile {
 pub struct ResolveRestoreTargetsResult {
     pub actions: Vec<ResolvedRestoreTarget>,
     pub blocked: Vec<BlockedRestoreFile>,
+    pub deferred: Vec<BlockedRestoreFile>,
 }
 
 #[napi(object)]

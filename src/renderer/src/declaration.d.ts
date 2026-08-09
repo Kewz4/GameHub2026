@@ -19,9 +19,6 @@ import type {
   UserDetails,
   FriendRequestSync,
   NotificationSync,
-  GameArtifact,
-  GameArtifactWithGame,
-  LudusaviBackup,
   UserAchievement,
   ComparedAchievements,
   LibraryGame,
@@ -75,6 +72,7 @@ import type {
   CloudSaveConflictResolution,
   CloudSaveOverview,
   CloudSaveV2FileDetails,
+  CloudSaveV2LibraryEntry,
   CloudSaveSyncProgressPayload,
   SyncCloudSaveOnGamePageResult,
   SyncGameCloudSaveResult,
@@ -84,8 +82,9 @@ import type {
   SelectCloudSaveCustomPathApprovalResult,
   ConfirmCloudSaveCustomPathApprovalResult,
   ConfirmCloudSaveCustomPathRebindApprovalResult,
+  LudusaviBackupScanEntry,
+  LudusaviImportResult,
 } from "@types";
-import type { AxiosProgressEvent } from "axios";
 
 export interface DriveInfo {
   root: string;
@@ -145,6 +144,7 @@ declare global {
       objectId: string,
       shop: GameShop
     ) => Promise<CloudSaveV2FileDetails>;
+    getCloudSaveV2Library: () => Promise<CloudSaveV2LibraryEntry[]>;
     deleteGameCloudSaveData: (
       objectId: string,
       shop: GameShop
@@ -695,13 +695,21 @@ declare global {
     generateMissingMetadata: () => Promise<{
       updated: number;
       skipped: number;
-      results: Array<{ title: string; coverUrl: string | null; what: string }>;
+      failed: number;
+      results: Array<{
+        title: string;
+        coverUrl: string | null;
+        what: string;
+        status: "updated" | "failed";
+      }>;
     }>;
     mergeDuplicateGames: () => Promise<{
       merged: number;
       mergedTitles: string[];
     }>;
-    runCloudDebugger: () => Promise<
+    runCloudDebugger: (options?: {
+      repair?: boolean;
+    }) => Promise<
       import("@main/events/library/run-cloud-debugger").CloudDebugReport
     >;
     clearLibrary: () => Promise<{ cleared: number }>;
@@ -754,9 +762,6 @@ declare global {
       ) => void
     ) => () => Electron.IpcRenderer;
     onLibraryBatchComplete: (cb: () => void) => () => Electron.IpcRenderer;
-    onCloudArtifactsUpdated: (
-      cb: (artifacts: GameArtifactWithGame[]) => void
-    ) => () => Electron.IpcRenderer;
     onDownloadsUpdated: (cb: () => void) => () => Electron.IpcRenderer;
     resetGameAchievements: (shop: GameShop, objectId: string) => Promise<void>;
     changeGamePlayTime: (
@@ -826,12 +831,31 @@ declare global {
         currentTitle: string;
       }) => void
     ) => () => void;
-    importPlaynitePlaytime: (dbPath?: string) => Promise<{
+    importPlaynitePlaytime: (
+      dbPath?: string,
+      options?: { syncCloud?: boolean }
+    ) => Promise<{
       matched: number;
       total: number;
-      games: Array<{ title: string; addedHours: number }>;
+      cloudSynced: number;
+      cloudSyncPending: number;
+      games: Array<{
+        title: string;
+        previousHours: number;
+        playniteHours: number;
+        changeHours: number;
+      }>;
+      preserved: Array<{
+        title: string;
+        existingHours: number;
+        playniteHours: number;
+      }>;
       unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
-      cached: Array<{ title: string; playtimeHours: number }>;
+      cached: Array<{
+        title: string;
+        playtimeHours: number;
+        catalogueMatched: boolean;
+      }>;
       detectedPath: string | null;
     }>;
     getExclusionList: () => Promise<ExcludedGame[]>;
@@ -893,57 +917,19 @@ declare global {
     checkFolderWritePermission: (path: string) => Promise<boolean>;
 
     /* Cloud save */
-    uploadSaveGame: (
-      objectId: string,
-      shop: GameShop,
-      downloadOptionTitle: string | null
-    ) => Promise<void>;
-    downloadGameArtifact: (
-      objectId: string,
-      shop: GameShop,
-      gameArtifactId: string
-    ) => Promise<void>;
-    getGameArtifacts: (
-      objectId: string,
-      shop: GameShop
-    ) => Promise<GameArtifact[]>;
-    getAllArtifacts: () => Promise<GameArtifactWithGame[]>;
-    deleteGameArtifact: (artifactId: string) => Promise<{ ok: boolean }>;
     scanLudusaviBackupFolder: (
       folderPath: string
-    ) => Promise<
-      { gameName: string; folderPath: string; hasMappingYaml: boolean }[]
-    >;
+    ) => Promise<LudusaviBackupScanEntry[]>;
     importLudusaviBackup: (
       backupFolderPath: string,
-      gameName: string,
-      objectId: string,
-      shop: GameShop
-    ) => Promise<{ ok: boolean; artifactId?: string }>;
-    getGameBackupPreview: (
-      objectId: string,
-      shop: GameShop
-    ) => Promise<LudusaviBackup | null>;
-    selectGameBackupPath: (
-      shop: GameShop,
-      objectId: string,
-      backupPath: string | null
-    ) => Promise<void>;
-    onBackupDownloadComplete: (
       objectId: string,
       shop: GameShop,
-      cb: (success: boolean) => void
-    ) => () => Electron.IpcRenderer;
-    onUploadComplete: (
-      objectId: string,
-      shop: GameShop,
-      cb: () => void
-    ) => () => Electron.IpcRenderer;
-    onBackupDownloadProgress: (
-      objectId: string,
-      shop: GameShop,
-      cb: (progress: AxiosProgressEvent) => void
-    ) => () => Electron.IpcRenderer;
+      options?: {
+        dryRun?: boolean;
+        replaceExisting?: boolean;
+        expectedSnapshotId?: string;
+      }
+    ) => Promise<LudusaviImportResult>;
 
     /* Clipboard */
     clipboard: {
@@ -1797,13 +1783,16 @@ declare global {
       cb: (pct: number, file: string) => void
     ) => () => void;
     openConsoleWindow: () => Promise<void>;
-    onConsoleLog: (
-      cb: (entry: {
-        ts: number;
-        level: string;
-        scope: string;
-        text: string;
-      }) => void
+    getConsoleLogSnapshot: (
+      afterId?: number
+    ) => Promise<import("@shared").ConsoleLogSnapshot>;
+    clearConsoleLogs: () => Promise<import("@shared").ConsoleLogSnapshot>;
+    exportConsoleLogs: () => Promise<{
+      canceled: boolean;
+      path: string | null;
+    }>;
+    onConsoleLogs: (
+      cb: (entries: import("@shared").ConsoleLogEntry[]) => void
     ) => () => void;
     /* Main window controls (Linux) */
     minimizeMainWindow: () => Promise<void>;

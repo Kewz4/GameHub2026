@@ -38,7 +38,7 @@ export class SystemPath {
     try {
       return app.getPath(pathName);
     } catch (error) {
-      console.error(`Error getting path: ${error}`);
+      logger.error("[system-path] Error getting path", error);
       return "";
     }
   }

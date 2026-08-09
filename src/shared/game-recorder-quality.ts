@@ -1,4 +1,8 @@
-import type { GameRecorderPreferences, GameRecorderResolution } from "@types";
+import type {
+  GameRecorderPreferences,
+  GameRecorderQualityPreset,
+  GameRecorderResolution,
+} from "@types";
 
 export const GAME_RECORDER_SEGMENT_DURATION_MS = 3_000;
 // 256 kbps is the highest stereo rate accepted by the bundled LGPL libopus
@@ -6,6 +10,8 @@ export const GAME_RECORDER_SEGMENT_DURATION_MS = 3_000;
 export const GAME_RECORDER_AUDIO_BITRATE = 256_000;
 export const GAME_RECORDER_AUDIO_SAMPLE_RATE = 48_000;
 export const GAME_RECORDER_AUDIO_CHANNELS = 2;
+export const GAME_RECORDER_CAPTURE_RETRY_INITIAL_MS = 5_000;
+export const GAME_RECORDER_CAPTURE_RETRY_MAX_MS = 30_000;
 
 export type GameRecorderDimensions = {
   width: number;
@@ -22,25 +28,40 @@ const RESOLUTION_DIMENSIONS: Record<
   "2160p": { width: 3_840, height: 2_160 },
 };
 
-const MIN_VIDEO_BITRATE = 8_000_000;
-const MAX_VIDEO_BITRATE = 180_000_000;
-const VP9_BITS_PER_PIXEL_PER_FRAME = 0.3;
-const VP8_BITS_PER_PIXEL_PER_FRAME = 0.4;
-// H.264/HEVC are encoded by the GPU's dedicated encoder rather than libvpx on
-// the CPU, so they sustain high frame rates — but H.264 needs more bits than
-// VP9 for the same quality, and gameplay is the worst case for a fixed target.
-const H264_BITS_PER_PIXEL_PER_FRAME = 0.45;
-const HEVC_BITS_PER_PIXEL_PER_FRAME = 0.32;
+type GameRecorderQualityProfile = {
+  minimumBitrate: number;
+  maximumBitrate: number;
+  bitsPerPixel: Record<"h264" | "hevc" | "vp9" | "vp8", number>;
+};
+
+const QUALITY_PROFILES: Record<
+  GameRecorderQualityPreset,
+  GameRecorderQualityProfile
+> = {
+  performance: {
+    minimumBitrate: 6_000_000,
+    maximumBitrate: 60_000_000,
+    bitsPerPixel: { h264: 0.18, hevc: 0.13, vp9: 0.12, vp8: 0.17 },
+  },
+  balanced: {
+    minimumBitrate: 8_000_000,
+    maximumBitrate: 120_000_000,
+    bitsPerPixel: { h264: 0.3, hevc: 0.22, vp9: 0.2, vp8: 0.27 },
+  },
+  quality: {
+    minimumBitrate: 12_000_000,
+    maximumBitrate: 180_000_000,
+    bitsPerPixel: { h264: 0.45, hevc: 0.32, vp9: 0.3, vp8: 0.4 },
+  },
+};
 
 /**
  * MediaRecorder codec preference, best first.
  *
- * VP9/VP8 in Chromium are software-encoded by libvpx: at 1080p60 and above the
- * encoder cannot keep pace with the capture, so MediaRecorder silently drops
- * frames and the clip looks stuttery and soft no matter how high the bitrate
- * target is. H.264 (and HEVC where present) go through the platform's hardware
- * video encoder instead, which sustains the full frame rate. WebM/VP9 is kept
- * as the fallback for machines that expose no hardware encoder.
+ * Chromium attempts a platform video-encode accelerator for supported H.264
+ * profiles and falls back internally when one is unavailable. MIME support is
+ * not proof that hardware encoding is active, so runtime diagnostics report
+ * encoded cadence/throughput separately. WebM remains the portable fallback.
  */
 export const GAME_RECORDER_MIME_CANDIDATES = [
   // H.264 High profile, level 5.2 (covers 4K60) + AAC-LC.
@@ -75,7 +96,10 @@ export const getGameRecorderTargetDimensions = (
  * unbounded source-resolution stream on very large/high-refresh displays.
  */
 export const getGameRecorderVideoBitrate = (
-  configuration: Pick<GameRecorderPreferences, "resolution" | "fps">,
+  configuration: Pick<
+    GameRecorderPreferences,
+    "resolution" | "fps" | "qualityPreset"
+  >,
   actualDimensions: Partial<GameRecorderDimensions> | null | undefined,
   mimeType: string | null | undefined
 ) => {
@@ -97,22 +121,55 @@ export const getGameRecorderVideoBitrate = (
       ? actualDimensions.height
       : fallbackHeight;
   const codecs = mimeType?.toLowerCase() ?? "";
+  const profile = QUALITY_PROFILES[configuration.qualityPreset];
   const bitsPerPixel =
     codecs.includes("hvc1") || codecs.includes("hev1")
-      ? HEVC_BITS_PER_PIXEL_PER_FRAME
+      ? profile.bitsPerPixel.hevc
       : codecs.includes("avc1") || codecs.includes("mp4")
-        ? H264_BITS_PER_PIXEL_PER_FRAME
+        ? profile.bitsPerPixel.h264
         : codecs.includes("vp9")
-          ? VP9_BITS_PER_PIXEL_PER_FRAME
-          : VP8_BITS_PER_PIXEL_PER_FRAME;
+          ? profile.bitsPerPixel.vp9
+          : profile.bitsPerPixel.vp8;
 
   return Math.round(
     Math.min(
-      MAX_VIDEO_BITRATE,
+      profile.maximumBitrate,
       Math.max(
-        MIN_VIDEO_BITRATE,
+        profile.minimumBitrate,
         width * height * configuration.fps * bitsPerPixel
       )
     )
   );
 };
+
+export const getGameRecorderEstimatedBufferBytes = (
+  configuration: Pick<
+    GameRecorderPreferences,
+    | "resolution"
+    | "fps"
+    | "qualityPreset"
+    | "captureGameAudio"
+    | "replayDurationSeconds"
+  >
+) => {
+  const videoBitrate = getGameRecorderVideoBitrate(
+    configuration,
+    getGameRecorderTargetDimensions(configuration.resolution),
+    "video/mp4;codecs=avc1"
+  );
+  const totalBitrate =
+    videoBitrate +
+    (configuration.captureGameAudio ? GAME_RECORDER_AUDIO_BITRATE : 0);
+  // The rolling buffer intentionally retains two extra 3-second segments so a
+  // save cannot race cleanup at the requested cutoff.
+  return Math.ceil(
+    (totalBitrate / 8) * (configuration.replayDurationSeconds + 6)
+  );
+};
+
+export const getGameRecorderCaptureRetryDelay = (consecutiveFailures: number) =>
+  Math.min(
+    GAME_RECORDER_CAPTURE_RETRY_MAX_MS,
+    GAME_RECORDER_CAPTURE_RETRY_INITIAL_MS *
+      2 ** Math.max(0, Math.floor(consecutiveFailures) - 1)
+  );

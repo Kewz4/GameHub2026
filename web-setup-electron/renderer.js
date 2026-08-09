@@ -103,8 +103,7 @@ window.setup.onDone((data) => {
     document.getElementById("btn-launch").style.display = "none";
   } else if (data.mode === "portable") {
     doneTitle.textContent = "Portable Setup Complete!";
-    doneMessage.textContent =
-      "GameHub is ready in: " + data.path;
+    doneMessage.textContent = "GameHub is ready in: " + data.path;
     if (window.setup.platform === "win32") {
       launchPath = data.path + "\\GameHub.exe";
     } else {

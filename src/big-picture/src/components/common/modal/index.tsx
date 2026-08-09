@@ -25,6 +25,8 @@ export interface ModalProps {
   closeOnB?: boolean;
   ariaLabel?: string;
   animateLayout?: boolean;
+  /** Render directly at full opacity when another dialog remains underneath. */
+  noAnimation?: boolean;
   /** Focus target used when this modal creates its navigation layer. */
   initialFocusId?: string;
 }
@@ -45,6 +47,7 @@ export function Modal({
   closeOnB = true,
   ariaLabel = title,
   animateLayout = false,
+  noAnimation = false,
   initialFocusId,
 }: Readonly<ModalProps>) {
   const modalContentRef = useRef<HTMLDivElement | null>(null);
@@ -131,11 +134,13 @@ export function Modal({
               data-hydra-dialog
               className={cn("modal", className)}
               layout={animateLayout || undefined}
-              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              initial={noAnimation ? false : { opacity: 0, y: 24, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.98 }}
+              exit={
+                noAnimation ? undefined : { opacity: 0, y: 16, scale: 0.98 }
+              }
               transition={{
-                duration: 0.22,
+                duration: noAnimation ? 0 : 0.22,
                 ease: [0.22, 1, 0.36, 1],
                 layout: { duration: 0.4, ease: "easeInOut" },
               }}

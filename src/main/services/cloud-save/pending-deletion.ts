@@ -1,9 +1,12 @@
 import crypto from "node:crypto";
 
 import { cloudSavePendingDeletionsSublevel } from "@main/level";
-import { CloudSync } from "@main/services/cloud-sync";
 import type { GameShop } from "@types";
 
+import {
+  assertCloudSaveAccountSessionCurrent,
+  getCloudSaveAccountUserId,
+} from "./account-session";
 import {
   cloudSavePendingDeletionStorageKey,
   resolveCloudSavePendingDeletion,
@@ -12,7 +15,7 @@ import {
 } from "./pending-deletion-state";
 
 const getCurrentUserId = async () => {
-  return CloudSync.getOrCreateUserId();
+  return getCloudSaveAccountUserId();
 };
 
 const getStorageKey = async (objectId: string, shop: GameShop) =>
@@ -34,6 +37,7 @@ export const getCloudSavePendingDeletion = async (
 ) => {
   const key = await getStorageKey(objectId, shop);
   const value = await cloudSavePendingDeletionsSublevel.get(key);
+  assertCloudSaveAccountSessionCurrent();
   const state = resolveCloudSavePendingDeletion(value);
   if (state) return state;
   if (value === undefined) return null;
@@ -44,6 +48,7 @@ export const getCloudSavePendingDeletion = async (
     phase: resolveCloudSavePendingDeletionPhase(value) ?? "remote-started",
     operationId: crypto.randomUUID(),
   };
+  assertCloudSaveAccountSessionCurrent();
   await cloudSavePendingDeletionsSublevel.put(key, migrated);
   return migrated;
 };
@@ -68,6 +73,7 @@ export const beginCloudSavePendingDeletion = async (
 ) => {
   const key = await getStorageKey(objectId, shop);
   const currentValue = await cloudSavePendingDeletionsSublevel.get(key);
+  assertCloudSaveAccountSessionCurrent();
   const current = resolveCloudSavePendingDeletion(currentValue);
   if (current) return current;
 
@@ -76,6 +82,7 @@ export const beginCloudSavePendingDeletion = async (
     phase: "prepared",
     operationId: crypto.randomUUID(),
   };
+  assertCloudSaveAccountSessionCurrent();
   await cloudSavePendingDeletionsSublevel.put(key, state);
   return state;
 };
@@ -90,13 +97,16 @@ export const markCloudSaveRemoteDeletionStarted = async (
     ...current,
     phase: "remote-started",
   };
-  await cloudSavePendingDeletionsSublevel.put(
-    await getStorageKey(objectId, shop),
-    state
-  );
+  const key = await getStorageKey(objectId, shop);
+  assertCloudSaveAccountSessionCurrent();
+  await cloudSavePendingDeletionsSublevel.put(key, state);
 };
 
 export const clearCloudSavePendingDeletion = async (
   objectId: string,
   shop: GameShop
-) => cloudSavePendingDeletionsSublevel.del(await getStorageKey(objectId, shop));
+) => {
+  const key = await getStorageKey(objectId, shop);
+  assertCloudSaveAccountSessionCurrent();
+  return cloudSavePendingDeletionsSublevel.del(key);
+};

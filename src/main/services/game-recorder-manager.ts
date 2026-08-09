@@ -5,6 +5,8 @@ import {
   GAME_RECORDER_AUDIO_BITRATE,
   GAME_RECORDER_AUDIO_CHANNELS,
   GAME_RECORDER_AUDIO_SAMPLE_RATE,
+  buildGameRecorderConcatManifest,
+  getGameRecorderCaptureRetryDelay,
   getGameRecorderContainer,
   resolveGameRecorderPreferences,
   type GameRecorderContainer,
@@ -36,12 +38,12 @@ import { WindowManager } from "./window-manager";
 import { isGameWindowDisplaySized } from "./game-recorder-capture-source";
 
 const TARGET_POLL_INTERVAL_MS = 750;
-const CAPTURE_RETRY_DELAY_MS = 5_000;
 // A capped 4K/120 segment can still be tens of megabytes. Give Chromium IPC
 // and slower recording drives enough time to commit the boundary before
 // declaring a save failure.
 const SAVE_FLUSH_TIMEOUT_MS = 15_000;
 const SEGMENT_RETENTION_MARGIN_MS = 6_000;
+const MINIMUM_CAPTURE_DISK_RESERVE_BYTES = 512 * 1024 ** 2;
 
 type RecorderSegment = {
   path: string;
@@ -55,6 +57,8 @@ type RecorderSegment = {
   outputWidth: number;
   outputHeight: number;
   outputFps: number;
+  targetVideoBitrate: number;
+  encodedVideoFrames: number | null;
   /** Container MediaRecorder produced (mp4 for the hardware H.264 path). */
   container: GameRecorderContainer;
 };
@@ -123,6 +127,7 @@ export class GameRecorderManager {
   private static captureRendererReady = false;
   private static captureActive = false;
   private static captureRetryAfter = 0;
+  private static captureFailureCount = 0;
   private static segmentDirectory: string | null = null;
   private static segmentSequence = 0;
   private static loggedSegmentCodec: string | null = null;
@@ -143,7 +148,7 @@ export class GameRecorderManager {
     this.initialized = true;
     app.once("will-quit", () => {
       this.stopTargetPolling();
-      this.sendCaptureCommand({ type: "stop" });
+      this.sendCaptureCommand({ type: "stop", discardPending: true });
       this.captureWindow?.destroy();
       this.captureWindow = null;
       this.captureWindowReady = null;
@@ -177,6 +182,7 @@ export class GameRecorderManager {
     const captureConfigurationChanged =
       previous.resolution !== this.preferences.resolution ||
       previous.fps !== this.preferences.fps ||
+      previous.qualityPreset !== this.preferences.qualityPreset ||
       previous.captureGameAudio !== this.preferences.captureGameAudio;
     const replayDurationChanged =
       previous.replayDurationSeconds !== this.preferences.replayDurationSeconds;
@@ -264,6 +270,24 @@ export class GameRecorderManager {
     const defaultOutput = path.join(app.getPath("videos"), "GameHub");
     const bufferedSeconds = this.getBufferedSeconds();
     const platformSupported = process.platform === "win32";
+    const recentSegments = this.segments.slice(-3);
+    const recentDurationMs = recentSegments.reduce(
+      (total, segment) =>
+        total + Math.max(0, segment.endedAt - segment.startedAt),
+      0
+    );
+    const newestSegment = recentSegments.at(-1);
+    const measuredSegments = recentSegments.filter(
+      (segment) => segment.encodedVideoFrames !== null
+    );
+    const measuredDurationMs = measuredSegments.reduce(
+      (total, segment) =>
+        total + Math.max(0, segment.endedAt - segment.startedAt),
+      0
+    );
+    const videoEncodeStatus = platformSupported
+      ? app.getGPUFeatureStatus().video_encode
+      : undefined;
 
     let status: GameRecorderState["status"];
     if (!platformSupported) status = "unavailable";
@@ -289,6 +313,39 @@ export class GameRecorderManager {
       recordingStartedAt: this.recordingStartedAt,
       bufferedSeconds,
       captureActive: this.captureActive,
+      hardwareVideoEncodingAvailable:
+        videoEncodeStatus === undefined
+          ? null
+          : videoEncodeStatus === "enabled",
+      captureDiagnostics: newestSegment
+        ? {
+            mimeType: newestSegment.mimeType,
+            outputWidth: newestSegment.outputWidth,
+            outputHeight: newestSegment.outputHeight,
+            outputFps: newestSegment.outputFps,
+            encodedFps:
+              measuredDurationMs > 0
+                ? (measuredSegments.reduce(
+                    (total, segment) =>
+                      total + (segment.encodedVideoFrames ?? 0),
+                    0
+                  ) *
+                    1_000) /
+                  measuredDurationMs
+                : null,
+            targetVideoBitrate: newestSegment.targetVideoBitrate,
+            recentEncodedBitrate:
+              recentDurationMs > 0
+                ? (recentSegments.reduce(
+                    (total, segment) => total + segment.bytes,
+                    0
+                  ) *
+                    8_000) /
+                  recentDurationMs
+                : 0,
+            hasAudio: newestSegment.hasAudio,
+          }
+        : null,
       gameTitle: this.activeGame?.title ?? null,
       lastSavedClipPath: this.lastSavedClipPath,
       statusMessage:
@@ -426,14 +483,18 @@ export class GameRecorderManager {
       throw new Error("Recorder segment metadata was invalid.");
     }
 
+    // Electron has already materialized the IPC payload. View that memory
+    // directly instead of allocating and copying another 20–70 MB Buffer for
+    // every high-resolution slice.
     const bytes =
       payload instanceof Uint8Array
-        ? Buffer.from(payload)
-        : Buffer.from(new Uint8Array(payload));
+        ? Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength)
+        : Buffer.from(payload);
     if (!bytes.length) return;
 
     const container = getGameRecorderContainer(mimeType);
     const directory = await this.ensureSegmentDirectory();
+    await this.assertDiskHeadroom(directory, bytes.length);
     const fileName = `segment-${String(this.segmentSequence++).padStart(
       8,
       "0"
@@ -451,22 +512,46 @@ export class GameRecorderManager {
       outputWidth: Number(metadata?.outputWidth) || 0,
       outputHeight: Number(metadata?.outputHeight) || 0,
       outputFps: Number(metadata?.outputFps) || 0,
+      targetVideoBitrate: Number(metadata?.targetVideoBitrate) || 0,
+      encodedVideoFrames: Number.isFinite(metadata?.encodedVideoFrames)
+        ? Number(metadata.encodedVideoFrames)
+        : null,
       container,
     };
-    // Log the negotiated encoder once per capture session: whether MediaRecorder
-    // accepted hardware H.264 or silently fell back to software VP9 is the
-    // difference between smooth and stuttering output, and is otherwise
-    // invisible.
+    // MIME support identifies the codec/container, not the encoder backend.
+    // Chromium can silently fall back to software even for H.264, so report the
+    // GPU process capability without claiming this exact stream is accelerated.
     if (this.loggedSegmentCodec !== mimeType) {
       this.loggedSegmentCodec = mimeType;
       logger.info("Game recorder encoding", {
         mimeType,
         container,
         output: `${segment.outputWidth}x${segment.outputHeight}@${segment.outputFps}`,
-        hardwareAccelerated: /avc1|hvc1|hev1|mp4/i.test(mimeType),
+        requestedVideoBitrateMbps: Number(
+          (segment.targetVideoBitrate / 1_000_000).toFixed(2)
+        ),
+        firstSegmentBitrateMbps: Number(
+          (
+            (segment.bytes * 8_000) /
+            (segment.endedAt - segment.startedAt) /
+            1_000_000
+          ).toFixed(2)
+        ),
+        firstSegmentEncodedFps:
+          segment.encodedVideoFrames === null
+            ? null
+            : Number(
+                (
+                  (segment.encodedVideoFrames * 1_000) /
+                  (segment.endedAt - segment.startedAt)
+                ).toFixed(2)
+              ),
+        gpuVideoEncodeCapability: app.getGPUFeatureStatus().video_encode,
       });
     }
     this.segments.push(segment);
+    this.captureFailureCount = 0;
+    this.captureRetryAfter = 0;
     if (
       this.recordingStartedAt !== null &&
       segment.endedAt >= this.recordingStartedAt
@@ -495,11 +580,19 @@ export class GameRecorderManager {
 
   public static handleCaptureError(senderId: number, message: string) {
     if (this.captureWindow?.webContents.id !== senderId) return;
-    this.sendCaptureCommand({ type: "stop" });
+    this.sendCaptureCommand({ type: "stop", discardPending: true });
     this.captureActive = false;
-    this.captureRetryAfter = Date.now() + CAPTURE_RETRY_DELAY_MS;
+    this.captureFailureCount += 1;
+    const retryDelay = getGameRecorderCaptureRetryDelay(
+      this.captureFailureCount
+    );
+    this.captureRetryAfter = Date.now() + retryDelay;
     this.errorMessage = `Gameplay capture could not start: ${message}`;
-    logger.error("Game recorder capture renderer failed", message);
+    logger.error("Game recorder capture renderer failed", {
+      message,
+      retryDelayMs: retryDelay,
+      consecutiveFailures: this.captureFailureCount,
+    });
     this.publishState();
   }
 
@@ -661,6 +754,10 @@ export class GameRecorderManager {
       const gameTitle = sanitizeFilePart(this.activeGame?.title ?? "Gameplay");
       const gameDirectory = path.join(outputRoot, gameTitle);
       await fs.promises.mkdir(gameDirectory, { recursive: true });
+      await this.assertDiskHeadroom(
+        gameDirectory,
+        selected.reduce((total, segment) => total + segment.bytes, 0)
+      );
 
       const container = selected[0]?.container ?? "webm";
       outputPath = path.join(
@@ -674,35 +771,16 @@ export class GameRecorderManager {
         directory,
         `concat-${crypto.randomBytes(8).toString("hex")}.ffconcat`
       );
-      const concatText = [
-        "ffconcat version 1.0",
-        ...selected.map((segment) => {
-          const normalized = segment.path
-            .replaceAll("\\", "/")
-            .replaceAll("'", "'\\''");
-          return `file '${normalized}'`;
-        }),
-        "",
-      ].join("\n");
+      const concatText = buildGameRecorderConcatManifest(selected);
       await fs.promises.writeFile(listPath, concatText, "utf8");
 
       const hasAudio = selected[0]?.hasAudio ?? false;
-      // Opus is a WebM codec; an MP4 container needs AAC. The video stream is
-      // always copied, so the hardware-encoded H.264 is preserved bit for bit.
+      // Chromium's MP4 path already produced AAC. Copy it instead of applying
+      // a second lossy encode; the WebM fallback still needs async resampling
+      // while joining independently restarted Opus streams.
       const audioArguments =
         container === "mp4"
-          ? [
-              "-c:a",
-              "aac",
-              "-b:a",
-              String(GAME_RECORDER_AUDIO_BITRATE),
-              "-ar",
-              String(GAME_RECORDER_AUDIO_SAMPLE_RATE),
-              "-ac",
-              String(GAME_RECORDER_AUDIO_CHANNELS),
-              "-af",
-              `aresample=${GAME_RECORDER_AUDIO_SAMPLE_RATE}:async=1000:first_pts=0`,
-            ]
+          ? ["-c:a", "copy"]
           : [
               "-c:a",
               "libopus",
@@ -792,6 +870,31 @@ export class GameRecorderManager {
     });
   }
 
+  private static async assertDiskHeadroom(
+    directory: string,
+    bytesRequired: number
+  ) {
+    const stats = await fs.promises
+      .statfs(directory, { bigint: true })
+      .catch((error) => {
+        logger.warn("Could not inspect recorder disk capacity", {
+          directory,
+          error,
+        });
+        return null;
+      });
+    if (!stats) return;
+    const available = stats.bavail * stats.bsize;
+    const required =
+      BigInt(Math.max(0, Math.ceil(bytesRequired))) +
+      BigInt(MINIMUM_CAPTURE_DISK_RESERVE_BYTES);
+    if (available < required) {
+      throw new Error(
+        "The recording drive is nearly full. Free at least 512 MB or choose another capture folder."
+      );
+    }
+  }
+
   private static resolveFfmpegPath() {
     if (app.isPackaged) {
       return path.join(process.resourcesPath, "ffmpeg", "ffmpeg.exe");
@@ -802,7 +905,10 @@ export class GameRecorderManager {
   private static startTargetPolling() {
     this.stopTargetPolling();
     this.targetPoll = setInterval(
-      () => void this.refreshTarget(),
+      () =>
+        void this.refreshTarget().catch((error) =>
+          logger.warn("Could not refresh the game recorder target", error)
+        ),
       TARGET_POLL_INTERVAL_MS
     );
   }
@@ -897,12 +1003,10 @@ export class GameRecorderManager {
    * Pick what the recorder captures, using display capture only for fullscreen.
    *
    * Window capture was the only option here, and it is the wrong one for a
-   * fullscreen DirectX game on Windows: it goes through the slow per-window
-   * path, drops frames under load, and frequently exposes no source at all for
-   * an exclusive-fullscreen swap chain — which is why capture failed outright
-   * with "found no capture source". Screen capture is served by DXGI desktop
-   * duplication on the GPU, which is the same class of path OBS's Display
-   * Capture uses and holds a steady frame rate.
+   * fullscreen DirectX game on Windows: it frequently exposes no per-window
+   * source at all for an exclusive swap chain. Electron can use Windows'
+   * accelerated desktop-capture backends for a screen source, while windowed
+   * games retain the privacy of exact-window capture.
    *
    * For a fullscreen game the display and the window show the same pixels, so
    * this costs nothing. A windowed game must use its exact window source to
@@ -1162,6 +1266,7 @@ export class GameRecorderManager {
     this.targetPid = 0;
     this.targetWindowId = null;
     this.captureRetryAfter = 0;
+    this.captureFailureCount = 0;
     this.recordingStartedAt = null;
     this.recordingSegments = [];
     if (this.pendingSave) {

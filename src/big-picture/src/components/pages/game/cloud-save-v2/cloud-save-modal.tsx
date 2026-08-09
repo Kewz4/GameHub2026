@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   getCloudSavePanelAction,
+  getCloudSavePartialDescriptionKey,
   getCloudSavePresentation,
   shouldShowCloudSaveEmptySnapshot,
 } from "@renderer/pages/game-details/cloud-save-v2/cloud-save-presentation";
@@ -49,6 +50,10 @@ interface BigPictureCloudSaveModalProps {
   isGameRunning: boolean;
   hasExecutablePath: boolean;
   hasError: boolean;
+  errorMessageKey:
+    | "cloud_save_v2_load_error"
+    | "cloud_save_v2_sync_error"
+    | null;
   progress: CloudSaveSyncProgressPayload | null;
   onClose: () => void;
   onSync: () => void;
@@ -66,6 +71,8 @@ function getActionIcon(icon: string | undefined): ReactNode {
       return <CloudArrowDownIcon size={24} />;
     case "cloud":
       return <CloudIcon size={24} />;
+    case "folder":
+      return <FolderOpenIcon size={24} />;
     default:
       return <ArrowClockwiseIcon size={24} />;
   }
@@ -80,6 +87,7 @@ export function BigPictureCloudSaveModal({
   isGameRunning,
   hasExecutablePath,
   hasError,
+  errorMessageKey,
   progress,
   onClose,
   onSync,
@@ -100,6 +108,9 @@ export function BigPictureCloudSaveModal({
   }, [overview?.isAutomaticSyncEnabled]);
 
   const activeSnapshot = overview?.activeRemoteSnapshot ?? null;
+  const hasUnconfiguredCustomPaths =
+    (overview?.unconfiguredCustomPathCount ?? 0) > 0;
+  const partialDescriptionKey = getCloudSavePartialDescriptionKey(overview);
   const showEmptySnapshot = shouldShowCloudSaveEmptySnapshot({
     overview,
     isLoading,
@@ -111,13 +122,15 @@ export function BigPictureCloudSaveModal({
     isChecking: isLoading && overview === null,
     isSyncing,
     hasError,
+    hasUnconfiguredCustomPaths,
     state: overview?.state ?? null,
     progressStage: progress?.stage ?? null,
   });
   const derivedAction = getBigPictureCloudSaveAction(
     getCloudSavePanelAction(
       overview?.state ?? null,
-      overview?.suggestedAction ?? null
+      overview?.suggestedAction ?? null,
+      hasUnconfiguredCustomPaths
     )
   );
   const action =
@@ -158,6 +171,7 @@ export function BigPictureCloudSaveModal({
       closeOnB={!isSyncing}
       initialFocusId={TOGGLE_BUTTON_ID}
       className="big-picture-cloud-save-modal"
+      noAnimation
     >
       <VerticalFocusGroup
         regionId={GENERAL_REGION_ID}
@@ -217,9 +231,20 @@ export function BigPictureCloudSaveModal({
           </p>
         ) : null}
 
-        {hasError ? (
+        {errorMessageKey ? (
+          <p className="big-picture-cloud-save__error">{t(errorMessageKey)}</p>
+        ) : null}
+
+        {hasUnconfiguredCustomPaths && !hasError ? (
           <p className="big-picture-cloud-save__error">
-            {t("cloud_save_v2_error")}
+            {t("cloud_save_v2_unconfigured_custom_path_description")}
+          </p>
+        ) : null}
+
+        {partialDescriptionKey && !hasError ? (
+          <p className="big-picture-cloud-save__notice big-picture-cloud-save__notice--warning">
+            <WarningCircleIcon size={20} weight="fill" />
+            {t(partialDescriptionKey)}
           </p>
         ) : null}
 

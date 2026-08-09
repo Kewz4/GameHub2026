@@ -490,7 +490,7 @@ export function SettingsGeneral() {
           try {
             const result = await window.electron.generateMissingMetadata();
             showSuccessToast(
-              `Metadata updated for ${result.updated} game${result.updated !== 1 ? "s" : ""}, skipped ${result.skipped}.`
+              `Artwork updated for ${result.updated} game${result.updated !== 1 ? "s" : ""}; ${result.skipped} healthy, ${result.failed} failed.`
             );
           } catch {
             showErrorToast("Failed to generate metadata.");
@@ -659,8 +659,9 @@ export function SettingsGeneral() {
 
       <h2 className="settings-general__section-title">Debugging</h2>
       <p className="settings-general__common-redist-description">
-        Open a separate console window showing real-time logs from all
-        processes. Shortcut: Ctrl+Shift+L
+        Open a responsive, searchable diagnostics window with retained logs from
+        every GameHub process. Press Shift+S inside GameHub, or Ctrl+Shift+L
+        globally.
       </p>
       <Button
         onClick={() => window.electron.openConsoleWindow()}

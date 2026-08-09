@@ -37,6 +37,9 @@ import {
   getGogGameClientId,
   getGogRemoteAchievements,
 } from "../gog-account";
+import { getAchievementSyncAccountId } from "./achievement-cloud-sync";
+import { canonicalizeUnlockedAchievements } from "./achievement-sync-policy";
+import { repairAchievementRecords } from "./repair-achievement-records";
 
 const fileStats: Map<string, number> = new Map();
 const fltFiles: Map<string, Set<string>> = new Map();
@@ -358,12 +361,18 @@ const seedAchievementsFromCloud = async (
     `(${hydraUnlocked.length}/${definitions.length})`
   );
 
+  const canonicalUnlocked = canonicalizeUnlockedAchievements(
+    definitions,
+    hydraUnlocked
+  );
+  if (!canonicalUnlocked.length) return 0;
+
   await gameAchievementsSublevel.put(gameKey, {
     ...cached,
     achievements: cached?.achievements?.length
       ? cached.achievements
       : definitions,
-    unlockedAchievements: hydraUnlocked,
+    unlockedAchievements: canonicalUnlocked,
     updatedAt: cached?.updatedAt ?? Date.now(),
     language: cached?.language ?? "en",
   });
@@ -374,12 +383,12 @@ const seedAchievementsFromCloud = async (
   if (gameRecord) {
     await gamesSublevel.put(gameKey, {
       ...gameRecord,
-      unlockedAchievementCount: hydraUnlocked.length,
+      unlockedAchievementCount: canonicalUnlocked.length,
       achievementCount: definitions.length || gameRecord.achievementCount,
     });
   }
 
-  return hydraUnlocked.length;
+  return canonicalUnlocked.length;
 };
 
 /** Fetch the user's cloud library + id, for seeding one or many games. */
@@ -407,6 +416,31 @@ export class AchievementWatcherManager {
   }
 
   public static readonly alreadySyncedGames: Map<string, boolean> = new Map();
+  private static readonly firstSyncInFlight = new Map<string, Promise<void>>();
+
+  private static async scopedSyncKey(
+    gameKey: string,
+    remoteId: string | null | undefined
+  ) {
+    const accountId = (await getAchievementSyncAccountId()) ?? "logged-out";
+    return `${accountId}:${gameKey}:${remoteId ?? "local"}`;
+  }
+
+  public static async markGameSynced(
+    gameKey: string,
+    remoteId: string | null | undefined
+  ) {
+    this.alreadySyncedGames.set(
+      await this.scopedSyncKey(gameKey, remoteId),
+      true
+    );
+  }
+
+  public static resetSyncSession() {
+    this.alreadySyncedGames.clear();
+    this.firstSyncInFlight.clear();
+    this._hasFinishedPreSearch = false;
+  }
 
   public static async firstSyncWithRemoteIfNeeded(
     shop: GameShop,
@@ -415,70 +449,83 @@ export class AchievementWatcherManager {
     if (shop === "custom") return;
 
     const gameKey = levelKeys.game(shop, objectId);
-    if (this.alreadySyncedGames.get(gameKey)) return;
-
-    this.alreadySyncedGames.set(gameKey, true);
-
     const game = await gamesSublevel.get(gameKey).catch(() => null);
     if (!game || game.isDeleted) return;
 
-    const gameAchievementFiles = findAchievementFiles(game);
+    const scopedKey = await this.scopedSyncKey(gameKey, game.remoteId);
+    if (this.alreadySyncedGames.get(scopedKey)) return;
 
-    const userPreferences = await db.get<string, UserPreferences | null>(
-      levelKeys.userPreferences,
-      {
-        valueEncoding: "json",
-      }
-    );
+    const pending = this.firstSyncInFlight.get(scopedKey);
+    if (pending) return pending;
 
-    if (userPreferences?.enableSteamAchievements) {
-      gameAchievementFiles.push(...findAchievementFileInSteamPath(game));
-    }
+    const task = (async () => {
+      const gameAchievementFiles = findAchievementFiles(game);
 
-    if (game.experimentalAchievementsEnabled) {
-      gameAchievementFiles.push(...heuristicScanAchievementFiles(game));
-    }
-
-    const unlockedAchievements: UnlockedAchievement[] = [];
-
-    for (const achievementFile of gameAchievementFiles) {
-      const localAchievementFile = parseAchievementFile(
-        achievementFile.filePath,
-        achievementFile.type
+      const userPreferences = await db.get<string, UserPreferences | null>(
+        levelKeys.userPreferences,
+        {
+          valueEncoding: "json",
+        }
       );
 
-      if (localAchievementFile.length) {
-        unlockedAchievements.push(...localAchievementFile);
+      if (userPreferences?.enableSteamAchievements) {
+        gameAchievementFiles.push(...findAchievementFileInSteamPath(game));
       }
-    }
 
-    let newAchievements = await mergeAchievements(
-      game,
-      unlockedAchievements,
-      false
-    );
+      if (game.experimentalAchievementsEnabled) {
+        gameAchievementFiles.push(...heuristicScanAchievementFiles(game));
+      }
 
-    // Seed fractional progress so locked stat-gated achievements show a bar the
-    // first time the game's achievements page is opened (mergeAchievements has
-    // already populated the definitions record this writes onto).
-    await storeAchievementProgress(game, gameAchievementFiles).catch(() => {});
+      const unlockedAchievements: UnlockedAchievement[] = [];
 
-    if (game.shop === "gog") {
-      newAchievements += await syncGogAchievements(game);
-    }
+      for (const achievementFile of gameAchievementFiles) {
+        const localAchievementFile = parseAchievementFile(
+          achievementFile.filePath,
+          achievementFile.type
+        );
 
-    const seedCtx = await getCloudSeedContext();
-    if (seedCtx) {
-      await seedAchievementsFromCloud(
+        if (localAchievementFile.length) {
+          unlockedAchievements.push(...localAchievementFile);
+        }
+      }
+
+      let newAchievements = await mergeAchievements(
         game,
-        seedCtx.cloudGames,
-        seedCtx.userId
-      ).catch(() => 0);
-    }
+        unlockedAchievements,
+        false
+      );
 
-    if (newAchievements > 0) {
-      this.notifyCombinedAchievementsUnlocked(1, newAchievements);
-    }
+      // Seed fractional progress so locked stat-gated achievements show a bar the
+      // first time the game's achievements page is opened (mergeAchievements has
+      // already populated the definitions record this writes onto).
+      await storeAchievementProgress(game, gameAchievementFiles).catch(
+        () => {}
+      );
+
+      if (game.shop === "gog") {
+        newAchievements += await syncGogAchievements(game);
+      }
+
+      const seedCtx = await getCloudSeedContext();
+      if (seedCtx) {
+        await seedAchievementsFromCloud(
+          game,
+          seedCtx.cloudGames,
+          seedCtx.userId
+        ).catch(() => 0);
+      }
+
+      if (newAchievements > 0) {
+        this.notifyCombinedAchievementsUnlocked(1, newAchievements);
+      }
+    })();
+
+    this.firstSyncInFlight.set(scopedKey, task);
+    return task.finally(() => {
+      if (this.firstSyncInFlight.get(scopedKey) === task) {
+        this.firstSyncInFlight.delete(scopedKey);
+      }
+    });
   }
 
   public static watchAchievements() {
@@ -629,6 +676,7 @@ export class AchievementWatcherManager {
 
   public static async preSearchAchievements() {
     try {
+      await repairAchievementRecords();
       const gameAchievementFiles =
         process.platform === "win32"
           ? await this.getGameAchievementFilesWindows()

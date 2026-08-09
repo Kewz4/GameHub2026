@@ -1,3 +1,5 @@
+/* global globalThis */
+
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -30,6 +32,18 @@ const output = path.join(
   "overlay",
   "gamehub-overlay-playwright-electron.png"
 );
+const firstOpenOutput = path.join(
+  repositoryRoot,
+  "artifacts",
+  "overlay",
+  "gamehub-overlay-first-open.png"
+);
+const secondOpenOutput = path.join(
+  repositoryRoot,
+  "artifacts",
+  "overlay",
+  "gamehub-overlay-second-open.png"
+);
 
 for (const required of [electronExecutable, host, renderer]) {
   if (!fs.existsSync(required)) throw new Error(`Missing ${required}`);
@@ -60,6 +74,130 @@ try {
   const page = await electronApp.firstWindow();
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  const assertCompactOverlayLegibility = async (label) => {
+    const result = await page.evaluate(() => {
+      if (window.innerWidth > 1100) return { checked: false };
+
+      const viewportHasHorizontalScroll =
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth;
+      const clippedHeaders = Array.from(
+        document.querySelectorAll("[data-widget] .overlay-card__title h2")
+      )
+        .filter((heading) => {
+          const widget = heading.closest("[data-widget]");
+          if (!(widget instanceof HTMLElement)) return true;
+          const headingRect = heading.getBoundingClientRect();
+          const widgetRect = widget.getBoundingClientRect();
+          return (
+            headingRect.left < widgetRect.left ||
+            headingRect.right > widgetRect.right ||
+            headingRect.width <= 0
+          );
+        })
+        .map((heading) => heading.textContent?.trim() ?? "unknown");
+      const overlappingHeaderTools = Array.from(
+        document.querySelectorAll("[data-widget] .overlay-card__title h2")
+      )
+        .filter((heading) => {
+          const header = heading.closest(".overlay-card__head");
+          const tools = header?.querySelector(".overlay-card__tools");
+          if (!(tools instanceof HTMLElement)) return false;
+          const headingRect = heading.getBoundingClientRect();
+          const toolsRect = tools.getBoundingClientRect();
+          return (
+            Math.min(headingRect.right, toolsRect.right) >
+              Math.max(headingRect.left, toolsRect.left) &&
+            Math.min(headingRect.bottom, toolsRect.bottom) >
+              Math.max(headingRect.top, toolsRect.top)
+          );
+        })
+        .map((heading) => heading.textContent?.trim() ?? "unknown");
+      const clippedPerformanceValues = Array.from(
+        document.querySelectorAll(
+          '[data-widget="performance"] .overlay-perf__row b'
+        )
+      )
+        .filter((value) => {
+          const widget = value.closest("[data-widget]");
+          if (!(widget instanceof HTMLElement)) return true;
+          const valueRect = value.getBoundingClientRect();
+          const widgetRect = widget.getBoundingClientRect();
+          return (
+            valueRect.left < widgetRect.left ||
+            valueRect.right > widgetRect.right ||
+            valueRect.width <= 0
+          );
+        })
+        .map((value) => value.textContent?.trim() ?? "unknown");
+      const achievementsFilter = document.querySelector(
+        '[data-widget="achievements"] .overlay-ach__filters'
+      );
+      const expectedAchievementFilters = [
+        "All",
+        "Unlocked",
+        "Locked",
+        "Hidden",
+        "Missable",
+      ];
+      const achievementFilterLabels = achievementsFilter
+        ? Array.from(achievementsFilter.querySelectorAll("button")).map(
+            (button) => button.textContent?.trim() ?? ""
+          )
+        : [];
+      const missingAchievementFilters = expectedAchievementFilters.filter(
+        (label) => !achievementFilterLabels.includes(label)
+      );
+      const clippedAchievementFilters = achievementsFilter
+        ? Array.from(achievementsFilter.querySelectorAll("button"))
+            .filter((button) => {
+              const widget = button.closest("[data-widget]");
+              if (!(widget instanceof HTMLElement)) return true;
+              const buttonRect = button.getBoundingClientRect();
+              const widgetRect = widget.getBoundingClientRect();
+              return (
+                buttonRect.left < widgetRect.left ||
+                buttonRect.right > widgetRect.right ||
+                buttonRect.top < widgetRect.top ||
+                buttonRect.bottom > widgetRect.bottom ||
+                buttonRect.width <= 0
+              );
+            })
+            .map((button) => button.textContent?.trim() ?? "unknown")
+        : ["missing filter row"];
+      const achievementsFilterHasHorizontalScroll =
+        achievementsFilter instanceof HTMLElement &&
+        achievementsFilter.scrollWidth > achievementsFilter.clientWidth;
+
+      return {
+        checked: true,
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        viewportHasHorizontalScroll,
+        clippedHeaders,
+        overlappingHeaderTools,
+        clippedPerformanceValues,
+        clippedAchievementFilters,
+        missingAchievementFilters,
+        achievementsFilterHasHorizontalScroll,
+      };
+    });
+
+    if (
+      result.checked &&
+      (result.viewportHasHorizontalScroll ||
+        result.clippedHeaders.length ||
+        result.overlappingHeaderTools.length ||
+        result.clippedPerformanceValues.length ||
+        result.clippedAchievementFilters.length ||
+        result.missingAchievementFilters.length ||
+        result.achievementsFilterHasHorizontalScroll)
+    ) {
+      throw new Error(
+        `${label} has clipped compact overlay content: ${JSON.stringify(result)}.`
+      );
+    }
+  };
 
   await page.addInitScript(() => {
     window.localStorage.removeItem("gamehub.overlay.layout.v4");
@@ -188,6 +326,7 @@ try {
         enabled: true,
         resolution: "1080p",
         fps: 60,
+        qualityPreset: "quality",
         instantReplayEnabled: true,
         replayDurationSeconds: 30,
         captureGameAudio: true,
@@ -197,6 +336,17 @@ try {
       recordingStartedAt: null,
       bufferedSeconds: 30,
       captureActive: true,
+      hardwareVideoEncodingAvailable: true,
+      captureDiagnostics: {
+        mimeType: 'video/mp4;codecs="avc1.640034,mp4a.40.2"',
+        outputWidth: 1920,
+        outputHeight: 1080,
+        outputFps: 59.94,
+        encodedFps: 59.7,
+        targetVideoBitrate: 55_987_200,
+        recentEncodedBitrate: 24_600_000,
+        hasAudio: true,
+      },
       gameTitle: context.game.title,
       lastSavedClipPath: null,
       statusMessage: null,
@@ -331,6 +481,20 @@ try {
     };
 
     const listeners = () => () => undefined;
+    const overlayListeners = new Map();
+    const subscribeOverlay = (channel) => (callback) => {
+      const callbacks = overlayListeners.get(channel) ?? new Set();
+      callbacks.add(callback);
+      overlayListeners.set(channel, callbacks);
+      return () => callbacks.delete(callback);
+    };
+    window.__emitOverlayEvent = (channel, ...args) => {
+      for (const callback of overlayListeners.get(channel) ?? []) {
+        callback(...args);
+      }
+    };
+    window.__overlayContextDelayMs = 0;
+    window.__overlayRendererReadyCount = 0;
     const api = {
       platform: "win32",
       isWayland: false,
@@ -361,15 +525,24 @@ try {
         iterator: async () => [],
       },
       getLibrary: async () => [],
-      getOverlayContext: async () => context,
-      overlayRendererReady: async () => undefined,
+      getOverlayContext: async () => {
+        if (window.__overlayContextDelayMs) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, window.__overlayContextDelayMs)
+          );
+        }
+        return context;
+      },
+      overlayRendererReady: async () => {
+        window.__overlayRendererReadyCount += 1;
+      },
       getOverlayNote: async () =>
         "Boss phase two: dodge inward, then punish the overhead swing.",
       saveOverlayNote: async () => undefined,
       closeHydraOverlay: async () => undefined,
       setOverlayPerformancePinned: async () => undefined,
-      onOverlayMode: listeners,
-      onOverlayShown: listeners,
+      onOverlayMode: subscribeOverlay("mode"),
+      onOverlayShown: subscribeOverlay("shown"),
       onOverlayPerformance: listeners,
       onOverlayPerformancePin: listeners,
       onOverlayGamepadAction: (callback) => {
@@ -603,6 +776,89 @@ try {
     );
   }
   await page.waitForTimeout(1_000);
+
+  // Exercise the already-warmed BrowserWindow twice. The renderer receives a
+  // deliberately slow context refresh on each show; cached content must stay
+  // painted, and Electron must not emit an uncommanded hide between shows.
+  await page.evaluate(() => {
+    window.__overlayContextDelayMs = 250;
+    window.__overlayDomVisibility = [
+      document.querySelector(".overlay--full") ? "visible" : "hidden",
+    ];
+    let previous = window.__overlayDomVisibility[0];
+    window.__overlayDomObserver = new MutationObserver(() => {
+      const next = document.querySelector(".overlay--full")
+        ? "visible"
+        : "hidden";
+      if (next !== previous) {
+        window.__overlayDomVisibility.push(next);
+        previous = next;
+      }
+    });
+    window.__overlayDomObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  });
+
+  const activateOverlaySurface = async (label, screenshotPath) => {
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      if (!win) throw new Error("Overlay test window is missing.");
+      if (!globalThis.__overlayVisibilityRecorderInstalled) {
+        globalThis.__overlayVisibilityRecorderInstalled = true;
+        win.on("show", () =>
+          globalThis.__overlayVisibilityTransitions?.push("visible")
+        );
+        win.on("hide", () =>
+          globalThis.__overlayVisibilityTransitions?.push("hidden")
+        );
+      }
+      win.hide();
+      globalThis.__overlayVisibilityTransitions = [];
+      win.show();
+    });
+    await page.evaluate(() => window.__emitOverlayEvent("shown"));
+    await page.waitForTimeout(800);
+    const [surfaceTransitions, domTransitions, visible] = await Promise.all([
+      electronApp.evaluate(
+        () => globalThis.__overlayVisibilityTransitions ?? []
+      ),
+      page.evaluate(() => window.__overlayDomVisibility),
+      electronApp.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]?.isVisible()
+      ),
+    ]);
+    if (!visible || surfaceTransitions.join(",") !== "visible") {
+      throw new Error(
+        `${label} blinked at the BrowserWindow layer: ${JSON.stringify(surfaceTransitions)}.`
+      );
+    }
+    if (domTransitions.includes("hidden")) {
+      throw new Error(
+        `${label} removed the painted overlay while refreshing: ${JSON.stringify(domTransitions)}.`
+      );
+    }
+    await assertCompactOverlayLegibility(label);
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await page.evaluate(() => {
+      window.__overlayDomVisibility = ["visible"];
+    });
+    return { surfaceTransitions, domTransitions };
+  };
+
+  const firstOpenTransitions = await activateOverlaySurface(
+    "First overlay open",
+    firstOpenOutput
+  );
+  const secondOpenTransitions = await activateOverlaySurface(
+    "Second overlay open",
+    secondOpenOutput
+  );
+  await page.evaluate(() => {
+    window.__overlayContextDelayMs = 0;
+    window.__overlayDomObserver?.disconnect();
+  });
 
   const localClockValues = page.locator(".overlay-header__clock time");
   if ((await localClockValues.count()) !== 2) {
@@ -919,6 +1175,14 @@ try {
         .querySelector(".overlay-capture__replay .overlay-select__value")
         ?.textContent?.trim() === "Last 45 seconds"
   );
+  await page.waitForFunction(() => {
+    const capture = document.querySelector('[data-widget="capture"]');
+    return (
+      capture?.textContent?.includes("30s of 45s buffered") &&
+      capture?.textContent?.includes("Save 30s available") &&
+      capture?.textContent?.includes("Buffering Instant Replay")
+    );
+  });
 
   // Controller A opens the same list, directions stay within its options, and
   // A commits. This catches regressions where spatial navigation escapes into
@@ -978,35 +1242,96 @@ try {
     captureText:
       document.querySelector('[data-widget="capture"]')?.textContent ?? "",
   }));
+  if (
+    !dimensions.captureText.includes("30s of 45s buffered") ||
+    !dimensions.captureText.includes("Save 30s available") ||
+    !dimensions.captureText.includes("59.7 FPS encoded") ||
+    !dimensions.captureText.includes("24.6 Mbps")
+  ) {
+    throw new Error(
+      `Instant Replay target and actual buffer are inconsistent: ${dimensions.captureText}`
+    );
+  }
   if (pageErrors.length) {
     throw new Error(`Renderer errors: ${pageErrors.join(" | ")}`);
   }
 
-  await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.setSize(620, 190);
-  });
-  await page.goto(`${pathToFileURL(renderer).href}#/overlay-toast`);
-  await page.reload();
-  await page.waitForSelector(".overlay-toast");
-  const toastFits = await page.evaluate(() => {
-    const toast = document.querySelector(".overlay-toast");
-    if (!(toast instanceof HTMLElement)) return false;
-    const rect = toast.getBoundingClientRect();
-    return (
-      rect.left >= 0 &&
-      rect.top >= 0 &&
-      rect.right <= window.innerWidth &&
-      rect.bottom <= window.innerHeight &&
-      toast.scrollWidth <= toast.clientWidth &&
-      toast.scrollHeight <= toast.clientHeight
+  const toastViewportMatrix = [
+    { width: 820, height: 118, name: "wide" },
+    { width: 592, height: 148, name: "medium" },
+    { width: 352, height: 184, name: "narrow" },
+  ];
+  const toastResults = [];
+  for (const viewport of toastViewportMatrix) {
+    await electronApp.evaluate(({ BrowserWindow }, size) => {
+      BrowserWindow.getAllWindows()[0]?.setContentSize(size.width, size.height);
+    }, viewport);
+    await page.goto(`${pathToFileURL(renderer).href}#/overlay-toast`);
+    await page.reload();
+    await page.waitForSelector(".overlay-toast");
+    const result = await page.evaluate(() => {
+      const toast = document.querySelector(".overlay-toast");
+      if (!(toast instanceof HTMLElement)) {
+        return { fits: false, reason: "missing toast" };
+      }
+      const toastRect = toast.getBoundingClientRect();
+      const descendants = Array.from(toast.querySelectorAll("*"));
+      const outside = descendants
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return (
+            rect.left < toastRect.left - 0.5 ||
+            rect.top < toastRect.top - 0.5 ||
+            rect.right > toastRect.right + 0.5 ||
+            rect.bottom > toastRect.bottom + 0.5
+          );
+        })
+        .map((element) => element.className || element.tagName);
+      const fits =
+        toastRect.left >= 0 &&
+        toastRect.top >= 0 &&
+        toastRect.right <= window.innerWidth &&
+        toastRect.bottom <= window.innerHeight &&
+        toast.scrollWidth <= toast.clientWidth &&
+        toast.scrollHeight <= toast.clientHeight &&
+        outside.length === 0;
+      return {
+        fits,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        toast: {
+          x: toastRect.x,
+          y: toastRect.y,
+          width: toastRect.width,
+          height: toastRect.height,
+        },
+        outside,
+        text: toast.textContent?.replace(/\s+/g, " ").trim(),
+      };
+    });
+    const toastOutput = path.join(
+      repositoryRoot,
+      "artifacts",
+      "overlay",
+      `gamehub-overlay-toast-${viewport.name}.png`
     );
-  });
-  if (!toastFits) throw new Error("Overlay-ready toast content is clipped.");
+    await page.screenshot({ path: toastOutput, fullPage: true });
+    toastResults.push({ name: viewport.name, output: toastOutput, ...result });
+    if (!result.fits) {
+      throw new Error(
+        `Overlay-ready toast content is clipped at ${viewport.name} size: ${JSON.stringify(result)}.`
+      );
+    }
+  }
 
   console.log(
     JSON.stringify(
       {
         output,
+        firstOpenOutput,
+        secondOpenOutput,
+        firstOpenTransitions,
+        secondOpenTransitions,
+        toastResults,
         widgetToggles: widgetToggleCount,
         nativeIconBytes: nativeIconDataUrl.length,
         ...dimensions,

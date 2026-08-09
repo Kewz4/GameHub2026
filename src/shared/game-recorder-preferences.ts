@@ -1,6 +1,7 @@
 import type {
   GameRecorderFps,
   GameRecorderPreferences,
+  GameRecorderQualityPreset,
   GameRecorderReplayDuration,
   GameRecorderResolution,
   UserPreferences,
@@ -10,6 +11,7 @@ export const DEFAULT_GAME_RECORDER_PREFERENCES: GameRecorderPreferences = {
   enabled: false,
   resolution: "1080p",
   fps: 60,
+  qualityPreset: "quality",
   instantReplayEnabled: false,
   replayDurationSeconds: 30,
   captureGameAudio: true,
@@ -24,6 +26,11 @@ const RESOLUTIONS = new Set<GameRecorderResolution>([
   "2160p",
 ]);
 const FRAME_RATES = new Set<GameRecorderFps>([30, 60, 120]);
+const QUALITY_PRESETS = new Set<GameRecorderQualityPreset>([
+  "performance",
+  "balanced",
+  "quality",
+]);
 const REPLAY_DURATIONS = new Set<GameRecorderReplayDuration>([15, 30, 45, 60]);
 
 export const resolveGameRecorderPreferences = (
@@ -31,6 +38,7 @@ export const resolveGameRecorderPreferences = (
 ): GameRecorderPreferences => {
   const resolution = preferences?.gameRecorderResolution;
   const fps = preferences?.gameRecorderFps;
+  const qualityPreset = preferences?.gameRecorderQualityPreset;
   const replayDuration = preferences?.gameRecorderReplayDurationSeconds;
 
   return {
@@ -43,6 +51,10 @@ export const resolveGameRecorderPreferences = (
         : DEFAULT_GAME_RECORDER_PREFERENCES.resolution,
     fps:
       fps && FRAME_RATES.has(fps) ? fps : DEFAULT_GAME_RECORDER_PREFERENCES.fps,
+    qualityPreset:
+      qualityPreset && QUALITY_PRESETS.has(qualityPreset)
+        ? qualityPreset
+        : DEFAULT_GAME_RECORDER_PREFERENCES.qualityPreset,
     instantReplayEnabled:
       preferences?.gameRecorderInstantReplayEnabled ??
       DEFAULT_GAME_RECORDER_PREFERENCES.instantReplayEnabled,

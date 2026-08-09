@@ -3,17 +3,21 @@ import type {
   Game,
   GameShop,
   UnlockedAchievement,
-  UpdatedUnlockedAchievements,
   UserPreferences,
 } from "@types";
 import { WindowManager } from "../window-manager";
-import { HydraApi } from "../hydra-api";
 import { getUnlockedAchievements } from "@main/events/user/get-unlocked-achievements";
 import { publishNewAchievementNotification } from "../notifications";
 import { achievementsLogger } from "../logger";
 import { db, gameAchievementsSublevel, levelKeys } from "@main/level";
 import { getGameAchievementData } from "./get-game-achievement-data";
 import { AchievementWatcherManager } from "./achievement-watcher-manager";
+import {
+  achievementPayloadFingerprint,
+  canonicalizeUnlockedAchievements,
+  getNewUnlockedAchievements,
+} from "./achievement-sync-policy";
+import { syncAchievementsToHydraCloud } from "./achievement-cloud-sync";
 
 const isRareAchievement = (points: number) => {
   const rawPercentage = (50 - Math.sqrt(points)) * 2;
@@ -34,12 +38,16 @@ const saveAchievementsOnLocal = async (
   const gameAchievement = await gameAchievementsSublevel
     .get(levelKey)
     .catch(() => null);
+  const canonicalUnlocked = canonicalizeUnlockedAchievements(
+    gameAchievement?.achievements,
+    unlockedAchievements
+  );
 
   return gameAchievementsSublevel
     .put(levelKey, {
       ...gameAchievement,
       achievements: gameAchievement?.achievements ?? [],
-      unlockedAchievements: unlockedAchievements,
+      unlockedAchievements: canonicalUnlocked,
       updatedAt: gameAchievement?.updatedAt,
       language: gameAchievement?.language,
     })
@@ -83,34 +91,29 @@ export const mergeAchievements = async (
   // achievements use Exophase apiNames, so the local-file watcher and remote
   // sync (Steam apiNames) must not merge into or overwrite this record.
   if (localGameAchievement?.source === "exophase") {
+    await AchievementWatcherManager.markGameSynced(gameKey, game.remoteId);
     return 0;
   }
 
   const achievementsData = localGameAchievement?.achievements ?? [];
-  const unlockedAchievements = localGameAchievement?.unlockedAchievements ?? [];
-
-  const newAchievementsMap = new Map(
-    achievements.toReversed().map((achievement) => {
-      return [achievement.name.toUpperCase(), achievement];
-    })
+  const storedUnlockedAchievements =
+    localGameAchievement?.unlockedAchievements ?? [];
+  const unlockedAchievements = canonicalizeUnlockedAchievements(
+    achievementsData,
+    storedUnlockedAchievements
   );
-
-  const newAchievements = [...newAchievementsMap.values()]
-    .filter((achievement) => {
-      return !unlockedAchievements.some((localAchievement) => {
-        return (
-          localAchievement.name.toUpperCase() === achievement.name.toUpperCase()
-        );
-      });
-    })
-    .map((achievement) => {
-      return {
-        name: achievement.name.toUpperCase(),
-        unlockTime: achievement.unlockTime,
-      };
-    });
-
-  const mergedLocalAchievements = unlockedAchievements.concat(newAchievements);
+  const newAchievements = getNewUnlockedAchievements(
+    achievementsData,
+    unlockedAchievements,
+    achievements
+  );
+  const mergedLocalAchievements = canonicalizeUnlockedAchievements(
+    achievementsData,
+    [...unlockedAchievements, ...achievements]
+  );
+  const localRecordNeedsRepair =
+    achievementPayloadFingerprint(storedUnlockedAchievements) !==
+    achievementPayloadFingerprint(unlockedAchievements);
 
   if (
     newAchievements.length &&
@@ -197,54 +200,41 @@ export const mergeAchievements = async (
   }
 
   const shouldSyncWithRemote =
-    game.remoteId &&
+    game.shop !== "custom" &&
     (newAchievements.length || AchievementWatcherManager.hasFinishedPreSearch);
 
   if (shouldSyncWithRemote) {
-    await HydraApi.put<UpdatedUnlockedAchievements | undefined>(
-      "/profile/games/achievements",
-      {
-        id: game.remoteId,
-        achievements: mergedLocalAchievements,
-      },
-      {}
-    )
-      .then((response) => {
-        if (response) {
-          return saveAchievementsOnLocal(
-            response.objectId,
-            response.shop,
-            response.achievements,
-            publishNotification
-          );
-        }
+    const syncResult = await syncAchievementsToHydraCloud({
+      remoteId: game.remoteId,
+      shop: game.shop,
+      objectId: game.objectId,
+      achievements: mergedLocalAchievements,
+    });
 
-        return saveAchievementsOnLocal(
-          game.objectId,
-          game.shop,
-          mergedLocalAchievements,
-          publishNotification
-        );
-      })
-      .catch((err) => {
-        achievementsLogger.log(
-          "Achievements cloud sync failed",
-          game.objectId,
-          game.title,
-          err instanceof Error ? err.message : String(err)
-        );
+    const serverAchievements = syncResult.response?.achievements ?? [];
+    const persistedAchievements = canonicalizeUnlockedAchievements(
+      achievementsData,
+      [...syncResult.achievements, ...serverAchievements]
+    );
 
-        return saveAchievementsOnLocal(
-          game.objectId,
-          game.shop,
-          mergedLocalAchievements,
-          publishNotification
-        );
-      })
-      .finally(() => {
-        AchievementWatcherManager.alreadySyncedGames.set(gameKey, true);
-      });
-  } else if (newAchievements.length) {
+    // Always persist under the LOCAL game identity. A canonical server response
+    // may identify the same title under another shop; writing that identity here
+    // creates a second achievement record and duplicate profile rows.
+    await saveAchievementsOnLocal(
+      game.objectId,
+      game.shop,
+      persistedAchievements,
+      publishNotification
+    );
+
+    if (
+      syncResult.status === "synced" ||
+      syncResult.status === "unchanged" ||
+      syncResult.status === "no-remote-id"
+    ) {
+      await AchievementWatcherManager.markGameSynced(gameKey, game.remoteId);
+    }
+  } else if (newAchievements.length || localRecordNeedsRepair) {
     await saveAchievementsOnLocal(
       game.objectId,
       game.shop,

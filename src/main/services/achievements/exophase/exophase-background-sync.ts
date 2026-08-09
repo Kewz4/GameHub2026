@@ -3,7 +3,7 @@ import type { ExophaseSyncReport } from "@types";
 import { achievementsLogger } from "@main/services/logger";
 import { WindowManager } from "@main/services/window-manager";
 import { LocalNotificationManager } from "@main/services/notifications/local-notifications";
-import { getPrefs } from "./exophase-cache";
+import { getPrefs, validateExophaseAccountScope } from "./exophase-cache";
 import { syncExophaseAccount } from "./exophase-importer";
 import { runCloudDebuggerInternal } from "@main/events/library/run-cloud-debugger";
 
@@ -30,6 +30,10 @@ export const runExophaseBackgroundSync = async (
     (prefs?.exophaseExtraProfiles?.length ?? 0) > 0;
   if (!hasProfiles) return;
   if (prefs?.exophaseEnabled === false) return;
+  const accountScope = await validateExophaseAccountScope();
+  if (accountScope === "logged-out" || accountScope === "account-mismatch") {
+    return;
+  }
 
   running = true;
   try {

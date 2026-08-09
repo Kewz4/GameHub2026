@@ -8,6 +8,10 @@ import type {
 
 import { logger } from "../logger";
 import { WindowManager } from "../window-manager";
+import {
+  getCloudSaveAccountScopeKey,
+  runWithCloudSaveAccountSession,
+} from "./account-session";
 import { getCloudSaveAutomaticSyncEnabled } from "./automatic-sync-settings";
 import { syncGameCloudSave } from "./sync-game-cloud-save";
 import { getCloudSaveGameContext } from "./cloud-save-game-context";
@@ -25,12 +29,16 @@ import {
   type AutomaticCloudSaveSyncOutcome,
 } from "./automatic-sync-outcome";
 import { isCloudSaveDeletionPending } from "./pending-deletion";
+import {
+  beginAutomaticSyncObservation,
+  finishAutomaticSyncObservation,
+} from "./automatic-sync-observation";
 
 const automaticSyncCoordinator =
   new CloudSaveOperationCoordinator<AutomaticCloudSaveSyncOutcome>();
 
 const gameKey = (objectId: string, shop: GameShop) =>
-  JSON.stringify([shop, objectId]);
+  JSON.stringify([getCloudSaveAccountScopeKey(), shop, objectId]);
 
 const isPendingDeletionBlockingAutomaticSync = async (
   objectId: string,
@@ -64,7 +72,7 @@ const emitAutomaticSyncEvent = (event: CloudSaveAutomaticSyncEvent) => {
   WindowManager.sendToAppWindows("on-cloud-save-automatic-sync", event);
 };
 
-export const runAutomaticCloudSaveSyncDetailed = async (
+const runAutomaticCloudSaveSyncDetailedInAccount = async (
   objectId: string,
   shop: GameShop,
   trigger: CloudSaveAutomaticSyncTrigger,
@@ -89,8 +97,8 @@ export const runAutomaticCloudSaveSyncDetailed = async (
     return pendingDeletionOutcome;
   }
 
-  // A launch session freezes the selected backend. Mode changes made while a
-  // game is preparing/running apply to the next launch, not this session.
+  // A launch session freezes V2 eligibility. Mode changes made while a game is
+  // preparing/running apply to the next launch; legacy sessions are retired.
   if (
     launchSessionToken === undefined &&
     !(await getCloudSaveAutomaticSyncEnabled(objectId, shop))
@@ -134,6 +142,25 @@ export const runAutomaticCloudSaveSyncDetailed = async (
   ]);
 
   return automaticSyncCoordinator.run(key, operationKey, async () => {
+    const accountScopeKey = getCloudSaveAccountScopeKey();
+    const observation =
+      trigger === "game-page-open"
+        ? beginAutomaticSyncObservation(
+            objectId,
+            shop,
+            trigger,
+            Date.now(),
+            accountScopeKey
+          )
+        : ({
+            accepted: true,
+            observationKey: null,
+            sessionGeneration: -1,
+          } as const);
+    if (!observation.accepted) {
+      return { status: "skipped", result: null };
+    }
+
     let latestStage: CloudSaveSyncProgressStage | undefined;
     return syncGameCloudSave(
       objectId,
@@ -154,6 +181,16 @@ export const runAutomaticCloudSaveSyncDetailed = async (
     )
       .then((result) => {
         const status = result.action === "conflict" ? "conflict" : "completed";
+        finishAutomaticSyncObservation(
+          objectId,
+          shop,
+          trigger,
+          observation.observationKey,
+          "settled",
+          Date.now(),
+          accountScopeKey,
+          observation.sessionGeneration
+        );
         logger.info("[Cloud Save] Automatic sync finished", {
           shop,
           objectId,
@@ -171,6 +208,16 @@ export const runAutomaticCloudSaveSyncDetailed = async (
         return { status: "completed", result } as const;
       })
       .catch((error: unknown) => {
+        finishAutomaticSyncObservation(
+          objectId,
+          shop,
+          trigger,
+          observation.observationKey,
+          "failed",
+          Date.now(),
+          accountScopeKey,
+          observation.sessionGeneration
+        );
         const environmentChanged = isCloudSaveEnvironmentChangedError(error);
         const executableMissing = isCloudSaveExecutableMissingError(error);
         if (environmentChanged || executableMissing) {
@@ -217,6 +264,25 @@ export const runAutomaticCloudSaveSyncDetailed = async (
   });
 };
 
+export const runAutomaticCloudSaveSyncDetailed = (
+  objectId: string,
+  shop: GameShop,
+  trigger: CloudSaveAutomaticSyncTrigger,
+  suppliedContext?: Awaited<ReturnType<typeof getCloudSaveGameContext>>,
+  expectedRemoteHash?: string | null,
+  launchSessionToken?: string
+): Promise<AutomaticCloudSaveSyncOutcome> =>
+  runWithCloudSaveAccountSession(() =>
+    runAutomaticCloudSaveSyncDetailedInAccount(
+      objectId,
+      shop,
+      trigger,
+      suppliedContext,
+      expectedRemoteHash,
+      launchSessionToken
+    )
+  );
+
 export const runAutomaticCloudSaveSync = async (
   objectId: string,
   shop: GameShop,
@@ -236,7 +302,7 @@ export const runAutomaticCloudSaveSync = async (
     )
   ).result;
 
-export const runAutomaticCloudSavePostExit = async (
+const runAutomaticCloudSavePostExitInAccount = async (
   objectId: string,
   shop: GameShop,
   session: CloudSaveLaunchSession
@@ -283,3 +349,12 @@ export const runAutomaticCloudSavePostExit = async (
     session.token
   );
 };
+
+export const runAutomaticCloudSavePostExit = (
+  objectId: string,
+  shop: GameShop,
+  session: CloudSaveLaunchSession
+): Promise<SyncGameCloudSaveResult | null> =>
+  runWithCloudSaveAccountSession(() =>
+    runAutomaticCloudSavePostExitInAccount(objectId, shop, session)
+  );

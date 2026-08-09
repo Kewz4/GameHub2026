@@ -1,5 +1,38 @@
 .bp-custom-download-modal {
-  width: min(720px, calc(100vw - 96px));
+  width: min(760px, calc(100vw - 96px));
+
+  .modal__header-title {
+    color: var(--text);
+    font-size: 1.15rem;
+    opacity: 1;
+  }
+
+  .modal__header-description {
+    color: color-mix(in srgb, var(--text) 78%, var(--text-secondary));
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .input {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+
+  .input-label {
+    color: color-mix(in srgb, var(--text) 78%, var(--text-secondary));
+    font-size: 0.9rem;
+  }
+
+  .checkbox__label-primary {
+    font-size: 1rem;
+  }
+
+  .checkbox__label-secondary {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 1;
+  }
 
   &__form {
     display: flex;
@@ -23,6 +56,8 @@
     margin-top: calc(var(--spacing-unit) * 0.75);
     overflow: hidden;
     color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.4;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -56,7 +91,15 @@
     }
 
     p {
-      color: var(--text-secondary);
+      color: color-mix(in srgb, var(--text) 76%, var(--text-secondary));
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .typography--label {
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 700;
     }
   }
 
@@ -64,11 +107,15 @@
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
   }
 
   &__error {
     border: 1px solid color-mix(in srgb, #ff5d73 45%, transparent);
     background: color-mix(in srgb, #ff5d73 12%, transparent);
     color: #ff8a99;
+    font-size: 0.95rem;
+    line-height: 1.5;
   }
 }

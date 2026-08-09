@@ -19,9 +19,10 @@ const hash = (value: string) => value.repeat(64).slice(0, 64);
 const file = (
   relativePath: string,
   value: string,
-  rawPath = "<home>/game"
+  rawPath = "<home>/game",
+  fileVariantId = variantId
 ): SnapshotFile => ({
-  variantId,
+  variantId: fileVariantId,
   rawPath,
   relativePath,
   hash: hash(value),
@@ -42,6 +43,7 @@ const context = (files: SnapshotFile[]): LocalGameSnapshotContext =>
     aggregateHash: hash("f"),
     sourceFiles: [],
     environmentId: "environment",
+    customPathRawPaths: [],
     pathContext: {
       shop: "steam",
       objectId: "1",
@@ -83,6 +85,80 @@ describe("merge user variant snapshots", () => {
       cloudSaveFileKey(file("B.sav", "d")),
     ]);
     assert.equal(result.conflicts.length, 0);
+  });
+
+  it("merges an existing v1 default variant without duplicating it", () => {
+    const stableDefault: SnapshotVariant = {
+      variantId:
+        "6bb5b19456b48c65d5b6120154934d146013679fd8673e7d42694fff131774db",
+      kind: "default",
+    };
+    const localFile = {
+      ...file("achievements.json", "a", "<winAppData>/GSE Saves/1817070"),
+      variantId: stableDefault.variantId,
+    };
+    const remoteFile = { ...localFile };
+
+    const result = mergeUserVariantSnapshots({
+      local: {
+        ...context([localFile]),
+        variants: [stableDefault],
+      },
+      remoteVariants: [stableDefault],
+      remoteFiles: [remoteFile],
+      base: anchor([remoteFile]),
+    });
+
+    assert.deepEqual(result.variants, [stableDefault]);
+    assert.deepEqual(result.files, [remoteFile]);
+    assert.deepEqual(result.conflicts, []);
+  });
+
+  it("keeps a shipped Steam account manifest and anchor stable for an accountId32 local path", () => {
+    const shippedSteamVariant: SnapshotVariant = {
+      variantId:
+        "a3a47f520bfece378832d82e5c972ebdd0c596a6632a3804e5b71054d0d14c23",
+      kind: "steam-account",
+      steamId64: "76561197960278073",
+    };
+    const shippedFile = {
+      ...file(
+        "S0000.sl2",
+        "a",
+        "<winAppData>/Sekiro/<storeUserId>/S0000.sl2",
+        shippedSteamVariant.variantId
+      ),
+    };
+    const local = context([shippedFile]);
+    local.variants = [shippedSteamVariant];
+    local.sourceFiles = [
+      {
+        ...shippedFile,
+        ruleId: "sekiro-save",
+        absolutePath: "C:/Users/Hydra/Sekiro/12345/S0000.sl2",
+        localBindings: {
+          environmentId: "environment",
+          rootId: "root",
+          concreteUserSegment: "12345",
+          concretePath: "C:/Users/Hydra/Sekiro/12345/S0000.sl2",
+        },
+        confidence: "authoritative",
+        provenance: ["ludusavi:sekiro-save"],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [shippedSteamVariant],
+      remoteFiles: [shippedFile],
+      base: anchor([shippedFile]),
+    });
+
+    assert.deepEqual(result.variants, [shippedSteamVariant]);
+    assert.deepEqual(result.files, [shippedFile]);
+    assert.deepEqual(result.conflicts, []);
+    assert.deepEqual(result.restoreEntryIds, []);
+    assert.deepEqual(result.deleteRemoteEntryIds, []);
   });
 
   it("preserves and schedules remote-only entries for restore", () => {
@@ -285,6 +361,220 @@ describe("merge user variant snapshots", () => {
     assert.deepEqual(result.restoreEntryIds, []);
   });
 
+  it("deletes one empty profile without affecting another profile", () => {
+    const firstVariant: SnapshotVariant = {
+      variantId,
+      kind: "opaque-folder",
+      concreteFolderId: "76561197960267366",
+    };
+    const secondVariantId = "2".repeat(64);
+    const secondVariant: SnapshotVariant = {
+      variantId: secondVariantId,
+      kind: "opaque-folder",
+      concreteFolderId: "76561199873967367",
+    };
+    const rawPath = "<winAppData>/Sekiro/<storeUserId>/S0000.sl2";
+    const deleted = file("S0000.sl2", "a", rawPath);
+    const retained = file("S0000.sl2", "b", rawPath, secondVariantId);
+    const local = context([retained]);
+    local.variants = [secondVariant];
+    local.coverage = [
+      {
+        candidateId: "empty-sekiro-profile",
+        ruleId: "sekiro-save",
+        variantId,
+        rawPath,
+        selectedRoot: true,
+        authority: "exact",
+        outcome: "scanned",
+        enumeratedCompletely: true,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [firstVariant, secondVariant],
+      remoteFiles: [deleted, retained],
+      base: anchor([deleted, retained]),
+    });
+
+    assert.deepEqual(result.files, [retained]);
+    assert.deepEqual(result.deleteRemoteEntryIds, [cloudSaveFileKey(deleted)]);
+    assert.deepEqual(result.restoreEntryIds, []);
+    assert.deepEqual(result.unresolvedRemoteEntryIds, []);
+  });
+
+  it("uses complete leaf-parent coverage to delete a missing filename profile", () => {
+    const firstVariant: SnapshotVariant = {
+      variantId,
+      kind: "opaque-folder",
+      concreteFolderId: "Goldberg",
+    };
+    const secondVariantId = "2".repeat(64);
+    const secondVariant: SnapshotVariant = {
+      variantId: secondVariantId,
+      kind: "opaque-folder",
+      concreteFolderId: "Rune",
+    };
+    const rawPath = "<home>/Game/PlayerProfile<storeUserId>.sav";
+    const deleted = file("PlayerProfileGoldberg.sav", "a", rawPath);
+    const retained = file(
+      "PlayerProfileRune.sav",
+      "b",
+      rawPath,
+      secondVariantId
+    );
+    const local = context([retained]);
+    local.variants = [secondVariant];
+    local.coverage = [
+      {
+        candidateId: "profiles-parent",
+        ruleId: "profile-save",
+        rawPath,
+        selectedRoot: true,
+        authority: "inferred",
+        outcome: "scanned",
+        enumeratedCompletely: true,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [firstVariant, secondVariant],
+      remoteFiles: [deleted, retained],
+      base: anchor([deleted, retained]),
+    });
+
+    assert.deepEqual(result.files, [retained]);
+    assert.deepEqual(result.deleteRemoteEntryIds, [cloudSaveFileKey(deleted)]);
+    assert.deepEqual(result.restoreEntryIds, []);
+  });
+
+  it("restores the last file even when coverage could prove deletion", () => {
+    const deleted = file("S0000.sl2", "a");
+    const local = context([]);
+    local.coverage = [
+      {
+        candidateId: "sekiro-profile",
+        ruleId: "sekiro-save",
+        variantId,
+        rawPath: deleted.rawPath,
+        selectedRoot: true,
+        authority: "exact",
+        outcome: "scanned",
+        enumeratedCompletely: true,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [variant],
+      remoteFiles: [deleted],
+      base: anchor([deleted]),
+    });
+
+    assert.deepEqual(result.files, [deleted]);
+    assert.deepEqual(result.deleteRemoteEntryIds, []);
+    assert.deepEqual(result.restoreEntryIds, [cloudSaveFileKey(deleted)]);
+    assert.deepEqual(result.unresolvedRemoteEntryIds, []);
+  });
+
+  it("restores an empty local snapshot instead of conflicting with a changed remote", () => {
+    const previous = file("S0000.sl2", "a");
+    const remote = file("S0000.sl2", "b");
+    const local = context([]);
+    local.coverage = [
+      {
+        candidateId: "sekiro-profile",
+        ruleId: "sekiro-save",
+        variantId,
+        rawPath: remote.rawPath,
+        selectedRoot: true,
+        authority: "exact",
+        outcome: "scanned",
+        enumeratedCompletely: true,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [variant],
+      remoteFiles: [remote],
+      base: anchor([previous]),
+    });
+
+    assert.deepEqual(result.files, [remote]);
+    assert.deepEqual(result.conflicts, []);
+    assert.deepEqual(result.deleteRemoteEntryIds, []);
+    assert.deepEqual(result.restoreEntryIds, [cloudSaveFileKey(remote)]);
+  });
+
+  it("restores the last file during a restore-only pre-launch sync", () => {
+    const deleted = file("S0000.sl2", "a");
+    const local = context([]);
+    local.coverage = [
+      {
+        candidateId: "sekiro-profile",
+        ruleId: "sekiro-save",
+        variantId,
+        rawPath: deleted.rawPath,
+        selectedRoot: true,
+        authority: "exact",
+        outcome: "scanned",
+        enumeratedCompletely: true,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [variant],
+      remoteFiles: [deleted],
+      base: anchor([deleted]),
+      direction: "restore-only",
+    });
+
+    assert.deepEqual(result.files, [deleted]);
+    assert.deepEqual(result.deleteRemoteEntryIds, []);
+    assert.deepEqual(result.restoreEntryIds, [cloudSaveFileKey(deleted)]);
+  });
+
+  it("restores an installation-owned custom path instead of publishing its absence", () => {
+    const rawPath = "<custom><windows><base>/Saves";
+    const missing = file("slot.sav", "a", rawPath);
+    const retained = file("settings.ini", "b", "<home>/other");
+    const local = context([retained]);
+    local.coverage = [
+      {
+        candidateId: "custom",
+        ruleId: "custom",
+        variantId,
+        rawPath,
+        selectedRoot: true,
+        authority: "authoritative",
+        outcome: "scanned",
+        enumeratedCompletely: true,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [variant],
+      remoteFiles: [missing, retained],
+      base: anchor([missing, retained]),
+      preserveLocalMissingRawPaths: new Set([rawPath]),
+    });
+
+    assert.deepEqual(result.files, [missing, retained]);
+    assert.deepEqual(result.restoreEntryIds, [cloudSaveFileKey(missing)]);
+    assert.deepEqual(result.deleteRemoteEntryIds, []);
+  });
+
   it("restores instead of deleting when the root is missing", () => {
     const missing = file("missing.sav", "a");
     const retained = file("retained.sav", "b", "<home>/other");
@@ -343,6 +633,92 @@ describe("merge user variant snapshots", () => {
     assert.deepEqual(result.restoreEntryIds, []);
     assert.deepEqual(result.deleteRemoteEntryIds, []);
     assert.equal(result.partial, true);
+  });
+
+  it("preserves foreign-OS files without restoring, deleting or staying partial", () => {
+    const windowsFile = file(
+      "windows-slot.dat",
+      "w",
+      "<winAppData>/Team Cherry/Hollow Knight Silksong"
+    );
+    const linuxFile = file(
+      "linux-slot.dat",
+      "l",
+      "<xdgConfig>/Team Cherry/Hollow Knight Silksong"
+    );
+    const local = context([windowsFile]);
+    local.coverage = [
+      {
+        candidateId: "foreign-linux-rule",
+        ruleId: "linux-rule",
+        rawPath: linuxFile.rawPath,
+        selectedRoot: false,
+        authority: "inferred",
+        outcome: "foreign-environment",
+        enumeratedCompletely: false,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [variant],
+      remoteFiles: [windowsFile, linuxFile],
+      base: anchor([windowsFile, linuxFile]),
+    });
+
+    assert.deepEqual(result.files, [windowsFile, linuxFile]);
+    assert.deepEqual(result.restoreEntryIds, []);
+    assert.deepEqual(result.deleteRemoteEntryIds, []);
+    assert.deepEqual(result.unresolvedRemoteEntryIds, []);
+    assert.equal(result.partial, false);
+  });
+
+  it("restores only current-OS files when the local snapshot is empty", () => {
+    const windowsFile = file(
+      "windows-slot.dat",
+      "w",
+      "<winAppData>/Team Cherry/Hollow Knight Silksong"
+    );
+    const linuxFile = file(
+      "linux-slot.dat",
+      "l",
+      "<xdgConfig>/Team Cherry/Hollow Knight Silksong"
+    );
+    const local = context([]);
+    local.coverage = [
+      {
+        candidateId: "windows-rule",
+        ruleId: "windows-rule",
+        rawPath: windowsFile.rawPath,
+        selectedRoot: true,
+        authority: "exact",
+        outcome: "scanned",
+        enumeratedCompletely: true,
+        warningCodes: [],
+      },
+      {
+        candidateId: "foreign-linux-rule",
+        ruleId: "linux-rule",
+        rawPath: linuxFile.rawPath,
+        selectedRoot: false,
+        authority: "inferred",
+        outcome: "foreign-environment",
+        enumeratedCompletely: false,
+        warningCodes: [],
+      },
+    ];
+
+    const result = mergeUserVariantSnapshots({
+      local,
+      remoteVariants: [variant],
+      remoteFiles: [windowsFile, linuxFile],
+      base: anchor([windowsFile, linuxFile]),
+    });
+
+    assert.deepEqual(result.files, [windowsFile, linuxFile]);
+    assert.deepEqual(result.restoreEntryIds, [cloudSaveFileKey(windowsFile)]);
+    assert.deepEqual(result.deleteRemoteEntryIds, []);
   });
 
   it("conflicts when a locally deleted file changed remotely", () => {
@@ -429,6 +805,25 @@ describe("merge user variant snapshots", () => {
 
     assert.deepEqual(result.files, [retained]);
     assert.deepEqual(result.deleteLocalEntryIds, [cloudSaveFileKey(deleted)]);
+  });
+
+  it("treats files from an explicitly re-added custom path as new", () => {
+    const rawPath = "<custom><windows><winDocuments>/Game";
+    const retained = file("slot.sav", "a", rawPath);
+    const result = mergeUserVariantSnapshots({
+      local: {
+        ...context([retained]),
+        customPathRawPaths: [rawPath],
+      },
+      remoteVariants: [],
+      remoteFiles: [],
+      base: anchor([retained]),
+      treatLocalAsNewRawPaths: new Set([rawPath]),
+    });
+
+    assert.deepEqual(result.files, [retained]);
+    assert.deepEqual(result.deleteLocalEntryIds, []);
+    assert.deepEqual(result.conflicts, []);
   });
 
   it("conflicts when a remotely deleted file changed locally", () => {

@@ -2,6 +2,7 @@ import { logger } from "@main/services/logger";
 import { SystemPath } from "@main/services/system-path";
 import { Wine } from "@main/services/wine";
 import type {
+  CloudSaveCustomPathBindings,
   CloudSavePathContext,
   CloudSaveGameId,
   RemoteGameSnapshot,
@@ -16,9 +17,9 @@ import { getCloudSaveGameContext } from "./cloud-save-game-context";
 import { cloudSaveCustomPathContextFromPathContext } from "./custom-path";
 import { customPathToCloudSaveRule } from "./custom-path-store";
 import { getUsableCloudSaveCustomPathBindings } from "./custom-path-overlap";
-import { storeUserContextWithSnapshotAccounts } from "./snapshot-store-user-context";
 import { getR2CloudSaveSnapshot } from "./r2-snapshot-store";
 import { getGameHubSavePlanRules } from "./gamehub-save-plan-rules";
+import { storeUserContextWithSnapshotAccounts } from "./snapshot-store-user-context";
 
 const isWinePrefixValid = (winePrefixPath?: string) => {
   if (!winePrefixPath) return false;
@@ -47,6 +48,7 @@ export const getRemoteSnapshotRestoreManifest = async (
       shop: document.snapshot.shop,
       objectId: document.snapshot.objectId,
     },
+    customPathRawPaths: document.customPathRawPaths,
     variants: document.variants,
     files: document.files,
   });
@@ -73,12 +75,16 @@ export const getRemoteSnapshotRestoreManifest = async (
 
 export const resolveRestoreManifestTargets = async (
   manifest: RestoreManifestResponse,
-  suppliedPathContext?: CloudSavePathContext
+  suppliedPathContext?: CloudSavePathContext,
+  suppliedCustomPathBindings?: CloudSaveCustomPathBindings,
+  suppliedGameContext?: Awaited<ReturnType<typeof getCloudSaveGameContext>>
 ): Promise<ResolveRestoreTargetsResult> => {
-  const gameContext = await getCloudSaveGameContext(
-    manifest.snapshot.objectId,
-    manifest.snapshot.shop
-  );
+  const gameContext =
+    suppliedGameContext ??
+    (await getCloudSaveGameContext(
+      manifest.snapshot.objectId,
+      manifest.snapshot.shop
+    ));
   const pathContext = suppliedPathContext ?? gameContext.pathContext;
   const effectiveGameContext =
     pathContext === gameContext.pathContext
@@ -93,16 +99,18 @@ export const resolveRestoreManifestTargets = async (
   });
   const customPathContext =
     cloudSaveCustomPathContextFromPathContext(pathContext);
-  const [customPathResult, gameHubRules] = await Promise.all([
-    getUsableCloudSaveCustomPathBindings(
-      manifest.snapshot.objectId,
-      manifest.snapshot.shop,
-      effectiveGameContext,
-      {
-        approvedRules: approved.rules,
-        remoteFiles: manifest.files,
-      }
-    ),
+  const [customPaths, gameHubRules] = await Promise.all([
+    suppliedCustomPathBindings
+      ? Promise.resolve(suppliedCustomPathBindings.ready)
+      : getUsableCloudSaveCustomPathBindings(
+          manifest.snapshot.objectId,
+          manifest.snapshot.shop,
+          effectiveGameContext,
+          {
+            approvedRules: approved.rules,
+            remoteFiles: manifest.files,
+          }
+        ).then(({ ready }) => ready),
     getGameHubSavePlanRules(
       manifest.snapshot.objectId,
       manifest.snapshot.shop,
@@ -110,8 +118,6 @@ export const resolveRestoreManifestTargets = async (
       manifest.files
     ),
   ]);
-  const { ready: customPaths } = customPathResult;
-
   const effectiveWinePrefixPath = customPathContext.winePrefixPath;
   const wineUserProfilePath = customPathContext.wineUserProfilePath;
   const wineProfiles = effectiveWinePrefixPath
@@ -129,8 +135,6 @@ export const resolveRestoreManifestTargets = async (
     winePrefixIsValid,
     wineUserProfilePath: wineUserProfilePath ?? null,
     wineProfileCount: wineProfiles.length,
-    hasActiveStoreUser: Boolean(pathContext.storeUserContext.active),
-    knownStoreUsers: pathContext.storeUserContext.known.length,
   });
 
   if (usesWindowsCompatibility && !effectiveWinePrefixPath) {
@@ -144,31 +148,29 @@ export const resolveRestoreManifestTargets = async (
   }
 
   const targets = await NativeAddon.resolveRestoreTargets({
-    ...pathContext,
+    shop: pathContext.shop,
+    objectId: pathContext.objectId,
+    platform: pathContext.platform,
+    homeDir: pathContext.homeDir,
+    documentsDir: pathContext.documentsDir,
+    appDataDir: pathContext.appDataDir,
+    executablePath: pathContext.executablePath,
+    steamPath: pathContext.steamPath,
     storeUserContext: storeUserContextWithSnapshotAccounts(
       pathContext.storeUserContext,
       manifest.variants
     ),
     winePrefixPath: effectiveWinePrefixPath,
     approvedRules: [
-      ...approved.rules.map(({ kind, rawPath, source }) => ({
-        kind,
-        rawPath,
-        source,
-        preferredPath: undefined,
-      })),
-      ...gameHubRules.map(({ kind, rawPath, source, preferredPath }) => ({
-        kind,
-        rawPath,
-        source,
-        preferredPath,
-      })),
+      ...approved.rules,
+      ...gameHubRules,
       ...customPaths.map(customPathToCloudSaveRule),
-    ].map(({ kind, rawPath, source, preferredPath }) => ({
+    ].map(({ kind, rawPath, source, preferredPath, when }) => ({
       kind,
       rawPath,
       source,
       preferredPath,
+      when,
     })),
     variants: manifest.variants,
     files: manifest.files,

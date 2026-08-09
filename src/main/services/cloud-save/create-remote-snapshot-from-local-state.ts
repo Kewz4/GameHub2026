@@ -147,10 +147,18 @@ export const createRemoteSnapshotFromLocalState = async (
     (await buildLocalGameSnapshotContext(objectId, shop));
   const variants = options.variants ?? context.variants;
   const files = options.files ?? context.files;
+  const customPathRawPaths =
+    options.customPathRawPaths ?? context.customPathRawPaths;
   // An empty first upload is a no-op, but an empty successor is meaningful: it
   // is the tombstone-like snapshot that propagates deletion of the last save
   // file or removal of the last tracked custom path.
-  if (!shouldCreateRemoteCloudSaveSnapshot(files.length, options.baseVersion)) {
+  if (
+    !shouldCreateRemoteCloudSaveSnapshot(
+      files.length,
+      customPathRawPaths.length,
+      options.baseVersion
+    )
+  ) {
     return null;
   }
   assertCloudSaveUploadWithinLimits(files);
@@ -207,6 +215,7 @@ export const createRemoteSnapshotFromLocalState = async (
       aggregateHash,
       epoch: beforeCommit?.control.epoch ?? 0,
     },
+    customPathRawPaths,
     variants,
     files,
   };

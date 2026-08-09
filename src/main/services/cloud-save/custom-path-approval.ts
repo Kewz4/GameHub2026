@@ -26,6 +26,11 @@ import {
   registerCloudSaveCustomPathWithoutOverlap,
 } from "./custom-path-overlap";
 import { assertCloudSaveDeletionInactive } from "./operation-gate";
+import {
+  assertCloudSaveAccountSessionCurrent,
+  runWithCloudSaveAccountSession,
+} from "./account-session";
+import { registerR2CredentialSessionInvalidator } from "../r2-credential-session";
 
 export interface CloudSavePendingLaunchOptions {
   shop: GameShop;
@@ -44,6 +49,7 @@ interface PendingCloudSaveCustomPathApproval {
 }
 
 const pendingByGame = new Map<string, PendingCloudSaveCustomPathApproval>();
+registerR2CredentialSessionInvalidator(() => pendingByGame.clear());
 
 const gameKey = (shop: GameShop, objectId: string) =>
   JSON.stringify([shop, objectId]);
@@ -79,7 +85,7 @@ export const getPendingCloudSaveCustomPathApproval = (
   objectId: string
 ) => pendingByGame.get(gameKey(shop, objectId))?.approval ?? null;
 
-const createPendingApproval = async (
+const createPendingApprovalInAccount = async (
   gameId: { shop: GameShop; objectId: string },
   purpose: CloudSaveCustomPathApproval["purpose"],
   context: CloudSaveGameContext,
@@ -89,6 +95,7 @@ const createPendingApproval = async (
   const { shop, objectId } = gameId;
   const key = gameKey(shop, objectId);
   const clearPending = () => {
+    assertCloudSaveAccountSessionCurrent();
     if (pendingByGame.get(key)?.approval.id !== preservePendingId) {
       pendingByGame.delete(key);
     }
@@ -100,7 +107,7 @@ const createPendingApproval = async (
     "restore-only"
   );
   const manifest = analysis.remoteManifest;
-  if (!manifest || analysis.merge.restoreEntryIds.length === 0) {
+  if (!manifest) {
     clearPending();
     return null;
   }
@@ -173,9 +180,27 @@ const createPendingApproval = async (
     snapshotId: manifest.snapshot.id,
     snapshotVersion: manifest.snapshot.version,
   };
+  assertCloudSaveAccountSessionCurrent();
   pendingByGame.set(key, { approval, launchOptions, context });
   return approval;
 };
+
+const createPendingApproval = (
+  gameId: { shop: GameShop; objectId: string },
+  purpose: CloudSaveCustomPathApproval["purpose"],
+  context: CloudSaveGameContext,
+  launchOptions: CloudSavePendingLaunchOptions | null,
+  preservePendingId?: string
+) =>
+  runWithCloudSaveAccountSession(() =>
+    createPendingApprovalInAccount(
+      gameId,
+      purpose,
+      context,
+      launchOptions,
+      preservePendingId
+    )
+  );
 
 export const createPendingCloudSaveCustomPathApproval = (
   launchOptions: CloudSavePendingLaunchOptions,
@@ -195,7 +220,7 @@ export const createPendingManualCloudSaveCustomPathApproval = (
     preservePendingId
   );
 
-export const createPendingCustomPathRebindApproval = async (
+const createPendingCustomPathRebindApprovalInAccount = async (
   gameId: { shop: GameShop; objectId: string },
   rawPath: string,
   context: CloudSaveGameContext
@@ -283,6 +308,7 @@ export const createPendingCustomPathRebindApproval = async (
     remoteFiles,
     snapshot: analysis.remoteManifest?.snapshot ?? null,
   });
+  assertCloudSaveAccountSessionCurrent();
   pendingByGame.set(gameKey(shop, objectId), {
     approval,
     launchOptions: null,
@@ -292,7 +318,16 @@ export const createPendingCustomPathRebindApproval = async (
   return approval;
 };
 
-export const selectPendingCloudSaveCustomPathApproval = async (
+export const createPendingCustomPathRebindApproval = (
+  gameId: { shop: GameShop; objectId: string },
+  rawPath: string,
+  context: CloudSaveGameContext
+): Promise<CloudSaveCustomPathApproval> =>
+  runWithCloudSaveAccountSession(() =>
+    createPendingCustomPathRebindApprovalInAccount(gameId, rawPath, context)
+  );
+
+const selectPendingCloudSaveCustomPathApprovalInAccount = async (
   id: string,
   selectedPath: string
 ) => {
@@ -314,6 +349,7 @@ export const selectPendingCloudSaveCustomPathApproval = async (
       ({ relativePath }) => relativePath
     ),
   });
+  assertCloudSaveAccountSessionCurrent();
   pending.approval = {
     ...pending.approval,
     selectedPath: selected.path,
@@ -322,7 +358,15 @@ export const selectPendingCloudSaveCustomPathApproval = async (
   return pending.approval;
 };
 
-const bindPendingCloudSaveCustomPathApproval = async (
+export const selectPendingCloudSaveCustomPathApproval = (
+  id: string,
+  selectedPath: string
+) =>
+  runWithCloudSaveAccountSession(() =>
+    selectPendingCloudSaveCustomPathApprovalInAccount(id, selectedPath)
+  );
+
+const bindPendingCloudSaveCustomPathApprovalInAccount = async (
   id: string,
   purpose: CloudSaveCustomPathApproval["purpose"],
   removePending: boolean,
@@ -395,12 +439,28 @@ const bindPendingCloudSaveCustomPathApproval = async (
     assertCanRegister,
   });
   if (removePending) {
+    assertCloudSaveAccountSessionCurrent();
     pendingByGame.delete(
       gameKey(approval.gameId.shop, approval.gameId.objectId)
     );
   }
   return { approval, launchOptions };
 };
+
+const bindPendingCloudSaveCustomPathApproval = (
+  id: string,
+  purpose: CloudSaveCustomPathApproval["purpose"],
+  removePending: boolean,
+  assertCanBind?: () => void
+) =>
+  runWithCloudSaveAccountSession(() =>
+    bindPendingCloudSaveCustomPathApprovalInAccount(
+      id,
+      purpose,
+      removePending,
+      assertCanBind
+    )
+  );
 
 export const confirmPendingCloudSaveCustomPathApproval = async (id: string) => {
   const { launchOptions } = await bindPendingCloudSaveCustomPathApproval(
@@ -434,7 +494,7 @@ export const confirmPendingManualCloudSaveCustomPathApproval = async (
   );
 };
 
-export const confirmPendingCustomPathRebindApproval = async (
+const confirmPendingCustomPathRebindApprovalInAccount = async (
   id: string,
   gameId: { shop: GameShop; objectId: string },
   assertCanBind?: () => void
@@ -481,9 +541,29 @@ export const confirmPendingCustomPathRebindApproval = async (
   return { rawPath: approval.rawPath };
 };
 
+export const confirmPendingCustomPathRebindApproval = (
+  id: string,
+  gameId: { shop: GameShop; objectId: string },
+  assertCanBind?: () => void
+) =>
+  runWithCloudSaveAccountSession(() =>
+    confirmPendingCustomPathRebindApprovalInAccount(id, gameId, assertCanBind)
+  );
+
 export const dismissPendingCloudSaveCustomPathApproval = (id: string) => {
   const pending = getPendingById(id);
   pendingByGame.delete(
     gameKey(pending.approval.gameId.shop, pending.approval.gameId.objectId)
   );
+};
+
+export const dismissPendingCloudSaveCustomPathApprovalForRawPath = (
+  shop: GameShop,
+  objectId: string,
+  rawPath: string
+) => {
+  const key = gameKey(shop, objectId);
+  if (pendingByGame.get(key)?.approval.rawPath === rawPath) {
+    pendingByGame.delete(key);
+  }
 };

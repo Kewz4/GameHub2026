@@ -780,6 +780,8 @@ export interface CloudDebugReport {
   fixedCount: number;
   unfixedCount: number;
   notLoggedIn?: boolean;
+  mode?: "audit" | "repair";
+  error?: string;
 }
 
 /** One game's achievement progress for the profile breakdown. Sourced from the

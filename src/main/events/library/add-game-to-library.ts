@@ -6,9 +6,13 @@ import {
   gamesShopAssetsSublevel,
   gamesSublevel,
   levelKeys,
-  playnitePlaytimeCacheSublevel,
 } from "@main/level";
 import { AchievementWatcherManager } from "@main/services/achievements/achievement-watcher-manager";
+import {
+  findPlayniteCacheEntryForGame,
+  removePlayniteCacheEntriesForGame,
+} from "@main/services/playnite-playtime-cache";
+import { decidePlaynitePlaytimeImport } from "@main/services/playnite-playtime-policy";
 
 const addGameToLibrary = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -23,9 +27,10 @@ const addGameToLibrary = async (
 
   // Apply any Playnite-imported playtime cached for this game (cached when the
   // user ran a Playnite import while the game was NOT yet in their library).
-  const cachedPlaytime = await playnitePlaytimeCacheSublevel
-    .get(gameKey)
-    .catch(() => null);
+  const playniteIdentity = { shop, objectId, title };
+  const cachedPlaytimeRecord =
+    await findPlayniteCacheEntryForGame(playniteIdentity);
+  const cachedPlaytime = cachedPlaytimeRecord?.[1] ?? null;
 
   if (game) {
     await downloadsSublevel.del(gameKey);
@@ -34,11 +39,17 @@ const addGameToLibrary = async (
     game.addedToLibraryAt ??= new Date();
     game.libraryOrigin ??= "catalog";
 
-    if (
-      cachedPlaytime &&
-      cachedPlaytime.playTimeInMilliseconds > (game.playTimeInMilliseconds ?? 0)
-    ) {
-      game.playTimeInMilliseconds = cachedPlaytime.playTimeInMilliseconds;
+    if (cachedPlaytime) {
+      const decision = decidePlaynitePlaytimeImport(
+        game.playTimeInMilliseconds,
+        cachedPlaytime.playTimeInMilliseconds
+      );
+      if (decision.action === "replace") {
+        game.playTimeInMilliseconds = decision.nextPlaytimeMs;
+        game.hasManuallyUpdatedPlaytime = true;
+        game.unsyncedDeltaPlayTimeInMilliseconds = 0;
+        game.pendingAbsolutePlayTimeInMilliseconds = decision.nextPlaytimeMs;
+      }
     }
 
     await gamesSublevel.put(gameKey, game);
@@ -53,6 +64,9 @@ const addGameToLibrary = async (
       remoteId: null,
       isDeleted: false,
       playTimeInMilliseconds: cachedPlaytime?.playTimeInMilliseconds ?? 0,
+      pendingAbsolutePlayTimeInMilliseconds: cachedPlaytime
+        ? cachedPlaytime.playTimeInMilliseconds
+        : null,
       lastTimePlayed: null,
       addedToLibraryAt: new Date(),
       automaticCloudSync: true,
@@ -64,7 +78,7 @@ const addGameToLibrary = async (
 
   // The cached playtime has now been applied to the real library record.
   if (cachedPlaytime) {
-    await playnitePlaytimeCacheSublevel.del(gameKey).catch(() => {});
+    await removePlayniteCacheEntriesForGame(playniteIdentity);
   }
 
   if (game) {

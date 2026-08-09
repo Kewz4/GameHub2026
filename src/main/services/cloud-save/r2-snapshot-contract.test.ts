@@ -10,6 +10,7 @@ import {
 
 const hash = "a".repeat(64);
 const variantId = "b".repeat(64);
+const customPath = "<custom><windows><winDocuments>/Game";
 const snapshot = {
   schemaVersion: 1 as const,
   snapshot: {
@@ -24,11 +25,12 @@ const snapshot = {
     aggregateHash: hash,
     epoch: 0,
   },
+  customPathRawPaths: [customPath],
   variants: [{ variantId, kind: "default" as const }],
   files: [
     {
       variantId,
-      rawPath: "<home>/Game",
+      rawPath: customPath,
       relativePath: "save.dat",
       hash,
       sizeBytes: 4,
@@ -90,6 +92,35 @@ describe("R2 Cloud Saves V2 snapshot contract", () => {
         { shop: "steam", objectId: "123" }
       )
     );
+  });
+
+  it("reads legacy manifests and derives their tracked custom paths", () => {
+    const { customPathRawPaths: _, ...legacyDocument } = snapshot;
+    const document = validateR2CloudSaveV2SnapshotDocument(
+      legacyDocument,
+      { shop: "steam", objectId: "123" },
+      () => hash
+    );
+    assert.deepEqual(document.customPathRawPaths, [customPath]);
+  });
+
+  it("round-trips an explicitly tracked empty custom path", () => {
+    const document = validateR2CloudSaveV2SnapshotDocument(
+      {
+        ...snapshot,
+        snapshot: {
+          ...snapshot.snapshot,
+          fileCount: 0,
+          totalSizeBytes: 0,
+        },
+        variants: [],
+        files: [],
+      },
+      { shop: "steam", objectId: "123" },
+      () => hash
+    );
+    assert.deepEqual(document.customPathRawPaths, [customPath]);
+    assert.deepEqual(document.files, []);
   });
 
   it("rejects unknown fields, bad aggregates, and divergent head pointers", () => {

@@ -44,6 +44,7 @@ interface CloudSaveV2ContextValue {
   canUseCloudSaves: boolean;
   openManager: () => void;
   openFileBrowser: () => void;
+  selectExecutable: () => void;
   runCloudSaveOperation: (
     resolution?: CloudSaveConflictResolution
   ) => Promise<void>;
@@ -112,16 +113,12 @@ export function CloudSaveV2Provider({
   const [searchParams, setSearchParams] = useSearchParams();
   const { showErrorToast, showSuccessToast, showWarningToast } = useToast();
   const { userDetails } = useUserDetails();
-  const {
-    game,
-    isGameRunning,
-    setShowGameOptionsModal,
-    setGameOptionsInitialCategory,
-  } = useContext(gameDetailsContext);
+  const { game, isGameRunning, selectGameExecutable, updateGame } =
+    useContext(gameDetailsContext);
   // R2 saves are free, but the credential broker requires a signed-in account
   // so it can scope every temporary credential to that user's namespace.
   const canUseCloudSaves = userDetails !== null;
-  const hasExecutablePath = Boolean(game);
+  const hasExecutablePath = Boolean(game?.executablePath);
   const canCheckCloudSaves = canUseCloudSaves && hasExecutablePath;
   const {
     overview,
@@ -166,7 +163,6 @@ export function CloudSaveV2Provider({
   const gameKey = `${shop}:${objectId}`;
   const activeGameKey = useRef(gameKey);
   const gamePageSyncInFlight = useRef(false);
-  const gamePageSyncCompleted = useRef(false);
 
   activeGameKey.current = gameKey;
 
@@ -206,7 +202,6 @@ export function CloudSaveV2Provider({
     setIsCustomPathApprovalGateActive(false);
     setPendingResolution(null);
     gamePageSyncInFlight.current = false;
-    gamePageSyncCompleted.current = false;
   }, [gameKey]);
 
   const wasGameRunning = useRef(isGameRunning);
@@ -235,6 +230,16 @@ export function CloudSaveV2Provider({
     setWasOpenedFromLaunchConflict(true);
     setIsModalVisible(true);
   }, [searchParams, setSearchParams, shop]);
+
+  useEffect(() => {
+    if (searchParams.get("openCloudSaveManager") !== "1") return;
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("openCloudSaveManager");
+    setSearchParams(nextSearchParams, { replace: true });
+    setWasOpenedFromLaunchConflict(false);
+    setIsFileBrowserVisible(false);
+    setIsModalVisible(true);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (searchParams.get("openCloudSavePathApproval") !== "1") {
@@ -347,7 +352,6 @@ export function CloudSaveV2Provider({
         isGameRunning,
         isSyncing,
         isInFlight: gamePageSyncInFlight.current,
-        isCompleted: gamePageSyncCompleted.current,
       })
     ) {
       return;
@@ -358,9 +362,8 @@ export function CloudSaveV2Provider({
 
     void window.electron
       .syncCloudSaveOnGamePage(objectId, shop)
-      .then((response) => {
+      .then((_response) => {
         if (activeGameKey.current !== requestedGame) return;
-        if (response.accepted) gamePageSyncCompleted.current = true;
       })
       .catch(() => {
         if (activeGameKey.current !== requestedGame) return;
@@ -400,21 +403,34 @@ export function CloudSaveV2Provider({
     setIsModalVisible(true);
   }, [canUseCloudSaves]);
 
-  const handleSelectExecutable = () => {
+  const handleSelectExecutable = useCallback(async () => {
     setIsModalVisible(false);
     setWasOpenedFromLaunchConflict(false);
     setIsFileBrowserVisible(false);
-    setGameOptionsInitialCategory("locations");
-    setShowGameOptionsModal(true);
-  };
+    const executablePath = await selectGameExecutable();
+    if (!executablePath) return;
 
-  const handleOpenBackupHistory = () => {
-    setIsModalVisible(false);
-    setWasOpenedFromLaunchConflict(false);
-    setIsFileBrowserVisible(false);
-    setGameOptionsInitialCategory("hydra_cloud");
-    setShowGameOptionsModal(true);
-  };
+    const gameUsingPath =
+      await window.electron.verifyExecutablePathInUse(executablePath);
+    if (gameUsingPath) {
+      showErrorToast(
+        t("executable_path_in_use", { game: gameUsingPath.title })
+      );
+      return;
+    }
+
+    await window.electron.updateExecutablePath(shop, objectId, executablePath);
+    await updateGame();
+    await refresh();
+  }, [
+    objectId,
+    refresh,
+    selectGameExecutable,
+    shop,
+    showErrorToast,
+    t,
+    updateGame,
+  ]);
 
   const handleCloudSaveOperationError = useCallback(
     (error: unknown, requestedGame: string) => {
@@ -742,6 +758,7 @@ export function CloudSaveV2Provider({
       canUseCloudSaves,
       openManager,
       openFileBrowser,
+      selectExecutable: handleSelectExecutable,
       runCloudSaveOperation,
       setAutomaticSyncEnabled,
       requestConflictResolution: setPendingResolution,
@@ -750,6 +767,7 @@ export function CloudSaveV2Provider({
       canUseCloudSaves,
       hasError,
       hasExecutablePath,
+      handleSelectExecutable,
       isAutomaticSyncEnabled,
       isGameRunning,
       isRefreshing,
@@ -793,11 +811,17 @@ export function CloudSaveV2Provider({
         hasExecutablePath={hasExecutablePath}
         isAutomaticSyncEnabled={isAutomaticSyncEnabled}
         hasError={hasError}
+        errorMessageKey={
+          hasRefreshError
+            ? "cloud_save_v2_load_error"
+            : hasSyncError
+              ? "cloud_save_v2_sync_error"
+              : null
+        }
         progress={progress}
         onSync={() => void runCloudSaveOperation()}
         onOpenFileBrowser={() => setIsFileBrowserVisible(true)}
         onSelectExecutable={handleSelectExecutable}
-        onOpenBackupHistory={handleOpenBackupHistory}
         onAutomaticSyncChange={setAutomaticSyncEnabled}
         onResolveConflict={setPendingResolution}
         onClose={() => {

@@ -24,9 +24,11 @@ export function normalizeTorBoxFileName(value: string) {
   return (value.replaceAll("\\", "/").split("/").at(-1) ?? "").toLowerCase();
 }
 
-export function selectTorBoxDownloadFile<
-  T extends TorBoxDownloadFileIdentity,
->(files: T[], targetFileName?: string | null, fileIndices?: number[]) {
+export function selectTorBoxDownloadFile<T extends TorBoxDownloadFileIdentity>(
+  files: T[],
+  targetFileName?: string | null,
+  fileIndices?: number[]
+) {
   const wantedName = targetFileName
     ? normalizeTorBoxFileName(targetFileName)
     : null;

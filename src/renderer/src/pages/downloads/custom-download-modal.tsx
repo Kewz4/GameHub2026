@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   AlertIcon,
   DownloadIcon,
@@ -9,8 +15,11 @@ import {
 import { useNavigate } from "react-router-dom";
 import {
   classifyCustomDownloadSource,
+  getCustomDownloadInputPresentation,
+  isCustomDownloadFormReady,
   normalizeCustomDownloadTitle,
   suggestCustomDownloadTitle,
+  type CustomDownloadEntryIntent,
 } from "@shared";
 import { Button, CheckboxField, Modal, TextField } from "@renderer/components";
 import { useAppSelector, useToast } from "@renderer/hooks";
@@ -19,6 +28,7 @@ import "./custom-download-modal.scss";
 
 interface CustomDownloadModalProps {
   visible: boolean;
+  initialIntent: CustomDownloadEntryIntent;
   onClose: () => void;
   onSubmitted: () => void;
 }
@@ -29,6 +39,7 @@ function fileNameFromPath(filePath: string) {
 
 export function CustomDownloadModal({
   visible,
+  initialIntent,
   onClose,
   onSubmitted,
 }: Readonly<CustomDownloadModalProps>) {
@@ -38,6 +49,7 @@ export function CustomDownloadModal({
   const navigate = useNavigate();
   const { showErrorToast, showSuccessToast } = useToast();
   const titleTouchedRef = useRef(false);
+  const torrentPickerOpenedRef = useRef(false);
   const [source, setSource] = useState("");
   const [localTorrentPath, setLocalTorrentPath] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -52,6 +64,7 @@ export function CustomDownloadModal({
     if (!visible) return;
 
     titleTouchedRef.current = false;
+    torrentPickerOpenedRef.current = false;
     setSource("");
     setLocalTorrentPath(null);
     setTitle("");
@@ -72,18 +85,21 @@ export function CustomDownloadModal({
     return () => {
       cancelled = true;
     };
-  }, [userPreferences, visible]);
+  }, [initialIntent, userPreferences, visible]);
 
-  const updateSuggestedTitle = (
-    nextSource: string,
-    attachedFileName?: string | null
-  ) => {
-    if (titleTouchedRef.current) return;
-    const suggestion = suggestCustomDownloadTitle(nextSource, attachedFileName);
-    if (suggestion) setTitle(suggestion);
-  };
+  const updateSuggestedTitle = useCallback(
+    (nextSource: string, attachedFileName?: string | null) => {
+      if (titleTouchedRef.current) return;
+      const suggestion = suggestCustomDownloadTitle(
+        nextSource,
+        attachedFileName
+      );
+      if (suggestion) setTitle(suggestion);
+    },
+    []
+  );
 
-  const handleAttachTorrent = async () => {
+  const handleAttachTorrent = useCallback(async () => {
     const result = await window.electron.showOpenDialog({
       title: "Attach a torrent file",
       properties: ["openFile"],
@@ -96,7 +112,14 @@ export function CustomDownloadModal({
     setSource("");
     setError(null);
     updateSuggestedTitle("", fileNameFromPath(filePath));
-  };
+  }, [updateSuggestedTitle]);
+
+  useEffect(() => {
+    if (!visible || initialIntent !== "torrent") return;
+    if (torrentPickerOpenedRef.current) return;
+    torrentPickerOpenedRef.current = true;
+    void handleAttachTorrent();
+  }, [handleAttachTorrent, initialIntent, visible]);
 
   const handleBrowseDownloadPath = async () => {
     const result = await window.electron.showOpenDialog({
@@ -165,6 +188,14 @@ export function CustomDownloadModal({
   const attachedFileName = localTorrentPath
     ? fileNameFromPath(localTorrentPath)
     : null;
+  const inputPresentation = getCustomDownloadInputPresentation(initialIntent);
+  const canSubmit = isCustomDownloadFormReady({
+    hasTorBoxToken,
+    source,
+    localTorrentPath,
+    title,
+    downloadPath,
+  });
 
   const handleOpenTorBoxSettings = () => {
     onClose();
@@ -183,9 +214,9 @@ export function CustomDownloadModal({
       <form className="custom-download-modal__form" onSubmit={handleSubmit}>
         <div className="custom-download-modal__source-row">
           <TextField
-            label="Download link or magnet"
+            label={inputPresentation.label}
             value={source}
-            placeholder="https://… or magnet:?xt=…"
+            placeholder={inputPresentation.placeholder}
             disabled={submitting}
             onChange={(event) => {
               const value = event.target.value;
@@ -312,7 +343,7 @@ export function CustomDownloadModal({
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={submitting || !hasTorBoxToken}>
+          <Button type="submit" disabled={submitting || !canSubmit}>
             {submitting ? (
               <SyncIcon className="custom-download-modal__spinner" />
             ) : (

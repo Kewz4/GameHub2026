@@ -6,6 +6,7 @@ import {
   levelKeys,
 } from "@main/level";
 import type { UserPreferences } from "@types";
+import { assertCloudSaveAccountSessionCurrent } from "./cloud-save/account-session";
 import {
   planCloudSaveLocalNamespaceMigration,
   type CloudSaveLocalNamespaceEntry,
@@ -15,6 +16,12 @@ import {
   planCloudSaveAccountNamespace,
   uniqueCloudSaveLegacyIds,
 } from "./cloud-save-namespace-plan";
+import {
+  getCloudSaveNamespaceMigrationClaim,
+  isSafeCloudSaveAccountUserId,
+  setCloudSaveNamespaceMigrationClaim,
+} from "./cloud-save-namespace-claims";
+import { CloudSaveNamespaceMutationQueue } from "./cloud-save-namespace-mutation-queue";
 
 export { planCloudSaveAccountNamespace } from "./cloud-save-namespace-plan";
 
@@ -25,15 +32,41 @@ const readPreferences = () =>
     })
     .catch(() => ({}) as UserPreferences);
 
-export const prepareCloudSaveAccountNamespace = async (
+const namespaceStateMutations = new CloudSaveNamespaceMutationQueue();
+
+const prepareCloudSaveAccountNamespaceInQueue = async (
   profileId: string,
   previouslyPersistedProfileId: string | null
 ) => {
+  if (!isSafeCloudSaveAccountUserId(profileId)) {
+    throw new Error("cloud_save_account_namespace_invalid");
+  }
   const preferences = await readPreferences();
-  const plan = planCloudSaveAccountNamespace(
-    preferences,
-    profileId,
-    previouslyPersistedProfileId
+  const retainedClaim = getCloudSaveNamespaceMigrationClaim(
+    preferences.cloudSyncNamespaceMigrationClaims,
+    profileId
+  );
+  const plan = retainedClaim
+    ? {
+        activeUserId: retainedClaim.activeUserId,
+        accountUserId: profileId,
+        legacyUserIds: retainedClaim.legacyUserIds,
+        migrationPending: true,
+      }
+    : planCloudSaveAccountNamespace(
+        preferences,
+        profileId,
+        previouslyPersistedProfileId
+      );
+  const claims = setCloudSaveNamespaceMigrationClaim(
+    preferences.cloudSyncNamespaceMigrationClaims,
+    plan.accountUserId,
+    plan.migrationPending
+      ? {
+          activeUserId: plan.activeUserId,
+          legacyUserIds: plan.legacyUserIds,
+        }
+      : null
   );
   await db.put(
     levelKeys.userPreferences,
@@ -43,45 +76,68 @@ export const prepareCloudSaveAccountNamespace = async (
       cloudSyncAccountUserId: plan.accountUserId,
       cloudSyncLegacyUserIds: plan.legacyUserIds,
       cloudSyncNamespaceMigrationPending: plan.migrationPending,
+      cloudSyncNamespaceMigrationClaims: claims,
     },
     { valueEncoding: "json" }
   );
   return plan;
 };
 
+export const prepareCloudSaveAccountNamespace = (
+  profileId: string,
+  previouslyPersistedProfileId: string | null
+) =>
+  namespaceStateMutations.run(() =>
+    prepareCloudSaveAccountNamespaceInQueue(
+      profileId,
+      previouslyPersistedProfileId
+    )
+  );
+
 export const getClaimableCloudSaveLegacyNamespaces = async () => {
-  const preferences = await readPreferences();
-  if (!preferences.cloudSyncNamespaceMigrationPending) return [];
-  if (!preferences.cloudSyncAccountUserId) return [];
-  return uniqueCloudSaveLegacyIds(
-    preferences.cloudSyncLegacyUserIds ?? []
-  ).filter((value) => value !== preferences.cloudSyncAccountUserId);
+  const pending = await getPendingCloudSaveNamespaceMigration();
+  return pending?.legacyUserIds ?? [];
 };
 
 export const getPendingCloudSaveNamespaceMigration = async () => {
   const preferences = await readPreferences();
   const accountUserId = preferences.cloudSyncAccountUserId?.trim() ?? "";
-  const legacyUserIds = preferences.cloudSyncNamespaceMigrationPending
-    ? uniqueCloudSaveLegacyIds(preferences.cloudSyncLegacyUserIds ?? []).filter(
-        (value) => value !== accountUserId
+  const retainedClaim = accountUserId
+    ? getCloudSaveNamespaceMigrationClaim(
+        preferences.cloudSyncNamespaceMigrationClaims,
+        accountUserId
       )
-    : [];
+    : null;
+  const legacyUserIds = retainedClaim
+    ? retainedClaim.legacyUserIds
+    : preferences.cloudSyncNamespaceMigrationPending
+      ? uniqueCloudSaveLegacyIds(
+          preferences.cloudSyncLegacyUserIds ?? []
+        ).filter((value) => value !== accountUserId)
+      : [];
   return accountUserId && legacyUserIds.length
     ? { accountUserId, legacyUserIds }
     : null;
 };
 
-export const completeCloudSaveNamespaceMigration = async (
+const completeCloudSaveNamespaceMigrationInQueue = async (
   accountUserId: string,
   migratedLegacyUserIds: readonly string[]
 ) => {
+  if (!isSafeCloudSaveAccountUserId(accountUserId)) {
+    throw new Error("cloud_save_account_namespace_invalid");
+  }
   const preferences = await readPreferences();
   if (preferences.cloudSyncAccountUserId !== accountUserId) {
     throw new Error("cloud_save_namespace_account_changed");
   }
+  const retainedClaim = getCloudSaveNamespaceMigrationClaim(
+    preferences.cloudSyncNamespaceMigrationClaims,
+    accountUserId
+  );
   const migrated = new Set(migratedLegacyUserIds);
   const remaining = uniqueCloudSaveLegacyIds(
-    preferences.cloudSyncLegacyUserIds ?? []
+    retainedClaim?.legacyUserIds ?? preferences.cloudSyncLegacyUserIds ?? []
   ).filter((value) => !migrated.has(value));
   if (remaining.length > 0) {
     // A partial cutover could leave the active legacy namespace pointing at
@@ -96,6 +152,7 @@ export const completeCloudSaveNamespaceMigration = async (
     entries: AsyncIterable<[string, unknown]>
   ) => {
     for await (const [key, value] of entries) {
+      assertCloudSaveAccountSessionCurrent();
       localEntries.push({ store, key, value });
     }
   };
@@ -132,8 +189,27 @@ export const completeCloudSaveNamespaceMigration = async (
       cloudSyncAccountUserId: accountUserId,
       cloudSyncLegacyUserIds: [],
       cloudSyncNamespaceMigrationPending: false,
+      cloudSyncNamespaceMigrationClaims: setCloudSaveNamespaceMigrationClaim(
+        preferences.cloudSyncNamespaceMigrationClaims,
+        accountUserId,
+        null
+      ),
     },
     { valueEncoding: "json" }
   );
+  assertCloudSaveAccountSessionCurrent();
   await batch.write();
+  assertCloudSaveAccountSessionCurrent();
 };
+
+export const completeCloudSaveNamespaceMigration = (
+  accountUserId: string,
+  migratedLegacyUserIds: readonly string[]
+) =>
+  namespaceStateMutations.run(async () => {
+    assertCloudSaveAccountSessionCurrent();
+    return completeCloudSaveNamespaceMigrationInQueue(
+      accountUserId,
+      migratedLegacyUserIds
+    );
+  });

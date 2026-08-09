@@ -36,6 +36,7 @@ import type {
   CloudSaveConflictResolution,
   CloudSaveOverview,
   CloudSaveV2FileDetails,
+  CloudSaveV2LibraryEntry,
   CloudSaveSyncIpcProgressPayload,
   CloudSaveSyncProgressPayload,
   SyncCloudSaveOnGamePageResult,
@@ -48,7 +49,6 @@ import type {
   ConfirmCloudSaveCustomPathRebindApprovalResult,
 } from "@types";
 import type { AuthPage } from "@shared";
-import type { AxiosProgressEvent } from "axios";
 
 const fileExplorerApi = {
   readDirectory: (path: string) => ipcRenderer.invoke("readDirectory", path),
@@ -121,6 +121,10 @@ contextBridge.exposeInMainWorld("electron", {
       objectId,
       shop
     ) as Promise<CloudSaveV2FileDetails>,
+  getCloudSaveV2Library: () =>
+    ipcRenderer.invoke("getCloudSaveV2Library") as Promise<
+      CloudSaveV2LibraryEntry[]
+    >,
   deleteGameCloudSaveData: (objectId: string, shop: GameShop) =>
     ipcRenderer.invoke(
       "deleteGameCloudSaveData",
@@ -762,8 +766,10 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("on-scan-progress", listener);
     return () => ipcRenderer.removeListener("on-scan-progress", listener);
   },
-  importPlaynitePlaytime: (dbPath?: string) =>
-    ipcRenderer.invoke("importPlaynitePlaytime", dbPath),
+  importPlaynitePlaytime: (
+    dbPath?: string,
+    options?: { syncCloud?: boolean }
+  ) => ipcRenderer.invoke("importPlaynitePlaytime", dbPath, options),
   getExclusionList: () => ipcRenderer.invoke("getExclusionList"),
   addGameToExclusionList: (shop: GameShop, objectId: string, title: string) =>
     ipcRenderer.invoke("addGameToExclusionList", shop, objectId, title),
@@ -795,13 +801,6 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("on-library-batch-complete", listener);
     return () =>
       ipcRenderer.removeListener("on-library-batch-complete", listener);
-  },
-  onCloudArtifactsUpdated: (cb: (artifacts: any[]) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, artifacts: any[]) =>
-      cb(artifacts);
-    ipcRenderer.on("on-cloud-artifacts-updated", listener);
-    return () =>
-      ipcRenderer.removeListener("on-cloud-artifacts-updated", listener);
   },
   onDownloadsUpdated: (cb: () => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => cb();
@@ -875,84 +874,25 @@ contextBridge.exposeInMainWorld("electron", {
   getNetworkInterfaces: () => ipcRenderer.invoke("getNetworkInterfaces"),
 
   /* Cloud save */
-  uploadSaveGame: (
-    objectId: string,
-    shop: GameShop,
-    downloadOptionTitle: string | null
-  ) =>
-    ipcRenderer.invoke("uploadSaveGame", objectId, shop, downloadOptionTitle),
-  downloadGameArtifact: (
-    objectId: string,
-    shop: GameShop,
-    gameArtifactId: string
-  ) =>
-    ipcRenderer.invoke("downloadGameArtifact", objectId, shop, gameArtifactId),
-  getGameArtifacts: (objectId: string, shop: GameShop) =>
-    ipcRenderer.invoke("getGameArtifacts", objectId, shop),
-  getAllArtifacts: () => ipcRenderer.invoke("getAllArtifacts"),
-  deleteGameArtifact: (artifactId: string) =>
-    ipcRenderer.invoke("deleteGameArtifact", artifactId),
   scanLudusaviBackupFolder: (folderPath: string) =>
     ipcRenderer.invoke("scanLudusaviBackupFolder", folderPath),
   importLudusaviBackup: (
     backupFolderPath: string,
-    gameName: string,
     objectId: string,
-    shop: GameShop
+    shop: GameShop,
+    options?: {
+      dryRun?: boolean;
+      replaceExisting?: boolean;
+      expectedSnapshotId?: string;
+    }
   ) =>
     ipcRenderer.invoke(
       "importLudusaviBackup",
       backupFolderPath,
-      gameName,
       objectId,
-      shop
+      shop,
+      options
     ),
-  getGameBackupPreview: (objectId: string, shop: GameShop) =>
-    ipcRenderer.invoke("getGameBackupPreview", objectId, shop),
-  selectGameBackupPath: (
-    shop: GameShop,
-    objectId: string,
-    backupPath: string | null
-  ) => ipcRenderer.invoke("selectGameBackupPath", shop, objectId, backupPath),
-  onUploadComplete: (objectId: string, shop: GameShop, cb: () => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => cb();
-    ipcRenderer.on(`on-upload-complete-${objectId}-${shop}`, listener);
-    return () =>
-      ipcRenderer.removeListener(
-        `on-upload-complete-${objectId}-${shop}`,
-        listener
-      );
-  },
-  onBackupDownloadProgress: (
-    objectId: string,
-    shop: GameShop,
-    cb: (progress: AxiosProgressEvent) => void
-  ) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      progress: AxiosProgressEvent
-    ) => cb(progress);
-    ipcRenderer.on(`on-backup-download-progress-${objectId}-${shop}`, listener);
-    return () =>
-      ipcRenderer.removeListener(
-        `on-backup-download-progress-${objectId}-${shop}`,
-        listener
-      );
-  },
-  onBackupDownloadComplete: (
-    objectId: string,
-    shop: GameShop,
-    cb: (success: boolean) => void
-  ) => {
-    const listener = (_event: Electron.IpcRendererEvent, success: boolean) =>
-      cb(success);
-    ipcRenderer.on(`on-backup-download-complete-${objectId}-${shop}`, listener);
-    return () =>
-      ipcRenderer.removeListener(
-        `on-backup-download-complete-${objectId}-${shop}`,
-        listener
-      );
-  },
 
   /* Clipboard (renderer-side `navigator.clipboard.*` is deprecated in Electron 40+;
      direct `electron.clipboard` access from preload is also deprecated, so go through main via IPC) */
@@ -2199,24 +2139,33 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("getRandomClassics", limit),
 
   // Cloud debugger
-  runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),
+  runCloudDebugger: (options?: { repair?: boolean }) =>
+    ipcRenderer.invoke("runCloudDebugger", options),
 
   // Debug console window
   openConsoleWindow: () => ipcRenderer.invoke("openConsoleWindow"),
-  onConsoleLog: (
-    cb: (entry: {
-      ts: number;
-      level: string;
-      scope: string;
-      text: string;
-    }) => void
+  getConsoleLogSnapshot: (afterId?: number) =>
+    ipcRenderer.invoke("getConsoleLogSnapshot", afterId) as Promise<
+      import("@shared").ConsoleLogSnapshot
+    >,
+  clearConsoleLogs: () =>
+    ipcRenderer.invoke("clearConsoleLogs") as Promise<
+      import("@shared").ConsoleLogSnapshot
+    >,
+  exportConsoleLogs: () =>
+    ipcRenderer.invoke("exportConsoleLogs") as Promise<{
+      canceled: boolean;
+      path: string | null;
+    }>,
+  onConsoleLogs: (
+    cb: (entries: import("@shared").ConsoleLogEntry[]) => void
   ): (() => void) => {
     const listener = (
       _: unknown,
-      entry: { ts: number; level: string; scope: string; text: string }
-    ) => cb(entry);
-    ipcRenderer.on("console:log", listener);
-    return () => ipcRenderer.off("console:log", listener);
+      entries: import("@shared").ConsoleLogEntry[]
+    ) => cb(entries);
+    ipcRenderer.on("console:logs", listener);
+    return () => ipcRenderer.off("console:logs", listener);
   },
 });
 

@@ -18,6 +18,8 @@ interface MergeUserVariantSnapshotsInput {
   base: CloudSaveSyncAnchor | null;
   direction?: SyncDirection;
   resolutions?: ReadonlyMap<string, CloudSaveConflictResolution>;
+  preserveLocalMissingRawPaths?: ReadonlySet<string>;
+  treatLocalAsNewRawPaths?: ReadonlySet<string>;
 }
 
 const indexUnique = <T extends SnapshotFile>(files: T[]) => {
@@ -69,6 +71,8 @@ export const mergeUserVariantSnapshots = ({
   base,
   direction = "bidirectional",
   resolutions,
+  preserveLocalMissingRawPaths = new Set<string>(),
+  treatLocalAsNewRawPaths = new Set<string>(),
 }: MergeUserVariantSnapshotsInput): CloudSaveMergeResult => {
   const localById = indexUnique(local.files);
   const remoteById = indexUnique(remoteFiles);
@@ -76,7 +80,11 @@ export const mergeUserVariantSnapshots = ({
   const baseById = new Map(
     (base?.entries ?? [])
       .map((entry) => [cloudSaveFileKey(entry), entry] as const)
-      .filter(([entryId]) => !unresolvedBaseIds.has(entryId))
+      .filter(
+        ([entryId, entry]) =>
+          !unresolvedBaseIds.has(entryId) &&
+          !treatLocalAsNewRawPaths.has(entry.rawPath)
+      )
   );
   const ids = new Set([...localById.keys(), ...remoteById.keys()]);
   const files: SnapshotFile[] = [];
@@ -85,6 +93,8 @@ export const mergeUserVariantSnapshots = ({
   const deleteRemoteEntryIds = new Set<string>();
   const deleteLocalEntryIds = new Set<string>();
   const unresolvedRemoteEntryIds = new Set<string>();
+  const shouldRestoreEmptyLocalSnapshot =
+    local.files.length === 0 && remoteFiles.length > 0;
 
   const coverageFor = (file: SnapshotFile) =>
     local.coverage.filter(
@@ -95,12 +105,16 @@ export const mergeUserVariantSnapshots = ({
     );
   const coverageStateFor = (file: SnapshotFile) => {
     const coverage = coverageFor(file);
+    const foreignEnvironment =
+      coverage.length > 0 &&
+      coverage.every((item) => item.outcome === "foreign-environment");
     const incomplete = coverage.some(
       (item) =>
-        !item.enumeratedCompletely ||
-        item.outcome === "failed" ||
-        item.outcome === "partial" ||
-        item.outcome === "unresolved"
+        item.outcome !== "foreign-environment" &&
+        (!item.enumeratedCompletely ||
+          item.outcome === "failed" ||
+          item.outcome === "partial" ||
+          item.outcome === "unresolved")
     );
     const selectedCompleteRoot = coverage.some(
       (item) =>
@@ -109,6 +123,8 @@ export const mergeUserVariantSnapshots = ({
         item.enumeratedCompletely
     );
     return {
+      hasCoverage: coverage.length > 0,
+      foreignEnvironment,
       incomplete,
       provesDeletion: selectedCompleteRoot && !incomplete,
     };
@@ -142,11 +158,29 @@ export const mergeUserVariantSnapshots = ({
       continue;
     }
     if (!localFile && remoteFile) {
+      if (preserveLocalMissingRawPaths.has(remoteFile.rawPath)) {
+        files.push(remoteFile);
+        restoreEntryIds.add(entryId);
+        continue;
+      }
+
       const coverage = coverageStateFor(remoteFile);
-      if (!baseEntry || local.files.length === 0) {
+      if (coverage.foreignEnvironment) {
+        files.push(remoteFile);
+        continue;
+      }
+      if (shouldRestoreEmptyLocalSnapshot) {
+        files.push(remoteFile);
+        restoreEntryIds.add(entryId);
+        if (!baseEntry || !coverage.hasCoverage || coverage.incomplete) {
+          unresolvedRemoteEntryIds.add(entryId);
+        }
+        continue;
+      }
+      if (!baseEntry) {
         files.push(remoteFile);
         unresolvedRemoteEntryIds.add(entryId);
-        if (local.files.length === 0 || !coverage.incomplete) {
+        if (!coverage.incomplete) {
           restoreEntryIds.add(entryId);
         }
         continue;
@@ -220,10 +254,11 @@ export const mergeUserVariantSnapshots = ({
 
   const incompleteCoverage = local.coverage.some(
     (item) =>
-      !item.enumeratedCompletely ||
-      item.outcome === "failed" ||
-      item.outcome === "partial" ||
-      item.outcome === "unresolved"
+      item.outcome !== "foreign-environment" &&
+      (!item.enumeratedCompletely ||
+        item.outcome === "failed" ||
+        item.outcome === "partial" ||
+        item.outcome === "unresolved")
   );
   const usedVariantIds = new Set(files.map((file) => file.variantId));
   return {

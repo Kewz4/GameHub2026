@@ -3,7 +3,11 @@ import { isStaging } from "@main/constants";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import icon from "@resources/icon.png?asset";
 import trayIcon from "@resources/tray-icon.png?asset";
-import { AuthPage, generateAchievementCustomNotificationTest } from "@shared";
+import {
+  AuthPage,
+  generateAchievementCustomNotificationTest,
+  type ConsoleLogEntry,
+} from "@shared";
 import type {
   AchievementCustomNotificationPosition,
   AchievementNotificationInfo,
@@ -28,7 +32,7 @@ import path from "node:path";
 import UserAgent from "user-agents";
 import { AUTH_REBRAND_CSS, AUTH_REBRAND_JS } from "./auth-rebrand";
 import { HydraApi } from "./hydra-api";
-import { setConsoleWindowSender, type ConsoleLogEntry } from "./logger";
+import { setConsoleWindowSender } from "./logger";
 
 export class WindowManager {
   public static mainWindow: Electron.BrowserWindow | null = null;
@@ -1262,7 +1266,10 @@ export class WindowManager {
     this.consoleWindow = new BrowserWindow({
       width: 900,
       height: 600,
-      minWidth: 600,
+      // Keep the diagnostics window usable beside a game or download manager.
+      // The compact responsive layout starts below 560px, so a 600px minimum
+      // made that layout impossible to reach through normal window resizing.
+      minWidth: 480,
       minHeight: 300,
       title: "GameHub Console",
       backgroundColor: "#0d0d0d",
@@ -1272,9 +1279,9 @@ export class WindowManager {
       },
     });
 
-    setConsoleWindowSender((entry: ConsoleLogEntry) => {
+    setConsoleWindowSender((entries: ConsoleLogEntry[]) => {
       if (this.consoleWindow && !this.consoleWindow.isDestroyed()) {
-        this.consoleWindow.webContents.send("console:log", entry);
+        this.consoleWindow.webContents.send("console:logs", entries);
       }
     });
 

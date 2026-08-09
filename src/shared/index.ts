@@ -26,9 +26,11 @@ export * from "./game-recorder-quality";
 export * from "./fragmented-mp4";
 export * from "./download-directories";
 export * from "./custom-download";
+export * from "./profile-images";
 export * from "./html-sanitizer";
 export * from "./language-flags";
 export * from "./use-hls-video";
+export * from "./path-presentation";
 
 export class UserNotLoggedInError extends Error {
   constructor() {
@@ -247,3 +249,5 @@ export const generateAchievementCustomNotificationTest = (
   };
 };
 export * from "./cloud-save-access";
+export * from "./console-log";
+export * from "./game-recorder-concat";

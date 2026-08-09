@@ -4,6 +4,7 @@ import type {
   GameShop,
 } from "@types";
 
+import { runWithCloudSaveAccountSession } from "./account-session";
 import { analyzeCloudSaveState } from "./analyze-cloud-save-state";
 import { assertCloudSaveSubscription } from "./cloud-save-access";
 import {
@@ -13,7 +14,6 @@ import {
 import { classifyCloudSaveCustomPathResolutionError } from "./custom-path-binding-state";
 import { getRemoteSnapshotRestoreManifest } from "./resolve-remote-snapshot-targets";
 import { getFirstSyncState } from "./sync-game";
-import { getUsableCloudSaveCustomPathBindings } from "./custom-path-overlap";
 import {
   cloudSaveCustomPathContextFromPathContext,
   decodeCloudSaveCustomPath,
@@ -66,7 +66,7 @@ const describeUnregisteredCustomPath = (
   }
 };
 
-export const getCloudSaveV2FileDetails = async (
+const getCloudSaveV2FileDetailsInAccount = async (
   objectId: string,
   shop: GameShop
 ): Promise<CloudSaveV2FileDetails> => {
@@ -76,12 +76,7 @@ export const getCloudSaveV2FileDetails = async (
   const customPathContext = cloudSaveCustomPathContextFromPathContext(
     analysis.localSnapshotContext.pathContext
   );
-  const bindings = await getUsableCloudSaveCustomPathBindings(
-    objectId,
-    shop,
-    analysis.context,
-    { remoteFiles: analysis.remoteManifest?.files }
-  );
+  const bindings = analysis.customPathBindings;
   const state =
     analysis.state.state === "untracked"
       ? getFirstSyncState(analysis)
@@ -113,3 +108,11 @@ export const getCloudSaveV2FileDetails = async (
     (snapshot) => getRemoteSnapshotRestoreManifest(snapshot, { objectId, shop })
   );
 };
+
+export const getCloudSaveV2FileDetails = (
+  objectId: string,
+  shop: GameShop
+): Promise<CloudSaveV2FileDetails> =>
+  runWithCloudSaveAccountSession(() =>
+    getCloudSaveV2FileDetailsInAccount(objectId, shop)
+  );

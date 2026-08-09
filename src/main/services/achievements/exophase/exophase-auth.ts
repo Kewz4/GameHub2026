@@ -50,6 +50,12 @@ const patchPrefs = async (patch: Partial<UserPreferences>): Promise<void> => {
   );
 };
 
+const currentHydraAccountId = () =>
+  db
+    .get<string, { id?: string }>(levelKeys.user, { valueEncoding: "json" })
+    .then((user) => user?.id ?? null)
+    .catch(() => null);
+
 /**
  * Confirms whether the persisted Exophase session is still valid by loading the
  * account page in the Exophase partition and reading the username. Persists the
@@ -62,7 +68,10 @@ export async function probeExophaseAuth(): Promise<ExophaseAuthState> {
     const username =
       (await fetcher.readCurrentUsername()) ?? extractUsernameFromHtml(html);
     if (!username) return { authenticated: false, username: null };
-    await patchPrefs({ exophaseUserId: username });
+    await patchPrefs({
+      exophaseUserId: username,
+      exophaseHydraAccountId: await currentHydraAccountId(),
+    });
     return { authenticated: true, username };
   } catch (err) {
     logger.warn("[Exophase] auth probe failed", err);
@@ -109,7 +118,11 @@ export function openExophaseLoginWindow(): Promise<ExophaseAuthState> {
       if (handled) return;
       handled = true;
       stopPolling();
-      await patchPrefs({ exophaseUserId: username, exophaseEnabled: true });
+      await patchPrefs({
+        exophaseUserId: username,
+        exophaseEnabled: true,
+        exophaseHydraAccountId: await currentHydraAccountId(),
+      });
       try {
         if (!win.isDestroyed()) win.close();
       } catch {

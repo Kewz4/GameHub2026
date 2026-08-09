@@ -28,6 +28,7 @@ export interface R2CloudSaveV2SnapshotMetadata {
 export interface R2CloudSaveV2SnapshotDocument {
   schemaVersion: 1;
   snapshot: R2CloudSaveV2SnapshotMetadata;
+  customPathRawPaths: string[];
   variants: SnapshotVariant[];
   files: SnapshotFile[];
 }
@@ -60,6 +61,13 @@ export type BuildR2SnapshotAggregateHash = (
 ) => string;
 
 const SNAPSHOT_DOCUMENT_KEYS = [
+  "schemaVersion",
+  "snapshot",
+  "customPathRawPaths",
+  "variants",
+  "files",
+] as const;
+const LEGACY_SNAPSHOT_DOCUMENT_KEYS = [
   "schemaVersion",
   "snapshot",
   "variants",
@@ -105,7 +113,10 @@ const isSafeIdentifier = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length > 0 &&
   value.length <= 512 &&
-  !/[\u0000-\u001f\u007f]/.test(value);
+  ![...value].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
 
 const isNonNegativeSafeInteger = (value: unknown): value is number =>
   typeof value === "number" &&
@@ -116,7 +127,9 @@ const isNonNegativeSafeInteger = (value: unknown): value is number =>
 const isCanonicalIsoDate = (value: unknown): value is string => {
   if (typeof value !== "string") return false;
   const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
+  return (
+    Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
+  );
 };
 
 const invalidDocument = (kind: "control" | "snapshot") =>
@@ -207,7 +220,11 @@ export const validateR2CloudSaveV2SnapshotDocument = (
   expected: R2CloudSaveV2ExpectedIdentity,
   buildAggregateHash: BuildR2SnapshotAggregateHash
 ): R2CloudSaveV2SnapshotDocument => {
-  if (!isRecord(value) || !hasExactKeys(value, SNAPSHOT_DOCUMENT_KEYS)) {
+  if (
+    !isRecord(value) ||
+    (!hasExactKeys(value, SNAPSHOT_DOCUMENT_KEYS) &&
+      !hasExactKeys(value, LEGACY_SNAPSHOT_DOCUMENT_KEYS))
+  ) {
     throw invalidDocument("snapshot");
   }
   if (value.schemaVersion !== 1) throw invalidDocument("snapshot");
@@ -220,6 +237,7 @@ export const validateR2CloudSaveV2SnapshotDocument = (
       shop: snapshot.shop,
       objectId: snapshot.objectId,
     },
+    customPathRawPaths: value.customPathRawPaths,
     variants: value.variants,
     files: value.files,
   });
@@ -245,6 +263,7 @@ export const validateR2CloudSaveV2SnapshotDocument = (
   return {
     schemaVersion: 1,
     snapshot,
+    customPathRawPaths: manifest.customPathRawPaths,
     variants: manifest.variants,
     files: manifest.files,
   };

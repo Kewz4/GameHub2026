@@ -15,7 +15,7 @@ describe("cloud save custom path binding state", () => {
       ),
       {
         state: "recoverable",
-        reason: "environment-unavailable",
+        reason: "wine-profile-unavailable",
       }
     );
     assert.deepEqual(

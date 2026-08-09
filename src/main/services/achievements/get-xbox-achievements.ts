@@ -1,11 +1,12 @@
 import axios from "axios";
-import { db, levelKeys, gameAchievementsSublevel } from "@main/level";
+import { db, gamesSublevel, levelKeys } from "@main/level";
 import type {
   UserPreferences,
   SteamAchievement,
   UnlockedAchievement,
 } from "@types";
 import { logger } from "@main/services/logger";
+import { persistImportedAchievements } from "./persist-imported-achievements";
 
 interface XblAchievement {
   id: string;
@@ -114,13 +115,10 @@ export async function syncXboxGameAchievements(
     );
 
     const key = levelKeys.game("xbox", objectId);
+    const game = await gamesSublevel.get(key).catch(() => null);
+    if (!game || game.isDeleted) return;
 
-    await gameAchievementsSublevel.put(key, {
-      achievements,
-      unlockedAchievements: unlocked,
-      updatedAt: Date.now(),
-      language: "en",
-    });
+    await persistImportedAchievements(game, achievements, unlocked);
 
     logger.log(
       `Xbox achievements synced for ${objectId}: ${unlocked.length}/${achievements.length} unlocked`

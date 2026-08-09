@@ -8,6 +8,17 @@ import { LIBRARY_PAGE_REGION_ID } from "../components/pages/library/navigation";
 import { CLOUD_SAVES_PAGE_REGION_ID } from "../pages/cloud-saves/navigation";
 import { PROFILE_PAGE_REGION_ID } from "../pages/profile/navigation";
 import { FRIENDS_PAGE_REGION_ID } from "../pages/friends/navigation";
+import {
+  matchesBigPictureRoute,
+  normalizeBigPicturePathname,
+} from "./route-presentation";
+
+export {
+  getBigPictureCurrentPageTitle,
+  getBigPictureDefaultPageTitle,
+  isSameBigPictureNavigationLocation,
+  normalizeBigPicturePathname,
+} from "./route-presentation";
 
 export const BIG_PICTURE_APP_LAYER_ID = "big-picture-app-layer";
 export const BIG_PICTURE_SHELL_REGION_ID = "big-picture-shell";
@@ -43,20 +54,6 @@ export function getBigPictureSidebarLibraryGameFocusId(
   return `big-picture-sidebar-library-game:${game.shop}:${game.objectId}`;
 }
 
-export function normalizeBigPicturePathname(pathname: string) {
-  let end = pathname.length;
-  while (end > 0 && pathname[end - 1] === "/") end--;
-  const withoutTrailingSlash = end === 0 ? "/" : pathname.slice(0, end);
-
-  if (withoutTrailingSlash === "/big-picture") return "/";
-
-  if (withoutTrailingSlash.startsWith("/big-picture/")) {
-    return withoutTrailingSlash.slice("/big-picture".length) || "/";
-  }
-
-  return withoutTrailingSlash;
-}
-
 export function getBigPictureGameRouteMatch(
   pathname: string
 ): BigPictureGameRouteMatch | null {
@@ -73,43 +70,43 @@ export function getBigPictureGameRouteMatch(
 
 export function getBigPictureSidebarItemIdFromPathname(pathname: string) {
   const normalizedPathname = normalizeBigPicturePathname(pathname);
-  const isDev = import.meta.env.DEV;
+  const isDev = import.meta.env?.DEV ?? false;
 
   if (getBigPictureGameRouteMatch(normalizedPathname)) {
     return null;
   }
 
-  if (normalizedPathname.startsWith("/component-lab")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/component-lab")) {
     return isDev
       ? BIG_PICTURE_SIDEBAR_ITEM_IDS.componentLab
       : BIG_PICTURE_SIDEBAR_ITEM_IDS.home;
   }
 
-  if (normalizedPathname.startsWith("/catalogue")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/catalogue")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.catalogue;
   }
 
-  if (normalizedPathname.startsWith("/cloud-saves")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/cloud-saves")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.cloudSaves;
   }
 
-  if (normalizedPathname.startsWith("/downloads")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/downloads")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.downloads;
   }
 
-  if (normalizedPathname.startsWith("/profile")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/profile")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.profile;
   }
 
-  if (normalizedPathname.startsWith("/friends")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/friends")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.friends;
   }
 
-  if (normalizedPathname.startsWith("/settings")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/settings")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.settings;
   }
 
-  if (normalizedPathname.startsWith("/library")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/library")) {
     return BIG_PICTURE_SIDEBAR_ITEM_IDS.library;
   }
 
@@ -125,31 +122,31 @@ export function getBigPictureContentEntryRegionIdFromPathname(
     return HOME_PAGE_REGION_ID;
   }
 
-  if (normalizedPathname.startsWith("/catalogue")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/catalogue")) {
     return CATALOGUE_GRID_REGION_ID;
   }
 
-  if (normalizedPathname.startsWith("/library")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/library")) {
     return LIBRARY_PAGE_REGION_ID;
   }
 
-  if (normalizedPathname.startsWith("/cloud-saves")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/cloud-saves")) {
     return CLOUD_SAVES_PAGE_REGION_ID;
   }
 
-  if (normalizedPathname.startsWith("/downloads")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/downloads")) {
     return DOWNLOADS_PAGE_REGION_ID;
   }
 
-  if (normalizedPathname.startsWith("/profile")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/profile")) {
     return PROFILE_PAGE_REGION_ID;
   }
 
-  if (normalizedPathname.startsWith("/friends")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/friends")) {
     return FRIENDS_PAGE_REGION_ID;
   }
 
-  if (normalizedPathname.startsWith("/settings")) {
+  if (matchesBigPictureRoute(normalizedPathname, "/settings")) {
     return SETTINGS_PAGE_REGION_ID;
   }
 

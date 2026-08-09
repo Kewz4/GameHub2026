@@ -16,7 +16,7 @@ import { GameReviews } from "./game-reviews";
 import { GameLogo } from "./game-logo";
 import { PlatformBadge } from "./platform-badge";
 
-import { cloudSyncContext, gameDetailsContext } from "@renderer/context";
+import { gameDetailsContext } from "@renderer/context";
 
 import { useUserDetails } from "@renderer/hooks";
 import { CloudSaveWidget } from "./cloud-save-v2";
@@ -76,8 +76,6 @@ export function GameDetailsContent() {
 
   const { userDetails } = useUserDetails();
 
-  const { getGameArtifacts } = useContext(cloudSyncContext);
-
   const aboutTheGame = useMemo(() => {
     const aboutTheGame = shopDetails?.about_the_game;
     if (aboutTheGame) {
@@ -135,10 +133,6 @@ export function GameDetailsContent() {
     setGameOptionsInitialCategory("assets");
     setShowGameOptionsModal(true);
   };
-
-  useEffect(() => {
-    getGameArtifacts();
-  }, [getGameArtifacts]);
 
   // Scroll to reviews section if reviews=true in URL
   useEffect(() => {

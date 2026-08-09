@@ -16,6 +16,7 @@ hydra-python-rpc/
 /ffmpeg/
 /presentmon/
 /artifacts/
+/.tmp-live-catalog-audit/
 native/hydra-native/target/
 # Any native crate's build output, not just the first one that existed.
 native/*/target/

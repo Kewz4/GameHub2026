@@ -5,14 +5,18 @@ import { shouldCreateRemoteCloudSaveSnapshot } from "./snapshot-creation-policy"
 
 describe("remote cloud-save snapshot creation policy", () => {
   it("skips a first upload when no save files exist", () => {
-    assert.equal(shouldCreateRemoteCloudSaveSnapshot(0, 0), false);
+    assert.equal(shouldCreateRemoteCloudSaveSnapshot(0, 0, 0), false);
   });
 
   it("commits an empty successor snapshot after the last file is removed", () => {
-    assert.equal(shouldCreateRemoteCloudSaveSnapshot(0, 3), true);
+    assert.equal(shouldCreateRemoteCloudSaveSnapshot(0, 0, 3), true);
   });
 
   it("always commits a non-empty snapshot", () => {
-    assert.equal(shouldCreateRemoteCloudSaveSnapshot(1, 0), true);
+    assert.equal(shouldCreateRemoteCloudSaveSnapshot(1, 0, 0), true);
+  });
+
+  it("commits a tracked empty custom path", () => {
+    assert.equal(shouldCreateRemoteCloudSaveSnapshot(0, 1, 0), true);
   });
 });

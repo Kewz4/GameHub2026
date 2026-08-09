@@ -29,4 +29,8 @@ export const shouldRetryCloudSaveConflict = (error: unknown, attempt: number) =>
   ((isAxiosError(error) && error.response?.status === 409) ||
     (error instanceof Error &&
       (error.message.includes("cloud_save_remote_head_conflict") ||
-        ("code" in error && error.code === "cloud_save_remote_head_conflict"))));
+        ("code" in error &&
+          error.code === "cloud_save_remote_head_conflict"))));
+
+export const shouldRetryCloudSaveStateChange = (attempt: number) =>
+  attempt === 0;

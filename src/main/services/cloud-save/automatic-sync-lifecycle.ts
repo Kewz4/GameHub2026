@@ -1,6 +1,5 @@
 import type { CloudSaveAutomaticSyncMode, GameShop } from "@types";
 
-import { CloudSync } from "../cloud-sync";
 import { logger } from "../logger";
 import { getCloudSaveAutomaticSyncMode } from "./automatic-sync-settings";
 import {
@@ -24,10 +23,7 @@ import {
   createPendingCloudSaveCustomPathApproval,
   type CloudSavePendingLaunchOptions,
 } from "./custom-path-approval";
-import {
-  shouldRunLegacyAutomaticCloudSave,
-  shouldRunV2AutomaticCloudSave,
-} from "./automatic-sync-mode";
+import { shouldRunV2AutomaticCloudSave } from "./automatic-sync-mode";
 import { finalizeCloudSaveLaunchSession } from "./launch-session-finalizer";
 
 export interface AutomaticCloudSaveLaunchPreparation {
@@ -37,16 +33,10 @@ export interface AutomaticCloudSaveLaunchPreparation {
   blockReason: "custom-path-approval" | "conflict" | "restore-failed" | null;
 }
 
-/**
- * Prepare the V2 half of an automatic cloud-save session. Legacy restore is
- * intentionally supplied by the launch event because it uses the legacy
- * artifact IPC service. Keeping the mode decision here ensures only one
- * backend can own a launch session.
- */
+/** Prepare one automatic Cloud Saves V2 launch session. */
 export const prepareAutomaticCloudSaveLaunch = async (
   objectId: string,
   shop: GameShop,
-  restoreLegacy: () => Promise<void>,
   contextOverrides?: CloudSaveGameContextOverrides,
   pendingLaunchOptions?: CloudSavePendingLaunchOptions
 ): Promise<AutomaticCloudSaveLaunchPreparation> => {
@@ -65,19 +55,6 @@ export const prepareAutomaticCloudSaveLaunch = async (
   const session = startCloudSaveLaunchSession(objectId, shop, mode);
 
   try {
-    if (shouldRunLegacyAutomaticCloudSave(mode)) {
-      await restoreLegacy();
-      if (!markCloudSaveLaunchSessionPending(objectId, shop, session.token)) {
-        throw new Error("cloud_save_launch_session_lost");
-      }
-      return {
-        mode,
-        sessionToken: session.token,
-        shouldLaunch: true,
-        blockReason: null,
-      };
-    }
-
     if (!shouldRunV2AutomaticCloudSave(mode)) {
       if (!markCloudSaveLaunchSessionPending(objectId, shop, session.token)) {
         throw new Error("cloud_save_launch_session_lost");
@@ -197,7 +174,7 @@ export const prepareAutomaticCloudSaveLaunch = async (
   }
 };
 
-/** Run exactly one post-exit backend captured by the launch session. */
+/** Run the V2 post-exit sync captured by the launch session. */
 export const runAutomaticCloudSaveAfterExit = async (
   objectId: string,
   shop: GameShop,
@@ -216,13 +193,6 @@ export const runAutomaticCloudSaveAfterExit = async (
     objectId,
     shop,
     {
-      legacy: async () => {
-        await CloudSync.uploadSaveGameIfChanged(
-          objectId,
-          shop,
-          CloudSync.getBackupLabel(true)
-        );
-      },
       v2: async (session) => {
         await runAutomaticCloudSavePostExit(objectId, shop, session);
       },

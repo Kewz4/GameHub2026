@@ -43,7 +43,11 @@ const brokerProvider = credentialsUrl
   ? createCachedBrokerR2CredentialProvider({
       credentialsUrl,
       getBearerToken: () => HydraApi.getAccessToken(),
-      getLegacyNamespaceIds: getClaimableCloudSaveLegacyNamespaces,
+      // Defer access to the namespace module until the broker request. The
+      // bundled main process has an intentional R2/namespace import cycle;
+      // eagerly reading this binding can hit the ESM temporal dead zone when
+      // a broker URL is supplied through the runtime environment.
+      getLegacyNamespaceIds: () => getClaimableCloudSaveLegacyNamespaces(),
     })
   : null;
 

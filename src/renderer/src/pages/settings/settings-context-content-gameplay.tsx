@@ -13,9 +13,14 @@ import { useAppSelector } from "@renderer/hooks";
 import { QuestionIcon } from "@primer/octicons-react";
 import type {
   GameRecorderFps,
+  GameRecorderQualityPreset,
   GameRecorderReplayDuration,
   GameRecorderResolution,
 } from "@types";
+import {
+  getGameRecorderEstimatedBufferBytes,
+  getGameRecorderVideoBitrate,
+} from "@shared";
 
 import "./settings-behavior.scss";
 
@@ -39,6 +44,7 @@ export function SettingsContextContentGameplay() {
     gameRecorderEnabled: false,
     gameRecorderResolution: "1080p" as GameRecorderResolution,
     gameRecorderFps: 60 as GameRecorderFps,
+    gameRecorderQualityPreset: "quality" as GameRecorderQualityPreset,
     gameRecorderInstantReplayEnabled: false,
     gameRecorderReplayDurationSeconds: 30 as GameRecorderReplayDuration,
     gameRecorderCaptureAudio: true,
@@ -47,15 +53,18 @@ export function SettingsContextContentGameplay() {
 
   const [resolvedRecorderOutputDirectory, setResolvedRecorderOutputDirectory] =
     useState("");
+  const [hardwareVideoEncodingAvailable, setHardwareVideoEncodingAvailable] =
+    useState<boolean | null>(null);
   const spotifySystemAudioBlocked =
     userPreferences?.musicProvider === "spotify";
 
   useEffect(() => {
     window.electron
       .gameRecorderGetPreferences()
-      .then((state) =>
-        setResolvedRecorderOutputDirectory(state.resolvedOutputDirectory)
-      )
+      .then((state) => {
+        setResolvedRecorderOutputDirectory(state.resolvedOutputDirectory);
+        setHardwareVideoEncodingAvailable(state.hardwareVideoEncodingAvailable);
+      })
       .catch(() => undefined);
   }, []);
 
@@ -77,6 +86,8 @@ export function SettingsContextContentGameplay() {
       gameRecorderEnabled: userPreferences.gameRecorderEnabled ?? false,
       gameRecorderResolution: userPreferences.gameRecorderResolution ?? "1080p",
       gameRecorderFps: userPreferences.gameRecorderFps ?? 60,
+      gameRecorderQualityPreset:
+        userPreferences.gameRecorderQualityPreset ?? "quality",
       gameRecorderInstantReplayEnabled:
         userPreferences.gameRecorderInstantReplayEnabled ?? false,
       gameRecorderReplayDurationSeconds:
@@ -92,6 +103,24 @@ export function SettingsContextContentGameplay() {
     setForm((prev) => ({ ...prev, ...values }));
     updateUserPreferences(values);
   };
+
+  const recorderConfiguration = {
+    resolution: form.gameRecorderResolution,
+    fps: form.gameRecorderFps,
+    qualityPreset: form.gameRecorderQualityPreset,
+    captureGameAudio: form.gameRecorderCaptureAudio,
+    replayDurationSeconds: form.gameRecorderReplayDurationSeconds,
+  };
+  const recorderTargetBitrateMbps = Math.round(
+    getGameRecorderVideoBitrate(
+      recorderConfiguration,
+      null,
+      "video/mp4;codecs=avc1"
+    ) / 1_000_000
+  );
+  const recorderBufferMegabytes = Math.round(
+    getGameRecorderEstimatedBufferBytes(recorderConfiguration) / 1_000_000
+  );
 
   const chooseRecorderOutputDirectory = async () => {
     const result = await window.electron.showOpenDialog({
@@ -269,6 +298,52 @@ export function SettingsContextContentGameplay() {
             { key: "120", value: "120", label: "120 FPS" },
           ]}
         />
+
+        <SelectField
+          label={t("recording_quality_preset")}
+          value={form.gameRecorderQualityPreset}
+          disabled={!form.gameRecorderEnabled}
+          onChange={(event) =>
+            handleChange({
+              gameRecorderQualityPreset: event.target
+                .value as GameRecorderQualityPreset,
+            })
+          }
+          options={[
+            {
+              key: "performance",
+              value: "performance",
+              label: t("recording_quality_performance"),
+            },
+            {
+              key: "balanced",
+              value: "balanced",
+              label: t("recording_quality_balanced"),
+            },
+            {
+              key: "quality",
+              value: "quality",
+              label: t("recording_quality_high"),
+            },
+          ]}
+        />
+        <HelperText>
+          {t("recording_quality_storage_hint", {
+            bitrate: recorderTargetBitrateMbps,
+            size: recorderBufferMegabytes,
+          })}
+        </HelperText>
+        {hardwareVideoEncodingAvailable !== null && (
+          <HelperText
+            tone={hardwareVideoEncodingAvailable ? undefined : "danger"}
+          >
+            {t(
+              hardwareVideoEncodingAvailable
+                ? "hardware_encoder_available"
+                : "hardware_encoder_unavailable"
+            )}
+          </HelperText>
+        )}
 
         <SelectField
           label={t("instant_replay_length")}

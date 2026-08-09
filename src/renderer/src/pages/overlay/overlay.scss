@@ -1142,16 +1142,20 @@ body.overlay-widget-dragging * {
   list-style: none;
   margin: 0;
   padding: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 11px;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .overlay-mixer__row {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
 .overlay-mixer__row.is-muted {
   opacity: 0.55;
@@ -2695,7 +2699,10 @@ body.overlay-widget-resizing * {
 }
 
 .overlay-mixer__slider {
-  margin: 6px 4px 3px;
+  display: block;
+  width: calc(100% - 16px);
+  min-width: 0;
+  margin: 6px 8px 3px;
 
   &[data-controller-editing="true"] {
     outline: 2px solid var(--color-text-bright);
@@ -2796,16 +2803,37 @@ body.overlay-widget-resizing * {
   max-width: none;
   height: auto;
   min-height: 0;
-  align-items: flex-start;
+  align-items: center;
 
-  > div {
+  &__body {
+    width: 100%;
     min-width: 0;
   }
 
+  strong {
+    flex: none;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+
   p {
+    min-width: 0;
     white-space: normal;
     overflow-wrap: anywhere;
     line-height: 1.45;
+  }
+}
+
+@media (max-width: 639px) {
+  .overlay-toast {
+    align-items: flex-start;
+
+    &__body {
+      flex-direction: column;
+      align-items: flex-start;
+      flex-wrap: nowrap;
+      gap: 4px;
+    }
   }
 }
 
@@ -2831,6 +2859,114 @@ body.overlay-widget-resizing * {
 
   .overlay-grid {
     margin: 7px;
+  }
+}
+
+// On compact game windows the freeform widgets keep their desktop positions,
+// but their normalized widths can be close to the minimum allowed size. Keep
+// header names and telemetry values ahead of optional metadata and chrome.
+@media (max-width: 1100px) {
+  .overlay-card {
+    gap: 8px;
+    padding: 9px;
+
+    &__head {
+      min-width: 0;
+      gap: 4px;
+    }
+
+    &__title {
+      flex: 1;
+      gap: 5px;
+
+      h2 {
+        flex: none;
+        overflow: visible;
+        font-size: 11px;
+      }
+    }
+
+    &__icon {
+      width: 22px;
+      height: 22px;
+    }
+
+    &__tools {
+      flex: none;
+      gap: 2px;
+    }
+  }
+
+  .overlay-card:not(.overlay-card--capture) .overlay-card__count {
+    display: none;
+  }
+
+  .overlay-card--capture .overlay-card__count {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .overlay-widget__tool,
+  .overlay-widget__drag {
+    width: 20px;
+    height: 20px;
+  }
+
+  .overlay-pin {
+    flex: none;
+  }
+
+  .overlay-card--perf .overlay-card__head {
+    align-content: flex-start;
+    flex-wrap: wrap;
+
+    .overlay-card__title {
+      flex-basis: 100%;
+    }
+
+    .overlay-card__tools {
+      width: 100%;
+      justify-content: flex-end;
+    }
+  }
+
+  .overlay-ach__filters {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+  }
+
+  .overlay-perf {
+    min-width: 0;
+    gap: 8px;
+
+    &__fps {
+      flex: none;
+      font-size: 38px;
+    }
+
+    &__rows {
+      flex: 1;
+      min-width: 0;
+      gap: 5px;
+      font-size: 11.5px;
+    }
+
+    &__row {
+      min-width: 0;
+      gap: 5px;
+
+      span {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      b {
+        flex: none;
+      }
+    }
   }
 }
 

@@ -166,7 +166,11 @@ export function buildStoredZip64Trailer({
     locator.length +
     eocdBase.length;
   const commentLength = expectedTotalSize - withoutComment;
-  if (!Number.isSafeInteger(commentLength) || commentLength < 0 || commentLength > 0xffff) {
+  if (
+    !Number.isSafeInteger(commentLength) ||
+    commentLength < 0 ||
+    commentLength > 0xffff
+  ) {
     throw new Error(
       `Cannot preserve the generated ZIP size: calculated comment length is ${commentLength}`
     );
@@ -184,7 +188,10 @@ export function buildStoredZip64Trailer({
     eocdBase,
     comment,
   ]);
-  assert.equal(header.headerLength + rawSize + trailer.length, expectedTotalSize);
+  assert.equal(
+    header.headerLength + rawSize + trailer.length,
+    expectedTotalSize
+  );
   return trailer;
 }
 
@@ -212,7 +219,8 @@ function parseArgs(argv) {
 
 async function readTorBoxToken(dataDir) {
   const source = path.join(dataDir, "gamehub-db");
-  if (!fs.existsSync(source)) throw new Error(`GameHub database not found: ${source}`);
+  if (!fs.existsSync(source))
+    throw new Error(`GameHub database not found: ${source}`);
 
   const tempRoot = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "gamehub-recovery-db-")
@@ -228,7 +236,8 @@ async function readTorBoxToken(dataDir) {
       await db.open();
       const preferences = await db.get("userPreferences");
       const token = preferences?.torBoxApiToken?.trim();
-      if (!token) throw new Error("No TorBox API token is configured in GameHub");
+      if (!token)
+        throw new Error("No TorBox API token is configured in GameHub");
       return token;
     } finally {
       await db.close().catch(() => undefined);
@@ -244,7 +253,9 @@ async function torBoxJson(url, token) {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.success !== true) {
-    const error = new Error(`TorBox API request failed (HTTP ${response.status})`);
+    const error = new Error(
+      `TorBox API request failed (HTTP ${response.status})`
+    );
     error.status = response.status;
     const retryAfter = Number(response.headers.get("retry-after"));
     const resetAt = Number(response.headers.get("x-ratelimit-reset"));
@@ -262,12 +273,13 @@ async function findWebDownload(token, sourceUrl, requestedId) {
   const url = new URL(`${TORBOX_API}/webdl/mylist`);
   url.searchParams.set("bypass_cache", "true");
   const items = await torBoxJson(url, token);
-  if (!Array.isArray(items)) throw new Error("TorBox returned an invalid web list");
+  if (!Array.isArray(items))
+    throw new Error("TorBox returned an invalid web list");
   const expectedHash = crypto.createHash("md5").update(sourceUrl).digest("hex");
   const item = requestedId
     ? items.find((entry) => entry.id === Number(requestedId))
-    : items.find((entry) => entry.original_url === sourceUrl) ??
-      items.find((entry) => entry.hash?.toLowerCase() === expectedHash);
+    : (items.find((entry) => entry.original_url === sourceUrl) ??
+      items.find((entry) => entry.hash?.toLowerCase() === expectedHash));
   if (!item) throw new Error("The matching TorBox web download was not found");
   return item;
 }
@@ -286,7 +298,8 @@ async function requestDownloadLink(token, webId, fileId) {
       }
       return link;
     } catch (error) {
-      if (error?.status !== 429 || attempt === MAX_TRANSFER_RETRIES) throw error;
+      if (error?.status !== 429 || attempt === MAX_TRANSFER_RETRIES)
+        throw error;
       const delay = Math.max(60_000, Number(error.retryAfterMs) || 0);
       console.log(
         `[recovery] TorBox API cooldown; retrying the signed-link request in ${Math.ceil(delay / 1000)}s (${attempt}/${MAX_TRANSFER_RETRIES})`
@@ -318,7 +331,9 @@ async function getGeneratedZipSize(token, webId) {
     const range = parseContentRange(response);
     const size = range?.total ?? Number(response.headers.get("content-length"));
     if (!response.ok || !Number.isSafeInteger(size) || size <= 0) {
-      throw new Error(`Could not determine generated ZIP size (HTTP ${response.status})`);
+      throw new Error(
+        `Could not determine generated ZIP size (HTTP ${response.status})`
+      );
     }
     return size;
   } finally {
@@ -336,7 +351,9 @@ async function fetchExactRange(getLink, start, end, totalSize) {
   });
   try {
     const range = parseContentRange(response);
-    const encoding = (response.headers.get("content-encoding") ?? "").toLowerCase();
+    const encoding = (
+      response.headers.get("content-encoding") ?? ""
+    ).toLowerCase();
     if (
       response.status !== 206 ||
       !range ||
@@ -365,7 +382,8 @@ async function fetchExactRange(getLink, start, end, totalSize) {
 async function readLocalRange(fileHandle, start, length) {
   const buffer = Buffer.alloc(length);
   const { bytesRead } = await fileHandle.read(buffer, 0, length, start);
-  if (bytesRead !== length) throw new Error("The local partial changed during verification");
+  if (bytesRead !== length)
+    throw new Error("The local partial changed during verification");
   return buffer;
 }
 
@@ -386,10 +404,21 @@ async function verifyPayloadIdentity({
   const handle = await fs.promises.open(partialPath, "r");
   try {
     const headLength = Math.min(VERIFY_HEAD_BYTES, payloadBytes);
-    const localHead = await readLocalRange(handle, header.headerLength, headLength);
-    const remoteHead = await fetchExactRange(getRawLink, 0, headLength - 1, rawSize);
+    const localHead = await readLocalRange(
+      handle,
+      header.headerLength,
+      headLength
+    );
+    const remoteHead = await fetchExactRange(
+      getRawLink,
+      0,
+      headLength - 1,
+      rawSize
+    );
     if (!localHead.equals(remoteHead)) {
-      throw new Error("The beginning of the ZIP payload does not match TorBox's raw file");
+      throw new Error(
+        "The beginning of the ZIP payload does not match TorBox's raw file"
+      );
     }
 
     const tailLength = Math.min(VERIFY_TAIL_BYTES, payloadBytes);
@@ -406,7 +435,9 @@ async function verifyPayloadIdentity({
       rawSize
     );
     if (!localTail.equals(remoteTail)) {
-      throw new Error("The ZIP payload does not match TorBox at the resume boundary");
+      throw new Error(
+        "The ZIP payload does not match TorBox at the resume boundary"
+      );
     }
   } finally {
     await handle.close();
@@ -430,7 +461,8 @@ async function scanExistingPayload(partialPath, headerLength, payloadBytes) {
         length,
         headerLength + position
       );
-      if (bytesRead !== length) throw new Error("The local partial changed during CRC scan");
+      if (bytesRead !== length)
+        throw new Error("The local partial changed during CRC scan");
       const chunk = buffer.subarray(0, bytesRead);
       crcState = updateCrc32(crcState, chunk);
       md5.update(chunk);
@@ -459,7 +491,8 @@ async function writeAll(handle, buffer, position) {
       buffer.length - written,
       position + written
     );
-    if (result.bytesWritten <= 0) throw new Error("The recovery write made no progress");
+    if (result.bytesWritten <= 0)
+      throw new Error("The recovery write made no progress");
     written += result.bytesWritten;
   }
 }
@@ -541,11 +574,15 @@ async function appendMissingRawBytes({
           bytesSinceSync = 0;
           await fs.promises.writeFile(
             journalPath,
-            JSON.stringify({ state: "downloading", rawOffset, rawSize }, null, 2)
+            JSON.stringify(
+              { state: "downloading", rawOffset, rawSize },
+              null,
+              2
+            )
           );
         }
         console.log(
-          `[recovery] network ${(100 * rawOffset / rawSize).toFixed(2)}% total; ${formatBytes(rawSize - rawOffset)} remains (${contiguousResults}/${segments.length} parallel ranges kept)`
+          `[recovery] network ${((100 * rawOffset) / rawSize).toFixed(2)}% total; ${formatBytes(rawSize - rawOffset)} remains (${contiguousResults}/${segments.length} parallel ranges kept)`
         );
         const failed = results[contiguousResults];
         if (failed?.status === "rejected") throw failed.reason;
@@ -582,7 +619,12 @@ async function runRecovery(options) {
   const firstHeaderBytes = Buffer.alloc(4096);
   const partialHandle = await fs.promises.open(partialPath, "r");
   try {
-    const { bytesRead } = await partialHandle.read(firstHeaderBytes, 0, firstHeaderBytes.length, 0);
+    const { bytesRead } = await partialHandle.read(
+      firstHeaderBytes,
+      0,
+      firstHeaderBytes.length,
+      0
+    );
     if (bytesRead < 30) throw new Error("The partial is too short to be a ZIP");
   } finally {
     await partialHandle.close();
@@ -595,18 +637,22 @@ async function runRecovery(options) {
   const target = files.find(
     (file) =>
       normalizeName(file.name) === normalizeName(header.filenameText) ||
-      normalizeName(file.short_name ?? "") === normalizeName(header.filenameText)
+      normalizeName(file.short_name ?? "") ===
+        normalizeName(header.filenameText)
   );
   if (!target || !Number.isSafeInteger(target.size) || target.size <= 0) {
-    throw new Error("The ZIP payload could not be matched to one TorBox raw file");
+    throw new Error(
+      "The ZIP payload could not be matched to one TorBox raw file"
+    );
   }
 
   const rawSize = target.size;
   const getRawLink = () => requestDownloadLink(token, web.id, target.id);
   const suppliedZipSize = Number(options.expected_zip_size);
-  const expectedZipSize = Number.isSafeInteger(suppliedZipSize) && suppliedZipSize > rawSize
-    ? suppliedZipSize
-    : await getGeneratedZipSize(token, web.id);
+  const expectedZipSize =
+    Number.isSafeInteger(suppliedZipSize) && suppliedZipSize > rawSize
+      ? suppliedZipSize
+      : await getGeneratedZipSize(token, web.id);
 
   if (
     initialStats.size === expectedZipSize &&
@@ -666,7 +712,9 @@ async function runRecovery(options) {
     journalPath,
   });
 
-  console.log("[recovery] computing final CRC32 and MD5 over the complete payload");
+  console.log(
+    "[recovery] computing final CRC32 and MD5 over the complete payload"
+  );
   const { crcState, md5 } = await scanExistingPayload(
     partialPath,
     header.headerLength,
@@ -674,7 +722,10 @@ async function runRecovery(options) {
   );
 
   const actualMd5 = md5.digest("hex");
-  if (/^[a-f0-9]{32}$/i.test(target.md5 ?? "") && actualMd5 !== target.md5.toLowerCase()) {
+  if (
+    /^[a-f0-9]{32}$/i.test(target.md5 ?? "") &&
+    actualMd5 !== target.md5.toLowerCase()
+  ) {
     throw new Error(
       "The completed raw payload failed TorBox's MD5 integrity check; refusing to finalize the ZIP"
     );
@@ -711,10 +762,14 @@ async function runRecovery(options) {
   );
 }
 
-const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : "";
+const invokedPath = process.argv[1]
+  ? pathToFileURL(path.resolve(process.argv[1])).href
+  : "";
 if (import.meta.url === invokedPath) {
   runRecovery(parseArgs(process.argv.slice(2))).catch((error) => {
-    console.error(`[recovery] FAILED: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `[recovery] FAILED: ${error instanceof Error ? error.message : String(error)}`
+    );
     process.exitCode = 1;
   });
 }

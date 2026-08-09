@@ -113,6 +113,7 @@ const overview = (
   suggestedAction: "upload",
   discoveredVariantCount: 1,
   unresolvedRemoteVariantCount: 0,
+  unconfiguredCustomPathCount: 0,
   warnings: [],
   ...overrides,
 });
@@ -128,7 +129,6 @@ const shouldSyncOnGamePage = (
     isGameRunning: false,
     isSyncing: false,
     isInFlight: false,
-    isCompleted: false,
     ...overrides,
   });
 
@@ -141,6 +141,7 @@ const presentation = (
     isChecking: false,
     isSyncing: false,
     hasError: false,
+    hasUnconfiguredCustomPaths: false,
     state: "untracked",
     progressStage: null,
     ...overrides,
@@ -377,9 +378,8 @@ describe("game page automatic cloud save sync", () => {
     );
   });
 
-  it("blocks concurrent and completed attempts", () => {
+  it("blocks concurrent attempts", () => {
     assert.equal(shouldSyncOnGamePage({ isInFlight: true }), false);
-    assert.equal(shouldSyncOnGamePage({ isCompleted: true }), false);
   });
 
   it("respects automatic sync and supports every mapped library source", () => {

@@ -11,13 +11,15 @@ import {
   GAME_RECORDER_MIME_CANDIDATES,
   GAME_RECORDER_SEGMENT_DURATION_MS,
   FragmentedMp4SegmentAssembler,
+  getFragmentedMp4VideoFrameCount,
   getGameRecorderContainer,
   getGameRecorderTargetDimensions,
   getGameRecorderVideoBitrate,
 } from "@shared";
 
-// Prefer the hardware-encoded H.264/MP4 path; see GAME_RECORDER_MIME_CANDIDATES
-// for why software VP9 is only a fallback.
+// Prefer H.264/MP4, for which Chromium can use a platform encoder when the
+// selected profile and geometry are supported. Runtime telemetry remains the
+// authority because accepting this MIME type does not prove acceleration.
 const chooseMimeType = () =>
   GAME_RECORDER_MIME_CANDIDATES.find((candidate) =>
     MediaRecorder.isTypeSupported(candidate)
@@ -91,7 +93,7 @@ const applyVideoConstraints = async (
 type CaptureOutputSettings = {
   width: number;
   height: number;
-  frameRate: GameRecorderPreferences["fps"];
+  frameRate: number;
   normalized: boolean;
 };
 
@@ -150,6 +152,9 @@ const createCaptureStreamPipeline = async (
   const height = isPositiveFinite(settings.height)
     ? settings.height
     : (requested?.height ?? 1_080);
+  const frameRate = isPositiveFinite(settings.frameRate)
+    ? Math.round(settings.frameRate * 100) / 100
+    : configuration.fps;
 
   let disposed = false;
   return {
@@ -157,7 +162,7 @@ const createCaptureStreamPipeline = async (
     outputSettings: {
       width,
       height,
-      frameRate: configuration.fps,
+      frameRate,
       normalized: false,
     },
     dispose: () => {
@@ -319,6 +324,10 @@ class CaptureController {
       blob
         .arrayBuffer()
         .then((payload) => {
+          const encodedVideoFrames =
+            getGameRecorderContainer(blob.type || mimeType) === "mp4"
+              ? getFragmentedMp4VideoFrameCount(new Uint8Array(payload))
+              : null;
           const metadata: GameRecorderSegmentMetadata = {
             startedAt,
             endedAt,
@@ -327,6 +336,8 @@ class CaptureController {
             outputWidth: outputSettings.width,
             outputHeight: outputSettings.height,
             outputFps: outputSettings.frameRate,
+            targetVideoBitrate: videoBitsPerSecond,
+            encodedVideoFrames,
             normalizedOutput: outputSettings.normalized,
           };
           return window.electron.gameRecorderCommitSegment(metadata, payload);

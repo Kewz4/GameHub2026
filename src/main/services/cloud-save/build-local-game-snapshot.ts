@@ -12,6 +12,7 @@ import { getCloudSaveGameContext } from "./cloud-save-game-context";
 import { getUsableCloudSaveCustomPathBindings } from "./custom-path-overlap";
 import { customPathToCloudSaveRule } from "./custom-path-store";
 import { getGameHubSavePlanRules } from "./gamehub-save-plan-rules";
+import { getAuthoritativeCloudSaveCustomPathRawPaths } from "./authoritative-custom-paths";
 
 interface BuildLocalGameSnapshotContextOptions {
   scanStoreUserContext?: StoreUserContext;
@@ -28,13 +29,18 @@ export const buildLocalGameSnapshotContext = async (
     suppliedContext ?? (await getCloudSaveGameContext(objectId, shop));
   const { game, pathContext, environmentId } = context;
   const cacheKey = levelKeys.game(shop, objectId);
-  const [hashCache, customRules, gameHubRules] = await Promise.all([
+  const [hashCache, customPathBindings, gameHubRules] = await Promise.all([
     cloudSaveLocalHashCacheSublevel.get(cacheKey).then((value) => value ?? []),
-    getUsableCloudSaveCustomPathBindings(objectId, shop, context, {
-      bindings: options.customPathBindings,
-    }).then(({ ready }) => ready.map(customPathToCloudSaveRule)),
+    options.customPathBindings
+      ? Promise.resolve(options.customPathBindings)
+      : getUsableCloudSaveCustomPathBindings(objectId, shop, context),
     getGameHubSavePlanRules(objectId, shop, context.pathContext),
   ]);
+  const customRules = customPathBindings.ready.map(customPathToCloudSaveRule);
+  const customPathRawPaths = getAuthoritativeCloudSaveCustomPathRawPaths(
+    customPathBindings,
+    gameHubRules
+  );
   const extraRules = [...customRules, ...gameHubRules].filter(
     (rule, index, rules) =>
       rules.findIndex((candidate) => candidate.rawPath === rule.rawPath) ===
@@ -59,5 +65,10 @@ export const buildLocalGameSnapshotContext = async (
     await cloudSaveLocalHashCacheSublevel.put(cacheKey, updatedHashCache);
   }
 
-  return { ...snapshot, environmentId, pathContext };
+  return {
+    ...snapshot,
+    environmentId,
+    pathContext,
+    customPathRawPaths,
+  };
 };

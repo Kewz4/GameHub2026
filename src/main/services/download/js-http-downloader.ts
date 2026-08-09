@@ -306,9 +306,7 @@ export class JsHttpDownloader {
     const refreshUrl = this.currentOptions?.refreshUrl;
     if (!refreshUrl || this.isPaused) return false;
 
-    if (
-      this.consecutiveSourceRefreshes >= MAX_CONSECUTIVE_SOURCE_REFRESHES
-    ) {
+    if (this.consecutiveSourceRefreshes >= MAX_CONSECUTIVE_SOURCE_REFRESHES) {
       logger.warn(
         `[JsHttpDownloader] Source refresh limit reached; preserving the partial (${reason})`
       );
@@ -324,7 +322,8 @@ export class JsHttpDownloader {
 
     try {
       const nextUrl = (await refreshUrl()).trim();
-      if (!nextUrl) throw new Error("The source returned an empty download URL");
+      if (!nextUrl)
+        throw new Error("The source returned an empty download URL");
       if (!this.currentOptions) return false;
       this.currentOptions = { ...this.currentOptions, url: nextUrl };
       return true;
@@ -596,9 +595,7 @@ export class JsHttpDownloader {
       }
 
       const probeRange = this.parseContentRange(probeResponse);
-      const encoding = (
-        probeResponse.headers.get("content-encoding") ?? ""
-      )
+      const encoding = (probeResponse.headers.get("content-encoding") ?? "")
         .toLowerCase()
         .trim();
       if (

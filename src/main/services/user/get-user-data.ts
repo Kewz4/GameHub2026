@@ -10,11 +10,17 @@ import { logger } from "../logger";
 import { db } from "@main/level";
 import { levelKeys } from "@main/level/sublevels";
 import fs from "node:fs";
+import { app } from "electron";
+import {
+  planLegacyProfileImageOwnerMigration,
+  resolveOwnedProfileImagePreference,
+} from "../profile-image-helpers";
 
-/** HydraAPI rejects ucarecdn.com image URLs, so uploads are stored locally in
- * userPreferences. Overlay them so the user's own images always show. */
+/** Private R2 keys are not public image URLs, so profile images are stored as
+ * renderer-safe local cache paths in userPreferences. */
 const overlayLocalImages = async <
   T extends {
+    id: string;
     profileImageUrl?: string | null;
     backgroundImageUrl?: string | null;
   },
@@ -27,66 +33,144 @@ const overlayLocalImages = async <
     })
     .catch(() => null);
 
-  const rawBg = prefs?.localBackgroundImageUrl;
-  // Convert local file path to a usable URL for the renderer.
-  // Use the CDN/http URL as-is; convert local paths via the app's local:
-  // protocol — file:// URLs are blocked by the renderer's web security.
-  const resolvedBg = rawBg
-    ? rawBg.startsWith("http") || rawBg.startsWith("local:")
-      ? rawBg
-      : `local:${rawBg.replace(/\\/g, "/")}`
-    : user.backgroundImageUrl;
+  const avatarPreference = resolveOwnedProfileImagePreference(
+    prefs ?? {},
+    "avatar",
+    user.id,
+    fs.existsSync
+  );
+  const bannerPreference = resolveOwnedProfileImagePreference(
+    prefs ?? {},
+    "banner",
+    user.id,
+    fs.existsSync
+  );
+  const resolvedBg = bannerPreference.removed
+    ? null
+    : (bannerPreference.url ?? user.backgroundImageUrl);
+  const resolvedAvatar = avatarPreference.removed
+    ? null
+    : (avatarPreference.url ?? user.profileImageUrl);
 
   return {
     ...user,
-    profileImageUrl: prefs?.localProfileImageUrl ?? user.profileImageUrl,
+    profileImageUrl: resolvedAvatar,
     backgroundImageUrl: resolvedBg,
   };
 };
 
-/** The banner lives on Uploadcare tagged with the Hydra account id. If this
- * install has no local banner yet (fresh install / cleared data), restore the
- * account's latest one so the banner follows the account everywhere. */
-const restoreAccountBanner = async (userId: string): Promise<void> => {
+/**
+ * Adopt only legacy values with strong account provenance, then restore any
+ * missing images from the signed-in account's private R2 namespace.
+ */
+const restoreAccountProfileImages = async (userId: string): Promise<void> => {
   try {
-    const prefs = await db
+    const storedPreferences = await db
       .get<string, UserPreferences | null>(levelKeys.userPreferences, {
         valueEncoding: "json",
       })
       .catch(() => null);
+    const migration = planLegacyProfileImageOwnerMigration(
+      storedPreferences ?? {}
+    );
+    const prefs: UserPreferences = {
+      ...(storedPreferences ?? ({} as UserPreferences)),
+      ...migration,
+    };
 
-    const existingBg = prefs?.localBackgroundImageUrl;
-    if (existingBg) {
-      // If it's an HTTP URL, we already have it
-      if (existingBg.startsWith("http") || existingBg.startsWith("local:"))
-        return;
-      // If it's a local file path, only skip if the file actually exists
-      if (fs.existsSync(existingBg)) return;
-      // File missing (cleared data, new machine) — fall through to restore from CDN
+    // Commit the migration/quarantine marker before touching the network. If
+    // R2 is offline, a later account switch must still be unable to claim an
+    // unknown ownerless value.
+    if (Object.keys(migration).length > 0) {
+      await db.put(levelKeys.userPreferences, prefs, {
+        valueEncoding: "json",
+      });
     }
 
-    const { UploadcareSync } = await import("../uploadcare-sync");
-    const bannerUrl = await UploadcareSync.findLatestImageByKind(
-      "profile-banner",
-      userId
+    const avatarPreference = resolveOwnedProfileImagePreference(
+      prefs,
+      "avatar",
+      userId,
+      fs.existsSync
     );
-    if (!bannerUrl) return;
+    const bannerPreference = resolveOwnedProfileImagePreference(
+      prefs,
+      "banner",
+      userId,
+      fs.existsSync
+    );
 
-    await db.put(
-      levelKeys.userPreferences,
-      { ...(prefs ?? {}), localBackgroundImageUrl: bannerUrl },
-      { valueEncoding: "json" }
-    );
-    logger.log(`Restored account banner from Uploadcare: ${bannerUrl}`);
+    const { R2Sync } = await import("../r2-sync");
+    const [avatarUrl, bannerUrl] = await Promise.all([
+      avatarPreference.url || avatarPreference.removed
+        ? Promise.resolve(null)
+        : R2Sync.findLatestImageByKind("profile-avatar", userId),
+      bannerPreference.url || bannerPreference.removed
+        ? Promise.resolve(null)
+        : R2Sync.findLatestImageByKind("profile-banner", userId),
+    ]);
+
+    const updates: Partial<UserPreferences> = {};
+    if (avatarUrl) {
+      updates.localProfileImageUrl = avatarUrl;
+      updates.localProfileImageUserId = userId;
+      updates.profileAvatarRemoved = false;
+    }
+    if (bannerUrl) {
+      updates.localBackgroundImageUrl = bannerUrl;
+      updates.localBackgroundImageUserId = userId;
+      updates.profileBannerRemoved = false;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db.put(
+        levelKeys.userPreferences,
+        { ...prefs, ...updates },
+        { valueEncoding: "json" }
+      );
+    }
+    if (avatarUrl || bannerUrl) {
+      logger.log(
+        `Restored account profile images from R2 (avatar=${Boolean(
+          avatarUrl
+        )}, banner=${Boolean(bannerUrl)})`
+      );
+    }
   } catch (error) {
-    logger.error("Failed to restore account banner", error);
+    logger.error("Failed to restore account profile images", error);
   }
 };
 
 export const getUserData = async () => {
+  if (!app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true") {
+    const loggedUser = await db
+      .get<string, User>(levelKeys.user, { valueEncoding: "json" })
+      .catch(() => null);
+    if (!loggedUser) return null;
+    return overlayLocalImages({
+      ...loggedUser,
+      username: "",
+      bio: "",
+      email: null,
+      profileVisibility: "PUBLIC" as ProfileVisibility,
+      quirks: { backupsPerGameLimit: 0 },
+      subscription: loggedUser.subscription
+        ? {
+            id: loggedUser.subscription.id,
+            status: loggedUser.subscription.status,
+            plan: {
+              id: loggedUser.subscription.plan.id,
+              name: loggedUser.subscription.plan.name,
+            },
+            expiresAt: loggedUser.subscription.expiresAt,
+          }
+        : null,
+    } as UserDetails);
+  }
+
   return HydraApi.get<UserDetails>(`/profile/me`)
     .then(async (me) => {
-      if (me?.id) await restoreAccountBanner(me.id);
+      if (me?.id) await restoreAccountProfileImages(me.id);
       return overlayLocalImages(me);
     })
     .then(async (me) => {

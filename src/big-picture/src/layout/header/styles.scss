@@ -57,8 +57,25 @@
     margin-top: 0;
     padding: calc(var(--spacing-unit) * 2) calc(var(--spacing-unit) * 3);
     border-top: none;
-    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: calc(var(--spacing-unit) * 2.5);
+    background-color: rgba(8, 8, 8, 0.72);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(10px);
     cursor: default;
+  }
+
+  .user-profile-content__info__name {
+    color: #fff;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+  }
+
+  .user-profile-content__info__friend-code {
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .user-profile__actions__friends {
+    opacity: 0.82;
   }
 
   .user-profile__actions {

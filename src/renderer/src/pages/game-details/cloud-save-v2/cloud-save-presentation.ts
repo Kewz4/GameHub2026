@@ -2,6 +2,7 @@ import type {
   CloudSaveOverview,
   CloudSaveState,
   CloudSaveSyncAction,
+  CloudSaveSyncProgressPayload,
   CloudSaveSyncProgressStage,
   CloudSaveV2FileDetails,
   GameShop,
@@ -41,6 +42,26 @@ export const shouldShowCloudSaveEmptySnapshot = ({
 }: CloudSaveEmptySnapshotInput) =>
   !hasError && overview !== null && overview.activeRemoteSnapshot === null;
 
+interface CloudSaveSnapshotPanelModeInput {
+  overview: CloudSaveOverview | null;
+  isLoading: boolean;
+  isSyncing: boolean;
+  hasError: boolean;
+}
+
+export type CloudSaveSnapshotPanelMode = "content" | "skeleton" | "hidden";
+
+export const getCloudSaveSnapshotPanelMode = ({
+  overview,
+  isLoading,
+  isSyncing,
+  hasError,
+}: CloudSaveSnapshotPanelModeInput): CloudSaveSnapshotPanelMode => {
+  if (overview !== null || isSyncing) return "content";
+  if (isLoading && !hasError) return "skeleton";
+  return "hidden";
+};
+
 export const canOpenCloudSaveFileBrowser = (
   overview: CloudSaveOverview | null
 ) => overview !== null;
@@ -55,6 +76,10 @@ export const hasCloudSaveDataToDelete = (
     details.unresolvedCustomPaths.some(({ registered }) => registered));
 
 export type CloudSaveUploadLimitError = "snapshot-too-large" | "too-many-files";
+export type CloudSaveSyncErrorKind =
+  | CloudSaveUploadLimitError
+  | "restore-metadata"
+  | "generic";
 
 const getErrorMessage = (error: unknown) => {
   if (typeof error === "string") return error;
@@ -76,6 +101,61 @@ export const getCloudSaveUploadLimitError = (
   return null;
 };
 
+export const getCloudSaveSyncErrorKind = (
+  error: unknown
+): CloudSaveSyncErrorKind => {
+  const limitError = getCloudSaveUploadLimitError(error);
+  if (limitError) return limitError;
+  if (getErrorMessage(error).includes("cloud_save_restore_metadata_failed")) {
+    return "restore-metadata";
+  }
+  return "generic";
+};
+
+export interface CloudSaveOperationPresentation {
+  labelKey: string;
+  fileCount: {
+    count: number;
+    processed: number;
+    total: number;
+  } | null;
+}
+
+export const getCloudSaveOperationPresentation = (
+  progress: CloudSaveSyncProgressPayload | null,
+  fallbackLabelKey = "cloud_save_v2_syncing"
+): CloudSaveOperationPresentation => ({
+  labelKey: progress
+    ? `cloud_save_v2_progress_${progress.stage}`
+    : fallbackLabelKey,
+  fileCount:
+    progress && progress.totalFiles > 0
+      ? {
+          count: progress.totalFiles,
+          processed: progress.processedFiles,
+          total: progress.totalFiles,
+        }
+      : null,
+});
+
+export const getCloudSavePartialDescriptionKey = (
+  overview: CloudSaveOverview | null
+) => {
+  if (
+    overview?.state !== "partial" ||
+    overview.unconfiguredCustomPathCount > 0
+  ) {
+    return null;
+  }
+  if (overview.unresolvedRemoteVariantCount > 0) {
+    return "cloud_save_v2_partial_unresolved_description";
+  }
+  if (overview.warnings.length > 0) {
+    return "cloud_save_v2_partial_scan_description";
+  }
+  return "cloud_save_v2_partial_deferred_description";
+};
+
 interface GamePageOpenSyncInput {
   overview: CloudSaveOverview | null;
   shop: GameShop;
@@ -84,7 +164,6 @@ interface GamePageOpenSyncInput {
   isGameRunning: boolean;
   isSyncing: boolean;
   isInFlight: boolean;
-  isCompleted: boolean;
 }
 
 export const shouldSyncCloudSaveOnGamePage = ({
@@ -95,14 +174,13 @@ export const shouldSyncCloudSaveOnGamePage = ({
   isGameRunning,
   isSyncing,
   isInFlight,
-  isCompleted,
 }: GamePageOpenSyncInput) =>
   (void shop, canUseCloudSaves) &&
   hasExecutablePath &&
   !isGameRunning &&
   !isSyncing &&
   !isInFlight &&
-  !isCompleted &&
+  (overview?.unconfiguredCustomPathCount ?? 0) === 0 &&
   overview?.isAutomaticSyncEnabled === true &&
   overview.suggestedAction !== "none";
 
@@ -112,6 +190,7 @@ interface CloudSavePresentationInput {
   isChecking: boolean;
   isSyncing: boolean;
   hasError: boolean;
+  hasUnconfiguredCustomPaths: boolean;
   state: CloudSaveState | null;
   progressStage: CloudSaveSyncProgressStage | null;
 }
@@ -130,6 +209,7 @@ export const getCloudSavePresentation = ({
   isChecking,
   isSyncing,
   hasError,
+  hasUnconfiguredCustomPaths,
   state,
   progressStage,
 }: CloudSavePresentationInput): CloudSavePresentation => {
@@ -162,6 +242,14 @@ export const getCloudSavePresentation = ({
       labelKey: "cloud_save_v2_unavailable",
       icon: "cloud-x",
       tone: "neutral",
+    };
+  }
+
+  if (hasUnconfiguredCustomPaths) {
+    return {
+      labelKey: "cloud_save_v2_location_required",
+      icon: "warning",
+      tone: "outdated",
     };
   }
 
@@ -213,6 +301,11 @@ export type CloudSavePanelAction =
       icon: "details";
     }
   | {
+      kind: "confirm-location";
+      labelKey: "cloud_save_v2_confirm_location";
+      icon: "folder";
+    }
+  | {
       kind: "verify";
       labelKey: "cloud_save_v2_check_again";
       icon: "refresh";
@@ -222,8 +315,16 @@ export type CloudSavePanelAction =
 
 export const getCloudSavePanelAction = (
   state: CloudSaveState | null,
-  suggestedAction: CloudSaveSyncAction | null
+  suggestedAction: CloudSaveSyncAction | null,
+  hasUnconfiguredCustomPaths = false
 ): CloudSavePanelAction => {
+  if (hasUnconfiguredCustomPaths) {
+    return {
+      kind: "confirm-location",
+      labelKey: "cloud_save_v2_confirm_location",
+      icon: "folder",
+    };
+  }
   if (state === "conflict" || suggestedAction === "conflict") {
     return { kind: "conflict" };
   }

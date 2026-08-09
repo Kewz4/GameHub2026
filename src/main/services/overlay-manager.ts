@@ -28,16 +28,16 @@ import { WindowManager } from "./window-manager";
 import { GameRecorderManager } from "./game-recorder-manager";
 import { OverlayBroker } from "./overlay-broker";
 import { OverlayInputGateController } from "./overlay-input-gate";
+import {
+  OVERLAY_ACTIVATION_GRACE_MS,
+  calculateActivationToastBounds,
+  canShowActivationToast,
+  isOverlayInteractionForeground,
+} from "./overlay-activation-policy";
 
 const PREFERRED_SHORTCUT = "Shift+F3";
 const FALLBACK_SHORTCUT = "Control+Shift+F3";
 const CONTROLLER_SHORTCUT = "Guide";
-// The toast is a single line of text, so it is sized wide and short: the extra
-// width keeps the shortcut hint on one line instead of wrapping (and being
-// clipped), and the reduced height keeps it out of the way of the game.
-const TOAST_WIDTH = 820;
-const TOAST_HEIGHT = 118;
-const TOAST_MARGIN = 24;
 const FPS_WIDTH = 218;
 const FPS_HEIGHT = 116;
 const TOGGLE_DEBOUNCE_MS = 350;
@@ -111,6 +111,8 @@ export class OverlayManager {
   private static activationToastShown = false;
   private static overlayRendererReady = false;
   private static overlayTogglePending = false;
+  private static overlayActivationGraceUntil = 0;
+  private static lastOverlayPlacement: Electron.Rectangle | null = null;
   private static overlayContextGeneration = 0;
   private static rendererContextGeneration = -1;
   private static overlayRendererReadyWaiters = new Set<
@@ -197,6 +199,7 @@ export class OverlayManager {
 
     this.stopActiveServices();
     this.activeGame = game;
+    this.lastOverlayPlacement = null;
     this.sessionStartedAt = Date.now();
     this.performancePinned = false;
     this.invalidateOverlayRendererContext(true);
@@ -523,7 +526,15 @@ export class OverlayManager {
         logger.warn("Overlay toggle ignored", { reason: "no active game" });
         return;
       }
-      await this.refreshTargetProcess(game);
+      // Target discovery can enumerate every process in the install tree. The
+      // 125 ms window tracker has normally already selected the visible game,
+      // so keep the shortcut path synchronous when that cached target still
+      // owns the foreground. Rescan only when the cached target is stale.
+      let targetBounds = this.getTargetBounds();
+      if (!targetBounds || !this.isTargetForeground(false)) {
+        await this.refreshTargetProcess(game);
+        targetBounds = this.getTargetBounds();
+      }
       if (
         !this.activeGame ||
         this.activeGame.objectId !== game.objectId ||
@@ -534,7 +545,6 @@ export class OverlayManager {
         });
         return;
       }
-      const targetBounds = this.getTargetBounds();
       // Every early return here looks identical from outside — the shortcut
       // simply does nothing — so name the one that fired.
       if (!targetBounds || !this.isTargetForeground(false)) {
@@ -593,8 +603,9 @@ export class OverlayManager {
         this.placeWindowOverGame(overlayWindow, currentBounds);
         overlayWindow.setAlwaysOnTop(false);
         overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
+        this.overlayActivationGraceUntil =
+          Date.now() + OVERLAY_ACTIVATION_GRACE_MS;
         overlayWindow.show();
-        this.placeWindowOverGame(overlayWindow, currentBounds);
         overlayWindow.moveTop();
         overlayWindow.focus();
         overlayWindow.webContents.send("on-overlay-shown");
@@ -716,6 +727,7 @@ export class OverlayManager {
     restoreGameFocus: boolean,
     showPinnedPerformance: boolean
   ) {
+    this.overlayActivationGraceUntil = 0;
     // Clear the in-game hook before hiding or returning focus. This call is
     // synchronous and fail-open, including when Electron's hide event is late.
     this.inputGate.setOverlayState(false, false);
@@ -751,16 +763,18 @@ export class OverlayManager {
     }
   }
 
-  private static ensureOverlayWindow(bounds = this.getWindowCreationBounds()) {
+  private static ensureOverlayWindow(bounds: Electron.Rectangle) {
     if (this.overlayWindow && !this.overlayWindow.isDestroyed()) {
       return this.overlayWindow;
     }
 
+    this.lastOverlayPlacement = null;
+    const electronBounds = this.toElectronBounds(bounds);
     const overlayWindow = new BrowserWindow({
-      x: bounds.x,
-      y: bounds.y,
-      width: bounds.width,
-      height: bounds.height,
+      x: electronBounds.x,
+      y: electronBounds.y,
+      width: electronBounds.width,
+      height: electronBounds.height,
       show: false,
       transparent: true,
       backgroundColor: "#00000000",
@@ -792,6 +806,7 @@ export class OverlayManager {
     overlayWindow.on("closed", () => {
       this.inputGate.setOverlayState(false, false);
       this.overlayWindow = null;
+      this.lastOverlayPlacement = null;
       this.overlayRendererReady = false;
       this.rendererContextGeneration = -1;
       for (const resolve of this.overlayRendererReadyWaiters) resolve(false);
@@ -856,6 +871,7 @@ export class OverlayManager {
       this.targetExecutable = targetExecutable;
       this.lastTargetRefreshAt = Date.now();
       if (targetChanged) {
+        this.lastOverlayPlacement = null;
         this.inputGate.setTarget(targetPid);
         logger.info("GameHub overlay render target changed", {
           pid: targetPid,
@@ -887,24 +903,31 @@ export class OverlayManager {
     return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
   }
 
-  private static getWindowCreationBounds(): Electron.Rectangle {
-    return (
-      this.getTargetBounds() ??
-      screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds
-    );
-  }
-
   private static isTargetForeground(includeOverlayWindow: boolean) {
     if (process.platform !== "win32") return true;
-    if (!this.targetPid) return false;
-    if (
-      includeOverlayWindow &&
-      this.overlayWindow?.isVisible() &&
-      this.overlayWindow.isFocused()
-    ) {
-      return true;
+    return isOverlayInteractionForeground({
+      targetPid: this.targetPid,
+      foregroundPid: NativeAddon.getForegroundProcessId(),
+      appPid: process.pid,
+      overlayVisible:
+        includeOverlayWindow && Boolean(this.overlayWindow?.isVisible()),
+      overlayFocused:
+        includeOverlayWindow && Boolean(this.overlayWindow?.isFocused()),
+      activationGraceUntil: includeOverlayWindow
+        ? this.overlayActivationGraceUntil
+        : 0,
+      now: Date.now(),
+    });
+  }
+
+  /** Convert Win32 physical screen coordinates before using Electron bounds. */
+  private static toElectronBounds(bounds: Electron.Rectangle) {
+    if (process.platform !== "win32") return bounds;
+    try {
+      return screen.screenToDipRect(null, bounds);
+    } catch {
+      return bounds;
     }
-    return NativeAddon.getForegroundProcessId() === this.targetPid;
   }
 
   private static placeWindowOverGame(
@@ -912,17 +935,34 @@ export class OverlayManager {
     bounds: Electron.Rectangle
   ) {
     if (window.isDestroyed()) return;
+    const previous = this.lastOverlayPlacement;
     if (
-      process.platform === "win32" &&
-      this.targetPid &&
-      NativeAddon.placeOverlayWindow(
-        window.getNativeWindowHandle(),
-        this.targetPid
-      )
+      previous &&
+      previous.x === bounds.x &&
+      previous.y === bounds.y &&
+      previous.width === bounds.width &&
+      previous.height === bounds.height
     ) {
       return;
     }
-    window.setBounds(bounds);
+    if (process.platform === "win32" && this.targetPid) {
+      if (
+        NativeAddon.placeOverlayWindow(
+          window.getNativeWindowHandle(),
+          this.targetPid
+        )
+      ) {
+        this.lastOverlayPlacement = { ...bounds };
+        return;
+      }
+      // Keep the fallback safe for DPI, but do not cache a failed native
+      // placement: the next tracker tick must be allowed to retry it.
+      window.setBounds(this.toElectronBounds(bounds));
+      this.lastOverlayPlacement = null;
+      return;
+    }
+    window.setBounds(this.toElectronBounds(bounds));
+    this.lastOverlayPlacement = { ...bounds };
   }
 
   private static startTargetPolling() {
@@ -975,11 +1015,18 @@ export class OverlayManager {
       return;
     }
 
+    // Warm the renderer while the game is in view. The ready notification must
+    // mean that the actual overlay (including its game context) is painted and
+    // can open immediately, not merely that a shortcut was registered.
+    this.ensureOverlayWindow(bounds);
+
     if (
-      this.activationToastPending &&
-      !this.activationToastShown &&
-      !this.toastWindow &&
-      (!this.overlayWindow || this.overlayRendererReady)
+      canShowActivationToast(
+        this.activationToastPending,
+        this.activationToastShown,
+        this.overlayRendererReady
+      ) &&
+      !this.toastWindow
     ) {
       this.showActivationToast(bounds);
     } else if (this.toastWindow?.isVisible()) {
@@ -997,28 +1044,7 @@ export class OverlayManager {
   private static getActivationToastBounds(
     targetBounds: Electron.Rectangle
   ): Electron.Rectangle {
-    const horizontalInset = Math.min(
-      TOAST_MARGIN,
-      Math.floor(Math.max(0, targetBounds.width - TOAST_WIDTH) / 2)
-    );
-    const verticalInset = Math.min(
-      TOAST_MARGIN,
-      Math.floor(Math.max(0, targetBounds.height - TOAST_HEIGHT) / 2)
-    );
-    const width = Math.max(
-      1,
-      Math.min(TOAST_WIDTH, targetBounds.width - horizontalInset * 2)
-    );
-    const height = Math.max(
-      1,
-      Math.min(TOAST_HEIGHT, targetBounds.height - verticalInset * 2)
-    );
-    return {
-      x: targetBounds.x + targetBounds.width - horizontalInset - width,
-      y: targetBounds.y + verticalInset,
-      width,
-      height,
-    };
+    return calculateActivationToastBounds(this.toElectronBounds(targetBounds));
   }
 
   private static showActivationToast(targetBounds: Electron.Rectangle) {
@@ -1117,6 +1143,7 @@ export class OverlayManager {
     this.inputGate.setTarget(0);
     this.targetPid = 0;
     this.targetExecutable = null;
+    this.lastOverlayPlacement = null;
     this.activationToastPending = false;
     this.activationToastShown = false;
   }
@@ -1134,7 +1161,8 @@ export class OverlayManager {
 
     const fpsWindow = this.ensureFpsWindow(targetBounds);
     if (fpsWindow.isVisible()) {
-      fpsWindow.setPosition(targetBounds.x + 24, targetBounds.y + 24);
+      const electronBounds = this.toElectronBounds(targetBounds);
+      fpsWindow.setPosition(electronBounds.x + 24, electronBounds.y + 24);
       fpsWindow.setAlwaysOnTop(true, "screen-saver", 1);
       return;
     }
@@ -1149,7 +1177,8 @@ export class OverlayManager {
       ) {
         return;
       }
-      fpsWindow.setPosition(bounds.x + 24, bounds.y + 24);
+      const electronBounds = this.toElectronBounds(bounds);
+      fpsWindow.setPosition(electronBounds.x + 24, electronBounds.y + 24);
       fpsWindow.setAlwaysOnTop(true, "screen-saver", 1);
       fpsWindow.showInactive();
     };
@@ -1162,9 +1191,10 @@ export class OverlayManager {
 
   private static ensureFpsWindow(targetBounds: Electron.Rectangle) {
     if (this.fpsWindow && !this.fpsWindow.isDestroyed()) return this.fpsWindow;
+    const electronBounds = this.toElectronBounds(targetBounds);
     const fpsWindow = new BrowserWindow({
-      x: targetBounds.x + 24,
-      y: targetBounds.y + 24,
+      x: electronBounds.x + 24,
+      y: electronBounds.y + 24,
       width: FPS_WIDTH,
       height: FPS_HEIGHT,
       show: false,

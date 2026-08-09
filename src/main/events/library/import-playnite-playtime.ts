@@ -11,6 +11,15 @@ import {
   compactGameTitle,
   normalizeGameTitle,
 } from "@main/helpers/normalize-game-title";
+import {
+  buildUnresolvedPlaynitePlaytimeCacheKey,
+  removePlayniteCacheEntriesForGame,
+} from "@main/services/playnite-playtime-cache";
+import {
+  decidePlaynitePlaytimeImport,
+  PLAYNITE_CATALOGUE_SEARCH_TAKE,
+  reconcilePlayniteAbsolutePlaytimeAcknowledgement,
+} from "@main/services/playnite-playtime-policy";
 import type { CatalogueSearchResult } from "@types";
 
 interface PlayniteGame {
@@ -22,15 +31,55 @@ interface PlayniteGame {
 interface ImportResult {
   matched: number;
   total: number;
-  games: Array<{ title: string; addedHours: number }>;
+  cloudSynced: number;
+  cloudSyncPending: number;
+  games: Array<{
+    title: string;
+    previousHours: number;
+    playniteHours: number;
+    changeHours: number;
+  }>;
+  preserved: Array<{
+    title: string;
+    existingHours: number;
+    playniteHours: number;
+  }>;
   unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
   /**
    * Games found in the Hydra catalogue but NOT in the user's library. Their
    * playtime is cached and applied automatically if/when the user adds them —
    * they are deliberately NOT added to the library (no Retigga clutter).
    */
-  cached: Array<{ title: string; playtimeHours: number }>;
+  cached: Array<{
+    title: string;
+    playtimeHours: number;
+    catalogueMatched: boolean;
+  }>;
 }
+
+const toHours = (milliseconds: number) =>
+  Math.round((milliseconds / 3_600_000) * 100) / 100;
+
+const mapWithConcurrency = async <T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>
+) => {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(Math.max(1, concurrency), values.length) },
+    async () => {
+      for (;;) {
+        const index = nextIndex++;
+        if (index >= values.length) return;
+        results[index] = await mapper(values[index]);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+};
 
 /**
  * LiteDB v4 file parser (Playnite's games.db).
@@ -237,6 +286,14 @@ function parsePlayniteDb(data: Buffer): PlayniteGame[] {
 
 /** Detect default Playnite games.db path on Windows */
 function getDefaultPlaynitePath(): string | null {
+  const qaPath = process.env.GAMEHUB_PLAYNITE_DB_PATH;
+  if (
+    process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true" &&
+    qaPath &&
+    fs.existsSync(qaPath)
+  ) {
+    return qaPath;
+  }
   const appData = process.env.APPDATA;
   if (!appData) return null;
   const defaultPath = path.join(appData, "Playnite", "library", "games.db");
@@ -245,7 +302,8 @@ function getDefaultPlaynitePath(): string | null {
 
 const importPlaynitePlaytime = async (
   _event: Electron.IpcMainInvokeEvent,
-  dbPath?: string
+  dbPath?: string,
+  options: { syncCloud?: boolean } = {}
 ): Promise<ImportResult & { detectedPath: string | null }> => {
   const detectedPath = getDefaultPlaynitePath();
   const filePath = dbPath ?? detectedPath;
@@ -254,7 +312,10 @@ const importPlaynitePlaytime = async (
     return {
       matched: 0,
       total: 0,
+      cloudSynced: 0,
+      cloudSyncPending: 0,
       games: [],
+      preserved: [],
       unmatched: [],
       cached: [],
       detectedPath,
@@ -269,7 +330,10 @@ const importPlaynitePlaytime = async (
     return {
       matched: 0,
       total: 0,
+      cloudSynced: 0,
+      cloudSyncPending: 0,
       games: [],
+      preserved: [],
       unmatched: [],
       cached: [],
       detectedPath,
@@ -316,8 +380,16 @@ const importPlaynitePlaytime = async (
     );
 
   const matched: ImportResult["games"] = [];
+  const preserved: ImportResult["preserved"] = [];
   const unmatched: ImportResult["unmatched"] = [];
   const cached: ImportResult["cached"] = [];
+  const pendingCloudPlaytime: Array<{
+    key: string;
+    shop: string;
+    objectId: string;
+    remoteId: string | null;
+    playTimeInMilliseconds: number;
+  }> = [];
 
   const searchCatalogue = async (
     title: string,
@@ -337,7 +409,9 @@ const importPlaynitePlaytime = async (
           developers: [],
           protondbSupportBadges: [],
           deckCompatibility: [],
-          take: 5,
+          // Exact catalogue matches can rank well below the first popularity
+          // page (the live maintenance audit found a valid match at result 26).
+          take: PLAYNITE_CATALOGUE_SEARCH_TAKE,
           skip: 0,
         },
         { needsAuth: false }
@@ -350,51 +424,135 @@ const importPlaynitePlaytime = async (
         resp?.edges?.find((r) => compactGameTitle(r.title) === titleCompact) ??
         null
       );
-    } catch {
+    } catch (error) {
+      logger.warn(`[Playnite] Catalogue lookup failed for "${title}"`, error);
       return null;
     }
   };
 
+  const applyToLibraryGame = async (
+    local: (typeof localGames)[number],
+    pg: PlayniteGame
+  ) => {
+    const importedMs = pg.playtimeSeconds * 1000;
+    const existingMs = local.game.playTimeInMilliseconds ?? 0;
+    const decision = decidePlaynitePlaytimeImport(existingMs, importedMs);
+    const identity = {
+      shop: local.game.shop,
+      objectId: local.game.objectId,
+      title: local.game.title ?? pg.name,
+    };
+
+    // A stale provisional cache must not survive after the title exists in the
+    // library; otherwise a later add/import path can apply the same data twice.
+    await removePlayniteCacheEntriesForGame(identity);
+
+    if (decision.action === "preserve" || decision.deltaMs === 0) {
+      preserved.push({
+        title: identity.title,
+        existingHours: toHours(existingMs),
+        playniteHours: toHours(importedMs),
+      });
+      return;
+    }
+
+    await gamesSublevel.put(local.key, {
+      ...local.game,
+      playTimeInMilliseconds: decision.nextPlaytimeMs,
+      hasManuallyUpdatedPlaytime: true,
+      // Imported playtime is an absolute correction (and can move downward),
+      // so it must never be replayed through Hydra's additive delta endpoint.
+      unsyncedDeltaPlayTimeInMilliseconds: 0,
+      pendingAbsolutePlayTimeInMilliseconds: decision.nextPlaytimeMs,
+    });
+    local.game.playTimeInMilliseconds = decision.nextPlaytimeMs;
+    local.game.hasManuallyUpdatedPlaytime = true;
+    local.game.unsyncedDeltaPlayTimeInMilliseconds = 0;
+    local.game.pendingAbsolutePlayTimeInMilliseconds = decision.nextPlaytimeMs;
+    pendingCloudPlaytime.push({
+      key: local.key,
+      shop: local.game.shop,
+      objectId: local.game.objectId,
+      remoteId: local.game.remoteId,
+      playTimeInMilliseconds: decision.nextPlaytimeMs,
+    });
+    matched.push({
+      title: identity.title,
+      previousHours: toHours(existingMs),
+      playniteHours: toHours(importedMs),
+      changeHours: toHours(decision.deltaMs),
+    });
+    logger.info(
+      `[Playnite] Replaced sub-five-hour playtime for "${identity.title}": ${toHours(existingMs)}h -> ${toHours(importedMs)}h`
+    );
+  };
+
+  const cataloguePending: Array<{
+    game: PlayniteGame;
+    steamId?: string;
+  }> = [];
+
   for (const pg of gamesWithPlaytime) {
     const pgTitleCompact = compactGameTitle(pg.name);
-    const pgPlaytimeMs = pg.playtimeSeconds * 1000;
     const steamId = /^\d{3,10}$/.test(pg.gameId) ? pg.gameId : undefined;
 
     // 1. Match by Steam objectId or compact title in local library
     const localById = steamId
-      ? localGames.find(({ game }) => game.objectId === steamId)
+      ? localGames.find(
+          ({ game }) => game.shop === "steam" && game.objectId === steamId
+        )
       : null;
+    const localTitleMatches = localGames.filter(
+      ({ game }) => compactGameTitle(game.title ?? "") === pgTitleCompact
+    );
     const localMatch =
       localById ??
-      localGames.find(
-        ({ game }) => compactGameTitle(game.title ?? "") === pgTitleCompact
-      );
+      (localTitleMatches.length === 1 ? localTitleMatches[0] : null);
 
     if (localMatch) {
-      const existing = localMatch.game.playTimeInMilliseconds ?? 0;
-      if (pgPlaytimeMs <= existing) continue;
-      const addedMs = pgPlaytimeMs - existing;
-      await gamesSublevel.put(localMatch.key, {
-        ...localMatch.game,
-        playTimeInMilliseconds: pgPlaytimeMs,
-      });
-      matched.push({
-        title: localMatch.game.title ?? pg.name,
-        addedHours: Math.round((addedMs / 3600000) * 10) / 10,
-      });
-      logger.info(
-        `[Playnite] Updated playtime for ${localMatch.game.title}: +${(addedMs / 3600000).toFixed(1)}h`
-      );
+      await applyToLibraryGame(localMatch, pg);
       continue;
     }
 
-    // 2. Not in local library — search HydraAPI catalogue and add the game
-    const catalogueMatch = await searchCatalogue(pg.name, steamId);
+    cataloguePending.push({ game: pg, steamId });
+  }
+
+  const catalogueResults = await mapWithConcurrency(
+    cataloguePending,
+    6,
+    async ({ game, steamId }) => ({
+      game,
+      match: await searchCatalogue(game.name, steamId),
+    })
+  );
+
+  for (const { game: pg, match: catalogueMatch } of catalogueResults) {
+    const pgPlaytimeMs = pg.playtimeSeconds * 1000;
+
     if (!catalogueMatch) {
+      const cacheKey = buildUnresolvedPlaynitePlaytimeCacheKey(
+        pg.name,
+        pg.gameId
+      );
+      await playnitePlaytimeCacheSublevel.put(cacheKey, {
+        shop: "custom",
+        objectId: pg.gameId || cacheKey,
+        sourceGameId: pg.gameId,
+        title: pg.name,
+        normalizedTitle: compactGameTitle(pg.name),
+        catalogueResolved: false,
+        playTimeInMilliseconds: pgPlaytimeMs,
+        updatedAt: Date.now(),
+      });
       unmatched.push({
         name: pg.name,
         gameId: pg.gameId,
-        playtimeHours: Math.round((pgPlaytimeMs / 3600000) * 10) / 10,
+        playtimeHours: toHours(pgPlaytimeMs),
+      });
+      cached.push({
+        title: pg.name,
+        playtimeHours: toHours(pgPlaytimeMs),
+        catalogueMatched: false,
       });
       continue;
     }
@@ -409,60 +567,28 @@ const importPlaynitePlaytime = async (
     // The user may already own this game under a DIFFERENT shop (e.g. Epic).
     // Check the local library for a cross-shop match by canonical objectId then
     // by compact title, and merge playtime into the owned entry if found.
-    const crossShopMatch =
+    const crossShopCandidates =
       !existingAtKey || existingAtKey.isDeleted
-        ? (localGames.find(
+        ? localGames.filter(
             ({ game }) =>
               !game.isDeleted &&
-              game.objectId === catalogueMatch.objectId &&
-              game.shop !== catalogueMatch.shop
-          ) ??
-          localGames.find(
-            ({ game }) =>
-              !game.isDeleted &&
+              game.shop !== catalogueMatch.shop &&
               compactGameTitle(game.title ?? "") ===
                 compactGameTitle(catalogueMatch.title)
-          ))
-        : null;
+          )
+        : [];
+    const crossShopMatch =
+      crossShopCandidates.length === 1 ? crossShopCandidates[0] : null;
 
     if (crossShopMatch) {
-      const existing = crossShopMatch.game.playTimeInMilliseconds ?? 0;
-      if (pgPlaytimeMs > existing) {
-        const addedMs = pgPlaytimeMs - existing;
-        await gamesSublevel.put(crossShopMatch.key, {
-          ...crossShopMatch.game,
-          playTimeInMilliseconds: pgPlaytimeMs,
-        });
-        matched.push({
-          title: crossShopMatch.game.title ?? catalogueMatch.title,
-          addedHours: Math.round((addedMs / 3600000) * 10) / 10,
-        });
-        logger.info(
-          `[Playnite] Merged playtime into cross-shop match for "${crossShopMatch.game.title}" (${crossShopMatch.game.shop})`
-        );
-      }
+      await applyToLibraryGame(crossShopMatch, pg);
       continue;
     }
 
     const existingGame = existingAtKey;
 
     if (existingGame && !existingGame.isDeleted) {
-      // Game IS in the library — update its playtime directly.
-      if (pgPlaytimeMs > (existingGame.playTimeInMilliseconds ?? 0)) {
-        const addedMs =
-          pgPlaytimeMs - (existingGame.playTimeInMilliseconds ?? 0);
-        await gamesSublevel.put(gameKey, {
-          ...existingGame,
-          playTimeInMilliseconds: pgPlaytimeMs,
-        });
-        matched.push({
-          title: catalogueMatch.title,
-          addedHours: Math.round((addedMs / 3600000) * 10) / 10,
-        });
-        logger.info(
-          `[Playnite] Updated playtime for ${catalogueMatch.title}: +${(addedMs / 3600000).toFixed(1)}h`
-        );
-      }
+      await applyToLibraryGame({ key: gameKey, game: existingGame }, pg);
       continue;
     }
 
@@ -471,28 +597,85 @@ const importPlaynitePlaytime = async (
     // id, so when the user later adds this game to their library it shows the
     // correct Playnite playtime. The game is still surfaced as "unmatched" in
     // the result modal so the user knows it wasn't imported into the library.
-    await playnitePlaytimeCacheSublevel
-      .put(gameKey, {
-        shop: catalogueMatch.shop,
-        objectId: catalogueMatch.objectId,
-        title: catalogueMatch.title,
-        playTimeInMilliseconds: pgPlaytimeMs,
-        updatedAt: Date.now(),
-      })
-      .catch(() => {});
+    await removePlayniteCacheEntriesForGame({
+      shop: catalogueMatch.shop,
+      objectId: catalogueMatch.objectId,
+      title: catalogueMatch.title,
+    });
+    await playnitePlaytimeCacheSublevel.put(gameKey, {
+      shop: catalogueMatch.shop,
+      objectId: catalogueMatch.objectId,
+      sourceGameId: pg.gameId,
+      title: catalogueMatch.title,
+      normalizedTitle: compactGameTitle(catalogueMatch.title),
+      catalogueResolved: true,
+      playTimeInMilliseconds: pgPlaytimeMs,
+      updatedAt: Date.now(),
+    });
     cached.push({
       title: catalogueMatch.title,
-      playtimeHours: Math.round((pgPlaytimeMs / 3600000) * 10) / 10,
+      playtimeHours: toHours(pgPlaytimeMs),
+      catalogueMatched: true,
     });
     logger.info(
-      `[Playnite] Cached ${(pgPlaytimeMs / 3600000).toFixed(1)}h for "${catalogueMatch.title}" (${catalogueMatch.shop}:${catalogueMatch.objectId}) — not in library, will apply on add`
+      `[Playnite] Cached ${toHours(pgPlaytimeMs)}h for "${catalogueMatch.title}" (${catalogueMatch.shop}:${catalogueMatch.objectId}) — not in library, will apply on add`
     );
   }
+
+  const cloudSyncResults = await mapWithConcurrency(
+    pendingCloudPlaytime,
+    6,
+    async (pending) => {
+      if (
+        options.syncCloud === false ||
+        process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true"
+      ) {
+        return false;
+      }
+      if (!pending.remoteId || pending.shop === "custom") return false;
+      const synced = await HydraApi.put(
+        `/profile/games/${pending.shop}/${pending.objectId}/playtime`,
+        {
+          playTimeInSeconds: Math.trunc(pending.playTimeInMilliseconds / 1000),
+        }
+      )
+        .then(() => true)
+        .catch((error) => {
+          logger.warn(
+            `[Playnite] Absolute cloud playtime sync deferred for ${pending.shop}:${pending.objectId}`,
+            error
+          );
+          return false;
+        });
+      if (!synced) return false;
+      const current = await gamesSublevel.get(pending.key).catch(() => null);
+      if (!current) return true;
+      const acknowledgement = reconcilePlayniteAbsolutePlaytimeAcknowledgement(
+        current.playTimeInMilliseconds,
+        current.pendingAbsolutePlayTimeInMilliseconds,
+        pending.playTimeInMilliseconds
+      );
+      if (acknowledgement.action !== "ignore") {
+        await gamesSublevel.put(pending.key, {
+          ...current,
+          pendingAbsolutePlayTimeInMilliseconds:
+            acknowledgement.pendingAbsolutePlayTimeInMilliseconds,
+          unsyncedDeltaPlayTimeInMilliseconds:
+            acknowledgement.unsyncedDeltaPlayTimeInMilliseconds,
+        });
+      }
+      return acknowledgement.action === "clear";
+    }
+  );
+  const cloudSynced = cloudSyncResults.filter(Boolean).length;
 
   return {
     matched: matched.length,
     total: gamesWithPlaytime.length,
+    cloudSynced,
+    cloudSyncPending: pendingCloudPlaytime.length - cloudSynced,
     games: matched,
+    preserved,
     unmatched,
     cached,
     detectedPath,

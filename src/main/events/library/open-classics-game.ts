@@ -122,8 +122,8 @@ const openClassicsGame = async (
   }
 
   return runWithCloudSaveLaunchGate(objectId, shop, async () => {
-    // Emulator launches use the same mutually exclusive legacy/V2 pre-launch
-    // routing as native and store-URI games.
+    // Emulator launches use the same V2 pre-launch preparation as native and
+    // store-URI games.
     const preparation = await prepareGameCloudSaveLaunch(shop, objectId);
     if (!preparation.shouldLaunch) {
       await redirectBlockedGameCloudSaveLaunch(

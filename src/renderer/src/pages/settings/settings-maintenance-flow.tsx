@@ -165,9 +165,14 @@ export function SettingsMaintenanceFlow() {
       );
       try {
         const result = await window.electron.generateMissingMetadata();
+        const failure = result.failed
+          ? `, ${result.failed} still need attention`
+          : "";
         return result.updated > 0
-          ? `Updated ${result.updated} game${result.updated !== 1 ? "s" : ""}`
-          : "All games already had artwork";
+          ? `Updated ${result.updated} game${result.updated !== 1 ? "s" : ""}${failure}`
+          : result.failed > 0
+            ? `${result.failed} game${result.failed !== 1 ? "s" : ""} still need artwork`
+            : "All games already had working artwork";
       } finally {
         unsub();
       }
@@ -207,6 +212,7 @@ export function SettingsMaintenanceFlow() {
       if (report.notLoggedIn) {
         throw new Error("Not logged into GameHub");
       }
+      if (report.error) throw new Error(report.error);
       const fixed = report.issues.filter((i) => i.fixed).length;
       const unfixed = report.issues.length - fixed;
       return report.issues.length === 0

@@ -1,12 +1,22 @@
 import type { CloudSaveOverview, GameShop } from "@types";
 
+import {
+  getCloudSaveAccountScopeKey,
+  runWithCloudSaveAccountSession,
+} from "./account-session";
 import { analyzeCloudSaveState } from "./analyze-cloud-save-state";
+import {
+  buildCloudSaveObservationKey,
+  recordLatestCloudSaveObservation,
+} from "./automatic-sync-observation";
 import { getCloudSaveAutomaticSyncEnabled } from "./automatic-sync-settings";
 import { assertCloudSaveSubscription } from "./cloud-save-access";
+import { getCachedCloudSaveOverview } from "./cloud-save-overview-cache";
 import { cloudSaveFileKey } from "./cloud-save-contract";
+import { getUnconfiguredCloudSaveCustomPathCandidates } from "./custom-path-approval-policy";
 import { getFirstSyncState, getSuggestedCloudSaveAction } from "./sync-game";
 
-export const getCloudSaveOverview = async (
+const loadCloudSaveOverview = async (
   objectId: string,
   shop: GameShop
 ): Promise<CloudSaveOverview> => {
@@ -24,6 +34,20 @@ export const getCloudSaveOverview = async (
     ...(analysis.anchor?.unresolvedRemoteEntryIds ?? []),
     ...analysis.merge.unresolvedRemoteEntryIds,
   ]);
+  const unconfiguredCustomPathCount =
+    getUnconfiguredCloudSaveCustomPathCandidates(
+      analysis.remoteManifest?.files ?? [],
+      [
+        ...analysis.customPathBindings.ready,
+        ...analysis.customPathBindings.unresolved,
+      ].map(({ rawPath }) => rawPath)
+    ).length;
+  recordLatestCloudSaveObservation(
+    objectId,
+    shop,
+    buildCloudSaveObservationKey(analysis),
+    getCloudSaveAccountScopeKey()
+  );
 
   return {
     ...analysis.state,
@@ -41,8 +65,19 @@ export const getCloudSaveOverview = async (
         .filter((file) => unresolvedEntryIds.has(cloudSaveFileKey(file)))
         .map((file) => file.variantId)
     ).size,
+    unconfiguredCustomPathCount,
     warnings: analysis.localSnapshot.coverage.filter(
       (item) => item.warningCodes.length > 0
     ),
   };
 };
+
+export const getCloudSaveOverview = (
+  objectId: string,
+  shop: GameShop
+): Promise<CloudSaveOverview> =>
+  runWithCloudSaveAccountSession(() =>
+    getCachedCloudSaveOverview(objectId, shop, () =>
+      loadCloudSaveOverview(objectId, shop)
+    )
+  );

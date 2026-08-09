@@ -7,6 +7,7 @@ import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
 import { ClockIcon, TrophyIcon } from "@primer/octicons-react";
 import { Award } from "lucide-react";
 import { AchievementsBreakdownModal } from "./achievements-breakdown-modal";
+import { totalProfilePlayTimeInSeconds } from "./profile-library-data";
 import "./user-stats-box.scss";
 
 export function UserStatsBox() {
@@ -78,6 +79,11 @@ export function UserStatsBox() {
     [allGames]
   );
 
+  const localPlayTimeInSeconds = useMemo(
+    () => totalProfilePlayTimeInSeconds(allGames),
+    [allGames]
+  );
+
   if (!userStats) return null;
 
   const karma = isMe ? userDetails?.karma : userProfile?.karma;
@@ -101,8 +107,16 @@ export function UserStatsBox() {
     userStats.achievementsPointsEarnedSum !== undefined
       ? userStats.achievementsPointsEarnedSum
       : isMe && localPointsSum > 0
-        ? ({ value: localPointsSum, topPercentile: null } as any)
+        ? { value: localPointsSum, topPercentile: null }
         : undefined;
+  const serverPlayTimeInSeconds = userStats.totalPlayTimeInSeconds.value;
+  const totalPlayTimeInSeconds = isMe
+    ? Math.max(serverPlayTimeInSeconds, localPlayTimeInSeconds)
+    : serverPlayTimeInSeconds;
+  const playTimeTopPercentile =
+    isMe && localPlayTimeInSeconds > serverPlayTimeInSeconds
+      ? null
+      : userStats.totalPlayTimeInSeconds.topPercentile;
 
   return (
     <div className="user-stats__box">
@@ -152,18 +166,23 @@ export function UserStatsBox() {
           </li>
         )}
 
-        <li className="user-stats__list-item">
+        <li
+          className="user-stats__list-item"
+          data-profile-total-playtime-seconds={totalPlayTimeInSeconds}
+        >
           <h3 className="user-stats__list-title">{t("total_play_time")}</h3>
           <div className="user-stats__stats-row">
             <p className="user-stats__list-description">
               <ClockIcon />
-              {formatPlayTime(userStats.totalPlayTimeInSeconds.value)}
+              {formatPlayTime(totalPlayTimeInSeconds)}
             </p>
-            <p title={t("ranking_updated_weekly")}>
-              {t("top_percentile", {
-                percentile: userStats.totalPlayTimeInSeconds.topPercentile,
-              })}
-            </p>
+            {playTimeTopPercentile !== null && (
+              <p title={t("ranking_updated_weekly")}>
+                {t("top_percentile", {
+                  percentile: playTimeTopPercentile,
+                })}
+              </p>
+            )}
           </div>
         </li>
 

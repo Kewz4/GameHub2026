@@ -1,24 +1,41 @@
-import type { LibraryGame } from "@types";
-import { CloudSyncPanel } from "../../cloud-sync/cloud-sync-panel";
+import { CloudSavePanel, useCloudSaveV2 } from "../../cloud-save-v2";
 
-interface HydraCloudSettingsSectionProps {
-  game: LibraryGame;
-  automaticCloudSync: boolean;
-  onToggleAutomaticCloudSync: (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => Promise<void>;
-}
+export function HydraCloudSettingsSection() {
+  const {
+    overview,
+    isAutomaticSyncEnabled,
+    isRefreshing,
+    isSyncing,
+    isGameRunning,
+    hasError,
+    progress,
+    hasExecutablePath,
+    openFileBrowser,
+    selectExecutable,
+    runCloudSaveOperation,
+    setAutomaticSyncEnabled,
+    requestConflictResolution,
+  } = useCloudSaveV2();
 
-export function HydraCloudSettingsSection({
-  game: _game,
-  automaticCloudSync,
-  onToggleAutomaticCloudSync,
-}: Readonly<HydraCloudSettingsSectionProps>) {
   return (
     <div className="game-options-modal__cloud-panel">
-      <CloudSyncPanel
-        automaticCloudSync={automaticCloudSync}
-        onToggleAutomaticCloudSync={onToggleAutomaticCloudSync}
+      <CloudSavePanel
+        active
+        showLaunchConflictWarning={false}
+        overview={overview}
+        isLoading={isRefreshing}
+        isSyncing={isSyncing}
+        isGameRunning={isGameRunning}
+        hasExecutablePath={hasExecutablePath}
+        isAutomaticSyncEnabled={isAutomaticSyncEnabled}
+        hasError={hasError}
+        errorMessageKey={hasError ? "cloud_save_v2_load_error" : null}
+        progress={progress}
+        onSync={() => void runCloudSaveOperation()}
+        onOpenFileBrowser={openFileBrowser}
+        onSelectExecutable={selectExecutable}
+        onAutomaticSyncChange={setAutomaticSyncEnabled}
+        onResolveConflict={requestConflictResolution}
       />
     </div>
   );

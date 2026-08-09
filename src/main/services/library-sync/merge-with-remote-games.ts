@@ -7,6 +7,7 @@ import {
   gamesSublevel,
   levelKeys,
 } from "@main/level";
+import { canonicalizeUnlockedAchievements } from "../achievements/achievement-sync-policy";
 
 type ProfileGame = {
   id: string;
@@ -67,14 +68,12 @@ const syncCloudAchievementsToLocal = async (
 
   if (cloudUnlocked.length === 0) return;
 
-  // Merge: keep existing local unlocks, add cloud ones not already present.
-  const existingNames = new Set(
-    (local?.unlockedAchievements ?? []).map((u) => u.name.toUpperCase())
-  );
-  const merged = [
+  // Merge through the same canonical policy used by uploads so stale source
+  // names and duplicate rows cannot re-enter the local cache from cloud reads.
+  const merged = canonicalizeUnlockedAchievements(local?.achievements, [
     ...(local?.unlockedAchievements ?? []),
-    ...cloudUnlocked.filter((u) => !existingNames.has(u.name.toUpperCase())),
-  ];
+    ...cloudUnlocked,
+  ]);
 
   await gameAchievementsSublevel
     .put(gameKey, {
@@ -175,9 +174,11 @@ export const mergeWithRemoteGames = async ({
               : localGame.lastTimePlayed;
 
           const updatedPlayTime =
-            localGame.playTimeInMilliseconds < game.playTimeInMilliseconds
-              ? game.playTimeInMilliseconds
-              : localGame.playTimeInMilliseconds;
+            localGame.pendingAbsolutePlayTimeInMilliseconds != null
+              ? localGame.playTimeInMilliseconds
+              : localGame.playTimeInMilliseconds < game.playTimeInMilliseconds
+                ? game.playTimeInMilliseconds
+                : localGame.playTimeInMilliseconds;
 
           await gamesSublevel.put(gameKey, {
             ...localGame,
@@ -218,9 +219,10 @@ export const mergeWithRemoteGames = async ({
 
         // Construct coverImageUrl if not provided by backend (Steam games use predictable pattern)
         const coverImageUrl =
+          localGameShopAsset?.coverImageUrl ||
           game.coverImageUrl ||
           (game.shop === "steam"
-            ? `https://shared.steamstatic.com/store_item_assets/steam/apps/${game.objectId}/library_600x900_2x.jpg`
+            ? `https://cdn.akamai.steamstatic.com/steam/apps/${game.objectId}/library_600x900.jpg`
             : null);
 
         await gamesShopAssetsSublevel.put(gameKey, {
@@ -230,12 +232,16 @@ export const mergeWithRemoteGames = async ({
           objectId: game.objectId,
           title: localGame?.title || game.title, // Preserve local title if it exists
           coverImageUrl,
-          libraryHeroImageUrl: game.libraryHeroImageUrl,
-          libraryImageUrl: game.libraryImageUrl,
-          logoImageUrl: game.logoImageUrl,
-          iconUrl: game.iconUrl,
-          logoPosition: game.logoPosition,
-          downloadSources: game.downloadSources,
+          libraryHeroImageUrl:
+            localGameShopAsset?.libraryHeroImageUrl ?? game.libraryHeroImageUrl,
+          libraryImageUrl:
+            localGameShopAsset?.libraryImageUrl ?? game.libraryImageUrl,
+          logoImageUrl: localGameShopAsset?.logoImageUrl ?? game.logoImageUrl,
+          iconUrl: localGameShopAsset?.iconUrl ?? game.iconUrl,
+          logoPosition: localGameShopAsset?.logoPosition ?? game.logoPosition,
+          downloadSources: localGameShopAsset?.downloadSources?.length
+            ? localGameShopAsset.downloadSources
+            : game.downloadSources,
         });
 
         // Pull individual achievement unlocks from HydraCloud when the server

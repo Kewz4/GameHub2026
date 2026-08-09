@@ -4,13 +4,14 @@ use std::path::{Path, PathBuf};
 use napi::bindgen_prelude::Error;
 use napi_derive::napi;
 
-use crate::cloud_save::hashing::hash_file;
+use crate::cloud_save::hashing::batch::hash_files;
 use crate::cloud_save::identity::{
-    is_safe_capture, normalize_rule_path, KnownStoreAccount, SnapshotVariant,
+    is_safe_capture, normalize_rule_path, KnownStoreAccount, SnapshotVariant, StoreUserContext,
 };
 use crate::cloud_save::manifest::types::CloudSaveRule;
 use crate::cloud_save::path_resolution::{
-    build_context, glob_base_path, resolve_restore_root, ResolveSaveRulesInput,
+    build_context, glob_base_path, path_is_foreign_environment, resolve_path, resolve_restore_root,
+    rule_is_applicable, target_matches_rule, ResolveSaveRulesInput,
 };
 
 use super::metadata::parse_last_modified_at;
@@ -151,7 +152,7 @@ fn validated_steam_ids(account: &KnownStoreAccount) -> Option<(String, String)> 
 
 fn concrete_user_values(
     variant: &SnapshotVariant,
-    context: &crate::cloud_save::identity::StoreUserContext,
+    context: &StoreUserContext,
 ) -> Result<Vec<String>, &'static str> {
     match variant.kind.as_str() {
         "default" => Ok(Vec::new()),
@@ -226,6 +227,7 @@ fn resolve_restore_targets_inner(
         .collect::<Vec<_>>();
     let mut candidates = Vec::<(ResolvedRestoreTarget, RestoreManifestFile)>::new();
     let mut blocked_files = Vec::new();
+    let mut deferred_files = Vec::new();
     let mut identities = HashSet::new();
     let mut used_variants = HashSet::new();
 
@@ -247,6 +249,17 @@ fn resolve_restore_targets_inner(
             blocked_files.push(blocked(file, "blocked-rule-unavailable"));
             continue;
         }
+        let rules = rules
+            .into_iter()
+            .filter(|rule| {
+                rule_is_applicable(&rule.when, &context)
+                    && !path_is_foreign_environment(&rule.raw_path, &context)
+            })
+            .collect::<Vec<_>>();
+        if rules.is_empty() {
+            deferred_files.push(blocked(file, "foreign-environment"));
+            continue;
+        }
         if variant.kind == "default" && file.raw_path.contains("<storeUserId>") {
             blocked_files.push(blocked(file, "blocked-user-ambiguous"));
             continue;
@@ -265,6 +278,7 @@ fn resolve_restore_targets_inner(
         };
 
         let mut resolved_targets = Vec::new();
+        let mut rejected_incomplete_relative_path = false;
         for rule in rules {
             let directory = rule.kind == "dir" || has_glob(&rule.raw_path);
             let root_rule = if has_glob(&rule.raw_path) {
@@ -288,7 +302,7 @@ fn resolve_restore_targets_inner(
                     })
             });
             if let Some(preferred_path) = preferred_path {
-                resolved_roots.push(preferred_path.replace('\\', "/"));
+                resolved_roots.push((preferred_path.replace('\\', "/"), None));
             }
             for user_value in concrete_values {
                 if preferred_path.is_some() {
@@ -297,37 +311,42 @@ fn resolve_restore_targets_inner(
                 let concrete_rule = user_value
                     .map(|value| bind_store_user(&root_rule, value))
                     .unwrap_or_else(|| root_rule.clone());
-                if let Ok(root) = resolve_restore_root(
+                let concrete_target_rule = user_value
+                    .map(|value| bind_store_user(&rule.raw_path, value))
+                    .unwrap_or_else(|| rule.raw_path.clone());
+                let resolved_root = resolve_restore_root(
                     &concrete_rule,
+                    &concrete_target_rule,
                     &context,
                     directory,
+                    rule.kind == "dir",
                     std::slice::from_ref(&file.relative_path),
-                ) {
-                    if variant.kind == "opaque-folder" && !Path::new(&root).exists() {
-                        continue;
-                    }
-                    resolved_roots.push(root);
+                );
+                if resolved_root
+                    .as_ref()
+                    .is_err_and(|error| error == "cloud_save_restore_relative_path_incomplete")
+                {
+                    rejected_incomplete_relative_path = true;
+                }
+                if let Ok(root) = resolved_root {
+                    let concrete_rule = has_glob(&rule.raw_path)
+                        .then(|| resolve_path(&concrete_target_rule, &context).paths);
+                    resolved_roots.push((root, concrete_rule));
                 }
             }
 
-            if variant.kind == "steam-account" {
-                let existing = resolved_roots
-                    .iter()
-                    .filter(|root| Path::new(root).exists())
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if !existing.is_empty() {
-                    resolved_roots = existing;
-                } else {
-                    resolved_roots.truncate(1);
-                }
-            }
-            for root in resolved_roots {
+            for (root, concrete_rule) in resolved_roots {
                 let target_path = if directory {
                     join_path(&root, &file.relative_path)
                 } else {
                     root.clone()
                 };
+                if concrete_rule.as_ref().is_some_and(|candidates| {
+                    !target_matches_rule(candidates, &target_path, rule.kind == "dir")
+                }) {
+                    rejected_incomplete_relative_path = true;
+                    continue;
+                }
                 let restore_root_path = if directory {
                     root
                 } else {
@@ -358,8 +377,27 @@ fn resolve_restore_targets_inner(
             canonical_target_key(&left.0, case_sensitive)
                 == canonical_target_key(&right.0, case_sensitive)
         });
+        if variant.kind == "steam-account" && resolved_targets.len() > 1 {
+            let existing = resolved_targets
+                .iter()
+                .filter(|(target_path, restore_root_path)| {
+                    Path::new(target_path).exists() || Path::new(restore_root_path).exists()
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            if !existing.is_empty() {
+                resolved_targets = existing;
+            }
+        }
         if resolved_targets.is_empty() {
-            blocked_files.push(blocked(file, "blocked-user-not-found"));
+            blocked_files.push(blocked(
+                file,
+                if rejected_incomplete_relative_path {
+                    "blocked-relative-path-incomplete"
+                } else {
+                    "blocked-user-not-found"
+                },
+            ));
             continue;
         }
         if resolved_targets.len() > 1 {
@@ -368,8 +406,13 @@ fn resolve_restore_targets_inner(
         }
 
         let (target_path, restore_root_path) = resolved_targets.remove(0);
-        let action = if Path::new(&target_path).is_file()
-            && hash_file(&target_path).is_ok_and(|hash| hash == file.hash)
+        let observed = hash_files(vec![target_path.clone()], vec![])
+            .ok()
+            .and_then(|mut result| result.files.pop())
+            .map(|file| (file.hash, file.size_bytes, file.last_modified_at));
+        let action = if observed
+            .as_ref()
+            .is_some_and(|(hash, _, _)| hash == &file.hash)
         {
             "skip-identical"
         } else if Path::new(&target_path).exists() {
@@ -377,6 +420,11 @@ fn resolve_restore_targets_inner(
         } else {
             "create"
         };
+        let (observed_hash, observed_size_bytes, observed_last_modified_at) = observed
+            .map(|(hash, size_bytes, last_modified_at)| {
+                (Some(hash), Some(size_bytes), Some(last_modified_at))
+            })
+            .unwrap_or((None, None, None));
         candidates.push((
             ResolvedRestoreTarget {
                 variant_id: file.variant_id.clone(),
@@ -388,6 +436,9 @@ fn resolve_restore_targets_inner(
                 size_bytes: file.size_bytes,
                 last_modified_at: file.last_modified_at.clone(),
                 action: action.to_string(),
+                observed_hash,
+                observed_size_bytes,
+                observed_last_modified_at,
             },
             file,
         ));
@@ -428,10 +479,17 @@ fn resolve_restore_targets_inner(
             file.variant_id, file.raw_path, file.relative_path
         )
     });
+    deferred_files.sort_by_key(|file| {
+        format!(
+            "{}\0{}\0{}",
+            file.variant_id, file.raw_path, file.relative_path
+        )
+    });
 
     Ok(ResolveRestoreTargetsResult {
         actions,
         blocked: blocked_files,
+        deferred: deferred_files,
     })
 }
 
@@ -452,7 +510,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::cloud_save::identity::{KnownStoreAccount, StoreUserContext};
+    use crate::cloud_save::manifest::types::CloudSaveRuleCondition;
     use crate::cloud_save::restore::types::ApprovedRestoreRule;
 
     const RAW_RULE: &str = "<home>/Game/<storeUserId>";
@@ -480,7 +538,6 @@ mod tests {
 
     fn input(
         home: &Path,
-        context: StoreUserContext,
         variants: Vec<SnapshotVariant>,
         files: Vec<RestoreManifestFile>,
     ) -> ResolveRestoreTargetsInput {
@@ -494,12 +551,13 @@ mod tests {
             executable_path: None,
             wine_prefix_path: None,
             steam_path: None,
-            store_user_context: context,
+            store_user_context: StoreUserContext::default(),
             approved_rules: vec![ApprovedRestoreRule {
                 kind: "dir".into(),
                 raw_path: RAW_RULE.into(),
                 source: "test".into(),
                 preferred_path: None,
+                when: vec![],
             }],
             variants,
             files,
@@ -513,20 +571,13 @@ mod tests {
         let mut remote_file = file(&variant, "slot.sav");
         remote_file.raw_path =
             "<custom><windows><absolute>C:/Users/Rodrigo/Downloads/Game/Saves".into();
-        let mut restore_input = input(
-            temp.path(),
-            StoreUserContext {
-                active: None,
-                known: Vec::new(),
-            },
-            vec![variant],
-            vec![remote_file],
-        );
+        let mut restore_input = input(temp.path(), vec![variant], vec![remote_file]);
         restore_input.approved_rules = vec![ApprovedRestoreRule {
             kind: "dir".into(),
             raw_path: "<custom><windows><absolute>C:/Users/Rodrigo/Downloads/Game/Saves".into(),
             source: "custom".into(),
             preferred_path: None,
+            when: vec![],
         }];
 
         let result = resolve_restore_targets_inner(restore_input).unwrap();
@@ -540,6 +591,37 @@ mod tests {
     }
 
     #[test]
+    fn reports_the_current_file_metadata_for_an_existing_target() {
+        let temp = tempdir().unwrap();
+        let target_root = temp.path().join("Game");
+        fs::create_dir_all(&target_root).unwrap();
+        fs::write(target_root.join("slot.sav"), b"save").unwrap();
+        let variant = variant("default", "");
+        let mut remote_file = file(&variant, "slot.sav");
+        remote_file.raw_path = "<home>/Game".into();
+        remote_file.hash = format!("{:x}", Sha256::digest(b"save"));
+        let mut restore_input = input(temp.path(), vec![variant], vec![remote_file.clone()]);
+        restore_input.approved_rules = vec![ApprovedRestoreRule {
+            kind: "dir".into(),
+            raw_path: remote_file.raw_path.clone(),
+            source: "test".into(),
+            preferred_path: None,
+            when: vec![],
+        }];
+
+        let result = resolve_restore_targets_inner(restore_input).unwrap();
+
+        assert_eq!(result.actions.len(), 1);
+        assert_eq!(result.actions[0].action, "skip-identical");
+        assert_eq!(
+            result.actions[0].observed_hash.as_deref(),
+            Some(remote_file.hash.as_str())
+        );
+        assert_eq!(result.actions[0].observed_size_bytes, Some(4.0));
+        assert!(result.actions[0].observed_last_modified_at.is_some());
+    }
+
+    #[test]
     fn restores_a_windows_custom_path_to_the_approved_active_profile() {
         let temp = tempdir().unwrap();
         let prefix = temp.path().join("prefix");
@@ -550,15 +632,7 @@ mod tests {
         let raw_path = "<custom><windows><winAppData>/Game";
         let mut remote_file = file(&variant, "slot.sav");
         remote_file.raw_path = raw_path.into();
-        let mut restore_input = input(
-            temp.path(),
-            StoreUserContext {
-                active: None,
-                known: Vec::new(),
-            },
-            vec![variant],
-            vec![remote_file],
-        );
+        let mut restore_input = input(temp.path(), vec![variant], vec![remote_file]);
         restore_input.platform = "linux".into();
         restore_input.executable_path =
             Some(temp.path().join("Game/game.exe").display().to_string());
@@ -568,6 +642,10 @@ mod tests {
             raw_path: raw_path.into(),
             source: "custom".into(),
             preferred_path: Some(approved_root.display().to_string()),
+            when: vec![CloudSaveRuleCondition {
+                os: Some("windows".into()),
+                store: None,
+            }],
         }];
 
         let result = resolve_restore_targets_inner(restore_input).unwrap();
@@ -591,15 +669,7 @@ mod tests {
         let raw_path = "<custom><windows><winDocuments>/Game";
         let mut remote_file = file(&variant, "slot.sav");
         remote_file.raw_path = raw_path.into();
-        let mut restore_input = input(
-            temp.path(),
-            StoreUserContext {
-                active: None,
-                known: Vec::new(),
-            },
-            vec![variant],
-            vec![remote_file],
-        );
+        let mut restore_input = input(temp.path(), vec![variant], vec![remote_file]);
         restore_input.platform = "linux".into();
         restore_input.executable_path =
             Some(temp.path().join("Game/game.exe").display().to_string());
@@ -609,6 +679,7 @@ mod tests {
             raw_path: raw_path.into(),
             source: "custom".into(),
             preferred_path: Some(selected.display().to_string()),
+            when: vec![],
         }];
 
         let result = resolve_restore_targets_inner(restore_input).unwrap();
@@ -634,181 +705,428 @@ mod tests {
             .iter()
             .map(|variant| file(variant, "slot.dat"))
             .collect();
-        let result = resolve_restore_targets_inner(input(
-            temp.path(),
-            StoreUserContext::default(),
-            variants,
-            files,
-        ))
-        .unwrap();
+        let result = resolve_restore_targets_inner(input(temp.path(), variants, files)).unwrap();
 
         assert!(result.blocked.is_empty());
         assert_eq!(result.actions.len(), 2);
     }
 
     #[test]
-    fn refuses_to_create_a_missing_opaque_folder() {
+    fn creates_an_exact_missing_profile_folder() {
         let temp = tempdir().unwrap();
         let variants = vec![variant("opaque-folder", "Unknown")];
         let files = vec![file(&variants[0], "slot.dat")];
-        let result = resolve_restore_targets_inner(input(
-            temp.path(),
-            StoreUserContext::default(),
-            variants,
-            files,
-        ))
-        .unwrap();
-
-        assert!(result.actions.is_empty());
-        assert_eq!(result.blocked[0].reason, "blocked-user-not-found");
-    }
-
-    #[test]
-    fn validated_account_can_create_its_exact_missing_folder() {
-        let temp = tempdir().unwrap();
-        let account = KnownStoreAccount {
-            store: "steam".into(),
-            steam_id64: Some("76561197960278073".into()),
-            account_id32: Some("12345".into()),
-            source: "loginusers".into(),
-        };
-        let context = StoreUserContext {
-            active: Some(account.clone()),
-            known: vec![account],
-        };
-        let variants = vec![variant("steam-account", "76561197960278073")];
-        let files = vec![file(&variants[0], "slot.dat")];
-        let result =
-            resolve_restore_targets_inner(input(temp.path(), context, variants, files)).unwrap();
+        let result = resolve_restore_targets_inner(input(temp.path(), variants, files)).unwrap();
 
         assert!(result.blocked.is_empty());
         assert_eq!(result.actions.len(), 1);
         assert_eq!(result.actions[0].action, "create");
+        assert!(result.actions[0]
+            .target_path
+            .replace('\\', "/")
+            .ends_with("/Game/Unknown/slot.dat"));
+    }
+
+    fn intermediate_glob_restore_input(
+        home: &Path,
+        relative_path: &str,
+    ) -> ResolveRestoreTargetsInput {
+        let profile = variant("opaque-folder", "76561197960267366");
+        let raw_path = "<home>/Hk_project/Saved/SaveGames/<storeUserId>/Slots/Slot_*/Data.sav";
+        ResolveRestoreTargetsInput {
+            shop: "steam".into(),
+            object_id: "1332010".into(),
+            platform: "windows".into(),
+            home_dir: home.display().to_string(),
+            documents_dir: None,
+            app_data_dir: None,
+            executable_path: None,
+            wine_prefix_path: None,
+            steam_path: None,
+            store_user_context: StoreUserContext::default(),
+            approved_rules: vec![ApprovedRestoreRule {
+                kind: "file".into(),
+                raw_path: raw_path.into(),
+                source: "ludusavi".into(),
+                preferred_path: None,
+                when: vec![],
+            }],
+            variants: vec![profile.clone()],
+            files: vec![RestoreManifestFile {
+                variant_id: profile.variant_id,
+                raw_path: raw_path.into(),
+                relative_path: relative_path.into(),
+                hash: "a".repeat(64),
+                size_bytes: 4.0,
+                last_modified_at: LAST_MODIFIED_AT.into(),
+            }],
+        }
     }
 
     #[test]
-    fn restores_remote_snapshot_accounts_independently_from_the_local_account() {
+    fn restores_intermediate_glob_segments_from_the_portable_relative_path() {
         let temp = tempdir().unwrap();
-        let local = KnownStoreAccount {
-            store: "steam".into(),
-            steam_id64: Some("76561199208012825".into()),
-            account_id32: Some("1247747097".into()),
-            source: "active-login".into(),
-        };
-        let remote_accounts = [
-            ("76561199800542110", "1840276382"),
-            ("76561199865645641", "1905379913"),
-            ("76561198835007011", "874741283"),
-        ];
-        let mut known = vec![local.clone()];
-        known.extend(
-            remote_accounts.map(|(steam_id64, account_id32)| KnownStoreAccount {
-                store: "steam".into(),
-                steam_id64: Some(steam_id64.into()),
-                account_id32: Some(account_id32.into()),
-                source: "remote-snapshot".into(),
-            }),
-        );
-        let context = StoreUserContext {
-            active: Some(local),
-            known,
-        };
-        let variants = remote_accounts
-            .map(|(steam_id64, _)| variant("steam-account", steam_id64))
-            .to_vec();
-        let files = variants
-            .iter()
-            .map(|variant| file(variant, "slot.dat"))
-            .collect();
-
-        let result =
-            resolve_restore_targets_inner(input(temp.path(), context, variants, files)).unwrap();
+        let result = resolve_restore_targets_inner(intermediate_glob_restore_input(
+            temp.path(),
+            "Slot_1/Data.sav",
+        ))
+        .unwrap();
 
         assert!(result.blocked.is_empty());
-        assert_eq!(result.actions.len(), 3);
-        for (steam_id64, _) in remote_accounts {
-            assert!(result.actions.iter().any(|action| {
-                action
-                    .target_path
-                    .replace('\\', "/")
-                    .ends_with(&format!("/Game/{steam_id64}/slot.dat"))
-            }));
-        }
-        assert!(result
-            .actions
-            .iter()
-            .all(|action| !action.target_path.contains("76561199208012825")));
+        assert_eq!(result.actions.len(), 1);
+        assert!(result.actions[0]
+            .restore_root_path
+            .replace('\\', "/")
+            .ends_with("/76561197960267366/Slots"));
+        assert!(result.actions[0]
+            .target_path
+            .replace('\\', "/")
+            .ends_with("/76561197960267366/Slots/Slot_1/Data.sav"));
     }
 
     #[test]
-    fn reuses_an_existing_account_id32_folder_for_a_remote_account() {
+    fn ignores_a_legacy_layout_when_resolving_intermediate_glob_segments() {
         let temp = tempdir().unwrap();
-        fs::create_dir_all(temp.path().join("Game").join("1840276382")).unwrap();
-        let account = KnownStoreAccount {
-            store: "steam".into(),
-            steam_id64: Some("76561199800542110".into()),
-            account_id32: Some("1840276382".into()),
-            source: "remote-snapshot".into(),
-        };
-        let context = StoreUserContext {
-            active: None,
-            known: vec![account],
-        };
-        let variants = vec![variant("steam-account", "76561199800542110")];
-        let files = vec![file(&variants[0], "slot.dat")];
+        let legacy = temp
+            .path()
+            .join("Hk_project/Saved/SaveGames/76561197960267366/Slots/Data.sav");
+        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        fs::write(&legacy, b"legacy save").unwrap();
 
-        let result =
-            resolve_restore_targets_inner(input(temp.path(), context, variants, files)).unwrap();
+        let result = resolve_restore_targets_inner(intermediate_glob_restore_input(
+            temp.path(),
+            "Slot_1/Data.sav",
+        ))
+        .unwrap();
 
         assert!(result.blocked.is_empty());
         assert_eq!(result.actions.len(), 1);
         assert!(result.actions[0]
             .target_path
             .replace('\\', "/")
-            .ends_with("/Game/1840276382/slot.dat"));
+            .ends_with("/76561197960267366/Slots/Slot_1/Data.sav"));
+        assert_eq!(fs::read(&legacy).unwrap(), b"legacy save");
     }
 
     #[test]
-    fn blocks_a_remote_account_when_both_steam_folder_formats_exist() {
+    fn ignores_a_legacy_layout_inside_the_active_wine_prefix() {
         let temp = tempdir().unwrap();
-        fs::create_dir_all(temp.path().join("Game").join("76561199800542110")).unwrap();
-        fs::create_dir_all(temp.path().join("Game").join("1840276382")).unwrap();
-        let account = KnownStoreAccount {
-            store: "steam".into(),
-            steam_id64: Some("76561199800542110".into()),
-            account_id32: Some("1840276382".into()),
-            source: "remote-snapshot".into(),
-        };
-        let context = StoreUserContext {
-            active: None,
-            known: vec![account],
-        };
-        let variants = vec![variant("steam-account", "76561199800542110")];
-        let files = vec![file(&variants[0], "slot.dat")];
+        let prefix = temp.path().join("prefix");
+        let save_root = prefix.join(
+            "drive_c/users/steamuser/AppData/Local/Hk_project/Saved/SaveGames/76561197960267366/Slots",
+        );
+        fs::create_dir_all(&save_root).unwrap();
+        let legacy = save_root.join("Data.sav");
+        fs::write(&legacy, b"legacy save").unwrap();
 
+        let raw_path =
+            "<winLocalAppData>/Hk_project/Saved/SaveGames/<storeUserId>/Slots/Slot_*/Data.sav";
+        let mut restore_input = intermediate_glob_restore_input(temp.path(), "Slot_1/Data.sav");
+        restore_input.platform = "linux".into();
+        restore_input.executable_path = Some(temp.path().join("Stray.exe").display().to_string());
+        restore_input.wine_prefix_path = Some(prefix.display().to_string());
+        restore_input.approved_rules[0].raw_path = raw_path.into();
+        restore_input.files[0].raw_path = raw_path.into();
+
+        let result = resolve_restore_targets_inner(restore_input).unwrap();
+
+        assert!(result.blocked.is_empty());
+        assert_eq!(result.actions.len(), 1);
+        assert_eq!(
+            Path::new(&result.actions[0].target_path),
+            save_root.join("Slot_1/Data.sav")
+        );
+        assert_eq!(fs::read(&legacy).unwrap(), b"legacy save");
+    }
+
+    #[test]
+    fn resolves_each_profile_independently_when_legacy_layouts_exist() {
+        let temp = tempdir().unwrap();
+        let second_profile = variant("opaque-folder", "76561199873967367");
+        let mut restore_input = intermediate_glob_restore_input(temp.path(), "Slot_1/Data.sav");
+        let mut second_file = restore_input.files[0].clone();
+        second_file.variant_id = second_profile.variant_id.clone();
+        restore_input.variants.push(second_profile);
+        restore_input.files.push(second_file);
+
+        for profile in ["76561197960267366", "76561199873967367"] {
+            let legacy = temp
+                .path()
+                .join("Hk_project/Saved/SaveGames")
+                .join(profile)
+                .join("Slots/Data.sav");
+            fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+            fs::write(legacy, b"legacy save").unwrap();
+        }
+
+        let result = resolve_restore_targets_inner(restore_input).unwrap();
+
+        assert!(result.blocked.is_empty());
+        assert_eq!(result.actions.len(), 2);
+        for profile in ["76561197960267366", "76561199873967367"] {
+            assert!(result.actions.iter().any(|action| {
+                action
+                    .target_path
+                    .replace('\\', "/")
+                    .ends_with(&format!("/{profile}/Slots/Slot_1/Data.sav"))
+            }));
+        }
+    }
+
+    #[test]
+    fn blocks_legacy_file_glob_entries_that_lost_intermediate_segments() {
+        let temp = tempdir().unwrap();
         let result =
-            resolve_restore_targets_inner(input(temp.path(), context, variants, files)).unwrap();
+            resolve_restore_targets_inner(intermediate_glob_restore_input(temp.path(), "Data.sav"))
+                .unwrap();
 
         assert!(result.actions.is_empty());
         assert_eq!(result.blocked.len(), 1);
-        assert_eq!(result.blocked[0].reason, "blocked-target-ambiguous");
+        assert_eq!(result.blocked[0].reason, "blocked-relative-path-incomplete");
     }
 
     #[test]
-    fn blocks_a_steam_variant_when_the_account_is_not_known() {
+    fn validates_intermediate_segments_for_directory_globs() {
+        let temp = tempdir().unwrap();
+        let raw_path = "<home>/Hk_project/Saved/SaveGames/<storeUserId>/Slots/Slot_*".to_string();
+        let mut valid = intermediate_glob_restore_input(temp.path(), "Slot_1/Data.sav");
+        valid.approved_rules[0].kind = "dir".into();
+        valid.approved_rules[0].raw_path = raw_path.clone();
+        valid.files[0].raw_path = raw_path.clone();
+
+        let valid_result = resolve_restore_targets_inner(valid).unwrap();
+        assert!(valid_result.blocked.is_empty());
+        assert_eq!(valid_result.actions.len(), 1);
+        assert!(valid_result.actions[0]
+            .target_path
+            .replace('\\', "/")
+            .ends_with("/76561197960267366/Slots/Slot_1/Data.sav"));
+
+        let mut legacy = intermediate_glob_restore_input(temp.path(), "Data.sav");
+        legacy.approved_rules[0].kind = "dir".into();
+        legacy.approved_rules[0].raw_path = raw_path.clone();
+        legacy.files[0].raw_path = raw_path;
+
+        let legacy_result = resolve_restore_targets_inner(legacy).unwrap();
+        assert!(legacy_result.actions.is_empty());
+        assert_eq!(legacy_result.blocked.len(), 1);
+        assert_eq!(
+            legacy_result.blocked[0].reason,
+            "blocked-relative-path-incomplete"
+        );
+    }
+
+    #[test]
+    fn restores_wildcard_segments_that_precede_a_captured_profile() {
+        let temp = tempdir().unwrap();
+        let profile = variant("opaque-folder", "Goldberg");
+        let raw_path = "<home>/Games/Game_*/<storeUserId>/slot.dat";
+        let result = resolve_restore_targets_inner(ResolveRestoreTargetsInput {
+            shop: "steam".into(),
+            object_id: "1".into(),
+            platform: "windows".into(),
+            home_dir: temp.path().display().to_string(),
+            documents_dir: None,
+            app_data_dir: None,
+            executable_path: None,
+            wine_prefix_path: None,
+            steam_path: None,
+            store_user_context: StoreUserContext::default(),
+            approved_rules: vec![ApprovedRestoreRule {
+                kind: "file".into(),
+                raw_path: raw_path.into(),
+                source: "test".into(),
+                preferred_path: None,
+                when: vec![],
+            }],
+            variants: vec![profile.clone()],
+            files: vec![RestoreManifestFile {
+                variant_id: profile.variant_id,
+                raw_path: raw_path.into(),
+                relative_path: "Game_A/Goldberg/slot.dat".into(),
+                hash: "a".repeat(64),
+                size_bytes: 4.0,
+                last_modified_at: LAST_MODIFIED_AT.into(),
+            }],
+        })
+        .unwrap();
+
+        assert!(result.blocked.is_empty());
+        assert_eq!(result.actions.len(), 1);
+        assert!(result.actions[0]
+            .target_path
+            .replace('\\', "/")
+            .ends_with("/Games/Game_A/Goldberg/slot.dat"));
+    }
+
+    #[test]
+    fn keeps_valid_file_glob_shapes_restoreable() {
+        for (raw_path, relative_path) in [
+            ("<home>/Game/SLOT*.SAV", "slot1.sav"),
+            ("<home>/Game/*.{sav,dat}", "slot.dat"),
+            ("<home>/Game/[{]Deluxe[}]/save*.dat", "{Deluxe}/save1.dat"),
+        ] {
+            let temp = tempdir().unwrap();
+            let default = variant("default", "default");
+            let result = resolve_restore_targets_inner(ResolveRestoreTargetsInput {
+                shop: "steam".into(),
+                object_id: "1".into(),
+                platform: "windows".into(),
+                home_dir: temp.path().display().to_string(),
+                documents_dir: None,
+                app_data_dir: None,
+                executable_path: None,
+                wine_prefix_path: None,
+                steam_path: None,
+                store_user_context: StoreUserContext::default(),
+                approved_rules: vec![ApprovedRestoreRule {
+                    kind: "file".into(),
+                    raw_path: raw_path.into(),
+                    source: "test".into(),
+                    preferred_path: None,
+                    when: vec![],
+                }],
+                variants: vec![default.clone()],
+                files: vec![RestoreManifestFile {
+                    variant_id: default.variant_id,
+                    raw_path: raw_path.into(),
+                    relative_path: relative_path.into(),
+                    hash: "a".repeat(64),
+                    size_bytes: 4.0,
+                    last_modified_at: LAST_MODIFIED_AT.into(),
+                }],
+            })
+            .unwrap();
+
+            assert!(
+                result.blocked.is_empty(),
+                "{raw_path}: {:?}",
+                result
+                    .blocked
+                    .iter()
+                    .map(|file| file.reason.as_str())
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(result.actions.len(), 1, "{raw_path}");
+            assert!(
+                result.actions[0]
+                    .target_path
+                    .replace('\\', "/")
+                    .ends_with(&format!("/Game/{relative_path}")),
+                "{raw_path}: {}",
+                result.actions[0].target_path
+            );
+        }
+    }
+
+    #[test]
+    fn defers_a_foreign_environment_without_blocking_the_restore() {
+        let temp = tempdir().unwrap();
+        let variant = variant("default", "");
+        let raw_path = "<xdgConfig>/Team Cherry/Hollow Knight Silksong";
+        let mut remote_file = file(&variant, "slot.dat");
+        remote_file.raw_path = raw_path.into();
+        let mut restore_input = input(temp.path(), vec![variant], vec![remote_file]);
+        restore_input.approved_rules = vec![ApprovedRestoreRule {
+            kind: "dir".into(),
+            raw_path: raw_path.into(),
+            source: "ludusavi".into(),
+            preferred_path: None,
+            when: vec![CloudSaveRuleCondition {
+                os: Some("linux".into()),
+                store: None,
+            }],
+        }];
+
+        let result = resolve_restore_targets_inner(restore_input).unwrap();
+
+        assert!(result.actions.is_empty());
+        assert!(result.blocked.is_empty());
+        assert_eq!(result.deferred.len(), 1);
+        assert_eq!(result.deferred[0].reason, "foreign-environment");
+    }
+
+    #[test]
+    fn shipped_steam_variant_restores_to_the_existing_account_id32_folder() {
+        let temp = tempdir().unwrap();
+        fs::create_dir_all(temp.path().join("Game/12345")).unwrap();
+        let variants = vec![variant("steam-account", "76561197960278073")];
+        let files = vec![file(&variants[0], "slot.dat")];
+        let mut restore_input = input(temp.path(), variants, files);
+        let account = KnownStoreAccount {
+            store: "steam".into(),
+            steam_id64: Some("76561197960278073".into()),
+            account_id32: Some("12345".into()),
+            source: "known-login".into(),
+        };
+        restore_input.store_user_context = StoreUserContext {
+            active: Some(account.clone()),
+            known: vec![account],
+        };
+        let result = resolve_restore_targets_inner(restore_input).unwrap();
+
+        assert!(result.blocked.is_empty());
+        assert_eq!(result.actions.len(), 1);
+        assert_eq!(result.actions[0].action, "create");
+        assert!(result.actions[0]
+            .target_path
+            .replace('\\', "/")
+            .ends_with("/Game/12345/slot.dat"));
+    }
+
+    #[test]
+    fn shipped_steam_variant_requires_a_validated_local_or_snapshot_account() {
         let temp = tempdir().unwrap();
         let variants = vec![variant("steam-account", "76561197960278073")];
         let files = vec![file(&variants[0], "slot.dat")];
-        let result = resolve_restore_targets_inner(input(
-            temp.path(),
-            StoreUserContext::default(),
-            variants,
-            files,
-        ))
-        .unwrap();
+        let result = resolve_restore_targets_inner(input(temp.path(), variants, files)).unwrap();
 
         assert!(result.actions.is_empty());
+        assert_eq!(result.blocked.len(), 1);
         assert_eq!(result.blocked[0].reason, "blocked-user-not-found");
+    }
+
+    #[test]
+    fn preserves_different_numeric_profile_folders_as_different_targets() {
+        let temp = tempdir().unwrap();
+        let profile_ids = ["76561199800542110", "1840276382", "Goldberg"];
+        let variants = profile_ids
+            .map(|profile_id| variant("opaque-folder", profile_id))
+            .to_vec();
+        let files = variants
+            .iter()
+            .map(|variant| file(variant, "slot.dat"))
+            .collect();
+
+        let result = resolve_restore_targets_inner(input(temp.path(), variants, files)).unwrap();
+
+        assert!(result.blocked.is_empty());
+        assert_eq!(result.actions.len(), 3);
+        for profile_id in profile_ids {
+            assert!(result.actions.iter().any(|action| {
+                action
+                    .target_path
+                    .replace('\\', "/")
+                    .ends_with(&format!("/Game/{profile_id}/slot.dat"))
+            }));
+        }
+    }
+
+    #[test]
+    fn does_not_alias_different_numeric_folder_formats() {
+        let temp = tempdir().unwrap();
+        fs::create_dir_all(temp.path().join("Game").join("1840276382")).unwrap();
+        let variants = vec![variant("opaque-folder", "76561199800542110")];
+        let files = vec![file(&variants[0], "slot.dat")];
+
+        let result = resolve_restore_targets_inner(input(temp.path(), variants, files)).unwrap();
+
+        assert!(result.blocked.is_empty());
+        assert_eq!(result.actions.len(), 1);
+        assert!(result.actions[0]
+            .target_path
+            .replace('\\', "/")
+            .ends_with("/Game/76561199800542110/slot.dat"));
     }
 
     #[test]
@@ -832,6 +1150,7 @@ mod tests {
                 raw_path: raw_path.into(),
                 source: "test".into(),
                 preferred_path: None,
+                when: vec![],
             }],
             variants: vec![default.clone()],
             files: vec![RestoreManifestFile {
@@ -879,6 +1198,7 @@ mod tests {
                 raw_path: raw_path.clone(),
                 source: "custom".into(),
                 preferred_path: None,
+                when: vec![],
             }],
             variants: vec![default.clone()],
             files: vec![RestoreManifestFile {
@@ -928,12 +1248,14 @@ mod tests {
                     raw_path: raw_path.into(),
                     source: "first".into(),
                     preferred_path: None,
+                    when: vec![],
                 },
                 ApprovedRestoreRule {
                     kind: "dir".into(),
                     raw_path: raw_path.into(),
                     source: "second".into(),
                     preferred_path: None,
+                    when: vec![],
                 },
             ],
             variants: vec![default.clone()],
@@ -957,13 +1279,7 @@ mod tests {
         let temp = tempdir().unwrap();
         let variants = vec![variant("opaque-folder", "Goldberg")];
         let files = vec![file(&variants[0], "../slot.dat")];
-        assert!(resolve_restore_targets_inner(input(
-            temp.path(),
-            StoreUserContext::default(),
-            variants,
-            files
-        ))
-        .is_err());
+        assert!(resolve_restore_targets_inner(input(temp.path(), variants, files)).is_err());
     }
 
     #[test]
@@ -973,13 +1289,7 @@ mod tests {
             let variants = vec![variant("opaque-folder", "Goldberg")];
             let files = vec![file(&variants[0], relative_path)];
 
-            assert!(resolve_restore_targets_inner(input(
-                temp.path(),
-                StoreUserContext::default(),
-                variants,
-                files,
-            ))
-            .is_err());
+            assert!(resolve_restore_targets_inner(input(temp.path(), variants, files,)).is_err());
         }
     }
 }

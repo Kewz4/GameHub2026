@@ -292,6 +292,7 @@ describe("cloud save V2 file details", () => {
             shop: "steam",
             objectId: "814380",
           },
+          customPathRawPaths: [],
           variants,
           files: remoteFiles,
         };
@@ -321,6 +322,7 @@ describe("cloud save V2 file details", () => {
             shop: "steam",
             objectId: "814380",
           },
+          customPathRawPaths: [],
           variants,
           files: [file(firstVariantId, "a"), file(secondVariantId, "a")],
         })

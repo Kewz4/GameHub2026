@@ -1,12 +1,18 @@
 import { cloudSaveSyncAnchorsSublevel } from "@main/level";
-import { CloudSync } from "@main/services/cloud-sync";
 import type { CloudSaveSyncAnchor, GameShop } from "@types";
+import {
+  assertCloudSaveAccountSessionCurrent,
+  getCloudSaveAccountUserId,
+} from "./account-session";
 
 import {
   CLOUD_SAVE_HASH_PATTERN,
   cloudSaveFileKey,
 } from "./cloud-save-contract";
-import { isCloudSaveSyncAnchorKeyForGame } from "./sync-anchor-key";
+import {
+  getCloudSaveSyncAnchorEnvironmentFromKey,
+  isCloudSaveSyncAnchorKeyForGame,
+} from "./sync-anchor-key";
 import { hasCloudSaveV4AnchorSchema } from "./sync-anchor-policy";
 
 const isValidAnchor = (
@@ -16,6 +22,7 @@ const isValidAnchor = (
   if (
     !anchor ||
     !hasCloudSaveV4AnchorSchema(anchor) ||
+    !anchor.environmentId ||
     anchor.environmentId !== environmentId ||
     !anchor.baseSnapshotId ||
     !Number.isSafeInteger(anchor.baseVersion) ||
@@ -46,7 +53,7 @@ const isValidAnchor = (
   return anchor.unresolvedRemoteEntryIds.every((id) => ids.has(id));
 };
 
-const getCurrentUserId = () => CloudSync.getOrCreateUserId();
+const getCurrentUserId = () => getCloudSaveAccountUserId();
 
 const getLegacyAnchorKey = async (shop: GameShop, objectId: string) =>
   JSON.stringify([await getCurrentUserId(), shop, objectId]);
@@ -71,8 +78,12 @@ export const getCloudSaveSyncAnchorForEnvironment = async (
 ) => {
   const key = await getEnvironmentAnchorKey(shop, objectId, environmentId);
   const anchor = (await cloudSaveSyncAnchorsSublevel.get(key)) ?? null;
+  assertCloudSaveAccountSessionCurrent();
   if (!isValidAnchor(anchor, environmentId)) {
-    if (anchor) await cloudSaveSyncAnchorsSublevel.del(key);
+    if (anchor) {
+      assertCloudSaveAccountSessionCurrent();
+      await cloudSaveSyncAnchorsSublevel.del(key);
+    }
     return null;
   }
   return anchor;
@@ -82,8 +93,7 @@ export const getCloudSaveSyncAnchor = async (
   shop: GameShop,
   objectId: string,
   environmentId: string,
-  _localSnapshotHash: string,
-  _localSnapshotFileCount: number
+  options: { allowEnvironmentFallback?: boolean } = {}
 ) => {
   const environmentAnchor = await getCloudSaveSyncAnchorForEnvironment(
     shop,
@@ -92,10 +102,43 @@ export const getCloudSaveSyncAnchor = async (
   );
   if (environmentAnchor) return environmentAnchor;
 
+  const legacyAnchorKey = await getLegacyAnchorKey(shop, objectId);
+  assertCloudSaveAccountSessionCurrent();
   await cloudSaveSyncAnchorsSublevel
-    .del(await getLegacyAnchorKey(shop, objectId))
+    .del(legacyAnchorKey)
     .catch(() => undefined);
-  return null;
+  if (!options.allowEnvironmentFallback) return null;
+
+  const userId = await getCurrentUserId();
+  let latestAnchor: CloudSaveSyncAnchor | null = null;
+  let latestUpdatedAt = Number.NEGATIVE_INFINITY;
+
+  for await (const [
+    key,
+    candidate,
+  ] of cloudSaveSyncAnchorsSublevel.iterator()) {
+    assertCloudSaveAccountSessionCurrent();
+    const candidateEnvironmentId = getCloudSaveSyncAnchorEnvironmentFromKey(
+      key,
+      userId,
+      shop,
+      objectId
+    );
+    if (
+      !candidateEnvironmentId ||
+      !isValidAnchor(candidate, candidateEnvironmentId)
+    ) {
+      continue;
+    }
+    const updatedAt = Date.parse(candidate.updatedAt);
+    if (updatedAt > latestUpdatedAt) {
+      latestAnchor = candidate;
+      latestUpdatedAt = updatedAt;
+    }
+  }
+
+  assertCloudSaveAccountSessionCurrent();
+  return latestAnchor;
 };
 
 export const saveCloudSaveSyncAnchor = async (
@@ -129,12 +172,20 @@ export const saveCloudSaveSyncAnchor = async (
   if (!isValidAnchor(environmentAnchor, environmentId)) {
     throw new Error("Invalid Cloud Save V4 sync anchor");
   }
+  const environmentAnchorKey = await getEnvironmentAnchorKey(
+    shop,
+    objectId,
+    environmentId
+  );
+  assertCloudSaveAccountSessionCurrent();
   await cloudSaveSyncAnchorsSublevel.put(
-    await getEnvironmentAnchorKey(shop, objectId, environmentId),
+    environmentAnchorKey,
     environmentAnchor
   );
+  const legacyAnchorKey = await getLegacyAnchorKey(shop, objectId);
+  assertCloudSaveAccountSessionCurrent();
   await cloudSaveSyncAnchorsSublevel
-    .del(await getLegacyAnchorKey(shop, objectId))
+    .del(legacyAnchorKey)
     .catch(() => undefined);
 };
 
@@ -147,11 +198,15 @@ export const clearCloudSaveSyncAnchors = async (
   let hasOperations = false;
 
   for await (const [key] of cloudSaveSyncAnchorsSublevel.iterator()) {
+    assertCloudSaveAccountSessionCurrent();
     if (isCloudSaveSyncAnchorKeyForGame(key, userId, shop, objectId)) {
       batch.del(key);
       hasOperations = true;
     }
   }
 
-  if (hasOperations) await batch.write();
+  if (hasOperations) {
+    assertCloudSaveAccountSessionCurrent();
+    await batch.write();
+  }
 };

@@ -9,8 +9,11 @@ import {
 import { useNavigate } from "react-router-dom";
 import {
   classifyCustomDownloadSource,
+  getCustomDownloadInputPresentation,
+  isCustomDownloadFormReady,
   normalizeCustomDownloadTitle,
   suggestCustomDownloadTitle,
+  type CustomDownloadEntryIntent,
 } from "@shared";
 import {
   Button,
@@ -27,7 +30,9 @@ import "./custom-download-modal.scss";
 
 interface CustomDownloadModalProps {
   visible: boolean;
+  initialIntent: CustomDownloadEntryIntent;
   onClose: () => void;
+  onSubmitted?: () => void;
 }
 
 const SOURCE_INPUT_ID = "custom-download-source";
@@ -47,12 +52,15 @@ function fileNameFromPath(filePath: string) {
 
 export function BigPictureCustomDownloadModal({
   visible,
+  initialIntent,
   onClose,
+  onSubmitted,
 }: Readonly<CustomDownloadModalProps>) {
   const userPreferences = useUserPreferences();
   const navigate = useNavigate();
   const { showErrorToast, showSuccessToast } = useBigPictureToast();
   const titleTouchedRef = useRef(false);
+  const torrentExplorerOpenedRef = useRef(false);
   const [source, setSource] = useState("");
   const [localTorrentPath, setLocalTorrentPath] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -68,6 +76,7 @@ export function BigPictureCustomDownloadModal({
     if (!visible) return;
 
     titleTouchedRef.current = false;
+    torrentExplorerOpenedRef.current = false;
     setSource("");
     setLocalTorrentPath(null);
     setTitle("");
@@ -90,7 +99,14 @@ export function BigPictureCustomDownloadModal({
     return () => {
       cancelled = true;
     };
-  }, [userPreferences, visible]);
+  }, [initialIntent, userPreferences, visible]);
+
+  useEffect(() => {
+    if (!visible || initialIntent !== "torrent") return;
+    if (torrentExplorerOpenedRef.current) return;
+    torrentExplorerOpenedRef.current = true;
+    setExplorerMode("torrent");
+  }, [initialIntent, visible]);
 
   const updateSuggestedTitle = (
     nextSource: string,
@@ -155,6 +171,7 @@ export function BigPictureCustomDownloadModal({
           message: `${title.trim()} will be added to your library.`,
         }
       );
+      onSubmitted?.();
       onClose();
     } catch (submitError) {
       const message =
@@ -174,6 +191,14 @@ export function BigPictureCustomDownloadModal({
   const attachedFileName = localTorrentPath
     ? fileNameFromPath(localTorrentPath)
     : null;
+  const inputPresentation = getCustomDownloadInputPresentation(initialIntent);
+  const canSubmit = isCustomDownloadFormReady({
+    hasTorBoxToken,
+    source,
+    localTorrentPath,
+    title,
+    downloadPath,
+  });
 
   const handleOpenTorBoxSettings = () => {
     onClose();
@@ -197,8 +222,8 @@ export function BigPictureCustomDownloadModal({
         <VerticalFocusGroup className="bp-custom-download-modal__form">
           <Input
             focusId={SOURCE_INPUT_ID}
-            label="Download link or magnet"
-            placeholder="https://… or magnet:?xt=…"
+            label={inputPresentation.label}
+            placeholder={inputPresentation.placeholder}
             value={source}
             disabled={submitting}
             iconLeft={<LinkSimpleIcon size={20} />}
@@ -308,7 +333,7 @@ export function BigPictureCustomDownloadModal({
             icon={<DownloadSimpleIcon size={20} />}
             loading={submitting}
             onClick={handleSubmit}
-            disabled={submitting || !hasTorBoxToken}
+            disabled={submitting || !canSubmit}
           >
             {submitting ? "Submitting to TorBox…" : "Start download"}
           </Button>

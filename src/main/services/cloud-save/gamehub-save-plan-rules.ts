@@ -5,8 +5,10 @@ import path from "node:path";
 import {
   resolveEmulatorRestorePatterns,
   resolveEmulatorSaveLocation,
+  systemForGame,
 } from "@main/services/emulators/emulator-save-dirs";
 import { resolveSaveBackupPlan } from "@main/services/save-backup-plan";
+import { Ludusavi } from "@main/services/ludusavi";
 import type { CloudSavePathContext, CloudSaveRule, GameShop } from "@types";
 
 import {
@@ -17,6 +19,7 @@ import {
   buildGameHubEmulatorRules,
   type EmulatorRemoteFile,
 } from "./gamehub-emulator-rules";
+import { selectGameHubSavePlanLookup } from "./gamehub-save-plan-policy";
 
 const pathKind = async (candidate: string) =>
   fs.lstat(candidate).then(
@@ -42,12 +45,19 @@ export const getGameHubSavePlanRules = async (
   pathContext: CloudSavePathContext,
   remoteFiles?: readonly EmulatorRemoteFile[]
 ): Promise<CloudSaveRule[]> => {
-  const plan = await resolveSaveBackupPlan(shop, objectId);
+  const manual = await Ludusavi.getManualCustomGame(shop, objectId);
+  const emulatorSystem = manual?.files.length
+    ? null
+    : await systemForGame(shop, objectId);
+  const lookup = selectGameHubSavePlanLookup(
+    Boolean(manual?.files.length),
+    emulatorSystem
+  );
 
-  if (plan.status === "ready" && plan.source === "manual") {
+  if (lookup === "manual" && manual) {
     const customContext =
       cloudSaveCustomPathContextFromPathContext(pathContext);
-    const paths = sortedUniquePaths(plan.paths, pathContext.platform);
+    const paths = sortedUniquePaths(manual.files, pathContext.platform);
     return Promise.all(
       paths.map(async (preferredPath) => {
         const rawPath = encodeCloudSaveCustomPath(
@@ -70,6 +80,13 @@ export const getGameHubSavePlanRules = async (
     );
   }
 
+  // Native PC rules already come from the release-pinned V2 manifest. The
+  // legacy PC plan ultimately returned [] here, but only after a possible
+  // 60-second manifest refresh and two 30-second title lookups. Avoid that
+  // discarded work (and its Ludusavi config rewrite) entirely.
+  if (lookup !== "emulator") return [];
+
+  const plan = await resolveSaveBackupPlan(shop, objectId);
   if (plan.source !== "emulator") return [];
   const location = await resolveEmulatorSaveLocation(shop, objectId);
   if (!location) return [];

@@ -25,8 +25,7 @@ const GAMEHUB_CLOUD_SAVE_SHOPS = new Set<GameShop>([
 ]);
 
 const isGameHubCloudSaveShop = (value: unknown): value is GameShop =>
-  typeof value === "string" &&
-  GAMEHUB_CLOUD_SAVE_SHOPS.has(value as GameShop);
+  typeof value === "string" && GAMEHUB_CLOUD_SAVE_SHOPS.has(value as GameShop);
 
 export const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
@@ -183,6 +182,26 @@ export const validateSnapshotFiles = (
   return files;
 };
 
+export const validateCustomPathRawPaths = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    throw new TypeError("Invalid Cloud Save custom path list");
+  }
+  const rawPaths = value.map((rawPath) => {
+    if (
+      typeof rawPath !== "string" ||
+      !rawPath.startsWith("<custom>") ||
+      rawPath.includes("\\")
+    ) {
+      throw new Error("Invalid Cloud Save custom path");
+    }
+    return rawPath;
+  });
+  if (new Set(rawPaths).size !== rawPaths.length) {
+    throw new Error("Duplicate Cloud Save custom path");
+  }
+  return rawPaths.sort((left, right) => left.localeCompare(right));
+};
+
 export const validateRemoteSnapshotSummary = (
   value: unknown
 ): RemoteSnapshotSummary => {
@@ -229,7 +248,13 @@ export const validateRestoreManifest = (
     throw new Error("Invalid restore manifest response");
   }
   const response = value as Record<string, unknown>;
-  if (!hasOnlyKeys(response, ["snapshot", "variants", "files"])) {
+  if (
+    Object.keys(response).some(
+      (key) =>
+        !["snapshot", "customPathRawPaths", "variants", "files"].includes(key)
+    ) ||
+    !["snapshot", "variants", "files"].every((key) => key in response)
+  ) {
     throw new Error("Invalid restore manifest response");
   }
   const snapshot = response.snapshot as Record<string, unknown> | undefined;
@@ -248,6 +273,25 @@ export const validateRestoreManifest = (
   const shop = snapshot.shop as GameShop;
   const variants = validateSnapshotVariants(response.variants, shop);
   const files = validateSnapshotFiles(response.files, variants);
+  const customPathRawPaths = validateCustomPathRawPaths(
+    response.customPathRawPaths ?? [
+      ...new Set(
+        files.flatMap((file) =>
+          file.rawPath.startsWith("<custom>") ? [file.rawPath] : []
+        )
+      ),
+    ]
+  );
+  const activeCustomPaths = new Set(customPathRawPaths);
+  if (
+    files.some(
+      (file) =>
+        file.rawPath.startsWith("<custom>") &&
+        !activeCustomPaths.has(file.rawPath)
+    )
+  ) {
+    throw new Error("Cloud Save custom file references an inactive path");
+  }
   return {
     snapshot: {
       id: snapshot.id,
@@ -255,6 +299,7 @@ export const validateRestoreManifest = (
       shop,
       objectId: snapshot.objectId,
     },
+    customPathRawPaths,
     variants,
     files,
   };

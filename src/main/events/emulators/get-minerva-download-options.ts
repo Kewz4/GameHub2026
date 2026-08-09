@@ -9,6 +9,7 @@ import {
   romRegionFamilies,
 } from "@main/services/emulators/parse-rom-filename";
 import type { EmulatorSystem, GameRepack } from "@types";
+import { logger } from "@main/services";
 
 function buildRepackTitle(entry: MinervaCatalogueEntry): string {
   const region = parseRomFilename(entry.filename).region;
@@ -191,7 +192,7 @@ const getMinervaDownloadOptions = async (
 
     return repacks;
   } catch (err) {
-    console.error("[minerva] getMinervaDownloadOptions error:", err);
+    logger.error("[minerva] getMinervaDownloadOptions error:", err);
     return [];
   }
 };

@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
+import { app } from "electron";
 import { WindowManager } from "./window-manager";
 import url from "url";
 import { uploadGamesBatch } from "./library-sync";
@@ -115,6 +116,14 @@ export class HydraApi {
         };
       }
       if (userDetails?.id) {
+        const [{ AchievementWatcherManager }, achievementCloudSync] =
+          await Promise.all([
+            import("./achievements/achievement-watcher-manager"),
+            import("./achievements/achievement-cloud-sync"),
+          ]);
+        AchievementWatcherManager.resetSyncSession();
+        achievementCloudSync.resetAchievementCloudSyncSession();
+
         await prepareCloudSaveAccountNamespace(
           userDetails.id,
           previouslyPersistedUser?.id ?? null
@@ -146,6 +155,13 @@ export class HydraApi {
 
   static handleSignOut() {
     invalidateR2CredentialSession();
+    void Promise.all([
+      import("./achievements/achievement-watcher-manager"),
+      import("./achievements/achievement-cloud-sync"),
+    ]).then(([watcher, cloudSync]) => {
+      watcher.AchievementWatcherManager.resetSyncSession();
+      cloudSync.resetAchievementCloudSyncSession();
+    });
     this.userAuth = {
       authToken: "",
       refreshToken: "",
@@ -157,8 +173,12 @@ export class HydraApi {
   }
 
   static async setupApi() {
+    const visualQaApiUrl =
+      !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true"
+        ? process.env.GAMEHUB_API_URL?.trim()
+        : undefined;
     this.instance = axios.create({
-      baseURL: import.meta.env.MAIN_VITE_API_URL,
+      baseURL: visualQaApiUrl || import.meta.env.MAIN_VITE_API_URL,
       headers: { "User-Agent": `GameHub Launcher v${appVersion}` },
     });
 
@@ -194,21 +214,33 @@ export class HydraApi {
         (error) => {
           logger.error(" ---- RESPONSE ERROR -----");
           const { config } = error;
-
-          const data = JSON.parse(config.data ?? null);
+          let data: unknown = null;
+          try {
+            data =
+              typeof config?.data === "string"
+                ? JSON.parse(config.data)
+                : (config?.data ?? null);
+          } catch {
+            data = "[unparseable request body]";
+          }
+          const sanitizedData =
+            data !== null && typeof data === "object" && !Array.isArray(data)
+              ? omit(data as Record<string, unknown>, [
+                  "accessToken",
+                  "refreshToken",
+                ])
+              : data;
 
           logger.error(
-            config.method,
-            config.baseURL,
-            config.url,
-            omit(config.headers, [
+            config?.method,
+            config?.baseURL,
+            config?.url,
+            omit(config?.headers ?? {}, [
               "accessToken",
               "refreshToken",
               "Authorization",
             ]),
-            Array.isArray(data)
-              ? data
-              : omit(data, ["accessToken", "refreshToken"])
+            sanitizedData
           );
           if (error.response) {
             logger.error(
@@ -254,7 +286,10 @@ export class HydraApi {
 
     const updatedUserData = await getUserData();
 
-    if (updatedUserData?.id && this.isLoggedIn()) {
+    const isReadOnlyVisualQa =
+      !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true";
+
+    if (updatedUserData?.id && this.isLoggedIn() && !isReadOnlyVisualQa) {
       await prepareCloudSaveAccountNamespace(
         updatedUserData.id,
         user?.id ?? null
@@ -338,6 +373,13 @@ export class HydraApi {
       logger.error("401 - Clearing expired user credentials");
 
       invalidateR2CredentialSession();
+      void Promise.all([
+        import("./achievements/achievement-watcher-manager"),
+        import("./achievements/achievement-cloud-sync"),
+      ]).then(([watcher, cloudSync]) => {
+        watcher.AchievementWatcherManager.resetSyncSession();
+        cloudSync.resetAchievementCloudSyncSession();
+      });
       this.userAuth = {
         authToken: "",
         expirationTimestamp: 0,

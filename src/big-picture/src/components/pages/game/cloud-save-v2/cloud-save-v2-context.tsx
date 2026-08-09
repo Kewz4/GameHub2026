@@ -135,7 +135,6 @@ export function BigPictureCloudSaveProvider({
   const gameKey = `${shop}:${objectId}`;
   const activeGameKey = useRef(gameKey);
   const gamePageSyncInFlight = useRef(false);
-  const gamePageSyncCompleted = useRef(false);
 
   activeGameKey.current = gameKey;
 
@@ -183,7 +182,6 @@ export function BigPictureCloudSaveProvider({
     setIsFileExplorerVisible(false);
     setPendingResolution(null);
     gamePageSyncInFlight.current = false;
-    gamePageSyncCompleted.current = false;
   }, [gameKey]);
 
   useEffect(() => {
@@ -197,6 +195,15 @@ export function BigPictureCloudSaveProvider({
     setWasOpenedFromLaunchConflict(true);
     setIsModalVisible(true);
   }, [searchParams, setSearchParams, shop]);
+
+  useEffect(() => {
+    if (searchParams.get("openCloudSaveManager") !== "1") return;
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("openCloudSaveManager");
+    setSearchParams(nextSearchParams, { replace: true });
+    setWasOpenedFromLaunchConflict(false);
+    setIsModalVisible(true);
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (searchParams.get("openCloudSavePathApproval") !== "1") {
@@ -273,7 +280,6 @@ export function BigPictureCloudSaveProvider({
         isGameRunning,
         isSyncing,
         isInFlight: gamePageSyncInFlight.current,
-        isCompleted: gamePageSyncCompleted.current,
       })
     ) {
       return;
@@ -284,11 +290,7 @@ export function BigPictureCloudSaveProvider({
 
     void globalThis.window.electron
       .syncCloudSaveOnGamePage(objectId, shop)
-      .then((response) => {
-        if (activeGameKey.current === requestedGame && response.accepted) {
-          gamePageSyncCompleted.current = true;
-        }
-      })
+      .then(() => undefined)
       .catch((error) => {
         if (activeGameKey.current !== requestedGame) return;
         const isLimitError = showSyncError(error);
@@ -652,6 +654,13 @@ export function BigPictureCloudSaveProvider({
         isGameRunning={isGameRunning}
         hasExecutablePath={hasExecutablePath}
         hasError={hasError}
+        errorMessageKey={
+          hasRefreshError
+            ? "cloud_save_v2_load_error"
+            : hasSyncError
+              ? "cloud_save_v2_sync_error"
+              : null
+        }
         progress={progress}
         onSync={() => void runCloudSaveOperation()}
         onOpenFileDetails={() => setIsFileDetailsVisible(true)}

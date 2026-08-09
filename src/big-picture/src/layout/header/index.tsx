@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   FocusItem,
   HorizontalFocusGroup,
@@ -26,6 +27,7 @@ import {
 } from "../../stores";
 import {
   BIG_PICTURE_HEADER_REGION_ID,
+  getBigPictureCurrentPageTitle,
   normalizeBigPicturePathname,
 } from "../navigation";
 import "./styles.scss";
@@ -37,17 +39,21 @@ const VIRTUAL_KEYBOARD_DISMISS_EVENT = "big-picture-virtual-keyboard-dismiss";
 const VIRTUAL_KEYBOARD_KEY_FOCUS_ID_PREFIX =
   "big-picture-virtual-keyboard-key-";
 
-const useCurrentPageTitle = () => {
+const useCurrentPageTitle = (pathname: string) => {
   const stack = useNavigationHistoryStore((s) => s.stack);
-  if (stack.length >= 1) return stack[stack.length - 1].title;
-  return "Home";
+  const top = stack[stack.length - 1];
+  const { t } = useTranslation("sidebar");
+
+  return getBigPictureCurrentPageTitle(pathname, top, {
+    cloudSaves: t("cloud_saves", { defaultValue: "Cloud Saves" }),
+  });
 };
 
 function Header() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const pageTitle = useCurrentPageTitle();
+  const pageTitle = useCurrentPageTitle(pathname);
   const isOnCataloguePage =
     normalizeBigPicturePathname(pathname) === "/catalogue";
   const catalogueSearchValue = searchParams.get("title") ?? "";

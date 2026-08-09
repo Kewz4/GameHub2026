@@ -1,47 +1,10 @@
 use crate::cloud_save::manifest::types::CloudSaveRule;
 
+use super::applicability::{
+    path_is_foreign_environment, rule_is_applicable, FOREIGN_ENVIRONMENT_TOKEN,
+};
 use super::resolve_path::resolve_path;
 use super::types::{PathResolutionContext, ResolvedCloudSaveRule};
-
-fn os_matches(platform: &str, rule_os: &str) -> bool {
-    let rule_os = rule_os.to_ascii_lowercase();
-    platform == rule_os || (platform == "mac" && rule_os == "macos")
-}
-
-fn store_matches(shop: &str, rule_store: &str) -> bool {
-    let shop = shop.to_ascii_lowercase();
-    let store = rule_store
-        .to_ascii_lowercase()
-        .chars()
-        .filter(|character| !matches!(character, '.' | '-' | '_' | ' '))
-        .collect::<String>();
-    match shop.as_str() {
-        "steam" => store == "steam",
-        "gog" => store == "gog",
-        "epic" => store == "epic",
-        "xbox" => store == "microsoft" || store == "xbox",
-        "ubisoft" => store == "uplay" || store == "ubisoft",
-        "ea" => store == "origin" || store == "ea",
-        "battlenet" => store == "battlenet" || store == "blizzard",
-        "riot" => store == "riot",
-        "custom" => store == "other" || store == "custom",
-        _ => false,
-    }
-}
-
-fn rule_applies(rule: &CloudSaveRule, context: &PathResolutionContext) -> bool {
-    rule.when.is_empty()
-        || rule.when.iter().any(|condition| {
-            condition
-                .os
-                .as_deref()
-                .is_none_or(|rule_os| os_matches(&context.platform, rule_os))
-                && condition
-                    .store
-                    .as_deref()
-                    .is_none_or(|store| store_matches(&context.shop, store))
-        })
-}
 
 fn is_dangerously_broad_manifest_path(raw_path: &str) -> bool {
     let normalized = raw_path.trim().replace('\\', "/");
@@ -108,8 +71,21 @@ pub fn resolve_rules(
 ) -> Vec<ResolvedCloudSaveRule> {
     rules
         .into_iter()
-        .filter(|rule| rule_applies(rule, context))
         .map(|rule| {
+            if !rule_is_applicable(&rule.when, context)
+                || path_is_foreign_environment(&rule.raw_path, context)
+            {
+                return ResolvedCloudSaveRule {
+                    rule_id: rule.rule_id,
+                    kind: rule.kind,
+                    raw_path: rule.raw_path,
+                    source: rule.source,
+                    tags: rule.tags,
+                    when: rule.when,
+                    resolved_paths: vec![],
+                    unresolved_tokens: vec![FOREIGN_ENVIRONMENT_TOKEN.to_string()],
+                };
+            }
             let mut resolved = resolve_path(&rule.raw_path, context);
             let trusted_exact_root =
                 rule.raw_path.starts_with("<custom>") || rule.source == "gamehub-emulator";
@@ -225,9 +201,20 @@ mod tests {
         );
         let ids = result
             .iter()
+            .filter(|resolved| !resolved.resolved_paths.is_empty())
             .map(|resolved| resolved.rule_id.as_str())
             .collect::<Vec<_>>();
         assert_eq!(ids, vec!["microsoft", "os-only"]);
+        for foreign in result
+            .iter()
+            .filter(|resolved| matches!(resolved.rule_id.as_str(), "wrong-store" | "wrong-os"))
+        {
+            assert!(foreign.resolved_paths.is_empty());
+            assert_eq!(
+                foreign.unresolved_tokens,
+                vec![FOREIGN_ENVIRONMENT_TOKEN.to_string()]
+            );
+        }
     }
 
     #[test]

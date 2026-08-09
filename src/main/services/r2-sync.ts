@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   S3Client,
   PutObjectCommand,
@@ -14,7 +15,12 @@ import {
   type HeadObjectCommandOutput,
 } from "@aws-sdk/client-s3";
 import { app } from "electron";
-import type { GameArtifact, GameArtifactWithGame, GameShop } from "@types";
+import type {
+  CloudSaveV2LibraryEntry,
+  GameArtifact,
+  GameArtifactWithGame,
+  GameShop,
+} from "@types";
 import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
 import { getR2Credentials, R2_BUCKET, R2_ENDPOINT } from "./r2-credentials";
@@ -32,6 +38,12 @@ import {
   createCloudSaveRemoteHeadConflictError,
   publishCloudSaveSnapshotProposal,
 } from "./cloud-save/r2-snapshot-publication";
+import { listCloudSaveV2LibraryIndex } from "./cloud-save/cloud-save-v2-library-index";
+import {
+  getProfileImageCacheFileName,
+  sanitizeProfileImageCacheComponent,
+  selectLatestProfileImageObject,
+} from "./profile-image-helpers";
 
 export type {
   R2CloudSaveV2ControlDocument,
@@ -109,6 +121,11 @@ const dec = (v: string | undefined | null): string => {
 
 export class R2Sync {
   private static _client: S3Client | null = null;
+  private static profileImageDownloads = new Map<
+    string,
+    Promise<string | null>
+  >();
+  private static profileImageGenerations = new Map<string, number>();
 
   private static get client(): S3Client {
     if (!this._client) {
@@ -133,12 +150,33 @@ export class R2Sync {
     this._client?.destroy();
     this._client = null;
     this.headCache.clear();
+    for (const lookupKey of this.profileImageDownloads.keys()) {
+      const nextGeneration =
+        (this.profileImageGenerations.get(lookupKey) ?? 0) + 1;
+      this.profileImageGenerations.set(lookupKey, nextGeneration);
+    }
+    this.profileImageDownloads.clear();
   }
 
   private static imageCacheDir(): string {
     const dir = path.join(app.getPath("userData"), "r2-image-cache");
     fs.mkdirSync(dir, { recursive: true });
     return dir;
+  }
+
+  private static profileImageLookupKey(hydraUserId: string, kind: string) {
+    return JSON.stringify([hydraUserId, kind]);
+  }
+
+  private static invalidateProfileImageLookup(
+    hydraUserId: string,
+    kind: string
+  ) {
+    const lookupKey = this.profileImageLookupKey(hydraUserId, kind);
+    const nextGeneration =
+      (this.profileImageGenerations.get(lookupKey) ?? 0) + 1;
+    this.profileImageGenerations.set(lookupKey, nextGeneration);
+    this.profileImageDownloads.delete(lookupKey);
   }
 
   // ── Saves ──────────────────────────────────────────────────────────────
@@ -458,6 +496,38 @@ export class R2Sync {
       document,
       etag: result.etag,
     };
+  }
+
+  static async listCloudSaveV2Snapshots(
+    userId: string
+  ): Promise<CloudSaveV2LibraryEntry[]> {
+    const prefix = `users/${enc(userId)}/cloud-saves-v2/`;
+    return listCloudSaveV2LibraryIndex({
+      prefix,
+      listPage: async (continuationToken) => {
+        const page = await this.client.send(
+          new ListObjectsV2Command({
+            Bucket: R2_BUCKET,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+            MaxKeys: 1_000,
+          })
+        );
+        return {
+          keys: (page.Contents ?? []).map((object) => object.Key),
+          isTruncated: page.IsTruncated === true,
+          nextContinuationToken: page.NextContinuationToken,
+        };
+      },
+      loadHead: ({ shop, objectId }) =>
+        this.getCloudSaveV2Head(userId, shop, objectId),
+      onInvalidEntry: (identity, error) => {
+        logger.warn("R2: skipped invalid Cloud Save V2 library entry", {
+          key: identity.controlKey,
+          error,
+        });
+      },
+    });
   }
 
   static async getCloudSaveV2Snapshot(
@@ -932,52 +1002,198 @@ export class R2Sync {
       })
     );
 
+    this.invalidateProfileImageLookup(hydraUserId, kind);
+    await this.deleteProfileImagesByKind(kind, hydraUserId, key).catch(
+      (error) => {
+        logger.warn(`R2: failed to remove stale ${kind} variants`, error);
+      }
+    );
+
     logger.log(`R2: uploaded image ${key}`);
     return key;
   }
 
+  /** Remove a user's image kind, optionally retaining a freshly uploaded key. */
+  static async deleteProfileImagesByKind(
+    kind: string,
+    hydraUserId: string,
+    keepKey?: string
+  ): Promise<void> {
+    this.invalidateProfileImageLookup(hydraUserId, kind);
+    const prefix = `users/${hydraUserId}/images/`;
+    const list = await this.client.send(
+      new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix })
+    );
+    const exactKindPrefix = `${kind}.`;
+    const keys = (list.Contents ?? [])
+      .map((object) => object.Key)
+      .filter((key): key is string => {
+        if (!key || key === keepKey || !key.startsWith(prefix)) return false;
+        const name = key.slice(prefix.length);
+        return (
+          name.startsWith(exactKindPrefix) &&
+          name.length > exactKindPrefix.length
+        );
+      });
+
+    if (keys.length > 0) {
+      await this.client.send(
+        new DeleteObjectsCommand({
+          Bucket: R2_BUCKET,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        })
+      );
+    }
+
+    if (!keepKey) {
+      const cacheDir = this.imageCacheDir();
+      const cachePrefix = `${sanitizeProfileImageCacheComponent(
+        hydraUserId
+      )}-${sanitizeProfileImageCacheComponent(kind)}-`;
+      const cachedFiles = await fs.promises.readdir(cacheDir).catch(() => []);
+      await Promise.allSettled(
+        cachedFiles
+          .filter((name) => name.startsWith(cachePrefix))
+          .map((name) =>
+            fs.promises.rm(path.join(cacheDir, name), { force: true })
+          )
+      );
+    }
+  }
+
   /**
    * Locate a user's profile image by kind, download it to the local cache and
-   * return a local: URL the renderer can display. Tries the common extensions
-   * since the stored key includes the original file extension.
+   * return a local: URL the renderer can display. The cache filename includes
+   * the R2 object version so a replaced image never reuses a failed renderer URL.
    */
   static async findLatestImageByKind(
     kind: string,
     hydraUserId: string
   ): Promise<string | null> {
-    // One list call instead of probing each extension with 404-ing GETs: the
-    // image is stored as images/{kind}.{ext}, so match by basename === kind.
+    const lookupKey = this.profileImageLookupKey(hydraUserId, kind);
+    const existing = this.profileImageDownloads.get(lookupKey);
+    if (existing) return existing;
+
+    const generation = this.profileImageGenerations.get(lookupKey) ?? 0;
+    const lookup = this.downloadLatestImageByKind(
+      kind,
+      hydraUserId,
+      lookupKey,
+      generation
+    ).finally(() => {
+      if (this.profileImageDownloads.get(lookupKey) === lookup) {
+        this.profileImageDownloads.delete(lookupKey);
+      }
+    });
+    this.profileImageDownloads.set(lookupKey, lookup);
+    return lookup;
+  }
+
+  private static async downloadLatestImageByKind(
+    kind: string,
+    hydraUserId: string,
+    lookupKey: string,
+    generation: number
+  ): Promise<string | null> {
     const prefix = `users/${hydraUserId}/images/`;
     const list = await this.client
       .send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix }))
-      .catch(() => null);
+      .catch((error) => {
+        logger.warn(`R2: failed to list ${kind} for ${hydraUserId}`, error);
+        return null;
+      });
 
-    const match = (list?.Contents ?? []).find((o) => {
-      const name = o.Key?.slice(prefix.length) ?? "";
-      return name.slice(0, name.lastIndexOf(".")) === kind;
-    });
+    const match = selectLatestProfileImageObject(
+      list?.Contents ?? [],
+      prefix,
+      kind
+    );
     if (!match?.Key) return null;
+    if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+      return null;
+    }
 
+    const ext = match.Key.slice(match.Key.lastIndexOf(".") + 1) || "img";
+    const cacheDir = this.imageCacheDir();
+    const cacheName = getProfileImageCacheFileName(
+      hydraUserId,
+      kind,
+      match,
+      ext
+    );
+    const destinationPath = path.join(cacheDir, cacheName);
+    const cachedStat = await fs.promises
+      .stat(destinationPath)
+      .catch(() => null);
+    if (
+      cachedStat?.isFile() &&
+      (match.Size == null
+        ? cachedStat.size > 0
+        : cachedStat.size === match.Size)
+    ) {
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+      return `local:${destinationPath.replace(/\\/g, "/")}`;
+    }
+
+    const partialPath = `${destinationPath}.${process.pid}-${crypto.randomUUID()}.part`;
     try {
       const res = await this.client.send(
         new GetObjectCommand({ Bucket: R2_BUCKET, Key: match.Key })
       );
-      const ext = match.Key.slice(match.Key.lastIndexOf(".") + 1) || "img";
-      const dest = path.join(
-        this.imageCacheDir(),
-        `${hydraUserId}-${kind}.${ext}`
-      );
       const body = res.Body as Readable;
-      await new Promise<void>((resolve, reject) => {
-        const out = fs.createWriteStream(dest);
-        body.pipe(out);
-        body.on("error", reject);
-        out.on("finish", resolve);
-        out.on("error", reject);
-      });
-      return `local:${dest.replace(/\\/g, "/")}`;
-    } catch {
+      await pipeline(body, fs.createWriteStream(partialPath, { flags: "wx" }));
+
+      const downloadedStat = await fs.promises.stat(partialPath);
+      const expectedSize = res.ContentLength ?? match.Size;
+      if (expectedSize != null && downloadedStat.size !== expectedSize) {
+        throw new Error(
+          `R2 profile image was truncated: expected ${expectedSize} bytes, got ${downloadedStat.size}`
+        );
+      }
+      if (downloadedStat.size === 0) {
+        throw new Error("R2 profile image was empty");
+      }
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+
+      // A prior crash can leave a corrupt file at this exact versioned target.
+      // Replace only that validated destination after the complete temp file is
+      // safely on disk; never expose the in-progress stream to the renderer.
+      await fs.promises.rm(destinationPath, { force: true });
+      await fs.promises.rename(partialPath, destinationPath);
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+
+      const cachePrefix = `${sanitizeProfileImageCacheComponent(
+        hydraUserId
+      )}-${sanitizeProfileImageCacheComponent(kind)}-`;
+      const staleFiles = await fs.promises.readdir(cacheDir).catch(() => []);
+      await Promise.allSettled(
+        staleFiles
+          .filter(
+            (name) =>
+              name.startsWith(cachePrefix) &&
+              name !== cacheName &&
+              !name.endsWith(".part")
+          )
+          .map((name) =>
+            fs.promises.rm(path.join(cacheDir, name), { force: true })
+          )
+      );
+
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+      return `local:${destinationPath.replace(/\\/g, "/")}`;
+    } catch (error) {
+      logger.warn(`R2: failed to cache ${kind} for ${hydraUserId}`, error);
       return null;
+    } finally {
+      await fs.promises.rm(partialPath, { force: true }).catch(() => undefined);
     }
   }
 

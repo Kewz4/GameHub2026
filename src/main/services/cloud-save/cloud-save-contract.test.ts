@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 // @ts-ignore The Node ESM test runner requires the source extension.
 import {
   cloudSaveFileKey,
+  validateCustomPathRawPaths,
   validateRemoteSnapshotSummary,
   validateRestoreManifest,
 } from "./cloud-save-contract";
@@ -37,6 +38,7 @@ describe("Cloud Save launcher API contract", () => {
         shop: "steam",
         objectId: "814380",
       },
+      customPathRawPaths: [],
       variants: [
         {
           variantId: firstVariantId,
@@ -77,6 +79,7 @@ describe("Cloud Save launcher API contract", () => {
         shop: "steam",
         objectId: "814380",
       },
+      customPathRawPaths: [],
       variants: [],
       files: [],
     });
@@ -84,6 +87,13 @@ describe("Cloud Save launcher API contract", () => {
     assert.equal(summary.fileCount, 0);
     assert.deepEqual(manifest.variants, []);
     assert.deepEqual(manifest.files, []);
+  });
+
+  it("rejects a non-array custom path list with a TypeError", () => {
+    assert.throws(() => validateCustomPathRawPaths(null), {
+      name: "TypeError",
+      message: "Invalid Cloud Save custom path list",
+    });
   });
 
   it("rejects legacy head, revision and locator fields", () => {
@@ -107,6 +117,7 @@ describe("Cloud Save launcher API contract", () => {
           shop: "steam",
           objectId: "814380",
         },
+        customPathRawPaths: [],
         variants: [{ variantId: firstVariantId, kind: "default" }],
         files: [{ ...file(firstVariantId), locator: {}, logicalFileId: "old" }],
       })
@@ -121,6 +132,7 @@ describe("Cloud Save launcher API contract", () => {
         shop: "steam",
         objectId: "814380",
       },
+      customPathRawPaths: [],
       variants: [
         { variantId: firstVariantId, kind: "default" },
         {
@@ -156,6 +168,7 @@ describe("Cloud Save launcher API contract", () => {
         shop: "steam",
         objectId: "814380",
       },
+      customPathRawPaths: [],
       variants: [
         {
           variantId: firstVariantId,

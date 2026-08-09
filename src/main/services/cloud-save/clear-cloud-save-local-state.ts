@@ -5,12 +5,15 @@ import {
   db,
   levelKeys,
 } from "@main/level";
-import { CloudSync } from "@main/services/cloud-sync";
 import type { GameShop } from "@types";
 
+import {
+  assertCloudSaveAccountSessionCurrent,
+  getCloudSaveAccountUserId,
+} from "./account-session";
 import { isCloudSaveSyncAnchorKeyForGame } from "./sync-anchor-key";
 
-const getCurrentUserId = () => CloudSync.getOrCreateUserId();
+const getCurrentUserId = () => getCloudSaveAccountUserId();
 
 export const clearCloudSaveLocalState = async (
   objectId: string,
@@ -21,6 +24,7 @@ export const clearCloudSaveLocalState = async (
   const cacheKey = levelKeys.game(shop, objectId);
   const anchorKeys: string[] = [];
   for await (const [key] of cloudSaveSyncAnchorsSublevel.iterator()) {
+    assertCloudSaveAccountSessionCurrent();
     if (isCloudSaveSyncAnchorKeyForGame(key, userId, shop, objectId)) {
       anchorKeys.push(key);
     }
@@ -38,5 +42,6 @@ export const clearCloudSaveLocalState = async (
       sublevel: cloudSaveSyncAnchorsSublevel,
     });
   }
+  assertCloudSaveAccountSessionCurrent();
   await batch.write();
 };

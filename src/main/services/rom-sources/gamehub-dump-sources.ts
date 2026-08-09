@@ -87,12 +87,14 @@ interface DumpSupplemental {
   fileSize?: string | null;
 }
 
+const ANSI_ESCAPE = String.fromCharCode(27);
+
 function readJson<T>(folder: string, file: string): T | null {
   try {
     const p = path.join(DUMP_DIR, folder, file);
     if (!fs.existsSync(p)) return null;
     let raw = fs.readFileSync(p, "utf-8");
-    raw = raw.replace(/\x1b\[.*$/m, "").trimEnd();
+    raw = raw.replace(new RegExp(`${ANSI_ESCAPE}\\[.*$`, "m"), "").trimEnd();
     return JSON.parse(raw) as T;
   } catch (err) {
     logger.warn(`[dump] failed to read ${folder}/${file}:`, err);

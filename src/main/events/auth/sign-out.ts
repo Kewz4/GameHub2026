@@ -11,6 +11,8 @@ import {
   db,
   downloadLayoutStateSublevel,
   downloadsSublevel,
+  exophaseCacheSublevel,
+  gameAchievementsSublevel,
   gamesSublevel,
   levelKeys,
 } from "@main/level";
@@ -33,8 +35,12 @@ const signOut = async (_event: Electron.IpcMainInvokeEvent) => {
 
       return Promise.all([
         gamesSublevel.clear(),
+        gameAchievementsSublevel.clear(),
+        exophaseCacheSublevel.clear(),
         downloadsSublevel.clear(),
         downloadLayoutStateSublevel.clear(),
+        db.del(levelKeys.exophaseSyncReport).catch(() => {}),
+        db.del(levelKeys.exophaseCacheSyncedAt).catch(() => {}),
         emulators.resetEmulatorScanData(),
       ]);
     });

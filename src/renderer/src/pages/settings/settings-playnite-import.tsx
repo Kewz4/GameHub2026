@@ -6,9 +6,25 @@ import { PlayniteImportResultModal } from "./playnite-import-result-modal";
 type ImportResult = {
   matched: number;
   total: number;
-  games: Array<{ title: string; addedHours: number }>;
+  cloudSynced: number;
+  cloudSyncPending: number;
+  games: Array<{
+    title: string;
+    previousHours: number;
+    playniteHours: number;
+    changeHours: number;
+  }>;
+  preserved: Array<{
+    title: string;
+    existingHours: number;
+    playniteHours: number;
+  }>;
   unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
-  cached: Array<{ title: string; playtimeHours: number }>;
+  cached: Array<{
+    title: string;
+    playtimeHours: number;
+    catalogueMatched: boolean;
+  }>;
 };
 
 export function SettingsPlayniteImport() {
@@ -104,7 +120,7 @@ export function SettingsPlayniteImport() {
               style={{
                 height: "100%",
                 width: `${progress}%`,
-                background: "var(--color-primary, #8c67ef)",
+                background: "var(--color-button, #e7e7eb)",
                 borderRadius: "2px",
                 transition: "width 0.35s ease",
               }}

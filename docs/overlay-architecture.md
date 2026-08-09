@@ -12,11 +12,11 @@ GameHub's in-game overlay is a transparent `BrowserWindow` attached to the detec
 
 All created in `src/main/services/overlay-manager.ts`:
 
-| Window          | Mode   | Size                       | Transparent | Focusable | Loaded Route      |
-| --------------- | ------ | -------------------------- | ----------- | --------- | ----------------- |
-| `overlayWindow` | full   | matches game window bounds | yes         | yes       | `#/overlay`       |
-| `fpsWindow`     | pinned | 218×116                    | yes         | no        | `#/overlay-fps`   |
-| `toastWindow`   | toast  | up to 820×118              | yes         | no        | `#/overlay-toast` |
+| Window          | Mode   | Size                         | Transparent | Focusable | Loaded Route      |
+| --------------- | ------ | ---------------------------- | ----------- | --------- | ----------------- |
+| `overlayWindow` | full   | matches game window bounds   | yes         | yes       | `#/overlay`       |
+| `fpsWindow`     | pinned | 218×116                      | yes         | no        | `#/overlay-fps`   |
+| `toastWindow`   | toast  | up to 820 wide; 118–184 high | yes         | no        | `#/overlay-toast` |
 
 **All windows** use:
 
@@ -31,10 +31,10 @@ Full overlay additionally disables `backgroundThrottling: false` (keeps performa
 
 ### Positioning
 
-- **Windows**: `overlay-manager.ts:placeWindowOverGame()` uses `NativeAddon.getProcessWindowBounds()` and `SetWindowPos` to match the detected game client window exactly. Foreground polling hides all overlay surfaces when the game is backgrounded.
+- **Windows**: `overlay-manager.ts:placeWindowOverGame()` uses `NativeAddon.getProcessWindowBounds()` and `SetWindowPos` to match the detected game client window exactly. Native bounds stay in Win32 physical pixels; toast, FPS and fallback Electron bounds are converted to device-independent pixels before calling BrowserWindow APIs. Unchanged placement rectangles are deduplicated. Foreground polling hides all overlay surfaces when the game is backgrounded.
 - **Linux**: Falls back to the primary display's work area.
 - **FPS window**: Placed inside the detected game client bounds and hidden as soon as that game loses foreground.
-- **Toast window**: Clamped inside the detected game client bounds, auto-destroys after 8 seconds, and is never shown while the game is backgrounded.
+- **Toast window**: Clamped inside the detected game client bounds, gains height at medium/narrow widths so its complete shortcut hint remains readable, auto-destroys after 8 seconds, and is never shown while the game is backgrounded.
 
 ### Lifecycle
 
@@ -45,15 +45,18 @@ Game detected → OverlayManager.setActiveGame(game)
                ├─ registerShortcut() — Electron reserves Shift+F3 first
                ├─ startControllerPolling() — 32ms Raw Input / Guide fallback
                ├─ overlayFpsMonitor.start() — PresentMon (Windows) / MangoHud (Linux)
-               ├─ startTargetProcessPolling() — 250ms, tracks game window
-               └─ showActivationToast() — 8s auto-dismiss
+               ├─ startTargetProcessPolling() — 125ms, tracks game window
+               ├─ warm hidden overlay renderer once the game is foreground
+               └─ after overlayRendererReady, showActivationToast() — 8s auto-dismiss
 
 User presses Shift+F3 → toggleOverlay()
-                         ├─ ensureOverlayWindow() — create if destroyed
+                         ├─ reuse the tracked foreground target; rescan only if stale
+                         ├─ ensureOverlayWindow() — normally already warm
                          ├─ wait for overlayRendererReady — avoids first-frame flash
                          ├─ placeWindowOverGame() — position on game
                          ├─ showInactive() on fps window if pinned
-                         └─ overlayWindow.show() + focus()
+                         ├─ overlayWindow.show() + focus()
+                         └─ bounded focus-transfer grace prevents poll-driven blink
 
 User closes overlay → hideOverlay()
                       ├─ overlayWindow.hide()
@@ -327,9 +330,13 @@ Reads MangoHud's CSV metrics files from the game's overlay data directory. Same 
 
 ## Gameplay Capture
 
-`GameRecorderManager` owns manual recording and the Instant Replay rolling buffer. `src/shared/game-recorder-quality.ts` derives bitrate from actual pixel rate rather than a small fixed preset: roughly 37 Mbps for VP9 1080p60, 75 Mbps for 1440p60 and 149 Mbps for 4K60 (180 Mbps cap). Capture requests the selected width, height and frame rate before recording.
+`GameRecorderManager` owns manual recording and the Instant Replay rolling buffer. Capture remains opt-in and Instant Replay is separately off by default. The user selects source/720p/1080p/1440p/4K, 30/60/120 FPS and a Performance/Balanced/High quality preset. `src/shared/game-recorder-quality.ts` scales the MediaRecorder target with captured pixel rate and caps each preset at 60/120/180 Mbps. Settings show the target and worst-case temporary-disk estimate; the manager retains a 512 MB free-space reserve.
 
-Segments carry explicit audio metadata. Saving copies VP9/VP8 video bit-for-bit and performs one final Opus decode/resample/encode at 48 kHz stereo/256 kbps, avoiding per-segment codec-delay and timestamp artifacts. Instant Replay duration can be changed live from the overlay (15/30/45/60 seconds); the rolling buffer trims immediately.
+Chromium attempts a platform video-encode accelerator for supported H.264 profiles, but accepting an H.264 MIME type is not proof that hardware encoding is active. Recorder state therefore distinguishes GPU encode capability, capture-track cadence, encoded MP4 sample cadence, target bitrate and recent encoded throughput. The overlay presents measured FPS/throughput rather than claiming the requested 60/120 FPS was delivered.
+
+The MP4 path keeps one MediaRecorder alive and rotates three-second fragmented-MP4 slices. The assembler reads each track's `mdhd` timescale before rebasing `tfdt`: audio (typically 48 kHz) and video (commonly 90 kHz) are shifted by the same real instant rather than the same raw tick count. FFconcat manifests also carry GameHub's wall-clock duration for every slice, preventing continuous timestamps from compounding a 60-second replay into a multi-minute file. H.264 video and Chromium's AAC are stream-copied into the final MP4, avoiding a second lossy audio encode. WebM fallback video is copied while independently restarted Opus slices receive one final async resample/encode at 48 kHz stereo/256 kbps.
+
+Electron's Windows `audio: "loopback"` source is the system mix, not per-process audio. The setting is labeled accordingly, capture is stopped and its pending slice discarded when the game loses foreground, and Spotify Connect forces system audio off so Spotify cannot enter a clip. Instant Replay duration can be changed live from the overlay (15/30/45/60 seconds); the rolling buffer trims immediately. Segment IPC uses zero-copy Buffer views in the main process, and capture failures back off from 5 to 30 seconds before automatic retry.
 
 ---
 

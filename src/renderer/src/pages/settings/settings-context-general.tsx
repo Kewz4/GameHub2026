@@ -412,13 +412,15 @@ export function SettingsContextGeneral({
                   heading: "Metadata Generation Complete",
                   summary:
                     result.updated > 0
-                      ? `Updated ${result.updated} game${result.updated !== 1 ? "s" : ""}, skipped ${result.skipped} (already had artwork).`
-                      : `No new metadata found. All ${result.skipped} games already have artwork.`,
+                      ? `Updated ${result.updated} game${result.updated !== 1 ? "s" : ""}, ${result.skipped} already healthy${result.failed ? `, ${result.failed} failed` : ""}.`
+                      : result.failed > 0
+                        ? `No repairs completed. ${result.failed} game${result.failed !== 1 ? "s" : ""} still need artwork; ${result.skipped} were already healthy.`
+                        : `No repairs needed. All ${result.skipped} games have working artwork.`,
                   results: result.results.map((r) => ({
                     title: r.title,
                     coverUrl: r.coverUrl,
                     what: r.what,
-                    isNew: true,
+                    isNew: r.status === "updated",
                   })),
                 });
               } catch {

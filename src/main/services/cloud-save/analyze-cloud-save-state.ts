@@ -3,20 +3,44 @@ import type {
   CloudSaveState,
   GameShop,
 } from "@types";
+import { logger } from "@main/services/logger";
 
 import { NativeAddon } from "../native-addon";
 import { buildLocalGameSnapshotContext } from "./build-local-game-snapshot";
+import { cloudSaveFileKey } from "./cloud-save-contract";
 import { getCloudSaveGameContext } from "./cloud-save-game-context";
+import { cloudSaveCustomPathContextFromPathContext } from "./custom-path";
+import { getUsableCloudSaveCustomPathBindings } from "./custom-path-overlap";
+import {
+  getCloudSaveCustomPathTrackingState,
+  reconcileCloudSaveCustomPathsWithRemote,
+} from "./custom-path-store";
+import { getInstallationOwnedCustomPathRawPaths } from "./installation-owned-custom-paths";
 import { getRemoteGameSnapshotState } from "./list-remote-game-snapshots";
-import { mergeUserVariantSnapshots } from "./merge-user-variant-snapshots";
-import { getRemoteSnapshotRestoreManifest } from "./resolve-remote-snapshot-targets";
 import { storeUserContextWithSnapshotAccounts } from "./snapshot-store-user-context";
+import { mergeUserVariantSnapshots } from "./merge-user-variant-snapshots";
+import { reconcileRemoteTargetObservations } from "./reconcile-remote-target-observations";
+import {
+  getRemoteSnapshotRestoreManifest,
+  resolveRestoreManifestTargets,
+} from "./resolve-remote-snapshot-targets";
 import { getCloudSaveSyncAnchor } from "./sync-anchor";
 import type { SyncDirection } from "./sync-game/policy";
 
 interface AnalyzeCloudSaveStateOptions {
   customPathBindings?: CloudSaveCustomPathBindings;
+  allowInstallationOwnedCustomPathDeletion?: boolean;
 }
+
+const samePaths = (left: string[], right: string[]) =>
+  left.length === right.length &&
+  left.every((value, index) => value === right[index]);
+
+const isUnavailableRestoreEnvironment = (error: unknown) =>
+  error instanceof Error &&
+  (error.message === "cloud_save_restore_prefix_unresolved" ||
+    error.message === "cloud_save_restore_prefix_invalid" ||
+    error.message === "cloud_save_restore_profile_unresolved");
 
 export const analyzeCloudSaveState = async (
   objectId: string,
@@ -44,19 +68,108 @@ export const analyzeCloudSaveState = async (
   ) {
     throw new Error("Active Cloud Save snapshot belongs to another game");
   }
-  const scanStoreUserContext = storeUserContextWithSnapshotAccounts(
-    context.pathContext.storeUserContext,
-    remoteManifest?.variants ?? []
+  const anchor = await getCloudSaveSyncAnchor(
+    shop,
+    objectId,
+    context.environmentId,
+    { allowEnvironmentFallback: !activeRemoteSnapshot }
   );
-  const localSnapshotContext = await buildLocalGameSnapshotContext(
+  const customPathContext = cloudSaveCustomPathContextFromPathContext(
+    context.pathContext
+  );
+  let trackingState: Awaited<
+    ReturnType<typeof getCloudSaveCustomPathTrackingState>
+  >;
+  if (options.customPathBindings) {
+    trackingState = {
+      bindings: options.customPathBindings,
+      pendingRawPaths: [],
+    };
+  } else if (!remoteManifest && anchor) {
+    trackingState = await getCloudSaveCustomPathTrackingState(
+      shop,
+      objectId,
+      customPathContext
+    );
+  } else {
+    trackingState = await reconcileCloudSaveCustomPathsWithRemote(
+      shop,
+      objectId,
+      remoteManifest?.customPathRawPaths ?? [],
+      customPathContext
+    );
+  }
+  const customPathBindings = await getUsableCloudSaveCustomPathBindings(
     objectId,
     shop,
     context,
     {
-      scanStoreUserContext,
-      customPathBindings: options.customPathBindings,
+      bindings: trackingState.bindings,
+      remoteFiles: remoteManifest?.files ?? [],
     }
   );
+  const preserveLocalMissingRawPaths =
+    options.allowInstallationOwnedCustomPathDeletion
+      ? new Set<string>()
+      : await getInstallationOwnedCustomPathRawPaths(
+          customPathBindings,
+          context.pathContext
+        );
+  let localSnapshotContext = await buildLocalGameSnapshotContext(
+    objectId,
+    shop,
+    context,
+    {
+      customPathBindings,
+      scanStoreUserContext: remoteManifest
+        ? storeUserContextWithSnapshotAccounts(
+            context.pathContext.storeUserContext,
+            remoteManifest.variants
+          )
+        : context.pathContext.storeUserContext,
+    }
+  );
+
+  if (remoteManifest) {
+    const localEntryIds = new Set(
+      localSnapshotContext.files.map(cloudSaveFileKey)
+    );
+    const missingRemoteFiles = remoteManifest.files.filter(
+      (file) => !localEntryIds.has(cloudSaveFileKey(file))
+    );
+    if (missingRemoteFiles.length > 0) {
+      const usedVariantIds = new Set(
+        missingRemoteFiles.map((file) => file.variantId)
+      );
+      try {
+        const resolution = await resolveRestoreManifestTargets(
+          {
+            ...remoteManifest,
+            variants: remoteManifest.variants.filter((variant) =>
+              usedVariantIds.has(variant.variantId)
+            ),
+            files: missingRemoteFiles,
+          },
+          context.pathContext,
+          customPathBindings,
+          context
+        );
+        localSnapshotContext = reconcileRemoteTargetObservations(
+          localSnapshotContext,
+          remoteManifest.variants,
+          missingRemoteFiles,
+          resolution,
+          (input) => NativeAddon.buildSnapshotAggregateHash(input)
+        );
+      } catch (error) {
+        if (!isUnavailableRestoreEnvironment(error)) throw error;
+        logger.info(
+          "[Cloud Save] Skipping remote target observation without a usable restore environment",
+          { shop, objectId, error }
+        );
+      }
+    }
+  }
 
   const {
     sourceFiles: _,
@@ -64,20 +177,21 @@ export const analyzeCloudSaveState = async (
     pathContext: __,
     ...localSnapshot
   } = localSnapshotContext;
-  const anchor = await getCloudSaveSyncAnchor(
-    shop,
-    objectId,
-    environmentId,
-    localSnapshot.aggregateHash,
-    localSnapshot.fileCount
-  );
   const merge = mergeUserVariantSnapshots({
     local: localSnapshotContext,
     remoteVariants: remoteManifest?.variants ?? [],
     remoteFiles: remoteManifest?.files ?? [],
     base: anchor,
     direction: syncDirection,
+    preserveLocalMissingRawPaths,
+    treatLocalAsNewRawPaths: new Set(trackingState.pendingRawPaths),
   });
+  const mergedCustomPathRawPaths = [
+    ...new Set([
+      ...(remoteManifest?.customPathRawPaths ?? []),
+      ...localSnapshotContext.customPathRawPaths,
+    ]),
+  ].sort((left, right) => left.localeCompare(right));
   const mergedAggregateHash = NativeAddon.buildSnapshotAggregateHash({
     variants: merge.variants,
     files: merge.files,
@@ -93,7 +207,13 @@ export const analyzeCloudSaveState = async (
     currentState = "untracked";
   } else if (merge.conflicts.length > 0) {
     currentState = "conflict";
-  } else if (mergedAggregateHash !== activeRemoteSnapshot.aggregateHash) {
+  } else if (
+    mergedAggregateHash !== activeRemoteSnapshot.aggregateHash ||
+    !samePaths(
+      mergedCustomPathRawPaths,
+      remoteManifest?.customPathRawPaths ?? []
+    )
+  ) {
     currentState = "local-ahead";
   } else if (
     merge.restoreEntryIds.length > 0 ||
@@ -108,6 +228,9 @@ export const analyzeCloudSaveState = async (
 
   return {
     context,
+    customPathBindings,
+    pendingCustomPathRawPaths: trackingState.pendingRawPaths,
+    installationOwnedCustomPathRawPaths: [...preserveLocalMissingRawPaths],
     localSnapshot,
     localSnapshotContext,
     environmentId,
@@ -117,6 +240,7 @@ export const analyzeCloudSaveState = async (
     remoteManifest,
     remoteDeletionTombstone: deletionTombstone,
     merge,
+    mergedCustomPathRawPaths,
     mergedAggregateHash,
     state: {
       state: currentState,

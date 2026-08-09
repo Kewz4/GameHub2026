@@ -4,6 +4,10 @@ import { UserNotLoggedInError } from "@shared";
 import { logger } from "../logger";
 import { db, gameAchievementsSublevel, levelKeys } from "@main/level";
 import { AxiosError } from "axios";
+import {
+  canonicalizeAchievementDefinitions,
+  canonicalizeUnlockedAchievements,
+} from "./achievement-sync-policy";
 
 const getModifiedSinceHeader = (
   cachedAchievements: GameAchievement | undefined,
@@ -80,14 +84,20 @@ export const getGameAchievementData = async (
     }
   )
     .then(async (achievements) => {
+      const canonicalDefinitions =
+        canonicalizeAchievementDefinitions(achievements);
+      const canonicalUnlocked = canonicalizeUnlockedAchievements(
+        canonicalDefinitions,
+        cachedAchievements?.unlockedAchievements
+      );
       await gameAchievementsSublevel.put(gameKey, {
-        unlockedAchievements: cachedAchievements?.unlockedAchievements ?? [],
-        achievements,
+        unlockedAchievements: canonicalUnlocked,
+        achievements: canonicalDefinitions,
         updatedAt: Date.now(),
         language,
       });
 
-      return achievements;
+      return canonicalDefinitions;
     })
     .catch((err) => {
       if (err instanceof UserNotLoggedInError) {

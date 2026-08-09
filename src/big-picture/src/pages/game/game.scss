@@ -699,6 +699,18 @@
     object-fit: contain;
   }
 
+  &__hero-title-fallback {
+    width: min(720px, 70%);
+    margin: 0;
+    color: #fff;
+    font-size: clamp(2.5rem, 4vw, 4.5rem);
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+    text-shadow: 0 3px 24px rgba(0, 0, 0, 0.9);
+  }
+
   &__hero-description {
     max-width: 512px;
     color: rgba(255, 255, 255, 0.8);

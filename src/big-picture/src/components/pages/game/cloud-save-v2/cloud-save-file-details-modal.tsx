@@ -5,7 +5,7 @@ import {
   TrashIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react";
-import { formatBytes } from "@shared";
+import { formatBytes, formatLocalPathForDisplay } from "@shared";
 import type { CloudSaveV2FileDetails } from "@types";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -70,7 +70,9 @@ export function BigPictureCloudSaveFileDetailsModal({
       return details.comparisons.map((comparison) => ({
         key: `${comparison.variantId}:${comparison.rawPath}:${comparison.relativePath}`,
         name:
-          comparison.local?.absolutePath ??
+          (comparison.local?.absolutePath
+            ? formatLocalPathForDisplay(comparison.local.absolutePath)
+            : null) ??
           comparison.remote?.relativePath ??
           comparison.relativePath,
         size: comparison.local?.sizeBytes ?? comparison.remote?.sizeBytes ?? 0,
@@ -80,7 +82,7 @@ export function BigPictureCloudSaveFileDetailsModal({
 
     return details.local.files.map((file) => ({
       key: `${file.variantId}:${file.rawPath}:${file.relativePath}`,
-      name: file.absolutePath,
+      name: formatLocalPathForDisplay(file.absolutePath),
       size: file.sizeBytes,
       status: "local-only" as const,
     }));
@@ -100,6 +102,7 @@ export function BigPictureCloudSaveFileDetailsModal({
         closeOnB={!isBusy}
         initialFocusId={DETAILS_REFRESH_ID}
         className="big-picture-cloud-save-details-modal"
+        noAnimation
       >
         <VerticalFocusGroup
           regionId={DETAILS_REGION_ID}
@@ -184,7 +187,9 @@ export function BigPictureCloudSaveFileDetailsModal({
                     className="big-picture-cloud-save-details__path-row"
                   >
                     <div className="big-picture-cloud-save-details__path-copy">
-                      <strong>{customPath.path}</strong>
+                      <strong>
+                        {formatLocalPathForDisplay(customPath.path)}
+                      </strong>
                       <span>{customPath.rawPath}</span>
                     </div>
                     <Button
@@ -214,7 +219,9 @@ export function BigPictureCloudSaveFileDetailsModal({
                   >
                     <div className="big-picture-cloud-save-details__path-copy">
                       <strong>
-                        {customPath.pathHint ||
+                        {(customPath.pathHint
+                          ? formatLocalPathForDisplay(customPath.pathHint)
+                          : null) ||
                           t("cloud_save_v2_unresolved_custom_path_name")}
                       </strong>
                       <span>

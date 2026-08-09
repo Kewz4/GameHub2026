@@ -58,7 +58,14 @@ import BigPictureLibrary from "../../big-picture/src/pages/library/page";
 import BigPictureGame from "../../big-picture/src/pages/game/game";
 import BigPictureGameAchievements from "../../big-picture/src/pages/game-achievements/game-achievements";
 
+// Route every renderer console level through electron-log so the diagnostics
+// window receives warnings/errors from third-party and legacy code too. The old
+// bridge only wired console.log, silently losing the most useful messages.
 console.log = logger.log;
+console.info = logger.info;
+console.warn = logger.warn;
+console.error = logger.error;
+console.debug = logger.debug;
 
 Sentry.init({
   dsn: import.meta.env.RENDERER_VITE_SENTRY_DSN,
@@ -122,6 +129,33 @@ globalThis.electron.onUserPreferencesUpdated((preferences) => {
     "data-theme-mode",
     preferences?.themeMode ?? "dark"
   );
+});
+
+// Shift+S toggles diagnostics while GameHub itself is focused. Keeping this as
+// an in-app shortcut avoids globally stealing uppercase "S" from every other
+// application; Ctrl+Shift+L remains the global fallback.
+document.addEventListener("keydown", (event) => {
+  if (
+    event.repeat ||
+    !event.shiftKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    event.metaKey ||
+    event.key.toLowerCase() !== "s"
+  ) {
+    return;
+  }
+
+  const target = event.target as HTMLElement | null;
+  const isEditing =
+    target?.isContentEditable ||
+    target?.tagName === "INPUT" ||
+    target?.tagName === "TEXTAREA" ||
+    target?.tagName === "SELECT";
+  if (isEditing) return;
+
+  event.preventDefault();
+  void globalThis.electron.toggleConsoleWindow();
 });
 
 if (userPreferences?.language) {

@@ -35,7 +35,10 @@ const digest = crypto.createHash("sha256").update(raw).digest("hex");
 const compressed = gzipSync(raw, { level: 9, mtime: 0 });
 
 await Promise.all([
-  fs.writeFile(path.join(targetDirectory, "baseline-manifest.yaml.gz"), compressed),
+  fs.writeFile(
+    path.join(targetDirectory, "baseline-manifest.yaml.gz"),
+    compressed
+  ),
   fs.writeFile(
     path.join(targetDirectory, "baseline-manifest.sha256"),
     `${digest}\n`,

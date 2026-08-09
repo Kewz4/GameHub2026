@@ -1,12 +1,14 @@
-import type { CloudSaveAutomaticSyncMode } from "@types";
+import type { CloudSaveAutomaticSyncMode, GameShop } from "@types";
 
 export type { CloudSaveAutomaticSyncMode } from "@types";
 
+/** Legacy fields are decoded only while migrating old local settings. */
 export interface CloudSaveAutomaticSyncState {
   legacyEnabled: boolean;
   v2Enabled: boolean;
 }
 
+/** Decode the historical two-flag shape; this does not select a live backend. */
 export const resolveCloudSaveAutomaticSyncMode = ({
   legacyEnabled,
   v2Enabled,
@@ -17,13 +19,17 @@ export const resolveCloudSaveAutomaticSyncMode = ({
 };
 
 export const resolveStoredCloudSaveAutomaticSyncMode = (
+  _legacyEnabled: boolean,
+  storedV2Enabled: boolean | undefined
+): CloudSaveAutomaticSyncMode =>
+  storedV2Enabled === false ? "disabled" : "v2";
+
+export const resolveStoredCloudSaveAutomaticSyncModeForShop = (
+  _shop: GameShop,
   legacyEnabled: boolean,
   storedV2Enabled: boolean | undefined
-) =>
-  resolveCloudSaveAutomaticSyncMode({
-    legacyEnabled,
-    v2Enabled: storedV2Enabled === true,
-  });
+): CloudSaveAutomaticSyncMode =>
+  resolveStoredCloudSaveAutomaticSyncMode(legacyEnabled, storedV2Enabled);
 
 export const getCloudSaveAutomaticSyncStateForMode = (
   mode: CloudSaveAutomaticSyncMode
@@ -34,16 +40,12 @@ export const getCloudSaveAutomaticSyncStateForMode = (
 
 export const getNextCloudSaveAutomaticSyncMode = (
   currentMode: CloudSaveAutomaticSyncMode,
-  targetMode: Exclude<CloudSaveAutomaticSyncMode, "disabled">,
+  targetMode: "v2",
   enabled: boolean
 ): CloudSaveAutomaticSyncMode => {
   if (enabled) return targetMode;
   return currentMode === targetMode ? "disabled" : currentMode;
 };
-
-export const shouldRunLegacyAutomaticCloudSave = (
-  mode: CloudSaveAutomaticSyncMode
-) => mode === "legacy";
 
 export const shouldRunV2AutomaticCloudSave = (
   mode: CloudSaveAutomaticSyncMode

@@ -12,12 +12,12 @@ export interface CloudSaveLaunchSessionFinalizationStore {
 }
 
 export interface CloudSaveLaunchSessionBackends {
-  legacy: (session: CloudSaveLaunchSession) => Promise<void>;
   v2: (session: CloudSaveLaunchSession) => Promise<void>;
 }
 
 /**
- * Claims one launch session and dispatches the backend captured at pre-launch.
+ * Claims one launch session and dispatches V2 when captured at pre-launch.
+ * Retired legacy or disabled sessions are completed without running a backend.
  * A concurrent or duplicate exit observes the finalizing phase and is a no-op.
  */
 export const finalizeCloudSaveLaunchSession = async (
@@ -31,9 +31,7 @@ export const finalizeCloudSaveLaunchSession = async (
   if (!session) return null;
 
   try {
-    if (session.mode === "legacy") {
-      await backends.legacy(session);
-    } else if (session.mode === "v2") {
+    if (session.mode === "v2") {
       await backends.v2(session);
     }
     return session;

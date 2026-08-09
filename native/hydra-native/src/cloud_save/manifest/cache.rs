@@ -16,7 +16,6 @@ use super::lookup::ManifestLookupIndex;
 use super::types::ManifestIndex;
 use crate::constants::MANIFEST_INDEX_VERSION;
 
-const MANIFEST_CACHE_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 const MANIFEST_HTTP_TIMEOUT_SECS: u64 = 30;
 const RAW_MANIFEST_FILE_NAME: &str = "cloud-save-manifest.yaml";
 const INDEX_FILE_NAME: &str = "cloud-save-manifest-index.json";
@@ -44,10 +43,6 @@ fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as i64
-}
-
-fn is_index_expired(index: &ManifestIndex, current_time: i64) -> bool {
-    index.fetched_at + MANIFEST_CACHE_TTL_MS <= current_time
 }
 
 async fn cache_for(key: PathBuf) -> ManifestCache {
@@ -214,60 +209,49 @@ async fn download_manifest(source_url: &str) -> Result<String> {
 }
 
 async fn load_index(user_data_path: &Path, source_url: &str) -> Result<ManifestIndex> {
-    let current_time = now_ms();
     let index_file = index_path(user_data_path);
     let raw_file = raw_manifest_path(user_data_path);
     let disk_index = read_index(&index_file).await;
-    let has_matching_disk_index = disk_index
-        .as_ref()
-        .is_some_and(|index| index.source_url == source_url);
     let disk_index = disk_index.filter(|index| index.source_url == source_url);
-    let mut fallback = disk_index
-        .clone()
-        .or_else(|| bundled_manifest(source_url).ok());
-
-    if let Some(index) = &disk_index {
-        if !is_index_expired(index, current_time) {
-            return Ok(index.clone());
-        }
+    // A validated index has the release-pinned digest. A network refresh can
+    // therefore only return the exact same rules, so never put a local save
+    // scan behind the CDN merely to refresh fetched_at. A new GameHub release
+    // carries a new pinned digest and read_index rejects the old cache.
+    if let Some(index) = disk_index {
+        return Ok(index);
     }
 
-    let raw_yaml = if disk_index.is_some() {
-        read_utf8_bounded(&raw_file, MAX_MANIFEST_BYTES as u64)
-            .await
-            .filter(|raw_yaml| verify_manifest_digest(raw_yaml).is_ok())
-    } else {
-        None
-    };
+    let raw_yaml = read_utf8_bounded(&raw_file, MAX_MANIFEST_BYTES as u64)
+        .await
+        .filter(|raw_yaml| verify_manifest_digest(raw_yaml).is_ok());
 
     if let Some(raw_yaml) = raw_yaml {
         let fetched_at = raw_manifest_fetched_at(&raw_file)
             .await
-            .unwrap_or(current_time);
+            .unwrap_or_else(now_ms);
         if let Ok(rebuilt) = build_manifest_index(&raw_yaml, source_url, fetched_at) {
-            // A valid rebuilt index remains usable in memory if refreshing disk fails.
             let _ = write_index(&index_file, &rebuilt).await;
-            if !is_index_expired(&rebuilt, current_time) {
-                return Ok(rebuilt);
-            }
-            fallback = Some(rebuilt);
+            return Ok(rebuilt);
         }
     }
 
-    let fresh_result = async {
-        let raw_yaml = download_manifest(source_url).await?;
-        let fresh = build_manifest_index(&raw_yaml, source_url, now_ms())?;
-        if !has_matching_disk_index {
-            remove_cache_file(&raw_file).await?;
-            remove_cache_file(&index_file).await?;
-        }
-        write_atomically(&raw_file, raw_yaml.as_bytes()).await?;
-        write_index(&index_file, &fresh).await?;
-        Ok::<ManifestIndex, anyhow::Error>(fresh)
+    // The embedded manifest is verified against the same pinned digest at
+    // runtime. Persist its compact index for future launches and serve it now;
+    // offline/cold starts must not wait for the 30-second HTTP timeout.
+    if let Ok(bundled) = bundled_manifest(source_url) {
+        let _ = write_index(&index_file, &bundled).await;
+        return Ok(bundled);
     }
-    .await;
 
-    fresh_result.or_else(|error| fallback.ok_or(error))
+    // This is only reachable if the embedded release asset is corrupt. Keep a
+    // pinned network recovery path rather than accepting arbitrary rules.
+    let raw_yaml = download_manifest(source_url).await?;
+    let fresh = build_manifest_index(&raw_yaml, source_url, now_ms())?;
+    remove_cache_file(&raw_file).await?;
+    remove_cache_file(&index_file).await?;
+    write_atomically(&raw_file, raw_yaml.as_bytes()).await?;
+    write_index(&index_file, &fresh).await?;
+    Ok(fresh)
 }
 
 pub async fn get_manifest_index(
@@ -278,7 +262,7 @@ pub async fn get_manifest_index(
     let mut cached = cache.lock().await;
 
     if let Some(index) = cached.as_ref() {
-        if index.manifest.source_url == source_url && !is_index_expired(&index.manifest, now_ms()) {
+        if index.manifest.source_url == source_url {
             return Ok(Arc::clone(index));
         }
     }
@@ -338,5 +322,18 @@ mod tests {
         std::fs::write(&path, serde_json::to_vec(&index).unwrap()).unwrap();
 
         assert!(read_index(&path).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn persists_the_release_bundled_index_on_a_cold_start() {
+        let temp = tempdir().unwrap();
+        let source_url = "not-a-network-url";
+
+        let loaded = load_index(temp.path(), source_url).await.unwrap();
+
+        assert_eq!(loaded.source_url, source_url);
+        assert!(index_path(temp.path()).is_file());
+        assert!(!raw_manifest_path(temp.path()).exists());
+        assert!(read_index(&index_path(temp.path())).await.is_some());
     }
 }

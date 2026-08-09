@@ -10,6 +10,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
+import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 
 import type {
   CloudSaveConflictResolution,
@@ -21,7 +22,10 @@ import { Button, Modal } from "@renderer/components";
 import { useDate } from "@renderer/hooks";
 import {
   getCloudSavePanelAction,
+  getCloudSaveOperationPresentation,
+  getCloudSavePartialDescriptionKey,
   getCloudSavePresentation,
+  getCloudSaveSnapshotPanelMode,
   type CloudSavePanelAction,
   shouldShowCloudSaveEmptySnapshot,
 } from "./cloud-save-presentation";
@@ -36,11 +40,15 @@ export interface CloudSavePanelProps {
   hasExecutablePath: boolean;
   isAutomaticSyncEnabled: boolean | null;
   hasError: boolean;
+  errorMessageKey:
+    | "cloud_save_v2_load_error"
+    | "cloud_save_v2_sync_error"
+    | null;
   progress: CloudSaveSyncProgressPayload | null;
   onSync: () => void;
   onOpenFileBrowser: () => void;
   onSelectExecutable: () => void;
-  onOpenBackupHistory: () => void;
+  onOpenBackupHistory?: () => void;
   onAutomaticSyncChange: (enabled: boolean) => Promise<void>;
   onResolveConflict: (resolution: CloudSaveConflictResolution) => void;
 }
@@ -59,6 +67,32 @@ interface CloudSaveSyncActionProps {
   onSync: () => void;
   onOpenFileBrowser: () => void;
   onResolveConflict: (resolution: CloudSaveConflictResolution) => void;
+}
+
+function CloudSaveSnapshotSkeleton({ label }: Readonly<{ label: string }>) {
+  return (
+    <section
+      className="cloud-save-v2__active-snapshot"
+      aria-busy="true"
+      aria-label={label}
+    >
+      <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">
+        <article className="cloud-save-v2__snapshot cloud-save-v2__snapshot--active cloud-save-v2__snapshot--skeleton">
+          <div className="cloud-save-v2__snapshot-header">
+            <Skeleton width={120} height={16} />
+            <Skeleton width={82} height={22} borderRadius={999} />
+          </div>
+          <div className="cloud-save-v2__snapshot-metadata">
+            <Skeleton width={112} height={14} />
+            <Skeleton width={128} height={14} />
+          </div>
+          <div className="cloud-save-v2__action-area cloud-save-v2__action-area--with-snapshot">
+            <Skeleton height={40} borderRadius={4} />
+          </div>
+        </article>
+      </SkeletonTheme>
+    </section>
+  );
 }
 
 const getSyncActionIcon = (
@@ -82,22 +116,15 @@ function CloudSaveSyncAction({
   const { t } = useTranslation("game_details");
 
   if (isSyncing) {
-    const progressLabel = progress
-      ? t(`cloud_save_v2_progress_${progress.stage}`)
-      : t("cloud_save_v2_syncing");
-    const progressFileCount =
-      progress && progress.totalFiles > 0
-        ? t("cloud_save_v2_progress_file_count", {
-            count: progress.totalFiles,
-            processed: progress.processedFiles,
-            total: progress.totalFiles,
-          })
-        : null;
+    const operation = getCloudSaveOperationPresentation(progress);
+    const progressFileCount = operation.fileCount
+      ? t("cloud_save_v2_progress_file_count", operation.fileCount)
+      : null;
 
     return (
       <Button className="cloud-save-v2__sync-button" disabled>
         <CircleNotchIcon className="cloud-save-v2__spinner" size={20} />
-        <span>{progressLabel}</span>
+        <span>{t(operation.labelKey)}</span>
         {progressFileCount && (
           <span className="cloud-save-v2__sync-file-count">
             · {progressFileCount}
@@ -133,6 +160,17 @@ function CloudSaveSyncAction({
           className="cloud-save-v2__sync-button"
           onClick={onOpenFileBrowser}
           disabled={isLoading}
+        >
+          <FolderOpenIcon size={20} />
+          <span>{t(action.labelKey)}</span>
+        </Button>
+      );
+    case "confirm-location":
+      return (
+        <Button
+          className="cloud-save-v2__sync-button"
+          onClick={onSync}
+          disabled={isLoading || isGameRunning}
         >
           <FolderOpenIcon size={20} />
           <span>{t(action.labelKey)}</span>
@@ -174,6 +212,7 @@ export function CloudSavePanel({
   hasExecutablePath,
   isAutomaticSyncEnabled,
   hasError,
+  errorMessageKey,
   progress,
   onSync,
   onOpenFileBrowser,
@@ -202,19 +241,30 @@ export function CloudSavePanel({
     hasError,
   });
   const hasSnapshotSummary = activeSnapshot !== null || showEmptySnapshot;
+  const hasUnconfiguredCustomPaths =
+    (overview?.unconfiguredCustomPathCount ?? 0) > 0;
   const presentation = getCloudSavePresentation({
     canUseCloudSaves: true,
     hasExecutablePath,
     isChecking: isLoading && !overview,
     isSyncing,
     hasError,
+    hasUnconfiguredCustomPaths,
     state: overview?.state ?? null,
     progressStage: isSyncing ? (progress?.stage ?? null) : null,
   });
   const panelAction = getCloudSavePanelAction(
     overview?.state ?? null,
-    overview?.suggestedAction ?? null
+    overview?.suggestedAction ?? null,
+    hasUnconfiguredCustomPaths
   );
+  const snapshotPanelMode = getCloudSaveSnapshotPanelMode({
+    overview,
+    isLoading,
+    isSyncing,
+    hasError,
+  });
+  const partialDescriptionKey = getCloudSavePartialDescriptionKey(overview);
 
   useEffect(() => {
     setIsCloudSaveEnabled(isAutomaticSyncEnabled ?? false);
@@ -335,14 +385,16 @@ export function CloudSavePanel({
         </button>
       </div>
 
-      <Button
-        theme="outline"
-        className="cloud-save-v2__history-button"
-        onClick={onOpenBackupHistory}
-      >
-        <ClockCounterClockwiseIcon size={20} />
-        <span>{t("backups")}</span>
-      </Button>
+      {onOpenBackupHistory && (
+        <Button
+          theme="outline"
+          className="cloud-save-v2__history-button"
+          onClick={onOpenBackupHistory}
+        >
+          <ClockCounterClockwiseIcon size={20} />
+          <span>{t("backups")}</span>
+        </Button>
+      )}
 
       {showLaunchConflictWarning && overview?.state === "conflict" && (
         <p className="cloud-save-v2__launch-conflict-warning">
@@ -356,13 +408,29 @@ export function CloudSavePanel({
         </p>
       )}
 
-      {hasError && (
-        <p className="cloud-save-v2__error">{t("cloud_save_v2_error")}</p>
+      {errorMessageKey && (
+        <p className="cloud-save-v2__error">{t(errorMessageKey)}</p>
       )}
 
-      {!hasExecutablePath ? (
-        missingExecutableCard
-      ) : (
+      {hasUnconfiguredCustomPaths && !hasError && (
+        <p className="cloud-save-v2__error">
+          {t("cloud_save_v2_unconfigured_custom_path_description")}
+        </p>
+      )}
+
+      {partialDescriptionKey && !hasError && (
+        <p className="cloud-save-v2__partial-warning">
+          {t(partialDescriptionKey)}
+        </p>
+      )}
+
+      {!hasExecutablePath && missingExecutableCard}
+
+      {hasExecutablePath && snapshotPanelMode === "skeleton" && (
+        <CloudSaveSnapshotSkeleton label={t("cloud_save_v2_checking")} />
+      )}
+
+      {hasExecutablePath && snapshotPanelMode === "content" && (
         <section className="cloud-save-v2__active-snapshot">
           <article className="cloud-save-v2__snapshot cloud-save-v2__snapshot--active">
             {activeSnapshot ? (
@@ -434,7 +502,9 @@ export function CloudSaveModal({
       description={t("cloud_save_v2_modal_description")}
       onClose={onClose}
     >
-      <CloudSavePanel {...panelProps} active={visible} />
+      <div className="cloud-save-v2__dialog-content">
+        <CloudSavePanel {...panelProps} active={visible} />
+      </div>
     </Modal>
   );
 }

@@ -22,6 +22,8 @@ import {
   normalizeExophaseTitle,
   type ExophaseAchievement,
 } from "./exophase-api";
+import { syncAchievementsToHydraCloud } from "../achievement-cloud-sync";
+import { canonicalizeUnlockedAchievements } from "../achievement-sync-policy";
 
 const SHARED_CACHE_BLOB = "exophase-cache.json";
 
@@ -65,6 +67,46 @@ export const getPrefs = (): Promise<UserPreferences | null> =>
       valueEncoding: "json",
     })
     .catch(() => null);
+
+/**
+ * Prevents one Hydra account from importing another account's persisted
+ * Exophase profiles after sign-out/account switching. Existing installations
+ * are claimed once by the currently authenticated Hydra account.
+ */
+export const validateExophaseAccountScope = async (): Promise<
+  "valid" | "claimed" | "logged-out" | "account-mismatch"
+> => {
+  if (!HydraApi.isLoggedIn()) return "logged-out";
+
+  const [prefs, user] = await Promise.all([
+    getPrefs(),
+    db
+      .get<string, { id?: string }>(levelKeys.user, { valueEncoding: "json" })
+      .catch(() => null),
+  ]);
+  if (!user?.id) return "logged-out";
+
+  if (
+    prefs?.exophaseHydraAccountId &&
+    prefs.exophaseHydraAccountId !== user.id
+  ) {
+    achievementsLogger.warn(
+      "[Exophase account] sync blocked because the configured profiles belong to another Hydra account"
+    );
+    return "account-mismatch";
+  }
+
+  if (!prefs?.exophaseHydraAccountId) {
+    await db.put<string, UserPreferences>(
+      levelKeys.userPreferences,
+      { ...(prefs ?? {}), exophaseHydraAccountId: user.id },
+      { valueEncoding: "json" }
+    );
+    return "claimed";
+  }
+
+  return "valid";
+};
 
 export const isManagedShop = (
   shop: GameShop,
@@ -178,25 +220,26 @@ export const syncUnlockedToHydraApi = async (
     return "no-remote-id";
   }
 
-  try {
-    await HydraApi.put(
-      "/profile/games/achievements",
-      { id: remoteId, achievements: unlockedAchievements },
-      {}
-    );
+  const result = await syncAchievementsToHydraCloud({
+    remoteId,
+    shop: game.shop,
+    objectId: game.objectId,
+    achievements: unlockedAchievements,
+  });
+
+  if (result.status === "synced" || result.status === "unchanged") {
     achievementsLogger.log(
       `[Exophase→HydraAPI] synced ${unlockedAchievements.length} unlocks for ${game.shop}:${game.objectId}`
     );
     return "synced";
-  } catch (err) {
-    // Subscription-required / network errors are non-fatal — the unlocks are
-    // already persisted locally and will retry on the next sync.
-    achievementsLogger.log(
-      `[Exophase→HydraAPI] cloud sync failed for ${game.shop}:${game.objectId}`,
-      err instanceof Error ? err.message : String(err)
-    );
-    return "failed";
   }
+
+  if (result.status === "logged-out") return "logged-out";
+  if (result.status === "no-remote-id") return "no-remote-id";
+
+  // Network/account errors are non-fatal — the unlocks are already persisted
+  // locally and the bounded sync service leaves them eligible for another run.
+  return "failed";
 };
 
 /**
@@ -544,13 +587,10 @@ export const matchAndSyncToHydraApiForNonLibraryGame = async (
     .get(gameKey)
     .catch(() => null);
   const existingUnlocked = existing?.unlockedAchievements ?? [];
-  const existingNames = new Set(
-    existingUnlocked.map((u) => (u.name ?? "").toUpperCase())
-  );
-  const merged = [
+  const merged = canonicalizeUnlockedAchievements(hydraDefinitions, [
     ...existingUnlocked,
-    ...matched.filter((u) => !existingNames.has((u.name ?? "").toUpperCase())),
-  ];
+    ...matched,
+  ]);
   await gameAchievementsSublevel
     .put(gameKey, {
       achievements: hydraDefinitions,

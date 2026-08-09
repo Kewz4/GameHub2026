@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type {
-  SnapshotVariant,
-  StoreUserContext,
-} from "../../../types/index";
+import type { SnapshotVariant, StoreUserContext } from "../../../types/index";
 
 import { storeUserContextWithSnapshotAccounts } from "./snapshot-store-user-context";
 

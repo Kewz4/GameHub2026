@@ -81,6 +81,7 @@ export const LibraryGameCard = memo(function LibraryGameCard({
     game.libraryImageUrl, // Level 2
     game.iconUrl, // Level 3 — last resort (includes a custom icon, if set)
   ].filter((url) => url && url.trim() !== "");
+  const sourcesKey = sources.join("\u0000");
 
   const [fallbackIndex, setFallbackIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
@@ -133,7 +134,7 @@ export const LibraryGameCard = memo(function LibraryGameCard({
   useEffect(() => {
     setFallbackIndex(0);
     setImageError(false);
-  }, [game.id]);
+  }, [game.id, sourcesKey]);
 
   return (
     <button

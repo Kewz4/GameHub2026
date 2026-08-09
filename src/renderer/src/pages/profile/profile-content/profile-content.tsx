@@ -22,8 +22,8 @@ import { AnimatePresence } from "framer-motion";
 import { HydraCloudModal } from "@renderer/pages/shared-modals/hydra-cloud/hydra-cloud-modal";
 import { useSubscription } from "@renderer/hooks/use-subscription";
 import "./profile-content.scss";
-
-type SortOption = "playtime" | "achievementCount" | "playedRecently";
+import type { ProfileGameSort } from "./profile-library-data";
+import { ProfileAchievementsTab } from "./profile-achievements-tab";
 
 interface UserReview {
   id: string;
@@ -88,7 +88,7 @@ export function ProfileContent() {
   } = useContext(userProfileContext);
   const { userDetails } = useUserDetails();
   const [statsIndex, setStatsIndex] = useState(0);
-  const [sortBy, setSortBy] = useState<SortOption>("playedRecently");
+  const [sortBy, setSortBy] = useState<ProfileGameSort>("playedRecently");
 
   const [activeTab, setActiveTab] = useState<ProfileTabType>("library");
 
@@ -159,13 +159,7 @@ export function ProfileContent() {
     setActiveTab("library");
   }, [userProfile?.id]);
 
-  useEffect(() => {
-    if (userProfile?.id) {
-      fetchUserReviews();
-    }
-  }, [userProfile?.id]);
-
-  const fetchUserReviews = async () => {
+  const fetchUserReviews = useCallback(async () => {
     if (!userProfile?.id) return;
 
     setIsLoadingReviews(true);
@@ -176,10 +170,17 @@ export function ProfileContent() {
       );
       setReviews(response.reviews);
       setReviewsTotalCount(response.totalCount);
+    } catch {
+      setReviews([]);
+      setReviewsTotalCount(0);
     } finally {
       setIsLoadingReviews(false);
     }
-  };
+  }, [userProfile?.id]);
+
+  useEffect(() => {
+    void fetchUserReviews();
+  }, [fetchUserReviews]);
 
   const handleDeleteReview = async (reviewId: string) => {
     try {
@@ -331,7 +332,7 @@ export function ProfileContent() {
     return userProfile?.relation?.status === "ACCEPTED";
   }, [userProfile]);
 
-  const content = useMemo(() => {
+  const content = (() => {
     if (!userProfile) return null;
 
     const shouldLockProfile =
@@ -355,6 +356,7 @@ export function ProfileContent() {
           <ProfileTabs
             activeTab={activeTab}
             reviewsTotalCount={reviewsTotalCount}
+            showAchievements={isMe}
             onTabChange={setActiveTab}
           />
 
@@ -386,6 +388,10 @@ export function ProfileContent() {
                   onVote={handleVoteReview}
                   onDelete={handleDeleteClick}
                 />
+              )}
+
+              {activeTab === "achievements" && isMe && (
+                <ProfileAchievementsTab />
               )}
             </AnimatePresence>
           </div>
@@ -433,27 +439,7 @@ export function ProfileContent() {
         />
       </section>
     );
-  }, [
-    userProfile,
-    isMe,
-    usersAreFriends,
-    userStats,
-    numberFormatter,
-    t,
-    statsIndex,
-    libraryGames,
-    pinnedGames,
-
-    sortBy,
-    localLibraryCount,
-    activeTab,
-    // ensure reviews UI updates correctly
-    reviews,
-    reviewsTotalCount,
-    isLoadingReviews,
-    votingReviews,
-    deleteModalVisible,
-  ]);
+  })();
 
   return (
     <div>
