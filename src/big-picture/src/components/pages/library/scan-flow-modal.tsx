@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { EmulatorSystem } from "@types";
-import { Button, Modal } from "../../common";
+import {
+  Button,
+  Checkbox,
+  FileExplorerModal,
+  FocusItem,
+  HorizontalFocusGroup,
+  Modal,
+  VerticalFocusGroup,
+} from "../../common";
 import {
   XIcon,
   FolderOpenIcon,
@@ -44,6 +52,7 @@ export function ScanFlowModal({
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [candidates, setCandidates] = useState<FoundGame[]>([]);
   const [approved, setApproved] = useState<Set<string>>(new Set());
+  const [isFolderPickerVisible, setIsFolderPickerVisible] = useState(false);
 
   // Reset to configure stage each time the modal opens
   useEffect(() => {
@@ -100,19 +109,11 @@ export function ScanFlowModal({
     }
   }, [mode, folderPaths]);
 
-  const handleAddFolder = async () => {
-    const result = await globalThis.window.electron.showOpenDialog({
-      properties: ["openDirectory"],
-    });
-    if (!result.canceled && result.filePaths.length > 0) {
-      setFolderPaths((prev) => {
-        const next = [...prev];
-        for (const p of result.filePaths) {
-          if (!next.includes(p)) next.push(p);
-        }
-        return next;
-      });
-    }
+  const handleAddFolder = (path: string) => {
+    setFolderPaths((previousPaths) =>
+      previousPaths.includes(path) ? previousPaths : [...previousPaths, path]
+    );
+    setIsFolderPickerVisible(false);
   };
 
   const toggleApproval = (key: string) => {
@@ -144,374 +145,361 @@ export function ScanFlowModal({
       onClose={canClose ? onClose : () => {}}
       closeOnB={canClose}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {/* ── Stage: configure ─────────────────────────────────────────── */}
-        {stage === "configure" && (
-          <>
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button
-                type="button"
-                onClick={() => setMode("deep")}
-                style={{
-                  flex: 1,
-                  padding: "14px",
-                  borderRadius: "8px",
-                  border: `2px solid ${mode === "deep" ? "var(--color-primary, #8c67ef)" : "rgba(255,255,255,0.15)"}`,
-                  background:
-                    mode === "deep"
-                      ? "rgba(140,103,239,0.12)"
-                      : "rgba(255,255,255,0.04)",
-                  color: "inherit",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    marginBottom: "4px",
-                  }}
-                >
-                  <MagnifyingGlassIcon size={18} />
-                  <strong style={{ fontSize: "0.9rem" }}>Deep Scan</strong>
-                </div>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "0.78rem",
-                    opacity: 0.6,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Scans your entire PC for games, skipping official store
-                  folders.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMode("selective")}
-                style={{
-                  flex: 1,
-                  padding: "14px",
-                  borderRadius: "8px",
-                  border: `2px solid ${mode === "selective" ? "var(--color-primary, #8c67ef)" : "rgba(255,255,255,0.15)"}`,
-                  background:
-                    mode === "selective"
-                      ? "rgba(140,103,239,0.12)"
-                      : "rgba(255,255,255,0.04)",
-                  color: "inherit",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    marginBottom: "4px",
-                  }}
-                >
-                  <FolderOpenIcon size={18} />
-                  <strong style={{ fontSize: "0.9rem" }}>Selective Scan</strong>
-                </div>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "0.78rem",
-                    opacity: 0.6,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  Choose specific folders to scan.
-                </p>
-              </button>
-            </div>
-
-            {mode === "selective" && (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-              >
-                {folderPaths.map((p) => (
-                  <div
-                    key={p}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "6px 10px",
-                      background: "rgba(255,255,255,0.06)",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        flex: 1,
-                        fontSize: "0.8rem",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {p}
-                    </span>
+      <VerticalFocusGroup regionId="library-scan-flow-region" asChild>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* ── Stage: configure ─────────────────────────────────────────── */}
+          {stage === "configure" && (
+            <>
+              <HorizontalFocusGroup asChild>
+                <div style={{ display: "flex", gap: "12px" }}>
+                  <FocusItem id="library-scan-mode-deep" asChild>
                     <button
                       type="button"
-                      onClick={() =>
-                        setFolderPaths((prev) => prev.filter((f) => f !== p))
-                      }
+                      onClick={() => setMode("deep")}
+                      aria-pressed={mode === "deep"}
                       style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
+                        flex: 1,
+                        padding: "14px",
+                        borderRadius: "8px",
+                        border: `2px solid ${mode === "deep" ? "var(--color-primary, #8c67ef)" : "rgba(255,255,255,0.15)"}`,
+                        background:
+                          mode === "deep"
+                            ? "rgba(140,103,239,0.12)"
+                            : "rgba(255,255,255,0.04)",
                         color: "inherit",
-                        opacity: 0.6,
-                        padding: "2px",
+                        cursor: "pointer",
+                        textAlign: "left",
                       }}
                     >
-                      <XIcon size={14} />
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        <MagnifyingGlassIcon size={18} />
+                        <strong style={{ fontSize: "0.9rem" }}>
+                          Deep Scan
+                        </strong>
+                      </div>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.78rem",
+                          opacity: 0.6,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Scans your entire PC for games, skipping official store
+                        folders.
+                      </p>
                     </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => void handleAddFolder()}
-                  style={{
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px dashed rgba(255,255,255,0.2)",
-                    borderRadius: "6px",
-                    padding: "8px",
-                    cursor: "pointer",
-                    color: "inherit",
-                    fontSize: "0.82rem",
-                    opacity: 0.8,
-                  }}
-                >
-                  + Add Folder
-                </button>
-              </div>
-            )}
+                  </FocusItem>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "8px",
-              }}
-            >
-              <Button variant="secondary" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                disabled={mode === "selective" && folderPaths.length === 0}
-                onClick={() => void handleStartScan()}
-              >
-                Start Scan
-              </Button>
-            </div>
-          </>
-        )}
+                  <FocusItem id="library-scan-mode-selective" asChild>
+                    <button
+                      type="button"
+                      onClick={() => setMode("selective")}
+                      aria-pressed={mode === "selective"}
+                      style={{
+                        flex: 1,
+                        padding: "14px",
+                        borderRadius: "8px",
+                        border: `2px solid ${mode === "selective" ? "var(--color-primary, #8c67ef)" : "rgba(255,255,255,0.15)"}`,
+                        background:
+                          mode === "selective"
+                            ? "rgba(140,103,239,0.12)"
+                            : "rgba(255,255,255,0.04)",
+                        color: "inherit",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        <FolderOpenIcon size={18} />
+                        <strong style={{ fontSize: "0.9rem" }}>
+                          Selective Scan
+                        </strong>
+                      </div>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.78rem",
+                          opacity: 0.6,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Choose specific folders to scan.
+                      </p>
+                    </button>
+                  </FocusItem>
+                </div>
+              </HorizontalFocusGroup>
 
-        {/* ── Stage: scanning ───────────────────────────────────────────── */}
-        {stage === "scanning" && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "16px",
-              padding: "16px 0",
-            }}
-          >
-            <p style={{ margin: 0, opacity: 0.8 }}>
-              Scanning your PC for games…
-            </p>
-
-            {progress && progress.total > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "6px",
-                  width: "100%",
-                }}
-              >
+              {mode === "selective" && (
                 <div
                   style={{
-                    height: "4px",
-                    background: "rgba(255,255,255,0.12)",
-                    borderRadius: "2px",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      height: "100%",
-                      width: `${Math.round((progress.scanned / progress.total) * 100)}%`,
-                      background: "var(--color-primary, #8c67ef)",
-                      borderRadius: "2px",
-                      transition: "width 0.2s ease",
-                    }}
-                  />
-                </div>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    opacity: 0.55,
-                    textAlign: "center",
-                  }}
-                >
-                  {progress.scanned}/{progress.total} — {progress.currentTitle}{" "}
-                  ({progress.foundCount} found)
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Stage: approve ────────────────────────────────────────────── */}
-        {stage === "approve" && (
-          <>
-            {candidates.length === 0 ? (
-              <p style={{ margin: 0, opacity: 0.6 }}>
-                No games were found during the scan.
-              </p>
-            ) : (
-              <>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setApproved(new Set(candidates.map((g) => g.key)))
-                    }
-                    style={{
-                      background: "none",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      borderRadius: "4px",
-                      padding: "4px 10px",
-                      cursor: "pointer",
-                      color: "inherit",
-                      fontSize: "0.8rem",
-                    }}
-                  >
-                    Approve All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApproved(new Set())}
-                    style={{
-                      background: "none",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      borderRadius: "4px",
-                      padding: "4px 10px",
-                      cursor: "pointer",
-                      color: "inherit",
-                      fontSize: "0.8rem",
-                      opacity: 0.7,
-                    }}
-                  >
-                    Deny All
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    maxHeight: "300px",
-                    overflowY: "auto",
                     display: "flex",
                     flexDirection: "column",
                     gap: "6px",
                   }}
                 >
-                  {candidates.map((g) => (
-                    <label
-                      key={g.key}
-                      aria-label={g.title}
+                  {folderPaths.map((p) => (
+                    <div
+                      key={p}
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "10px",
-                        padding: "8px 10px",
-                        background: approved.has(g.key)
-                          ? "rgba(255,255,255,0.07)"
-                          : "rgba(255,255,255,0.02)",
+                        gap: "8px",
+                        padding: "6px 10px",
+                        background: "rgba(255,255,255,0.06)",
                         borderRadius: "6px",
-                        cursor: "pointer",
-                        opacity: approved.has(g.key) ? 1 : 0.45,
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={approved.has(g.key)}
-                        onChange={() => toggleApproval(g.key)}
+                      <span
                         style={{
-                          accentColor: "var(--color-primary, #8c67ef)",
-                          width: "16px",
-                          height: "16px",
-                        }}
-                      />
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "2px",
+                          flex: 1,
+                          fontSize: "0.8rem",
                           overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>
-                          {g.title}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "0.74rem",
-                            opacity: 0.5,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}
-                        >
-                          {g.executablePath}
-                        </span>
-                      </div>
-                    </label>
+                        {p}
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        focusId={`library-scan-remove-folder-${p.replaceAll(/[^a-z0-9_-]/gi, "-")}`}
+                        aria-label={`Remove ${p}`}
+                        onClick={() =>
+                          setFolderPaths((prev) => prev.filter((f) => f !== p))
+                        }
+                        icon={<XIcon size={14} />}
+                      >
+                        {null}
+                      </Button>
+                    </div>
                   ))}
+                  <Button
+                    variant="secondary"
+                    focusId="library-scan-add-folder"
+                    onClick={() => setIsFolderPickerVisible(true)}
+                  >
+                    Add Folder
+                  </Button>
                 </div>
-              </>
-            )}
+              )}
 
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "8px",
+                }}
+              >
+                <Button variant="secondary" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={mode === "selective" && folderPaths.length === 0}
+                  onClick={() => void handleStartScan()}
+                >
+                  Start Scan
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* ── Stage: scanning ───────────────────────────────────────────── */}
+          {stage === "scanning" && (
             <div
               style={{
                 display: "flex",
-                justifyContent: "flex-end",
-                gap: "8px",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "16px",
+                padding: "16px 0",
               }}
             >
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setStage("configure");
-                  setCandidates([]);
+              <p style={{ margin: 0, opacity: 0.8 }}>
+                Scanning your PC for games…
+              </p>
+
+              {progress && progress.total > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                    width: "100%",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "4px",
+                      background: "rgba(255,255,255,0.12)",
+                      borderRadius: "2px",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.round((progress.scanned / progress.total) * 100)}%`,
+                        background: "var(--color-primary, #8c67ef)",
+                        borderRadius: "2px",
+                        transition: "width 0.2s ease",
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      opacity: 0.55,
+                      textAlign: "center",
+                    }}
+                  >
+                    {progress.scanned}/{progress.total} —{" "}
+                    {progress.currentTitle} ({progress.foundCount} found)
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Stage: approve ────────────────────────────────────────────── */}
+          {stage === "approve" && (
+            <>
+              {candidates.length === 0 ? (
+                <p style={{ margin: 0, opacity: 0.6 }}>
+                  No games were found during the scan.
+                </p>
+              ) : (
+                <>
+                  <HorizontalFocusGroup asChild>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        focusId="library-scan-approve-all"
+                        onClick={() =>
+                          setApproved(new Set(candidates.map((g) => g.key)))
+                        }
+                      >
+                        Approve All
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        focusId="library-scan-deny-all"
+                        onClick={() => setApproved(new Set())}
+                      >
+                        Deny All
+                      </Button>
+                    </div>
+                  </HorizontalFocusGroup>
+
+                  <VerticalFocusGroup
+                    regionId="library-scan-results-region"
+                    style={{
+                      maxHeight: "300px",
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
+                    {candidates.map((g) => (
+                      <Checkbox
+                        key={g.key}
+                        id={`library-scan-result-${g.key.replaceAll(/[^a-z0-9_-]/gi, "-")}`}
+                        focusId={`library-scan-result-${g.key.replaceAll(/[^a-z0-9_-]/gi, "-")}`}
+                        checked={approved.has(g.key)}
+                        onChange={() => toggleApproval(g.key)}
+                        block
+                        label={
+                          <span
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "2px",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <span
+                              style={{ fontSize: "0.875rem", fontWeight: 500 }}
+                            >
+                              {g.title}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "0.74rem",
+                                opacity: 0.5,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {g.executablePath}
+                            </span>
+                          </span>
+                        }
+                      />
+                    ))}
+                  </VerticalFocusGroup>
+                </>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "8px",
                 }}
               >
-                Scan Again
-              </Button>
-              {candidates.length > 0 && (
-                <Button variant="primary" onClick={handleConfirm}>
-                  Add {approved.size} game{approved.size !== 1 ? "s" : ""} to
-                  library
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setStage("configure");
+                    setCandidates([]);
+                  }}
+                >
+                  Scan Again
                 </Button>
-              )}
-              <Button variant="secondary" onClick={onClose}>
-                Close
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
+                {candidates.length > 0 && (
+                  <Button variant="primary" onClick={handleConfirm}>
+                    Add {approved.size} game{approved.size !== 1 ? "s" : ""} to
+                    library
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={onClose}>
+                  Close
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </VerticalFocusGroup>
+
+      <FileExplorerModal
+        visible={isFolderPickerVisible}
+        title="Choose a folder to scan"
+        initialPath={folderPaths.at(-1)}
+        selectDirectory
+        onClose={() => setIsFolderPickerVisible(false)}
+        onSelect={handleAddFolder}
+      />
     </Modal>
   );
 }

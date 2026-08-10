@@ -9,6 +9,7 @@ import { patchUserProfile } from "../profile/update-profile";
 import { DownloadManager } from "@main/services";
 import { OverlayManager } from "@main/services/overlay-manager";
 import { getDownloadDirectoryPreferences } from "@shared";
+import { enqueueUserPreferencesMutation } from "./user-preferences-mutation-queue";
 
 const updateUserPreferences = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -89,4 +90,8 @@ const updateUserPreferences = async (
     .catch(() => {});
 };
 
-registerEvent("updateUserPreferences", updateUserPreferences);
+registerEvent("updateUserPreferences", (event, preferences) =>
+  enqueueUserPreferencesMutation(() =>
+    updateUserPreferences(event, preferences as Partial<UserPreferences>)
+  )
+);

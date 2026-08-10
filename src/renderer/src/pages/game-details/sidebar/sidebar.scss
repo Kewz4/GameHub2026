@@ -309,20 +309,6 @@
   }
 }
 
-.subscription-required-button {
-  text-decoration: none;
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  gap: calc(globals.$spacing-unit / 2);
-  color: globals.$warning-color;
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
 .achievements-placeholder {
   position: absolute;
   z-index: 1;

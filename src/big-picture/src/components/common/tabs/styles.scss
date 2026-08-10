@@ -218,13 +218,42 @@
 
   &--settings {
     .tabs__content {
+      width: 100%;
+      min-width: 0;
       padding: 0;
       justify-content: flex-start;
     }
 
     .tabs__list {
-      width: auto;
+      width: 100%;
+      min-width: 0;
+      flex: 1 1 auto;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-inline: contain;
+      scroll-behavior: smooth;
+      scroll-padding-inline: calc(var(--spacing-unit) * 6);
+      scrollbar-width: none;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    }
+
+    .tabs__settings-rail {
+      display: flex;
+      align-items: flex-end;
+      gap: calc(var(--spacing-unit) * 3);
+      width: 100%;
+      min-width: 0;
+    }
+
+    .tabs__before-tabs,
+    .tabs__after-tabs {
+      position: relative;
+      z-index: 1;
       flex: 0 0 auto;
+      padding-bottom: calc(var(--spacing-unit) * 1.5);
     }
 
     .tabs__tablist {
@@ -232,7 +261,9 @@
       align-items: flex-end;
       gap: calc(var(--spacing-unit) * 10);
       width: max-content;
-      max-width: 100%;
+      min-width: max-content;
+      max-width: none;
+      padding-inline: calc(var(--spacing-unit) * 1);
     }
 
     .tabs__tab {

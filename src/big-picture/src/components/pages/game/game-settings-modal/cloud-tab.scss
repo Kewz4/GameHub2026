@@ -48,6 +48,19 @@
   color: var(--color-text-muted);
 }
 
+.game-cloud-settings-tab__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing-unit) * 4);
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: calc(var(--spacing-unit) * 2);
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.18);
+}
+
 .game-cloud-settings-tab__section-content--backups {
   display: flex;
   flex-direction: column;

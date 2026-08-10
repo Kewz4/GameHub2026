@@ -159,7 +159,7 @@ export function BehaviorSection({ className }: Readonly<BehaviorSectionProps>) {
       {
         id: "launch-to-library-page",
         focusId: BEHAVIOR_ITEM_FOCUS_IDS.launchToLibraryPage,
-        label: "Launch Hydra in library page",
+        label: "Launch GameHub in the library",
         checked: form.launchToLibraryPage,
         disabled: false,
         onChange: (checked: boolean) =>
@@ -168,7 +168,7 @@ export function BehaviorSection({ className }: Readonly<BehaviorSectionProps>) {
       {
         id: "launch-in-big-picture",
         focusId: BEHAVIOR_ITEM_FOCUS_IDS.launchInBigPicture,
-        label: "Launch Hydra in Big Picture",
+        label: "Launch GameHub in Big Picture",
         checked: form.launchInBigPicture,
         disabled: false,
         onChange: (checked: boolean) =>

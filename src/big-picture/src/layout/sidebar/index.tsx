@@ -87,7 +87,7 @@ function SidebarRouter() {
       },
       {
         key: "downloads",
-        label: "Download",
+        label: "Downloads",
         path: `${basePath}/downloads`,
         icon: DownloadSimpleIcon,
       },

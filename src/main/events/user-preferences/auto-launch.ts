@@ -3,9 +3,13 @@ import AutoLaunch from "auto-launch";
 import { app } from "electron";
 import { logger } from "@main/services";
 
-const autoLaunch = async (
-  _event: Electron.IpcMainInvokeEvent,
-  autoLaunchProps: { enabled: boolean; minimized: boolean }
+export interface AutoLaunchPreferences {
+  enabled: boolean;
+  minimized: boolean;
+}
+
+export const applyAutoLaunchPreferences = async (
+  autoLaunchProps: AutoLaunchPreferences
 ) => {
   if (!app.isPackaged) return;
 
@@ -15,14 +19,19 @@ const autoLaunch = async (
   });
 
   if (autoLaunchProps.enabled) {
-    appLauncher.enable().catch((err) => {
+    await appLauncher.enable().catch((err) => {
       logger.error(err);
     });
   } else {
-    appLauncher.disable().catch((err) => {
+    await appLauncher.disable().catch((err) => {
       logger.error(err);
     });
   }
 };
+
+const autoLaunch = async (
+  _event: Electron.IpcMainInvokeEvent,
+  autoLaunchProps: AutoLaunchPreferences
+) => applyAutoLaunchPreferences(autoLaunchProps);
 
 registerEvent("autoLaunch", autoLaunch);

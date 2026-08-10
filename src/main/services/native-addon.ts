@@ -24,6 +24,7 @@ import type {
 } from "@types";
 
 import { logger } from "./logger";
+import type { OverlayInputGateNativeStatus } from "./overlay-input-gate";
 
 type NativeProcessProfileImageResponse = {
   imagePath?: string;
@@ -128,6 +129,25 @@ type HydraNativeModule = {
   createOverlayInputGate: () => boolean;
   setOverlayInputBlock: (blocked: boolean) => boolean;
   setOverlayInputGate: (targetPid: number, blocked: boolean) => boolean;
+  getOverlayInputGateStatus: (targetPid: number) => {
+    ready: boolean;
+    ownerPid?: number;
+    owner_pid?: number;
+    targetPid?: number;
+    target_pid?: number;
+    blocked: boolean;
+    generation: number;
+    readyPid?: number;
+    ready_pid?: number;
+    readyGeneration?: number;
+    ready_generation?: number;
+    capabilityMask?: number;
+    capability_mask?: number;
+    unsupportedModuleMask?: number;
+    unsupported_module_mask?: number;
+    hookStatus?: number;
+    hook_status?: number;
+  };
   injectInputHook: (
     pid: number,
     dllPath: string
@@ -587,8 +607,9 @@ export class NativeAddon {
   // A DLL injected into the game answers XInput / GetAsyncKeyState / raw input
   // with neutral state while a shared flag is set, which is the only way to
   // take input off a game that does not honour focus. Every entry point below
-  // is best-effort: injection legitimately fails (a protected process, a
-  // bitness mismatch, an antivirus block) and the overlay must still open.
+  // can fail (a protected process, a bitness mismatch, an antivirus block).
+  // An injection result only means LoadLibrary completed; callers must require
+  // getOverlayInputGateStatus().ready before exposing an interactive overlay.
 
   private static resolveInputHookPath() {
     const root = app.isPackaged ? process.resourcesPath : app.getAppPath();
@@ -622,6 +643,47 @@ export class NativeAddon {
       return this.load().setOverlayInputGate(targetPid, blocked);
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Read the worker-published hook handshake for exactly one target PID. The
+   * generation fields prevent a late reply from a previous render process
+   * (for example Khazan's loader before its BBQ render child) being accepted.
+   */
+  public static getOverlayInputGateStatus(
+    targetPid: number
+  ): OverlayInputGateNativeStatus {
+    const empty: OverlayInputGateNativeStatus = {
+      ready: false,
+      ownerPid: 0,
+      targetPid: 0,
+      blocked: false,
+      generation: 0,
+      readyPid: 0,
+      readyGeneration: 0,
+      capabilityMask: 0,
+      unsupportedModuleMask: 0,
+      hookStatus: 0,
+    };
+    if (process.platform !== "win32" || targetPid <= 0) return empty;
+    try {
+      const status = this.load().getOverlayInputGateStatus(targetPid);
+      return {
+        ready: status.ready,
+        ownerPid: status.ownerPid ?? status.owner_pid ?? 0,
+        targetPid: status.targetPid ?? status.target_pid ?? 0,
+        blocked: status.blocked,
+        generation: status.generation,
+        readyPid: status.readyPid ?? status.ready_pid ?? 0,
+        readyGeneration: status.readyGeneration ?? status.ready_generation ?? 0,
+        capabilityMask: status.capabilityMask ?? status.capability_mask ?? 0,
+        unsupportedModuleMask:
+          status.unsupportedModuleMask ?? status.unsupported_module_mask ?? 0,
+        hookStatus: status.hookStatus ?? status.hook_status ?? 0,
+      };
+    } catch {
+      return empty;
     }
   }
 

@@ -77,6 +77,7 @@ function HeroActionButton({
     <FocusItem
       id={focusId}
       actions={focusActions}
+      navigationState={disabled ? "disabled" : "active"}
       navigationOverrides={navigationOverrides}
       asChild
     >
@@ -92,6 +93,7 @@ function HeroActionButton({
           if (disabled) return;
           onClick?.();
         }}
+        disabled={disabled}
         aria-disabled={disabled}
         style={style}
       >

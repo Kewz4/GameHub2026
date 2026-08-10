@@ -149,7 +149,7 @@ export const getUserData = async () => {
     if (!loggedUser) return null;
     return overlayLocalImages({
       ...loggedUser,
-      username: "",
+      username: loggedUser.displayName.trim() || "GameHub user",
       bio: "",
       email: null,
       profileVisibility: "PUBLIC" as ProfileVisibility,
@@ -210,7 +210,7 @@ export const getUserData = async () => {
         if (loggedUser) {
           return overlayLocalImages({
             ...loggedUser,
-            username: "",
+            username: loggedUser.displayName.trim() || "GameHub user",
             bio: "",
             email: null,
             profileVisibility: "PUBLIC" as ProfileVisibility,

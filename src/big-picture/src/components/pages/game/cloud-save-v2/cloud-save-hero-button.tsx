@@ -35,12 +35,16 @@ export function BigPictureCloudSaveHeroButton({
     state: overview?.state ?? null,
     progressStage: isSyncing ? (progress?.stage ?? null) : null,
   });
+  const isReady =
+    !hasExecutablePath || !isRefreshing || overview !== null || hasError;
 
   return (
     <Button
       focusId={GAME_HERO_OPEN_CLOUD_SAVE_ID}
       focusNavigationOverrides={focusNavigationOverrides}
       variant="secondary"
+      data-cloud-save-ready={isReady}
+      data-cloud-save-state={overview?.state ?? (hasError ? "error" : "none")}
       icon={<CloudSaveStatusIcon icon={presentation.icon} size={24} />}
       onClick={openManager}
     >

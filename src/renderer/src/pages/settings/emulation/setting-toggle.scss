@@ -15,7 +15,7 @@
   transition: background 0.16s ease;
 
   &--on {
-    background: var(--color-primary, #7aa2ff);
+    background: var(--color-text-bright, #fafafa);
   }
 
   &--disabled {
@@ -37,10 +37,11 @@
 
   &--on &__thumb {
     transform: translateX(calc(var(--toggle-w) - var(--toggle-h)));
+    background: var(--color-dark-background, #0d0d0d);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-primary, #7aa2ff);
+    outline: 2px solid var(--color-text-bright, #fafafa);
     outline-offset: 2px;
   }
 }

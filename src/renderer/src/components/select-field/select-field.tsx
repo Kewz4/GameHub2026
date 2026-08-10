@@ -21,10 +21,12 @@ export function SelectField({
   onFocus,
   onBlur,
   className,
+  id: providedId,
   ...props
 }: Readonly<SelectProps>) {
   const [isFocused, setIsFocused] = useState(false);
-  const id = useId();
+  const generatedId = useId();
+  const id = providedId ?? generatedId;
 
   return (
     <div className={cn("select-field__container", className)}>

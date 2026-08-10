@@ -8,7 +8,11 @@ import { GridFocusGroup } from "../grid-focus-group";
 import { NavigationLayer } from "../navigation-layer";
 import { FocusRegionContext } from "../../context";
 import { IS_BROWSER } from "../../../constants";
-import type { FocusDirection, FocusOverrides } from "../../../services";
+import {
+  NAVIGATION_SCREEN_ACTION_PRIORITY,
+  type FocusDirection,
+  type FocusOverrides,
+} from "../../../services";
 import {
   GAMEPAD_REPEAT_INITIAL_DELAY,
   getAcceleratedGamepadRepeatInterval,
@@ -975,7 +979,8 @@ export function VirtualKeyboardProvider() {
             y: hotkeySpace,
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.virtualKeyboard }
   );
 
   useAcceleratedHoldAction({

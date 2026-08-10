@@ -291,18 +291,4 @@ $logo-max-width: 200px;
       width: 32px;
     }
   }
-
-  &__subscription-button {
-    text-decoration: none;
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    gap: math.div(globals.$spacing-unit, 2);
-    color: var(--color-text-bright);
-    cursor: pointer;
-
-    &:hover {
-      text-decoration: underline;
-    }
-  }
 }

@@ -49,6 +49,7 @@ import {
   injectCustomCss,
   removeCustomCss,
 } from "./helpers";
+import { buildExternalResourceUrl } from "./helpers/external-resources";
 import { levelDBService } from "./services/leveldb.service";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
 
@@ -254,7 +255,10 @@ export function App() {
     if (!document.getElementById("external-resources")) {
       const $script = document.createElement("script");
       $script.id = "external-resources";
-      $script.src = `${import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL}/bundle.js?t=${Date.now()}`;
+      $script.src = `${buildExternalResourceUrl(
+        "/bundle.js",
+        import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL
+      )}?t=${Date.now()}`;
       document.head.appendChild($script);
     }
   }, [fetchUserDetails, updateUserDetails, dispatch]);

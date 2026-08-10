@@ -6,8 +6,14 @@ import { logger } from "@main/services";
 import type { UserPreferences, UserProfile } from "@types";
 import type { SettingsBackup } from "./backup-settings-to-cloud";
 import { BrowserWindow } from "electron";
+import i18next from "i18next";
+import { DownloadManager } from "@main/services";
+import { OverlayManager } from "@main/services/overlay-manager";
+import { applyAutoLaunchPreferences } from "./auto-launch";
+import { enqueueUserPreferencesMutation } from "./user-preferences-mutation-queue";
+import { getSettingsBackupPreferences } from "./settings-backup-policy";
 
-const restoreSettingsFromCloud = async (): Promise<{
+const restoreSettingsFromCloudMutation = async (): Promise<{
   restored: boolean;
   updatedAt?: string;
 }> => {
@@ -22,6 +28,9 @@ const restoreSettingsFromCloud = async (): Promise<{
     if (!backup?.preferences && !backup?.excludedGames?.length) {
       return { restored: false };
     }
+    const restoredPreferences = getSettingsBackupPreferences(
+      backup.preferences ?? {}
+    );
 
     const existing = await db
       .get<string, UserPreferences | null>(levelKeys.userPreferences, {
@@ -31,7 +40,7 @@ const restoreSettingsFromCloud = async (): Promise<{
 
     const merged: UserPreferences = {
       ...(existing ?? {}),
-      ...backup.preferences,
+      ...restoredPreferences,
       // Merge exclusion lists — keep local entries not in the backup
       excludedGames: mergeExclusionLists(
         existing?.excludedGames ?? [],
@@ -42,6 +51,33 @@ const restoreSettingsFromCloud = async (): Promise<{
     await db.put<string, UserPreferences>(levelKeys.userPreferences, merged, {
       valueEncoding: "json",
     });
+
+    if (restoredPreferences.language) {
+      await db.put<string, string>(
+        levelKeys.language,
+        restoredPreferences.language,
+        { valueEncoding: "utf8" }
+      );
+      await i18next.changeLanguage(restoredPreferences.language);
+    }
+
+    OverlayManager.applyUserPreferences(merged);
+
+    if (Object.hasOwn(restoredPreferences, "maxDownloadSpeedBytesPerSecond")) {
+      await DownloadManager.applyDownloadSpeedLimit(
+        merged.maxDownloadSpeedBytesPerSecond ?? null
+      );
+    }
+
+    if (
+      Object.hasOwn(restoredPreferences, "runAtStartup") ||
+      Object.hasOwn(restoredPreferences, "startMinimized")
+    ) {
+      await applyAutoLaunchPreferences({
+        enabled: merged.runAtStartup ?? false,
+        minimized: merged.startMinimized ?? false,
+      });
+    }
 
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
@@ -55,6 +91,9 @@ const restoreSettingsFromCloud = async (): Promise<{
     return { restored: false };
   }
 };
+
+const restoreSettingsFromCloud = () =>
+  enqueueUserPreferencesMutation(restoreSettingsFromCloudMutation);
 
 function mergeExclusionLists(
   local: Array<{

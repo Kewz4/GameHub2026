@@ -235,6 +235,9 @@ import { GameShop, UserPreferences } from "@types";
 import { openGame } from "./events/library/open-game";
 import { loadState } from "./main";
 import { UpdateCheckerManager } from "./services/update-checker-manager";
+import { GameRecorderManager } from "./services/game-recorder-manager";
+import { NativeAddon } from "./services/native-addon";
+import { getCloudSaveAutomaticSyncEnabled } from "./services/cloud-save/automatic-sync-settings";
 
 const { autoUpdater } = updater;
 
@@ -454,6 +457,21 @@ app.whenReady().then(async () => {
     (globalThis as Record<string, unknown>).__raWatcherManager =
       RaWatcherManager;
     (globalThis as Record<string, unknown>).__windowManager = WindowManager;
+
+    // The live recorder acceptance harness needs the already-loaded singleton
+    // instances. Expose them only in an explicitly read-only, unpackaged QA
+    // process so Playwright never imports the entry bundle a second time.
+    if (isReadOnlyVisualQa) {
+      (globalThis as Record<string, unknown>).__gameHubRecorderQaControl = {
+        levelKeys,
+        database: db,
+        gamesSublevel,
+        OverlayManager,
+        GameRecorderManager,
+        NativeAddon,
+        getCloudSaveAutomaticSyncEnabled,
+      };
+    }
   }
 
   await import("./events")

@@ -32,6 +32,7 @@ export default function Catalogue() {
     values,
     updateSearchParams,
     catalogueData,
+    catalogueMetadataState,
     search,
     page,
     pageSize,
@@ -121,6 +122,16 @@ export default function Catalogue() {
       <section
         ref={pageRef}
         className="catalogue-results-page"
+        data-catalogue-search-state={
+          search.isLoading
+            ? "loading"
+            : search.isError
+              ? "error"
+              : search.isEmpty
+                ? "empty"
+                : "ready"
+        }
+        data-catalogue-metadata-state={catalogueMetadataState}
         data-suppress-navigation-autoscroll={
           suppressPageAutoScroll ? "true" : undefined
         }

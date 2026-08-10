@@ -27,6 +27,8 @@ import {
   LibraryFocusList,
   LibraryGameContextMenu,
   LibraryHero,
+  Button,
+  EmptyState,
   VerticalFocusGroup,
   LIBRARY_SECONDARY_FILTER_STORAGE_KEY,
   LIBRARY_SORT_BY_STORAGE_KEY,
@@ -44,6 +46,8 @@ import {
 import { ConfirmationModal, DownloadGameModal } from "../../components/modals";
 import {
   LIBRARY_FILTERS_SEARCH_INPUT_ID,
+  LIBRARY_EMPTY_REFRESH_BUTTON_ID,
+  LIBRARY_FILTERED_EMPTY_RESET_BUTTON_ID,
   LIBRARY_PAGE_REGION_ID,
 } from "../../components/pages/library/navigation";
 import {
@@ -117,7 +121,7 @@ export default function LibraryPage() {
   const navigate = useNavigate();
   const { setFocus } = useNavigation();
   const { showSuccessToast } = useBigPictureToast();
-  const { library, updateLibrary } = useLibrary();
+  const { library, updateLibrary, isLoading, loadError } = useLibrary();
   const { collections, loadCollections } = useGameCollections();
   const [selectedFilterTab, setSelectedFilterTab] =
     useState<LibraryFilterTab>("all");
@@ -162,6 +166,12 @@ export default function LibraryPage() {
   const shouldAnimateContentChange =
     hasMountedContentRef.current &&
     previousContentTransitionKeyRef.current !== contentTransitionKey;
+
+  const resetLibraryFilters = useCallback(() => {
+    setSelectedFilterTab("all");
+    setSearch("");
+    setFilterBy("all_games");
+  }, []);
 
   const refreshLibraryData = useCallback(async () => {
     await Promise.all([updateLibrary(), loadCollections()]);
@@ -356,22 +366,6 @@ export default function LibraryPage() {
   }, [pendingAction, refreshLibraryData, setFocus, showSuccessToast]);
 
   useEffect(() => {
-    updateLibrary();
-
-    if (!IS_DESKTOP) return;
-
-    const unsubscribe = globalThis.window.electron.onLibraryBatchComplete(
-      () => {
-        updateLibrary();
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [updateLibrary]);
-
-  useEffect(() => {
     try {
       globalThis.window.localStorage.setItem(
         LIBRARY_VIEW_MODE_STORAGE_KEY,
@@ -424,9 +418,35 @@ export default function LibraryPage() {
     return (
       <section className="library-page">
         <VerticalFocusGroup regionId={LIBRARY_PAGE_REGION_ID}>
-          <div className="library-page__empty">
-            <p>No games in library</p>
-          </div>
+          <EmptyState
+            className="library-page__empty"
+            role={loadError ? "alert" : "status"}
+            title={
+              isLoading
+                ? "Loading library…"
+                : loadError
+                  ? "Library could not be loaded"
+                  : "No games in library"
+            }
+            description={
+              loadError
+                ? "Check the connection to GameHub's local data and try again."
+                : isLoading
+                  ? "GameHub is reading your installed and saved games."
+                  : "Add a game or scan this device, then refresh the library."
+            }
+            actions={
+              !isLoading ? (
+                <Button
+                  focusId={LIBRARY_EMPTY_REFRESH_BUTTON_ID}
+                  variant="secondary"
+                  onClick={() => void updateLibrary()}
+                >
+                  Refresh
+                </Button>
+              ) : null
+            }
+          />
         </VerticalFocusGroup>
       </section>
     );
@@ -482,7 +502,21 @@ export default function LibraryPage() {
                   : undefined
               }
             >
-              {viewMode === "list" ? (
+              {filteredLibrary.length === 0 ? (
+                <EmptyState
+                  title="No games match these filters"
+                  description="Clear the current search and filters to show your library again."
+                  actions={
+                    <Button
+                      focusId={LIBRARY_FILTERED_EMPTY_RESET_BUTTON_ID}
+                      variant="secondary"
+                      onClick={resetLibraryFilters}
+                    >
+                      Clear filters
+                    </Button>
+                  }
+                />
+              ) : viewMode === "list" ? (
                 <LibraryFocusList
                   games={filteredLibrary}
                   contextMenuGameId={

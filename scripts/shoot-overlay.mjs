@@ -44,6 +44,18 @@ const secondOpenOutput = path.join(
   "overlay",
   "gamehub-overlay-second-open.png"
 );
+const controllerFullHdOutput = path.join(
+  repositoryRoot,
+  "artifacts",
+  "overlay",
+  "gamehub-overlay-controller-1920x1080.png"
+);
+const controllerCompactOutput = path.join(
+  repositoryRoot,
+  "artifacts",
+  "overlay",
+  "gamehub-overlay-controller-1280x720.png"
+);
 
 for (const required of [electronExecutable, host, renderer]) {
   if (!fs.existsSync(required)) throw new Error(`Missing ${required}`);
@@ -199,6 +211,275 @@ try {
     }
   };
 
+  const assertWidgetToolsClearHeader = async (label) => {
+    const overlaps = await page.evaluate(() => {
+      const docks = Array.from(
+        document.querySelectorAll(
+          ".overlay-header__game, .overlay-header__actions"
+        )
+      ).map((element) => element.getBoundingClientRect());
+      return Array.from(document.querySelectorAll("[data-widget]"))
+        .filter((widget) => {
+          const tools = widget.querySelector(".overlay-card__tools");
+          if (!(tools instanceof HTMLElement)) return true;
+          const rect = tools.getBoundingClientRect();
+          return docks.some(
+            (dock) =>
+              rect.left < dock.right &&
+              rect.right > dock.left &&
+              rect.top < dock.bottom &&
+              rect.bottom > dock.top
+          );
+        })
+        .map((widget) => widget.getAttribute("data-widget") ?? "unknown");
+    });
+    if (overlaps.length) {
+      throw new Error(
+        `${label} left widget tools under floating header controls: ${overlaps.join(", ")}.`
+      );
+    }
+  };
+
+  const assertOverlayThemeContrast = async () => {
+    const themes = [
+      {
+        name: "dark",
+        variables: {
+          "--fg-rgb": "255, 255, 255",
+          "--bg-rgb": "18, 18, 18",
+          "--color-background": "#121212",
+          "--color-dark-background": "#080808",
+          "--color-text": "#eeeeee",
+          "--color-text-bright": "#ffffff",
+        },
+      },
+      {
+        name: "light",
+        variables: {
+          "--fg-rgb": "17, 17, 19",
+          "--bg-rgb": "245, 245, 247",
+          "--color-background": "#f5f5f7",
+          "--color-dark-background": "#ececef",
+          "--color-text": "#1c1c1e",
+          "--color-text-bright": "#000000",
+        },
+      },
+      {
+        name: "custom",
+        variables: {
+          "--fg-rgb": "250, 250, 250",
+          "--bg-rgb": "15, 10, 20",
+          "--color-background": "#18131f",
+          "--color-dark-background": "#0b0712",
+          "--color-text": "#f0edf4",
+          "--color-text-bright": "#ffffff",
+        },
+      },
+    ];
+
+    const results = await page.evaluate(async (themeFixtures) => {
+      const root = document.documentElement;
+      const properties = Array.from(
+        new Set(themeFixtures.flatMap((theme) => Object.keys(theme.variables)))
+      );
+      const original = Object.fromEntries(
+        properties.map((property) => [
+          property,
+          root.style.getPropertyValue(property),
+        ])
+      );
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+      const parseColor = (value) => {
+        if (!value || value === "transparent") {
+          return { red: 0, green: 0, blue: 0, alpha: 0 };
+        }
+        const rgb = value.match(
+          /^rgba?\(\s*([\d.]+)(?:\s*,\s*|\s+)([\d.]+)(?:\s*,\s*|\s+)([\d.]+)(?:(?:\s*,\s*|\s*\/\s*)([\d.]+))?\s*\)$/i
+        );
+        if (rgb) {
+          return {
+            red: Number(rgb[1]),
+            green: Number(rgb[2]),
+            blue: Number(rgb[3]),
+            alpha: rgb[4] === undefined ? 1 : Number(rgb[4]),
+          };
+        }
+        const srgb = value.match(
+          /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)$/i
+        );
+        if (srgb) {
+          return {
+            red: Number(srgb[1]) * 255,
+            green: Number(srgb[2]) * 255,
+            blue: Number(srgb[3]) * 255,
+            alpha: srgb[4] === undefined ? 1 : Number(srgb[4]),
+          };
+        }
+        throw new Error(`Unsupported computed color: ${value}`);
+      };
+      const composite = (foreground, background) => {
+        const foregroundAlpha = clamp(foreground.alpha, 0, 1);
+        const backgroundAlpha = clamp(background.alpha, 0, 1);
+        const alpha = foregroundAlpha + backgroundAlpha * (1 - foregroundAlpha);
+        if (!alpha) return { red: 0, green: 0, blue: 0, alpha: 0 };
+        const channel = (foregroundValue, backgroundValue) =>
+          (foregroundValue * foregroundAlpha +
+            backgroundValue * backgroundAlpha * (1 - foregroundAlpha)) /
+          alpha;
+        return {
+          red: channel(foreground.red, background.red),
+          green: channel(foreground.green, background.green),
+          blue: channel(foreground.blue, background.blue),
+          alpha,
+        };
+      };
+      const luminance = (color) => {
+        const linear = (channel) => {
+          const srgbChannel = clamp(channel, 0, 255) / 255;
+          return srgbChannel <= 0.04045
+            ? srgbChannel / 12.92
+            : Math.pow((srgbChannel + 0.055) / 1.055, 2.4);
+        };
+        return (
+          0.2126 * linear(color.red) +
+          0.7152 * linear(color.green) +
+          0.0722 * linear(color.blue)
+        );
+      };
+      const ratio = (left, right) => {
+        const leftLuminance = luminance(left);
+        const rightLuminance = luminance(right);
+        return (
+          (Math.max(leftLuminance, rightLuminance) + 0.05) /
+          (Math.min(leftLuminance, rightLuminance) + 0.05)
+        );
+      };
+      const effectiveAncestorBackground = (element) => {
+        const ancestors = [];
+        let current = element.parentElement;
+        while (current) {
+          ancestors.unshift(current);
+          current = current.parentElement;
+        }
+        return ancestors.reduce(
+          (background, ancestor) =>
+            composite(
+              parseColor(getComputedStyle(ancestor).backgroundColor),
+              background
+            ),
+          { red: 0, green: 0, blue: 0, alpha: 1 }
+        );
+      };
+      const renderedContrast = (element) => {
+        const style = getComputedStyle(element);
+        const parentBackground = effectiveAncestorBackground(element);
+        const localBackground = composite(
+          parseColor(style.backgroundColor),
+          parentBackground
+        );
+        const localText = composite(parseColor(style.color), localBackground);
+        const opacity = clamp(Number(style.opacity || 1), 0, 1);
+        const renderedBackground = composite(
+          { ...localBackground, alpha: opacity },
+          parentBackground
+        );
+        const renderedText = composite(
+          { ...localText, alpha: opacity },
+          parentBackground
+        );
+        return ratio(renderedText, renderedBackground);
+      };
+
+      try {
+        const themeResults = [];
+        for (const theme of themeFixtures) {
+          for (const [property, value] of Object.entries(theme.variables)) {
+            root.style.setProperty(property, value);
+          }
+          // Chromium can retain a resolved descendant color for the remainder
+          // of a synchronous task when only an inherited custom-property input
+          // changes. Let style/layout settle exactly as it does during a real
+          // runtime theme switch before sampling computed contrast.
+          await new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve))
+          );
+          await new Promise((resolve) => setTimeout(resolve, 150));
+          const sampleDefinitions = [
+            ["header metadata", ".overlay-header__meta"],
+            ["widget metadata", ".overlay-card__count"],
+            ["widget size tool", ".overlay-widget__tool:not(:disabled)"],
+            ["widget move tool", ".overlay-widget__drag:not(:disabled)"],
+            ["widget resize tool", ".overlay-widget__resize:not(:disabled)"],
+          ];
+          const activeSamples = sampleDefinitions.map(([sample, selector]) => {
+            const element = document.querySelector(selector);
+            if (!(element instanceof HTMLElement)) {
+              throw new Error(`Contrast fixture could not find ${sample}.`);
+            }
+            return {
+              sample,
+              ratio: renderedContrast(element),
+              minimum: 4.5,
+              computed: {
+                color: getComputedStyle(element).color,
+                backgroundColor: getComputedStyle(element).backgroundColor,
+                opacity: getComputedStyle(element).opacity,
+                foregroundRgb:
+                  getComputedStyle(element).getPropertyValue("--fg-rgb"),
+                faintColor:
+                  getComputedStyle(element).getPropertyValue(
+                    "--color-text-faint"
+                  ),
+                parentBackgroundColor: element.parentElement
+                  ? getComputedStyle(element.parentElement).backgroundColor
+                  : null,
+                cardBackgroundColor: element.closest(".overlay-card")
+                  ? getComputedStyle(element.closest(".overlay-card"))
+                      .backgroundColor
+                  : null,
+              },
+            };
+          });
+          const tool = document.querySelector(
+            ".overlay-widget__tool:not(:disabled)"
+          );
+          if (!(tool instanceof HTMLButtonElement)) {
+            throw new Error(
+              "Contrast fixture could not disable a widget tool."
+            );
+          }
+          tool.disabled = true;
+          const disabled = {
+            sample: "disabled widget tool",
+            ratio: renderedContrast(tool),
+            minimum: 3,
+          };
+          tool.disabled = false;
+          themeResults.push(
+            ...[...activeSamples, disabled].map((sample) => ({
+              theme: theme.name,
+              ...sample,
+            }))
+          );
+        }
+        return themeResults;
+      } finally {
+        for (const [property, value] of Object.entries(original)) {
+          if (value) root.style.setProperty(property, value);
+          else root.style.removeProperty(property);
+        }
+      }
+    }, themes);
+
+    const failures = results.filter((result) => result.ratio < result.minimum);
+    if (failures.length) {
+      throw new Error(
+        `Overlay computed contrast regression: ${JSON.stringify(failures)}.`
+      );
+    }
+    return results;
+  };
+
   await page.addInitScript(() => {
     window.localStorage.removeItem("gamehub.overlay.layout.v4");
     window.localStorage.setItem("gamehub.overlay.layout-locked.v1", "false");
@@ -223,6 +504,41 @@ try {
         },
       })
     );
+    const qaGamepad = {
+      id: "GameHub Playwright standard controller",
+      index: 0,
+      connected: true,
+      mapping: "standard",
+      timestamp: 0,
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({
+        pressed: false,
+        touched: false,
+        value: 0,
+      })),
+      vibrationActuator: null,
+    };
+    window.__qaGamepad = qaGamepad;
+    window.__qaGamepadPollCount = 0;
+    window.__setQaGamepadButton = (index, pressed) => {
+      qaGamepad.buttons[index] = {
+        pressed,
+        touched: pressed,
+        value: pressed ? 1 : 0,
+      };
+      qaGamepad.timestamp = performance.now();
+    };
+    window.__setQaGamepadAxis = (index, value) => {
+      qaGamepad.axes[index] = value;
+      qaGamepad.timestamp = performance.now();
+    };
+    Object.defineProperty(navigator, "getGamepads", {
+      configurable: true,
+      value: () => {
+        window.__qaGamepadPollCount += 1;
+        return [qaGamepad, null, null, null];
+      },
+    });
     const achievementIcon =
       "data:image/svg+xml," +
       encodeURIComponent(
@@ -622,7 +938,11 @@ try {
         ok: true,
         data: {
           currentlyPlaying: spotifyTrack,
-          queue: [spotifyEpisode, spotifyTrack],
+          queue: Array.from({ length: 18 }, (_, index) => ({
+            ...(index % 3 === 0 ? spotifyEpisode : spotifyTrack),
+            uri: `${index % 3 === 0 ? spotifyEpisode.uri : spotifyTrack.uri}:qa-${index}`,
+            title: `${index % 3 === 0 ? spotifyEpisode.title : spotifyTrack.title} ${index + 1}`,
+          })),
         },
       }),
       spotifyGetHome: async () => ({
@@ -777,6 +1097,48 @@ try {
   }
   await page.waitForTimeout(1_000);
 
+  const pulseBrowserGamepadButton = async (buttonIndex) => {
+    await page.evaluate(
+      (index) => window.__setQaGamepadButton?.(index, true),
+      buttonIndex
+    );
+    await page.waitForTimeout(85);
+    await page.evaluate(
+      (index) => window.__setQaGamepadButton?.(index, false),
+      buttonIndex
+    );
+    await page.waitForTimeout(110);
+  };
+
+  const pulseBrowserGamepadAxis = async (axisIndex, value) => {
+    await page.evaluate(
+      ({ index, nextValue }) => window.__setQaGamepadAxis?.(index, nextValue),
+      { index: axisIndex, nextValue: value }
+    );
+    await page.waitForTimeout(85);
+    await page.evaluate(
+      (index) => window.__setQaGamepadAxis?.(index, 0),
+      axisIndex
+    );
+    await page.waitForTimeout(110);
+  };
+
+  const restoreDefaultOverlayLayout = async () => {
+    await page.getByRole("button", { name: "Reset widget layout" }).click();
+    await page.waitForSelector(
+      '#overlay-reset-layout-dialog[aria-modal="true"]'
+    );
+    await page.waitForFunction(
+      () => document.activeElement?.id === "overlay-reset-layout-cancel",
+      undefined,
+      { timeout: 2_000 }
+    );
+    await page.getByRole("button", { name: "Restore defaults" }).click();
+    await page.waitForSelector("#overlay-reset-layout-dialog", {
+      state: "detached",
+    });
+  };
+
   // Exercise the already-warmed BrowserWindow twice. The renderer receives a
   // deliberately slow context refresh on each show; cached content must stay
   // painted, and Electron must not emit an uncommanded hide between shows.
@@ -918,6 +1280,10 @@ try {
     throw new Error("Controller range edit mode did not adjust mixer volume.");
   }
 
+  const activeSpotifyTab = page.locator(
+    '.spotify-overlay-panel__tab[aria-selected="true"]'
+  );
+  await activeSpotifyTab.focus();
   await page.evaluate(() => window.__emitOverlayGamepad?.("next-tab"));
   if (
     !(
@@ -1029,7 +1395,7 @@ try {
     throw new Error("Volume mixer icon has no contrast.");
   }
 
-  await page.getByRole("button", { name: "Reset widget layout" }).click();
+  await restoreDefaultOverlayLayout();
 
   const [friendsDefault, mixerDefault] = await Promise.all([
     page.locator('[data-widget="friends"]').boundingBox(),
@@ -1064,12 +1430,15 @@ try {
       compactViewport,
       { timeout: 5_000 }
     );
-    await page.getByRole("button", { name: "Reset widget layout" }).click();
+    await restoreDefaultOverlayLayout();
     await page.evaluate(
       () =>
         new Promise((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(resolve))
         )
+    );
+    await assertWidgetToolsClearHeader(
+      `Compact ${compactViewport.width}x${compactViewport.height}`
     );
 
     const compactWidgetLayout = await page
@@ -1127,6 +1496,12 @@ try {
           `Bounds: ${JSON.stringify(compactWidgetLayout)}.`
       );
     }
+    if (compactViewport.width === 1280) {
+      await page.screenshot({
+        path: controllerCompactOutput,
+        fullPage: true,
+      });
+    }
   }
 
   await electronApp.evaluate(({ BrowserWindow }) => {
@@ -1137,13 +1512,44 @@ try {
     undefined,
     { timeout: 5_000 }
   );
-  await page.getByRole("button", { name: "Reset widget layout" }).click();
+  await restoreDefaultOverlayLayout();
   await page.evaluate(
     () =>
       new Promise((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve))
       )
   );
+  await assertWidgetToolsClearHeader("Full HD default layout");
+
+  const friendsCornerMoveHandle = await page
+    .locator('[data-widget="friends"] [data-widget-controller-edit="move"]')
+    .boundingBox();
+  if (!friendsCornerMoveHandle) {
+    throw new Error("Friends move handle is missing for corner recovery QA.");
+  }
+  await page.mouse.move(
+    friendsCornerMoveHandle.x + friendsCornerMoveHandle.width / 2,
+    friendsCornerMoveHandle.y + friendsCornerMoveHandle.height / 2
+  );
+  await page.mouse.down();
+  await page.mouse.move(1_910, 10, { steps: 6 });
+  await page.mouse.up();
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      )
+  );
+  await assertWidgetToolsClearHeader("Full HD top-right recovery");
+  await restoreDefaultOverlayLayout();
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      )
+  );
+
+  const contrastResults = await assertOverlayThemeContrast();
 
   const pinnedIconCount = await page
     .locator('[data-widget="quick-launch"] .overlay-pin-tile__icon')
@@ -1184,6 +1590,67 @@ try {
     );
   });
 
+  // Tab/Shift+Tab close the portaled list and hand focus to the logical control
+  // after/before the trigger instead of leaving focus on an unmounted option.
+  await replayLength.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".overlay-select__list");
+  await page.waitForFunction(() =>
+    document.activeElement?.classList.contains("overlay-select__option")
+  );
+  await page.keyboard.press("Tab");
+  await page.waitForSelector(".overlay-select__list", { state: "detached" });
+  await page.waitForFunction(() => {
+    const active = document.activeElement;
+    return (
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      active.getAttribute("aria-label") !== "Instant Replay length"
+    );
+  });
+  const tabHandoff = await page.evaluate(() => ({
+    tag: document.activeElement?.tagName,
+    isTrigger:
+      document.activeElement?.getAttribute("aria-label") ===
+      "Instant Replay length",
+  }));
+  if (!tabHandoff.tag || tabHandoff.tag === "BODY" || tabHandoff.isTrigger) {
+    throw new Error(
+      `Overlay select Tab did not hand focus forward: ${JSON.stringify(tabHandoff)}.`
+    );
+  }
+  await replayLength.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(".overlay-select__list");
+  await page.waitForFunction(() =>
+    document.activeElement?.classList.contains("overlay-select__option")
+  );
+  await page.keyboard.press("Shift+Tab");
+  await page.waitForSelector(".overlay-select__list", { state: "detached" });
+  await page.waitForFunction(() => {
+    const active = document.activeElement;
+    return (
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      active.getAttribute("aria-label") !== "Instant Replay length"
+    );
+  });
+  const reverseTabHandoff = await page.evaluate(() => ({
+    tag: document.activeElement?.tagName,
+    isTrigger:
+      document.activeElement?.getAttribute("aria-label") ===
+      "Instant Replay length",
+  }));
+  if (
+    !reverseTabHandoff.tag ||
+    reverseTabHandoff.tag === "BODY" ||
+    reverseTabHandoff.isTrigger
+  ) {
+    throw new Error(
+      `Overlay select Shift+Tab did not hand focus backward: ${JSON.stringify(reverseTabHandoff)}.`
+    );
+  }
+
   // Controller A opens the same list, directions stay within its options, and
   // A commits. This catches regressions where spatial navigation escapes into
   // another widget because the list is rendered through a portal.
@@ -1221,8 +1688,287 @@ try {
     );
   }
 
+  // Switch away from the native XInput fixture and prove the renderer's
+  // navigator.getGamepads polling path. The arbitration window intentionally
+  // ignores a second API exposing the same physical button press.
+  await page.waitForTimeout(1_050);
+  if ((await page.evaluate(() => window.__qaGamepadPollCount ?? 0)) < 1) {
+    throw new Error("The renderer did not poll navigator.getGamepads().");
+  }
+
+  await replayLength.focus();
+  await pulseBrowserGamepadButton(0);
+  await page.waitForSelector(".overlay-select__list");
+  await pulseBrowserGamepadButton(15);
+  await page.waitForFunction(
+    () => document.activeElement?.textContent?.trim() === "Last 60 seconds"
+  );
+  await pulseBrowserGamepadButton(0);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector(".overlay-capture__replay .overlay-select__value")
+        ?.textContent?.trim() === "Last 60 seconds"
+  );
+  await replayLength.focus();
+  await pulseBrowserGamepadButton(0);
+  await pulseBrowserGamepadButton(14);
+  await pulseBrowserGamepadButton(0);
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector(".overlay-capture__replay .overlay-select__value")
+        ?.textContent?.trim() === "Last 45 seconds"
+  );
+
+  // A enters a digital widget edit mode, the left analog stick performs a
+  // pixel nudge, and A exits back to the exact edit handle.
+  const friendsWidget = page.locator('[data-widget="friends"]');
+  const friendsMoveButton = friendsWidget.locator(
+    '[data-widget-controller-edit="move"]'
+  );
+  const friendsBeforeControllerMove = await friendsWidget.boundingBox();
+  if (!friendsBeforeControllerMove) {
+    throw new Error("Friends widget is missing before controller movement.");
+  }
+  await friendsMoveButton.focus();
+  await pulseBrowserGamepadButton(0);
+  if ((await friendsMoveButton.getAttribute("aria-pressed")) !== "true") {
+    throw new Error("Controller A did not engage widget move mode.");
+  }
+  await pulseBrowserGamepadAxis(0, -1);
+  await pulseBrowserGamepadButton(0);
+  const friendsAfterControllerMove = await friendsWidget.boundingBox();
+  if (
+    !friendsAfterControllerMove ||
+    friendsAfterControllerMove.x >= friendsBeforeControllerMove.x - 4
+  ) {
+    throw new Error("Left analog input did not move the Friends widget.");
+  }
+  if ((await friendsMoveButton.getAttribute("aria-pressed")) !== "false") {
+    throw new Error("Controller A did not exit widget move mode.");
+  }
+
+  const friendsResizeButton = friendsWidget.locator(
+    '[data-widget-controller-edit="resize"]'
+  );
+  const friendsBeforeControllerResize = await friendsWidget.boundingBox();
+  await friendsResizeButton.focus();
+  await pulseBrowserGamepadButton(0);
+  await pulseBrowserGamepadButton(15);
+  await pulseBrowserGamepadButton(0);
+  const friendsAfterControllerResize = await friendsWidget.boundingBox();
+  if (
+    !friendsBeforeControllerResize ||
+    !friendsAfterControllerResize ||
+    friendsAfterControllerResize.width <=
+      friendsBeforeControllerResize.width + 4
+  ) {
+    throw new Error("D-pad input did not resize the Friends widget.");
+  }
+
+  // Long Spotify shelves are one predictable focus stop until A engages the
+  // region. B then disengages it and restores focus to the shelf itself.
+  const spotifyBrowseRegion = page
+    .locator(
+      '.spotify-overlay-panel__browse [data-controller-focus-region="true"]'
+    )
+    .first();
+  await spotifyBrowseRegion.focus();
+  await pulseBrowserGamepadButton(0);
+  const browseRegionEngagement = await spotifyBrowseRegion.evaluate(
+    (region) => ({
+      editing: region.getAttribute("data-controller-editing"),
+      activeInside: region.contains(document.activeElement),
+      activeIsRegion: document.activeElement === region,
+    })
+  );
+  if (
+    browseRegionEngagement.editing !== "true" ||
+    !browseRegionEngagement.activeInside ||
+    browseRegionEngagement.activeIsRegion
+  ) {
+    throw new Error(
+      `Spotify browse focus engagement failed: ${JSON.stringify(browseRegionEngagement)}.`
+    );
+  }
+  await pulseBrowserGamepadButton(1);
+  const spotifyBackState = await spotifyBrowseRegion.evaluate((region) => ({
+    restored: document.activeElement === region,
+    editing: region.getAttribute("data-controller-editing"),
+    activeTag: document.activeElement?.tagName ?? null,
+    activeId: document.activeElement?.id ?? null,
+    activeClass:
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement.className
+        : null,
+    activeInside: region.contains(document.activeElement),
+  }));
+  if (!spotifyBackState.restored) {
+    throw new Error(
+      `Controller B did not restore focus to the Spotify shelf: ${JSON.stringify(spotifyBackState)}.`
+    );
+  }
+
+  await page
+    .locator(".spotify-overlay-panel__tab")
+    .filter({ hasText: "Queue" })
+    .click();
+  const spotifyQueueRegion = page.locator(
+    ".spotify-overlay-panel__queue-up-next [data-controller-focus-region]"
+  );
+  await spotifyQueueRegion.focus();
+  await pulseBrowserGamepadButton(0);
+  for (let index = 0; index < 12; index += 1) {
+    await pulseBrowserGamepadButton(13);
+  }
+  const queueTraversal = await spotifyQueueRegion.evaluate((region) => ({
+    scrollTop: region.closest(".spotify-overlay-panel__queue")?.scrollTop ?? 0,
+    activeInside: region.contains(document.activeElement),
+    activeLabel: document.activeElement?.getAttribute("aria-label"),
+  }));
+  if (!queueTraversal.activeInside || queueTraversal.scrollTop <= 0) {
+    throw new Error(
+      `Controller traversal stalled at the visible Spotify queue edge: ${JSON.stringify(queueTraversal)}.`
+    );
+  }
+  await pulseBrowserGamepadButton(1);
+  await page
+    .locator(".spotify-overlay-panel__tab")
+    .filter({ hasText: "Browse" })
+    .click();
+
+  // Bumpers are scoped to the tabbed music widget; they must not hijack focus
+  // from achievements or another freeform widget.
+  const selectedSpotifyTabBefore = await page
+    .locator('.spotify-overlay-panel__tab[aria-selected="true"]')
+    .textContent();
+  await page.locator(".overlay-ach__filters button").first().focus();
+  await pulseBrowserGamepadButton(5);
+  const selectedSpotifyTabOutsideMusic = await page
+    .locator('.spotify-overlay-panel__tab[aria-selected="true"]')
+    .textContent();
+  if (selectedSpotifyTabOutsideMusic !== selectedSpotifyTabBefore) {
+    throw new Error("RB changed music tabs while focus was outside Music.");
+  }
+  await page
+    .locator('.spotify-overlay-panel__tab[aria-selected="true"]')
+    .focus();
+  await pulseBrowserGamepadButton(5);
+  const selectedSpotifyTabInsideMusic = await page
+    .locator('.spotify-overlay-panel__tab[aria-selected="true"]')
+    .textContent();
+  if (selectedSpotifyTabInsideMusic === selectedSpotifyTabBefore) {
+    throw new Error("RB did not change tabs while focus was inside Music.");
+  }
+
+  // Close Game is destructive: A opens a modal with Cancel focused, and B
+  // cancels without invoking the process action or closing the overlay.
+  const closeGameTrigger = page.locator("#overlay-close-game-trigger");
+  await closeGameTrigger.focus();
+  await page.evaluate(() => {
+    window.__qaHasFocus = document.hasFocus.bind(document);
+    Object.defineProperty(document, "hasFocus", {
+      configurable: true,
+      value: () => false,
+    });
+    window.__emitOverlayGamepad?.("accept");
+  });
+  await page.waitForTimeout(100);
+  if (await page.locator("#overlay-close-game-dialog").count()) {
+    throw new Error(
+      "A native controller action was accepted after overlay blur."
+    );
+  }
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hasFocus", {
+      configurable: true,
+      value: window.__qaHasFocus,
+    });
+  });
+  await pulseBrowserGamepadButton(0);
+  await page.waitForSelector('#overlay-close-game-dialog[aria-modal="true"]');
+  if (
+    !(await page
+      .locator("#overlay-close-game-cancel")
+      .evaluate((button) => document.activeElement === button))
+  ) {
+    throw new Error("Close Game confirmation did not focus the safe action.");
+  }
+  await pulseBrowserGamepadButton(1);
+  await page.waitForSelector("#overlay-close-game-dialog", {
+    state: "detached",
+  });
+  if (
+    !(await closeGameTrigger.evaluate(
+      (button) => document.activeElement === button
+    ))
+  ) {
+    throw new Error("Close Game cancellation did not restore trigger focus.");
+  }
+
+  // Hardware text editing keeps native cursor keys, while controller A opens
+  // the monochrome on-screen keyboard for every text input and textarea.
+  const spotifySearchTab = page
+    .locator(".spotify-overlay-panel__tab")
+    .filter({ hasText: "Search" });
+  await spotifySearchTab.click();
+  const spotifySearchInput = page.locator(
+    '.spotify-overlay-panel__search input[type="search"]'
+  );
+  await spotifySearchInput.fill("AB");
+  await spotifySearchInput.evaluate((input) => input.setSelectionRange(2, 2));
+  await page.keyboard.press("ArrowLeft");
+  const searchCursor = await spotifySearchInput.evaluate((input) => ({
+    selectionStart: input.selectionStart,
+    stillFocused: document.activeElement === input,
+  }));
+  if (searchCursor.selectionStart !== 1 || !searchCursor.stillFocused) {
+    throw new Error(
+      `Overlay intercepted a hardware cursor key in text: ${JSON.stringify(searchCursor)}.`
+    );
+  }
+
+  const notesInput = page.locator('[data-widget="notes"] textarea');
+  const notesBeforeKeyboard = await notesInput.inputValue();
+  await notesInput.focus();
+  await pulseBrowserGamepadButton(0);
+  await page.waitForSelector('#overlay-controller-keyboard[aria-modal="true"]');
+  await pulseBrowserGamepadButton(0);
+  await pulseBrowserGamepadButton(1);
+  await page.waitForSelector("#overlay-controller-keyboard", {
+    state: "detached",
+  });
+  if ((await notesInput.inputValue()) !== `${notesBeforeKeyboard}q`) {
+    throw new Error("Controller keyboard did not update the Notes textarea.");
+  }
+  if (
+    !(await notesInput.evaluate((input) => document.activeElement === input))
+  ) {
+    throw new Error("Controller keyboard did not restore text-field focus.");
+  }
+
+  if (
+    (await page
+      .locator('[data-widget="quick-launch"] .overlay-pin-entry__remove')
+      .count()) !== 2
+  ) {
+    throw new Error(
+      "Pinned apps do not expose controller-reachable Unpin buttons."
+    );
+  }
+
+  await restoreDefaultOverlayLayout();
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      )
+  );
+
   await page.waitForTimeout(500);
   await page.screenshot({ path: output, fullPage: true });
+  await page.screenshot({ path: controllerFullHdOutput, fullPage: true });
 
   const dimensions = await page.evaluate(() => ({
     width: document.documentElement.clientWidth,
@@ -1323,14 +2069,46 @@ try {
     }
   }
 
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.setContentSize(592, 148);
+  });
+  await page.goto(
+    `${pathToFileURL(renderer).href}#/overlay-toast?kind=input-gate-error&reason=unsupported`
+  );
+  await page.waitForSelector(".overlay-toast--error");
+  const inputGateErrorText = await page
+    .locator(".overlay-toast--error")
+    .textContent();
+  if (
+    !inputGateErrorText?.includes("Overlay input protection unavailable") ||
+    !inputGateErrorText.includes(
+      "This game uses an input system GameHub cannot safely isolate yet, so the overlay stayed closed."
+    )
+  ) {
+    throw new Error(
+      `Input-gate error toast rendered unexpected copy: ${inputGateErrorText}`
+    );
+  }
+  const inputGateErrorOutput = path.join(
+    repositoryRoot,
+    "artifacts",
+    "overlay",
+    "gamehub-overlay-input-gate-error.png"
+  );
+  await page.screenshot({ path: inputGateErrorOutput, fullPage: true });
+
   console.log(
     JSON.stringify(
       {
         output,
         firstOpenOutput,
         secondOpenOutput,
+        controllerFullHdOutput,
+        controllerCompactOutput,
         firstOpenTransitions,
         secondOpenTransitions,
+        contrastResults,
+        inputGateErrorOutput,
         toastResults,
         widgetToggles: widgetToggleCount,
         nativeIconBytes: nativeIconDataUrl.length,

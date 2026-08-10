@@ -6,6 +6,7 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -19,7 +20,10 @@ import {
 } from "../../components";
 import { IS_DESKTOP } from "../../constants";
 import { useNavigationScreenActions } from "../../hooks";
-import type { FocusOverrides } from "../../services";
+import {
+  NAVIGATION_SCREEN_ACTION_PRIORITY,
+  type FocusOverrides,
+} from "../../services";
 import {
   useNavigationHistoryStore,
   useNavigationStore,
@@ -30,6 +34,7 @@ import {
   getBigPictureCurrentPageTitle,
   normalizeBigPicturePathname,
 } from "../navigation";
+import { resolveBigPictureHeaderFootprint } from "./header-layout";
 import "./styles.scss";
 
 const HEADER_BACK_BUTTON_ID = "header-back-button";
@@ -76,6 +81,7 @@ function Header() {
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLFormElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const searchNavigationOverrides: FocusOverrides = {
     left: {
@@ -180,6 +186,40 @@ function Header() {
       inputRef.current?.focus();
     }
   }, [isSearchOpen]);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const headerContainer =
+      header?.querySelector<HTMLElement>(".header__container");
+    const bigPictureRoot = header?.closest<HTMLElement>("#big-picture");
+
+    if (!headerContainer || !bigPictureRoot) return;
+
+    const updateHeaderFootprint = () => {
+      const measuredHeight = headerContainer.getBoundingClientRect().height;
+      const footprint = resolveBigPictureHeaderFootprint(measuredHeight);
+
+      bigPictureRoot.style.setProperty(
+        "--big-picture-header-footprint",
+        `${footprint}px`
+      );
+    };
+
+    updateHeaderFootprint();
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateHeaderFootprint);
+
+    resizeObserver?.observe(headerContainer);
+    globalThis.window.addEventListener("resize", updateHeaderFootprint);
+
+    return () => {
+      resizeObserver?.disconnect();
+      globalThis.window.removeEventListener("resize", updateHeaderFootprint);
+      bigPictureRoot.style.removeProperty("--big-picture-header-footprint");
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSearchFocused && !isSearchVirtualKeyboardTarget) {
@@ -288,11 +328,12 @@ function Header() {
             b: closeSearchKeepingFocus,
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.activeShell }
   );
 
   return (
-    <div className="header">
+    <div ref={headerRef} className="header">
       <HorizontalFocusGroup regionId={BIG_PICTURE_HEADER_REGION_ID} asChild>
         <header className="header__container">
           <FocusItem id={HEADER_BACK_BUTTON_ID} asChild>

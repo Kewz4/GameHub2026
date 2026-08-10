@@ -22,8 +22,6 @@ export function UploadBackgroundImageButton() {
   const [cropIsAnimated, setCropIsAnimated] = useState(false);
   const buttonRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { hasActiveSubscription } = useUserDetails();
-
   const { t } = useTranslation("user_profile");
 
   const { isMe, setSelectedBackgroundImage, userProfile, getUserProfile } =
@@ -144,7 +142,7 @@ export function UploadBackgroundImageButton() {
     };
   }, [isMenuOpen]);
 
-  if (!isMe || !hasActiveSubscription) return null;
+  if (!isMe) return null;
 
   const cropModal = (
     <ProfileImageCropModal

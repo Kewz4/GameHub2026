@@ -14,7 +14,12 @@ function getInitialUserDetails() {
       return null;
     }
 
-    return JSON.parse(cachedUserDetails) as UserDetails;
+    const details = JSON.parse(cachedUserDetails) as UserDetails;
+    return {
+      ...details,
+      username:
+        details.username?.trim() || details.displayName || "GameHub user",
+    };
   } catch {
     return null;
   }
@@ -38,7 +43,10 @@ function mergeUserProfileIntoDetails(
 ): UserDetails {
   return {
     id: updatedProfile.id,
-    username: currentUserDetails?.username ?? "",
+    username:
+      currentUserDetails?.username?.trim() ||
+      updatedProfile.displayName ||
+      "GameHub user",
     email: updatedProfile.email,
     displayName: updatedProfile.displayName,
     profileImageUrl: updatedProfile.profileImageUrl,

@@ -5,9 +5,9 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { pipeline } = require("node:stream/promises");
 
-// Pinned LGPL build used only to join the recorder's independently encoded
-// WebM segments. The capture/encoding path itself is Chromium's Windows
-// Graphics Capture + MediaRecorder implementation.
+// Pinned LGPL build used for exact-window Windows Graphics Capture, native
+// NVENC encoding, and stream-copy joining. Chromium MediaRecorder remains the
+// automatic compatibility path when native capture is unavailable.
 const FFMPEG_BUILD = "n8.1.2-21-gce3c09c101";
 const FFMPEG_ASSET = "ffmpeg-n8.1.2-21-gce3c09c101-win64-lgpl-8.1.zip";
 const FFMPEG_ARCHIVE_SHA256 =

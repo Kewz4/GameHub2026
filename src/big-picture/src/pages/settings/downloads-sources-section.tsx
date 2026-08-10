@@ -346,7 +346,7 @@ export function DownloadsSourcesSection({
     <>
       <SettingsSection
         title="Sources"
-        description="Hydra will fetch the download links from these sources. The source URL must be a direct link to a .json file containing the download the links."
+        description="GameHub will fetch download links from these sources. Each source URL must link directly to a .json file containing the download links."
         className={className}
       >
         <VerticalFocusGroup
@@ -436,7 +436,7 @@ export function DownloadsSourcesSection({
       <ConfirmationModal
         visible={showDeleteAllConfirmation}
         title="Delete All Sources"
-        description="This will remove every configured download source from Hydra."
+        description="This will remove every configured download source from GameHub."
         confirmLabel="Delete All"
         danger
         loading={isRemoving}

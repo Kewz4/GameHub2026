@@ -155,6 +155,7 @@ function EmulationCloudSaveSettings({
   const [saves, setSaves] = useState<EmulationCloudSave[]>([]);
   const [records, setRecords] = useState<MemoryCardSaveRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [uploadingCardKey, setUploadingCardKey] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<EmulationCloudSave | null>(
@@ -163,20 +164,25 @@ function EmulationCloudSaveSettings({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const localPromise =
-      platform === "ps2"
-        ? globalThis.window.electron.listPs2MemcardSaves()
-        : globalThis.window.electron.listPs1MemcardSaves();
-    const [remote, local] = await Promise.all([
-      globalThis.window.electron
-        .listEmulationSaves(platform, game.objectId)
-        .catch(() => [] as EmulationCloudSave[]),
-      localPromise,
-    ]);
-    setSaves(remote.filter((save) => save.objectId === game.objectId));
-    setRecords(local.filter((record) => record.objectId === game.objectId));
-    setLoading(false);
-  }, [game.objectId, platform]);
+    setLoadError(false);
+    try {
+      const localPromise =
+        platform === "ps2"
+          ? globalThis.window.electron.listPs2MemcardSaves()
+          : globalThis.window.electron.listPs1MemcardSaves();
+      const [remote, local] = await Promise.all([
+        globalThis.window.electron.listEmulationSaves(platform, game.objectId),
+        localPromise,
+      ]);
+      setSaves(remote.filter((save) => save.objectId === game.objectId));
+      setRecords(local.filter((record) => record.objectId === game.objectId));
+    } catch {
+      setLoadError(true);
+      showErrorToast("Memory-card backups could not be loaded");
+    } finally {
+      setLoading(false);
+    }
+  }, [game.objectId, platform, showErrorToast]);
 
   useEffect(() => {
     void load();
@@ -268,6 +274,14 @@ function EmulationCloudSaveSettings({
         title="Memory Card Cloud Backups"
         description={t("cloud_saves_list_description")}
       >
+        {loadError ? (
+          <div className="game-cloud-settings-tab__error" role="alert">
+            <span>Memory-card backups could not be loaded.</span>
+            <Button variant="secondary" onClick={() => void load()}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
         <CloudSavesList
           artifacts={artifacts}
           loading={loading}

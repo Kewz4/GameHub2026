@@ -78,6 +78,7 @@ export function SettingsContextGeneral({
     null
   );
   const updateUnsubRef = useRef<(() => void) | null>(null);
+  const updateResultTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [deduping, setDeduping] = useState(false);
   const [dedupProgress, setDedupProgress] = useState<{
@@ -103,7 +104,6 @@ export function SettingsContextGeneral({
     startMinimized: false,
     hideToTrayOnGameStart: false,
     launchToLibraryPage: false,
-    launchInBigPicture: false,
     enableAutoInstall: false,
   });
 
@@ -129,6 +129,15 @@ export function SettingsContextGeneral({
   }, []);
 
   useEffect(() => {
+    return () => {
+      updateUnsubRef.current?.();
+      if (updateResultTimeoutRef.current) {
+        clearTimeout(updateResultTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!userPreferences) return;
 
     const languageKeys = Object.keys(languageResources);
@@ -149,7 +158,6 @@ export function SettingsContextGeneral({
       startMinimized: userPreferences.startMinimized ?? false,
       hideToTrayOnGameStart: userPreferences.hideToTrayOnGameStart ?? false,
       launchToLibraryPage: userPreferences.launchToLibraryPage ?? false,
-      launchInBigPicture: userPreferences.launchInBigPicture ?? false,
       enableAutoInstall: userPreferences.enableAutoInstall ?? false,
     });
   }, [userPreferences, defaultDownloadsPath]);
@@ -234,6 +242,7 @@ export function SettingsContextGeneral({
         <h3>{t("app_basics")}</h3>
 
         <TextField
+          id="settings-downloads-path"
           label={t("downloads_path")}
           value={form.downloadsPath}
           readOnly
@@ -246,6 +255,7 @@ export function SettingsContextGeneral({
         />
 
         <SelectField
+          id="settings-language"
           label={t("language")}
           value={form.language}
           onChange={handleLanguageChange}
@@ -261,6 +271,7 @@ export function SettingsContextGeneral({
         <h3>{t("startup_behavior")}</h3>
 
         <CheckboxField
+          id="settings-prefer-quit"
           label={t("quit_app_instead_hiding")}
           checked={form.preferQuitInsteadOfHiding}
           onChange={() =>
@@ -271,6 +282,7 @@ export function SettingsContextGeneral({
         />
 
         <CheckboxField
+          id="settings-hide-on-game-start"
           label={t("hide_to_tray_on_game_start")}
           checked={form.hideToTrayOnGameStart}
           onChange={() =>
@@ -282,6 +294,7 @@ export function SettingsContextGeneral({
 
         {showRunAtStartup && (
           <CheckboxField
+            id="settings-run-at-startup"
             label={t("launch_with_system")}
             onChange={() => {
               handleChange({ runAtStartup: !form.runAtStartup });
@@ -296,6 +309,7 @@ export function SettingsContextGeneral({
 
         {showRunAtStartup && (
           <CheckboxField
+            id="settings-start-minimized"
             label={t("launch_minimized")}
             style={{ cursor: form.runAtStartup ? "pointer" : "not-allowed" }}
             checked={form.runAtStartup && form.startMinimized}
@@ -311,21 +325,12 @@ export function SettingsContextGeneral({
         )}
 
         <CheckboxField
+          id="settings-launch-to-library"
           label={t("launch_hydra_in_library_page")}
           checked={form.launchToLibraryPage}
           onChange={() =>
             handleChange({
               launchToLibraryPage: !form.launchToLibraryPage,
-            })
-          }
-        />
-
-        <CheckboxField
-          label={t("launch_hydra_in_big_picture")}
-          checked={form.launchInBigPicture}
-          onChange={() =>
-            handleChange({
-              launchInBigPicture: !form.launchInBigPicture,
             })
           }
         />
@@ -336,6 +341,7 @@ export function SettingsContextGeneral({
           <h3>{t("behavior")}</h3>
 
           <CheckboxField
+            id="settings-enable-auto-install"
             label={t("enable_auto_install")}
             checked={form.enableAutoInstall}
             onChange={() =>
@@ -348,6 +354,7 @@ export function SettingsContextGeneral({
       <div className="settings-context-panel__group">
         <h3>{t("appearance")}</h3>
         <SelectField
+          id="settings-theme-mode"
           label={t("theme_mode", { defaultValue: "Theme" })}
           value={userPreferences?.themeMode ?? "dark"}
           onChange={(event) => {
@@ -655,31 +662,43 @@ export function SettingsContextGeneral({
             theme="outline"
             onClick={async () => {
               updateUnsubRef.current?.();
+              if (updateResultTimeoutRef.current) {
+                clearTimeout(updateResultTimeoutRef.current);
+                updateResultTimeoutRef.current = null;
+              }
               setCheckingForUpdates(true);
               setUpdateCheckResult(null);
+              updateUnsubRef.current = window.electron.onAutoUpdaterEvent(
+                (event) => {
+                  if (event.type === "update-available") {
+                    setUpdateCheckResult(
+                      `Update available: v${event.info.version}`
+                    );
+                  } else if (event.type === "update-downloaded") {
+                    setUpdateCheckResult(
+                      "Update downloaded — restart to install."
+                    );
+                  }
+                  updateUnsubRef.current?.();
+                  updateUnsubRef.current = null;
+                }
+              );
               try {
                 const isAutoInstall = await window.electron.checkForUpdates();
-                updateUnsubRef.current = window.electron.onAutoUpdaterEvent(
-                  (event) => {
-                    if (event.type === "update-available") {
-                      setUpdateCheckResult(
-                        `Update available: v${event.info.version}`
-                      );
-                    } else if (event.type === "update-downloaded") {
-                      setUpdateCheckResult(
-                        "Update downloaded — restart to install."
-                      );
-                    }
-                    updateUnsubRef.current?.();
-                  }
-                );
                 if (!isAutoInstall) {
-                  setTimeout(() => {
+                  updateResultTimeoutRef.current = setTimeout(() => {
                     setUpdateCheckResult(
                       (prev) => prev ?? "No new update found."
                     );
+                    updateUnsubRef.current?.();
+                    updateUnsubRef.current = null;
+                    updateResultTimeoutRef.current = null;
                   }, 8000);
                 }
+              } catch {
+                updateUnsubRef.current?.();
+                updateUnsubRef.current = null;
+                setUpdateCheckResult("Update check failed. Try again later.");
               } finally {
                 setCheckingForUpdates(false);
               }

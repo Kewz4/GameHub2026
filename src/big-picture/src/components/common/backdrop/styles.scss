@@ -5,7 +5,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 10;
+  // Above the fixed shell (sidebar/header) and sticky Settings rail, while the
+  // controller virtual keyboard remains the top-most interactive layer.
+  z-index: 120;
   top: 0;
   padding: calc(var(--spacing-unit) * 3);
 }

@@ -358,6 +358,16 @@ One Guide-button press toggles the overlay, matching the `Shift+F3` keyboard sho
 
 ---
 
+## In-game Input Isolation
+
+Foreground focus alone does not stop games polling XInput 1.3, global Win32 keyboard state, or background Raw Input. On Windows, `gamehub-inputhook.dll` is therefore prewarmed inside one unambiguous visible render PID. Launch helpers remain session roots but are never injection targets; Khazan specifically hands off from `steamclient_loader_x64.exe` to `BBQ-Win64-Shipping.exe`.
+
+Injection success is not readiness. The launcher and DLL share a generation-scoped record containing owner PID, render PID, block state, acknowledged PID/generation, capability mask, observed unsupported-module mask, and hook status. The DLL publishes the acknowledgement only after a complete module snapshot and successful IAT coverage sweep. Immediately before showing the interactive window, the main process verifies the exact PID/generation and required XInput, Win32 keyboard, Raw Input, and late-binding capabilities; the native setter independently checks the same record. Blur, hide, target handoff, native failure, and shutdown synchronously clear blocking.
+
+The current hook does **not** claim universal controller isolation. DirectInput (`dinput.dll`/`dinput8.dll`), GameInput (`gameinput.dll`/`gameinputredist.dll`), and Windows.Gaming.Input are detected conservatively from loaded modules and make overlay opening fail safe. This can reject a game that loaded but never polls one of those modules; that false-positive tradeoff is intentional until those APIs are hooked. Direct raw-HID polling is also unsupported, but `hid.dll` presence is not treated as proof because it is commonly loaded transitively. If readiness is late, stale, incomplete, or unsupported, GameHub keeps the interactive overlay closed and shows a noninteractive error toast rather than opening fail-open.
+
+---
+
 ## Styling
 
 `src/renderer/src/pages/overlay/overlay.scss`
@@ -418,6 +428,8 @@ In development, `ELECTRON_RENDERER_URL` is set for HMR. In production, all windo
 | ---------------------------------------------------------- | ----------------------------------------------------------- |
 | `src/main/services/overlay-manager.ts`                     | Window creation, positioning, gamepad, shortcuts, lifecycle |
 | `src/main/services/overlay-game-process.ts`                | Game window detection and ranking                           |
+| `src/main/services/overlay-game-process-ranking.ts`        | Single visible render-PID and loader handoff policy         |
+| `src/main/services/overlay-input-gate.ts`                  | Readiness, capability and synchronous release controller    |
 | `src/main/services/overlay-fps-monitor.ts`                 | PresentMon/MangoHud frame time → FPS calculation            |
 | `src/main/services/overlay-music-player.ts`                | Deezer search, yt-dlp audio resolution, queue, playlists    |
 | `src/main/services/spotify-service.ts`                     | PKCE, encrypted tokens and Spotify Web API/Connect client   |
@@ -425,6 +437,7 @@ In development, `ELECTRON_RENDERER_URL` is set for HMR. In production, all windo
 | `src/shared/game-recorder-quality.ts`                      | Pixel-rate bitrate and media-constraint policy              |
 | `src/main/services/game-process-control-manager.ts`        | Safe pause/resume/close state machine                       |
 | `native/hydra-native/src/bin/presentmon-bridge.rs`         | Elevated share-readable PresentMon bridge                   |
+| `native/gamehub-inputhook/src/lib.rs`                      | Target-scoped XInput/Win32/Raw Input gate and handshake     |
 | `src/main/services/gamepad-state.ts`                       | Raw Input gamepad state polling                             |
 | `src/main/services/overlay-shortcut.ts`                    | Native keyboard hook for Shift+F3                           |
 | `src/main/events/overlay/index.ts`                         | IPC handlers: context, notes, pins, audio sessions          |

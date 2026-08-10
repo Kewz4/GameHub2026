@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigationScreenActions } from "../../../hooks";
+import { NAVIGATION_SCREEN_ACTION_PRIORITY } from "../../../services";
 import {
   type DirectoryEntry,
   getParentPath,
@@ -231,7 +232,8 @@ export function useFileExplorer({
           press: { b: handleBPress },
           hold: { b: handleBHold },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.modalFlow }
   );
 
   const handleEntrySelect = useCallback(

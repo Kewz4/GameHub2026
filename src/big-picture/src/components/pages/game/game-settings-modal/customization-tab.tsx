@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button,
+  FileExplorerModal,
   FocusItem,
   Input,
   Tabs,
@@ -52,7 +53,7 @@ export interface GameCustomizationSettingsProps {
   updatingGameTitle: boolean;
   onChangeGameTitle: (event: ChangeEvent<HTMLInputElement>) => void;
   onBlurGameTitle: () => Promise<void>;
-  onSelectAsset: (assetType: AssetTab) => Promise<void>;
+  onSelectAsset: (assetType: AssetTab, sourcePath: string) => Promise<void>;
   onClearAsset: (assetType: AssetTab) => Promise<void>;
   onRefreshAssets: () => Promise<void>;
 }
@@ -135,6 +136,8 @@ export function GameCustomizationSettingsTab({
   const { t } = useTranslation("big_picture");
   const [selectedAssetTab, setSelectedAssetTab] = useState<AssetTab>("icon");
   const [isOnlinePickerVisible, setIsOnlinePickerVisible] = useState(false);
+  const [isLocalAssetPickerVisible, setIsLocalAssetPickerVisible] =
+    useState(false);
   const [hasAssetTabsInteracted, setHasAssetTabsInteracted] = useState(false);
   const [assetPreviewState, setAssetPreviewState] = useState<AssetPreviewState>(
     () => getAssetPreviewState(game)
@@ -184,20 +187,8 @@ export function GameCustomizationSettingsTab({
       return;
     }
 
-    setPendingAssetTab(selectedAssetTab);
-    void onSelectAsset(selectedAssetTab).finally(() => {
-      setPendingAssetTab((currentTab) =>
-        currentTab === selectedAssetTab ? null : currentTab
-      );
-    });
-  }, [
-    game,
-    hasCustomAsset,
-    onClearAsset,
-    onSelectAsset,
-    pendingAssetTab,
-    selectedAssetTab,
-  ]);
+    setIsLocalAssetPickerVisible(true);
+  }, [game, hasCustomAsset, onClearAsset, pendingAssetTab, selectedAssetTab]);
 
   useEffect(() => {
     setAssetPreviewState(getAssetPreviewState(game));
@@ -321,6 +312,28 @@ export function GameCustomizationSettingsTab({
         title={gameTitle.trim() || game.title || ""}
         initialAssetType={ASSET_TAB_TO_ONLINE_TYPE[selectedAssetTab]}
         onArtworkApplied={onRefreshAssets}
+      />
+
+      <FileExplorerModal
+        visible={isLocalAssetPickerVisible}
+        title={t("edit_game_modal_assets")}
+        filters={[
+          {
+            name: "Image files",
+            extensions: ["jpg", "jpeg", "png", "gif", "webp"],
+          },
+        ]}
+        onClose={() => setIsLocalAssetPickerVisible(false)}
+        onSelect={(path) => {
+          const assetType = selectedAssetTab;
+          setIsLocalAssetPickerVisible(false);
+          setPendingAssetTab(assetType);
+          void onSelectAsset(assetType, path).finally(() => {
+            setPendingAssetTab((currentTab) =>
+              currentTab === assetType ? null : currentTab
+            );
+          });
+        }}
       />
     </VerticalFocusGroup>
   );

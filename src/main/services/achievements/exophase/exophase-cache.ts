@@ -169,7 +169,8 @@ const normalizeDisplayName = (s: string): string =>
  * game has HydraAPI definitions and we matched Exophase unlocks onto them) —
  * raw Exophase apiNames would be rejected/ignored by the cloud which keys by
  * the canonical (Steam) apiName. Best-effort: silently no-ops when the user is
- * logged out, lacks a subscription, or the game has no remoteId.
+ * logged out or the game has no remoteId. Achievement upload itself does not
+ * require a cloud subscription.
  */
 export type HydraApiSyncStatus =
   | "synced"

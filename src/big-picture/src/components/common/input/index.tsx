@@ -6,6 +6,7 @@ import {
   forwardRef,
   type InputHTMLAttributes,
   type ReactNode,
+  useId,
   useRef,
 } from "react";
 import { FocusItem } from "..";
@@ -36,11 +37,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     focusId,
     focusNavigationOverrides,
     focusNavigationState,
+    id: idProp,
     ...props
   },
   ref
 ) {
+  const generatedId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputId =
+    idProp ?? `big-picture-input-${generatedId.replaceAll(":", "")}`;
   const resolvedFocusNavigationState =
     focusNavigationState ?? (disabled ? "disabled" : "active");
 
@@ -70,7 +75,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         >
           <input
             ref={setInputRef}
-            id="input"
+            id={inputId}
             type={type}
             placeholder={placeholder}
             disabled={disabled}

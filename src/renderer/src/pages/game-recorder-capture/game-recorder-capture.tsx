@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type {
   GameRecorderCaptureCommand,
+  GameRecorderPcmChunkMetadata,
   GameRecorderPreferences,
   GameRecorderSegmentMetadata,
 } from "@types";
@@ -59,6 +60,11 @@ const getAudioConstraints = (): MediaTrackConstraints => ({
   echoCancellation: false,
   noiseSuppression: false,
 });
+
+// IPC normally carries one 85 ms WebAudio block at a time. If FFmpeg or the
+// pipe stalls, fail over before an unbounded Promise chain retains minutes of
+// Float32 PCM in the hidden renderer.
+const MAXIMUM_PCM_QUEUE_SECONDS = 5;
 
 const applyVideoConstraints = async (
   track: MediaStreamTrack,
@@ -185,10 +191,18 @@ class CaptureController {
   /** Recorders stopped on background/target loss must not leak the final
    * desktop-containing fragment into a clip. */
   private discardedRecorders = new WeakSet<MediaRecorder>();
+  private pcmSendChain = Promise.resolve();
 
   public async handle(command: GameRecorderCaptureCommand) {
     if (command.type === "start" && command.configuration) {
-      await this.start(command.configuration);
+      if (command.backend === "native_ffmpeg_nvenc") {
+        await this.startNativeAudio(
+          command.configuration,
+          command.captureSessionId
+        );
+      } else {
+        await this.start(command.configuration);
+      }
       return;
     }
     if (command.type === "flush") {
@@ -197,6 +211,146 @@ class CaptureController {
     }
     if (command.type === "stop") {
       this.stop(Boolean(command.discardPending));
+    }
+  }
+
+  private async startNativeAudio(
+    configuration: GameRecorderPreferences,
+    captureSessionId: number | undefined
+  ) {
+    this.stop();
+    const generation = ++this.startGeneration;
+    if (!configuration.captureGameAudio) return;
+    if (!Number.isSafeInteger(captureSessionId) || !captureSessionId) {
+      await window.electron.gameRecorderCaptureError(
+        "The native recorder audio session was invalid."
+      );
+      return;
+    }
+
+    try {
+      // Chromium supplies the trusted Windows loopback track. Native FFmpeg
+      // owns video capture/encoding, so request the smallest possible video
+      // companion and stop it as soon as the audio track is established.
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        audio: getAudioConstraints(),
+        video: true,
+      });
+      if (generation !== this.startGeneration) {
+        displayStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      const audioTrack = displayStream.getAudioTracks()[0];
+      if (!audioTrack) {
+        displayStream.getTracks().forEach((track) => track.stop());
+        throw new Error(
+          "Windows did not provide a system-loopback audio track."
+        );
+      }
+      await audioTrack
+        .applyConstraints(getAudioConstraints())
+        .catch(() => undefined);
+      displayStream.getVideoTracks().forEach((track) => track.stop());
+
+      const audioStream = new MediaStream([audioTrack]);
+      const audioContext = new AudioContext({
+        sampleRate: GAME_RECORDER_AUDIO_SAMPLE_RATE,
+        latencyHint: "playback",
+      });
+      await audioContext.resume();
+      const source = audioContext.createMediaStreamSource(audioStream);
+      const processor = audioContext.createScriptProcessor(
+        4_096,
+        GAME_RECORDER_AUDIO_CHANNELS,
+        GAME_RECORDER_AUDIO_CHANNELS
+      );
+      const mute = audioContext.createGain();
+      mute.gain.value = 0;
+      source.connect(processor);
+      processor.connect(mute);
+      mute.connect(audioContext.destination);
+
+      this.stream = audioStream;
+      this.active = true;
+      this.streamCleanups.set(audioStream, () => {
+        processor.onaudioprocess = null;
+        source.disconnect();
+        processor.disconnect();
+        mute.disconnect();
+        displayStream.getTracks().forEach((track) => track.stop());
+        audioStream.getTracks().forEach((track) => track.stop());
+        void audioContext.close();
+      });
+
+      let queuedFrames = 0;
+      let backpressureFailed = false;
+      processor.onaudioprocess = (event) => {
+        if (
+          generation !== this.startGeneration ||
+          !this.active ||
+          this.stream !== audioStream
+        ) {
+          return;
+        }
+        const input = event.inputBuffer;
+        const frameCount = input.length;
+        if (
+          queuedFrames + frameCount >
+          audioContext.sampleRate * MAXIMUM_PCM_QUEUE_SECONDS
+        ) {
+          if (!backpressureFailed) {
+            backpressureFailed = true;
+            void window.electron.gameRecorderCaptureError(
+              "Native recorder audio could not keep up with the system mix."
+            );
+          }
+          return;
+        }
+        const left = input.getChannelData(0);
+        const right =
+          input.numberOfChannels > 1 ? input.getChannelData(1) : left;
+        const interleaved = new Float32Array(
+          frameCount * GAME_RECORDER_AUDIO_CHANNELS
+        );
+        for (let frame = 0; frame < frameCount; frame += 1) {
+          interleaved[frame * 2] = left[frame];
+          interleaved[frame * 2 + 1] = right[frame];
+        }
+        const metadata: GameRecorderPcmChunkMetadata = {
+          captureSessionId,
+          sampleRate: audioContext.sampleRate,
+          channels: GAME_RECORDER_AUDIO_CHANNELS,
+          frameCount,
+          chunkStartedAt:
+            Date.now() - (frameCount / audioContext.sampleRate) * 1_000,
+        };
+        queuedFrames += frameCount;
+        this.pcmSendChain = this.pcmSendChain
+          .then(() =>
+            window.electron.gameRecorderCommitPcmChunk(
+              metadata,
+              interleaved.buffer
+            )
+          )
+          .catch((error) => {
+            if (generation === this.startGeneration && this.active) {
+              return window.electron.gameRecorderCaptureError(
+                error instanceof Error ? error.message : String(error)
+              );
+            }
+            return undefined;
+          })
+          .finally(() => {
+            queuedFrames = Math.max(0, queuedFrames - frameCount);
+          });
+      };
+    } catch (error) {
+      this.active = false;
+      this.closeStream();
+      await window.electron.gameRecorderCaptureError(
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 

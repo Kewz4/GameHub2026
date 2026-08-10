@@ -56,8 +56,7 @@ export function EditProfileModal(
   );
   const [cropIsAnimated, setCropIsAnimated] = useState(false);
 
-  const { userDetails, fetchUserDetails, hasActiveSubscription } =
-    useUserDetails();
+  const { userDetails, fetchUserDetails } = useUserDetails();
 
   useEffect(() => {
     if (userDetails) {
@@ -95,26 +94,10 @@ export function EditProfileModal(
               const handleProfileImagePath = async (path: string) => {
                 const metadata = await getProfileImageMetadata(path);
 
-                if (metadata.isAnimated && hasActiveSubscription) {
+                if (metadata.isAnimated) {
                   // Crop while preserving animation (handled in main/sharp).
                   setCropIsAnimated(true);
                   setProfileImageToCrop(path);
-                  return;
-                }
-
-                if (metadata.isAnimated && !hasActiveSubscription) {
-                  const { imagePath } = await window.electron
-                    .processProfileImage(path)
-                    .catch(() => {
-                      showErrorToast(t("image_process_failure"));
-                      return { imagePath: null };
-                    });
-
-                  if (imagePath) {
-                    setCropIsAnimated(false);
-                    setProfileImageToCrop(imagePath);
-                  }
-
                   return;
                 }
 

@@ -34,30 +34,45 @@ function IntegrationItem({
   onToggle,
   children,
 }: Readonly<IntegrationItemProps>) {
+  const { t } = useTranslation("settings");
+  const triggerId = `settings-integration-trigger-${id}`;
+  const panelId = `settings-integration-panel-${id}`;
+
   return (
-    <div className="settings-integration-item">
+    <div className="settings-integration-item" data-settings-integration={id}>
       <button
+        id={triggerId}
         type="button"
         className="settings-integration-item__header"
         onClick={() => onToggle(id)}
         aria-expanded={expanded}
+        aria-controls={panelId}
       >
         {expanded ? (
-          <ChevronDownIcon size={14} />
+          <ChevronDownIcon size={14} aria-hidden="true" />
         ) : (
-          <ChevronRightIcon size={14} />
+          <ChevronRightIcon size={14} aria-hidden="true" />
         )}
         <span className="settings-integration-item__title">{title}</span>
         {connected !== undefined && (
           <span
             className={`settings-integration-item__chip ${connected ? "settings-integration-item__chip--connected" : ""}`}
           >
-            {connected ? "Connected" : "Not connected"}
+            {connected
+              ? t("connected", { defaultValue: "Connected" })
+              : t("not_connected", { defaultValue: "Not connected" })}
           </span>
         )}
       </button>
       {expanded && (
-        <div className="settings-integration-item__body">{children}</div>
+        <div
+          id={panelId}
+          className="settings-integration-item__body"
+          role="region"
+          aria-labelledby={triggerId}
+        >
+          {children}
+        </div>
       )}
     </div>
   );
@@ -90,7 +105,9 @@ export function SettingsContextIntegrations() {
     return (
       <div className="settings-context-panel">
         <div className="settings-context-panel__group">
-          <HelperText tone="faint">Loading…</HelperText>
+          <HelperText tone="faint">
+            {t("loading", { defaultValue: "Loading…" })}
+          </HelperText>
         </div>
       </div>
     );
@@ -154,8 +171,11 @@ export function SettingsContextIntegrations() {
     <div className="settings-context-panel">
       <div className="settings-context-panel__group">
         <SectionHeading
-          title="Music providers"
-          hint="Choose an optional music source while GameHub Music remains the default."
+          title={t("music_providers", { defaultValue: "Music providers" })}
+          hint={t("music_providers_hint", {
+            defaultValue:
+              "Choose an optional music source while GameHub Music remains the default.",
+          })}
         />
         <div className="settings-integration-list">
           <IntegrationItem
@@ -171,8 +191,11 @@ export function SettingsContextIntegrations() {
 
       <div className="settings-context-panel__group">
         <SectionHeading
-          title="Libraries"
-          hint="Connect your store accounts to import and sync your game libraries."
+          title={t("libraries", { defaultValue: "Libraries" })}
+          hint={t("libraries_hint", {
+            defaultValue:
+              "Connect your store accounts to import and sync your game libraries.",
+          })}
         />
         <div className="settings-integration-list">
           {libraries.map(({ id, title, connected, content }) => (
@@ -189,7 +212,7 @@ export function SettingsContextIntegrations() {
           ))}
           <IntegrationItem
             id="exclusion-list"
-            title="Excluded Games"
+            title={t("excluded_games", { defaultValue: "Excluded games" })}
             expanded={expanded.has("exclusion-list")}
             onToggle={toggle}
           >
@@ -200,13 +223,19 @@ export function SettingsContextIntegrations() {
 
       <div className="settings-context-panel__group">
         <SectionHeading
-          title="Backups &amp; Imports"
-          hint="Bring saves and playtime over from other tools."
+          title={t("backups_and_imports", {
+            defaultValue: "Backups & Imports",
+          })}
+          hint={t("backups_and_imports_hint", {
+            defaultValue: "Bring saves and playtime over from other tools.",
+          })}
         />
         <div className="settings-integration-list">
           <IntegrationItem
             id="ludusavi"
-            title="Import Ludusavi Backup"
+            title={t("import_ludusavi_backup", {
+              defaultValue: "Import Ludusavi backup",
+            })}
             expanded={expanded.has("ludusavi")}
             onToggle={toggle}
           >
@@ -214,7 +243,9 @@ export function SettingsContextIntegrations() {
           </IntegrationItem>
           <IntegrationItem
             id="playnite"
-            title="Import Playnite Playtime"
+            title={t("import_playnite_playtime", {
+              defaultValue: "Import Playnite playtime",
+            })}
             expanded={expanded.has("playnite")}
             onToggle={toggle}
           >
@@ -225,8 +256,10 @@ export function SettingsContextIntegrations() {
 
       <div className="settings-context-panel__group">
         <SectionHeading
-          title="Premium Clients"
-          hint="Debrid and download services."
+          title={t("premium_clients", { defaultValue: "Premium clients" })}
+          hint={t("premium_clients_hint", {
+            defaultValue: "Debrid and download services.",
+          })}
         />
         <div className="settings-integration-list">
           <IntegrationItem

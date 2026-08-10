@@ -18,6 +18,9 @@ export const LIBRARY_FILTERS_COMPLETED_TAB_ID = "library-filters-tab-completed";
 export const LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID =
   "library-filters-new-folder-button";
 export const LIBRARY_FILTERS_SCAN_BUTTON_ID = "library-filters-scan-button";
+export const LIBRARY_EMPTY_REFRESH_BUTTON_ID = "library-empty-refresh-button";
+export const LIBRARY_FILTERED_EMPTY_RESET_BUTTON_ID =
+  "library-filtered-empty-reset-button";
 
 /** Prefix + platform value → stable FocusItem id for the platform filter pills */
 export const LIBRARY_FILTERS_PLATFORM_PILL_PREFIX =

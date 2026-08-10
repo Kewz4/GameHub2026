@@ -12,7 +12,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { type FocusItemActions } from "../../types";
-import type { FocusOverrides } from "../../services";
+import {
+  NAVIGATION_SCREEN_ACTION_PRIORITY,
+  type FocusOverrides,
+} from "../../services";
 import {
   useNavigation,
   useNavigationScreenActions,
@@ -2099,7 +2102,8 @@ export default function Downloads() {
             right: () => {},
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.activeShell }
   );
 
   const handleOpen = (href: string) => {

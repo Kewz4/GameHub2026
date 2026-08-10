@@ -19,8 +19,6 @@ import { ProfileTabs, type ProfileTabType } from "./profile-tabs";
 import { LibraryTab } from "./library-tab";
 import { ReviewsTab } from "./reviews-tab";
 import { AnimatePresence } from "framer-motion";
-import { HydraCloudModal } from "@renderer/pages/shared-modals/hydra-cloud/hydra-cloud-modal";
-import { useSubscription } from "@renderer/hooks/use-subscription";
 import "./profile-content.scss";
 import type { ProfileGameSort } from "./profile-library-data";
 import { ProfileAchievementsTab } from "./profile-achievements-tab";
@@ -101,9 +99,6 @@ export function ProfileContent() {
   const [reviewToDelete, setReviewToDelete] = useState<string | null>(null);
 
   const dispatch = useAppDispatch();
-
-  const { isHydraCloudModalVisible, hydraCloudFeature, hideHydraCloudModal } =
-    useSubscription();
 
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
@@ -446,12 +441,6 @@ export function ProfileContent() {
       <ProfileHero />
 
       {content}
-
-      <HydraCloudModal
-        visible={isHydraCloudModalVisible}
-        feature={hydraCloudFeature ?? "achievements"}
-        onClose={hideHydraCloudModal}
-      />
     </div>
   );
 }

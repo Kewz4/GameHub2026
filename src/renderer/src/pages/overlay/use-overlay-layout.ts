@@ -19,7 +19,10 @@ export type OverlayWidgetId =
   | "quick-launch"
   | "notes";
 
-type OverlayWidgetPosition = {
+export type OverlayWidgetControllerEditMode = "move" | "resize";
+export type OverlayWidgetControllerDirection = "up" | "down" | "left" | "right";
+
+export type OverlayWidgetPosition = {
   /**
    * Normalized position within the widget's available travel area. Keeping
    * these values resolution-independent prevents a layout created at 4K from
@@ -40,6 +43,18 @@ type OverlayWidgetPosition = {
 type OverlayLayout = Record<OverlayWidgetId, OverlayWidgetPosition>;
 
 type WidgetSize = { width: number; height: number };
+
+export type OverlayBlockedRect = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+export type OverlayWidgetPixelBounds = WidgetSize & {
+  left: number;
+  top: number;
+};
 
 const LAYOUT_STORAGE_KEY = "gamehub.overlay.layout.v4";
 const LEGACY_LAYOUT_STORAGE_KEYS = [
@@ -130,11 +145,103 @@ const MIN_WIDGET_SIZE: Record<OverlayWidgetId, WidgetSize> = {
   notes: { width: 260, height: 150 },
 };
 
+// These two cards have intrinsic content floors in overlay.scss. Keep the
+// layout engine aware of them so normalized positioning uses the rendered
+// height instead of a smaller theoretical height at compact resolutions.
+const ABSOLUTE_MIN_WIDGET_SIZE: Partial<
+  Record<OverlayWidgetId, Partial<WidgetSize>>
+> = {
+  performance: { height: 174 },
+  capture: { height: 196 },
+};
+
+const DEFAULT_LAYOUT_COLUMNS: ReadonlyArray<ReadonlyArray<OverlayWidgetId>> = [
+  ["performance", "achievements", "notes"],
+  ["capture", "music"],
+  ["friends", "mixer", "quick-launch"],
+];
+const DEFAULT_WIDGET_GAP = 8;
+
 const MINIMUM_SIZE_REFERENCE = { width: 1_080, height: 720 };
 const MINIMUM_SIZE_SCALE_FLOOR = 0.7;
 
 const clamp = (value: number, min = 0, max = 1) =>
   Math.min(max, Math.max(min, value));
+
+const rectsOverlap = (left: OverlayBlockedRect, right: OverlayBlockedRect) =>
+  left.left < right.right &&
+  left.right > right.left &&
+  left.top < right.bottom &&
+  left.bottom > right.top;
+
+/**
+ * Keeps the widget's title/tool strip out from under floating global controls.
+ * Only the occupied header docks are treated as blocked, so the center and all
+ * lower edges remain a genuinely freeform workspace.
+ */
+export const recoverOverlayWidgetControls = (
+  bounds: OverlayWidgetPixelBounds,
+  workspace: WidgetSize,
+  blockedRects: ReadonlyArray<OverlayBlockedRect>,
+  gap = 8
+): OverlayWidgetPixelBounds => {
+  const width = clamp(bounds.width, 1, workspace.width);
+  const height = clamp(bounds.height, 1, workspace.height);
+  const initial = {
+    left: clamp(bounds.left, 0, Math.max(0, workspace.width - width)),
+    top: clamp(bounds.top, 0, Math.max(0, workspace.height - height)),
+    width,
+    height,
+  };
+  const headerRect = (candidate: OverlayWidgetPixelBounds) => ({
+    left: candidate.left,
+    top: candidate.top,
+    right: candidate.left + candidate.width,
+    bottom: candidate.top + Math.min(48, candidate.height),
+  });
+  const isReachable = (candidate: OverlayWidgetPixelBounds) =>
+    !blockedRects.some((blocked) =>
+      rectsOverlap(headerRect(candidate), blocked)
+    );
+  if (isReachable(initial)) return initial;
+
+  const candidatePositions = blockedRects.flatMap((blocked) => [
+    { left: initial.left, top: blocked.bottom + gap },
+    { left: blocked.left - initial.width - gap, top: initial.top },
+    { left: blocked.right + gap, top: initial.top },
+  ]);
+  const candidates = candidatePositions
+    .map(({ left, top }) => {
+      const nextLeft = clamp(
+        left,
+        0,
+        Math.max(0, workspace.width - initial.width)
+      );
+      const nextTop = clamp(top, 0, Math.max(0, workspace.height - 1));
+      return {
+        left: nextLeft,
+        top: nextTop,
+        width: initial.width,
+        // A nearly full-height widget is shortened only when that is the sole
+        // way to preserve an accessible title/tool strip below a header dock.
+        height: Math.min(initial.height, workspace.height - nextTop),
+      };
+    })
+    .filter((candidate) => candidate.height > 0 && isReachable(candidate))
+    .sort((left, right) => {
+      const leftDistance =
+        Math.abs(left.left - initial.left) +
+        Math.abs(left.top - initial.top) +
+        Math.abs(left.height - initial.height) * 2;
+      const rightDistance =
+        Math.abs(right.left - initial.left) +
+        Math.abs(right.top - initial.top) +
+        Math.abs(right.height - initial.height) * 2;
+      return leftDistance - rightDistance;
+    });
+
+  return candidates[0] ?? initial;
+};
 
 const getMinimumWidgetSize = (
   id: OverlayWidgetId,
@@ -149,9 +256,185 @@ const getMinimumWidgetSize = (
     1
   );
   const minimum = MIN_WIDGET_SIZE[id];
+  const absoluteMinimum = ABSOLUTE_MIN_WIDGET_SIZE[id];
   return {
-    width: Math.round(minimum.width * scale),
-    height: Math.round(minimum.height * scale),
+    width: Math.max(
+      absoluteMinimum?.width ?? 0,
+      Math.round(minimum.width * scale)
+    ),
+    height: Math.max(
+      absoluteMinimum?.height ?? 0,
+      Math.round(minimum.height * scale)
+    ),
+  };
+};
+
+const getOverlayWidgetPixelBounds = (
+  id: OverlayWidgetId,
+  position: OverlayWidgetPosition,
+  workspace: WidgetSize,
+  blockedRects: ReadonlyArray<OverlayBlockedRect>
+) => {
+  const minimum = getMinimumWidgetSize(id, workspace);
+  const width = clamp(
+    position.width * workspace.width,
+    Math.min(minimum.width, workspace.width),
+    workspace.width
+  );
+  const height = clamp(
+    position.height * workspace.height,
+    Math.min(minimum.height, workspace.height),
+    workspace.height
+  );
+  const availableX = Math.max(0, workspace.width - width);
+  const availableY = Math.max(0, workspace.height - height);
+  return recoverOverlayWidgetControls(
+    {
+      left: position.x * availableX,
+      top: position.y * availableY,
+      width,
+      height,
+    },
+    workspace,
+    blockedRects
+  );
+};
+
+/**
+ * Resolves the shipped layout as three visual columns with a real pixel gap.
+ * Normalized anchors remain resolution-independent, while a compact card that
+ * reaches its intrinsic content height can no longer bleed into the next card.
+ */
+export const getOverlayDefaultWidgetBounds = (
+  workspace: WidgetSize,
+  blockedRects: ReadonlyArray<OverlayBlockedRect> = []
+): Record<OverlayWidgetId, OverlayWidgetPixelBounds> => {
+  const bounds = OVERLAY_WIDGET_IDS.reduce(
+    (next, id) => {
+      next[id] = getOverlayWidgetPixelBounds(
+        id,
+        DEFAULT_LAYOUT[id],
+        workspace,
+        blockedRects
+      );
+      return next;
+    },
+    {} as Record<OverlayWidgetId, OverlayWidgetPixelBounds>
+  );
+
+  for (const column of DEFAULT_LAYOUT_COLUMNS) {
+    for (let index = 1; index < column.length; index += 1) {
+      const previous = bounds[column[index - 1]];
+      const current = bounds[column[index]];
+      const minimumTop = previous.top + previous.height + DEFAULT_WIDGET_GAP;
+      if (current.top >= minimumTop) continue;
+      current.top = Math.min(
+        minimumTop,
+        Math.max(0, workspace.height - current.height)
+      );
+    }
+  }
+
+  return bounds;
+};
+
+const usesDefaultGeometry = (
+  position: OverlayWidgetPosition,
+  fallback: OverlayWidgetPosition
+) =>
+  position.x === fallback.x &&
+  position.y === fallback.y &&
+  position.width === fallback.width &&
+  position.height === fallback.height;
+
+/**
+ * Digital alternative to pointer drag/resize. Movement is measured in pixels
+ * but persisted in the same resolution-independent fractions as pointer edits.
+ */
+export const adjustOverlayWidgetForController = (
+  id: OverlayWidgetId,
+  position: OverlayWidgetPosition,
+  mode: OverlayWidgetControllerEditMode,
+  direction: OverlayWidgetControllerDirection,
+  workspace: WidgetSize,
+  stepPixels = 24
+): OverlayWidgetPosition => {
+  const minimum = getMinimumWidgetSize(id, workspace);
+  const width = clamp(
+    position.width * workspace.width,
+    Math.min(minimum.width, workspace.width),
+    workspace.width
+  );
+  const height = clamp(
+    position.height * workspace.height,
+    Math.min(minimum.height, workspace.height),
+    workspace.height
+  );
+  const availableX = Math.max(0, workspace.width - width);
+  const availableY = Math.max(0, workspace.height - height);
+  const left = clamp(position.x * availableX, 0, availableX);
+  const top = clamp(position.y * availableY, 0, availableY);
+
+  if (mode === "move") {
+    const nextLeft = clamp(
+      left +
+        (direction === "left"
+          ? -stepPixels
+          : direction === "right"
+            ? stepPixels
+            : 0),
+      0,
+      availableX
+    );
+    const nextTop = clamp(
+      top +
+        (direction === "up"
+          ? -stepPixels
+          : direction === "down"
+            ? stepPixels
+            : 0),
+      0,
+      availableY
+    );
+    return {
+      ...position,
+      x: availableX > 0 ? nextLeft / availableX : 0,
+      y: availableY > 0 ? nextTop / availableY : 0,
+    };
+  }
+
+  const minimumWidth = Math.min(minimum.width, workspace.width);
+  const minimumHeight = Math.min(minimum.height, workspace.height);
+  const nextWidth = clamp(
+    width +
+      (direction === "left"
+        ? -stepPixels
+        : direction === "right"
+          ? stepPixels
+          : 0),
+    minimumWidth,
+    Math.max(minimumWidth, workspace.width - left)
+  );
+  const nextHeight = clamp(
+    height +
+      (direction === "up"
+        ? -stepPixels
+        : direction === "down"
+          ? stepPixels
+          : 0),
+    minimumHeight,
+    Math.max(minimumHeight, workspace.height - top)
+  );
+  const nextAvailableX = Math.max(0, workspace.width - nextWidth);
+  const nextAvailableY = Math.max(0, workspace.height - nextHeight);
+
+  return {
+    ...position,
+    // Preserve the visible top-left origin while the bottom/right edges move.
+    x: nextAvailableX > 0 ? clamp(left / nextAvailableX) : 0,
+    y: nextAvailableY > 0 ? clamp(top / nextAvailableY) : 0,
+    width: nextWidth / Math.max(1, workspace.width),
+    height: nextHeight / Math.max(1, workspace.height),
   };
 };
 
@@ -236,12 +519,11 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
     width: Math.max(1, window.innerWidth - 24),
     height: Math.max(1, window.innerHeight - 24),
   });
-  const [widgetSizes, setWidgetSizes] = useState<
-    Partial<Record<OverlayWidgetId, WidgetSize>>
-  >({});
+  const [blockedHeaderRects, setBlockedHeaderRects] = useState<
+    OverlayBlockedRect[]
+  >([]);
 
   const widgetNodes = useRef(new Map<OverlayWidgetId, HTMLElement>());
-  const resizeObserver = useRef<ResizeObserver | null>(null);
   const drag = useRef<{
     id: OverlayWidgetId;
     offsetX: number;
@@ -273,36 +555,46 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
         : nextWorkspaceSize
     );
 
-    const nextWidgetSizes: Partial<Record<OverlayWidgetId, WidgetSize>> = {};
-    for (const [id, node] of widgetNodes.current) {
-      const rect = node.getBoundingClientRect();
-      nextWidgetSizes[id] = {
-        width: Math.max(0, rect.width),
-        height: Math.max(0, rect.height),
-      };
-    }
-    setWidgetSizes((current) => {
-      const changed = OVERLAY_WIDGET_IDS.some((id) => {
-        const before = current[id];
-        const after = nextWidgetSizes[id];
-        return (
-          before?.width !== after?.width || before?.height !== after?.height
-        );
-      });
-      return changed ? nextWidgetSizes : current;
+    const nextBlockedHeaderRects = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        ".overlay-header__game, .overlay-header__actions"
+      )
+    )
+      .map((element) => element.getBoundingClientRect())
+      .filter(
+        (rect) =>
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.right > workspaceRect.left &&
+          rect.left < workspaceRect.right
+      )
+      .map((rect) => ({
+        left: clamp(rect.left - workspaceRect.left, 0, workspaceRect.width),
+        top: clamp(rect.top - workspaceRect.top, 0, workspaceRect.height),
+        right: clamp(rect.right - workspaceRect.left, 0, workspaceRect.width),
+        bottom: clamp(rect.bottom - workspaceRect.top, 0, workspaceRect.height),
+      }));
+    setBlockedHeaderRects((current) => {
+      const changed =
+        current.length !== nextBlockedHeaderRects.length ||
+        current.some((rect, index) => {
+          const next = nextBlockedHeaderRects[index];
+          return (
+            !next ||
+            rect.left !== next.left ||
+            rect.top !== next.top ||
+            rect.right !== next.right ||
+            rect.bottom !== next.bottom
+          );
+        });
+      return changed ? nextBlockedHeaderRects : current;
     });
   }, [workspaceRef]);
 
   const registerWidget = useCallback(
     (id: OverlayWidgetId, node: HTMLElement | null) => {
-      const previous = widgetNodes.current.get(id);
-      if (previous && previous !== node) {
-        resizeObserver.current?.unobserve(previous);
-      }
-
       if (node) {
         widgetNodes.current.set(id, node);
-        resizeObserver.current?.observe(node);
       } else {
         widgetNodes.current.delete(id);
       }
@@ -314,16 +606,18 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
 
   useLayoutEffect(() => {
     const observer = new ResizeObserver(measure);
-    resizeObserver.current = observer;
 
     const workspace = workspaceRef.current;
     if (workspace) observer.observe(workspace);
-    for (const node of widgetNodes.current.values()) observer.observe(node);
+    for (const headerDock of document.querySelectorAll<HTMLElement>(
+      ".overlay-header__game, .overlay-header__actions"
+    )) {
+      observer.observe(headerDock);
+    }
     measure();
 
     return () => {
       observer.disconnect();
-      resizeObserver.current = null;
     };
   }, [measure, workspaceRef]);
 
@@ -396,17 +690,22 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
           minimumHeight,
           maxHeight
         );
-        const availableX = Math.max(0, workspaceRect.width - width);
-        const availableY = Math.max(0, workspaceRect.height - height);
+        const recovered = recoverOverlayWidgetControls(
+          { left: fixedLeft, top: fixedTop, width, height },
+          { width: workspaceRect.width, height: workspaceRect.height },
+          blockedHeaderRects
+        );
+        const availableX = Math.max(0, workspaceRect.width - recovered.width);
+        const availableY = Math.max(0, workspaceRect.height - recovered.height);
 
         setLayout((current) => ({
           ...current,
           [currentResize.id]: {
             ...current[currentResize.id],
-            x: availableX > 0 ? clamp(fixedLeft / availableX) : 0,
-            y: availableY > 0 ? clamp(fixedTop / availableY) : 0,
-            width: width / Math.max(1, workspaceRect.width),
-            height: height / Math.max(1, workspaceRect.height),
+            x: availableX > 0 ? clamp(recovered.left / availableX) : 0,
+            y: availableY > 0 ? clamp(recovered.top / availableY) : 0,
+            width: recovered.width / Math.max(1, workspaceRect.width),
+            height: recovered.height / Math.max(1, workspaceRect.height),
           },
         }));
         return;
@@ -431,13 +730,23 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
         0,
         availableY
       );
+      const recovered = recoverOverlayWidgetControls(
+        {
+          left,
+          top,
+          width: widgetRect.width,
+          height: widgetRect.height,
+        },
+        { width: workspaceRect.width, height: workspaceRect.height },
+        blockedHeaderRects
+      );
 
       setLayout((current) => ({
         ...current,
         [currentDrag.id]: {
           ...current[currentDrag.id],
-          x: availableX > 0 ? left / availableX : 0,
-          y: availableY > 0 ? top / availableY : 0,
+          x: availableX > 0 ? recovered.left / availableX : 0,
+          y: availableY > 0 ? recovered.top / availableY : 0,
         },
       }));
     };
@@ -463,48 +772,50 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
         "overlay-widget-resizing"
       );
     };
-  }, [workspaceRef]);
+  }, [blockedHeaderRects, workspaceRef]);
 
   const getWidgetStyle = useCallback(
     (id: OverlayWidgetId): CSSProperties => {
       const position = layout[id];
-      const size = widgetSizes[id] ?? { width: 0, height: 0 };
-      const minimum = getMinimumWidgetSize(id, workspaceSize);
-      const width = clamp(
-        position.width * workspaceSize.width,
-        Math.min(minimum.width, workspaceSize.width),
-        workspaceSize.width
+      const column = DEFAULT_LAYOUT_COLUMNS.find((candidate) =>
+        candidate.includes(id)
       );
-      const height = clamp(
-        position.height * workspaceSize.height,
-        Math.min(minimum.height, workspaceSize.height),
-        workspaceSize.height
-      );
-      const actualWidth = size.width || width;
-      const actualHeight = size.height || height;
-      const availableX = Math.max(0, workspaceSize.width - actualWidth);
-      const availableY = Math.max(0, workspaceSize.height - actualHeight);
+      const hasDefaultColumnGeometry =
+        column?.every((widgetId) =>
+          usesDefaultGeometry(layout[widgetId], DEFAULT_LAYOUT[widgetId])
+        ) ?? false;
+      const recovered = hasDefaultColumnGeometry
+        ? getOverlayDefaultWidgetBounds(workspaceSize, blockedHeaderRects)[id]
+        : getOverlayWidgetPixelBounds(
+            id,
+            position,
+            workspaceSize,
+            blockedHeaderRects
+          );
       return {
-        left: Math.round(position.x * availableX),
-        top: Math.round(position.y * availableY),
-        width: Math.round(width),
-        height: Math.round(height),
+        left: Math.round(recovered.left),
+        top: Math.round(recovered.top),
+        width: Math.round(recovered.width),
+        height: Math.round(recovered.height),
         zIndex: position.z,
       };
     },
-    [layout, widgetSizes, workspaceSize]
+    [blockedHeaderRects, layout, workspaceSize]
   );
 
   const focusWidget = useCallback((id: OverlayWidgetId) => {
     setLayout((current) => {
-      const highestZ = Math.max(
-        ...Object.values(current).map((item) => item.z)
+      const ordered = OVERLAY_WIDGET_IDS.filter((widgetId) => widgetId !== id)
+        .sort((left, right) => current[left].z - current[right].z)
+        .concat(id);
+      const alreadyNormalized = ordered.every(
+        (widgetId, index) => current[widgetId].z === index + 1
       );
-      if (current[id].z === highestZ) return current;
-      return {
-        ...current,
-        [id]: { ...current[id], z: highestZ + 1 },
-      };
+      if (alreadyNormalized) return current;
+      return ordered.reduce((next, widgetId, index) => {
+        next[widgetId] = { ...current[widgetId], z: index + 1 };
+        return next;
+      }, {} as OverlayLayout);
     });
   }, []);
 
@@ -525,19 +836,9 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
       };
       resize.current = null;
       document.body.classList.add("overlay-widget-dragging");
-
-      setLayout((current) => {
-        const highestZ = Math.max(
-          ...Object.values(current).map((item) => item.z)
-        );
-        if (current[id].z === highestZ) return current;
-        return {
-          ...current,
-          [id]: { ...current[id], z: highestZ + 1 },
-        };
-      });
+      focusWidget(id);
     },
-    [layoutLocked, workspaceRef]
+    [focusWidget, layoutLocked, workspaceRef]
   );
 
   const beginWidgetResize = useCallback(
@@ -590,6 +891,72 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
     [focusWidget]
   );
 
+  const adjustWidgetByController = useCallback(
+    (
+      id: OverlayWidgetId,
+      mode: OverlayWidgetControllerEditMode,
+      direction: OverlayWidgetControllerDirection
+    ) => {
+      if (layoutLocked) return;
+      setLayout((current) => {
+        const adjusted = adjustOverlayWidgetForController(
+          id,
+          current[id],
+          mode,
+          direction,
+          workspaceSize
+        );
+        const minimum = getMinimumWidgetSize(id, workspaceSize);
+        const width = clamp(
+          adjusted.width * workspaceSize.width,
+          Math.min(minimum.width, workspaceSize.width),
+          workspaceSize.width
+        );
+        const height = clamp(
+          adjusted.height * workspaceSize.height,
+          Math.min(minimum.height, workspaceSize.height),
+          workspaceSize.height
+        );
+        const availableX = Math.max(0, workspaceSize.width - width);
+        const availableY = Math.max(0, workspaceSize.height - height);
+        const recovered = recoverOverlayWidgetControls(
+          {
+            left: adjusted.x * availableX,
+            top: adjusted.y * availableY,
+            width,
+            height,
+          },
+          workspaceSize,
+          blockedHeaderRects
+        );
+        const recoveredAvailableX = Math.max(
+          0,
+          workspaceSize.width - recovered.width
+        );
+        const recoveredAvailableY = Math.max(
+          0,
+          workspaceSize.height - recovered.height
+        );
+        return {
+          ...current,
+          [id]: {
+            ...adjusted,
+            x:
+              recoveredAvailableX > 0
+                ? recovered.left / recoveredAvailableX
+                : 0,
+            y:
+              recoveredAvailableY > 0 ? recovered.top / recoveredAvailableY : 0,
+            width: recovered.width / Math.max(1, workspaceSize.width),
+            height: recovered.height / Math.max(1, workspaceSize.height),
+          },
+        };
+      });
+      focusWidget(id);
+    },
+    [blockedHeaderRects, focusWidget, layoutLocked, workspaceSize]
+  );
+
   const setWidgetVisible = useCallback(
     (id: OverlayWidgetId, visible: boolean) => {
       setLayout((current) => ({
@@ -611,6 +978,7 @@ export const useOverlayLayout = (workspaceRef: RefObject<HTMLDivElement>) => {
   }, []);
 
   return {
+    adjustWidgetByController,
     beginWidgetDrag,
     beginWidgetResize,
     cycleWidgetSize,

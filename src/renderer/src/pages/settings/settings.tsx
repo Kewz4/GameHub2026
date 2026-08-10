@@ -5,7 +5,7 @@ import {
 } from "@renderer/context";
 import { SettingsAccount } from "./settings-account";
 import { useUserDetails } from "@renderer/hooks";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import "./settings.scss";
 import {
   BellIcon,
@@ -26,11 +26,19 @@ import { SettingsContextAchievements } from "./settings-context-achievements";
 import { SettingsContextCompatibility } from "./settings-context-compatibility";
 import { SettingsContextBigPicture } from "./settings-context-big-picture";
 import { SettingsContextEmulation } from "./settings-context-emulation";
+import {
+  getSettingsCategoryNavigationTarget,
+  type SettingsCategoryId,
+} from "@renderer/context/settings/settings-navigation";
 
 export default function Settings() {
   const { t } = useTranslation("settings");
+  const { t: tSidebar } = useTranslation("sidebar");
 
   const { userDetails } = useUserDetails();
+  const categoryButtonRefs = useRef<Map<SettingsCategoryId, HTMLButtonElement>>(
+    new Map()
+  );
 
   const categories = useMemo(
     () => [
@@ -100,6 +108,25 @@ export default function Settings() {
             categories.find((category) => category.id === currentCategoryId) ??
             categories[0];
           const selectedCategoryId = currentCategory.id;
+          const categoryIds = categories.map((category) => category.id);
+
+          const handleCategoryKeyDown = (
+            event: React.KeyboardEvent<HTMLButtonElement>,
+            categoryId: SettingsCategoryId
+          ) => {
+            const nextCategoryId = getSettingsCategoryNavigationTarget(
+              categoryIds,
+              categoryId,
+              event.key
+            );
+            if (!nextCategoryId) return;
+
+            event.preventDefault();
+            setCurrentCategoryId(nextCategoryId);
+            requestAnimationFrame(() => {
+              categoryButtonRefs.current.get(nextCategoryId)?.focus();
+            });
+          };
 
           const renderCategory = () => {
             if (selectedCategoryId === "general") {
@@ -144,27 +171,56 @@ export default function Settings() {
           return (
             <section className="settings__container">
               <div className="settings__content">
-                <aside className="settings__sidebar">
+                <div
+                  className="settings__sidebar"
+                  role="tablist"
+                  aria-label={tSidebar("settings")}
+                >
                   {categories.map((category) => (
                     <button
                       key={category.id}
+                      ref={(element) => {
+                        if (element) {
+                          categoryButtonRefs.current.set(category.id, element);
+                        } else {
+                          categoryButtonRefs.current.delete(category.id);
+                        }
+                      }}
                       type="button"
+                      id={`settings-category-tab-${category.id}`}
+                      role="tab"
+                      aria-selected={selectedCategoryId === category.id}
+                      aria-controls="settings-category-panel"
+                      tabIndex={selectedCategoryId === category.id ? 0 : -1}
+                      data-settings-category={category.id}
                       className={`settings__sidebar-button ${
-                        currentCategory.id === category.id
+                        selectedCategoryId === category.id
                           ? "settings__sidebar-button--active"
                           : ""
                       }`}
                       onClick={() => setCurrentCategoryId(category.id)}
+                      onKeyDown={(event) =>
+                        handleCategoryKeyDown(event, category.id)
+                      }
                     >
-                      <span className="settings__sidebar-button-icon">
+                      <span
+                        className="settings__sidebar-button-icon"
+                        aria-hidden="true"
+                      >
                         {category.icon}
                       </span>
                       <span>{category.label}</span>
                     </button>
                   ))}
-                </aside>
+                </div>
 
-                <div className="settings__panel">
+                <div
+                  className="settings__panel"
+                  id="settings-category-panel"
+                  role="tabpanel"
+                  aria-labelledby={`settings-category-tab-${selectedCategoryId}`}
+                  data-settings-panel={selectedCategoryId}
+                >
                   <h2>{currentCategory.label}</h2>
                   {renderCategory()}
                 </div>

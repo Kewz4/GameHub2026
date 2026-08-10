@@ -131,8 +131,17 @@ export function SettingsContextDownloads() {
     );
 
     if (parsedBytesPerSecond === undefined) {
-      setForm((prev) => ({ ...prev, maxDownloadSpeedMegabytes: "" }));
-      updateUserPreferences({ maxDownloadSpeedBytesPerSecond: null });
+      const persistedLimit = userPreferences?.maxDownloadSpeedBytesPerSecond;
+      setForm((prev) => ({
+        ...prev,
+        maxDownloadSpeedMegabytes:
+          typeof persistedLimit === "number" && persistedLimit > 0
+            ? formatLimitInputValue(
+                persistedLimit,
+                form.showDownloadSpeedInMegabytes
+              )
+            : "",
+      }));
       return;
     }
 
@@ -181,6 +190,7 @@ export function SettingsContextDownloads() {
         <h3>{t("download_behavior")}</h3>
 
         <TextField
+          id="settings-max-download-speed"
           type="number"
           min="0"
           step="0.1"
@@ -200,11 +210,15 @@ export function SettingsContextDownloads() {
             }));
           }}
           onBlur={handleMaxDownloadSpeedBlur}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
           placeholder={t("max_download_speed_unlimited")}
         />
 
         <div className="settings-general__network-interface">
           <SelectField
+            id="settings-network-interface"
             label={t("network_interface")}
             value={form.torrentNetworkInterface}
             onChange={(event) =>
@@ -218,6 +232,7 @@ export function SettingsContextDownloads() {
         </div>
 
         <CheckboxField
+          id="settings-seed-after-download"
           label={t("seed_after_download_complete")}
           checked={form.seedAfterDownloadComplete}
           onChange={() =>
@@ -228,6 +243,7 @@ export function SettingsContextDownloads() {
         />
 
         <CheckboxField
+          id="settings-extract-files"
           label={t("extract_files_by_default")}
           checked={form.extractFilesByDefault}
           onChange={() =>
@@ -238,12 +254,14 @@ export function SettingsContextDownloads() {
         />
 
         <CheckboxField
+          id="settings-speed-in-megabytes"
           label={t("show_download_speed_in_megabytes")}
           checked={form.showDownloadSpeedInMegabytes}
           onChange={handleSpeedUnitChange}
         />
 
         <CheckboxField
+          id="settings-delete-archives"
           label={t("delete_archive_files_after_extraction")}
           checked={form.deleteArchiveFilesAfterExtractionByDefault}
           onChange={() =>
@@ -256,6 +274,7 @@ export function SettingsContextDownloads() {
 
         {window.electron.platform === "win32" && (
           <CheckboxField
+            id="settings-create-shortcuts"
             label={t("create_shortcuts_on_download")}
             checked={form.createStartMenuShortcut}
             onChange={() =>

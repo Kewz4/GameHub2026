@@ -33,6 +33,7 @@
   --error-hover: rgba(225, 29, 72, 0.2);
   --spacing-unit: 0.25rem;
   --big-picture-header-height: 56px;
+  --big-picture-header-footprint: var(--big-picture-header-height);
 }
 
 * {
@@ -107,7 +108,10 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding-top: var(--big-picture-header-height);
+  padding-top: var(
+    --big-picture-header-footprint,
+    var(--big-picture-header-height)
+  );
   box-sizing: border-box;
 }
 

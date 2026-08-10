@@ -1,12 +1,31 @@
 .settings-page {
-  margin-top: calc(-1 * var(--big-picture-header-height));
+  --settings-page-inline-padding: calc(var(--spacing-unit) * 16);
+  --settings-page-tab-rail-height: 56px;
+  --settings-page-content-top-clearance: calc(
+    var(--settings-page-tab-rail-height) + var(--spacing-unit) * 3
+  );
+  --settings-page-tab-rail-top: calc(
+    var(--big-picture-header-footprint, var(--big-picture-header-height)) +
+      var(--spacing-unit) * 4
+  );
+  --settings-page-focus-scroll-clearance: calc(
+    var(--settings-page-tab-rail-top) + var(--settings-page-tab-rail-height) +
+      var(--spacing-unit) * 5
+  );
+  margin-top: calc(
+    -1 * var(--big-picture-header-footprint, var(--big-picture-header-height))
+  );
   display: flex;
   align-items: flex-start;
   justify-content: center;
   width: 100%;
   min-width: 0;
-  height: calc(100% + var(--big-picture-header-height));
-  min-height: calc(100% + var(--big-picture-header-height));
+  height: calc(
+    100% + var(--big-picture-header-footprint, var(--big-picture-header-height))
+  );
+  min-height: calc(
+    100% + var(--big-picture-header-footprint, var(--big-picture-header-height))
+  );
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -14,8 +33,13 @@
   background: var(--background);
   color: var(--text);
   box-sizing: border-box;
-  padding: calc(var(--spacing-unit) * 24) calc(var(--spacing-unit) * 16)
-    calc(var(--spacing-unit) * 12);
+  scroll-padding-top: var(--settings-page-focus-scroll-clearance);
+  scroll-padding-bottom: calc(var(--spacing-unit) * 16);
+  padding: calc(
+      var(--big-picture-header-footprint, var(--big-picture-header-height)) +
+        var(--spacing-unit) * 10
+    )
+    var(--settings-page-inline-padding) calc(var(--spacing-unit) * 12);
 
   &::-webkit-scrollbar {
     display: none;
@@ -28,7 +52,8 @@
   align-items: stretch;
   gap: calc(var(--spacing-unit) * 8);
   min-height: 100%;
-  width: max-content;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -39,9 +64,20 @@
 }
 
 .settings-page__tabs-wrap {
+  position: sticky;
+  top: var(--settings-page-tab-rail-top);
+  z-index: 70;
   flex-shrink: 0;
-  width: max-content;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
+  padding: calc(var(--spacing-unit) * 3) calc(var(--spacing-unit) * 2)
+    calc(var(--spacing-unit) * 2);
+  border-radius: calc(var(--spacing-unit) * 2);
+  background: var(--background);
+  box-shadow: 0 calc(var(--spacing-unit) * 3) calc(var(--spacing-unit) * 7)
+    rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(14px);
 }
 
 .settings-page__bumper {
@@ -61,11 +97,35 @@
 
 .settings-page__content {
   flex: 0 0 auto;
-  width: 0;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
+  // The sticky rail is offset below its normal flex position. Reserve its
+  // measured footprint in real layout so the first section cannot sit behind
+  // it when controller focus resets or auto-scrolls the page.
+  padding-top: var(--settings-page-content-top-clearance);
   padding-inline: calc(var(--spacing-unit) * 18);
   box-sizing: border-box;
+}
+
+@media (max-width: 1280px) {
+  .settings-page {
+    --settings-page-inline-padding: calc(var(--spacing-unit) * 8);
+  }
+
+  .settings-page__content {
+    padding-inline: calc(var(--spacing-unit) * 10);
+  }
+}
+
+@media (max-width: 1024px) {
+  .settings-page {
+    --settings-page-inline-padding: calc(var(--spacing-unit) * 5);
+  }
+
+  .settings-page__content {
+    padding-inline: calc(var(--spacing-unit) * 5);
+  }
 }
 
 .settings-page__copy {

@@ -87,7 +87,8 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
             style={{ margin: 0, fontSize: "0.82rem", opacity: 0.72 }}
           >
             {result.cloudSynced} absolute playtime correction
-            {result.cloudSynced === 1 ? "" : "s"} confirmed by Hydra Cloud.
+            {result.cloudSynced === 1 ? "" : "s"} confirmed by the Hydra API
+            profile service.
             {result.cloudSyncPending > 0
               ? ` ${result.cloudSyncPending} will retry automatically when the cloud connection is available.`
               : ""}

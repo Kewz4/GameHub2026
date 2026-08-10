@@ -68,6 +68,7 @@ export function SettingsContextBigPicture() {
         <h3>{t("big_picture_startup")}</h3>
 
         <CheckboxField
+          id="settings-big-picture-startup"
           label={t("launch_hydra_in_big_picture")}
           checked={form.launchInBigPicture}
           onChange={() =>
@@ -82,6 +83,7 @@ export function SettingsContextBigPicture() {
         <h3>{t("big_picture_audio")}</h3>
 
         <CheckboxField
+          id="settings-big-picture-sounds"
           label={t("big_picture_enable_sounds")}
           checked={form.bigPictureSoundsEnabled}
           onChange={() =>
@@ -96,6 +98,7 @@ export function SettingsContextBigPicture() {
         <h3>{t("big_picture_input")}</h3>
 
         <CheckboxField
+          id="settings-big-picture-virtual-keyboard"
           label={t("big_picture_enable_virtual_keyboard")}
           checked={form.bigPictureVirtualKeyboardEnabled}
           onChange={() =>
@@ -111,6 +114,7 @@ export function SettingsContextBigPicture() {
         <h3>{t("big_picture_diagnostics")}</h3>
 
         <CheckboxField
+          id="settings-big-picture-diagnostics"
           label={t("big_picture_enable_diagnostics")}
           checked={form.bigPictureDiagnosticsEnabled}
           onChange={() =>
@@ -121,6 +125,7 @@ export function SettingsContextBigPicture() {
         />
 
         <SelectField
+          id="settings-big-picture-diagnostics-position"
           label={t("big_picture_diagnostics_position")}
           value={form.bigPictureDiagnosticsPosition}
           onChange={(e) =>

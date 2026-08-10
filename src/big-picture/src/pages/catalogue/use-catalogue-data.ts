@@ -5,6 +5,7 @@ import type {
   EmulatorSystem,
 } from "@types";
 import { levelDBService } from "@renderer/services/leveldb.service";
+import { resolveExternalResourcesUrl } from "@renderer/helpers/external-resources";
 import axios from "axios";
 import {
   useCallback,
@@ -33,28 +34,27 @@ export enum FilterType {
   Developers = "developers",
 }
 
+export type CatalogueMetadataStatus =
+  | "loading"
+  | "ready"
+  | "partial"
+  | "unavailable";
+
+interface CatalogueFacet<T> {
+  data: T;
+  label: string;
+  color: string;
+  status: CatalogueMetadataStatus;
+}
+
 export interface CatalogueData {
-  [FilterType.Genres]: { data: string[]; label: string; color: string };
-  [FilterType.Tags]: {
-    data: Record<string, number>;
-    label: string;
-    color: string;
-  };
-  [FilterType.DownloadSourceFingerprints]: {
-    data: Record<string, string>;
-    label: string;
-    color: string;
-  };
-  [FilterType.Developers]: {
-    data: string[];
-    label: string;
-    color: string;
-  };
-  [FilterType.Publishers]: {
-    data: string[];
-    label: string;
-    color: string;
-  };
+  [FilterType.Genres]: CatalogueFacet<string[]>;
+  [FilterType.Tags]: CatalogueFacet<Record<string, number>>;
+  [FilterType.DownloadSourceFingerprints]: CatalogueFacet<
+    Record<string, string>
+  >;
+  [FilterType.Developers]: CatalogueFacet<string[]>;
+  [FilterType.Publishers]: CatalogueFacet<string[]>;
 }
 
 export interface SearchGamesFormValues {
@@ -137,7 +137,9 @@ interface SteamTagsResponse {
 }
 
 const externalResourcesInstance = axios.create({
-  baseURL: import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL,
+  baseURL: resolveExternalResourcesUrl(
+    import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL
+  ),
 });
 
 function parseJsonParam(value: string | null): unknown {
@@ -188,6 +190,15 @@ export function useCatalogueData() {
   const [steamDevelopers, setSteamDevelopers] = useState<string[]>([]);
   const [steamPublishers, setSteamPublishers] = useState<string[]>([]);
   const [downloadSources, setDownloadSources] = useState<DownloadSource[]>([]);
+  const [metadataStatus, setMetadataStatus] = useState<
+    Record<FilterType, CatalogueMetadataStatus>
+  >({
+    [FilterType.Genres]: "loading",
+    [FilterType.Tags]: "loading",
+    [FilterType.Developers]: "loading",
+    [FilterType.Publishers]: "loading",
+    [FilterType.DownloadSourceFingerprints]: "loading",
+  });
   const [searchData, setSearchData] = useState<SearchGamesResponseData>();
   const [isLoadingSearch, setIsLoadingSearch] = useState(true);
   const [searchError, setSearchError] = useState<Error | null>(null);
@@ -329,19 +340,33 @@ export function useCatalogueData() {
       if (cancelled) return;
 
       if (genresResponse.status === "fulfilled") {
-        setSteamGenres(genresResponse.value.data.en);
+        const genres = Array.isArray(genresResponse.value.data.en)
+          ? genresResponse.value.data.en
+          : [];
+        setSteamGenres(genres);
       }
 
       if (tagsResponse.status === "fulfilled") {
-        setSteamTags(tagsResponse.value.data.en);
+        const tags = tagsResponse.value.data.en;
+        setSteamTags(
+          tags && typeof tags === "object" && !Array.isArray(tags) ? tags : {}
+        );
       }
 
       if (developersResponse.status === "fulfilled") {
-        setSteamDevelopers(developersResponse.value.data);
+        setSteamDevelopers(
+          Array.isArray(developersResponse.value.data)
+            ? developersResponse.value.data
+            : []
+        );
       }
 
       if (publishersResponse.status === "fulfilled") {
-        setSteamPublishers(publishersResponse.value.data);
+        setSteamPublishers(
+          Array.isArray(publishersResponse.value.data)
+            ? publishersResponse.value.data
+            : []
+        );
       }
 
       if (rawDownloadSources.status === "fulfilled") {
@@ -351,6 +376,36 @@ export function useCatalogueData() {
           )
         );
       }
+
+      setMetadataStatus({
+        [FilterType.Genres]:
+          genresResponse.status === "fulfilled" &&
+          Array.isArray(genresResponse.value.data.en) &&
+          genresResponse.value.data.en.length > 0
+            ? "ready"
+            : "unavailable",
+        [FilterType.Tags]:
+          tagsResponse.status === "fulfilled" &&
+          tagsResponse.value.data.en &&
+          typeof tagsResponse.value.data.en === "object" &&
+          Object.keys(tagsResponse.value.data.en).length > 0
+            ? "ready"
+            : "unavailable",
+        [FilterType.Developers]:
+          developersResponse.status === "fulfilled" &&
+          Array.isArray(developersResponse.value.data) &&
+          developersResponse.value.data.length > 0
+            ? "ready"
+            : "unavailable",
+        [FilterType.Publishers]:
+          publishersResponse.status === "fulfilled" &&
+          Array.isArray(publishersResponse.value.data) &&
+          publishersResponse.value.data.length > 0
+            ? "ready"
+            : "unavailable",
+        [FilterType.DownloadSourceFingerprints]:
+          rawDownloadSources.status === "fulfilled" ? "ready" : "unavailable",
+      });
     };
 
     loadMetadata();
@@ -489,41 +544,66 @@ export function useCatalogueData() {
   }, [downloadSources]);
 
   const catalogueData = useMemo<CatalogueData>(() => {
+    const visibleResultGenres = Array.from(
+      new Set(searchData?.edges.flatMap((game) => game.genres) ?? [])
+    ).sort((left, right) => left.localeCompare(right));
+    const resolvedGenres =
+      steamGenres.length > 0 ? steamGenres : visibleResultGenres;
+    const genresStatus =
+      metadataStatus[FilterType.Genres] === "unavailable" &&
+      visibleResultGenres.length > 0
+        ? "partial"
+        : metadataStatus[FilterType.Genres];
+
     return {
       [FilterType.Genres]: {
-        data: steamGenres,
+        data: resolvedGenres,
         label: "Genres",
         color: "magenta",
+        status: genresStatus,
       },
       [FilterType.Tags]: {
         data: steamTags,
         label: "Tags",
         color: "yellow",
+        status: metadataStatus[FilterType.Tags],
       },
       [FilterType.DownloadSourceFingerprints]: {
         data: downloadSourcesAndFingerprints,
         label: "Download Sources",
         color: "red",
+        status: metadataStatus[FilterType.DownloadSourceFingerprints],
       },
       [FilterType.Developers]: {
         data: steamDevelopers,
         label: "Developers",
         color: "cyan",
+        status: metadataStatus[FilterType.Developers],
       },
       [FilterType.Publishers]: {
         data: steamPublishers,
         label: "Publishers",
         color: "lime",
+        status: metadataStatus[FilterType.Publishers],
       },
     };
   }, [
     downloadSourcesAndFingerprints,
+    metadataStatus,
+    searchData?.edges,
     steamDevelopers,
     steamGenres,
     steamPublishers,
     steamTags,
   ]);
   const totalPages = Math.ceil((searchData?.count ?? 0) / pageSize);
+  const catalogueMetadataState = Object.values(metadataStatus).some(
+    (status) => status === "loading"
+  )
+    ? "loading"
+    : Object.values(metadataStatus).some((status) => status === "unavailable")
+      ? "unavailable"
+      : "ready";
 
   const changePage = useCallback((nextPage: number) => {
     setIsLoadingSearch(true);
@@ -538,6 +618,7 @@ export function useCatalogueData() {
     values,
     updateSearchParams,
     catalogueData,
+    catalogueMetadataState,
     platform,
     consoleSystem,
     setPlatform,

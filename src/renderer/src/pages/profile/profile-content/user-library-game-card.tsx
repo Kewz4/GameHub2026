@@ -20,6 +20,7 @@ import {
 import { MAX_MINUTES_TO_SHOW_IN_PLAYTIME } from "@renderer/constants";
 import { Tooltip } from "react-tooltip";
 import { useTranslation } from "react-i18next";
+import { profileGameHasAchievements } from "./profile-library-data";
 import "./user-library-game-card.scss";
 
 interface UserLibraryGameCardProps {
@@ -55,7 +56,7 @@ export function UserLibraryGameCard({
 
   const buildUserGameDetailsPath = useCallback(
     (game: UserGame) => {
-      if (!userProfile?.hasActiveSubscription || game.achievementCount === 0) {
+      if (!profileGameHasAchievements(game)) {
         return buildGameDetailsPath({
           ...game,
           objectId: game.objectId,
@@ -169,56 +170,53 @@ export function UserLibraryGameCard({
               </span>
             </div>
 
-            {userProfile?.hasActiveSubscription &&
-              game.achievementCount > 0 && (
-                <div className="user-library-game__stats">
-                  <div className="user-library-game__stats-header">
-                    <div className="user-library-game__stats-content">
+            {profileGameHasAchievements(game) && (
+              <div className="user-library-game__stats">
+                <div className="user-library-game__stats-header">
+                  <div className="user-library-game__stats-content">
+                    <div
+                      className="user-library-game__stats-item"
+                      style={{
+                        transform: `translateY(${-100 * (statIndex % getStatsItemCount())}%)`,
+                      }}
+                    >
+                      <TrophyIcon size={13} />
+                      <span>
+                        {game.unlockedAchievementCount} /{" "}
+                        {game.achievementCount}
+                      </span>
+                    </div>
+
+                    {game.achievementsPointsEarnedSum > 0 && (
                       <div
                         className="user-library-game__stats-item"
                         style={{
                           transform: `translateY(${-100 * (statIndex % getStatsItemCount())}%)`,
                         }}
                       >
-                        <TrophyIcon size={13} />
-                        <span>
-                          {game.unlockedAchievementCount} /{" "}
-                          {game.achievementCount}
-                        </span>
+                        <GameHubIcon width={16} height={16} />
+                        {formatAchievementPoints(
+                          game.achievementsPointsEarnedSum
+                        )}
                       </div>
-
-                      {game.achievementsPointsEarnedSum > 0 && (
-                        <div
-                          className="user-library-game__stats-item"
-                          style={{
-                            transform: `translateY(${-100 * (statIndex % getStatsItemCount())}%)`,
-                          }}
-                        >
-                          <GameHubIcon width={16} height={16} />
-                          {formatAchievementPoints(
-                            game.achievementsPointsEarnedSum
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <span>
-                      {formatDownloadProgress(
-                        game.unlockedAchievementCount / game.achievementCount,
-                        1
-                      )}
-                    </span>
+                    )}
                   </div>
 
-                  <progress
-                    max={1}
-                    value={
-                      game.unlockedAchievementCount / game.achievementCount
-                    }
-                    className="user-library-game__achievements-progress"
-                  />
+                  <span>
+                    {formatDownloadProgress(
+                      game.unlockedAchievementCount / game.achievementCount,
+                      1
+                    )}
+                  </span>
                 </div>
-              )}
+
+                <progress
+                  max={1}
+                  value={game.unlockedAchievementCount / game.achievementCount}
+                  className="user-library-game__achievements-progress"
+                />
+              </div>
+            )}
           </div>
 
           {imageError || !game.coverImageUrl ? (

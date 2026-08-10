@@ -67,11 +67,71 @@ function getContainerRect(container: HTMLElement): DOMRect {
   return container.getBoundingClientRect();
 }
 
-function getSafeMargin(containerRect: DOMRect): { x: number; y: number } {
+interface NavigationScrollPadding {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
+
+export function resolveNavigationScrollInsets(
+  containerSize: { width: number; height: number },
+  scrollPadding: NavigationScrollPadding = {}
+) {
+  const horizontalMargin = Math.min(
+    SAFE_SCROLL_MARGIN,
+    Math.max(0, containerSize.width / 2 - 1)
+  );
+  const verticalMargin = Math.min(
+    SAFE_SCROLL_MARGIN,
+    Math.max(0, containerSize.height / 2 - 1)
+  );
+
   return {
-    x: Math.min(SAFE_SCROLL_MARGIN, Math.max(0, containerRect.width / 2 - 1)),
-    y: Math.min(SAFE_SCROLL_MARGIN, Math.max(0, containerRect.height / 2 - 1)),
+    top: Math.max(verticalMargin, scrollPadding.top ?? 0),
+    right: Math.max(horizontalMargin, scrollPadding.right ?? 0),
+    bottom: Math.max(verticalMargin, scrollPadding.bottom ?? 0),
+    left: Math.max(horizontalMargin, scrollPadding.left ?? 0),
   };
+}
+
+function parsePixelValue(value: string) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getSafeInsets(containerRect: DOMRect, container: HTMLElement) {
+  const style = globalThis.getComputedStyle(container);
+
+  return resolveNavigationScrollInsets(
+    { width: containerRect.width, height: containerRect.height },
+    {
+      top: parsePixelValue(style.scrollPaddingTop),
+      right: parsePixelValue(style.scrollPaddingRight),
+      bottom: parsePixelValue(style.scrollPaddingBottom),
+      left: parsePixelValue(style.scrollPaddingLeft),
+    }
+  );
+}
+
+function canScrollAxis(container: HTMLElement, axis: "x" | "y") {
+  if (container === document.scrollingElement) return true;
+
+  const style = globalThis.getComputedStyle(container);
+  const overflow = axis === "x" ? style.overflowX : style.overflowY;
+
+  return /(auto|scroll|overlay)/.test(overflow);
+}
+
+export function resolveNavigationScrollAxisTarget(options: {
+  current: number;
+  delta: number;
+  maximum: number;
+  enabled: boolean;
+}) {
+  if (!options.enabled) return 0;
+
+  return clamp(options.current + options.delta, 0, options.maximum);
 }
 
 function getRectCenter(rect: DOMRect) {
@@ -198,12 +258,12 @@ function animateScroll(
 
 function getKeepVisibleTarget(rect: DOMRect, container: HTMLElement) {
   const containerRect = getContainerRect(container);
-  const safeMargin = getSafeMargin(containerRect);
+  const safeInsets = getSafeInsets(containerRect, container);
 
-  const safeTop = containerRect.top + safeMargin.y;
-  const safeBottom = containerRect.bottom - safeMargin.y;
-  const safeLeft = containerRect.left + safeMargin.x;
-  const safeRight = containerRect.right - safeMargin.x;
+  const safeTop = containerRect.top + safeInsets.top;
+  const safeBottom = containerRect.bottom - safeInsets.bottom;
+  const safeLeft = containerRect.left + safeInsets.left;
+  const safeRight = containerRect.right - safeInsets.right;
 
   let deltaY = 0;
   let deltaX = 0;
@@ -224,32 +284,46 @@ function getKeepVisibleTarget(rect: DOMRect, container: HTMLElement) {
   const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
 
   return {
-    left: clamp(container.scrollLeft + deltaX, 0, maxLeft),
-    top: clamp(container.scrollTop + deltaY, 0, maxTop),
+    left: resolveNavigationScrollAxisTarget({
+      current: container.scrollLeft,
+      delta: deltaX,
+      maximum: maxLeft,
+      enabled: canScrollAxis(container, "x"),
+    }),
+    top: resolveNavigationScrollAxisTarget({
+      current: container.scrollTop,
+      delta: deltaY,
+      maximum: maxTop,
+      enabled: canScrollAxis(container, "y"),
+    }),
   };
 }
 
 function getPreferCenterTarget(rect: DOMRect, container: HTMLElement) {
   const containerRect = getContainerRect(container);
-  const safeMargin = getSafeMargin(containerRect);
+  const safeInsets = getSafeInsets(containerRect, container);
   const maxTop = Math.max(0, container.scrollHeight - container.clientHeight);
   const maxLeft = Math.max(0, container.scrollWidth - container.clientWidth);
 
   const currentRectHeight = rect.height;
-  const availableHeight = Math.max(0, containerRect.height - safeMargin.y * 2);
+  const availableHeight = Math.max(
+    0,
+    containerRect.height - safeInsets.top - safeInsets.bottom
+  );
   const currentCenter = getRectCenter(rect);
-  const containerCenter = getRectCenter(containerRect);
+  const safeCenterY =
+    containerRect.top + safeInsets.top + Math.max(0, availableHeight) / 2;
 
   const top =
     currentRectHeight >= availableHeight
-      ? container.scrollTop + (rect.top - containerRect.top) - safeMargin.y
-      : container.scrollTop + (currentCenter.y - containerCenter.y);
+      ? container.scrollTop + (rect.top - containerRect.top) - safeInsets.top
+      : container.scrollTop + (currentCenter.y - safeCenterY);
 
   const horizontalTarget = getKeepVisibleTarget(rect, container);
 
   return {
     left: clamp(horizontalTarget.left, 0, maxLeft),
-    top: clamp(top, 0, maxTop),
+    top: canScrollAxis(container, "y") ? clamp(top, 0, maxTop) : 0,
   };
 }
 

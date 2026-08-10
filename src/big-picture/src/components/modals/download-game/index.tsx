@@ -27,6 +27,7 @@ import {
   useUserPreferences,
 } from "../../../hooks";
 import { useNavigationStore } from "../../../stores";
+import { NAVIGATION_SCREEN_ACTION_PRIORITY } from "../../../services";
 import {
   Button,
   Checkbox,
@@ -251,7 +252,8 @@ export function DownloadGameModal({
   };
 
   useNavigationScreenActions(
-    isntFirstStep ? { press: { b: handleOnBack } } : {}
+    isntFirstStep ? { press: { b: handleOnBack } } : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.modalFlow }
   );
 
   const stepTransitionKey =

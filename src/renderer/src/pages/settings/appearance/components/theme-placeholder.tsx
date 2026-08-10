@@ -22,11 +22,12 @@ export const ThemePlaceholder = ({ onListUpdated }: ThemePlaceholderProps) => {
       />
 
       <button
+        type="button"
         className="theme-placeholder"
         onClick={() => setAddThemeModalVisible(true)}
       >
         <div className="theme-placeholder__icon">
-          <AlertIcon />
+          <AlertIcon aria-hidden="true" />
         </div>
 
         <p className="theme-placeholder__text">{t("no_themes")}</p>

@@ -20,6 +20,7 @@ interface FormValues {
 
 export function SettingsAccount() {
   const { t } = useTranslation("settings");
+  const { t: tUserProfile } = useTranslation("user_profile");
 
   const [isUnblocking, setIsUnblocking] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -95,7 +96,11 @@ export function SettingsAccount() {
   if (!userDetails) return null;
 
   return (
-    <form className="settings-account__form" onSubmit={handleSubmit(onSubmit)}>
+    <form
+      className="settings-account__form"
+      data-settings-account
+      onSubmit={handleSubmit(onSubmit)}
+    >
       <Controller
         control={control}
         name="profileVisibility"
@@ -110,6 +115,7 @@ export function SettingsAccount() {
           return (
             <section className="settings-account__section">
               <SelectField
+                id="settings-profile-visibility"
                 label={t("profile_visibility")}
                 value={field.value}
                 onChange={handleChange}
@@ -129,7 +135,11 @@ export function SettingsAccount() {
 
       <section className="settings-account__section">
         <h4>{t("current_username")}</h4>
-        <p>{userDetails?.username}</p>
+        <p>
+          {userDetails?.username?.trim() ||
+            userDetails?.displayName ||
+            "GameHub user"}
+        </p>
 
         <h4>{t("current_email")}</h4>
         <p>{userDetails?.email ?? t("no_email_account")}</p>
@@ -139,7 +149,7 @@ export function SettingsAccount() {
             theme="outline"
             onClick={() => window.electron.openAuthWindow(AuthPage.UpdateEmail)}
           >
-            <MailIcon />
+            <MailIcon aria-hidden="true" />
             {t("update_email")}
           </Button>
 
@@ -149,7 +159,7 @@ export function SettingsAccount() {
               window.electron.openAuthWindow(AuthPage.UpdatePassword)
             }
           >
-            <KeyIcon />
+            <KeyIcon aria-hidden="true" />
             {t("update_password")}
           </Button>
         </div>
@@ -157,7 +167,7 @@ export function SettingsAccount() {
 
       <section className="settings-account__section">
         <h3>{t("settings_sync_title")}</h3>
-        <p style={{ marginBottom: 8, opacity: 0.7, fontSize: 13 }}>
+        <p className="settings-account__sync-description">
           {t("settings_sync_description")}
         </p>
         <div className="settings-account__actions">
@@ -175,7 +185,7 @@ export function SettingsAccount() {
               }
             }}
           >
-            <CloudIcon />
+            <CloudIcon aria-hidden="true" />
             {isBackingUp ? t("backing_up") : t("backup_settings")}
           </Button>
 
@@ -194,7 +204,7 @@ export function SettingsAccount() {
               }
             }}
           >
-            <DownloadIcon />
+            <DownloadIcon aria-hidden="true" />
             {isRestoring ? t("restoring") : t("restore_settings")}
           </Button>
         </div>
@@ -223,8 +233,10 @@ export function SettingsAccount() {
                     className="settings-account__unblock-button"
                     onClick={() => handleUnblockClick(user.id)}
                     disabled={isUnblocking}
+                    aria-label={`${tUserProfile("unblock")} ${user.displayName}`}
+                    title={`${tUserProfile("unblock")} ${user.displayName}`}
                   >
-                    <XCircleFillIcon />
+                    <XCircleFillIcon aria-hidden="true" />
                   </button>
                 </li>
               );

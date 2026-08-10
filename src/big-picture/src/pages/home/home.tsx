@@ -721,7 +721,7 @@ export default function Home() {
           showRightFade
         />
         <FocusCarousel
-          title="Popular on Hydra"
+          title="Popular on GameHub"
           cardVariant="vertical"
           games={weeklyGames}
           regionId={HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID}

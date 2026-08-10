@@ -20,8 +20,13 @@ import {
   excludeOverlayLaunchHelpers,
   rankOverlayGameProcesses,
   selectOverlayRenderProcess,
+  selectUnambiguousOverlayRenderProcess,
 } from "../../src/main/services/overlay-game-process-ranking.ts";
-import { OverlayInputGateController } from "../../src/main/services/overlay-input-gate.ts";
+import {
+  OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+  OverlayInputGateController,
+  type OverlayInputGateNativeStatus,
+} from "../../src/main/services/overlay-input-gate.ts";
 
 const require = createRequire(import.meta.url);
 
@@ -141,6 +146,23 @@ test("selects a visible nested renderer over a hidden same-name launcher", () =>
   assert.equal(selectOverlayRenderProcess(ranked, new Set(), 20)?.pid, 20);
 });
 
+test("requires foreground to disambiguate multiple visible render processes", () => {
+  const candidates = [
+    { pid: 10, score: 10_000 },
+    { pid: 20, score: 9_000 },
+  ];
+  const visible = new Set([10, 20]);
+
+  assert.equal(
+    selectUnambiguousOverlayRenderProcess(candidates, visible, 10, 20)?.pid,
+    20
+  );
+  assert.equal(
+    selectUnambiguousOverlayRenderProcess(candidates, visible, 10, 999),
+    null
+  );
+});
+
 test("bounds silent PresentMon retries with increasing backoff", () => {
   assert.deepEqual(getPresentMonRetry(1), {
     delayMs: 2_000,
@@ -153,9 +175,27 @@ test("bounds silent PresentMon retries with increasing backoff", () => {
   assert.equal(getPresentMonRetry(PRESENTMON_MAX_CAPTURE_ATTEMPTS), null);
 });
 
-test("blocks only after the prepared overlay is visible and focused", async () => {
+const gateStatus = (
+  pid: number,
+  overrides: Partial<OverlayInputGateNativeStatus> = {}
+): OverlayInputGateNativeStatus => ({
+  ready: false,
+  ownerPid: 1,
+  targetPid: pid,
+  blocked: false,
+  generation: 7,
+  readyPid: 0,
+  readyGeneration: 0,
+  capabilityMask: 0,
+  unsupportedModuleMask: 0,
+  hookStatus: 0,
+  ...overrides,
+});
+
+test("blocks only after the injected worker positively acknowledges readiness", async () => {
   const writes: Array<[number, boolean]> = [];
   let finishInjection: (ready: boolean) => void = () => undefined;
+  let status = gateStatus(42);
   const controller = new OverlayInputGateController({
     create: () => true,
     set: (pid, blocked) => {
@@ -166,16 +206,12 @@ test("blocks only after the prepared overlay is visible and focused", async () =
       new Promise<boolean>((resolve) => {
         finishInjection = resolve;
       }),
+    status: () => status,
   });
 
   controller.initialize();
   controller.setTarget(42);
-  controller.setOverlayState(true, false);
-  assert.equal(
-    writes.some(([pid, blocked]) => pid === 42 && blocked),
-    false
-  );
-  controller.setOverlayState(true, true);
+  const readiness = controller.waitUntilReady(42, 100, 1);
   assert.equal(
     writes.some(([pid, blocked]) => pid === 42 && blocked),
     false
@@ -183,10 +219,24 @@ test("blocks only after the prepared overlay is visible and focused", async () =
 
   finishInjection(true);
   await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(
+    writes.some(([pid, blocked]) => pid === 42 && blocked),
+    false,
+    "LoadLibrary success must not arm the gate"
+  );
+  status = gateStatus(42, {
+    ready: true,
+    readyPid: 42,
+    readyGeneration: 7,
+    capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+    hookStatus: 301,
+  });
+  assert.equal((await readiness).ready, true);
+  assert.equal(controller.activate(42), true);
   assert.deepEqual(writes.at(-1), [42, true]);
 
-  controller.setOverlayState(false, false);
-  assert.deepEqual(writes.at(-1), [0, false]);
+  controller.release();
+  assert.deepEqual(writes.at(-1), [42, false]);
   controller.dispose();
   assert.deepEqual(writes.at(-1), [0, false]);
 });
@@ -194,6 +244,7 @@ test("blocks only after the prepared overlay is visible and focused", async () =
 test("a stale injection cannot block a new target", async () => {
   const writes: Array<[number, boolean]> = [];
   const injections = new Map<number, (ready: boolean) => void>();
+  let status = gateStatus(10);
   const controller = new OverlayInputGateController({
     create: () => true,
     set: (pid, blocked) => {
@@ -202,30 +253,71 @@ test("a stale injection cannot block a new target", async () => {
     },
     inject: (pid) =>
       new Promise<boolean>((resolve) => injections.set(pid, resolve)),
+    status: () => status,
   });
 
   controller.initialize();
   controller.setTarget(10);
-  controller.setOverlayState(true, true);
+  const staleReadiness = controller.waitUntilReady(10, 100, 1);
   controller.setTarget(20);
   injections.get(10)?.(true);
-  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal((await staleReadiness).ready, false);
   assert.equal(
     writes.some(([pid, blocked]) => pid === 10 && blocked),
     false
   );
 
+  status = gateStatus(20, {
+    ready: true,
+    readyPid: 20,
+    readyGeneration: 7,
+    capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+  });
   injections.get(20)?.(true);
   await new Promise((resolve) => setImmediate(resolve));
+  assert.equal((await controller.waitUntilReady(20, 10, 1)).ready, true);
+  assert.equal(controller.activate(20), true);
   assert.deepEqual(writes.at(-1), [20, true]);
   controller.setTarget(0);
   assert.deepEqual(writes.at(-1), [0, false]);
 });
 
+test("rejects a ready hook when an unsupported input stack is observed", async () => {
+  const writes: Array<[number, boolean]> = [];
+  const status = gateStatus(55, {
+    ready: true,
+    readyPid: 55,
+    readyGeneration: 7,
+    capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+    unsupportedModuleMask: 1,
+  });
+  const controller = new OverlayInputGateController({
+    create: () => true,
+    set: (pid, blocked) => {
+      writes.push([pid, blocked]);
+      return true;
+    },
+    inject: async () => true,
+    status: () => status,
+  });
+  controller.setTarget(55);
+  const readiness = await controller.waitUntilReady(55, 10, 1);
+  assert.deepEqual(readiness, {
+    ready: false,
+    reason: "unsupported",
+    status,
+  });
+  assert.equal(controller.activate(55), false);
+  assert.equal(
+    writes.some(([pid, blocked]) => pid === 55 && blocked),
+    false
+  );
+});
+
 test(
   "the injected Win32 gate neutralizes a real input poll and restores it",
   { skip: process.platform !== "win32" },
-  async () => {
+  async (context) => {
     const fixturePath = path.resolve(
       "native/hydra-native/target/release/input-gate-fixture.exe"
     );
@@ -237,11 +329,19 @@ test(
     const native = require(addonPath) as {
       createOverlayInputGate(): boolean;
       setOverlayInputGate(pid: number, blocked: boolean): boolean;
+      getOverlayInputGateStatus?: (pid: number) => OverlayInputGateNativeStatus;
       injectInputHook(
         pid: number,
         dllPath: string
       ): { injected: boolean; stage: string; errorCode: number };
     };
+    const getGateStatus = native.getOverlayInputGateStatus;
+    if (typeof getGateStatus !== "function") {
+      context.skip(
+        "native addon has not been rebuilt with gate status support"
+      );
+      return;
+    }
     const fixture = spawn(fixturePath, [], { stdio: ["pipe", "pipe", "pipe"] });
     const lines = createInterface({ input: fixture.stdout });
     const pending: Array<(line: string) => void> = [];
@@ -263,7 +363,7 @@ test(
       targetPid = Number(ready[1]);
       assert.equal(ready[2], "1", "synthetic F24 press was not visible");
       assert.equal(native.createOverlayInputGate(), true);
-      assert.equal(native.setOverlayInputGate(0, false), true);
+      assert.equal(native.setOverlayInputGate(targetPid, false), true);
 
       const injection = native.injectInputHook(targetPid, hookPath);
       assert.deepEqual(injection, {
@@ -271,7 +371,18 @@ test(
         stage: "ok",
         errorCode: 0,
       });
-      await new Promise((resolve) => setTimeout(resolve, 2_300));
+      const readinessDeadline = Date.now() + 5_000;
+      let gateReadiness = getGateStatus(targetPid);
+      while (!gateReadiness.ready && Date.now() < readinessDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        gateReadiness = getGateStatus(targetPid);
+      }
+      assert.equal(gateReadiness.ready, true, "hook handshake timed out");
+      assert.equal(
+        gateReadiness.capabilityMask & OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+        OVERLAY_INPUT_REQUIRED_CAPABILITIES
+      );
+      assert.equal(gateReadiness.unsupportedModuleMask, 0);
 
       fixture.stdin.write("status\n");
       const status = (await nextLine()).split("\t");
@@ -287,6 +398,7 @@ test(
       fixture.stdin.write("poll\n");
       assert.equal(await nextLine(), "POLL\t0");
       assert.equal(native.setOverlayInputGate(0, false), true);
+      assert.equal(getGateStatus(targetPid).ready, false);
       fixture.stdin.write("poll\n");
       assert.equal(await nextLine(), "POLL\t1");
     } finally {

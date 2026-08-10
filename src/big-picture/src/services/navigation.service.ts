@@ -1460,6 +1460,7 @@ export class NavigationService {
       target.entryDirection ?? direction,
       {
         preferRememberedFocus: target.preferRememberedFocus,
+        initialFocusId: target.initialFocusId,
       }
     );
   }
@@ -1503,6 +1504,18 @@ export class NavigationService {
   ): string | null {
     if (!this.isRegionInActiveLayer(regionId)) {
       return null;
+    }
+
+    const initialFocusId = options.initialFocusId;
+
+    if (
+      initialFocusId &&
+      this.nodes.has(initialFocusId) &&
+      this.isNodeActive(initialFocusId) &&
+      this.isNodeWithinRegion(initialFocusId, regionId) &&
+      this.isNodeInActiveLayer(initialFocusId)
+    ) {
+      return initialFocusId;
     }
 
     const rememberedNodeId =
@@ -1695,7 +1708,9 @@ export class NavigationService {
     if (left.type === "region" && right.type === "region") {
       return (
         left.regionId === right.regionId &&
-        left.entryDirection === right.entryDirection
+        left.entryDirection === right.entryDirection &&
+        left.preferRememberedFocus === right.preferRememberedFocus &&
+        left.initialFocusId === right.initialFocusId
       );
     }
 
@@ -1868,6 +1883,7 @@ export class NavigationService {
       target.entryDirection ?? direction,
       {
         preferRememberedFocus: target.preferRememberedFocus,
+        initialFocusId: target.initialFocusId,
       }
     );
 

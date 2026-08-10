@@ -1,6 +1,8 @@
 export const FRIENDS_PAGE_REGION_ID = "friends-page";
 export const FRIENDS_REQUESTS_REGION_ID = "friends-page-requests";
 export const FRIENDS_LIST_REGION_ID = "friends-page-list";
+export const FRIENDS_RETRY_BUTTON_ID = "friends-page-retry";
+export const FRIENDS_REFRESH_BUTTON_ID = "friends-page-refresh";
 
 export function getFriendRequestAcceptFocusId(id: string) {
   return `friend-request-accept:${id}`;

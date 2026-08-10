@@ -15,6 +15,7 @@ import { buildTasteProfile, rankRecommendations } from "./recommender";
 import { isMechanicTag, parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
 import { getRecommendedClassics } from "./recommender-classics";
+import { buildExternalResourceUrl } from "@renderer/helpers/external-resources";
 
 /** A thumbs-up recommendation counts like a well-liked, moderately-played game. */
 const LIKE_SYNTHETIC_HOURS = 8;
@@ -79,7 +80,10 @@ async function getTagDictionary(language: string): Promise<TagDictionary> {
   if (tagDictCache) return tagDictCache;
   try {
     const response = await fetch(
-      `${import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL}/steam-user-tags.json`
+      buildExternalResourceUrl(
+        "/steam-user-tags.json",
+        import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL
+      )
     );
     const data = (await response.json()) as Record<
       string,

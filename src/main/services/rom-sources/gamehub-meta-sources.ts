@@ -87,6 +87,39 @@ interface HostedMetaFile {
   games: Record<string, GameHubMetaEntry>;
 }
 
+const localMetaCache = new Map<EmulatorSystem, HostedMetaFile | null>();
+
+/**
+ * Read one entry straight from the bundled metadata file. This is the
+ * read-only fallback used by game details while the background LevelDB seed is
+ * still running (and by visual-QA sessions, which intentionally disable all
+ * database writes). Keeping this lookup in memory makes repeat details visits
+ * effectively free.
+ */
+export function getBundledGameHubMeta(
+  system: EmulatorSystem,
+  title: string
+): GameHubMetaEntry | null {
+  let data = localMetaCache.get(system);
+  if (data === undefined) {
+    data = readLocalMeta(system);
+    localMetaCache.set(system, data);
+  }
+
+  if (!data?.games || !title) return null;
+  const normalizedTitle = normalizeMetaTitle(title);
+  const direct = data.games[normalizedTitle];
+  if (direct) return direct;
+
+  // Older generated files used a slightly different JSON key scheme. Match
+  // the raw entry title as a compatibility fallback without trusting that key.
+  return (
+    Object.values(data.games).find(
+      (entry) => normalizeMetaTitle(entry.title) === normalizedTitle
+    ) ?? null
+  );
+}
+
 /**
  * Fetch one system's hosted metadata file and store each entry locally. Returns
  * the number of entries stored (0 when the file is missing or empty).

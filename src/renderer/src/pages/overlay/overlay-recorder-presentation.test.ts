@@ -72,4 +72,25 @@ describe("overlay recorder technical summary", () => {
       "Balanced · 1440p · 120 FPS requested"
     );
   });
+
+  it("identifies the native NVENC backend", () => {
+    assert.equal(
+      getOverlayRecorderTechnicalSummary(
+        {
+          backend: "native_ffmpeg_nvenc",
+          encoderName: "NVIDIA NVENC H.264",
+          mimeType: 'video/mp4;codecs="avc1.640034,mp4a.40.2"',
+          outputWidth: 1920,
+          outputHeight: 1080,
+          outputFps: 60,
+          encodedFps: 59.94,
+          targetVideoBitrate: 56_000_000,
+          recentEncodedBitrate: 48_500_000,
+          hasAudio: true,
+        },
+        { resolution: "1080p", fps: 60, qualityPreset: "quality" }
+      ),
+      "High · NVENC H.264 · 1080p · 59.9 FPS encoded · 48.5 Mbps"
+    );
+  });
 });

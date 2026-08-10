@@ -386,6 +386,7 @@ test(
         chunks?: string[];
         chunkDurationsMs?: number[];
         recorderVideoBitsPerSecond?: number;
+        audioContextStateAfterResume?: AudioContextState;
         gpuFeatureStatus?: { video_encode?: string };
         gpuInfo?: {
           gpuDevice?: Array<{
@@ -405,6 +406,11 @@ test(
       assert.ok(result.chunks && result.chunks.length >= 3);
       assert.equal(result.chunkDurationsMs?.length, result.chunks.length);
       assert.equal(result.recorderVideoBitsPerSecond, requestedCapture.bitrate);
+      assert.equal(
+        result.audioContextStateAfterResume,
+        "running",
+        "Hidden recorder AudioContext did not resume without a user gesture"
+      );
 
       const assembler = new FragmentedMp4SegmentAssembler();
       let eventEndedAt = 0;

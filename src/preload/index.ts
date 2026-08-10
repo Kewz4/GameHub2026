@@ -1951,6 +1951,10 @@ contextBridge.exposeInMainWorld("electron", {
     metadata: GameRecorderSegmentMetadata,
     payload: ArrayBuffer
   ) => ipcRenderer.invoke("gameRecorderCommitSegment", metadata, payload),
+  gameRecorderCommitPcmChunk: (
+    metadata: import("@types").GameRecorderPcmChunkMetadata,
+    payload: ArrayBuffer
+  ) => ipcRenderer.invoke("gameRecorderCommitPcmChunk", metadata, payload),
   gameRecorderCaptureError: (message: string) =>
     ipcRenderer.invoke("gameRecorderCaptureError", message),
   gameRecorderCaptureReady: () =>

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Button, HorizontalFocusGroup } from "../../components";
 import { useNavigationScreenActions } from "../../hooks";
+import { NAVIGATION_SCREEN_ACTION_PRIORITY } from "../../services";
 import {
   CATALOGUE_PAGINATION_FIRST_ID,
   CATALOGUE_PAGINATION_LAST_ID,
@@ -129,7 +130,8 @@ export function CataloguePagination({
             b: closeJump,
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.activeShell }
   );
 
   if (totalPages <= 1) return null;

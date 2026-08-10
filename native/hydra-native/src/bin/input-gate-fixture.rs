@@ -5,6 +5,8 @@
 //! GetAsyncKeyState call must report pressed -> neutral -> pressed.
 
 #[cfg(target_os = "windows")]
+use std::ffi::c_void;
+#[cfg(target_os = "windows")]
 use std::io::{self, BufRead, Write};
 
 #[cfg(target_os = "windows")]
@@ -19,6 +21,12 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 #[cfg(target_os = "windows")]
 fn pressed() -> bool {
     unsafe { GetAsyncKeyState(VK_F24 as i32) < 0 }
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "Xinput9_1_0")]
+extern "system" {
+    fn XInputGetState(user_index: u32, state: *mut c_void) -> u32;
 }
 
 #[cfg(target_os = "windows")]
@@ -47,6 +55,12 @@ fn hook_status() -> (bool, bool, u32) {
 
 #[cfg(target_os = "windows")]
 fn main() {
+    // Keep a real XInput import in the fixture so the handshake validates the
+    // controller path as well as the Win32 keyboard path.
+    let mut xinput_state = [0u8; 16];
+    unsafe {
+        XInputGetState(0, xinput_state.as_mut_ptr().cast());
+    }
     unsafe { keybd_event(VK_F24 as u8, 0, 0, 0) };
     std::thread::sleep(std::time::Duration::from_millis(150));
 

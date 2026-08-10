@@ -59,6 +59,38 @@ export const selectOverlayRenderProcess = <
   ) ??
   null;
 
+/**
+ * Select exactly one visible render process. If more than one candidate owns a
+ * window, foreground is the only permitted tiebreaker. Any remaining ambiguity
+ * returns null so injection can never fan out across a process tree.
+ */
+export const selectUnambiguousOverlayRenderProcess = <
+  T extends Pick<OverlayProcess, "pid">,
+>(
+  candidates: T[],
+  visiblePids: ReadonlySet<number>,
+  currentPid: number,
+  foregroundPid: number
+) => {
+  const visible = candidates.filter((candidate) =>
+    visiblePids.has(candidate.pid)
+  );
+  const foreground = visible.filter(
+    (candidate) => candidate.pid === foregroundPid
+  );
+  if (foreground.length === 1) return foreground[0];
+
+  const current = candidates.find(
+    (candidate) => currentPid > 0 && candidate.pid === currentPid
+  );
+  if (visible.length === 1) return visible[0];
+  if (visible.length > 1) return null;
+
+  // Minimized games have no eligible visible HWND. Retaining a still-running,
+  // previously validated PID is safe; selecting a new hidden process is not.
+  return current ?? null;
+};
+
 const isWithinDirectory = (candidate: string, directory: string) => {
   const relative = path.relative(directory, candidate);
   return (

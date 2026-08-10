@@ -120,7 +120,7 @@ export function RetroAchievementsSection() {
             background: "none",
             border: "none",
             padding: 0,
-            color: "var(--color-accent)",
+            color: "var(--color-text-bright)",
             cursor: "pointer",
             fontSize: "inherit",
             textDecoration: "underline",

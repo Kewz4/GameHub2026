@@ -6,6 +6,12 @@ import {
 } from "@main/level/sublevels/gamehub-meta";
 import { igdb, IGDB_PLATFORM_IDS, extractConsoleMetadata } from "./igdb";
 import { logger } from "./logger";
+import { getBundledGameHubMeta } from "./rom-sources/gamehub-meta-sources";
+import {
+  hasHostedConsoleMetadataExtras,
+  mergeHostedConsoleMetadataExtras,
+  resolveConsoleMetadataCriticScore,
+} from "./console-metadata-extras";
 
 /**
  * Same title normalization the IGDB metadata fetch uses in
@@ -62,24 +68,47 @@ export async function getConsoleGameMetadata(
   const metaKey = system
     ? gamehubMetaKey(system as EmulatorSystem, normalizeMetaTitle(title))
     : null;
-  const entry = metaKey
+  const storedEntry = metaKey
     ? await gamehubMetaSublevel.get(metaKey).catch(() => null)
     : null;
+  const bundledEntry = system
+    ? getBundledGameHubMeta(system as EmulatorSystem, title)
+    : null;
+  const entry = storedEntry ?? bundledEntry;
+  const hostedExtras = mergeHostedConsoleMetadataExtras(
+    storedEntry,
+    bundledEntry
+  );
 
   // HLTB playtimes, the age rating and the LaunchBox box render come from the
   // hosted dataset (populated independently of the IGDB `extraMetadata` cache),
   // so they're merged onto the result at read-time rather than baked into the
   // cached IGDB blob — that way fields added to a later dataset show up without
   // invalidating a good cache.
-  const hltb = entry?.hltb ?? null;
-  const ageRating = entry?.ageRating ?? null;
-  const boxImageUrl = entry?.boxImageUrl ?? null;
+  const { hltb, ageRating, boxImageUrl } = hostedExtras;
   const withExtras = (
     m: ConsoleGameMetadata | null
   ): ConsoleGameMetadata | null => {
-    if (m) return { ...m, hltb, ageRating, boxImageUrl };
-    return hltb || ageRating || boxImageUrl
-      ? { ...EMPTY_CONSOLE_METADATA, hltb, ageRating, boxImageUrl }
+    const hostedCriticScore = hostedExtras.ratingScore;
+    if (m)
+      return {
+        ...m,
+        criticScore: resolveConsoleMetadataCriticScore(
+          hostedCriticScore,
+          m.criticScore
+        ),
+        hltb,
+        ageRating,
+        boxImageUrl,
+      };
+    return hltb || ageRating || boxImageUrl || hostedCriticScore != null
+      ? {
+          ...EMPTY_CONSOLE_METADATA,
+          criticScore: hostedCriticScore,
+          hltb,
+          ageRating,
+          boxImageUrl,
+        }
       : null;
   };
 
@@ -92,36 +121,54 @@ export async function getConsoleGameMetadata(
     return result;
   }
 
-  try {
-    const platformId = system ? IGDB_PLATFORM_IDS[system as string] : undefined;
-    const game = await igdb.searchGame(igdbQueryTitle(title), platformId);
-    const metadata = game ? extractConsoleMetadata(game) : null;
+  const loadIgdbMetadata = async () => {
+    try {
+      const platformId = system
+        ? IGDB_PLATFORM_IDS[system as string]
+        : undefined;
+      const game = await igdb.searchGame(igdbQueryTitle(title), platformId);
+      const metadata = game ? extractConsoleMetadata(game) : null;
 
-    const result = withExtras(metadata);
-    inMemory.set(key, result);
+      const result = withExtras(metadata);
+      inMemory.set(key, result);
 
-    // Persist a successful lookup back into gamehub-meta (best-effort).
-    if (metadata && metaKey) {
-      await gamehubMetaSublevel
-        .put(metaKey, {
-          title,
-          description: null,
-          genres: [],
-          releaseYear: null,
-          coverImageUrl: null,
-          libraryImageUrl: null,
-          libraryHeroImageUrl: null,
-          logoImageUrl: null,
-          ...entry,
-          extraMetadata: metadata,
-          extraMetadataVersion: METADATA_SCHEMA_VERSION,
-        })
-        .catch(() => {});
+      // Persist a successful lookup back into gamehub-meta (best-effort).
+      if (metadata && metaKey) {
+        await gamehubMetaSublevel
+          .put(metaKey, {
+            title,
+            description: null,
+            genres: [],
+            releaseYear: null,
+            coverImageUrl: null,
+            libraryImageUrl: null,
+            libraryHeroImageUrl: null,
+            logoImageUrl: null,
+            ...bundledEntry,
+            ...storedEntry,
+            ratingScore: hostedExtras.ratingScore ?? undefined,
+            hltb: hostedExtras.hltb ?? undefined,
+            ageRating: hostedExtras.ageRating ?? undefined,
+            boxImageUrl: hostedExtras.boxImageUrl,
+            extraMetadata: metadata,
+            extraMetadataVersion: METADATA_SCHEMA_VERSION,
+          })
+          .catch(() => {});
+      }
+
+      return result;
+    } catch (err) {
+      logger.log(`console-metadata: lookup failed: ${(err as Error).message}`);
+      return null;
     }
+  };
 
-    return result;
-  } catch (err) {
-    logger.log(`console-metadata: lookup failed: ${(err as Error).message}`);
-    return null;
+  if (hasHostedConsoleMetadataExtras(hostedExtras)) {
+    const hostedResult = withExtras(null);
+    inMemory.set(key, hostedResult);
+    void loadIgdbMetadata();
+    return hostedResult;
   }
+
+  return loadIgdbMetadata();
 }

@@ -24,6 +24,7 @@ import {
   Typography,
   VerticalFocusGroup,
 } from "../../components";
+import { getBigPictureRoutePath } from "../../helpers";
 import { useBigPictureToast, useUserPreferences } from "../../hooks";
 
 import "./custom-download-modal.scss";
@@ -202,7 +203,7 @@ export function BigPictureCustomDownloadModal({
 
   const handleOpenTorBoxSettings = () => {
     onClose();
-    navigate("/settings?tab=integrations");
+    navigate(getBigPictureRoutePath("/settings?tab=integrations"));
   };
 
   return (

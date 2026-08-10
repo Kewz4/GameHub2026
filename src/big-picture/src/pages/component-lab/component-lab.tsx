@@ -272,14 +272,14 @@ export default function ComponentLab() {
         </Typography>
         <Typography variant="h1">Component Lab</Typography>
         <Typography variant="body">
-          Estados e variações dos componentes migrados para o Big Picture.
+          States and variants for the components used throughout Big Picture.
         </Typography>
       </header>
 
       <div className="catalogue-page__sections">
         <ShowcaseSection
           title="Typography"
-          description="Escala de texto base usada nos componentes."
+          description="Base text scale used throughout the component system."
         >
           <div className="catalogue-page__typography-sample">
             <Typography variant="h1">Heading 1</Typography>
@@ -296,7 +296,7 @@ export default function ComponentLab() {
 
         <ShowcaseSection
           title="Button"
-          description="Variações, tamanhos, loading, disabled e links."
+          description="Variants, sizes, loading, disabled, and link states."
         >
           <div className="catalogue-page__component-row">
             <Button>Primary</Button>
@@ -324,7 +324,7 @@ export default function ComponentLab() {
 
         <ShowcaseSection
           title="Input"
-          description="Label, hint, ícones, erro e disabled."
+          description="Labels, hints, icons, errors, and disabled states."
         >
           <div className="catalogue-page__input-row">
             <Input label="Default" placeholder="GameHub" />
@@ -374,7 +374,7 @@ export default function ComponentLab() {
               variant="label"
               className="catalogue-page__filter-title"
             >
-              Showing search results for <q>hydra</q>
+              Showing search results for <q>gamehub</q>
             </Typography>
 
             <div className="catalogue-page__filter-row">
@@ -547,7 +547,7 @@ export default function ComponentLab() {
             <UserProfile
               image={PROFILE_IMAGE}
               name="UserProfile"
-              friendCode="HYDRA-2026"
+              friendCode="GAMEHUB-2026"
             />
           </div>
         </ShowcaseSection>
@@ -605,7 +605,7 @@ export default function ComponentLab() {
               Basic: image, title and description.
             </Typography>
             <Typography variant="label">
-              Fallback: no image so the Hydra icon should render.
+              Fallback: no image so the GameHub icon should render.
             </Typography>
             <Typography variant="label">
               Accent and Action: highlighted background with game art.
@@ -670,7 +670,7 @@ export default function ComponentLab() {
             />
             <UserDiskItem
               title="GameHub archive drive"
-              path="D:\\Hydra\\Library"
+              path="D:\\GameHub\\Library"
               freeBytes={Math.round(82.6 * 1024 ** 3)}
               totalBytes={2 * 1024 ** 4}
               isSelected

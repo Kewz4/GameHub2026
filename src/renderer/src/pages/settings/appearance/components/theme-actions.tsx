@@ -41,10 +41,10 @@ export const ThemeActions = ({
             theme="primary"
             className="settings-appearance__button"
             onClick={() => {
-              window.open(THEME_WEB_STORE_URL, "_blank");
+              window.electron.openExternal(THEME_WEB_STORE_URL);
             }}
           >
-            <GlobeIcon />
+            <GlobeIcon aria-hidden="true" />
             {t("web_store")}
           </Button>
 
@@ -54,7 +54,7 @@ export const ThemeActions = ({
             onClick={() => setDeleteAllThemesModalVisible(true)}
             disabled={themesCount < 1}
           >
-            <TrashIcon />
+            <TrashIcon aria-hidden="true" />
             {t("clear_themes")}
           </Button>
         </div>
@@ -65,7 +65,7 @@ export const ThemeActions = ({
             className="settings-appearance__button"
             onClick={() => setAddThemeModalVisible(true)}
           >
-            <PlusIcon />
+            <PlusIcon aria-hidden="true" />
             {t("create_theme")}
           </Button>
         </div>

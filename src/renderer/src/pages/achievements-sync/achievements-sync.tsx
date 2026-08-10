@@ -101,7 +101,7 @@ function DebugModal({
                         : d?.hydraApiSync === "no-remote-id"
                           ? "Skipped — game not in your GameHub cloud library"
                           : d?.hydraApiSync === "failed"
-                            ? "✗ Upload failed (subscription/network)"
+                            ? "✗ Upload failed (authentication/network)"
                             : "—"}
               </td>
             </tr>

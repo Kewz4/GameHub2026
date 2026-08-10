@@ -9,6 +9,7 @@ import { Button, Typography, VerticalFocusGroup } from "../../components";
 import { IS_DESKTOP } from "../../constants";
 import { getBigPictureGameDetailsPath } from "../../helpers";
 import {
+  CLOUD_SAVES_EMPTY_REFRESH_ID,
   CLOUD_SAVES_PAGE_REGION_ID,
   getCloudSavesManageFocusId,
 } from "./navigation";
@@ -107,6 +108,13 @@ export default function CloudSavesPage() {
             <Typography>
               Enable Cloud Saves from a game&apos;s options or sync it once.
             </Typography>
+            <Button
+              focusId={CLOUD_SAVES_EMPTY_REFRESH_ID}
+              variant="secondary"
+              onClick={() => void load()}
+            >
+              Refresh
+            </Button>
           </div>
         ) : entries.length > 0 ? (
           <div className="cloud-saves-page__list">

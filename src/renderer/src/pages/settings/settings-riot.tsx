@@ -116,7 +116,7 @@ export function SettingsRiot() {
                     gap: "10px",
                     padding: "8px 12px",
                     borderRadius: "8px",
-                    border: `1px solid ${isChecked ? "var(--color-accent, #5e81f4)" : "rgba(255,255,255,0.1)"}`,
+                    border: `1px solid ${isChecked ? "var(--color-text-bright, #fafafa)" : "rgba(var(--fg-rgb), 0.1)"}`,
                     background: isChecked
                       ? "rgba(94,129,244,0.15)"
                       : "rgba(255,255,255,0.03)",

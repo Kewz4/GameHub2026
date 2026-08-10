@@ -5,6 +5,7 @@ import type { LibraryGame, ProtonVersion } from "@types";
 import {
   Button,
   Checkbox,
+  FileExplorerModal,
   HorizontalFocusGroup,
   Input,
   Radio,
@@ -54,7 +55,6 @@ type ElectronCompatibilityBridge = Pick<
   | "isGamemodeAvailable"
   | "isMangohudAvailable"
   | "getDefaultWinePrefixSelectionPath"
-  | "showOpenDialog"
   | "selectGameWinePrefix"
   | "selectGameProtonPath"
   | "toggleGameGamemode"
@@ -83,6 +83,11 @@ export function GameCompatibilitySettingsTab({
   );
   const [autoRunMangohud, setAutoRunMangohud] = useState(
     game.autoRunMangohud ?? false
+  );
+  const [isWinePrefixPickerVisible, setIsWinePrefixPickerVisible] =
+    useState(false);
+  const [winePrefixPickerPath, setWinePrefixPickerPath] = useState(
+    game.winePrefixPath ?? ""
   );
 
   useEffect(() => {
@@ -150,23 +155,20 @@ export function GameCompatibilitySettingsTab({
     return options;
   }, [protonVersions, t, getProtonSourceDescription]);
 
-  const handleSelectWinePrefix = useCallback(async () => {
+  const handleOpenWinePrefixPicker = useCallback(async () => {
     const defaultPath = await electron.getDefaultWinePrefixSelectionPath();
+    setWinePrefixPickerPath(winePrefixPath ?? defaultPath ?? "");
+    setIsWinePrefixPickerVisible(true);
+  }, [electron, winePrefixPath]);
 
-    const { filePaths } = await electron.showOpenDialog({
-      properties: ["openDirectory"],
-      defaultPath: winePrefixPath ?? defaultPath ?? "",
-    });
-
-    if (filePaths?.length) {
-      await electron.selectGameWinePrefix(
-        game.shop,
-        game.objectId,
-        filePaths[0]
-      );
-      setWinePrefixPath(filePaths[0]);
-    }
-  }, [electron, game.shop, game.objectId, winePrefixPath]);
+  const handleSelectWinePrefix = useCallback(
+    async (path: string) => {
+      await electron.selectGameWinePrefix(game.shop, game.objectId, path);
+      setWinePrefixPath(path);
+      setIsWinePrefixPickerVisible(false);
+    },
+    [electron, game.shop, game.objectId]
+  );
 
   const handleClearWinePrefix = useCallback(async () => {
     await electron.selectGameWinePrefix(game.shop, game.objectId, null);
@@ -252,7 +254,7 @@ export function GameCompatibilitySettingsTab({
               variant="secondary"
               icon={<FolderOpen size={16} />}
               onClick={() => {
-                handleSelectWinePrefix().catch(() => {});
+                handleOpenWinePrefixPicker().catch(() => {});
               }}
               focusNavigationOverrides={{
                 left: {
@@ -345,6 +347,17 @@ export function GameCompatibilitySettingsTab({
           }}
         />
       </SettingsSection>
+
+      <FileExplorerModal
+        visible={isWinePrefixPickerVisible}
+        title={t("wine_prefix")}
+        initialPath={winePrefixPickerPath}
+        selectDirectory
+        onClose={() => setIsWinePrefixPickerVisible(false)}
+        onSelect={(path) => {
+          handleSelectWinePrefix(path).catch(() => {});
+        }}
+      />
     </VerticalFocusGroup>
   );
 }

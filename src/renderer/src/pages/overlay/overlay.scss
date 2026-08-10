@@ -21,6 +21,12 @@ body.overlay-widget-dragging * {
     var(--color-text-bright) 92%,
     var(--color-background)
   );
+  // App-level muted/faint tokens were designed for dense desktop UI and can
+  // fall below 4.5:1 over a game. The overlay is a 10-foot surface, so retain
+  // the current theme's foreground channel with accessible monochrome alpha.
+  --color-text-muted: rgba(var(--fg-rgb), 0.78);
+  --color-text-faint: rgba(var(--fg-rgb), 0.68);
+  --overlay-disabled-opacity: 0.72;
   --color-primary: var(--overlay-highlight);
   --color-accent: var(--overlay-highlight);
   --ink: var(--color-text-bright);
@@ -30,7 +36,6 @@ body.overlay-widget-dragging * {
   --glass-2: color-mix(in srgb, var(--color-background) 90%, transparent);
   --brd: var(--color-border);
   --accent: var(--overlay-highlight);
-  --teal: var(--overlay-highlight);
   --good: var(--color-success);
 
   position: fixed;
@@ -187,7 +192,7 @@ body.overlay-widget-dragging * {
     background-color 120ms ease,
     color 120ms ease;
   &:hover {
-    color: #fff;
+    color: var(--color-text-bright);
     background: var(--color-danger);
   }
 }
@@ -364,7 +369,7 @@ body.overlay-widget-dragging * {
       "SF Mono",
       Menlo,
       monospace;
-    color: var(--teal);
+    color: var(--overlay-highlight);
     text-shadow: 0 0 24px
       color-mix(in srgb, var(--overlay-highlight) 24%, transparent);
     span {
@@ -408,7 +413,7 @@ body.overlay-widget-dragging * {
     display: flex;
     gap: 11px;
     align-items: center;
-    opacity: 0.55;
+    opacity: 0.8;
     img {
       width: 38px;
       height: 38px;
@@ -485,7 +490,7 @@ body.overlay-widget-dragging * {
     font:
       700 16px/1.1 ui-monospace,
       monospace;
-    color: var(--teal);
+    color: var(--overlay-highlight);
     font-variant-numeric: tabular-nums;
   }
 }
@@ -522,6 +527,14 @@ body.overlay-widget-dragging * {
     background: var(--good);
     flex: none;
     box-shadow: 0 0 12px var(--good);
+  }
+
+  &--error {
+    .overlay-toast__dot {
+      background: var(--color-danger);
+      box-shadow: 0 0 12px
+        color-mix(in srgb, var(--color-danger) 72%, transparent);
+    }
   }
 }
 
@@ -651,7 +664,7 @@ body.overlay-widget-dragging * {
   color: var(--ink);
   font-size: 15px;
   cursor: pointer;
-  opacity: 0.85;
+  opacity: 0.92;
 }
 .overlay-music__np-ctrls button:hover {
   opacity: 1;
@@ -660,8 +673,8 @@ body.overlay-widget-dragging * {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #fff;
-  color: #101018;
+  background: var(--color-text-bright);
+  color: var(--color-dark-background);
   font-size: 13px;
   display: grid;
   place-items: center;
@@ -943,7 +956,7 @@ body.overlay-widget-dragging * {
 }
 .overlay-music__plist-save {
   background: var(--good);
-  color: #101018;
+  color: var(--color-dark-background);
 }
 .overlay-music__plist-cancel {
   background: rgba(255, 255, 255, 0.08);
@@ -1158,7 +1171,7 @@ body.overlay-widget-dragging * {
   min-width: 0;
 }
 .overlay-mixer__row.is-muted {
-  opacity: 0.55;
+  opacity: 0.8;
 }
 .overlay-mixer__mute {
   flex: none;
@@ -1217,7 +1230,7 @@ body.overlay-widget-dragging * {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: linear-gradient(150deg, var(--accent), var(--teal));
+  background: linear-gradient(150deg, var(--accent), var(--overlay-highlight));
   border: none;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
@@ -1516,6 +1529,12 @@ body.overlay-widget-dragging * {
       margin: 0;
     }
   }
+
+  &--error &__body {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
 }
 
 .overlay-music__tabs {
@@ -1680,21 +1699,17 @@ body.overlay-widget-dragging * {
     width: 40px;
     height: 40px;
     margin: 0 2px;
-    color: #fff;
-    background: linear-gradient(
-      135deg,
-      var(--color-primary),
-      var(--color-accent)
-    );
+    color: var(--color-dark-background);
+    background: var(--color-text-bright);
     box-shadow: 0 7px 18px
       color-mix(in srgb, var(--color-primary) 26%, transparent);
 
     &:hover {
-      color: #fff;
-      background: linear-gradient(
-        135deg,
-        color-mix(in srgb, var(--color-primary) 88%, #fff),
-        color-mix(in srgb, var(--color-accent) 88%, #fff)
+      color: var(--color-dark-background);
+      background: color-mix(
+        in srgb,
+        var(--color-text-bright) 88%,
+        var(--color-text-muted)
       );
       transform: scale(1.035);
     }
@@ -1710,7 +1725,7 @@ body.overlay-widget-dragging * {
   width: 17px;
   height: 17px;
   border: 2px solid rgba(255, 255, 255, 0.36);
-  border-top-color: #fff;
+  border-top-color: var(--color-text-bright);
   border-radius: 50%;
   animation: overlay-spin 700ms linear infinite;
 }
@@ -1880,13 +1895,17 @@ body.overlay-widget-dragging * {
 }
 
 .overlay-music__search-play {
-  color: #fff;
+  color: var(--color-dark-background);
   border-color: transparent;
   background: var(--color-primary);
 
   &:hover {
-    color: #fff;
-    background: color-mix(in srgb, var(--color-primary) 88%, #fff);
+    color: var(--color-dark-background);
+    background: color-mix(
+      in srgb,
+      var(--color-text-bright) 88%,
+      var(--color-text-muted)
+    );
   }
 }
 
@@ -1950,7 +1969,7 @@ body.overlay-widget-dragging * {
 }
 
 .overlay-music__plist-save {
-  color: #fff;
+  color: var(--color-dark-background);
   background: var(--color-primary);
 }
 
@@ -2107,7 +2126,7 @@ body.overlay-controller-navigation
   outline-offset: 3px;
   box-shadow:
     0 0 0 5px color-mix(in srgb, var(--color-primary) 22%, transparent),
-    var(--shadow-card);
+    0 12px 28px rgba(0, 0, 0, 0.42);
 }
 
 .overlay-mixer__mute:hover {
@@ -2547,7 +2566,7 @@ body.overlay-widget-resizing * {
   color: var(--color-text-faint);
   cursor: nwse-resize;
   touch-action: none;
-  opacity: 0.58;
+  opacity: 0.92;
 
   &:hover {
     color: var(--color-text-bright);
@@ -3004,7 +3023,7 @@ body.overlay-widget-resizing * {
     background: color-mix(in srgb, var(--color-text) 16%, transparent);
   }
   &:focus-visible {
-    outline: 2px solid var(--color-accent, #aab2ff);
+    outline: 2px solid var(--overlay-highlight, #fff);
     outline-offset: 1px;
   }
   &:disabled {
@@ -3060,11 +3079,11 @@ body.overlay-widget-resizing * {
     background: color-mix(in srgb, var(--color-text) 12%, transparent);
   }
   &.is-selected {
-    color: var(--color-accent, #aab2ff);
+    color: var(--overlay-highlight, #fff);
     font-weight: 700;
   }
   &:focus-visible {
-    outline: 2px solid var(--color-accent, #aab2ff);
+    outline: 2px solid var(--overlay-highlight, #fff);
     outline-offset: -2px;
   }
   &:disabled {
@@ -3129,4 +3148,438 @@ body.overlay-controller-navigation .overlay-card:focus-within {
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent),
     0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+// ── Floating GameHub chrome ─────────────────────────────────────────────────
+// Keep the freeform workspace genuinely full-screen. Game identity and global
+// actions are compact glass pills, not a full-width bar that blocks widget
+// placement at the top of the game window.
+.overlay--full {
+  .overlay-panel {
+    display: block;
+  }
+
+  .overlay-header {
+    position: absolute;
+    inset: 12px 16px auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    pointer-events: none;
+
+    &__game,
+    &__actions {
+      pointer-events: auto;
+      border: 1px solid var(--color-border);
+      background: color-mix(
+        in srgb,
+        var(--color-dark-background) 94%,
+        transparent
+      );
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(22px) saturate(1.05);
+    }
+
+    &__game {
+      min-height: 58px;
+      padding: 7px 10px;
+      border-radius: var(--radius-lg);
+    }
+
+    &__actions {
+      min-height: 48px;
+      padding: 6px;
+      border-radius: var(--radius-lg);
+    }
+
+    &__cover--empty {
+      background: var(--color-surface-hover);
+      box-shadow: inset 0 0 0 1px var(--color-border);
+    }
+  }
+
+  .overlay-grid {
+    position: absolute;
+    inset: 8px;
+    margin: 0;
+  }
+}
+
+// Drag and resize are real controls for non-pointer users. Pointer users still
+// drag the same handles; A/Enter engages an exact D-pad edit mode.
+.overlay-widget__drag,
+.overlay-widget__resize {
+  padding: 0;
+  border: 0;
+  font: inherit;
+
+  &[aria-pressed="true"] {
+    color: var(--color-dark-background);
+    background: var(--color-text-bright);
+    opacity: 1;
+  }
+}
+
+.overlay-widget__drag:disabled {
+  pointer-events: none;
+}
+
+[data-controller-focus-region] {
+  scroll-margin: 8px;
+
+  &:focus {
+    outline: none;
+  }
+
+  &[data-controller-editing="true"] {
+    outline: 2px solid var(--color-text-bright);
+    outline-offset: -2px;
+    box-shadow: inset 0 0 0 4px
+      color-mix(in srgb, var(--color-text-bright) 10%, transparent);
+  }
+}
+
+.overlay-confirm-backdrop {
+  position: fixed;
+  z-index: 13000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.overlay-confirm {
+  width: min(430px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-dark-background) 98%, transparent);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.68);
+
+  &__icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+
+  &__copy {
+    min-width: 0;
+
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--color-text-bright);
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    p {
+      margin-top: 7px;
+      color: var(--color-text-muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  }
+
+  &__actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+
+    button {
+      min-height: 38px;
+      padding: 0 15px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-text);
+      background: var(--color-surface-hover);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  }
+
+  &__danger {
+    border-color: var(--color-text-bright) !important;
+    color: var(--color-dark-background) !important;
+    background: var(--color-text-bright) !important;
+  }
+}
+
+.overlay-controller-keyboard-backdrop {
+  position: fixed;
+  z-index: 13100;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(10px);
+}
+
+.overlay-controller-keyboard {
+  width: min(920px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl, 18px);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-dark-background) 98%, transparent);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.7);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--color-text-bright);
+      font-size: 15px;
+    }
+
+    p {
+      margin-top: 2px;
+      color: var(--color-text-muted);
+      font-size: 10.5px;
+    }
+  }
+
+  &__preview {
+    min-height: 42px;
+    max-height: 86px;
+    display: block;
+    margin: 12px 0;
+    padding: 10px 12px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-bright);
+    background: var(--color-background);
+    font-size: 13px;
+
+    .is-placeholder {
+      color: var(--color-text-faint);
+    }
+  }
+
+  &__caret {
+    display: inline-block;
+    width: 2px;
+    height: 1.15em;
+    margin: 0 1px -0.18em;
+    border-radius: 2px;
+    background: var(--color-text-bright);
+    animation: overlay-keyboard-caret 900ms steps(1, end) infinite;
+  }
+
+  &__keys {
+    display: grid;
+    gap: 7px;
+  }
+
+  &__row {
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+
+    button {
+      min-width: 48px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-text);
+      background: var(--color-surface-hover);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+
+      &[aria-pressed="true"] {
+        color: var(--color-dark-background);
+        background: var(--color-text-bright);
+      }
+    }
+
+    &--actions {
+      margin-top: 2px;
+
+      button {
+        min-width: 82px;
+      }
+    }
+  }
+
+  &__space {
+    flex: 1 1 240px;
+    max-width: 320px;
+  }
+
+  &__done {
+    color: var(--color-dark-background) !important;
+    background: var(--color-text-bright) !important;
+  }
+}
+
+@keyframes overlay-keyboard-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.overlay-controller-hints {
+  position: absolute;
+  z-index: 11900;
+  left: 50%;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-dark-background) 95%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+  font-size: 10.5px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+
+  kbd {
+    min-width: 22px;
+    padding: 3px 5px;
+    text-align: center;
+  }
+
+  &__tabs {
+    display: none;
+  }
+}
+
+.overlay--full:has([data-widget="music"] :focus)
+  .overlay-controller-hints__tabs {
+  display: contents;
+}
+
+body.overlay-controller-navigation .overlay-controller-hints {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.overlay-pin-entry {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
+
+  .overlay-pin-tile {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  &__remove {
+    position: absolute;
+    z-index: 2;
+    top: 4px;
+    right: 4px;
+    width: 23px;
+    height: 23px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    background: color-mix(
+      in srgb,
+      var(--color-dark-background) 92%,
+      transparent
+    );
+    cursor: pointer;
+    opacity: 0.72;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+      opacity: 1;
+    }
+  }
+}
+
+// Preserve a visibly unavailable state without washing labels/icons below the
+// Xbox contrast floor. Kept at the end so older widget-specific opacity rules
+// cannot accidentally make disabled tools disappear in light/custom themes.
+.overlay :where(button, input, select, textarea):disabled,
+.overlay [aria-disabled="true"],
+.overlay .is-disabled {
+  opacity: var(--overlay-disabled-opacity);
+}
+
+@media (max-width: 900px), (max-height: 650px) {
+  .overlay--full .overlay-header {
+    inset: 7px 7px auto;
+
+    &__game {
+      min-height: 48px;
+      padding: 4px 6px;
+    }
+
+    &__actions {
+      min-height: 42px;
+      padding: 3px;
+    }
+  }
+
+  .overlay-controller-hints {
+    bottom: 6px;
+    min-height: 30px;
+    max-width: calc(100% - 14px);
+    gap: 5px;
+    padding: 4px 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-controller-hints {
+    transition: none;
+  }
+
+  .overlay-controller-keyboard__caret {
+    animation: none;
+  }
 }

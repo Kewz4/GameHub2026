@@ -56,8 +56,9 @@ win:
     # non-overlay build doesn't fail packaging.
     - from: presentmon
       to: presentmon
-    # Exact-window gameplay capture is encoded by Chromium; this pinned LGPL
-    # helper only joins the rolling, self-contained WebM segments on save.
+    # Pinned LGPL media runtime for exact-window Windows Graphics Capture,
+    # native NVENC encoding, and stream-copy joining. Chromium remains the
+    # automatic compatibility capture path.
     - from: ffmpeg
       to: ffmpeg
       filter:

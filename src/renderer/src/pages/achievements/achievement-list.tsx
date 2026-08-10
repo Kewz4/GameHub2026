@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import "./achievements.scss";
 import { AlertIcon, EyeClosedIcon } from "@primer/octicons-react";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
-import { useSubscription } from "@renderer/hooks/use-subscription";
 
 interface AchievementListProps {
   achievements: UserAchievement[];
@@ -14,7 +13,6 @@ export function AchievementList({
   achievements,
 }: Readonly<AchievementListProps>) {
   const { t } = useTranslation("achievement");
-  const { showHydraCloudModal } = useSubscription();
   const { formatDateTime } = useDate();
 
   return (
@@ -96,14 +94,15 @@ export function AchievementList({
                 </p>
               </div>
             ) : (
-              <button
-                onClick={() => showHydraCloudModal("achievements")}
-                className="achievements__item-points achievements__item-points--locked"
-                title={t("achievement_earn_points", { points: "???" })}
+              <div
+                className="achievements__item-points"
+                title={t("points_not_available", {
+                  defaultValue: "Points are not available for this achievement",
+                })}
               >
                 <GameHubIcon className="achievements__item-points-icon" />
-                <p className="achievements__item-points-value">???</p>
-              </button>
+                <p className="achievements__item-points-value">—</p>
+              </div>
             )}
             {achievement.unlockTime != null && (
               <div

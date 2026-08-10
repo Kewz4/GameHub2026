@@ -30,6 +30,7 @@ import {
   Button,
   ContextMenu,
   DropdownSelect,
+  FileExplorerModal,
   type DropdownSelectOption,
   GridFocusGroup,
   HorizontalFocusGroup,
@@ -55,6 +56,7 @@ interface DownloadDirectory {
   path: string;
   freeBytes: number;
   totalBytes: number;
+  usageState: "loading" | "ready" | "unavailable";
   isSelected: boolean;
   canRemove: boolean;
 }
@@ -73,7 +75,6 @@ interface DirectoryGridSlot {
   endColumn: number;
 }
 
-const EMPTY_DISK_USAGE: DiskUsage = { free: 0, total: 0 };
 const DOWNLOAD_DIRECTORIES_REGION_ID = "download-directories-region";
 const DOWNLOAD_DIRECTORIES_CONTROLS_REGION_ID =
   "download-directories-controls-region";
@@ -297,11 +298,13 @@ export function DownloadDirectoriesSection({
   const userPreferences = useUserPreferences();
   const [defaultDownloadsPath, setDefaultDownloadsPath] = useState("");
   const [diskUsageByPath, setDiskUsageByPath] = useState<
-    Record<string, DiskUsage>
+    Record<string, DiskUsage | null>
   >({});
   const [directoryMenu, setDirectoryMenu] = useState<DirectoryMenuState | null>(
     null
   );
+  const [isDirectoryPickerVisible, setIsDirectoryPickerVisible] =
+    useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -341,7 +344,7 @@ export function DownloadDirectoriesSection({
               await globalThis.window.electron.getDiskFreeSpace(path);
             return [path, usage] as const;
           } catch {
-            return [path, EMPTY_DISK_USAGE] as const;
+            return [path, null] as const;
           }
         })
       );
@@ -364,15 +367,21 @@ export function DownloadDirectoriesSection({
     }
 
     return resolvedDirectories.allPaths.map((path) => {
-      const diskUsage = diskUsageByPath[path] ?? EMPTY_DISK_USAGE;
+      const diskUsage = diskUsageByPath[path];
       const isSelected = path === resolvedDirectories.defaultPath;
       const canRemove = resolvedDirectories.optionalPaths.includes(path);
 
       return {
         title: getDownloadDirectoryTitle(path),
         path,
-        freeBytes: diskUsage.free,
-        totalBytes: diskUsage.total,
+        freeBytes: diskUsage?.free ?? 0,
+        totalBytes: diskUsage?.total ?? 0,
+        usageState:
+          diskUsage === undefined
+            ? "loading"
+            : diskUsage === null
+              ? "unavailable"
+              : "ready",
         isSelected,
         canRemove,
       };
@@ -453,32 +462,29 @@ export function DownloadDirectoriesSection({
     [defaultDownloadsPath, userPreferences]
   );
 
-  const handleAddDirectory = useCallback(async () => {
+  const handleAddDirectory = useCallback(() => {
     if (!resolvedDirectories || !defaultDownloadsPath || !canAddDirectory) {
       return;
     }
 
-    const { filePaths } = await globalThis.window.electron.showOpenDialog({
-      defaultPath: resolvedDirectories.defaultPath,
-      properties: ["openDirectory"],
-    });
-    const nextPath = filePaths?.[0];
+    setIsDirectoryPickerVisible(true);
+  }, [canAddDirectory, defaultDownloadsPath, resolvedDirectories]);
 
-    if (!nextPath) return;
+  const handleDirectorySelected = useCallback(
+    async (nextPath: string) => {
+      if (!defaultDownloadsPath) return;
 
-    const nextPreferences = addOptionalDownloadDirectory(
-      userPreferences,
-      nextPath,
-      defaultDownloadsPath
-    );
+      const nextPreferences = addOptionalDownloadDirectory(
+        userPreferences,
+        nextPath,
+        defaultDownloadsPath
+      );
 
-    await persistDownloadDirectoryPreferences(nextPreferences);
-  }, [
-    canAddDirectory,
-    defaultDownloadsPath,
-    resolvedDirectories,
-    userPreferences,
-  ]);
+      setIsDirectoryPickerVisible(false);
+      await persistDownloadDirectoryPreferences(nextPreferences);
+    },
+    [defaultDownloadsPath, userPreferences]
+  );
 
   const handleRemoveDirectory = useCallback(
     async (pathToRemove: string) => {
@@ -556,7 +562,7 @@ export function DownloadDirectoriesSection({
                 : undefined,
             }}
             onClick={() => {
-              void handleAddDirectory();
+              handleAddDirectory();
             }}
           >
             Add Directory
@@ -578,6 +584,7 @@ export function DownloadDirectoriesSection({
                 path={directory.path}
                 freeBytes={directory.freeBytes}
                 totalBytes={directory.totalBytes}
+                usageState={directory.usageState}
                 isSelected={directory.isSelected}
                 className="download-directories-section__disk"
                 focusId={cardFocusId}
@@ -645,6 +652,17 @@ export function DownloadDirectoriesSection({
         position={directoryMenu?.position ?? { x: 0, y: 0 }}
         restoreFocusId={directoryMenu?.restoreFocusId ?? null}
         onClose={() => setDirectoryMenu(null)}
+      />
+
+      <FileExplorerModal
+        visible={isDirectoryPickerVisible}
+        title="Add download directory"
+        initialPath={resolvedDirectories?.defaultPath}
+        selectDirectory
+        onClose={() => setIsDirectoryPickerVisible(false)}
+        onSelect={(path) => {
+          void handleDirectorySelected(path);
+        }}
       />
     </SettingsSection>
   );

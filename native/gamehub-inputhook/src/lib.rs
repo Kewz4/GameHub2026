@@ -51,7 +51,7 @@ use windows_sys::Win32::System::LibraryLoader::{
     DisableThreadLibraryCalls, GetModuleHandleW, GetProcAddress,
 };
 use windows_sys::Win32::System::Memory::{
-    MapViewOfFile, OpenFileMappingW, VirtualProtect, VirtualQuery, FILE_MAP_READ,
+    MapViewOfFile, OpenFileMappingW, VirtualProtect, VirtualQuery, FILE_MAP_READ, FILE_MAP_WRITE,
     MEMORY_BASIC_INFORMATION, PAGE_READWRITE,
 };
 use windows_sys::Win32::System::Threading::{
@@ -77,10 +77,27 @@ static HOOK_STATUS: AtomicU32 = AtomicU32::new(0);
 static OWNER_ALIVE: AtomicBool = AtomicBool::new(false);
 static OWNER_PID: AtomicU32 = AtomicU32::new(0);
 
-const INPUT_GATE_WORDS: usize = 3;
+const INPUT_GATE_WORDS: usize = 9;
 const OWNER_PID_WORD: usize = 0;
 const TARGET_PID_WORD: usize = 1;
 const BLOCKED_WORD: usize = 2;
+const TARGET_GENERATION_WORD: usize = 3;
+const READY_PID_WORD: usize = 4;
+const READY_GENERATION_WORD: usize = 5;
+const CAPABILITY_MASK_WORD: usize = 6;
+const UNSUPPORTED_MODULE_MASK_WORD: usize = 7;
+const HOOK_STATUS_WORD: usize = 8;
+
+const CAPABILITY_XINPUT: u32 = 1 << 0;
+const CAPABILITY_WIN32_KEYBOARD: u32 = 1 << 1;
+const CAPABILITY_RAW_INPUT: u32 = 1 << 2;
+const CAPABILITY_LATE_BINDING: u32 = 1 << 3;
+const REQUIRED_CAPABILITIES: u32 =
+    CAPABILITY_XINPUT | CAPABILITY_WIN32_KEYBOARD | CAPABILITY_RAW_INPUT | CAPABILITY_LATE_BINDING;
+
+const UNSUPPORTED_DIRECT_INPUT: u32 = 1 << 0;
+const UNSUPPORTED_GAME_INPUT: u32 = 1 << 1;
+const UNSUPPORTED_WINDOWS_GAMING_INPUT: u32 = 1 << 2;
 const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
 
 /// Real implementations, captured before any patching.
@@ -114,10 +131,21 @@ fn blocking() -> bool {
     }
     let owner = unsafe { std::ptr::read_volatile(words.add(OWNER_PID_WORD)) };
     let target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
+    let generation = unsafe { std::ptr::read_volatile(words.add(TARGET_GENERATION_WORD)) };
+    let ready_pid = unsafe { std::ptr::read_volatile(words.add(READY_PID_WORD)) };
+    let ready_generation = unsafe { std::ptr::read_volatile(words.add(READY_GENERATION_WORD)) };
+    let capability_mask = unsafe { std::ptr::read_volatile(words.add(CAPABILITY_MASK_WORD)) };
+    let unsupported_module_mask =
+        unsafe { std::ptr::read_volatile(words.add(UNSUPPORTED_MODULE_MASK_WORD)) };
     owner != 0
         && owner == OWNER_PID.load(Ordering::Acquire)
         && OWNER_ALIVE.load(Ordering::Acquire)
         && target == unsafe { GetCurrentProcessId() }
+        && ready_pid == target
+        && generation != 0
+        && ready_generation == generation
+        && (capability_mask & REQUIRED_CAPABILITIES) == REQUIRED_CAPABILITIES
+        && unsupported_module_mask == 0
 }
 
 // ---------------------------------------------------------------------------
@@ -394,12 +422,18 @@ unsafe fn import_descriptors(base: usize) -> Option<*const ImageImportDescriptor
 /// function. Matching on address rather than name deliberately: XInput's
 /// `XInputGetStateEx` is exported by ordinal 100 with no name at all, and this
 /// catches it for free.
-unsafe fn patch_module(base: usize, replacements: &[(usize, usize)]) -> usize {
+#[derive(Default)]
+struct PatchCoverage {
+    covered: usize,
+    failed: usize,
+}
+
+unsafe fn patch_module(base: usize, replacements: &[(usize, usize)]) -> PatchCoverage {
     let Some(mut descriptor) = (unsafe { import_descriptors(base) }) else {
-        return 0;
+        return PatchCoverage::default();
     };
 
-    let mut patched = 0usize;
+    let mut coverage = PatchCoverage::default();
     loop {
         if !unsafe {
             readable(
@@ -447,37 +481,88 @@ unsafe fn patch_module(base: usize, replacements: &[(usize, usize)]) -> usize {
                             &mut restored,
                         )
                     };
-                    patched += 1;
+                    coverage.covered += 1;
+                } else {
+                    coverage.failed += 1;
                 }
+            } else if replacements
+                .iter()
+                .any(|(_, replacement)| *replacement == current)
+            {
+                // Periodic sweeps must continue to report the slots patched by
+                // an earlier sweep as positively covered.
+                coverage.covered += 1;
             }
             thunk += std::mem::size_of::<usize>();
         }
 
         descriptor = unsafe { descriptor.add(1) };
     }
-    patched
+    coverage
 }
 
-/// Snapshot every module currently mapped into this process.
-fn loaded_modules() -> Vec<usize> {
+struct LoadedModules {
+    bases: Vec<usize>,
+    unsupported_module_mask: u32,
+    snapshot_complete: bool,
+}
+
+/// Snapshot every module currently mapped into this process and record input
+/// stacks this DLL does not hook. Module presence is intentionally a
+/// conservative signal: a title may load one without polling it, but opening
+/// fail-safe is preferable to letting one controller action hit two UIs.
+///
+/// Raw HID remains an explicit limitation but is not inferred from `hid.dll`:
+/// Windows and device middleware load it transitively in many games, so doing
+/// so would reject a large number of titles without proving direct HID use.
+fn loaded_modules() -> LoadedModules {
     let mut bases = Vec::new();
+    let mut unsupported_module_mask = 0u32;
     let snapshot: HANDLE =
         unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId()) };
     if snapshot == INVALID_HANDLE_VALUE {
-        return bases;
+        return LoadedModules {
+            bases,
+            unsupported_module_mask,
+            snapshot_complete: false,
+        };
     }
     let mut entry: MODULEENTRY32W = unsafe { std::mem::zeroed() };
     entry.dwSize = std::mem::size_of::<MODULEENTRY32W>() as u32;
-    if unsafe { Module32FirstW(snapshot, &mut entry) } != 0 {
+    let snapshot_complete = unsafe { Module32FirstW(snapshot, &mut entry) } != 0;
+    if snapshot_complete {
         loop {
             bases.push(entry.modBaseAddr as usize);
+            let name_length = entry
+                .szModule
+                .iter()
+                .position(|character| *character == 0)
+                .unwrap_or(entry.szModule.len());
+            let module_name =
+                String::from_utf16_lossy(&entry.szModule[..name_length]).to_ascii_lowercase();
+            match module_name.as_str() {
+                "dinput.dll" | "dinput8.dll" => {
+                    unsupported_module_mask |= UNSUPPORTED_DIRECT_INPUT;
+                }
+                "gameinput.dll" | "gameinputredist.dll" => {
+                    unsupported_module_mask |= UNSUPPORTED_GAME_INPUT;
+                }
+                "windows.gaming.input.dll" => {
+                    unsupported_module_mask |= UNSUPPORTED_WINDOWS_GAMING_INPUT;
+                }
+                _ => {}
+            }
             if unsafe { Module32NextW(snapshot, &mut entry) } == 0 {
                 break;
             }
         }
     }
     unsafe { CloseHandle(snapshot) };
-    bases
+    LoadedModules {
+        bases,
+        unsupported_module_mask,
+        snapshot_complete,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -512,7 +597,13 @@ fn resolve_ordinal(module: &str, ordinal: u16) -> usize {
 }
 
 fn map_flag() -> bool {
-    let mapping = unsafe { OpenFileMappingW(FILE_MAP_READ, FALSE, FLAG_MAPPING_NAME.as_ptr()) };
+    let mapping = unsafe {
+        OpenFileMappingW(
+            FILE_MAP_READ | FILE_MAP_WRITE,
+            FALSE,
+            FLAG_MAPPING_NAME.as_ptr(),
+        )
+    };
     if mapping.is_null() {
         HOOK_STATUS.store(1_000 + unsafe { GetLastError() }, Ordering::Release);
         return false;
@@ -520,7 +611,7 @@ fn map_flag() -> bool {
     let view = unsafe {
         MapViewOfFile(
             mapping,
-            FILE_MAP_READ,
+            FILE_MAP_READ | FILE_MAP_WRITE,
             0,
             0,
             std::mem::size_of::<u32>() * INPUT_GATE_WORDS,
@@ -623,6 +714,87 @@ fn replacement_table() -> Vec<(usize, usize)> {
     table
 }
 
+fn capability_mask() -> u32 {
+    // The XInput replacement family is compiled into this DLL and late-loaded
+    // XInput modules are covered by repeated import sweeps. The other bits
+    // require their real Win32 entry points to have been captured first.
+    let mut mask = CAPABILITY_XINPUT;
+    if REAL_GET_ASYNC_KEY_STATE.load(Ordering::Acquire) != 0
+        && REAL_GET_KEY_STATE.load(Ordering::Acquire) != 0
+        && REAL_GET_KEYBOARD_STATE.load(Ordering::Acquire) != 0
+    {
+        mask |= CAPABILITY_WIN32_KEYBOARD;
+    }
+    if REAL_GET_RAW_INPUT_DATA.load(Ordering::Acquire) != 0
+        && REAL_GET_RAW_INPUT_BUFFER.load(Ordering::Acquire) != 0
+    {
+        mask |= CAPABILITY_RAW_INPUT;
+    }
+    if REAL_GET_PROC_ADDRESS.load(Ordering::Acquire) != 0 {
+        mask |= CAPABILITY_LATE_BINDING;
+    }
+    mask
+}
+
+/// Publish a positive acknowledgement for the exact target generation. The
+/// launcher reads READY_PID as the commit word. Re-checking target/generation
+/// before that final store prevents a late loader (for example Khazan's
+/// steamclient_loader_x64.exe) from acknowledging its BBQ render child.
+fn publish_hook_state(capabilities: u32, unsupported_modules: u32, status: u32) {
+    let view = FLAG_VIEW.load(Ordering::Acquire);
+    if view == 0 || !OWNER_ALIVE.load(Ordering::Acquire) {
+        return;
+    }
+    let words = view as *mut u32;
+    let current_pid = unsafe { GetCurrentProcessId() };
+    let target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
+    let generation = unsafe { std::ptr::read_volatile(words.add(TARGET_GENERATION_WORD)) };
+    if target != current_pid || generation == 0 {
+        return;
+    }
+
+    unsafe {
+        std::ptr::write_volatile(words.add(CAPABILITY_MASK_WORD), capabilities);
+        std::ptr::write_volatile(words.add(UNSUPPORTED_MODULE_MASK_WORD), unsupported_modules);
+        std::ptr::write_volatile(words.add(HOOK_STATUS_WORD), status);
+        std::ptr::write_volatile(words.add(READY_GENERATION_WORD), generation);
+    }
+
+    let current_target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
+    let current_generation = unsafe { std::ptr::read_volatile(words.add(TARGET_GENERATION_WORD)) };
+    if current_target == current_pid && current_generation == generation {
+        unsafe { std::ptr::write_volatile(words.add(READY_PID_WORD), current_pid) };
+    }
+}
+
+fn invalidate_hook_state(status: u32) {
+    let view = FLAG_VIEW.load(Ordering::Acquire);
+    if view == 0 {
+        return;
+    }
+    let words = view as *mut u32;
+    let current_pid = unsafe { GetCurrentProcessId() };
+    let target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
+    if target != current_pid {
+        return;
+    }
+    // The game stops suppressing input immediately; the launcher observes the
+    // cleared readiness on its next 125 ms target poll and hides the overlay.
+    unsafe {
+        std::ptr::write_volatile(words.add(BLOCKED_WORD), 0);
+        std::ptr::write_volatile(words.add(READY_PID_WORD), 0);
+        std::ptr::write_volatile(words.add(HOOK_STATUS_WORD), status);
+    }
+}
+
+fn gate_requested() -> bool {
+    let view = FLAG_VIEW.load(Ordering::Acquire);
+    if view == 0 {
+        return false;
+    }
+    unsafe { std::ptr::read_volatile((view as *const u32).add(BLOCKED_WORD)) != 0 }
+}
+
 /// Re-apply the patch forever. Games load renderer plugins, anti-cheat shims
 /// and mod DLLs long after startup, and each arrives with a fresh unpatched
 /// IAT; a periodic sweep is far simpler and more robust than tracking
@@ -680,14 +852,48 @@ unsafe extern "system" fn worker(_parameter: *mut c_void) -> u32 {
             HOOK_STATUS.store(100 + table.len() as u32, Ordering::Release);
             if !table.is_empty() {
                 let modules = loaded_modules();
-                HOOK_STATUS.store(200 + modules.len() as u32, Ordering::Release);
-                for base in modules {
-                    unsafe { patch_module(base, &table) };
+                if !modules.snapshot_complete {
+                    const SNAPSHOT_FAILED_STATUS: u32 = 2_500;
+                    HOOK_STATUS.store(SNAPSHOT_FAILED_STATUS, Ordering::Release);
+                    HOOKS_READY.store(false, Ordering::Release);
+                    invalidate_hook_state(SNAPSHOT_FAILED_STATUS);
+                    module_scan_tick = 0;
+                    unsafe { Sleep(100) };
+                    continue;
                 }
-                HOOKS_READY.store(true, Ordering::Release);
+                let module_count = modules.bases.len() as u32;
+                HOOK_STATUS.store(200 + module_count, Ordering::Release);
+                let mut coverage = PatchCoverage::default();
+                for base in modules.bases {
+                    let module_coverage = unsafe { patch_module(base, &table) };
+                    coverage.covered = coverage.covered.saturating_add(module_coverage.covered);
+                    coverage.failed = coverage.failed.saturating_add(module_coverage.failed);
+                }
+                let capabilities = capability_mask();
+                let status = 300 + coverage.covered.min((u32::MAX - 300) as usize) as u32;
+                HOOK_STATUS.store(status, Ordering::Release);
+                let coverage_complete = coverage.covered > 0 && coverage.failed == 0;
+                let capabilities_complete =
+                    (capabilities & REQUIRED_CAPABILITIES) == REQUIRED_CAPABILITIES;
+                if coverage_complete && capabilities_complete {
+                    publish_hook_state(capabilities, modules.unsupported_module_mask, status);
+                    HOOKS_READY.store(true, Ordering::Release);
+                } else {
+                    HOOKS_READY.store(false, Ordering::Release);
+                    invalidate_hook_state(status);
+                }
+            } else {
+                const NO_HOOKS_STATUS: u32 = 2_600;
+                HOOK_STATUS.store(NO_HOOKS_STATUS, Ordering::Release);
+                HOOKS_READY.store(false, Ordering::Release);
+                invalidate_hook_state(NO_HOOKS_STATUS);
             }
         }
-        module_scan_tick = (module_scan_tick + 1) % 20;
+        // While the overlay is active, shorten the unsupported-module
+        // detection window to 200 ms. Hidden prewarming retains the lower-cost
+        // two-second cadence.
+        let scan_period = if gate_requested() { 2 } else { 20 };
+        module_scan_tick = (module_scan_tick + 1) % scan_period;
         // Check launcher liveness ten times per second; full module rescans
         // retain the previous two-second cadence.
         unsafe { Sleep(100) };

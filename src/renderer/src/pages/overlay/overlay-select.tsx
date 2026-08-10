@@ -54,9 +54,10 @@ interface OverlaySelectProps<T extends string | number> {
  * always-on-top group, so over an exclusive-fullscreen game it is composited
  * underneath — the list appeared behind the overlay and could not be clicked.
  *
- * It also behaves better on a controller than a native popup: with the trigger
- * focused, left/right cycle the value without opening anything, while A/Enter
- * opens the list for direct selection.
+ * It also behaves better on a controller than a native popup: A/Enter engages
+ * the list, directions choose an option, and B/Escape disengages. Directions
+ * do not mutate the value before engagement, so the control cannot trap XY
+ * focus navigation.
  */
 export function OverlaySelect<T extends string | number>({
   value,
@@ -110,6 +111,48 @@ export function OverlaySelect<T extends string | number>({
     }
   }, []);
 
+  const handoffTab = useCallback(
+    (backward: boolean) => {
+      const trigger = triggerRef.current;
+      const overlay = trigger?.closest<HTMLElement>(".overlay--full");
+      if (!trigger || !overlay) {
+        close(true);
+        return;
+      }
+      const candidates = Array.from(
+        overlay.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), input:not([disabled]):not([type='hidden']), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])"
+        )
+      ).filter((element) => {
+        if (
+          listRef.current?.contains(element) ||
+          element.closest('[aria-hidden="true"], [inert], [hidden]')
+        ) {
+          return false;
+        }
+        const style = window.getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      });
+      const triggerIndex = candidates.indexOf(trigger);
+      const target =
+        triggerIndex < 0 || candidates.length < 2
+          ? trigger
+          : candidates[
+              (triggerIndex + (backward ? -1 : 1) + candidates.length) %
+                candidates.length
+            ];
+      close();
+      window.requestAnimationFrame(() => target.focus({ preventScroll: true }));
+    },
+    [close]
+  );
+
   const openList = useCallback(() => {
     // Seed the active option before the portaled list mounts. Updating it in
     // an effect leaves one frame where the first option receives focus, so a
@@ -124,18 +167,6 @@ export function OverlaySelect<T extends string | number>({
       close(true);
     },
     [close, onChange, value]
-  );
-
-  const step = useCallback(
-    (direction: -1 | 1) => {
-      if (!enabled.length) return;
-      const next =
-        enabled[
-          Math.min(enabled.length - 1, Math.max(0, selectedIndex + direction))
-        ];
-      if (next && next.value !== value) onChange(next.value);
-    },
-    [enabled, onChange, selectedIndex, value]
   );
 
   // Close when focus or a click lands outside; the overlay has no backdrop to
@@ -219,13 +250,7 @@ export function OverlaySelect<T extends string | number>({
         disabled={disabled}
         onClick={() => (open ? close() : openList())}
         onKeyDown={(event) => {
-          if (event.key === "ArrowRight") {
-            event.preventDefault();
-            step(1);
-          } else if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            step(-1);
-          } else if (
+          if (
             event.key === "ArrowDown" ||
             event.key === "Enter" ||
             event.key === " "
@@ -256,6 +281,7 @@ export function OverlaySelect<T extends string | number>({
           <div
             ref={listRef}
             className="overlay-select__list"
+            data-controller-scope="true"
             role="listbox"
             id={listId}
             aria-label={ariaLabel}
@@ -317,7 +343,9 @@ export function OverlaySelect<T extends string | number>({
                       event.stopPropagation();
                       close(true);
                     } else if (event.key === "Tab") {
-                      close();
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handoffTab(event.shiftKey);
                     }
                   }}
                 >

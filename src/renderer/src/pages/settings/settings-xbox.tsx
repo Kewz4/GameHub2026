@@ -37,15 +37,17 @@ export function SettingsXbox() {
         await updateUserPreferences({
           xboxGamertag: result.gamertag ?? "Xbox User",
           xboxHasGamePass: false, // user sets this manually below
-        } as any);
+        });
         showSuccessToast(
           t("xbox_signed_in_as", { gamertag: result.gamertag ?? "Xbox User" })
         );
       } else {
         showErrorToast(t("xbox_auth_failed"));
       }
-    } catch (err: any) {
-      showErrorToast(err?.message ?? t("xbox_auth_failed"));
+    } catch (error: unknown) {
+      showErrorToast(
+        error instanceof Error ? error.message : t("xbox_auth_failed")
+      );
     } finally {
       setIsSigningIn(false);
     }
@@ -60,12 +62,12 @@ export function SettingsXbox() {
       xboxTokenExpiry: null,
       xboxGamertag: null,
       xboxHasGamePass: false,
-    } as any);
+    });
     showSuccessToast(t("xbox_signed_out"));
   };
 
   const handleToggleGamePass = async (value: boolean) => {
-    await updateUserPreferences({ xboxHasGamePass: value } as any);
+    await updateUserPreferences({ xboxHasGamePass: value });
   };
 
   const handleSync = async () => {
@@ -77,8 +79,10 @@ export function SettingsXbox() {
       showSuccessToast(
         t("xbox_library_synced", { added: result.added, total: result.total })
       );
-    } catch (err: any) {
-      showErrorToast(err?.message ?? t("xbox_sync_failed"));
+    } catch (error: unknown) {
+      showErrorToast(
+        error instanceof Error ? error.message : t("xbox_sync_failed")
+      );
     } finally {
       setIsSyncing(false);
     }

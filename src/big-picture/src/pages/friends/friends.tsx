@@ -24,6 +24,8 @@ import {
 import {
   FRIENDS_LIST_REGION_ID,
   FRIENDS_PAGE_REGION_ID,
+  FRIENDS_REFRESH_BUTTON_ID,
+  FRIENDS_RETRY_BUTTON_ID,
   FRIENDS_REQUESTS_REGION_ID,
   getFriendFocusId,
   getFriendRequestAcceptFocusId,
@@ -41,6 +43,8 @@ export default function Friends() {
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [friendsLoadError, setFriendsLoadError] = useState(false);
+  const [requestsLoadError, setRequestsLoadError] = useState(false);
 
   const basePath = IS_DESKTOP ? "/big-picture" : "";
 
@@ -53,8 +57,9 @@ export default function Friends() {
           { params: { take: PAGE_SIZE, skip: 0 } }
         );
       setFriends(response.friends ?? []);
+      setFriendsLoadError(false);
     } catch {
-      // transient error — keep previous list
+      setFriendsLoadError(true);
     }
   }, []);
 
@@ -65,8 +70,9 @@ export default function Friends() {
         FriendRequest[]
       >("/profile/friend-requests");
       setRequests(Array.isArray(response) ? response : []);
+      setRequestsLoadError(false);
     } catch {
-      // transient error — keep previous list
+      setRequestsLoadError(true);
     }
   }, []);
 
@@ -150,6 +156,7 @@ export default function Friends() {
     () => [...friends].sort((a, b) => Number(b.isOnline) - Number(a.isOnline)),
     [friends]
   );
+  const hasLoadError = friendsLoadError || requestsLoadError;
 
   if (!IS_DESKTOP) {
     return (
@@ -170,6 +177,23 @@ export default function Friends() {
           <UsersIcon size={32} />
           <Typography className="bp-friends__title">Friends</Typography>
         </header>
+
+        {hasLoadError ? (
+          <div className="bp-friends__status" role="alert">
+            <Typography>
+              Some friend data could not be refreshed. Existing results are
+              still shown below.
+            </Typography>
+            <Button
+              focusId={FRIENDS_RETRY_BUTTON_ID}
+              variant="secondary"
+              loading={loading}
+              onClick={() => void loadAll()}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
 
         {loading && friends.length === 0 && requests.length === 0 ? (
           <Typography className="bp-friends__status">
@@ -278,9 +302,23 @@ export default function Friends() {
               </Typography>
 
               {sortedFriends.length === 0 ? (
-                <Typography className="bp-friends__status">
-                  You haven&apos;t added any friends yet.
-                </Typography>
+                <div className="bp-friends__status">
+                  <Typography>
+                    {hasLoadError
+                      ? "No friend data is available right now."
+                      : "You haven't added any friends yet."}
+                  </Typography>
+                  {!hasLoadError ? (
+                    <Button
+                      focusId={FRIENDS_REFRESH_BUTTON_ID}
+                      variant="secondary"
+                      loading={loading}
+                      onClick={() => void loadAll()}
+                    >
+                      Refresh
+                    </Button>
+                  ) : null}
+                </div>
               ) : (
                 <VerticalFocusGroup regionId={FRIENDS_LIST_REGION_ID} asChild>
                   <ul className="bp-friends__list">

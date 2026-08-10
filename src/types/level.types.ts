@@ -256,7 +256,6 @@ export interface UserPreferences {
   enableAutoInstall?: boolean;
   seedAfterDownloadComplete?: boolean;
   showHiddenAchievementsDescription?: boolean;
-  showDownloadSpeedInMegabits?: boolean;
   downloadNotificationsEnabled?: boolean;
   repackUpdatesNotificationsEnabled?: boolean;
   achievementNotificationsEnabled?: boolean;

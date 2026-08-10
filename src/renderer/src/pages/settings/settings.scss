@@ -5,6 +5,7 @@
     padding: 24px;
     width: 100%;
     display: flex;
+    min-height: 0;
   }
 
   &__content {
@@ -16,6 +17,7 @@
     border-radius: var(--radius-md);
     display: flex;
     overflow: hidden;
+    min-height: 0;
   }
 
   &__sidebar {
@@ -56,19 +58,17 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--color-text-bright);
       outline-offset: -2px;
     }
 
-    // Selected category must read stronger than a hovered one: accent-tinted
-    // fill plus an inset accent bar on the leading edge.
     &--active {
-      background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+      background: rgba(var(--fg-rgb), 0.1);
       color: var(--color-text-bright);
-      box-shadow: inset 3px 0 0 var(--color-accent);
+      box-shadow: inset 3px 0 0 var(--color-text-bright);
 
       &:hover {
-        background: color-mix(in srgb, var(--color-accent) 26%, transparent);
+        background: rgba(var(--fg-rgb), 0.14);
       }
     }
 
@@ -103,11 +103,33 @@
       border-right: none;
       border-bottom: 1px solid globals.$border-color;
       flex-direction: row;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      scrollbar-width: thin;
+    }
+
+    &__sidebar-button {
+      width: auto;
+      flex: 0 0 auto;
     }
 
     &__panel {
       padding-top: globals.$spacing-unit;
+    }
+  }
+
+  @media (max-width: 520px) {
+    &__container {
+      padding: globals.$spacing-unit;
+    }
+
+    &__sidebar {
+      padding-inline: globals.$spacing-unit;
+    }
+
+    &__panel {
+      padding: calc(globals.$spacing-unit * 1.5);
     }
   }
 }
@@ -122,6 +144,15 @@
     flex-direction: column;
     gap: calc(globals.$spacing-unit * 1.5);
     padding-top: calc(globals.$spacing-unit * 1.5);
+  }
+
+  &__nested-group {
+    display: flex;
+    flex-direction: column;
+    gap: globals.$spacing-unit;
+    margin-left: calc(globals.$spacing-unit * 2.5);
+    padding-left: calc(globals.$spacing-unit * 1.5);
+    border-left: 1px solid globals.$border-color;
   }
 }
 
@@ -206,13 +237,13 @@
     color: inherit;
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--color-text-bright);
       outline-offset: 2px;
     }
 
     &--selected {
-      border-color: var(--color-accent);
-      background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+      border-color: var(--color-text-bright);
+      background: rgba(var(--fg-rgb), 0.12);
     }
   }
 
@@ -264,7 +295,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--color-text-bright);
       outline-offset: -2px;
     }
   }
@@ -291,5 +322,18 @@
   &__body {
     padding: calc(globals.$spacing-unit * 1.5);
     border-top: 1px solid rgba(var(--fg-rgb), 0.06);
+  }
+}
+
+.library-sync-modal {
+  &__placeholder {
+    background: rgba(var(--fg-rgb), 0.08);
+    color: var(--color-text-bright);
+  }
+
+  &__new-badge {
+    background: var(--color-text-bright);
+    color: var(--color-dark-background);
+    border: 1px solid rgba(var(--fg-rgb), 0.18);
   }
 }

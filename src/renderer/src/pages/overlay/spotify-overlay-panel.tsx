@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Scrollable controller focus-engagement regions are intentionally keyboard focusable. */
 import type {
   SpotifyContentItem,
   SpotifyContentType,
@@ -344,6 +345,16 @@ export function SpotifyOverlayPanel({
   const [searchError, setSearchError] = useState<SpotifyProviderError | null>(
     null
   );
+
+  useEffect(() => {
+    if (!volumeOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (document.body.classList.contains("overlay-controller-navigation")) {
+        volumeInputRef.current?.focus({ preventScroll: true });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [volumeOpen]);
 
   const rememberProviderBackoff = useCallback(
     (providerError: SpotifyProviderError) => {
@@ -1362,6 +1373,8 @@ export function SpotifyOverlayPanel({
                   <label
                     id={`${panelId}-volume`}
                     className="spotify-overlay-panel__volume-popover"
+                    data-controller-scope="true"
+                    data-controller-dismiss-on-back="true"
                   >
                     <Volume2 size={15} aria-hidden="true" />
                     <span className="spotify-overlay-panel__sr-only">
@@ -1518,7 +1531,13 @@ export function SpotifyOverlayPanel({
                         <span>{shelf.items.length}</span>
                       </header>
                       {shelf.items.length ? (
-                        <div className="spotify-overlay-panel__content-grid">
+                        <div
+                          className="spotify-overlay-panel__content-grid"
+                          role="region"
+                          tabIndex={0}
+                          data-controller-focus-region
+                          aria-label={`${shelf.title}. Press Select to browse, then Back to leave.`}
+                        >
                           {shelf.items.map((item) => (
                             <SpotifyContentCard
                               key={`${shelf.id}:${item.uri}`}
@@ -1651,7 +1670,13 @@ export function SpotifyOverlayPanel({
                             </h3>
                             <span>{items.length}</span>
                           </header>
-                          <div className="spotify-overlay-panel__content-grid">
+                          <div
+                            className="spotify-overlay-panel__content-grid"
+                            role="region"
+                            tabIndex={0}
+                            data-controller-focus-region
+                            aria-label={`${group.title}. Press Select to browse, then Back to leave.`}
+                          >
                             {items.map((item) => (
                               <SpotifyContentCard
                                 key={`search:${item.uri}`}
@@ -1715,7 +1740,12 @@ export function SpotifyOverlayPanel({
                       <h3 id={`${panelId}-queue-next`}>Up next</h3>
                       <span>{queue.queue.length}</span>
                     </header>
-                    <ol>
+                    <ol
+                      role="region"
+                      tabIndex={0}
+                      data-controller-focus-region
+                      aria-label="Spotify queue. Press Select to browse, then Back to leave."
+                    >
                       {queue.queue.map((item, index) => (
                         <li key={`${item.uri}:${index}`}>
                           <span className="spotify-overlay-panel__queue-index">

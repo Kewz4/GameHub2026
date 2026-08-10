@@ -9,7 +9,11 @@ import {
 import type { ConsoleGameMetadata, GameShop } from "@types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { buildLibraryToastOptions, getItemFocusTarget } from "../../helpers";
+import {
+  buildLibraryToastOptions,
+  getBigPictureRoutePath,
+  getItemFocusTarget,
+} from "../../helpers";
 import type { LibraryToastSource } from "../../helpers/library-toast";
 import {
   Typography,
@@ -67,6 +71,7 @@ import {
 } from "../../components/pages/game/navigation";
 import { NavigationService, type FocusOverrideTarget } from "../../services";
 import { useNavigationStore } from "../../stores";
+import { buildBigPictureGameMetadata } from "./game-metadata";
 import "./game.scss";
 
 const DESCRIPTION_HEADING_SELECTOR = "h1, h2, h3, h4, h5, h6";
@@ -390,7 +395,10 @@ export default function Game() {
     });
   const canAddToLibrary = shop !== "custom";
   const resolvedGameTitle =
-    preferredAssets.title || game?.title || "Download Game";
+    shopDetails?.name ||
+    preferredAssets.title ||
+    game?.title ||
+    "Download Game";
   const gameToastSource = useMemo<LibraryToastSource>(
     () => ({
       objectId: objectId ?? "",
@@ -414,54 +422,65 @@ export default function Game() {
     (import.meta.env.DEV || globalThis.window.electron?.platform === "linux");
   const descriptionBlocks = useMemo(() => {
     const document = preprocessSteamDescriptionDocument(
-      shopDetails?.detailed_description ?? ""
+      shopDetails?.detailed_description || game?.description || ""
     );
 
     return buildDescriptionSections(document);
-  }, [shopDetails?.detailed_description]);
+  }, [game?.description, shopDetails?.detailed_description]);
   const hasDescription = descriptionBlocks.length > 0;
   const hasMedia =
     (shopDetails?.movies?.length ?? 0) > 0 ||
     (shopDetails?.screenshots?.length ?? 0) > 0;
   const isLaunchboxGame = shop === "launchbox";
-  const [consoleMeta, setConsoleMeta] = useState<ConsoleGameMetadata | null>(
-    null
-  );
-  const consoleMetaTitle = shopDetails?.name ?? "";
+  const consoleMetaTitle =
+    shopDetails?.name || preferredAssets.title || game?.title || "";
+  const consoleMetaKey =
+    isLaunchboxGame && consoleMetaTitle && objectId
+      ? `${objectId}:${consoleMetaTitle}`
+      : null;
+  const [consoleMetaResolution, setConsoleMetaResolution] = useState<{
+    key: string;
+    data: ConsoleGameMetadata | null;
+  } | null>(null);
   useEffect(() => {
-    if (!isLaunchboxGame || !consoleMetaTitle || !objectId) {
-      setConsoleMeta(null);
+    if (!consoleMetaKey || !objectId) {
+      setConsoleMetaResolution(null);
       return;
     }
     let active = true;
     globalThis.window.electron
       .getConsoleGameMetadata(consoleMetaTitle, objectId)
       .then((data) => {
-        if (active) setConsoleMeta(data);
+        if (active) setConsoleMetaResolution({ key: consoleMetaKey, data });
       })
       .catch(() => {
-        if (active) setConsoleMeta(null);
+        if (active) {
+          setConsoleMetaResolution({ key: consoleMetaKey, data: null });
+        }
       });
     return () => {
       active = false;
     };
-  }, [isLaunchboxGame, consoleMetaTitle, objectId]);
-  const developer = shopDetails?.developers?.[0] ?? "";
-  const publisher = shopDetails?.publishers?.[0] ?? "";
-  const releaseDate = shopDetails?.release_date?.date ?? "";
-  const launchboxGenres = useMemo(() => {
-    return ((shopDetails?.genres ?? []) as unknown[])
-      .map((genre) => {
-        if (typeof genre === "string") return genre;
-        if (genre && typeof genre === "object" && "name" in genre) {
-          const { name } = genre as { name?: unknown };
-          return typeof name === "string" ? name : "";
-        }
-
-        return "";
-      })
-      .filter((genre) => genre.trim().length > 0);
-  }, [shopDetails?.genres]);
+  }, [consoleMetaKey, consoleMetaTitle, objectId]);
+  const isConsoleMetadataReady =
+    !consoleMetaKey || consoleMetaResolution?.key === consoleMetaKey;
+  const consoleMeta =
+    consoleMetaResolution?.key === consoleMetaKey
+      ? consoleMetaResolution.data
+      : null;
+  const gameMetadata = useMemo(
+    () =>
+      buildBigPictureGameMetadata({
+        objectId: objectId ?? "",
+        shop: shop ?? "custom",
+        game,
+        shopDetails,
+        consoleMetadata: consoleMeta,
+        stats,
+        achievements,
+      }),
+    [achievements, consoleMeta, game, objectId, shop, shopDetails, stats]
+  );
   const launchboxRegions = useMemo(
     () =>
       shopDetails?.skus && shopDetails.skus.length > 0
@@ -639,22 +658,43 @@ export default function Game() {
         const code = getClassicsLaunchErrorCode(error);
 
         if (code === "EMULATOR_NOT_CONFIGURED") {
+          const settingsPath = getBigPictureRoutePath(
+            "/settings?tab=emulation"
+          );
           showErrorToast("Emulator not configured", {
             message:
               "Configure the emulator for this platform before launching.",
             fallbackVisual: "settings",
             action: {
               label: "Open Settings",
-              onClick: () => navigate("/settings"),
+              onClick: () => navigate(settingsPath),
             },
           });
-          navigate("/settings");
+          navigate(settingsPath);
+          return;
+        }
+
+        if (code === "BIOS_NOT_CONFIGURED") {
+          const settingsPath = getBigPictureRoutePath(
+            "/settings?tab=emulation"
+          );
+          showErrorToast("BIOS or firmware required", {
+            message:
+              "Finish this platform's setup assistant before launching the game.",
+            fallbackVisual: "settings",
+            action: {
+              label: "Open Emulation Settings",
+              onClick: () => navigate(settingsPath),
+            },
+          });
+          navigate(settingsPath);
           return;
         }
 
         if (code === "PLATFORM_UNKNOWN") {
           showErrorToast("Platform not supported", {
-            message: "Hydra could not identify an emulator for this platform.",
+            message:
+              "GameHub could not identify an emulator for this platform.",
           });
           return;
         }
@@ -673,7 +713,7 @@ export default function Game() {
         }
 
         showErrorToast("Launch failed", {
-          message: "Hydra could not launch this Classics game.",
+          message: "GameHub could not launch this Classics game.",
         });
       }
     },
@@ -1158,11 +1198,27 @@ export default function Game() {
     };
   }, [descriptionBlocks]);
 
-  if (isLoading || !shopDetails) {
+  const [isHeroReady, setIsHeroReady] = useState(false);
+
+  useEffect(() => {
+    setIsHeroReady(false);
+  }, [objectId, shop]);
+
+  if (isLoading || !shopDetails || !isConsoleMetadataReady) {
     return (
       <VerticalFocusGroup regionId={GAME_PAGE_REGION_ID} asChild>
-        <div className="game-page">
-          <p style={{ color: "white" }}>Loading...</p>
+        <div
+          className="game-page game-page--loading"
+          data-game-ready="false"
+          role="status"
+        >
+          <div className="game-page__loading-shell">
+            <span className="game-page__loading-logo" />
+            <span className="game-page__loading-copy" />
+            <span className="game-page__loading-copy game-page__loading-copy--short" />
+            <span className="game-page__loading-action" />
+          </div>
+          <span className="sr-only">Preparing game details…</span>
         </div>
       </VerticalFocusGroup>
     );
@@ -1170,7 +1226,7 @@ export default function Game() {
 
   return (
     <VerticalFocusGroup regionId={GAME_PAGE_REGION_ID} asChild>
-      <div ref={pageRef} className="game-page">
+      <div ref={pageRef} className="game-page" data-game-ready={isHeroReady}>
         <BigPictureCloudSaveProvider
           objectId={objectId!}
           shop={shop!}
@@ -1194,6 +1250,7 @@ export default function Game() {
             canAddToLibrary={canAddToLibrary}
             downNavigationTarget={contentBelowHeroTarget}
             sidebarEntryTarget={sidebarEntryTarget}
+            onReadyChange={setIsHeroReady}
           />
           {game && launchSettings && customizationSettings && cloudSettings && (
             <GameSettingsModal
@@ -1208,11 +1265,13 @@ export default function Game() {
         </BigPictureCloudSaveProvider>
 
         <section className="game-page__content">
-          <PlaytimeBar
-            game={game}
-            isGameRunning={isGameRunning}
-            runningSessionDurationInMillis={runningSessionDurationInMillis}
-          />
+          {gameMetadata.showPlaytime && (
+            <PlaytimeBar
+              game={game}
+              isGameRunning={isGameRunning}
+              runningSessionDurationInMillis={runningSessionDurationInMillis}
+            />
+          )}
 
           <div className="game-page__main-layout">
             <div className="game-page__main-column">
@@ -1285,68 +1344,122 @@ export default function Game() {
                 </VerticalFocusGroup>
               )}
 
-              <Divider />
+              {gameMetadata.showHydraCommunity && (
+                <>
+                  <Divider />
 
-              <GameReviews
-                shop={shop!}
-                objectId={objectId!}
-                topNavigationTarget={commentsTopNavigationTarget}
-                onHasNavigableActionsChange={setHasNavigableComments}
-              />
+                  <GameReviews
+                    shop={shop!}
+                    objectId={objectId!}
+                    topNavigationTarget={commentsTopNavigationTarget}
+                    onHasNavigableActionsChange={setHasNavigableComments}
+                  />
+                </>
+              )}
             </div>
 
             <VerticalFocusGroup regionId={GAME_SIDEBAR_REGION_ID} asChild>
               <div className="game-page__sidebar">
-                <FocusItem
-                  id={GAME_SIDEBAR_STATS_ID}
-                  navigationOrder={0}
-                  navigationOverrides={sidebarStatsNavigationOverrides}
-                  asChild
-                >
-                  <section
-                    className="game-page__sidebar-section game-page__stats"
-                    aria-label="Game stats"
+                {gameMetadata.showHydraStats && stats ? (
+                  <FocusItem
+                    id={GAME_SIDEBAR_STATS_ID}
+                    navigationOrder={0}
+                    navigationOverrides={sidebarStatsNavigationOverrides}
+                    asChild
                   >
-                    <div className="game-page__stats-title">
-                      <Typography>Game Stats</Typography>
-                    </div>
+                    <section
+                      className="game-page__sidebar-section game-page__stats"
+                      aria-label="Game stats"
+                    >
+                      <div className="game-page__stats-title">
+                        <Typography>Game Stats</Typography>
+                      </div>
 
-                    <div className="game-page__stats-row">
-                      <Typography className="game-page__stats-label">
-                        Rating
-                      </Typography>
-                      <div className="game-page__stats-rating-value">
-                        <StarIcon
-                          size={16}
-                          weight="fill"
-                          aria-hidden="true"
-                          className="game-page__stats-rating-icon"
-                        />
+                      <div className="game-page__stats-row">
+                        <Typography className="game-page__stats-label">
+                          Rating
+                        </Typography>
+                        <div className="game-page__stats-rating-value">
+                          <StarIcon
+                            size={16}
+                            weight="fill"
+                            aria-hidden="true"
+                            className="game-page__stats-rating-icon"
+                          />
+                          <Typography className="game-page__stats-value">
+                            {stats.averageScore == null
+                              ? "—"
+                              : formatNumber(stats.averageScore)}
+                          </Typography>
+                        </div>
+                      </div>
+
+                      <div className="game-page__stats-row">
+                        <Typography className="game-page__stats-label">
+                          Downloads
+                        </Typography>
                         <Typography className="game-page__stats-value">
-                          {formatNumber(stats?.averageScore ?? 0)}
+                          {formatNumber(stats.downloadCount)}
                         </Typography>
                       </div>
-                    </div>
 
-                    <div className="game-page__stats-row">
-                      <Typography className="game-page__stats-label">
-                        Downloads
-                      </Typography>
-                      <Typography className="game-page__stats-value">
-                        {formatNumber(stats?.downloadCount ?? 0)}
-                      </Typography>
-                    </div>
-
-                    <div className="game-page__stats-row">
-                      <Typography className="game-page__stats-label">
-                        Playing now
-                      </Typography>
-                      <Typography className="game-page__stats-value">
-                        {formatNumber(stats?.playerCount ?? 0)}
-                      </Typography>
-                    </div>
-                  </section>
-                </FocusItem>
+                      <div className="game-page__stats-row">
+                        <Typography className="game-page__stats-label">
+                          Playing now
+                        </Typography>
+                        <Typography className="game-page__stats-value">
+                          {formatNumber(stats.playerCount)}
+                        </Typography>
+                      </div>
+                    </section>
+                  </FocusItem>
+                ) : gameMetadata.isEmulatorGame ? (
+                  <FocusItem
+                    id={GAME_SIDEBAR_STATS_ID}
+                    navigationOrder={0}
+                    navigationOverrides={sidebarStatsNavigationOverrides}
+                    asChild
+                  >
+                    <section
+                      className="game-page__sidebar-section game-page__stats"
+                      aria-label="Emulator details"
+                    >
+                      <div className="game-page__stats-title">
+                        <Typography>Emulator Game</Typography>
+                      </div>
+                      {gameMetadata.systemLabel && (
+                        <div className="game-page__stats-row">
+                          <Typography className="game-page__stats-label">
+                            System
+                          </Typography>
+                          <Typography className="game-page__stats-value">
+                            {gameMetadata.systemLabel}
+                          </Typography>
+                        </div>
+                      )}
+                      {gameMetadata.emulatorLabel && (
+                        <div className="game-page__stats-row">
+                          <Typography className="game-page__stats-label">
+                            Emulator
+                          </Typography>
+                          <Typography className="game-page__stats-value">
+                            {gameMetadata.emulatorLabel}
+                          </Typography>
+                        </div>
+                      )}
+                      {gameMetadata.achievementProgress && (
+                        <div className="game-page__stats-row">
+                          <Typography className="game-page__stats-label">
+                            Achievements
+                          </Typography>
+                          <Typography className="game-page__stats-value">
+                            {gameMetadata.achievementProgress}
+                          </Typography>
+                        </div>
+                      )}
+                    </section>
+                  </FocusItem>
+                ) : null}
 
                 {(howLongToBeat?.length ?? 0) > 0 && (
                   <HowLongToBeatBox
@@ -1378,7 +1491,7 @@ export default function Game() {
                   focusNavigationOverrides={sidebarCarouselNavigationOverrides}
                 />
 
-                {!isLaunchboxGame && (game?.achievementCount ?? 0) > 0 && (
+                {gameMetadata.showAchievements && (
                   <AchievementsBox
                     achievements={achievements ?? []}
                     focusId={GAME_SIDEBAR_ACHIEVEMENTS_ID}
@@ -1399,24 +1512,24 @@ export default function Game() {
                     className="game-page__sidebar-section game-page__metadata"
                     aria-label="Game info"
                   >
-                    {isLaunchboxGame && shopDetails.platform ? (
+                    {isLaunchboxGame && gameMetadata.systemLabel ? (
                       <div className="game-page__metadata-row">
                         <Typography className="game-page__metadata-label">
                           Platform
                         </Typography>
                         <Typography className="game-page__metadata-value">
-                          {shopDetails.platform}
+                          {gameMetadata.systemLabel}
                         </Typography>
                       </div>
                     ) : null}
 
-                    {isLaunchboxGame && launchboxGenres.length > 0 ? (
+                    {isLaunchboxGame && gameMetadata.genres.length > 0 ? (
                       <div className="game-page__metadata-row">
                         <Typography className="game-page__metadata-label">
                           Genres
                         </Typography>
                         <Typography className="game-page__metadata-value">
-                          {launchboxGenres.join(", ")}
+                          {gameMetadata.genres.join(", ")}
                         </Typography>
                       </div>
                     ) : null}
@@ -1440,38 +1553,49 @@ export default function Game() {
                       </div>
                     ) : null}
 
-                    {developer && (
+                    {gameMetadata.developers.length > 0 && (
                       <div className="game-page__metadata-row">
                         <Typography className="game-page__metadata-label">
                           Developed by
                         </Typography>
                         <Typography className="game-page__metadata-value">
-                          {developer}
+                          {gameMetadata.developers.join(", ")}
                         </Typography>
                       </div>
                     )}
 
-                    {publisher && (
+                    {gameMetadata.publishers.length > 0 && (
                       <div className="game-page__metadata-row">
                         <Typography className="game-page__metadata-label">
                           Published by
                         </Typography>
                         <Typography className="game-page__metadata-value">
-                          {publisher}
+                          {gameMetadata.publishers.join(", ")}
                         </Typography>
                       </div>
                     )}
 
-                    {releaseDate && (
+                    {gameMetadata.releaseDate && (
                       <div className="game-page__metadata-row">
                         <Typography className="game-page__metadata-label">
                           Release Date
                         </Typography>
                         <Typography className="game-page__metadata-value">
-                          {releaseDate}
+                          {gameMetadata.releaseDate}
                         </Typography>
                       </div>
                     )}
+
+                    {isLaunchboxGame && gameMetadata.ageRating ? (
+                      <div className="game-page__metadata-row">
+                        <Typography className="game-page__metadata-label">
+                          Age rating
+                        </Typography>
+                        <Typography className="game-page__metadata-value">
+                          {gameMetadata.ageRating}
+                        </Typography>
+                      </div>
+                    ) : null}
 
                     {isLaunchboxGame &&
                     (consoleMeta?.criticScore != null ||
@@ -1504,6 +1628,18 @@ export default function Game() {
                           {consoleMeta.maxLocalPlayers === 1
                             ? "1 player"
                             : `Up to ${consoleMeta.maxLocalPlayers}`}
+                        </Typography>
+                      </div>
+                    ) : null}
+
+                    {isLaunchboxGame &&
+                    (consoleMeta?.gameModes.length ?? 0) > 0 ? (
+                      <div className="game-page__metadata-row">
+                        <Typography className="game-page__metadata-label">
+                          Modes
+                        </Typography>
+                        <Typography className="game-page__metadata-value">
+                          {consoleMeta?.gameModes.join(", ")}
                         </Typography>
                       </div>
                     ) : null}
@@ -1562,12 +1698,16 @@ export default function Game() {
                   />
                 ) : null}
 
-                <SupportedLanguages
-                  shopDetails={shopDetails}
-                  focusId={GAME_SIDEBAR_LANGUAGES_ID}
-                  focusNavigationOrder={7}
-                  focusNavigationOverrides={sidebarLanguagesNavigationOverrides}
-                />
+                {!isLaunchboxGame && (
+                  <SupportedLanguages
+                    shopDetails={shopDetails}
+                    focusId={GAME_SIDEBAR_LANGUAGES_ID}
+                    focusNavigationOrder={7}
+                    focusNavigationOverrides={
+                      sidebarLanguagesNavigationOverrides
+                    }
+                  />
+                )}
               </div>
             </VerticalFocusGroup>
           </div>
@@ -1610,7 +1750,7 @@ export default function Game() {
         <ConfirmationModal
           visible={pendingClassicsLaunch !== null}
           title="RPCS3 is already running"
-          description="Close the current RPCS3 session before launching this game, or force Hydra to start it again."
+          description="Close the current RPCS3 session before launching this game, or force GameHub to start it again."
           confirmLabel="Launch Anyway"
           onClose={() => setPendingClassicsLaunch(null)}
           onConfirm={async () => {

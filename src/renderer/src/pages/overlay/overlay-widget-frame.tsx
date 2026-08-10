@@ -7,7 +7,10 @@ import {
   useCallback,
 } from "react";
 
-import type { OverlayWidgetId } from "./use-overlay-layout";
+import type {
+  OverlayWidgetControllerEditMode,
+  OverlayWidgetId,
+} from "./use-overlay-layout";
 
 type OverlayWidgetFrameProps = {
   children: ReactNode;
@@ -19,6 +22,10 @@ type OverlayWidgetFrameProps = {
   widgetId: OverlayWidgetId;
   widgetStyle: CSSProperties;
   layoutLocked: boolean;
+  controllerEdit: {
+    widgetId: OverlayWidgetId;
+    mode: OverlayWidgetControllerEditMode;
+  } | null;
   onBeginDrag: (
     id: OverlayWidgetId,
     event: ReactPointerEvent<HTMLElement>
@@ -28,6 +35,10 @@ type OverlayWidgetFrameProps = {
     event: ReactPointerEvent<HTMLElement>
   ) => void;
   onCycleSize: (id: OverlayWidgetId) => void;
+  onControllerEdit: (
+    id: OverlayWidgetId,
+    mode: OverlayWidgetControllerEditMode
+  ) => void;
   onFocus: (id: OverlayWidgetId) => void;
   onHide: (id: OverlayWidgetId) => void;
   registerWidget: (id: OverlayWidgetId, node: HTMLElement | null) => void;
@@ -39,10 +50,12 @@ export const OverlayWidgetFrame = ({
   headerActions,
   icon,
   layoutLocked,
+  controllerEdit,
   meta,
   onBeginDrag,
   onBeginResize,
   onCycleSize,
+  onControllerEdit,
   onFocus,
   onHide,
   registerWidget,
@@ -92,28 +105,58 @@ export const OverlayWidgetFrame = ({
           >
             <EyeOff size={14} />
           </button>
-          <span
+          <button
+            type="button"
             className={`overlay-widget__drag ${layoutLocked ? "is-locked" : ""}`}
-            aria-hidden="true"
-            title={layoutLocked ? "Unlock the layout to move" : "Drag widget"}
+            data-widget-controller-edit="move"
+            aria-label={`Move ${title} widget`}
+            aria-pressed={
+              controllerEdit?.widgetId === widgetId &&
+              controllerEdit.mode === "move"
+            }
+            title={
+              layoutLocked
+                ? "Unlock the layout to move"
+                : "Drag to move; press Enter or Select for move mode"
+            }
+            disabled={layoutLocked}
             onPointerDown={(event) => {
               event.stopPropagation();
               onBeginDrag(widgetId, event);
             }}
+            onClick={(event) => {
+              // Pointer dragging emits a click on release. Only keyboard and
+              // programmatic/controller activation (detail 0) engage move mode.
+              if (event.detail === 0) onControllerEdit(widgetId, "move");
+            }}
           >
             <GrabberIcon size={16} />
-          </span>
+          </button>
         </div>
       </header>
       {children}
-      <span
+      <button
+        type="button"
         className={`overlay-widget__resize ${layoutLocked ? "is-locked" : ""}`}
-        aria-hidden="true"
-        title={layoutLocked ? "Unlock the layout to resize" : "Resize widget"}
+        data-widget-controller-edit="resize"
+        aria-label={`Resize ${title} widget`}
+        aria-pressed={
+          controllerEdit?.widgetId === widgetId &&
+          controllerEdit.mode === "resize"
+        }
+        title={
+          layoutLocked
+            ? "Unlock the layout to resize"
+            : "Drag to resize; press Enter or Select for resize mode"
+        }
+        disabled={layoutLocked}
         onPointerDown={(event) => onBeginResize(widgetId, event)}
+        onClick={(event) => {
+          if (event.detail === 0) onControllerEdit(widgetId, "resize");
+        }}
       >
         <Maximize2 size={13} />
-      </span>
+      </button>
     </section>
   );
 };

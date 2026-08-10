@@ -8,6 +8,87 @@
   overflow-y: auto;
   background: var(--background);
 
+  &--loading {
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    background:
+      radial-gradient(
+        circle at 72% 22%,
+        rgba(255, 255, 255, 0.06),
+        transparent 32%
+      ),
+      var(--background);
+  }
+
+  &__loading-shell,
+  &__hero-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  &__loading-shell {
+    width: 100%;
+    min-height: 620px;
+    justify-content: flex-end;
+    padding: calc(
+        var(--big-picture-header-height) + calc(var(--spacing-unit) * 12)
+      )
+      calc(var(--spacing-unit) * 24) calc(var(--spacing-unit) * 12);
+  }
+
+  &__loading-logo,
+  &__loading-copy,
+  &__loading-action,
+  &__hero-loading-logo,
+  &__hero-loading-copy,
+  &__hero-loading-action {
+    display: block;
+    overflow: hidden;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+
+    &::after {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.08),
+        transparent
+      );
+      animation: game-page-readiness-shimmer 1.4s ease-in-out infinite;
+      content: "";
+      transform: translateX(-100%);
+    }
+  }
+
+  &__loading-logo,
+  &__hero-loading-logo {
+    width: min(330px, 52vw);
+    height: 72px;
+  }
+
+  &__loading-copy,
+  &__hero-loading-copy {
+    width: min(520px, 68vw);
+    height: 13px;
+
+    &--short {
+      width: min(380px, 52vw);
+    }
+  }
+
+  &__loading-action,
+  &__hero-loading-action {
+    width: 148px;
+    height: 44px;
+    margin-top: 6px;
+  }
+
   &__how-long-to-beat {
     display: flex;
     flex-direction: column;
@@ -632,6 +713,42 @@
     height: 620px;
     overflow: hidden;
     background: var(--background);
+
+    &--loading {
+      .game-page__hero-bg-layer,
+      .game-page__hero-overlay {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    &[data-description-expanded="true"] {
+      height: auto;
+      min-height: 620px;
+
+      .game-page__hero-overlay {
+        height: auto;
+        min-height: 620px;
+      }
+    }
+  }
+
+  &__hero-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    justify-content: flex-end;
+    padding: calc(
+        var(--big-picture-header-height) + calc(var(--spacing-unit) * 12)
+      )
+      calc(var(--spacing-unit) * 24) calc(var(--spacing-unit) * 12);
+    background:
+      radial-gradient(
+        circle at 72% 22%,
+        rgba(255, 255, 255, 0.055),
+        transparent 34%
+      ),
+      var(--background);
   }
 
   &__hero-actions {
@@ -711,9 +828,78 @@
     text-shadow: 0 3px 24px rgba(0, 0, 0, 0.9);
   }
 
+  &__hero-description-shell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--spacing-unit) * 2);
+    width: min(560px, 70vw);
+    max-width: 100%;
+  }
+
   &__hero-description {
-    max-width: 512px;
-    color: rgba(255, 255, 255, 0.8);
+    --game-hero-description-lines: 5;
+    display: -webkit-box;
+    width: 100%;
+    margin: 0;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 15px;
+    line-height: 1.42;
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--game-hero-description-lines);
+
+    &--expanded {
+      display: block;
+      overflow: visible;
+      -webkit-line-clamp: unset;
+    }
+  }
+
+  &__hero-description-toggle.button {
+    min-height: 32px;
+    padding: calc(var(--spacing-unit) * 1.5) calc(var(--spacing-unit) * 2.5);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(8, 8, 8, 0.64);
+    color: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+
+    &[data-focused="true"],
+    &:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 3px;
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .button__text {
+      font-size: 13px;
+      font-weight: 600;
+    }
+  }
+
+  @media (max-width: 1440px) {
+    &__hero-description {
+      --game-hero-description-lines: 4;
+    }
+  }
+
+  @media (max-width: 1100px), (max-height: 760px) {
+    &__hero-overlay {
+      gap: calc(var(--spacing-unit) * 4);
+    }
+
+    &__hero-description-shell {
+      width: min(500px, 72vw);
+    }
+
+    &__hero-description {
+      --game-hero-description-lines: 3;
+      font-size: 14px;
+      line-height: 1.38;
+    }
   }
 
   &__achievements {
@@ -1464,5 +1650,22 @@
     margin: 0;
     color: rgba(255, 255, 255, 0.5);
     font-size: 12px;
+  }
+}
+
+@keyframes game-page-readiness-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-page__loading-logo::after,
+  .game-page__loading-copy::after,
+  .game-page__loading-action::after,
+  .game-page__hero-loading-logo::after,
+  .game-page__hero-loading-copy::after,
+  .game-page__hero-loading-action::after {
+    animation: none;
   }
 }

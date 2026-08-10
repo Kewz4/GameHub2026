@@ -4,6 +4,8 @@ import {
   CheckCircleIcon,
   DownloadSimpleIcon,
   FolderPlusIcon,
+  PencilSimpleIcon,
+  TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react";
 
@@ -20,6 +22,7 @@ import {
 import {
   Button,
   Checkbox,
+  FileExplorerModal,
   Modal,
   VerticalFocusGroup,
 } from "../../../../components";
@@ -34,9 +37,15 @@ interface PendingFolder {
   previewCount: number | null;
 }
 
+type SetupPicker =
+  | { kind: "executable" }
+  | { kind: "rom-folder"; replaceIndex: number | null }
+  | null;
+
 interface Props {
   visible: boolean;
   system: EmulatorSystem | null;
+  installSystems: EmulatorSystem[];
   systemLabel: string;
   initialConfig: EmulatorConfig | null;
   onClose: () => void;
@@ -60,6 +69,7 @@ function formatBytes(bytes: number): string {
 export function EmulatorSetupModal({
   visible,
   system,
+  installSystems,
   systemLabel,
   initialConfig,
   onClose,
@@ -77,8 +87,10 @@ export function EmulatorSetupModal({
   const [keysOk, setKeysOk] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
+  const [picker, setPicker] = useState<SetupPicker>(null);
 
   const autoDetectRef = useRef(false);
+  const prefilledRef = useRef(false);
   const scanStartedRef = useRef(false);
 
   const steps = useMemo<StepKind[]>(
@@ -98,7 +110,9 @@ export function EmulatorSetupModal({
     setBiosOk(false);
     setKeysOk(false);
     setShowInstall(false);
+    setPicker(null);
     autoDetectRef.current = false;
+    prefilledRef.current = false;
     scanStartedRef.current = false;
     reset();
   }, [visible, initialConfig, reset]);
@@ -171,31 +185,100 @@ export function EmulatorSetupModal({
     [system]
   );
 
-  const handleBrowseExecutable = useCallback(async () => {
-    if (!system) return;
-    const isMac = globalThis.window.electron.platform === "darwin";
-    const result = await globalThis.window.electron.showOpenDialog({
-      properties: isMac ? ["openFile", "openDirectory"] : ["openFile"],
-    });
-    if (result.canceled || result.filePaths.length === 0) return;
-    const preview = await globalThis.window.electron.previewEmulatorExecutable(
-      system,
-      result.filePaths[0]
-    );
-    if (!preview) {
-      showErrorToast("That file doesn't look like the right emulator.");
-      return;
-    }
-    setConfig((curr) =>
-      curr
-        ? {
-            ...curr,
-            executablePath: preview.executablePath,
-            detectedVersion: preview.detectedVersion,
-          }
-        : curr
-    );
-  }, [system, showErrorToast]);
+  // Reuse folders GameHub or the emulator already knows about. This keeps the
+  // controller-only assistant useful for existing libraries (especially the
+  // RPCS3 games.yml directory and DuckStation/PCSX2 game paths) instead of
+  // forcing the user to browse to the same folder again.
+  useEffect(() => {
+    if (!visible || !system || currentStep !== "rom_folder") return;
+    if (prefilledRef.current || folders.length > 0) return;
+    prefilledRef.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      let seeds: PendingFolder[] = (config?.romFolders ?? []).map((folder) => ({
+        path: folder.path,
+        scanSubfolders: folder.scanSubfolders,
+        previewCount: null,
+      }));
+
+      if (seeds.length === 0 && system === "ps3") {
+        const sources = await globalThis.window.electron
+          .getRpcs3DefaultSources()
+          .catch(() => null);
+        if (sources?.gamesDir) {
+          seeds = [
+            {
+              path: sources.gamesDir,
+              scanSubfolders: true,
+              previewCount: null,
+            },
+          ];
+        }
+      } else if (seeds.length === 0 && (system === "ps1" || system === "ps2")) {
+        const paths = await globalThis.window.electron
+          .getEmulatorRomPaths(system)
+          .catch(() => [] as string[]);
+        seeds = paths.map((path) => ({
+          path,
+          scanSubfolders: true,
+          previewCount: null,
+        }));
+      }
+
+      if (cancelled || seeds.length === 0) return;
+      setFolders(seeds);
+
+      for (const seed of seeds) {
+        const count = await previewFolder(seed.path, seed.scanSubfolders);
+        if (cancelled) return;
+        setFolders((current) =>
+          current.map((folder) =>
+            folder.path === seed.path
+              ? { ...folder, previewCount: count }
+              : folder
+          )
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    config?.romFolders,
+    currentStep,
+    folders.length,
+    previewFolder,
+    system,
+    visible,
+  ]);
+
+  const handleExecutableSelected = useCallback(
+    async (path: string) => {
+      if (!system) return;
+      setPicker(null);
+      const preview =
+        await globalThis.window.electron.previewEmulatorExecutable(
+          system,
+          path
+        );
+      if (!preview) {
+        showErrorToast("That file doesn't look like the right emulator.");
+        return;
+      }
+      setConfig((curr) =>
+        curr
+          ? {
+              ...curr,
+              executablePath: preview.executablePath,
+              detectedVersion: preview.detectedVersion,
+            }
+          : curr
+      );
+    },
+    [system, showErrorToast]
+  );
 
   const handleContinue = useCallback(async () => {
     if (
@@ -204,38 +287,74 @@ export function EmulatorSetupModal({
       config?.executablePath &&
       config.executablePath !== initialConfig?.executablePath
     ) {
-      const next = await globalThis.window.electron.setEmulatorExecutablePath(
-        system,
-        config.executablePath
-      );
-      setConfig(next);
+      let activeConfig: EmulatorConfig | null = null;
+      for (const installSystem of installSystems) {
+        const next = await globalThis.window.electron.setEmulatorExecutablePath(
+          installSystem,
+          config.executablePath
+        );
+        if (installSystem === system) activeConfig = next;
+      }
+      if (activeConfig) setConfig(activeConfig);
     }
     goNext();
-  }, [currentStep, system, config, initialConfig?.executablePath, goNext]);
+  }, [
+    config,
+    currentStep,
+    goNext,
+    initialConfig?.executablePath,
+    installSystems,
+    system,
+  ]);
 
-  const handleAddFolder = useCallback(async () => {
-    if (!system) return;
-    const result = await globalThis.window.electron.showOpenDialog({
-      properties: ["openDirectory"],
-    });
-    if (result.canceled || result.filePaths.length === 0) return;
-    const folderPath = result.filePaths[0];
-    if (folders.some((f) => f.path === folderPath)) return;
+  const handleFolderSelected = useCallback(
+    async (folderPath: string) => {
+      if (!system || picker?.kind !== "rom-folder") return;
+      const replaceIndex = picker.replaceIndex;
+      setPicker(null);
 
-    await globalThis.window.electron.addRomFolder(system, folderPath, true);
+      if (
+        folders.some(
+          (folder, index) =>
+            index !== replaceIndex && folder.path === folderPath
+        )
+      ) {
+        return;
+      }
 
-    setFolders((prev) => [
-      ...prev,
-      { path: folderPath, scanSubfolders: true, previewCount: null },
-    ]);
+      const previous = replaceIndex === null ? null : folders[replaceIndex];
+      const scanSubfolders = previous?.scanSubfolders ?? true;
+      setFolders((current) =>
+        replaceIndex === null
+          ? [
+              ...current,
+              { path: folderPath, scanSubfolders, previewCount: null },
+            ]
+          : current.map((folder, index) =>
+              index === replaceIndex
+                ? { path: folderPath, scanSubfolders, previewCount: null }
+                : folder
+            )
+      );
 
-    const count = await previewFolder(folderPath, true);
-    setFolders((prev) =>
-      prev.map((f) =>
-        f.path === folderPath ? { ...f, previewCount: count } : f
-      )
+      const count = await previewFolder(folderPath, scanSubfolders);
+      setFolders((current) =>
+        current.map((folder, index) =>
+          (replaceIndex === null && folder.path === folderPath) ||
+          index === replaceIndex
+            ? { ...folder, previewCount: count }
+            : folder
+        )
+      );
+    },
+    [folders, picker, previewFolder, system]
+  );
+
+  const handleRemoveFolder = useCallback((index: number) => {
+    setFolders((current) =>
+      current.filter((_, currentIndex) => currentIndex !== index)
     );
-  }, [system, folders, previewFolder]);
+  }, []);
 
   const handleToggleSubfolders = useCallback(
     async (index: number) => {
@@ -274,6 +393,20 @@ export function EmulatorSetupModal({
   }, [currentStep, scan.phase, refreshConfig]);
 
   const scanComplete = scan.phase === "done";
+  const scanFailed = scan.phase === "error";
+
+  const handleRetryScan = useCallback(async () => {
+    if (!system) return;
+    scanStartedRef.current = true;
+    reset();
+    await start(
+      system,
+      folders.map((folder) => ({
+        path: folder.path,
+        scanSubfolders: folder.scanSubfolders,
+      }))
+    );
+  }, [folders, reset, start, system]);
 
   const continueDisabled = useMemo(() => {
     if (currentStep === "find_emulator") return !config?.executablePath;
@@ -338,159 +471,220 @@ export function EmulatorSetupModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      onClose={onClose}
-      title={`Set up ${systemLabel}`}
-      description={`Step ${stepIndex + 1} of ${steps.length}`}
-      className="emulator-setup-modal"
-    >
-      <VerticalFocusGroup
-        regionId="emulator-setup-region"
-        className="emulator-setup"
+    <>
+      <Modal
+        visible={visible}
+        onClose={onClose}
+        title={`Set up ${systemLabel}`}
+        description={`Step ${stepIndex + 1} of ${steps.length}`}
+        className="emulator-setup-modal"
+        initialFocusId={SETUP_PRIMARY_FOCUS_ID}
       >
-        <div className="emulator-setup__body">
-          {currentStep === "find_emulator" && !showInstall && (
-            <FindEmulatorStep
-              config={config}
-              detecting={detecting}
-              onInstall={() => setShowInstall(true)}
-              onBrowse={handleBrowseExecutable}
-            />
-          )}
+        <VerticalFocusGroup
+          regionId="emulator-setup-region"
+          className="emulator-setup"
+        >
+          <div className="emulator-setup__body">
+            {currentStep === "find_emulator" && !showInstall && (
+              <FindEmulatorStep
+                config={config}
+                detecting={detecting}
+                onInstall={() => setShowInstall(true)}
+                onBrowse={() => setPicker({ kind: "executable" })}
+              />
+            )}
 
-          {currentStep === "find_emulator" && showInstall && (
-            <InstallStep
-              binary={config.binary}
-              onInstalled={async () => {
-                setShowInstall(false);
-                setDetecting(true);
-                try {
-                  const refreshed = await refreshConfig();
-                  if (refreshed?.executablePath) return;
-                  const preview =
-                    await globalThis.window.electron.previewEmulatorExecutable(
-                      system
+            {currentStep === "find_emulator" && showInstall && (
+              <InstallStep
+                binary={config.binary}
+                onInstalled={async () => {
+                  setShowInstall(false);
+                  setDetecting(true);
+                  try {
+                    const refreshed = await refreshConfig();
+                    if (refreshed?.executablePath) return;
+                    const preview =
+                      await globalThis.window.electron.previewEmulatorExecutable(
+                        system
+                      );
+                    if (!preview) return;
+                    setConfig((curr) =>
+                      curr
+                        ? {
+                            ...curr,
+                            executablePath: preview.executablePath,
+                            detectedVersion: preview.detectedVersion,
+                          }
+                        : curr
                     );
-                  if (!preview) return;
-                  setConfig((curr) =>
-                    curr
-                      ? {
-                          ...curr,
-                          executablePath: preview.executablePath,
-                          detectedVersion: preview.detectedVersion,
-                        }
-                      : curr
-                  );
-                } finally {
-                  setDetecting(false);
-                }
-              }}
-            />
-          )}
-
-          {currentStep === "bios" && (
-            <BiosStep
-              system={system}
-              systemLabel={systemShort}
-              config={config}
-              onStatusChange={setBiosOk}
-            />
-          )}
-
-          {currentStep === "firmware" && (
-            <FirmwareStep
-              config={config}
-              systemLabel={systemShort}
-              onStatusChange={setFirmwareOk}
-            />
-          )}
-
-          {currentStep === "keys" && <KeysStep onStatusChange={setKeysOk} />}
-
-          {currentStep === "rom_folder" && (
-            <RomFolderStep
-              systemLabel={systemShort}
-              folders={folders}
-              onAddFolder={handleAddFolder}
-              onToggleSubfolders={handleToggleSubfolders}
-            />
-          )}
-
-          {currentStep === "scanning" && (
-            <ScanningStep
-              systemLabel={systemShort}
-              percent={scan.percent}
-              processed={scan.processed}
-              total={scan.total}
-              currentFile={scan.currentFile}
-              matched={scan.matched}
-              discovered={scan.discovered}
-              sizeBytes={scan.sizeBytes}
-              phase={scan.phase}
-            />
-          )}
-
-          {currentStep === "done" && (
-            <DoneStep
-              systemLabel={systemLabel}
-              gamesAdded={scan.matched}
-              onFinish={() => onComplete(system)}
-            />
-          )}
-        </div>
-
-        {currentStep !== "done" && (
-          <div className="emulator-setup__footer">
-            {showBack && (
-              <Button variant="secondary" onClick={handleBack}>
-                Back
-              </Button>
-            )}
-
-            {showSkip && !showInstall && (
-              <Button variant="tertiary" onClick={handleSkip}>
-                Skip for now
-              </Button>
-            )}
-
-            {currentStep === "scanning" && !scanComplete && (
-              <Button
-                variant="secondary"
-                focusId={SETUP_PRIMARY_FOCUS_ID}
-                onClick={() => {
-                  cancel();
-                  void refreshConfig();
-                  onClose();
+                  } finally {
+                    setDetecting(false);
+                  }
                 }}
-              >
-                Cancel scan
-              </Button>
+              />
             )}
 
-            {!showInstall && currentStep !== "scanning" && (
-              <Button
-                focusId={
-                  footerContinueOwnsPrimary
-                    ? SETUP_PRIMARY_FOCUS_ID
-                    : SETUP_CONTINUE_FOCUS_ID
+            {currentStep === "bios" && (
+              <BiosStep
+                system={system}
+                systemLabel={systemShort}
+                config={config}
+                onStatusChange={setBiosOk}
+              />
+            )}
+
+            {currentStep === "firmware" && (
+              <FirmwareStep
+                config={config}
+                systemLabel={systemShort}
+                onStatusChange={setFirmwareOk}
+              />
+            )}
+
+            {currentStep === "keys" && <KeysStep onStatusChange={setKeysOk} />}
+
+            {currentStep === "rom_folder" && (
+              <RomFolderStep
+                systemLabel={systemShort}
+                folders={folders}
+                onAddFolder={() =>
+                  setPicker({ kind: "rom-folder", replaceIndex: null })
                 }
-                disabled={continueDisabled}
-                onClick={handleContinue}
-              >
-                Continue
-              </Button>
+                onChangeFolder={(index) =>
+                  setPicker({ kind: "rom-folder", replaceIndex: index })
+                }
+                onRemoveFolder={handleRemoveFolder}
+                onToggleSubfolders={handleToggleSubfolders}
+              />
             )}
 
-            {!showInstall && currentStep === "scanning" && scanComplete && (
-              <Button focusId={SETUP_PRIMARY_FOCUS_ID} onClick={handleContinue}>
-                Continue
-              </Button>
+            {currentStep === "scanning" && (
+              <ScanningStep
+                systemLabel={systemShort}
+                percent={scan.percent}
+                processed={scan.processed}
+                total={scan.total}
+                currentFile={scan.currentFile}
+                matched={scan.matched}
+                discovered={scan.discovered}
+                sizeBytes={scan.sizeBytes}
+                phase={scan.phase}
+                error={scan.error}
+              />
+            )}
+
+            {currentStep === "done" && (
+              <DoneStep
+                systemLabel={systemLabel}
+                gamesAdded={scan.matched}
+                onFinish={() => onComplete(system)}
+              />
             )}
           </div>
-        )}
-      </VerticalFocusGroup>
-    </Modal>
+
+          {currentStep !== "done" && (
+            <div className="emulator-setup__footer">
+              {showBack && (
+                <Button variant="secondary" onClick={handleBack}>
+                  Back
+                </Button>
+              )}
+
+              {showSkip && !showInstall && (
+                <Button variant="tertiary" onClick={handleSkip}>
+                  Skip for now
+                </Button>
+              )}
+
+              {currentStep === "scanning" && !scanComplete && (
+                <Button
+                  variant="secondary"
+                  focusId={scanFailed ? undefined : SETUP_PRIMARY_FOCUS_ID}
+                  onClick={() => {
+                    cancel();
+                    void refreshConfig();
+                    onClose();
+                  }}
+                >
+                  Cancel scan
+                </Button>
+              )}
+
+              {currentStep === "scanning" && scanFailed ? (
+                <Button
+                  focusId={SETUP_PRIMARY_FOCUS_ID}
+                  icon={<ArrowClockwiseIcon size={18} />}
+                  onClick={() => {
+                    void handleRetryScan();
+                  }}
+                >
+                  Retry scan
+                </Button>
+              ) : null}
+
+              {!showInstall && currentStep !== "scanning" && (
+                <Button
+                  focusId={
+                    footerContinueOwnsPrimary
+                      ? SETUP_PRIMARY_FOCUS_ID
+                      : SETUP_CONTINUE_FOCUS_ID
+                  }
+                  disabled={continueDisabled}
+                  onClick={handleContinue}
+                >
+                  Continue
+                </Button>
+              )}
+
+              {!showInstall && currentStep === "scanning" && scanComplete && (
+                <Button
+                  focusId={SETUP_PRIMARY_FOCUS_ID}
+                  onClick={handleContinue}
+                >
+                  Continue
+                </Button>
+              )}
+            </div>
+          )}
+        </VerticalFocusGroup>
+      </Modal>
+
+      <FileExplorerModal
+        visible={picker?.kind === "executable"}
+        title={`Select ${systemLabel} emulator`}
+        initialPath={config.executablePath ?? undefined}
+        filters={
+          globalThis.window.electron.platform === "win32"
+            ? [
+                {
+                  name: "Executable",
+                  extensions: ["exe", "bat", "cmd", "com"],
+                },
+              ]
+            : undefined
+        }
+        selectDirectory={globalThis.window.electron.platform === "darwin"}
+        onClose={() => setPicker(null)}
+        onSelect={(path) => {
+          void handleExecutableSelected(path);
+        }}
+      />
+
+      <FileExplorerModal
+        visible={picker?.kind === "rom-folder"}
+        title={`Choose ${systemLabel} ROM folder`}
+        initialPath={
+          picker?.kind === "rom-folder" && picker.replaceIndex !== null
+            ? folders[picker.replaceIndex]?.path
+            : (folders[0]?.path ?? config.romFolders[0]?.path)
+        }
+        selectDirectory
+        onClose={() => setPicker(null)}
+        onSelect={(path) => {
+          void handleFolderSelected(path);
+        }}
+      />
+    </>
   );
 }
 
@@ -1017,6 +1211,8 @@ interface RomFolderStepProps {
   systemLabel: string;
   folders: PendingFolder[];
   onAddFolder: () => void;
+  onChangeFolder: (index: number) => void;
+  onRemoveFolder: (index: number) => void;
   onToggleSubfolders: (index: number) => void;
 }
 
@@ -1024,6 +1220,8 @@ function RomFolderStep({
   systemLabel,
   folders,
   onAddFolder,
+  onChangeFolder,
+  onRemoveFolder,
   onToggleSubfolders,
 }: Readonly<RomFolderStepProps>) {
   return (
@@ -1055,6 +1253,24 @@ function RomFolderStep({
               checked={folder.scanSubfolders}
               onChange={() => onToggleSubfolders(index)}
             />
+            <div className="emulator-setup__folder-actions">
+              <Button
+                size="small"
+                variant="secondary"
+                icon={<PencilSimpleIcon size={16} />}
+                onClick={() => onChangeFolder(index)}
+              >
+                Change
+              </Button>
+              <Button
+                size="small"
+                variant="danger"
+                icon={<TrashIcon size={16} />}
+                onClick={() => onRemoveFolder(index)}
+              >
+                Remove
+              </Button>
+            </div>
           </div>
         ))}
       </div>
@@ -1083,6 +1299,7 @@ interface ScanningStepProps {
   discovered: number;
   sizeBytes: number;
   phase: string;
+  error: string | null;
 }
 
 function ScanningStep({
@@ -1095,20 +1312,28 @@ function ScanningStep({
   discovered,
   sizeBytes,
   phase,
+  error,
 }: Readonly<ScanningStepProps>) {
   const isDone = phase === "done";
+  const isError = phase === "error";
   const indeterminate = !isDone && total === 0;
   const gamesValue = isDone || matched > 0 ? matched : discovered;
 
   return (
     <div className="emulator-setup__step">
       <h3 className="emulator-setup__title">
-        {isDone ? "Scan complete" : `Scanning ${systemLabel} games`}
+        {isDone
+          ? "Scan complete"
+          : isError
+            ? "Scan interrupted"
+            : `Scanning ${systemLabel} games`}
       </h3>
       <p className="emulator-setup__intro">
         {isDone
           ? "GameHub finished scanning your games."
-          : "GameHub is matching your files against its game database."}
+          : isError
+            ? (error ?? "The ROM scan could not be completed. Try again.")
+            : "GameHub is matching your files against its game database."}
       </p>
 
       <div className="emulator-setup__progress-meta">

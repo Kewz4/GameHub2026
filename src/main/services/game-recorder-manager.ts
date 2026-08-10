@@ -13,6 +13,9 @@ import {
 } from "@shared";
 import type {
   Game,
+  GameRecorderCaptureBackend,
+  GameRecorderCaptureCommand,
+  GameRecorderPcmChunkMetadata,
   GameRecorderPreferences,
   GameRecorderSaveResult,
   GameRecorderSegmentMetadata,
@@ -36,8 +39,14 @@ import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
 import { WindowManager } from "./window-manager";
 import { isGameWindowDisplaySized } from "./game-recorder-capture-source";
+import {
+  NativeRecorderSession,
+  probeNativeRecorderEncoder,
+  type NativeRecorderCompletedSegment,
+} from "./game-recorder-native-session";
 
 const TARGET_POLL_INTERVAL_MS = 750;
+const FOREGROUND_PRIVACY_POLL_INTERVAL_MS = 100;
 // A capped 4K/120 segment can still be tens of megabytes. Give Chromium IPC
 // and slower recording drives enough time to commit the boundary before
 // declaring a save failure.
@@ -61,6 +70,8 @@ type RecorderSegment = {
   encodedVideoFrames: number | null;
   /** Container MediaRecorder produced (mp4 for the hardware H.264 path). */
   container: GameRecorderContainer;
+  backend: GameRecorderCaptureBackend;
+  encoderName: string;
 };
 
 type PendingSave = {
@@ -121,11 +132,20 @@ export class GameRecorderManager {
   private static targetPid = 0;
   private static targetWindowId: string | null = null;
   private static targetPoll: NodeJS.Timeout | null = null;
+  private static foregroundPrivacyPoll: NodeJS.Timeout | null = null;
   private static targetRefreshPending = false;
   private static captureWindow: BrowserWindow | null = null;
   private static captureWindowReady: Promise<BrowserWindow> | null = null;
   private static captureRendererReady = false;
   private static captureActive = false;
+  private static captureBackend: GameRecorderCaptureBackend | null = null;
+  private static nativeSession: NativeRecorderSession | null = null;
+  private static nativeProbe: Promise<boolean> | null = null;
+  private static nativeEncoderAvailable: boolean | null = null;
+  private static nativeFailureTargetKey: string | null = null;
+  private static captureSessionSequence = 0;
+  private static captureReconcile: Promise<void> | null = null;
+  private static captureReconcileRequested = false;
   private static captureRetryAfter = 0;
   private static captureFailureCount = 0;
   private static segmentDirectory: string | null = null;
@@ -148,7 +168,7 @@ export class GameRecorderManager {
     this.initialized = true;
     app.once("will-quit", () => {
       this.stopTargetPolling();
-      this.sendCaptureCommand({ type: "stop", discardPending: true });
+      this.stopCaptureEngine(true);
       this.captureWindow?.destroy();
       this.captureWindow = null;
       this.captureWindowReady = null;
@@ -168,7 +188,7 @@ export class GameRecorderManager {
       if (this.recordingStartedAt !== null) {
         await this.stopRecording();
       }
-      this.stopCaptureEngine();
+      await this.stopCaptureEngine();
       await this.clearRollingSegments();
       this.publishState("Gameplay capture is disabled.");
       return;
@@ -195,6 +215,7 @@ export class GameRecorderManager {
     }
 
     if (captureConfigurationChanged) {
+      this.nativeFailureTargetKey = null;
       // Never concatenate segments created with different dimensions, frame
       // rates, or audio layouts. Finish an active manual recording under its
       // original capture configuration, then start a fresh replay buffer.
@@ -209,7 +230,7 @@ export class GameRecorderManager {
           );
         }
       }
-      if (this.captureActive) this.stopCaptureEngine();
+      if (this.captureActive) await this.stopCaptureEngine();
       await this.clearRollingSegments(!recordingSplitFailed);
       if (recordingSplitFailed) {
         this.publishState(
@@ -313,12 +334,18 @@ export class GameRecorderManager {
       recordingStartedAt: this.recordingStartedAt,
       bufferedSeconds,
       captureActive: this.captureActive,
+      activeCaptureBackend: this.captureActive ? this.captureBackend : null,
       hardwareVideoEncodingAvailable:
-        videoEncodeStatus === undefined
-          ? null
-          : videoEncodeStatus === "enabled",
+        this.nativeEncoderAvailable === true
+          ? true
+          : videoEncodeStatus === undefined
+            ? null
+            : videoEncodeStatus === "enabled",
+      nativeVideoEncodingAvailable: this.nativeEncoderAvailable,
       captureDiagnostics: newestSegment
         ? {
+            backend: newestSegment.backend,
+            encoderName: newestSegment.encoderName,
             mimeType: newestSegment.mimeType,
             outputWidth: newestSegment.outputWidth,
             outputHeight: newestSegment.outputHeight,
@@ -517,15 +544,24 @@ export class GameRecorderManager {
         ? Number(metadata.encodedVideoFrames)
         : null,
       container,
+      backend: "media_recorder",
+      encoderName: "Chromium MediaRecorder",
     };
+    await this.acceptSegment(segment);
+  }
+
+  private static async acceptSegment(segment: RecorderSegment) {
     // MIME support identifies the codec/container, not the encoder backend.
     // Chromium can silently fall back to software even for H.264, so report the
     // GPU process capability without claiming this exact stream is accelerated.
-    if (this.loggedSegmentCodec !== mimeType) {
-      this.loggedSegmentCodec = mimeType;
+    const codecIdentity = `${segment.backend}:${segment.encoderName}:${segment.mimeType}`;
+    if (this.loggedSegmentCodec !== codecIdentity) {
+      this.loggedSegmentCodec = codecIdentity;
       logger.info("Game recorder encoding", {
-        mimeType,
-        container,
+        backend: segment.backend,
+        encoder: segment.encoderName,
+        mimeType: segment.mimeType,
+        container: segment.container,
         output: `${segment.outputWidth}x${segment.outputHeight}@${segment.outputFps}`,
         requestedVideoBitrateMbps: Number(
           (segment.targetVideoBitrate / 1_000_000).toFixed(2)
@@ -578,10 +614,102 @@ export class GameRecorderManager {
     }
   }
 
+  public static async commitPcmChunk(
+    senderId: number,
+    metadata: GameRecorderPcmChunkMetadata,
+    payload: ArrayBuffer | Uint8Array
+  ) {
+    const captureWindow = this.captureWindow;
+    const session = this.nativeSession;
+    if (
+      !captureWindow ||
+      captureWindow.isDestroyed() ||
+      captureWindow.webContents.id !== senderId ||
+      !session ||
+      metadata.captureSessionId !== session.captureSessionId
+    ) {
+      throw new Error("Recorder PCM rejected from an inactive session.");
+    }
+    await session.writePcmChunk(metadata, payload);
+  }
+
+  private static async commitNativeSegment(
+    captureSessionId: number,
+    completed: NativeRecorderCompletedSegment
+  ) {
+    const session = this.nativeSession;
+    const foregroundPid = NativeAddon.getForegroundProcessId();
+    if (
+      !session ||
+      session.captureSessionId !== captureSessionId ||
+      !this.activeGame ||
+      !this.targetPid ||
+      foregroundPid !== this.targetPid
+    ) {
+      logger.info("Dropping native recorder segment outside the active game", {
+        captureSessionId,
+        gamePid: this.targetPid,
+        foregroundPid,
+      });
+      await fs.promises
+        .rm(completed.path, { force: true })
+        .catch(() => undefined);
+      return;
+    }
+
+    await this.acceptSegment({
+      path: completed.path,
+      startedAt: completed.startedAt,
+      endedAt: completed.endedAt,
+      mimeType: session.hasAudio
+        ? 'video/mp4;codecs="avc1.640034,mp4a.40.2"'
+        : 'video/mp4;codecs="avc1.640034"',
+      bytes: completed.bytes,
+      hasAudio: session.hasAudio,
+      outputWidth: session.dimensions.width,
+      outputHeight: session.dimensions.height,
+      outputFps: session.outputFps,
+      targetVideoBitrate: session.targetVideoBitrate,
+      encodedVideoFrames: completed.encodedVideoFrames,
+      container: "mp4",
+      backend: "native_ffmpeg_nvenc",
+      encoderName: session.encoder,
+    });
+  }
+
+  private static async handleNativeCaptureFailure(
+    captureSessionId: number,
+    message: string
+  ) {
+    const session = this.nativeSession;
+    if (!session || session.captureSessionId !== captureSessionId) return;
+    logger.warn(
+      "Native gameplay capture failed; switching to compatibility capture",
+      { message, captureSessionId, target: this.currentTargetKey() }
+    );
+    this.nativeFailureTargetKey = this.currentTargetKey();
+    await this.stopCaptureEngine(true);
+    this.errorMessage = null;
+    this.statusMessage =
+      "Native encoder unavailable; using compatibility capture…";
+    await this.reconcileCapture().catch((error) => {
+      this.errorMessage = `Gameplay capture could not start: ${String(error)}`;
+      this.publishState();
+    });
+  }
+
   public static handleCaptureError(senderId: number, message: string) {
     if (this.captureWindow?.webContents.id !== senderId) return;
+    if (this.captureBackend === "native_ffmpeg_nvenc" && this.nativeSession) {
+      void this.handleNativeCaptureFailure(
+        this.nativeSession.captureSessionId,
+        message
+      );
+      return;
+    }
     this.sendCaptureCommand({ type: "stop", discardPending: true });
     this.captureActive = false;
+    this.captureBackend = null;
     this.captureFailureCount += 1;
     const retryDelay = getGameRecorderCaptureRetryDelay(
       this.captureFailureCount
@@ -599,7 +727,9 @@ export class GameRecorderManager {
   public static handleCaptureReady(senderId: number) {
     if (this.captureWindow?.webContents.id !== senderId) return;
     this.captureRendererReady = true;
-    this.captureActive = false;
+    // A renderer reload can report readiness while native video is already
+    // active. Do not clear that session flag and accidentally spawn a second
+    // FFmpeg process; the initial load already starts with captureActive=false.
     void this.reconcileCapture().catch((error) => {
       this.errorMessage = `Gameplay capture could not start: ${String(error)}`;
       this.publishState();
@@ -631,7 +761,9 @@ export class GameRecorderManager {
         resolve,
         timeout,
       };
-      this.sendCaptureCommand({ type: "flush" });
+      if (this.captureBackend === "media_recorder") {
+        this.sendCaptureCommand({ type: "flush" });
+      }
     });
   }
 
@@ -706,7 +838,9 @@ export class GameRecorderManager {
         candidate.outputHeight === newest.outputHeight &&
         candidate.outputFps === newest.outputFps &&
         candidate.hasAudio === newest.hasAudio &&
-        candidate.container === newest.container;
+        candidate.container === newest.container &&
+        candidate.backend === newest.backend &&
+        candidate.encoderName === newest.encoderName;
       if (!matches) break;
       firstCompatible -= 1;
     }
@@ -911,11 +1045,24 @@ export class GameRecorderManager {
         ),
       TARGET_POLL_INTERVAL_MS
     );
+    this.foregroundPrivacyPoll = setInterval(() => {
+      if (
+        this.captureActive &&
+        this.targetPid > 0 &&
+        NativeAddon.getForegroundProcessId() !== this.targetPid
+      ) {
+        // Kill the unfinished native/MediaRecorder slice quickly on Alt+Tab.
+        // Only previously closed, game-only segments remain eligible to save.
+        this.stopCaptureEngine(true);
+      }
+    }, FOREGROUND_PRIVACY_POLL_INTERVAL_MS);
   }
 
   private static stopTargetPolling() {
     if (this.targetPoll) clearInterval(this.targetPoll);
+    if (this.foregroundPrivacyPoll) clearInterval(this.foregroundPrivacyPoll);
     this.targetPoll = null;
+    this.foregroundPrivacyPoll = null;
     this.targetRefreshPending = false;
   }
 
@@ -945,9 +1092,17 @@ export class GameRecorderManager {
       const targetChanged =
         targetPid !== this.targetPid || targetWindowId !== this.targetWindowId;
 
-      if (targetChanged && this.captureActive) this.stopCaptureEngine(true);
+      if (targetChanged && this.captureActive) {
+        await this.stopCaptureEngine(true);
+      }
       this.targetPid = targetPid;
       this.targetWindowId = targetWindowId;
+      if (
+        targetChanged &&
+        this.nativeFailureTargetKey !== this.currentTargetKey()
+      ) {
+        this.nativeFailureTargetKey = null;
+      }
       await this.reconcileCapture();
       this.publishState();
     } finally {
@@ -955,7 +1110,30 @@ export class GameRecorderManager {
     }
   }
 
-  private static async reconcileCapture() {
+  /**
+   * Coalesce every event that can change capture state. Native capability
+   * probing, hidden-renderer startup and disk checks all yield; without a
+   * single reconciliation lane, two callers can both observe captureActive as
+   * false and start competing FFmpeg/MediaRecorder sessions for one window.
+   */
+  private static reconcileCapture(): Promise<void> {
+    this.captureReconcileRequested = true;
+    if (this.captureReconcile) return this.captureReconcile;
+
+    const operation = (async () => {
+      while (this.captureReconcileRequested) {
+        this.captureReconcileRequested = false;
+        await this.reconcileCaptureOnce();
+      }
+    })();
+    const tracked = operation.finally(() => {
+      if (this.captureReconcile === tracked) this.captureReconcile = null;
+    });
+    this.captureReconcile = tracked;
+    return tracked;
+  }
+
+  private static canCaptureCurrentForegroundTarget() {
     const wantsCapture =
       this.preferences.enabled &&
       (this.preferences.instantReplayEnabled ||
@@ -964,7 +1142,7 @@ export class GameRecorderManager {
       process.platform !== "win32" ||
       (this.targetPid > 0 &&
         NativeAddon.getForegroundProcessId() === this.targetPid);
-    const canCapture =
+    return (
       wantsCapture &&
       process.platform === "win32" &&
       // A window id is no longer required: capture prefers the display the
@@ -972,7 +1150,16 @@ export class GameRecorderManager {
       // per-window source at all.
       Boolean(this.activeGame && this.targetPid) &&
       gameIsForeground &&
-      Date.now() >= this.captureRetryAfter;
+      Date.now() >= this.captureRetryAfter
+    );
+  }
+
+  private static async reconcileCaptureOnce() {
+    const gameIsForeground =
+      process.platform !== "win32" ||
+      (this.targetPid > 0 &&
+        NativeAddon.getForegroundProcessId() === this.targetPid);
+    const canCapture = this.canCaptureCurrentForegroundTarget();
 
     if (!canCapture) {
       if (this.captureActive) this.stopCaptureEngine(!gameIsForeground);
@@ -980,22 +1167,136 @@ export class GameRecorderManager {
     }
     if (this.captureActive) return;
 
-    const captureWindow = await this.ensureCaptureWindow();
-    if (!this.activeGame || !this.targetPid || captureWindow.isDestroyed()) {
+    const useNativeCapture = await this.shouldUseNativeCapture();
+    if (!this.canCaptureCurrentForegroundTarget() || this.captureActive) return;
+
+    if (useNativeCapture) {
+      if (this.preferences.captureGameAudio) {
+        const captureWindow = await this.ensureCaptureWindow();
+        if (captureWindow.isDestroyed()) return;
+        if (!this.captureRendererReady) {
+          this.statusMessage = "Preparing high-quality system-audio capture…";
+          this.publishState();
+          return;
+        }
+      }
+      await this.startNativeCapture();
       return;
     }
+
+    const captureWindow = await this.ensureCaptureWindow();
+    if (captureWindow.isDestroyed()) return;
     if (!this.captureRendererReady) {
       this.statusMessage = "Preparing the game recorder…";
       this.publishState();
       return;
     }
+    if (!this.canCaptureCurrentForegroundTarget() || this.captureActive) return;
+    this.captureBackend = "media_recorder";
     this.captureActive = true;
     this.errorMessage = null;
-    this.statusMessage = "Starting game-window capture…";
+    this.statusMessage = "Starting compatibility game-window capture…";
     this.sendCaptureCommand({
       type: "start",
+      backend: "media_recorder",
       configuration: this.preferences,
     });
+    this.publishState();
+  }
+
+  private static currentTargetKey() {
+    return `${this.targetPid}:${this.targetWindowId ?? ""}`;
+  }
+
+  public static async probeCaptureCapabilities() {
+    await this.probeNativeEncoder();
+    return this.getState();
+  }
+
+  private static async probeNativeEncoder() {
+    if (process.platform !== "win32") {
+      this.nativeEncoderAvailable = false;
+      return false;
+    }
+    const ffmpegPath = this.resolveFfmpegPath();
+    if (!fs.existsSync(ffmpegPath)) {
+      this.nativeEncoderAvailable = false;
+      return false;
+    }
+    if (this.nativeEncoderAvailable !== null) {
+      return this.nativeEncoderAvailable;
+    }
+    if (!this.nativeProbe) {
+      this.nativeProbe = probeNativeRecorderEncoder(ffmpegPath).then(
+        (available) => {
+          this.nativeEncoderAvailable = available;
+          return available;
+        }
+      );
+    }
+    return this.nativeProbe;
+  }
+
+  private static async shouldUseNativeCapture() {
+    if (
+      process.platform !== "win32" ||
+      !this.targetWindowId ||
+      this.nativeFailureTargetKey === this.currentTargetKey()
+    ) {
+      return false;
+    }
+    if (this.nativeEncoderAvailable === null) {
+      this.statusMessage = "Checking the hardware video encoder…";
+      this.publishState();
+    }
+    return this.probeNativeEncoder();
+  }
+
+  private static async startNativeCapture() {
+    if (!this.targetWindowId || !this.targetPid || !this.activeGame) return;
+    const targetPid = this.targetPid;
+    const targetWindowId = this.targetWindowId;
+    const bounds = NativeAddon.getProcessWindowBounds(targetPid);
+    if (!bounds) return;
+    const directory = await this.ensureSegmentDirectory();
+    await this.assertDiskHeadroom(directory, 0);
+    if (
+      this.captureActive ||
+      this.targetPid !== targetPid ||
+      this.targetWindowId !== targetWindowId ||
+      !this.canCaptureCurrentForegroundTarget()
+    ) {
+      return;
+    }
+    const captureSessionId = ++this.captureSessionSequence;
+    const session = new NativeRecorderSession({
+      ffmpegPath: this.resolveFfmpegPath(),
+      encoder: "h264_nvenc",
+      configuration: this.preferences,
+      captureSessionId,
+      windowHandle: targetWindowId,
+      sourceWidth: bounds.width,
+      sourceHeight: bounds.height,
+      segmentDirectory: directory,
+      onSegment: (segment) =>
+        this.commitNativeSegment(captureSessionId, segment),
+      onFatalError: (message) =>
+        this.handleNativeCaptureFailure(captureSessionId, message),
+    });
+    this.nativeSession = session;
+    this.captureBackend = "native_ffmpeg_nvenc";
+    this.captureActive = true;
+    this.errorMessage = null;
+    this.statusMessage = "Recording through NVIDIA NVENC…";
+    session.start();
+    if (this.preferences.captureGameAudio) {
+      this.sendCaptureCommand({
+        type: "start",
+        backend: "native_ffmpeg_nvenc",
+        captureSessionId,
+        configuration: this.preferences,
+      });
+    }
     this.publishState();
   }
 
@@ -1072,7 +1373,7 @@ export class GameRecorderManager {
       return this.captureWindow;
     }
 
-    this.captureWindowReady = new Promise<BrowserWindow>((resolve, reject) => {
+    const ready = new Promise<BrowserWindow>((resolve, reject) => {
       const captureWindow = new BrowserWindow({
         width: 1,
         height: 1,
@@ -1124,12 +1425,45 @@ export class GameRecorderManager {
       captureWindow.once("closed", () => {
         if (this.captureWindow === captureWindow) {
           this.captureWindow = null;
-          this.captureWindowReady = null;
           this.captureRendererReady = false;
-          this.captureActive = false;
-          this.publishState();
+          // A hidden renderer owns native loopback audio. If it closes, leaving
+          // FFmpeg alive would stall its pipe and a later reconciliation could
+          // overwrite the still-running child with a second session.
+          this.stopCaptureEngine(true);
+          reject(new Error("Recorder renderer closed before it became ready."));
         }
       });
+      captureWindow.webContents.on(
+        "did-start-navigation",
+        (_event, _url, _isInPlace, isMainFrame) => {
+          if (
+            !isMainFrame ||
+            this.captureWindow !== captureWindow ||
+            !this.captureRendererReady
+          ) {
+            return;
+          }
+          // A reload tears down WebAudio even though the BrowserWindow and its
+          // webContents id survive. Restart both sides as one fresh session
+          // when the renderer reports ready again.
+          this.captureRendererReady = false;
+          this.stopCaptureEngine(true);
+        }
+      );
+      captureWindow.webContents.once(
+        "render-process-gone",
+        (_event, details) => {
+          if (this.captureWindow !== captureWindow) return;
+          this.captureWindow = null;
+          this.captureRendererReady = false;
+          this.stopCaptureEngine(true);
+          const message = `Gameplay capture renderer stopped: ${details.reason}`;
+          this.errorMessage = message;
+          if (!captureWindow.isDestroyed()) captureWindow.destroy();
+          this.publishState();
+          reject(new Error(message));
+        }
+      );
       captureWindow.webContents.once("did-finish-load", () => {
         resolve(captureWindow);
       });
@@ -1139,6 +1473,7 @@ export class GameRecorderManager {
           if (this.captureWindow === captureWindow) {
             this.captureWindow = null;
             this.captureRendererReady = false;
+            this.stopCaptureEngine(true);
           }
           captureWindow.destroy();
           reject(
@@ -1156,25 +1491,27 @@ export class GameRecorderManager {
       ) {
         captureWindow.webContents.openDevTools({ mode: "detach" });
       }
-    }).finally(() => {
-      this.captureWindowReady = null;
     });
-
-    return this.captureWindowReady;
+    const tracked = ready.finally(() => {
+      if (this.captureWindowReady === tracked) this.captureWindowReady = null;
+    });
+    this.captureWindowReady = tracked;
+    return tracked;
   }
 
-  private static stopCaptureEngine(discardPending = false) {
-    if (!this.captureActive) return;
+  private static stopCaptureEngine(discardPending = false): Promise<void> {
+    if (!this.captureActive && !this.nativeSession) return Promise.resolve();
     this.captureActive = false;
+    const nativeSession = this.nativeSession;
+    this.nativeSession = null;
+    const completion = nativeSession?.stop() ?? Promise.resolve();
     this.sendCaptureCommand({ type: "stop", discardPending });
+    this.captureBackend = null;
     this.publishState();
+    return completion;
   }
 
-  private static sendCaptureCommand(command: {
-    type: "start" | "stop" | "flush";
-    configuration?: GameRecorderPreferences;
-    discardPending?: boolean;
-  }) {
+  private static sendCaptureCommand(command: GameRecorderCaptureCommand) {
     const captureWindow = this.captureWindow;
     if (!captureWindow || captureWindow.isDestroyed()) return;
     captureWindow.webContents.send("on-game-recorder-capture-command", command);
@@ -1261,7 +1598,7 @@ export class GameRecorderManager {
 
   private static async endCurrentGameSession() {
     this.stopTargetPolling();
-    this.stopCaptureEngine(true);
+    await this.stopCaptureEngine(true);
     this.activeGame = null;
     this.targetPid = 0;
     this.targetWindowId = null;

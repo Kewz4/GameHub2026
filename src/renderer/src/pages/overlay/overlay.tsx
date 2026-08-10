@@ -1,5 +1,7 @@
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Scrollable controller focus-engagement regions are intentionally keyboard focusable. */
 import {
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -70,12 +72,24 @@ import { useAppSelector } from "@renderer/hooks";
 import { OverlayWidgetFrame } from "./overlay-widget-frame";
 import { OverlaySelect } from "./overlay-select";
 import {
+  advanceOverlayGamepadPoll,
+  arbitrateOverlayControllerAction,
+  createOverlayGamepadPollState,
+  findOverlayDirectionalCandidate,
+  getOverlayBrowserGamepadMask,
+  getOverlaySequentialNavigationOffset,
+  type OverlayControllerArbitrationState,
+  type OverlayControllerDirection,
+} from "./overlay-controller";
+import { OverlayControllerKeyboard } from "./overlay-controller-keyboard";
+import {
   getOverlayRecorderTechnicalSummary,
   getOverlayReplayPresentation,
 } from "./overlay-recorder-presentation";
 import { SpotifyOverlayPanel } from "./spotify-overlay-panel";
 import {
   OVERLAY_WIDGET_IDS,
+  type OverlayWidgetControllerEditMode,
   type OverlayWidgetId,
   useOverlayLayout,
 } from "./use-overlay-layout";
@@ -84,6 +98,36 @@ import "./overlay.scss";
 type OverlayMode = "hidden" | "toast" | "pinned" | "full";
 type MusicTab = "now-playing" | "search" | "playlists";
 type AchievementFilter = "all" | "unlocked" | "locked" | "hidden" | "missable";
+
+type OverlayInputGateErrorReason =
+  | "unavailable"
+  | "timeout"
+  | "unsupported"
+  | "target-changed";
+
+const OVERLAY_INPUT_GATE_ERROR_MESSAGES: Record<
+  OverlayInputGateErrorReason,
+  string
+> = {
+  unavailable:
+    "GameHub could not isolate input from the game, so the overlay stayed closed.",
+  timeout:
+    "The game did not confirm input protection in time, so the overlay stayed closed.",
+  unsupported:
+    "This game uses an input system GameHub cannot safely isolate yet, so the overlay stayed closed.",
+  "target-changed":
+    "The game window changed while the overlay was opening. Try again.",
+};
+
+const getOverlayInputGateError = (search: string) => {
+  const params = new URLSearchParams(search);
+  if (params.get("kind") !== "input-gate-error") return null;
+  const reason = params.get("reason") as OverlayInputGateErrorReason | null;
+  if (!reason || !(reason in OVERLAY_INPUT_GATE_ERROR_MESSAGES)) {
+    return OVERLAY_INPUT_GATE_ERROR_MESSAGES.unavailable;
+  }
+  return OVERLAY_INPUT_GATE_ERROR_MESSAGES[reason];
+};
 
 const WIDGET_LABELS: Record<OverlayWidgetId, string> = {
   performance: "Performance",
@@ -203,27 +247,133 @@ const CONTROLLER_FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
   "select:not([disabled])",
   "[tabindex]:not([tabindex='-1'])",
-  "[data-controller-item]",
 ].join(",");
 
-const registerControllerItem = (element: HTMLElement | null) => {
-  if (element) element.tabIndex = -1;
+const intersectControllerRects = (left: DOMRect, right: DOMRect) => {
+  const intersectionLeft = Math.max(left.left, right.left);
+  const intersectionTop = Math.max(left.top, right.top);
+  const intersectionRight = Math.min(left.right, right.right);
+  const intersectionBottom = Math.min(left.bottom, right.bottom);
+  return {
+    left: intersectionLeft,
+    top: intersectionTop,
+    right: intersectionRight,
+    bottom: intersectionBottom,
+    width: Math.max(0, intersectionRight - intersectionLeft),
+    height: Math.max(0, intersectionBottom - intersectionTop),
+  };
 };
 
-const getControllerElements = () =>
-  Array.from(
-    document.querySelectorAll<HTMLElement>(CONTROLLER_FOCUSABLE_SELECTOR)
-  ).filter((element) => {
-    if (!element.closest(".overlay--full")) return false;
-    const rect = element.getBoundingClientRect();
-    const style = window.getComputedStyle(element);
-    return (
-      rect.width > 0 &&
-      rect.height > 0 &&
-      style.display !== "none" &&
-      style.visibility !== "hidden"
+const getVisibleControllerRect = (element: HTMLElement) => {
+  if (
+    element.closest('[aria-hidden="true"], [inert]') ||
+    element.getAttribute("aria-disabled") === "true"
+  ) {
+    return null;
+  }
+
+  const style = window.getComputedStyle(element);
+  const elementRect = element.getBoundingClientRect();
+  if (
+    elementRect.width <= 0 ||
+    elementRect.height <= 0 ||
+    style.display === "none" ||
+    style.visibility === "hidden"
+  ) {
+    return null;
+  }
+
+  let visibleRect = intersectControllerRects(
+    elementRect,
+    new DOMRect(0, 0, window.innerWidth, window.innerHeight)
+  );
+  let ancestor = element.parentElement;
+  while (ancestor && !ancestor.classList.contains("overlay--full")) {
+    const ancestorStyle = window.getComputedStyle(ancestor);
+    const clipsX = ["auto", "hidden", "scroll", "clip"].includes(
+      ancestorStyle.overflowX
     );
+    const clipsY = ["auto", "hidden", "scroll", "clip"].includes(
+      ancestorStyle.overflowY
+    );
+    if (clipsX || clipsY) {
+      const clip = ancestor.getBoundingClientRect();
+      visibleRect = {
+        left: clipsX ? Math.max(visibleRect.left, clip.left) : visibleRect.left,
+        top: clipsY ? Math.max(visibleRect.top, clip.top) : visibleRect.top,
+        right: clipsX
+          ? Math.min(visibleRect.right, clip.right)
+          : visibleRect.right,
+        bottom: clipsY
+          ? Math.min(visibleRect.bottom, clip.bottom)
+          : visibleRect.bottom,
+        width: 0,
+        height: 0,
+      };
+      visibleRect.width = Math.max(0, visibleRect.right - visibleRect.left);
+      visibleRect.height = Math.max(0, visibleRect.bottom - visibleRect.top);
+    }
+    ancestor = ancestor.parentElement;
+  }
+
+  const visibleArea = visibleRect.width * visibleRect.height;
+  const elementArea = elementRect.width * elementRect.height;
+  if (
+    visibleRect.width < Math.min(12, elementRect.width) ||
+    visibleRect.height < Math.min(12, elementRect.height) ||
+    visibleArea / Math.max(1, elementArea) < 0.2
+  ) {
+    return null;
+  }
+
+  const centerX = visibleRect.left + visibleRect.width / 2;
+  const centerY = visibleRect.top + visibleRect.height / 2;
+  const topmost = document.elementFromPoint(centerX, centerY);
+  if (topmost && !element.contains(topmost) && !topmost.contains(element)) {
+    return null;
+  }
+
+  return elementRect;
+};
+
+const getActiveControllerScope = () => {
+  const scopes = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-controller-scope="true"]')
+  ).filter((scope) => getVisibleControllerRect(scope) !== null);
+  const modal = scopes.find(
+    (scope) => scope.getAttribute("aria-modal") === "true"
+  );
+  if (modal) return modal;
+  const focusedScope =
+    document.activeElement instanceof Element
+      ? document.activeElement.closest<HTMLElement>(
+          '[data-controller-scope="true"]'
+        )
+      : null;
+  if (focusedScope && scopes.includes(focusedScope)) return focusedScope;
+  return scopes.at(-1) ?? null;
+};
+
+const getControllerElements = (rootOverride?: HTMLElement) => {
+  const overlay = document.querySelector<HTMLElement>(".overlay--full");
+  if (!overlay) return [];
+  const root = rootOverride ?? getActiveControllerScope() ?? overlay;
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(CONTROLLER_FOCUSABLE_SELECTOR)
+  ).filter((element) => {
+    const containingRegion = element.closest<HTMLElement>(
+      "[data-controller-focus-region]"
+    );
+    if (
+      containingRegion &&
+      containingRegion !== element &&
+      containingRegion.getAttribute("data-controller-editing") !== "true"
+    ) {
+      return false;
+    }
+    return getVisibleControllerRect(element) !== null;
   });
+};
 
 type FocusOverlayWidget = (widgetId: OverlayWidgetId) => void;
 
@@ -253,58 +403,67 @@ const focusControllerDefault = (focusOverlayWidget: FocusOverlayWidget) => {
 };
 
 const moveControllerFocus = (
-  action: Extract<HydraOverlayGamepadAction, "up" | "down" | "left" | "right">,
-  focusOverlayWidget: FocusOverlayWidget
+  action: OverlayControllerDirection,
+  focusOverlayWidget: FocusOverlayWidget,
+  rootOverride?: HTMLElement
 ) => {
-  const elements = getControllerElements();
-  if (!elements.length) return;
+  const elements = getControllerElements(rootOverride);
+  if (!elements.length) return false;
 
   const active = document.activeElement;
   const current = elements.includes(active as HTMLElement)
     ? (active as HTMLElement)
     : focusControllerDefault(focusOverlayWidget);
-  if (!current) return;
+  if (!current) return false;
 
   const origin = current.getBoundingClientRect();
-  const originX = origin.left + origin.width / 2;
-  const originY = origin.top + origin.height / 2;
-  const candidates = elements
-    .filter((element) => element !== current)
-    .map((element) => {
-      const rect = element.getBoundingClientRect();
-      const dx = rect.left + rect.width / 2 - originX;
-      const dy = rect.top + rect.height / 2 - originY;
-      const inDirection =
-        action === "left"
-          ? dx < -3
-          : action === "right"
-            ? dx > 3
-            : action === "up"
-              ? dy < -3
-              : dy > 3;
-      if (!inDirection) return null;
+  const next = findOverlayDirectionalCandidate(
+    origin,
+    elements
+      .filter((element) => element !== current)
+      .map((element) => ({
+        value: element,
+        rect: element.getBoundingClientRect(),
+      })),
+    action
+  );
+  if (!next) return false;
+  focusControllerElement(next, focusOverlayWidget);
+  return true;
+};
 
-      const primary =
-        action === "left" || action === "right" ? Math.abs(dx) : Math.abs(dy);
-      const secondary =
-        action === "left" || action === "right" ? Math.abs(dy) : Math.abs(dx);
-      return {
-        element,
-        score: primary + secondary * 0.35 + (secondary / (primary + 1)) * 60,
-      };
-    })
-    .filter(
-      (
-        candidate
-      ): candidate is {
-        element: HTMLElement;
-        score: number;
-      } => candidate !== null
-    )
-    .sort((left, right) => left.score - right.score);
-
-  const next = candidates[0]?.element;
-  if (next) focusControllerElement(next, focusOverlayWidget);
+const moveControllerFocusSequentiallyInRegion = (
+  region: HTMLElement,
+  current: HTMLElement,
+  action: OverlayControllerDirection,
+  focusOverlayWidget: FocusOverlayWidget
+) => {
+  const offset = getOverlaySequentialNavigationOffset(action);
+  if (offset === null) return false;
+  const elements = Array.from(
+    region.querySelectorAll<HTMLElement>(CONTROLLER_FOCUSABLE_SELECTOR)
+  ).filter((element) => {
+    if (
+      element.closest('[aria-hidden="true"], [inert], [hidden]') ||
+      element.getAttribute("aria-disabled") === "true"
+    ) {
+      return false;
+    }
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return (
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      rect.width > 0 &&
+      rect.height > 0
+    );
+  });
+  const currentIndex = elements.indexOf(current);
+  if (currentIndex < 0) return false;
+  const next = elements[currentIndex + offset];
+  if (!next) return false;
+  focusControllerElement(next, focusOverlayWidget);
+  return true;
 };
 
 const adjustControllerRange = (
@@ -331,29 +490,35 @@ const adjustControllerRange = (
   input.dispatchEvent(new Event("change", { bubbles: true }));
 };
 
-const adjustControllerSelect = (
-  select: HTMLSelectElement,
-  direction: "previous" | "next"
+type OverlayEditableElement = HTMLInputElement | HTMLTextAreaElement;
+
+const isOverlayEditableElement = (
+  element: Element | null
+): element is OverlayEditableElement =>
+  element instanceof HTMLTextAreaElement ||
+  (element instanceof HTMLInputElement &&
+    !["button", "checkbox", "radio", "range", "submit"].includes(element.type));
+
+const setOverlayEditableValue = (
+  element: OverlayEditableElement,
+  value: string
 ) => {
-  const enabledOptions = Array.from(select.options).filter(
-    (option) => !option.disabled
-  );
-  const currentIndex = enabledOptions.findIndex(
-    (option) => option.value === select.value
-  );
-  const offset = direction === "next" ? 1 : -1;
-  const next =
-    enabledOptions[
-      Math.min(enabledOptions.length - 1, Math.max(0, currentIndex + offset))
-    ];
-  if (!next || next.value === select.value) return;
-  select.value = next.value;
-  select.dispatchEvent(new Event("input", { bubbles: true }));
-  select.dispatchEvent(new Event("change", { bubbles: true }));
+  const prototype =
+    element instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  valueSetter?.call(element, value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
 };
 
 export default function Overlay() {
   const location = useLocation();
+  const inputGateError = useMemo(
+    () => getOverlayInputGateError(location.search),
+    [location.search]
+  );
   const musicProvider =
     useAppSelector((state) => state.userPreferences.value?.musicProvider) ??
     "gamehub";
@@ -385,12 +550,31 @@ export default function Overlay() {
     useState<AchievementFilter>("all");
   const [expandedMixerPid, setExpandedMixerPid] = useState<number | null>(null);
   const controllerRangeEditRef = useRef<HTMLInputElement | null>(null);
-  const controllerSelectEditRef = useRef<HTMLSelectElement | null>(null);
+  const controllerScrollEditRef = useRef<HTMLElement | null>(null);
+  const controllerKeyboardTargetRef = useRef<OverlayEditableElement | null>(
+    null
+  );
+  const [controllerKeyboard, setControllerKeyboard] = useState<{
+    label: string;
+    multiline: boolean;
+    value: string;
+  } | null>(null);
+  const controllerInputArbitrationRef =
+    useRef<OverlayControllerArbitrationState>(null);
+  const controllerActionHandlerRef = useRef<
+    (action: HydraOverlayGamepadAction) => void
+  >(() => undefined);
+  const [controllerWidgetEdit, setControllerWidgetEdit] = useState<{
+    widgetId: OverlayWidgetId;
+    mode: OverlayWidgetControllerEditMode;
+  } | null>(null);
+  const [closeGameConfirmOpen, setCloseGameConfirmOpen] = useState(false);
   const rendererReadySentRef = useRef(false);
   const contextRequestIdRef = useRef(0);
   const draggingPidRef = useRef<number | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const {
+    adjustWidgetByController,
     beginWidgetDrag,
     beginWidgetResize,
     cycleWidgetSize,
@@ -404,15 +588,55 @@ export default function Overlay() {
     setWidgetVisible,
   } = useOverlayLayout(workspaceRef);
 
+  const toggleControllerWidgetEdit = useCallback(
+    (widgetId: OverlayWidgetId, mode: OverlayWidgetControllerEditMode) => {
+      if (layoutLocked) return;
+      setControllerWidgetEdit((current) =>
+        current?.widgetId === widgetId && current.mode === mode
+          ? null
+          : { widgetId, mode }
+      );
+      focusWidget(widgetId);
+    },
+    [focusWidget, layoutLocked]
+  );
+
   const widgetFrameProps = {
+    controllerEdit: controllerWidgetEdit,
     layoutLocked,
     registerWidget,
     onBeginDrag: beginWidgetDrag,
     onBeginResize: beginWidgetResize,
     onCycleSize: cycleWidgetSize,
+    onControllerEdit: toggleControllerWidgetEdit,
     onFocus: focusWidget,
-    onHide: (id: OverlayWidgetId) => setWidgetVisible(id, false),
+    onHide: (id: OverlayWidgetId) => {
+      setWidgetVisible(id, false);
+      if (document.body.classList.contains("overlay-controller-navigation")) {
+        window.requestAnimationFrame(() => focusControllerDefault(focusWidget));
+      }
+    },
   };
+
+  const closeControllerKeyboard = useCallback(() => {
+    const target = controllerKeyboardTargetRef.current;
+    controllerKeyboardTargetRef.current = null;
+    setControllerKeyboard(null);
+    if (target?.isConnected) {
+      window.requestAnimationFrame(() =>
+        focusControllerElement(target, focusWidget)
+      );
+    }
+  }, [focusWidget]);
+
+  const updateControllerKeyboardValue = useCallback((value: string) => {
+    const target = controllerKeyboardTargetRef.current;
+    if (!target?.isConnected) return;
+    setOverlayEditableValue(target, value);
+    setControllerKeyboard((current) =>
+      current ? { ...current, value } : current
+    );
+  }, []);
 
   // ── Music player state ─────────────────────────────────────────────────────
   const [musicState, setMusicState] = useState<MusicPlayerState | null>(null);
@@ -434,6 +658,12 @@ export default function Overlay() {
   const [expandedPlaylistId, setExpandedPlaylistId] = useState<string | null>(
     null
   );
+  const [playlistDeleteCandidate, setPlaylistDeleteCandidate] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [resetLayoutConfirmOpen, setResetLayoutConfirmOpen] = useState(false);
+  const resetLayoutTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const refreshMusicState = useCallback(() => {
     window.electron
@@ -676,6 +906,43 @@ export default function Overlay() {
     [refreshPlaylists]
   );
 
+  const restorePlaylistDeleteFocus = useCallback((id: string) => {
+    window.requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLElement>(
+          `#overlay-delete-playlist-${CSS.escape(id)}`
+        )
+        ?.focus({ preventScroll: true })
+    );
+  }, []);
+
+  const cancelPlaylistDelete = useCallback(() => {
+    const id = playlistDeleteCandidate?.id;
+    setPlaylistDeleteCandidate(null);
+    if (id) restorePlaylistDeleteFocus(id);
+  }, [playlistDeleteCandidate?.id, restorePlaylistDeleteFocus]);
+
+  const requestResetLayout = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      resetLayoutTriggerRef.current = event.currentTarget;
+      setResetLayoutConfirmOpen(true);
+    },
+    []
+  );
+
+  const cancelResetLayout = useCallback(() => {
+    const trigger = resetLayoutTriggerRef.current;
+    setResetLayoutConfirmOpen(false);
+    window.requestAnimationFrame(() => trigger?.focus({ preventScroll: true }));
+  }, []);
+
+  const confirmResetLayout = useCallback(() => {
+    resetLayout();
+    setResetLayoutConfirmOpen(false);
+    const trigger = resetLayoutTriggerRef.current;
+    window.requestAnimationFrame(() => trigger?.focus({ preventScroll: true }));
+  }, [resetLayout]);
+
   const handlePlayPlaylist = useCallback(
     (id: string) => {
       window.electron
@@ -812,6 +1079,7 @@ export default function Overlay() {
 
   const closeActiveGame = useCallback(() => {
     if (!gameProcessState?.canClose || gameProcessBusy) return;
+    setCloseGameConfirmOpen(false);
     setGameProcessBusy(true);
     void window.electron
       .closeActiveGame()
@@ -819,16 +1087,65 @@ export default function Overlay() {
       .finally(() => setGameProcessBusy(false));
   }, [gameProcessBusy, gameProcessState?.canClose]);
 
-  const stopControllerRangeEdit = useCallback(() => {
+  const requestCloseActiveGame = useCallback(() => {
+    if (!gameProcessState?.canClose || gameProcessBusy) return;
+    setCloseGameConfirmOpen(true);
+  }, [gameProcessBusy, gameProcessState?.canClose]);
+
+  const stopControllerEngagement = useCallback(() => {
     controllerRangeEditRef.current?.removeAttribute("data-controller-editing");
     controllerRangeEditRef.current = null;
-    controllerSelectEditRef.current?.removeAttribute("data-controller-editing");
-    controllerSelectEditRef.current = null;
+    controllerScrollEditRef.current?.removeAttribute("data-controller-editing");
+    controllerScrollEditRef.current?.removeAttribute("data-controller-scope");
+    controllerScrollEditRef.current = null;
   }, []);
 
   const handleControllerAction = useCallback(
     (action: HydraOverlayGamepadAction) => {
+      if (controllerWidgetEdit) {
+        if (action === "accept" || action === "back") {
+          const { widgetId, mode: editMode } = controllerWidgetEdit;
+          setControllerWidgetEdit(null);
+          window.requestAnimationFrame(() => {
+            const editButton = document.querySelector<HTMLElement>(
+              `[data-widget="${widgetId}"] [data-widget-controller-edit="${editMode}"]`
+            );
+            if (editButton) focusControllerElement(editButton, focusWidget);
+          });
+          return;
+        }
+        if (["up", "down", "left", "right"].includes(action)) {
+          adjustWidgetByController(
+            controllerWidgetEdit.widgetId,
+            controllerWidgetEdit.mode,
+            action as OverlayControllerDirection
+          );
+        }
+        return;
+      }
+
       if (action === "back") {
+        if (controllerKeyboard) {
+          closeControllerKeyboard();
+          return;
+        }
+        if (playlistDeleteCandidate) {
+          cancelPlaylistDelete();
+          return;
+        }
+        if (resetLayoutConfirmOpen) {
+          cancelResetLayout();
+          return;
+        }
+        if (closeGameConfirmOpen) {
+          setCloseGameConfirmOpen(false);
+          window.requestAnimationFrame(() =>
+            document
+              .querySelector<HTMLElement>("#overlay-close-game-trigger")
+              ?.focus({ preventScroll: true })
+          );
+          return;
+        }
         const openOverlaySelect = document.querySelector<HTMLButtonElement>(
           '.overlay-select__trigger[aria-expanded="true"]'
         );
@@ -842,36 +1159,99 @@ export default function Overlay() {
           );
           return;
         }
-        if (controllerRangeEditRef.current || controllerSelectEditRef.current) {
-          stopControllerRangeEdit();
+        if (controllerRangeEditRef.current) {
+          stopControllerEngagement();
           return;
         }
-        if (widgetMenuOpen) {
-          setWidgetMenuOpen(false);
-          return;
-        }
-        if (musicVolumeOpen) {
-          setMusicVolumeOpen(false);
+        const dismissibleScope = getActiveControllerScope();
+        if (
+          dismissibleScope?.getAttribute("data-controller-dismiss-on-back") ===
+          "true"
+        ) {
+          const scopeId = dismissibleScope.id;
+          const trigger = scopeId
+            ? document.querySelector<HTMLElement>(
+                `[aria-controls="${scopeId}"][aria-expanded="true"]`
+              )
+            : null;
+          trigger?.click();
+          window.requestAnimationFrame(() =>
+            trigger?.focus({ preventScroll: true })
+          );
           return;
         }
         if (playlistMenuTrackId) {
+          const trigger = document.querySelector<HTMLElement>(
+            '.overlay-music__search-plist-btn[aria-expanded="true"]'
+          );
           setPlaylistMenuTrackId(null);
+          window.requestAnimationFrame(() =>
+            trigger?.focus({ preventScroll: true })
+          );
           return;
         }
         if (creatingPlaylist) {
           setCreatingPlaylist(false);
           setNewPlaylistName("");
+          window.requestAnimationFrame(() =>
+            document
+              .querySelector<HTMLElement>(".overlay-music__plist-new")
+              ?.focus({ preventScroll: true })
+          );
           return;
         }
         if (expandedPlaylistId) {
+          const trigger = document.querySelector<HTMLElement>(
+            '.overlay-music__plist-info[aria-expanded="true"]'
+          );
           setExpandedPlaylistId(null);
+          window.requestAnimationFrame(() =>
+            trigger?.focus({ preventScroll: true })
+          );
+          return;
+        }
+        if (controllerScrollEditRef.current) {
+          const region = controllerScrollEditRef.current;
+          stopControllerEngagement();
+          focusControllerElement(region, focusWidget);
+          return;
+        }
+        // An engaged list is the user's active interaction layer. Dismiss it
+        // before unrelated controls that may still be expanded in another
+        // widget; otherwise Back can jump across the overlay and leave the
+        // current shelf trapped in edit mode.
+        if (widgetMenuOpen) {
+          setWidgetMenuOpen(false);
+          window.requestAnimationFrame(() =>
+            document
+              .querySelector<HTMLElement>(".overlay-header__widget-button")
+              ?.focus({ preventScroll: true })
+          );
+          return;
+        }
+        if (musicVolumeOpen) {
+          setMusicVolumeOpen(false);
+          window.requestAnimationFrame(() =>
+            document
+              .querySelector<HTMLElement>(".overlay-music__volume-trigger")
+              ?.focus({ preventScroll: true })
+          );
+          return;
+        }
+        if (expandedMixerPid !== null) {
+          const trigger = document.querySelector<HTMLElement>(
+            `.overlay-mixer__adjust[aria-controls="overlay-mixer-slider-${expandedMixerPid}"]`
+          );
+          setExpandedMixerPid(null);
+          window.requestAnimationFrame(() =>
+            trigger?.focus({ preventScroll: true })
+          );
           return;
         }
         const active = document.activeElement;
         if (
           active instanceof HTMLInputElement ||
-          active instanceof HTMLTextAreaElement ||
-          active instanceof HTMLSelectElement
+          active instanceof HTMLTextAreaElement
         ) {
           active.blur();
           focusControllerDefault(focusWidget);
@@ -884,15 +1264,25 @@ export default function Overlay() {
       document.body.classList.add("overlay-controller-navigation");
 
       if (action === "previous-tab" || action === "next-tab") {
+        const activeTabList =
+          document.activeElement?.closest('[role="tablist"]');
+        const musicWidget = document.querySelector<HTMLElement>(
+          '[data-widget="music"]'
+        );
+        const tabRoot =
+          activeTabList ??
+          (document.activeElement instanceof Node &&
+          musicWidget?.contains(document.activeElement)
+            ? musicWidget
+            : null);
+        if (!tabRoot) return;
         const tabs = Array.from(
-          document.querySelectorAll<HTMLButtonElement>(
-            ".overlay-music__tab, .spotify-overlay-panel__tab"
-          )
-        ).filter((tab) => tab.getBoundingClientRect().width > 0);
+          tabRoot.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+        ).filter((tab) => getVisibleControllerRect(tab) !== null);
         if (!tabs.length) return;
         const activeIndex = Math.max(
           0,
-          tabs.findIndex((tab) => tab.classList.contains("is-active"))
+          tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true")
         );
         const offset = action === "next-tab" ? 1 : -1;
         const next = tabs[(activeIndex + offset + tabs.length) % tabs.length];
@@ -902,21 +1292,6 @@ export default function Overlay() {
       }
 
       const active = document.activeElement;
-
-      if (
-        active instanceof HTMLButtonElement &&
-        active.classList.contains("overlay-select__trigger") &&
-        (action === "left" || action === "right")
-      ) {
-        active.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            key: action === "left" ? "ArrowLeft" : "ArrowRight",
-            bubbles: true,
-            cancelable: true,
-          })
-        );
-        return;
-      }
 
       if (
         active instanceof HTMLButtonElement &&
@@ -944,22 +1319,47 @@ export default function Overlay() {
       if (action === "accept") {
         if (active instanceof HTMLInputElement && active.type === "range") {
           if (controllerRangeEditRef.current === active) {
-            stopControllerRangeEdit();
+            stopControllerEngagement();
           } else {
-            stopControllerRangeEdit();
+            stopControllerEngagement();
             controllerRangeEditRef.current = active;
             active.setAttribute("data-controller-editing", "true");
           }
           return;
         }
-        if (active instanceof HTMLSelectElement) {
-          if (controllerSelectEditRef.current === active) {
-            stopControllerRangeEdit();
+        if (
+          active instanceof HTMLElement &&
+          active.hasAttribute("data-controller-focus-region")
+        ) {
+          if (controllerScrollEditRef.current === active) {
+            stopControllerEngagement();
           } else {
-            stopControllerRangeEdit();
-            controllerSelectEditRef.current = active;
+            stopControllerEngagement();
+            controllerScrollEditRef.current = active;
             active.setAttribute("data-controller-editing", "true");
+            active.setAttribute("data-controller-scope", "true");
+            window.requestAnimationFrame(() => {
+              const firstChild = Array.from(
+                active.querySelectorAll<HTMLElement>(
+                  CONTROLLER_FOCUSABLE_SELECTOR
+                )
+              ).find((element) => getVisibleControllerRect(element) !== null);
+              if (firstChild) focusControllerElement(firstChild, focusWidget);
+            });
           }
+          return;
+        }
+        if (isOverlayEditableElement(active)) {
+          stopControllerEngagement();
+          controllerKeyboardTargetRef.current = active;
+          setControllerKeyboard({
+            label:
+              active.getAttribute("aria-label") ||
+              active.placeholder ||
+              "Enter text",
+            multiline: active instanceof HTMLTextAreaElement,
+            value: active.value,
+          });
           return;
         }
         if (
@@ -975,36 +1375,113 @@ export default function Overlay() {
       if (
         active instanceof HTMLInputElement &&
         active.type === "range" &&
-        controllerRangeEditRef.current === active &&
-        (action === "left" || action === "right")
+        controllerRangeEditRef.current === active
       ) {
-        adjustControllerRange(active, action);
+        if (action === "left" || action === "right") {
+          adjustControllerRange(active, action);
+        }
         return;
       }
 
       if (
-        active instanceof HTMLSelectElement &&
-        controllerSelectEditRef.current === active
+        active instanceof HTMLElement &&
+        controllerScrollEditRef.current === active
       ) {
-        adjustControllerSelect(
-          active,
-          action === "left" || action === "up" ? "previous" : "next"
-        );
+        const verticalAmount = Math.max(64, active.clientHeight * 0.42);
+        const horizontalAmount = Math.max(64, active.clientWidth * 0.42);
+        active.scrollBy({
+          top:
+            action === "up"
+              ? -verticalAmount
+              : action === "down"
+                ? verticalAmount
+                : 0,
+          left:
+            action === "left"
+              ? -horizontalAmount
+              : action === "right"
+                ? horizontalAmount
+                : 0,
+          behavior: "smooth",
+        });
         return;
       }
 
-      stopControllerRangeEdit();
-      moveControllerFocus(action, focusWidget);
+      if (["up", "down", "left", "right"].includes(action)) {
+        const direction = action as OverlayControllerDirection;
+        const engagedRegion = controllerScrollEditRef.current;
+        const isInsideEngagedRegion =
+          Boolean(engagedRegion) &&
+          active instanceof HTMLElement &&
+          engagedRegion!.contains(active);
+        const moved = moveControllerFocus(
+          direction,
+          focusWidget,
+          isInsideEngagedRegion ? engagedRegion! : undefined
+        );
+        if (
+          !moved &&
+          engagedRegion &&
+          isInsideEngagedRegion &&
+          active instanceof HTMLElement
+        ) {
+          moveControllerFocusSequentiallyInRegion(
+            engagedRegion,
+            active,
+            direction,
+            focusWidget
+          );
+        }
+      }
     },
     [
+      adjustWidgetByController,
+      closeGameConfirmOpen,
+      closeControllerKeyboard,
+      cancelPlaylistDelete,
+      cancelResetLayout,
+      controllerKeyboard,
+      controllerWidgetEdit,
       creatingPlaylist,
+      expandedMixerPid,
       expandedPlaylistId,
       focusWidget,
       musicVolumeOpen,
       playlistMenuTrackId,
-      stopControllerRangeEdit,
+      playlistDeleteCandidate,
+      resetLayoutConfirmOpen,
+      stopControllerEngagement,
       widgetMenuOpen,
     ]
+  );
+  controllerActionHandlerRef.current = handleControllerAction;
+
+  const dispatchControllerAction = useCallback(
+    (action: HydraOverlayGamepadAction, source: "native" | "browser") => {
+      if (
+        document.visibilityState !== "visible" ||
+        !document.hasFocus() ||
+        !document.querySelector(".overlay--full")
+      ) {
+        controllerInputArbitrationRef.current = null;
+        return;
+      }
+      const now = window.performance.now();
+      // Chromium and native XInput can expose the same physical edge. Suppress
+      // only a near-simultaneous matching cross-source edge; a different action
+      // or a source failover remains usable immediately instead of waiting for
+      // an arbitrary source lock timeout.
+      const arbitration = arbitrateOverlayControllerAction(
+        controllerInputArbitrationRef.current,
+        action,
+        source,
+        now
+      );
+      controllerInputArbitrationRef.current = arbitration.state;
+      if (!arbitration.accepted) return;
+      controllerActionHandlerRef.current(action);
+    },
+    []
   );
 
   useEffect(() => {
@@ -1049,17 +1526,55 @@ export default function Overlay() {
           current ? { ...current, performancePinned: pinned } : current
         );
       }),
-      window.electron.onOverlayGamepadAction(handleControllerAction),
+      window.electron.onOverlayGamepadAction((action) =>
+        dispatchControllerAction(action, "native")
+      ),
       window.electron.onGameRecorderState(setRecorderState),
     ];
     return () => unsubscribers.forEach((off) => off?.());
   }, [
     focusWidget,
-    handleControllerAction,
+    dispatchControllerAction,
     initialMode,
     refreshContext,
     refreshRecorderState,
   ]);
+
+  useEffect(() => {
+    if (mode !== "full" || typeof navigator.getGamepads !== "function") return;
+
+    let animationFrame = 0;
+    let pollState = createOverlayGamepadPollState();
+    const poll = (now: number) => {
+      if (
+        document.visibilityState === "visible" &&
+        document.hasFocus() &&
+        document.querySelector(".overlay--full")
+      ) {
+        let gamepads: (Gamepad | null)[] = [];
+        try {
+          gamepads = Array.from(navigator.getGamepads());
+        } catch {
+          // Some Chromium builds expose the method before the Gamepad service
+          // is available. The native watcher remains active in that case.
+        }
+        const frame = advanceOverlayGamepadPoll(
+          pollState,
+          getOverlayBrowserGamepadMask(gamepads),
+          now
+        );
+        pollState = frame.state;
+        if (frame.action) dispatchControllerAction(frame.action, "browser");
+      } else {
+        pollState = createOverlayGamepadPollState();
+        controllerInputArbitrationRef.current = null;
+      }
+      animationFrame = window.requestAnimationFrame(poll);
+    };
+
+    animationFrame = window.requestAnimationFrame(poll);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [dispatchControllerAction, mode]);
 
   useEffect(() => {
     if (
@@ -1095,26 +1610,210 @@ export default function Overlay() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (controllerRangeEditRef.current) {
-        stopControllerRangeEdit();
-      } else if (widgetMenuOpen) {
-        setWidgetMenuOpen(false);
-      } else if (musicVolumeOpen) {
-        setMusicVolumeOpen(false);
-      } else {
-        void window.electron.closeHydraOverlay();
+      if (mode !== "full" || event.defaultPrevented) return;
+
+      if (event.key === "Tab") {
+        const elements = getControllerElements();
+        if (!elements.length) return;
+        event.preventDefault();
+        document.body.classList.add("overlay-controller-navigation");
+        const activeIndex = elements.indexOf(
+          document.activeElement as HTMLElement
+        );
+        const offset = event.shiftKey ? -1 : 1;
+        const nextIndex =
+          activeIndex < 0
+            ? event.shiftKey
+              ? elements.length - 1
+              : 0
+            : (activeIndex + offset + elements.length) % elements.length;
+        focusControllerElement(elements[nextIndex], focusWidget);
+        return;
       }
+
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLButtonElement &&
+        activeElement.getAttribute("role") === "tab" &&
+        ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+      ) {
+        const tabList = activeElement.closest<HTMLElement>('[role="tablist"]');
+        const tabs = Array.from(
+          tabList?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []
+        ).filter((tab) => getVisibleControllerRect(tab) !== null);
+        if (tabs.length) {
+          event.preventDefault();
+          const currentIndex = Math.max(0, tabs.indexOf(activeElement));
+          const nextIndex =
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? tabs.length - 1
+                : (currentIndex +
+                    (event.key === "ArrowRight" ? 1 : -1) +
+                    tabs.length) %
+                  tabs.length;
+          tabs[nextIndex].click();
+          focusControllerElement(tabs[nextIndex], focusWidget);
+          return;
+        }
+      }
+
+      if (
+        activeElement instanceof HTMLElement &&
+        ["Enter", " "].includes(event.key) &&
+        (activeElement.hasAttribute("data-controller-focus-region") ||
+          (activeElement instanceof HTMLInputElement &&
+            activeElement.type === "range"))
+      ) {
+        event.preventDefault();
+        handleControllerAction("accept");
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleControllerAction("back");
+        return;
+      }
+
+      const directionByKey: Partial<
+        Record<string, OverlayControllerDirection>
+      > = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+      };
+      const direction = directionByKey[event.key];
+      if (!direction || isOverlayEditableElement(document.activeElement))
+        return;
+      event.preventDefault();
+      document.body.classList.add("overlay-controller-navigation");
+      handleControllerAction(direction);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [musicVolumeOpen, stopControllerRangeEdit, widgetMenuOpen]);
+  }, [focusWidget, handleControllerAction, mode]);
+
+  useEffect(() => {
+    if (mode !== "full") {
+      setControllerWidgetEdit(null);
+      stopControllerEngagement();
+      controllerInputArbitrationRef.current = null;
+      controllerKeyboardTargetRef.current = null;
+      setControllerKeyboard(null);
+    }
+  }, [mode, stopControllerEngagement]);
+
+  useEffect(() => {
+    if (mode !== "full") return;
+    const onBlur = () => {
+      controllerInputArbitrationRef.current = null;
+      setControllerWidgetEdit(null);
+      stopControllerEngagement();
+    };
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, [mode, stopControllerEngagement]);
+
+  useEffect(() => {
+    if (!widgetMenuOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (!document.body.classList.contains("overlay-controller-navigation")) {
+        return;
+      }
+      document
+        .querySelector<HTMLElement>("#overlay-widget-menu input:not(:disabled)")
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [widgetMenuOpen]);
+
+  useEffect(() => {
+    if (!musicVolumeOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (!document.body.classList.contains("overlay-controller-navigation")) {
+        return;
+      }
+      document
+        .querySelector<HTMLElement>("#overlay-music-volume-controls button")
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [musicVolumeOpen]);
+
+  useEffect(() => {
+    if (!playlistMenuTrackId) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (!document.body.classList.contains("overlay-controller-navigation")) {
+        return;
+      }
+      document
+        .querySelector<HTMLElement>(
+          `#overlay-playlist-menu-${CSS.escape(playlistMenuTrackId)} button`
+        )
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [playlistMenuTrackId]);
+
+  useEffect(() => {
+    if (!creatingPlaylist) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (!document.body.classList.contains("overlay-controller-navigation")) {
+        return;
+      }
+      document
+        .querySelector<HTMLElement>(".overlay-music__plist-input")
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [creatingPlaylist]);
+
+  useEffect(() => {
+    if (!closeGameConfirmOpen) return;
+    stopControllerEngagement();
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>("#overlay-close-game-cancel")
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [closeGameConfirmOpen, stopControllerEngagement]);
+
+  useEffect(() => {
+    if (!playlistDeleteCandidate) return;
+    stopControllerEngagement();
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>("#overlay-delete-playlist-cancel")
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [playlistDeleteCandidate, stopControllerEngagement]);
+
+  useEffect(() => {
+    if (!resetLayoutConfirmOpen) return;
+    stopControllerEngagement();
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>("#overlay-reset-layout-cancel")
+        ?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [resetLayoutConfirmOpen, stopControllerEngagement]);
+
+  useEffect(() => {
+    if (layoutLocked) setControllerWidgetEdit(null);
+  }, [layoutLocked]);
 
   useEffect(() => {
     document.body.classList.add("overlay-window");
     const usePointerNavigation = () => {
       document.body.classList.remove("overlay-controller-navigation");
-      stopControllerRangeEdit();
+      setControllerWidgetEdit(null);
+      stopControllerEngagement();
     };
     window.addEventListener("pointerdown", usePointerNavigation);
     return () => {
@@ -1124,7 +1823,7 @@ export default function Overlay() {
         "overlay-controller-navigation"
       );
     };
-  }, [stopControllerRangeEdit]);
+  }, [stopControllerEngagement]);
 
   // Pinned quick-launch apps.
   useEffect(() => {
@@ -1264,14 +1963,26 @@ export default function Overlay() {
   if (mode === "toast") {
     return (
       <div className="overlay overlay--toast">
-        <div className="overlay-toast">
-          <span className="overlay-toast__dot" />
+        <div
+          className={`overlay-toast${inputGateError ? " overlay-toast--error" : ""}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="overlay-toast__dot" aria-hidden="true" />
           <div className="overlay-toast__body">
-            <strong>The overlay is ready</strong>
-            <p>
-              Press <kbd>{context?.shortcut ?? "Shift+F3"}</kbd> or press the
-              Guide button once to open it.
-            </p>
+            <strong>
+              {inputGateError
+                ? "Overlay input protection unavailable"
+                : "The overlay is ready"}
+            </strong>
+            {inputGateError ? (
+              <p>{inputGateError}</p>
+            ) : (
+              <p>
+                Press <kbd>{context?.shortcut ?? "Shift+F3"}</kbd> or press the
+                Guide button once to open it.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -1367,12 +2078,16 @@ export default function Overlay() {
                   </span>
                 </button>
                 <button
+                  id="overlay-close-game-trigger"
                   type="button"
                   className="overlay-header__process-button overlay-header__process-button--danger"
-                  onClick={closeActiveGame}
+                  onClick={requestCloseActiveGame}
                   disabled={gameProcessBusy || !gameProcessState.canClose}
                   title="Close game"
                   aria-label="Close game"
+                  aria-haspopup="dialog"
+                  aria-expanded={closeGameConfirmOpen}
+                  aria-controls="overlay-close-game-dialog"
                 >
                   <Power size={15} />
                   <span>Close game</span>
@@ -1396,6 +2111,7 @@ export default function Overlay() {
                 <div
                   id="overlay-widget-menu"
                   className="overlay-widget-menu"
+                  data-controller-scope="true"
                   role="group"
                   aria-label="Show or hide overlay widgets"
                 >
@@ -1427,7 +2143,9 @@ export default function Overlay() {
                   <button
                     type="button"
                     className="overlay-widget-menu__reset"
-                    onClick={resetLayout}
+                    onClick={requestResetLayout}
+                    aria-haspopup="dialog"
+                    aria-controls="overlay-reset-layout-dialog"
                   >
                     <SyncIcon size={14} />
                     Restore default layout
@@ -1438,9 +2156,11 @@ export default function Overlay() {
             <button
               type="button"
               className="overlay-header__button"
-              onClick={resetLayout}
+              onClick={requestResetLayout}
               aria-label="Reset widget layout"
               title="Reset widget layout"
+              aria-haspopup="dialog"
+              aria-controls="overlay-reset-layout-dialog"
             >
               <SyncIcon size={16} />
             </button>
@@ -1468,6 +2188,214 @@ export default function Overlay() {
             </button>
           </div>
         </header>
+
+        {closeGameConfirmOpen && (
+          <div
+            className="overlay-confirm-backdrop"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setCloseGameConfirmOpen(false);
+                window.requestAnimationFrame(() =>
+                  document
+                    .querySelector<HTMLElement>("#overlay-close-game-trigger")
+                    ?.focus({ preventScroll: true })
+                );
+              }
+            }}
+          >
+            <section
+              id="overlay-close-game-dialog"
+              className="overlay-confirm"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="overlay-close-game-title"
+              aria-describedby="overlay-close-game-description"
+              data-controller-scope="true"
+            >
+              <div className="overlay-confirm__icon" aria-hidden="true">
+                <Power size={20} />
+              </div>
+              <div className="overlay-confirm__copy">
+                <h2 id="overlay-close-game-title">Close this game?</h2>
+                <p id="overlay-close-game-description">
+                  Unsaved progress may be lost. This closes the game process,
+                  not only the overlay.
+                </p>
+              </div>
+              <div className="overlay-confirm__actions">
+                <button
+                  id="overlay-close-game-cancel"
+                  type="button"
+                  onClick={() => {
+                    setCloseGameConfirmOpen(false);
+                    window.requestAnimationFrame(() =>
+                      document
+                        .querySelector<HTMLElement>(
+                          "#overlay-close-game-trigger"
+                        )
+                        ?.focus({ preventScroll: true })
+                    );
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="overlay-confirm__danger"
+                  onClick={closeActiveGame}
+                  disabled={gameProcessBusy}
+                >
+                  Close game
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {playlistDeleteCandidate && (
+          <div
+            className="overlay-confirm-backdrop"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) cancelPlaylistDelete();
+            }}
+          >
+            <section
+              id="overlay-delete-playlist-dialog"
+              className="overlay-confirm"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="overlay-delete-playlist-title"
+              aria-describedby="overlay-delete-playlist-description"
+              data-controller-scope="true"
+            >
+              <div className="overlay-confirm__icon" aria-hidden="true">
+                <TrashIcon size={20} />
+              </div>
+              <div className="overlay-confirm__copy">
+                <h2 id="overlay-delete-playlist-title">Delete playlist?</h2>
+                <p id="overlay-delete-playlist-description">
+                  “{playlistDeleteCandidate.name}” will be removed from GameHub.
+                  The tracks themselves will remain available.
+                </p>
+              </div>
+              <div className="overlay-confirm__actions">
+                <button
+                  id="overlay-delete-playlist-cancel"
+                  type="button"
+                  onClick={cancelPlaylistDelete}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="overlay-confirm__danger"
+                  onClick={() => {
+                    const id = playlistDeleteCandidate.id;
+                    setPlaylistDeleteCandidate(null);
+                    handleDeletePlaylist(id);
+                    window.requestAnimationFrame(() =>
+                      document
+                        .querySelector<HTMLElement>(
+                          ".overlay-music__plist-list, .overlay-music__plist-new"
+                        )
+                        ?.focus({ preventScroll: true })
+                    );
+                  }}
+                >
+                  Delete playlist
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {resetLayoutConfirmOpen && (
+          <div
+            className="overlay-confirm-backdrop"
+            onPointerDown={(event) => {
+              if (event.target === event.currentTarget) cancelResetLayout();
+            }}
+          >
+            <section
+              id="overlay-reset-layout-dialog"
+              className="overlay-confirm"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="overlay-reset-layout-title"
+              aria-describedby="overlay-reset-layout-description"
+              data-controller-scope="true"
+            >
+              <div className="overlay-confirm__icon" aria-hidden="true">
+                <SyncIcon size={20} />
+              </div>
+              <div className="overlay-confirm__copy">
+                <h2 id="overlay-reset-layout-title">Restore default layout?</h2>
+                <p id="overlay-reset-layout-description">
+                  Widget positions, sizes, visibility, and stacking order will
+                  return to the GameHub defaults.
+                </p>
+              </div>
+              <div className="overlay-confirm__actions">
+                <button
+                  id="overlay-reset-layout-cancel"
+                  type="button"
+                  onClick={cancelResetLayout}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="overlay-confirm__danger"
+                  onClick={confirmResetLayout}
+                >
+                  Restore defaults
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {controllerKeyboard && (
+          <OverlayControllerKeyboard
+            label={controllerKeyboard.label}
+            multiline={controllerKeyboard.multiline}
+            value={controllerKeyboard.value}
+            onChange={updateControllerKeyboardValue}
+            onClose={closeControllerKeyboard}
+          />
+        )}
+
+        <div
+          className="overlay-controller-hints"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {controllerWidgetEdit ? (
+            <>
+              <kbd>D-pad</kbd>
+              <span>
+                {controllerWidgetEdit.mode === "move" ? "Move" : "Resize"}
+              </span>
+              <kbd>A</kbd>
+              <span>Done</span>
+              <kbd>B</kbd>
+              <span>Exit</span>
+            </>
+          ) : (
+            <>
+              <kbd>A</kbd>
+              <span>Select / engage</span>
+              <kbd>B</kbd>
+              <span>Back</span>
+              <span className="overlay-controller-hints__tabs">
+                <kbd>LB</kbd>
+                <kbd>RB</kbd>
+                <span>Tabs</span>
+              </span>
+            </>
+          )}
+        </div>
 
         <div className="overlay-grid" ref={workspaceRef}>
           <div className="overlay-col overlay-col--left">
@@ -1568,12 +2496,16 @@ export default function Overlay() {
                     </button>
                   ))}
                 </div>
-                <ul className="overlay-ach">
+                <ul
+                  className="overlay-ach"
+                  role="region"
+                  tabIndex={0}
+                  data-controller-focus-region
+                  aria-label="Achievement list. Press Select to browse, then Back to leave."
+                >
                   {filteredAchievements.map((achievement) => (
                     <li
                       key={achievement.name}
-                      ref={registerControllerItem}
-                      data-controller-item
                       className={`overlay-ach__item ${
                         achievement.unlocked ? "is-unlocked" : ""
                       } ${achievement.hidden ? "is-hidden" : ""}`}
@@ -1709,7 +2641,20 @@ export default function Overlay() {
                           ]}
                         />
                       </div>
-                      <div className="overlay-capture__buffer">
+                      <div
+                        className="overlay-capture__buffer"
+                        role="progressbar"
+                        aria-label="Instant Replay buffer"
+                        aria-valuemin={0}
+                        aria-valuemax={
+                          recorderState.configuration.replayDurationSeconds
+                        }
+                        aria-valuenow={Math.min(
+                          recorderState.configuration.replayDurationSeconds,
+                          Math.max(0, recorderState.bufferedSeconds ?? 0)
+                        )}
+                        aria-valuetext={replayPresentation?.bufferLabel}
+                      >
                         <span
                           style={{
                             width: `${replayPresentation?.progressPercent ?? 0}%`,
@@ -2057,6 +3002,7 @@ export default function Overlay() {
                                   <div
                                     id="overlay-music-volume-controls"
                                     className="overlay-music__volume-panel"
+                                    data-controller-scope="true"
                                   >
                                     <button
                                       type="button"
@@ -2137,7 +3083,13 @@ export default function Overlay() {
                                     Clear
                                   </button>
                                 </div>
-                                <ul className="overlay-music__queue-list">
+                                <ul
+                                  className="overlay-music__queue-list"
+                                  role="region"
+                                  tabIndex={0}
+                                  data-controller-focus-region
+                                  aria-label="Music queue. Press Select to browse, then Back to leave."
+                                >
                                   {musicState.queue.map((track, i) => (
                                     <li
                                       key={`${track.id}-${i}`}
@@ -2201,6 +3153,7 @@ export default function Overlay() {
                           <input
                             className="overlay-music__search-input"
                             type="text"
+                            aria-label="Search tracks and artists"
                             placeholder="Search tracks and artists"
                             value={searchQuery}
                             onChange={(event) =>
@@ -2212,7 +3165,13 @@ export default function Overlay() {
                           {searching ? (
                             <p className="overlay-ach__empty">Searching…</p>
                           ) : searchResults.length > 0 ? (
-                            <ul className="overlay-music__search-list">
+                            <ul
+                              className="overlay-music__search-list"
+                              role="region"
+                              tabIndex={0}
+                              data-controller-focus-region
+                              aria-label="Music search results. Press Select to browse, then Back to leave."
+                            >
                               {searchResults.map((track) => (
                                 <li
                                   key={track.id}
@@ -2263,6 +3222,7 @@ export default function Overlay() {
                                         aria-expanded={
                                           playlistMenuTrackId === track.id
                                         }
+                                        aria-controls={`overlay-playlist-menu-${track.id}`}
                                         onClick={() =>
                                           setPlaylistMenuTrackId((current) =>
                                             current === track.id
@@ -2274,7 +3234,11 @@ export default function Overlay() {
                                         <ListMusic size={14} />
                                       </button>
                                       {playlistMenuTrackId === track.id && (
-                                        <div className="overlay-music__search-plist-drop">
+                                        <div
+                                          id={`overlay-playlist-menu-${track.id}`}
+                                          className="overlay-music__search-plist-drop"
+                                          data-controller-scope="true"
+                                        >
                                           {playlists.length > 0 ? (
                                             playlists.map((pl) => (
                                               <button
@@ -2333,6 +3297,7 @@ export default function Overlay() {
                             <input
                               className="overlay-music__plist-input"
                               type="text"
+                              aria-label="Playlist name"
                               placeholder="Playlist name…"
                               value={newPlaylistName}
                               onChange={(event) =>
@@ -2376,7 +3341,13 @@ export default function Overlay() {
                           </button>
                         )}
                         {playlists.length > 0 ? (
-                          <ul className="overlay-music__plist-list">
+                          <ul
+                            className="overlay-music__plist-list"
+                            role="region"
+                            tabIndex={0}
+                            data-controller-focus-region
+                            aria-label="Music playlists. Press Select to browse, then Back to leave."
+                          >
                             {playlists.map((pl) => (
                               <li
                                 key={pl.id}
@@ -2411,12 +3382,18 @@ export default function Overlay() {
                                       <Play size={13} fill="currentColor" />
                                     </button>
                                     <button
+                                      id={`overlay-delete-playlist-${pl.id}`}
                                       type="button"
                                       className="overlay-music__plist-del"
                                       onClick={() =>
-                                        handleDeletePlaylist(pl.id)
+                                        setPlaylistDeleteCandidate({
+                                          id: pl.id,
+                                          name: pl.name,
+                                        })
                                       }
                                       aria-label={`Delete ${pl.name}`}
+                                      aria-haspopup="dialog"
+                                      aria-controls="overlay-delete-playlist-dialog"
                                     >
                                       <TrashIcon size={13} />
                                     </button>
@@ -2507,14 +3484,15 @@ export default function Overlay() {
                 widgetStyle={getWidgetStyle("friends")}
                 {...widgetFrameProps}
               >
-                <ul className="overlay-friends">
+                <ul
+                  className="overlay-friends"
+                  role="region"
+                  tabIndex={0}
+                  data-controller-focus-region
+                  aria-label="Friend activity. Press Select to browse, then Back to leave."
+                >
                   {friends.map((friend) => (
-                    <li
-                      key={friend.id}
-                      ref={registerControllerItem}
-                      className="overlay-friend"
-                      data-controller-item
-                    >
+                    <li key={friend.id} className="overlay-friend">
                       {friend.profileImageUrl ? (
                         <img
                           className="overlay-friend__av"
@@ -2563,7 +3541,13 @@ export default function Overlay() {
                 widgetStyle={getWidgetStyle("mixer")}
                 {...widgetFrameProps}
               >
-                <ul className="overlay-mixer">
+                <ul
+                  className="overlay-mixer"
+                  role="region"
+                  tabIndex={0}
+                  data-controller-focus-region
+                  aria-label="Volume mixer. Press Select to browse, then Back to leave."
+                >
                   {audioSessions.map((session) => (
                     <li
                       key={session.pid}
@@ -2594,6 +3578,7 @@ export default function Overlay() {
                           className="overlay-mixer__adjust"
                           aria-expanded={expandedMixerPid === session.pid}
                           aria-controls={`overlay-mixer-slider-${session.pid}`}
+                          aria-label={`Adjust ${session.name} volume, ${Math.round(session.volume * 100)} percent`}
                           onClick={() =>
                             setExpandedMixerPid((current) =>
                               current === session.pid ? null : session.pid
@@ -2655,38 +3640,49 @@ export default function Overlay() {
               >
                 <div className="overlay-pins">
                   {pinnedApps.map((app) => (
-                    <button
-                      key={app.path}
-                      type="button"
-                      className="overlay-pin-tile"
-                      onClick={() =>
-                        void window.electron.launchPinnedApp(app.path)
-                      }
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        unpinApp(app.path);
-                      }}
-                      title={`${app.name} — right-click to unpin`}
-                    >
-                      <span
-                        className="overlay-pin-tile__glyph"
-                        aria-hidden="true"
+                    <div key={app.path} className="overlay-pin-entry">
+                      <button
+                        type="button"
+                        className="overlay-pin-tile"
+                        onClick={() =>
+                          void window.electron.launchPinnedApp(app.path)
+                        }
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          unpinApp(app.path);
+                        }}
+                        aria-label={`Launch ${app.name}`}
+                        title={`Launch ${app.name}`}
                       >
-                        {app.iconUrl ? (
-                          <img
-                            className="overlay-pin-tile__icon"
-                            src={app.iconUrl}
-                            alt=""
-                            draggable={false}
-                          />
-                        ) : (
-                          <AppsIcon size={17} />
-                        )}
-                      </span>
-                      <span className="overlay-pin-tile__label">
-                        {app.name}
-                      </span>
-                    </button>
+                        <span
+                          className="overlay-pin-tile__glyph"
+                          aria-hidden="true"
+                        >
+                          {app.iconUrl ? (
+                            <img
+                              className="overlay-pin-tile__icon"
+                              src={app.iconUrl}
+                              alt=""
+                              draggable={false}
+                            />
+                          ) : (
+                            <AppsIcon size={17} />
+                          )}
+                        </span>
+                        <span className="overlay-pin-tile__label">
+                          {app.name}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="overlay-pin-entry__remove"
+                        onClick={() => unpinApp(app.path)}
+                        aria-label={`Unpin ${app.name}`}
+                        title={`Unpin ${app.name}`}
+                      >
+                        <XIcon size={12} />
+                      </button>
+                    </div>
                   ))}
                   <button
                     type="button"
@@ -2717,6 +3713,7 @@ export default function Overlay() {
               >
                 <textarea
                   className="overlay-notes"
+                  aria-label="Game notes"
                   value={note}
                   placeholder="Jot down a code, a boss strategy, where you left off…"
                   onChange={(event) => handleNoteChange(event.target.value)}

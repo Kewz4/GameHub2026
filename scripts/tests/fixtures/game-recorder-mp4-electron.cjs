@@ -123,6 +123,11 @@ app.whenReady().then(async () => {
           // MP4 muxer. This exercises the production A/V timescale rebasing and
           // final AAC stream-copy path without playing a test tone aloud.
           const audioContext = new AudioContext({ sampleRate: 48_000 });
+          // Production capture runs inside a hidden BrowserWindow without a
+          // direct user gesture. Exercise Electron's autoplay policy explicitly
+          // instead of relying on oscillator creation to resume implicitly.
+          await audioContext.resume();
+          const audioContextStateAfterResume = audioContext.state;
           const destination = audioContext.createMediaStreamDestination();
           const oscillator = audioContext.createOscillator();
           const gain = audioContext.createGain();
@@ -178,6 +183,7 @@ app.whenReady().then(async () => {
               encodingInfo,
               recorderVideoBitsPerSecond: recorder.videoBitsPerSecond,
               videoTrackSettings: displayStream.getVideoTracks()[0]?.getSettings(),
+              audioContextStateAfterResume,
             });
           });
           recorder.start(700);

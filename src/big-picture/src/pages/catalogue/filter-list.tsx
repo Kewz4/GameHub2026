@@ -11,7 +11,11 @@ import {
 import { Checkbox, Typography } from "../../components";
 import { useNavigationActions } from "../../hooks";
 import { getCatalogueFilterCheckboxFocusId } from "./navigation";
-import { FilterType, type SearchGamesFormValues } from "./use-catalogue-data";
+import {
+  type CatalogueMetadataStatus,
+  FilterType,
+  type SearchGamesFormValues,
+} from "./use-catalogue-data";
 
 export type CatalogueFilterData =
   | string[]
@@ -36,6 +40,7 @@ export interface CatalogueFilterListHandle {
 interface FilterSectionProps {
   items: CatalogueFilterListItem[];
   name: FilterType;
+  status: CatalogueMetadataStatus;
   values: SearchGamesFormValues;
   updateSearchParams: (newValues: Partial<SearchGamesFormValues>) => void;
 }
@@ -93,7 +98,7 @@ export const CatalogueFilterList = forwardRef<
   CatalogueFilterListHandle,
   Readonly<FilterSectionProps>
 >(function CatalogueFilterList(
-  { items, name, values, updateSearchParams },
+  { items, name, status, values, updateSearchParams },
   ref
 ) {
   const listRef = useRef<ListRef>(null);
@@ -213,7 +218,11 @@ export const CatalogueFilterList = forwardRef<
       <div ref={viewportRef} className="catalogue-filter-list__viewport">
         <div className="filter-section__empty">
           <Typography variant="label" className="filter-section__empty__text">
-            No results found
+            {status === "loading"
+              ? "Loading filters…"
+              : status === "unavailable"
+                ? "Filter data is unavailable"
+                : "No results found"}
           </Typography>
         </div>
       </div>

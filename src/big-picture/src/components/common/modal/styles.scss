@@ -98,6 +98,13 @@
         opacity: 1;
         transform: translateX(-2px);
       }
+
+      &:focus-visible,
+      &[data-focus-visible="true"] {
+        opacity: 1;
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+      }
     }
 
     &-close-button {
@@ -117,6 +124,14 @@
 
       &:hover {
         opacity: 1;
+      }
+
+      &:focus-visible,
+      &[data-focus-visible="true"] {
+        opacity: 1;
+        outline: 2px solid var(--primary);
+        outline-offset: 2px;
+        border-radius: calc(var(--spacing-unit) * 1.5);
       }
     }
   }

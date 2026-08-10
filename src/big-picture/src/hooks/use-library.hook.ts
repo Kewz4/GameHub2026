@@ -1,14 +1,41 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IS_DESKTOP } from "../constants";
 import type { LibraryGame } from "@types";
 
 export function useLibrary() {
   const [library, setLibrary] = useState<LibraryGame[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<Error | null>(null);
+  const loadRequestIdRef = useRef(0);
 
   const updateLibrary = useCallback(async () => {
-    if (!IS_DESKTOP) return;
-    const updatedLibrary = await globalThis.window.electron.getLibrary();
-    setLibrary(updatedLibrary);
+    const requestId = ++loadRequestIdRef.current;
+
+    if (!IS_DESKTOP) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const updatedLibrary = await globalThis.window.electron.getLibrary();
+
+      if (requestId !== loadRequestIdRef.current) return;
+
+      setLibrary(updatedLibrary);
+      setLoadError(null);
+    } catch (error) {
+      if (requestId !== loadRequestIdRef.current) return;
+
+      setLoadError(
+        error instanceof Error ? error : new Error("Failed to load library")
+      );
+    } finally {
+      if (requestId === loadRequestIdRef.current) {
+        setIsLoading(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -39,5 +66,5 @@ export function useLibrary() {
     };
   }, [updateLibrary]);
 
-  return { library, updateLibrary };
+  return { library, updateLibrary, isLoading, loadError };
 }

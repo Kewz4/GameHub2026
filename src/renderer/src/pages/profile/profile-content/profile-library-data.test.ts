@@ -4,6 +4,7 @@ import type { UserGame } from "@types";
 import {
   dedupeProfileGames,
   mergeProfileGameCollections,
+  profileGameHasAchievements,
   profileGameKey,
   sortProfileGames,
   totalProfilePlayTimeInSeconds,
@@ -31,6 +32,19 @@ describe("profile library data", () => {
   it("uses shop and objectId as the stable identity", () => {
     assert.equal(profileGameKey(game("steam", "10", "A")), "steam:10");
     assert.equal(profileGameKey(game("gog", "10", "A")), "gog:10");
+  });
+
+  it("opens achievement progress based on game data, without a plan flag", () => {
+    assert.equal(
+      profileGameHasAchievements(
+        game("steam", "10", "With achievements", { achievementCount: 12 })
+      ),
+      true
+    );
+    assert.equal(
+      profileGameHasAchievements(game("steam", "20", "Without achievements")),
+      false
+    );
   });
 
   it("collapses exact-title imports while keeping richer progress", () => {

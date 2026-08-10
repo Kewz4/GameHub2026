@@ -1,6 +1,7 @@
 import type { FocusOverrideTarget } from "../services";
 import { DOWNLOADS_PAGE_REGION_ID } from "../components/pages/downloads/navigation";
 import { GAME_PAGE_REGION_ID } from "../components/pages/game/navigation";
+import { GAME_ACHIEVEMENTS_PAGE_REGION_ID } from "../components/pages/game-achievements/navigation";
 import { CATALOGUE_GRID_REGION_ID } from "../pages/catalogue/navigation";
 import { HOME_PAGE_REGION_ID } from "../pages/home/navigation";
 import { SETTINGS_PAGE_REGION_ID } from "../pages/settings/navigation";
@@ -46,6 +47,7 @@ export type BigPictureSidebarRouteKey =
 export interface BigPictureGameRouteMatch {
   shop: string;
   objectId: string;
+  section?: "achievements";
 }
 
 export function getBigPictureSidebarLibraryGameFocusId(
@@ -58,13 +60,18 @@ export function getBigPictureGameRouteMatch(
   pathname: string
 ): BigPictureGameRouteMatch | null {
   const normalizedPathname = normalizeBigPicturePathname(pathname);
-  const match = normalizedPathname.match(/^\/game\/([^/]+)\/([^/]+)$/);
+  const match = normalizedPathname.match(
+    /^\/game\/([^/]+)\/([^/]+)(?:\/(achievements))?$/
+  );
 
   if (!match) return null;
 
   return {
     shop: decodeURIComponent(match[1]),
     objectId: decodeURIComponent(match[2]),
+    ...(match[3] === "achievements"
+      ? { section: "achievements" as const }
+      : {}),
   };
 }
 
@@ -150,7 +157,13 @@ export function getBigPictureContentEntryRegionIdFromPathname(
     return SETTINGS_PAGE_REGION_ID;
   }
 
-  if (getBigPictureGameRouteMatch(normalizedPathname)) {
+  const gameRoute = getBigPictureGameRouteMatch(normalizedPathname);
+
+  if (gameRoute?.section === "achievements") {
+    return GAME_ACHIEVEMENTS_PAGE_REGION_ID;
+  }
+
+  if (gameRoute) {
     return GAME_PAGE_REGION_ID;
   }
 

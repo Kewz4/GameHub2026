@@ -87,5 +87,11 @@ export const getOverlayRecorderTechnicalSummary = (
     diagnostics.encodedFps === null
       ? `${diagnostics.outputFps} FPS negotiated`
       : `${diagnostics.encodedFps.toFixed(1)} FPS encoded`;
-  return `${preset} · ${codec} · ${resolution} · ${cadence} · ${encodedMbps.toFixed(1)} Mbps`;
+  const backend =
+    diagnostics.backend === "native_ffmpeg_nvenc"
+      ? "NVENC"
+      : diagnostics.backend === "media_recorder"
+        ? "Compatibility"
+        : null;
+  return `${preset} · ${backend ? `${backend} ` : ""}${codec} · ${resolution} · ${cadence} · ${encodedMbps.toFixed(1)} Mbps`;
 };

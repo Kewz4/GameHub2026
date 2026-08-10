@@ -57,8 +57,8 @@ export function UserStatsBox() {
     [numberFormatter, t]
   );
 
-  // When the server withholds subscription-gated fields, compute them locally
-  // from the library games we already fetched (available to all GameHub users).
+  // When the social API omits aggregate fields, compute them locally from the
+  // library games we already fetched (available to every signed-in user).
   const allGames = useMemo(
     () => [...libraryGames, ...pinnedGames],
     [libraryGames, pinnedGames]

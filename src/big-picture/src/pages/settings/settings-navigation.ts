@@ -30,6 +30,17 @@ export const NOTIFICATIONS_ACHIEVEMENTS_POSITION_SELECT_ID =
 export const NOTIFICATIONS_ACHIEVEMENTS_TEST_BUTTON_ID =
   "notifications-achievements-test-button";
 export const CONTENT_SECTION_REGION_ID = "content-section-region";
+export const CONTENT_CAPTURE_FOCUS_IDS = {
+  enabled: "content-game-recorder-enabled",
+  instantReplay: "content-game-recorder-instant-replay",
+  resolution: "content-game-recorder-resolution",
+  fps: "content-game-recorder-fps",
+  quality: "content-game-recorder-quality",
+  replayDuration: "content-game-recorder-replay-duration",
+  audio: "content-game-recorder-audio",
+  outputDirectory: "content-game-recorder-output-directory",
+  openDirectory: "content-game-recorder-open-directory",
+} as const;
 export const BIG_PICTURE_SECTION_REGION_ID = "big-picture-section-region";
 export const BIG_PICTURE_STARTUP_SECTION_REGION_ID =
   "big-picture-startup-section-region";
@@ -51,8 +62,12 @@ export const ACCOUNT_PRIVACY_UPDATE_EMAIL_BUTTON_ID =
   "account-privacy-update-email";
 export const ACCOUNT_PRIVACY_UPDATE_PASSWORD_BUTTON_ID =
   "account-privacy-update-password";
-export const ACCOUNT_PRIVACY_HYDRA_CLOUD_BUTTON_ID =
-  "account-privacy-hydra-cloud";
+export const ACCOUNT_PRIVACY_BACKUP_SETTINGS_BUTTON_ID =
+  "account-privacy-backup-settings";
+export const ACCOUNT_PRIVACY_RESTORE_SETTINGS_BUTTON_ID =
+  "account-privacy-restore-settings";
+export const ACCOUNT_PRIVACY_CLOUD_SAVES_BUTTON_ID =
+  "account-privacy-cloud-saves";
 export const EMULATION_OVERVIEW_REGION_ID = "emulation-overview-region";
 export const EMULATION_DETAIL_REGION_ID = "emulation-detail-region";
 export const EMULATION_DETAIL_EXECUTABLE_REGION_ID =
@@ -80,6 +95,7 @@ export const EMULATION_OVERVIEW_CARD_FOCUS_IDS = {
   wiiu: "emulation-overview-wiiu-card",
   wii: "emulation-overview-wii-card",
   gc: "emulation-overview-gc-card",
+  switch: "emulation-overview-switch-card",
 } as const;
 export const EMULATION_DETAIL_BACK_BUTTON_ID = "emulation-detail-back-button";
 export const EMULATION_DETAIL_REMOVE_EMULATOR_BUTTON_ID =

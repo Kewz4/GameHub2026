@@ -65,8 +65,10 @@ export function SettingsBattleNet() {
       showSuccessToast(t("battlenet_installer_launched"));
       // Re-check after a short delay to pick up the install
       setTimeout(refresh, 5000);
-    } catch (err: any) {
-      showErrorToast(err?.message ?? t("battlenet_install_failed"));
+    } catch (error: unknown) {
+      showErrorToast(
+        error instanceof Error ? error.message : t("battlenet_install_failed")
+      );
     } finally {
       setIsInstallingBnet(false);
       setBnetInstallProgress(0);

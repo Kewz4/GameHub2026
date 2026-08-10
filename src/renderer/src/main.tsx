@@ -57,6 +57,8 @@ import BigPictureSettings from "../../big-picture/src/pages/settings/settings";
 import BigPictureLibrary from "../../big-picture/src/pages/library/page";
 import BigPictureGame from "../../big-picture/src/pages/game/game";
 import BigPictureGameAchievements from "../../big-picture/src/pages/game-achievements/game-achievements";
+import BigPictureProfile from "../../big-picture/src/pages/profile/profile";
+import BigPictureFriends from "../../big-picture/src/pages/friends/friends";
 
 // Route every renderer console level through electron-log so the diagnostics
 // window receives warnings/errors from third-party and legacy code too. The old
@@ -218,6 +220,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route path="settings" element={<BigPictureSettings />} />
               <Route path="cloud-saves" element={<BigPictureCloudSaves />} />
               <Route path="library" element={<BigPictureLibrary />} />
+              <Route path="profile" element={<BigPictureProfile />} />
+              <Route path="profile/:userId" element={<BigPictureProfile />} />
+              <Route path="friends" element={<BigPictureFriends />} />
               <Route path="game/:shop/:objectId" element={<BigPictureGame />} />
               <Route
                 path="game/:shop/:objectId/achievements"

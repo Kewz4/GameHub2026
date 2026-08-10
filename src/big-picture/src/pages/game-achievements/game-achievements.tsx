@@ -1,10 +1,12 @@
 import type { GameShop } from "@types";
+import { TrophyIcon } from "@phosphor-icons/react";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { VerticalFocusGroup } from "../../components";
+import { FocusItem, VerticalFocusGroup } from "../../components";
 import {
   AchievementRow,
   AvailablePointsBar,
+  GAME_ACHIEVEMENTS_EMPTY_STATE_ID,
   GAME_ACHIEVEMENTS_LIST_REGION_ID,
   GAME_ACHIEVEMENTS_PAGE_REGION_ID,
   GameAchievementsHero,
@@ -84,19 +86,43 @@ export default function GameAchievements() {
               totalPoints={totalPoints}
             />
 
-            <VerticalFocusGroup
-              regionId={GAME_ACHIEVEMENTS_LIST_REGION_ID}
-              asChild
-            >
-              <ul className="game-achievements-page__list">
-                {achievements.map((achievement) => (
-                  <AchievementRow
-                    key={achievement.name}
-                    achievement={achievement}
+            {achievements.length === 0 ? (
+              <FocusItem
+                id={GAME_ACHIEVEMENTS_EMPTY_STATE_ID}
+                actions={{ primary: "off" }}
+                asChild
+              >
+                <div className="game-achievements-page__empty" role="status">
+                  <TrophyIcon
+                    className="game-achievements-page__empty-icon"
+                    size={38}
+                    aria-hidden="true"
                   />
-                ))}
-              </ul>
-            </VerticalFocusGroup>
+                  <div className="game-achievements-page__empty-copy">
+                    <p className="game-achievements-page__empty-title">
+                      No achievements available
+                    </p>
+                    <p className="game-achievements-page__empty-description">
+                      This game does not have achievement data to show yet.
+                    </p>
+                  </div>
+                </div>
+              </FocusItem>
+            ) : (
+              <VerticalFocusGroup
+                regionId={GAME_ACHIEVEMENTS_LIST_REGION_ID}
+                asChild
+              >
+                <ul className="game-achievements-page__list">
+                  {achievements.map((achievement) => (
+                    <AchievementRow
+                      key={achievement.name}
+                      achievement={achievement}
+                    />
+                  ))}
+                </ul>
+              </VerticalFocusGroup>
+            )}
           </section>
         </div>
       </div>

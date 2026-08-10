@@ -8,6 +8,10 @@ export type ProfileGameSort =
 export const profileGameKey = (game: Pick<UserGame, "shop" | "objectId">) =>
   `${game.shop}:${game.objectId}`;
 
+export const profileGameHasAchievements = (
+  game: Pick<UserGame, "achievementCount">
+) => (game.achievementCount ?? 0) > 0;
+
 const normalizedExactTitle = (title: string) =>
   title.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
 

@@ -88,6 +88,7 @@ export const ThemeCard = ({ theme, onListUpdated }: ThemeCardProps) => {
             {t("by")}
 
             <button
+              type="button"
               className="theme-card__author__name"
               onClick={() => navigate(`/profile/${theme.author}`)}
             >
@@ -118,17 +119,19 @@ export const ThemeCard = ({ theme, onListUpdated }: ThemeCardProps) => {
               }
               onClick={() => window.electron.openEditorWindow(theme.id)}
               title={t("edit_theme")}
+              aria-label={t("edit_theme")}
               theme="outline"
             >
-              <PencilIcon />
+              <PencilIcon aria-hidden="true" />
             </Button>
 
             <Button
               onClick={() => setDeleteThemeModalVisible(true)}
               title={t("delete_theme")}
+              aria-label={t("delete_theme")}
               theme="outline"
             >
-              <TrashIcon />
+              <TrashIcon aria-hidden="true" />
             </Button>
           </div>
         </div>

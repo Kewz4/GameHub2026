@@ -11,6 +11,10 @@ export type GameRecorderReplayDuration = 15 | 30 | 45 | 60;
 
 export type GameRecorderQualityPreset = "performance" | "balanced" | "quality";
 
+export type GameRecorderCaptureBackend =
+  | "media_recorder"
+  | "native_ffmpeg_nvenc";
+
 export interface GameRecorderPreferences {
   enabled: boolean;
   resolution: GameRecorderResolution;
@@ -33,6 +37,8 @@ export type GameRecorderStatus =
   | "error";
 
 export interface GameRecorderCaptureDiagnostics {
+  backend?: GameRecorderCaptureBackend;
+  encoderName?: string;
   mimeType: string;
   outputWidth: number;
   outputHeight: number;
@@ -53,9 +59,17 @@ export interface GameRecorderState {
   recordingStartedAt: number | null;
   bufferedSeconds: number;
   captureActive: boolean;
+  /** Backend selected for the live capture process. A completed segment is
+   * still required before the UI describes that backend as session-verified. */
+  activeCaptureBackend: GameRecorderCaptureBackend | null;
   captureDiagnostics: GameRecorderCaptureDiagnostics | null;
   /** GPU process capability, not a claim that this exact encoder is active. */
   hardwareVideoEncodingAvailable: boolean | null;
+  /** Result of GameHub's bundled FFmpeg NVIDIA encoder probe. Unlike the
+   * Electron GPU flag, this proves that the native NVENC executable path can
+   * initialize on this machine, but not that a particular game window can be
+   * captured through it. */
+  nativeVideoEncodingAvailable: boolean | null;
   gameTitle: string | null;
   lastSavedClipPath: string | null;
   statusMessage: string | null;
@@ -71,9 +85,24 @@ export interface GameRecorderSaveResult {
 export interface GameRecorderCaptureCommand {
   type: "start" | "stop" | "flush";
   configuration?: GameRecorderPreferences;
+  backend?: GameRecorderCaptureBackend;
+  /** Rejects PCM queued by an older native FFmpeg process after a restart. */
+  captureSessionId?: number;
   /** Drop the encoder's current unfinished slice. Used when capture stops
    * because another window became foreground, so desktop frames cannot leak. */
   discardPending?: boolean;
+}
+
+export interface GameRecorderPcmChunkMetadata {
+  captureSessionId: number;
+  sampleRate: number;
+  channels: number;
+  frameCount: number;
+  /** Epoch time for the first sample in this chunk. The native video process
+   * starts before Chromium finishes establishing Windows loopback audio; this
+   * lets the muxer preserve that real startup gap instead of shifting audio
+   * early against the captured video. */
+  chunkStartedAt: number;
 }
 
 export interface GameRecorderSegmentMetadata {

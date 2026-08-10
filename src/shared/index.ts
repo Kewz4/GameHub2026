@@ -251,3 +251,4 @@ export const generateAchievementCustomNotificationTest = (
 export * from "./cloud-save-access";
 export * from "./console-log";
 export * from "./game-recorder-concat";
+export * from "./metadata-credits";

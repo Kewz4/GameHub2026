@@ -501,10 +501,13 @@ declare global {
     openExophaseAuthWindow: () => Promise<{
       authenticated: boolean;
       username: string | null;
+      verification: "verified" | "cached" | "signed-out";
     }>;
-    getExophaseAuthState: (
-      revalidate?: boolean
-    ) => Promise<{ authenticated: boolean; username: string | null }>;
+    getExophaseAuthState: (revalidate?: boolean) => Promise<{
+      authenticated: boolean;
+      username: string | null;
+      verification: "verified" | "cached" | "signed-out";
+    }>;
     validateExophaseProfile: (input: string) => Promise<{
       ok: boolean;
       username?: string;
@@ -1358,6 +1361,10 @@ declare global {
     ) => () => void;
     gameRecorderCommitSegment: (
       metadata: import("@types").GameRecorderSegmentMetadata,
+      payload: ArrayBuffer
+    ) => Promise<void>;
+    gameRecorderCommitPcmChunk: (
+      metadata: import("@types").GameRecorderPcmChunkMetadata,
       payload: ArrayBuffer
     ) => Promise<void>;
     gameRecorderCaptureError: (message: string) => Promise<void>;

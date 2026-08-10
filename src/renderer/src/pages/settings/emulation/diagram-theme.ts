@@ -31,7 +31,7 @@ export const DIAGRAM = {
   /** Text ON a neutral button face. */
   btnLabel: "var(--diagram-btn-label, #d6d3d1)",
   /** Active/bound highlight — the app's primary colour. */
-  accent: "var(--color-primary, #7aa2ff)",
+  accent: "var(--color-text-bright, #fafafa)",
   /** Text on top of the accent (must contrast in both modes). */
   accentText: "#0d0d0d",
 } as const;

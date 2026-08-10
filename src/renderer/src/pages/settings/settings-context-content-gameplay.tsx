@@ -10,17 +10,20 @@ import {
 } from "@renderer/components";
 import { settingsContext } from "@renderer/context";
 import { useAppSelector } from "@renderer/hooks";
-import { QuestionIcon } from "@primer/octicons-react";
 import type {
   GameRecorderFps,
   GameRecorderQualityPreset,
   GameRecorderReplayDuration,
   GameRecorderResolution,
+  GameRecorderState,
 } from "@types";
 import {
+  DEFAULT_GAME_RECORDER_PREFERENCES,
+  DEFAULT_HYDRA_OVERLAY_PREFERENCES,
   getGameRecorderEstimatedBufferBytes,
   getGameRecorderVideoBitrate,
 } from "@shared";
+import { getSettingsRecorderBackendPresentation } from "./settings-recorder-presentation";
 
 import "./settings-behavior.scss";
 
@@ -39,33 +42,46 @@ export function SettingsContextContentGameplay() {
     showHiddenAchievementsDescription: false,
     enableSteamAchievements: false,
     enableNewDownloadOptionsBadges: true,
-    overlayEnabled: true,
-    overlayPerformanceEnabled: true,
-    gameRecorderEnabled: false,
-    gameRecorderResolution: "1080p" as GameRecorderResolution,
-    gameRecorderFps: 60 as GameRecorderFps,
-    gameRecorderQualityPreset: "quality" as GameRecorderQualityPreset,
-    gameRecorderInstantReplayEnabled: false,
-    gameRecorderReplayDurationSeconds: 30 as GameRecorderReplayDuration,
-    gameRecorderCaptureAudio: true,
+    ...DEFAULT_HYDRA_OVERLAY_PREFERENCES,
+    gameRecorderEnabled: DEFAULT_GAME_RECORDER_PREFERENCES.enabled,
+    gameRecorderResolution: DEFAULT_GAME_RECORDER_PREFERENCES.resolution,
+    gameRecorderFps: DEFAULT_GAME_RECORDER_PREFERENCES.fps,
+    gameRecorderQualityPreset: DEFAULT_GAME_RECORDER_PREFERENCES.qualityPreset,
+    gameRecorderInstantReplayEnabled:
+      DEFAULT_GAME_RECORDER_PREFERENCES.instantReplayEnabled,
+    gameRecorderReplayDurationSeconds:
+      DEFAULT_GAME_RECORDER_PREFERENCES.replayDurationSeconds,
+    gameRecorderCaptureAudio:
+      DEFAULT_GAME_RECORDER_PREFERENCES.captureGameAudio,
     gameRecorderOutputDirectory: null as string | null,
   });
 
   const [resolvedRecorderOutputDirectory, setResolvedRecorderOutputDirectory] =
     useState("");
-  const [hardwareVideoEncodingAvailable, setHardwareVideoEncodingAvailable] =
-    useState<boolean | null>(null);
+  const [recorderState, setRecorderState] = useState<GameRecorderState | null>(
+    null
+  );
   const spotifySystemAudioBlocked =
     userPreferences?.musicProvider === "spotify";
 
   useEffect(() => {
+    let active = true;
+    const applyRecorderState = (state: GameRecorderState) => {
+      if (!active) return;
+      setResolvedRecorderOutputDirectory(state.resolvedOutputDirectory);
+      setRecorderState(state);
+    };
+
     window.electron
       .gameRecorderGetPreferences()
-      .then((state) => {
-        setResolvedRecorderOutputDirectory(state.resolvedOutputDirectory);
-        setHardwareVideoEncodingAvailable(state.hardwareVideoEncodingAvailable);
-      })
+      .then(applyRecorderState)
       .catch(() => undefined);
+
+    const unsubscribe = window.electron.onGameRecorderState(applyRecorderState);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -80,20 +96,45 @@ export function SettingsContextContentGameplay() {
       enableSteamAchievements: userPreferences.enableSteamAchievements ?? false,
       enableNewDownloadOptionsBadges:
         userPreferences.enableNewDownloadOptionsBadges ?? true,
-      overlayEnabled: userPreferences.overlayEnabled ?? true,
+      overlayEnabled:
+        userPreferences.overlayEnabled ??
+        DEFAULT_HYDRA_OVERLAY_PREFERENCES.overlayEnabled,
       overlayPerformanceEnabled:
-        userPreferences.overlayPerformanceEnabled ?? true,
-      gameRecorderEnabled: userPreferences.gameRecorderEnabled ?? false,
-      gameRecorderResolution: userPreferences.gameRecorderResolution ?? "1080p",
-      gameRecorderFps: userPreferences.gameRecorderFps ?? 60,
+        userPreferences.overlayPerformanceEnabled ??
+        DEFAULT_HYDRA_OVERLAY_PREFERENCES.overlayPerformanceEnabled,
+      overlayPerformanceShowFps:
+        userPreferences.overlayPerformanceShowFps ??
+        DEFAULT_HYDRA_OVERLAY_PREFERENCES.overlayPerformanceShowFps,
+      overlayPerformanceShowAverageFps:
+        userPreferences.overlayPerformanceShowAverageFps ??
+        DEFAULT_HYDRA_OVERLAY_PREFERENCES.overlayPerformanceShowAverageFps,
+      overlayPerformanceShowFrameTime:
+        userPreferences.overlayPerformanceShowFrameTime ??
+        DEFAULT_HYDRA_OVERLAY_PREFERENCES.overlayPerformanceShowFrameTime,
+      overlayPerformanceShowOnePercentLow:
+        userPreferences.overlayPerformanceShowOnePercentLow ??
+        DEFAULT_HYDRA_OVERLAY_PREFERENCES.overlayPerformanceShowOnePercentLow,
+      gameRecorderEnabled:
+        userPreferences.gameRecorderEnabled ??
+        DEFAULT_GAME_RECORDER_PREFERENCES.enabled,
+      gameRecorderResolution:
+        userPreferences.gameRecorderResolution ??
+        DEFAULT_GAME_RECORDER_PREFERENCES.resolution,
+      gameRecorderFps:
+        userPreferences.gameRecorderFps ??
+        DEFAULT_GAME_RECORDER_PREFERENCES.fps,
       gameRecorderQualityPreset:
-        userPreferences.gameRecorderQualityPreset ?? "quality",
+        userPreferences.gameRecorderQualityPreset ??
+        DEFAULT_GAME_RECORDER_PREFERENCES.qualityPreset,
       gameRecorderInstantReplayEnabled:
-        userPreferences.gameRecorderInstantReplayEnabled ?? false,
+        userPreferences.gameRecorderInstantReplayEnabled ??
+        DEFAULT_GAME_RECORDER_PREFERENCES.instantReplayEnabled,
       gameRecorderReplayDurationSeconds:
-        userPreferences.gameRecorderReplayDurationSeconds ?? 30,
+        userPreferences.gameRecorderReplayDurationSeconds ??
+        DEFAULT_GAME_RECORDER_PREFERENCES.replayDurationSeconds,
       gameRecorderCaptureAudio:
-        userPreferences.gameRecorderCaptureAudio ?? true,
+        userPreferences.gameRecorderCaptureAudio ??
+        DEFAULT_GAME_RECORDER_PREFERENCES.captureGameAudio,
       gameRecorderOutputDirectory:
         userPreferences.gameRecorderOutputDirectory ?? null,
     });
@@ -121,6 +162,8 @@ export function SettingsContextContentGameplay() {
   const recorderBufferMegabytes = Math.round(
     getGameRecorderEstimatedBufferBytes(recorderConfiguration) / 1_000_000
   );
+  const recorderBackendPresentation =
+    getSettingsRecorderBackendPresentation(recorderState);
 
   const chooseRecorderOutputDirectory = async () => {
     const result = await window.electron.showOpenDialog({
@@ -142,6 +185,7 @@ export function SettingsContextContentGameplay() {
         <h3>{t("content_preferences")}</h3>
 
         <CheckboxField
+          id="settings-autoplay-trailers"
           label={t("autoplay_trailers_on_game_page")}
           checked={form.autoplayGameTrailers}
           onChange={() =>
@@ -152,6 +196,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <CheckboxField
+          id="settings-disable-nsfw-alert"
           label={t("disable_nsfw_alert")}
           checked={form.disableNsfwAlert}
           onChange={() =>
@@ -160,6 +205,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <CheckboxField
+          id="settings-hide-mature-games"
           label={t("hide_mature_games")}
           checked={form.hideMatureGames}
           onChange={() =>
@@ -168,6 +214,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <CheckboxField
+          id="settings-show-hidden-achievements"
           label={t("show_hidden_achievement_description")}
           checked={form.showHiddenAchievementsDescription}
           onChange={() =>
@@ -182,26 +229,19 @@ export function SettingsContextContentGameplay() {
       <div className="settings-context-panel__group">
         <h3>{t("gameplay_metadata")}</h3>
 
-        <div className={`settings-behavior__checkbox-container--with-tooltip`}>
-          <CheckboxField
-            label={t("enable_steam_achievements")}
-            checked={form.enableSteamAchievements}
-            onChange={() =>
-              handleChange({
-                enableSteamAchievements: !form.enableSteamAchievements,
-              })
-            }
-          />
-
-          <small
-            className="settings-behavior__checkbox-container--tooltip"
-            data-open-article="steam-achievements"
-          >
-            <QuestionIcon size={12} />
-          </small>
-        </div>
+        <CheckboxField
+          id="settings-enable-steam-achievements"
+          label={t("enable_steam_achievements")}
+          checked={form.enableSteamAchievements}
+          onChange={() =>
+            handleChange({
+              enableSteamAchievements: !form.enableSteamAchievements,
+            })
+          }
+        />
 
         <CheckboxField
+          id="settings-new-download-option-badges"
           label={t("enable_new_download_options_badges")}
           checked={form.enableNewDownloadOptionsBadges}
           onChange={() =>
@@ -217,6 +257,7 @@ export function SettingsContextContentGameplay() {
         <h3>{t("in_game_overlay")}</h3>
 
         <CheckboxField
+          id="settings-overlay-enabled"
           label={t("enable_in_game_overlay")}
           checked={form.overlayEnabled}
           onChange={() =>
@@ -225,24 +266,89 @@ export function SettingsContextContentGameplay() {
         />
 
         <CheckboxField
+          id="settings-overlay-performance-enabled"
           label={t("overlay_performance_hud")}
           checked={form.overlayPerformanceEnabled}
+          disabled={!form.overlayEnabled}
           onChange={() =>
             handleChange({
               overlayPerformanceEnabled: !form.overlayPerformanceEnabled,
             })
           }
         />
+
+        <div className="settings-context-panel__nested-group">
+          <CheckboxField
+            id="settings-overlay-show-fps"
+            label={t("overlay_show_fps", { defaultValue: "Show current FPS" })}
+            checked={form.overlayPerformanceShowFps}
+            disabled={!form.overlayEnabled || !form.overlayPerformanceEnabled}
+            onChange={() =>
+              handleChange({
+                overlayPerformanceShowFps: !form.overlayPerformanceShowFps,
+              })
+            }
+          />
+
+          <CheckboxField
+            id="settings-overlay-show-average-fps"
+            label={t("overlay_show_average_fps", {
+              defaultValue: "Show average FPS",
+            })}
+            checked={form.overlayPerformanceShowAverageFps}
+            disabled={!form.overlayEnabled || !form.overlayPerformanceEnabled}
+            onChange={() =>
+              handleChange({
+                overlayPerformanceShowAverageFps:
+                  !form.overlayPerformanceShowAverageFps,
+              })
+            }
+          />
+
+          <CheckboxField
+            id="settings-overlay-show-frame-time"
+            label={t("overlay_show_frame_time", {
+              defaultValue: "Show frame time",
+            })}
+            checked={form.overlayPerformanceShowFrameTime}
+            disabled={!form.overlayEnabled || !form.overlayPerformanceEnabled}
+            onChange={() =>
+              handleChange({
+                overlayPerformanceShowFrameTime:
+                  !form.overlayPerformanceShowFrameTime,
+              })
+            }
+          />
+
+          <CheckboxField
+            id="settings-overlay-show-one-percent-low"
+            label={t("overlay_show_one_percent_low", {
+              defaultValue: "Show 1% low FPS",
+            })}
+            checked={form.overlayPerformanceShowOnePercentLow}
+            disabled={!form.overlayEnabled || !form.overlayPerformanceEnabled}
+            onChange={() =>
+              handleChange({
+                overlayPerformanceShowOnePercentLow:
+                  !form.overlayPerformanceShowOnePercentLow,
+              })
+            }
+          />
+        </div>
       </div>
 
       <div className="settings-context-panel__group">
         <h3>{t("gameplay_capture")}</h3>
 
         <p className="settings-context-panel__description">
-          {t("gameplay_capture_description")}
+          {t("gameplay_capture_runtime_description", {
+            defaultValue:
+              "GameHub prefers exact-window native capture on supported Windows and NVIDIA setups, then falls back to compatibility game capture. Capture and Instant Replay pause whenever the detected game is no longer in the foreground.",
+          })}
         </p>
 
         <CheckboxField
+          id="settings-game-recorder-enabled"
           label={t("enable_gameplay_capture")}
           checked={form.gameRecorderEnabled}
           onChange={() =>
@@ -253,6 +359,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <CheckboxField
+          id="settings-game-recorder-instant-replay-enabled"
           label={t("enable_instant_replay")}
           checked={form.gameRecorderInstantReplayEnabled}
           disabled={!form.gameRecorderEnabled}
@@ -265,6 +372,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <SelectField
+          id="settings-game-recorder-resolution"
           label={t("recording_resolution")}
           value={form.gameRecorderResolution}
           disabled={!form.gameRecorderEnabled}
@@ -284,6 +392,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <SelectField
+          id="settings-game-recorder-fps"
           label={t("recording_frame_rate")}
           value={String(form.gameRecorderFps)}
           disabled={!form.gameRecorderEnabled}
@@ -300,6 +409,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <SelectField
+          id="settings-game-recorder-quality"
           label={t("recording_quality_preset")}
           value={form.gameRecorderQualityPreset}
           disabled={!form.gameRecorderEnabled}
@@ -333,19 +443,80 @@ export function SettingsContextContentGameplay() {
             size: recorderBufferMegabytes,
           })}
         </HelperText>
-        {hardwareVideoEncodingAvailable !== null && (
-          <HelperText
-            tone={hardwareVideoEncodingAvailable ? undefined : "danger"}
-          >
-            {t(
-              hardwareVideoEncodingAvailable
-                ? "hardware_encoder_available"
-                : "hardware_encoder_unavailable"
-            )}
+        {recorderBackendPresentation === "native_active_verified" ? (
+          <HelperText>
+            {t("native_recorder_verified", {
+              defaultValue:
+                "Active capture verified by a completed segment: native Windows Graphics Capture with NVIDIA NVENC.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "native_historical" ? (
+          <HelperText>
+            {t("native_recorder_last_segment", {
+              defaultValue:
+                "Last completed segment used native Windows Graphics Capture with NVIDIA NVENC. Capture is currently paused or inactive.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "compatibility_active_verified" ? (
+          <HelperText>
+            {t("compatibility_recorder_verified", {
+              defaultValue:
+                "Active capture verified by a completed segment: compatibility capture. Native NVIDIA NVENC was not selected for this game window.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "compatibility_historical" ? (
+          <HelperText>
+            {t("compatibility_recorder_last_segment", {
+              defaultValue:
+                "Last completed segment used compatibility capture. Capture is currently paused or inactive.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "native_active_pending" ? (
+          <HelperText>
+            {t("native_recorder_active_pending", {
+              defaultValue:
+                "Active capture selected native Windows Graphics Capture with NVIDIA NVENC. Waiting for a completed segment before verifying the backend.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "compatibility_active_pending" ? (
+          <HelperText>
+            {t("compatibility_recorder_active_pending", {
+              defaultValue:
+                "Compatibility capture is active. Waiting for a completed segment before confirming the backend from diagnostics.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "windows_unavailable" ? (
+          <HelperText tone="danger">
+            {t("recorder_windows_only", {
+              defaultValue:
+                "Gameplay capture is currently available on Windows.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "native_machine_available" ? (
+          <HelperText>
+            {t("native_recorder_machine_available", {
+              defaultValue:
+                "Machine check: GameHub's bundled FFmpeg can initialize NVIDIA NVENC. The backend used for a game is confirmed only after capture diagnostics are available.",
+            })}
+          </HelperText>
+        ) : recorderBackendPresentation === "native_machine_unavailable" ? (
+          <HelperText>
+            {t("native_recorder_machine_unavailable", {
+              defaultValue:
+                "Machine check: native NVIDIA NVENC is unavailable. GameHub will use compatibility capture; the active backend is confirmed after a capture session.",
+            })}
+          </HelperText>
+        ) : (
+          <HelperText>
+            {t("recorder_backend_pending", {
+              defaultValue:
+                "Checking the bundled FFmpeg NVIDIA NVENC capability. The active backend is confirmed only after a game window starts and capture diagnostics are available.",
+            })}
           </HelperText>
         )}
 
         <SelectField
+          id="settings-game-recorder-replay-duration"
           label={t("instant_replay_length")}
           value={String(form.gameRecorderReplayDurationSeconds)}
           disabled={
@@ -366,6 +537,7 @@ export function SettingsContextContentGameplay() {
         />
 
         <CheckboxField
+          id="settings-game-recorder-capture-audio"
           label={t("capture_game_audio")}
           checked={
             spotifySystemAudioBlocked ? false : form.gameRecorderCaptureAudio
@@ -377,6 +549,12 @@ export function SettingsContextContentGameplay() {
             })
           }
         />
+        <HelperText>
+          {t("capture_system_audio_scope", {
+            defaultValue:
+              "This records the Windows system mix—not only game audio—while the detected game is foreground. Audio capture pauses when you switch to another app.",
+          })}
+        </HelperText>
         {spotifySystemAudioBlocked && (
           <HelperText tone="danger">
             System audio is disabled while Spotify Connect is selected. This
@@ -387,6 +565,7 @@ export function SettingsContextContentGameplay() {
         )}
 
         <TextField
+          id="settings-game-recorder-output-directory"
           label={t("capture_output_directory")}
           value={
             form.gameRecorderOutputDirectory ?? resolvedRecorderOutputDirectory
