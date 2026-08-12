@@ -58,6 +58,8 @@ import type {
   Ps2MemoryCardSaveRecord,
   Ps2ExportResult,
   EmulationBackupProgress,
+  CrackDetection,
+  CrackResult,
   EmulatorBinary,
   EmulatorInstallProgress,
   EmulatorInstallResult,
@@ -752,6 +754,12 @@ declare global {
       launchOptions?: string | null
     ) => Promise<void>;
     closeGame: (shop: GameShop, objectId: string) => Promise<boolean>;
+    getCrackStatus: (
+      shop: GameShop,
+      objectId: string
+    ) => Promise<CrackDetection | null>;
+    crackGame: (shop: GameShop, objectId: string) => Promise<CrackResult>;
+    checkCrackToolAvailability: () => Promise<boolean>;
     removeGameFromLibrary: (shop: GameShop, objectId: string) => Promise<void>;
     removeGame: (shop: GameShop, objectId: string) => Promise<void>;
     deleteGameFolder: (shop: GameShop, objectId: string) => Promise<unknown>;

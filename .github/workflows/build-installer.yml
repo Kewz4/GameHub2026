@@ -158,6 +158,12 @@ jobs:
         with:
           python-version: "3.9"
 
+      - name: Install .NET SDK (SteamAutoCrack CLI build)
+        if: matrix.os == 'windows-2022'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
       # Cache the Cargo registry + our own native addon's incremental build
       # output. Keyed on its Cargo.lock, so an unchanged addon skips almost
       # all of `cargo build` (postinstall's build:native, re-run again by

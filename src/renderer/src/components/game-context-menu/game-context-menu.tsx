@@ -104,6 +104,7 @@ export function GameContextMenu({
     handleRemoveFromLibrary,
     handleRemoveFiles,
     handleOpenGameOptions,
+    handleCrackGame,
   } = useGameActions(game);
   const selectedCollectionId = searchParams.get("collection");
 
@@ -341,6 +342,19 @@ export function GameContextMenu({
                 label: t("open_folder"),
                 icon: <FileDirectoryIcon size={16} />,
                 onClick: handleOpenFolder,
+                disabled: isDeleting,
+              },
+            ]
+          : []),
+        ...(game.executablePath
+          ? [
+              {
+                id: "crack-game",
+                label: t("crack_game"),
+                icon: <BugIcon size={16} />,
+                onClick: () => {
+                  void handleCrackGame();
+                },
                 disabled: isDeleting,
               },
             ]

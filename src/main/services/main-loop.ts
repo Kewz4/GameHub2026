@@ -82,6 +82,15 @@ export const startMainLoop = async () => {
     () => AchievementWatcherManager.watchAchievements(),
     INTERVALS.achievementWatcher
   );
+
+  // Keep the global Goldberg save folders alive so the achievement watcher
+  // (which polls GSE Saves / Goldberg SteamEmu Saves) always sees new files.
+  wrapInLoop(async () => {
+    const { ensureGoldbergSaveFolders } = await import(
+      "./crack/steam-auto-crack"
+    );
+    ensureGoldbergSaveFolders();
+  }, INTERVALS.achievementWatcher);
   wrapInLoop(
     () => RaWatcherManager.watch(),
     INTERVALS.retroAchievementsWatcher

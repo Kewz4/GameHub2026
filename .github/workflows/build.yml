@@ -40,6 +40,12 @@ jobs:
         with:
           python-version: 3.9
 
+      - name: Install .NET SDK (SteamAutoCrack CLI build)
+        if: matrix.os == 'windows-2022'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 

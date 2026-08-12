@@ -427,6 +427,31 @@ export class GameFilesManager {
         WindowManager.sendToAppWindows("on-library-batch-complete");
 
         await this.createDesktopShortcutForGame(game.title);
+
+        // Auto-crack clean Steam files right after install so the game is
+        // playable without Steam (SteamAutoCrack + experimental Goldberg).
+        // Fire-and-forget; the pre-launch check re-runs it if needed.
+        if (process.platform === "win32" && game.shop === "steam") {
+          void (async () => {
+            try {
+              const { ensureGoldbergCracked } = await import(
+                "./crack/steam-auto-crack"
+              );
+              const detection = await ensureGoldbergCracked(
+                path.dirname(foundExePath),
+                this.objectId
+              );
+              logger.info(
+                `[GameFilesManager] Post-install crack check for ${this.objectId}: ${detection.status}`
+              );
+            } catch (error) {
+              logger.error(
+                `[GameFilesManager] Post-install crack failed for ${this.objectId}`,
+                error
+              );
+            }
+          })();
+        }
       }
     } catch (err) {
       logger.error(

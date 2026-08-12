@@ -1731,6 +1731,14 @@ contextBridge.exposeInMainWorld("electron", {
   cancelGameTransfer: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("cancelGameTransfer", shop, objectId),
 
+  // SteamAutoCrack integration
+  getCrackStatus: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("getCrackStatus", shop, objectId),
+  crackGame: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("crackGame", shop, objectId),
+  checkCrackToolAvailability: () =>
+    ipcRenderer.invoke("checkCrackToolAvailability"),
+
   // Add these to the electron object in contextBridge.exposeInMainWorld
   on: (channel: string, listener: (...args: any[]) => void) => {
     ipcRenderer.on(channel, listener);

@@ -246,6 +246,16 @@ export function useGameActions(game: LibraryGame) {
     }
   };
 
+  const handleCrackGame = async () => {
+    try {
+      await window.electron.crackGame(game.shop, game.objectId);
+      showSuccessToast(t("crack_game_success"));
+    } catch (error) {
+      showErrorToast(t("crack_game_failed"));
+      logger.error("Failed to crack game", error);
+    }
+  };
+
   const handleRemoveFromLibrary = async () => {
     try {
       if (isGameDownloading) {
@@ -309,5 +319,6 @@ export function useGameActions(game: LibraryGame) {
     handleRemoveFromLibrary,
     handleRemoveFiles,
     handleOpenGameOptions,
+    handleCrackGame,
   };
 }

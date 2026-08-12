@@ -810,7 +810,10 @@
     "reply_cannot_be_empty": "The reply cannot be empty.",
     "reply_deleted_successfully": "Reply deleted successfully.",
     "reply_deletion_failed": "Failed to delete reply. Please try again.",
-    "delete_reply": "Delete reply"
+    "delete_reply": "Delete reply",
+    "crack_game": "Crack with SteamAutoCrack",
+    "crack_game_success": "Crack applied successfully",
+    "crack_game_failed": "Failed to crack game"
   },
   "activation": {
     "title": "Activate GameHub",

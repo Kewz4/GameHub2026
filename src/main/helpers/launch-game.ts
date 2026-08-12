@@ -326,6 +326,25 @@ export const launchGame = async (
     const updatedGame = { ...game, executablePath: parsedPath, launchOptions };
     await gamesSublevel.put(gameKey, updatedGame);
 
+    // Auto-crack clean Steam files before launch (SteamAutoCrack +
+    // experimental Goldberg emulator). Skipped for external/platform games
+    // and for games that already carry an emulator signature.
+    if (process.platform === "win32" && game.shop === "steam") {
+      try {
+        const { ensureGoldbergCracked } = await import(
+          "@main/services/crack/steam-auto-crack"
+        );
+        const gameDir = path.dirname(parsedPath);
+        const detection = await ensureGoldbergCracked(gameDir, objectId);
+        logger.log("Pre-launch crack check", {
+          objectId,
+          status: detection.status,
+        });
+      } catch (error) {
+        logger.error("Pre-launch crack check failed, continuing", error);
+      }
+    }
+
     // Option A: First-launch achievement emulator detection for REPACK games only.
     // A repack is a game that was downloaded through Hydra (so it has a download
     // record keyed by gameKey). We deliberately skip games launched from a
