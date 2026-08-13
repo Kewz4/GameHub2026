@@ -76,20 +76,19 @@ export const syncAllLibraries = async () => {
 };
 
 export const startMainLoop = async () => {
-  // One-time SteamAutoCrack readiness diagnostic at startup: is the CLI
+  // One-time Steam emulator readiness diagnostic at startup: is the CLI
   // bundled, is the config patched, and what does each installed game's
-  // crack status look like? Logs make the auto-crack flow auditable.
+  // setup status look like? Logs make the offline-play flow auditable.
   void (async () => {
     try {
-      const { isCrackToolAvailable, ensureCrackConfig } = await import(
-        "./crack/steam-auto-crack"
-      );
-      logger.log("SteamAutoCrack readiness", {
-        toolAvailable: isCrackToolAvailable(),
-        configReady: (await ensureCrackConfig()) !== null,
+      const { isEmulatorToolAvailable, ensureEmulatorToolConfig } =
+        await import("./steam-emulator/steam-emulator");
+      logger.log("Steam emulator tool readiness", {
+        toolAvailable: isEmulatorToolAvailable(),
+        configReady: (await ensureEmulatorToolConfig()) !== null,
       });
     } catch (error) {
-      logger.error("SteamAutoCrack readiness check failed", error);
+      logger.error("Steam emulator tool readiness check failed", error);
     }
   })();
 
@@ -104,7 +103,7 @@ export const startMainLoop = async () => {
   // (which polls GSE Saves / Goldberg SteamEmu Saves) always sees new files.
   wrapInLoop(async () => {
     const { ensureGoldbergSaveFolders } = await import(
-      "./crack/steam-auto-crack"
+      "./steam-emulator/steam-emulator"
     );
     ensureGoldbergSaveFolders();
   }, INTERVALS.achievementWatcher);

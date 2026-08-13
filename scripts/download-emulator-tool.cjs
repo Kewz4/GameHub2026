@@ -1,20 +1,20 @@
 /**
- * Download SteamAutoCrack's Goldberg emulator bundle and build its CLI, then
- * assemble everything into ./cracktool before the Electron build.
- * Run via: node scripts/download-cracktool.cjs
+ * Download the SteamAutoCrack Goldberg emulator bundle and build its CLI, then
+ * assemble everything into ./emulator-tool before the Electron build.
+ * Run via: node scripts/download-emulator-tool.cjs
  * Or add to package.json build hook (build:win).
  *
  * The SteamAutoCrack release zip only ships the GUI exe, so this script:
  *   1. Downloads the latest SteamAutoCrack.zip release
  *   2. Extracts the Goldberg/ emulator bundle (regular + experimental) and
- *      the TEMP/ working dir into ./cracktool
+ *      the TEMP/ working dir into ./emulator-tool
  *   3. Shallow-clones Steam-auto-crack, patches a System.CommandLine API
  *      incompatibility in the CLI Program.cs, and publishes a self-contained
- *      win-x86 CLI into ./cracktool
+ *      win-x86 CLI into ./emulator-tool
  *   4. Writes a default config.json (the app patches in the user's
  *      SteamWebAPIKey + experimental emulator at runtime)
  *
- * cracktool/ is picked up by electron-builder via the win.extraResources
+ * emulator-tool/ is picked up by electron-builder via the win.extraResources
  * entry in electron-builder.yml.
  */
 
@@ -24,7 +24,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 
-const OUT_DIR = path.join(__dirname, "..", "cracktool");
+const OUT_DIR = path.join(__dirname, "..", "emulator-tool");
 const REPO_URL = "https://github.com/SteamAutoCracks/Steam-auto-crack.git";
 const RELEASE_ZIP_URL =
   "https://github.com/SteamAutoCracks/Steam-auto-crack/releases/latest/download/SteamAutoCrack.zip";
@@ -38,24 +38,28 @@ function download(url, dest) {
     const file = fs.createWriteStream(dest);
     const get = (u) => {
       https
-        .get(u, { headers: { "User-Agent": "gamehub-build-script" } }, (res) => {
-          if (
-            res.statusCode >= 300 &&
-            res.statusCode < 400 &&
-            res.headers.location
-          ) {
-            file.close();
-            get(res.headers.location);
-            return;
+        .get(
+          u,
+          { headers: { "User-Agent": "gamehub-build-script" } },
+          (res) => {
+            if (
+              res.statusCode >= 300 &&
+              res.statusCode < 400 &&
+              res.headers.location
+            ) {
+              file.close();
+              get(res.headers.location);
+              return;
+            }
+            if (res.statusCode !== 200) {
+              file.close();
+              reject(new Error(`HTTP ${res.statusCode} for ${u}`));
+              return;
+            }
+            res.pipe(file);
+            file.on("finish", () => file.close(resolve));
           }
-          if (res.statusCode !== 200) {
-            file.close();
-            reject(new Error(`HTTP ${res.statusCode} for ${u}`));
-            return;
-          }
-          res.pipe(file);
-          file.on("finish", () => file.close(resolve));
-        })
+        )
         .on("error", reject);
     };
     get(url);
@@ -90,7 +94,7 @@ async function downloadReleaseBundle() {
     if (!fs.existsSync(src)) continue;
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
-    console.log(`✓ ${folder} → cracktool/${folder}`);
+    console.log(`✓ ${folder} → emulator-tool/${folder}`);
   }
 
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -105,11 +109,7 @@ async function buildCli() {
     stdio: "inherit",
   });
 
-  const programPath = path.join(
-    tmp,
-    "SteamAutoCrack.CLI",
-    "Program.cs"
-  );
+  const programPath = path.join(tmp, "SteamAutoCrack.CLI", "Program.cs");
   let program = fs.readFileSync(programPath, "utf8");
 
   // System.CommandLine 2.x no longer accepts a description as the second
@@ -134,7 +134,9 @@ async function buildCli() {
       program = program.replace(pattern, fixed);
       console.log(`✓ patched CLI constructor in Program.cs`);
     } else {
-      console.warn(`! CLI constructor patch pattern not found (upstream changed?)`);
+      console.warn(
+        `! CLI constructor patch pattern not found (upstream changed?)`
+      );
     }
   }
   fs.writeFileSync(programPath, program);
@@ -162,7 +164,7 @@ async function buildCli() {
     recursive: true,
     force: true,
   });
-  console.log("✓ SteamAutoCrack.CLI → cracktool/");
+  console.log("✓ SteamAutoCrack.CLI → emulator-tool/");
 
   fs.rmSync(tmp, { recursive: true, force: true });
 }
@@ -171,10 +173,10 @@ async function main() {
   ensureDir(OUT_DIR);
   await downloadReleaseBundle();
   await buildCli();
-  console.log("SteamAutoCrack cracktool ready in", OUT_DIR);
+  console.log("Steam emulator bundle ready in", OUT_DIR);
 }
 
 main().catch((err) => {
-  console.error("Error assembling cracktool:", err);
+  console.error("Error assembling emulator-tool:", err);
   process.exit(1);
 });

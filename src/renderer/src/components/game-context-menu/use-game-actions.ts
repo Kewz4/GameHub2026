@@ -246,13 +246,13 @@ export function useGameActions(game: LibraryGame) {
     }
   };
 
-  const handleCrackGame = async () => {
+  const handleApplySteamEmulator = async () => {
     try {
-      await window.electron.crackGame(game.shop, game.objectId);
-      showSuccessToast(t("crack_game_success"));
+      await window.electron.applySteamEmulator(game.shop, game.objectId);
+      showSuccessToast(t("steam_emulator_success"));
     } catch (error) {
-      showErrorToast(t("crack_game_failed"));
-      logger.error("Failed to crack game", error);
+      showErrorToast(t("steam_emulator_failed"));
+      logger.error("Failed to set up offline play", error);
     }
   };
 
@@ -319,6 +319,6 @@ export function useGameActions(game: LibraryGame) {
     handleRemoveFromLibrary,
     handleRemoveFiles,
     handleOpenGameOptions,
-    handleCrackGame,
+    handleApplySteamEmulator,
   };
 }

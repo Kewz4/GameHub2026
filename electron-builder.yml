@@ -51,11 +51,11 @@ win:
   extraResources:
     - from: binaries/7z.exe
     - from: binaries/7z.dll
-    # SteamAutoCrack CLI + Goldberg emulator bundle (assembled by
-    # scripts/download-cracktool.cjs). Directory form so a missing tool on a
+    # Steam emulator CLI + Goldberg bundle (assembled by
+    # scripts/download-emulator-tool.cjs). Directory form so a missing tool on a
     # build that skipped the download doesn't fail packaging.
-    - from: cracktool
-      to: cracktool
+    - from: emulator-tool
+      to: emulator-tool
     # PresentMon backs the in-game overlay's FPS / frame-time HUD (downloaded by
     # postinstall into ./presentmon). Directory form so a missing binary on a
     # non-overlay build doesn't fail packaging.

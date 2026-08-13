@@ -428,25 +428,31 @@ export class GameFilesManager {
 
         await this.createDesktopShortcutForGame(game.title);
 
-        // Auto-crack clean Steam files right after install so the game is
-        // playable without Steam (SteamAutoCrack + experimental Goldberg).
-        // Fire-and-forget; the pre-launch check re-runs it if needed.
+        // Set up offline play (Steam emulator) right after install for
+        // manually added games only (custom games and repacks — never
+        // library-synced installs). Fire-and-forget; the pre-launch check
+        // re-runs it if needed.
         if (process.platform === "win32" && game.shop === "steam") {
           void (async () => {
             try {
-              const { ensureGoldbergCracked } = await import(
-                "./crack/steam-auto-crack"
-              );
-              const detection = await ensureGoldbergCracked(
+              const { ensureSteamEmulatorReady, isOfflinePlaySetupEligible } =
+                await import("./steam-emulator/steam-emulator");
+              if (!isOfflinePlaySetupEligible(game)) {
+                logger.info(
+                  `[GameFilesManager] Post-install offline-play setup skipped for ${this.objectId} (library-synced)`
+                );
+                return;
+              }
+              const detection = await ensureSteamEmulatorReady(
                 path.dirname(foundExePath),
                 this.objectId
               );
               logger.info(
-                `[GameFilesManager] Post-install crack check for ${this.objectId}: ${detection.status}`
+                `[GameFilesManager] Post-install offline-play setup check for ${this.objectId}: ${detection.status}`
               );
             } catch (error) {
               logger.error(
-                `[GameFilesManager] Post-install crack failed for ${this.objectId}`,
+                `[GameFilesManager] Post-install offline-play setup failed for ${this.objectId}`,
                 error
               );
             }

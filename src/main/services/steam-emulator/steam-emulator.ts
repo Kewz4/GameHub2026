@@ -6,29 +6,29 @@ import { SystemPath } from "../system-path";
 import { logger } from "../logger";
 
 /**
- * SteamAutoCrack integration.
+ * Steam emulator integration.
  *
  * Bundles the SteamAutoCrack CLI (built from source — the upstream release
- * only ships the GUI) plus the Goldberg emulator bundle (regular +
- * experimental). Detects games that were shipped with clean Steam files and
- * cracks them automatically before launch, then the game restarts with the
- * Goldberg emulator working.
+ * only ships the GUI) plus the Goldberg Steam emulator bundle (regular +
+ * experimental). Games that ship with untouched Steam files are set up
+ * automatically for offline play before launch (the Steam emulator is
+ * applied, then the game runs standalone without the Steam client).
  *
  * Emulator config strategy (matches the achievement watcher's scan paths):
  *   - UseLocalSave = false  → saves land in %APPDATA%\GSE Saves\<appid>\
  *   - UseGoldbergExperimental = true (per user preference)
  *   - SteamWebAPIKey baked in → achievement schema + images generated from
- *     the official Steam Web API at crack time.
+ *     the official Steam Web API at setup time.
  */
 
-const CRACK_TOOL_FOLDER_NAME = "cracktool";
-const CRACK_TOOL_EXE_NAME = "SteamAutoCrack.CLI.exe";
+const EMULATOR_TOOL_FOLDER_NAME = "emulator-tool";
+const EMULATOR_TOOL_EXE_NAME = "SteamAutoCrack.CLI.exe";
 
 /** Goldberg emulator DLL signatures (22MB gbe_fork builds). */
 const GBE_EMULATOR_MIN_SIZE_BYTES = 20 * 1024 * 1024;
 
-/** Files that indicate some crack (any flavour) is already present. */
-const OTHER_CRACK_SIGNATURES = [
+/** Files that indicate some Steam emulator (any flavour) is already present. */
+const OTHER_EMULATOR_SIGNATURES = [
   "steam_emu.ini",
   "steam_settings",
   "SmartSteamEmu.ini",
@@ -37,22 +37,22 @@ const OTHER_CRACK_SIGNATURES = [
   "CreamAPI.ini",
 ];
 
-export type CrackStatus =
+export type SteamEmulatorStatus =
   | "tool-unavailable"
   | "not-installed"
-  | "cracked-goldberg"
-  | "cracked-other"
+  | "emulator-ready"
+  | "emulator-present"
   | "clean";
 
-export interface CrackDetection {
-  status: CrackStatus;
+export interface SteamEmulatorDetection {
+  status: SteamEmulatorStatus;
   /** Short human-readable reason for the status. */
   reason: string;
-  /** Absolute path to the game directory that would be cracked. */
+  /** Absolute path to the game directory that would be set up. */
   gameDir?: string;
 }
 
-export interface CrackResult {
+export interface SteamEmulatorResult {
   success: boolean;
   /** Exit code of the CLI process (null if it never spawned). */
   exitCode: number | null;
@@ -60,28 +60,28 @@ export interface CrackResult {
   output: string;
 }
 
-const getCrackToolDirectory = () => {
+const getEmulatorToolDirectory = () => {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, CRACK_TOOL_FOLDER_NAME);
+    return path.join(process.resourcesPath, EMULATOR_TOOL_FOLDER_NAME);
   }
-  // Dev: repo root / cracktool (bundled chunks live flat in out/main).
-  return path.join(__dirname, "..", "..", CRACK_TOOL_FOLDER_NAME);
+  // Dev: repo root / emulator-tool (bundled chunks live flat in out/main).
+  return path.join(__dirname, "..", "..", EMULATOR_TOOL_FOLDER_NAME);
 };
 
-const getCrackToolExecutable = () =>
-  path.join(getCrackToolDirectory(), CRACK_TOOL_EXE_NAME);
+const getEmulatorToolExecutable = () =>
+  path.join(getEmulatorToolDirectory(), EMULATOR_TOOL_EXE_NAME);
 
-export const isCrackToolAvailable = () => {
+export const isEmulatorToolAvailable = () => {
   try {
-    return fs.existsSync(getCrackToolExecutable());
+    return fs.existsSync(getEmulatorToolExecutable());
   } catch {
     return false;
   }
 };
 
 /** Absolute path to the config.json the CLI is run with. */
-const getCrackConfigPath = () =>
-  path.join(getCrackToolDirectory(), "config.json");
+const getEmulatorToolConfigPath = () =>
+  path.join(getEmulatorToolDirectory(), "config.json");
 
 /**
  * The bundled SteamWebAPI key, used when generating achievement schemas from
@@ -101,7 +101,7 @@ const getDefaultUserPreferencesPath = () => {
 /**
  * Ensure the global Goldberg save folders exist so the achievement watcher
  * (which polls GSE Saves / Goldberg SteamEmu Saves every 2s) immediately sees
- * files written by newly cracked games.
+ * files written by newly set up games.
  */
 export const ensureGoldbergSaveFolders = () => {
   const { gseSaves, goldbergSaves } = getDefaultUserPreferencesPath();
@@ -139,19 +139,19 @@ interface SteamAutoCrackConfig {
 }
 
 /**
- * Load the crack config, patching in the personal SteamWebAPI key and
+ * Load the emulator config, patching in the personal SteamWebAPI key and
  * experimental Goldberg emulator. Generates the file via the CLI when it
  * doesn't exist yet (so the schema always matches the tool's version).
  */
-export const ensureCrackConfig = async (): Promise<string | null> => {
-  if (!isCrackToolAvailable()) return null;
+export const ensureEmulatorToolConfig = async (): Promise<string | null> => {
+  if (!isEmulatorToolAvailable()) return null;
 
-  const configPath = getCrackConfigPath();
+  const configPath = getEmulatorToolConfigPath();
 
   try {
     if (!fs.existsSync(configPath)) {
-      logger.log("Generating SteamAutoCrack config");
-      await runCrackTool(["createconfig", "--path", configPath]);
+      logger.log("Generating Steam emulator config");
+      await runEmulatorTool(["createconfig", "--path", configPath]);
     }
 
     const config = JSON.parse(
@@ -182,21 +182,21 @@ export const ensureCrackConfig = async (): Promise<string | null> => {
 
     if (changed) {
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-      logger.log("SteamAutoCrack config patched", { configPath });
+      logger.log("Steam emulator config patched", { configPath });
     }
   } catch (error) {
-    logger.error("Failed to ensure SteamAutoCrack config", error);
+    logger.error("Failed to ensure Steam emulator config", error);
     return null;
   }
 
   return configPath;
 };
 
-const runCrackTool = (
+const runEmulatorTool = (
   args: string[],
   options: { cwd?: string; timeoutMs?: number } = {}
 ): Promise<{ exitCode: number | null; output: string }> => {
-  const executable = getCrackToolExecutable();
+  const executable = getEmulatorToolExecutable();
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
 
   return new Promise((resolve) => {
@@ -215,16 +215,16 @@ const runCrackTool = (
         shell: false,
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
-        cwd: options.cwd ?? getCrackToolDirectory(),
+        cwd: options.cwd ?? getEmulatorToolDirectory(),
       });
     } catch (error) {
-      logger.error("Failed to spawn SteamAutoCrack CLI", error);
+      logger.error("Failed to spawn Steam emulator CLI", error);
       resolve({ exitCode: null, output: String(error) });
       return;
     }
 
     const timeout = setTimeout(() => {
-      logger.warn("SteamAutoCrack CLI timed out", { args });
+      logger.warn("Steam emulator CLI timed out", { args });
       try {
         child.kill();
       } catch {
@@ -241,7 +241,7 @@ const runCrackTool = (
     });
     child.once("error", (error) => {
       clearTimeout(timeout);
-      logger.error("SteamAutoCrack CLI error", error);
+      logger.error("Steam emulator CLI error", error);
       finish(null);
     });
     child.once("close", (code) => {
@@ -267,14 +267,39 @@ const getSteamApiDllSize = (gameDir: string): number | null => {
   }
 };
 
+/** Platform URI exe schemes that ONLY a platform sync handler ever writes. */
+const PLATFORM_URI_SCHEMES = [
+  "steam://",
+  "legendary://",
+  "goggalaxy://",
+  "goglauncher://",
+];
+
 /**
- * Detect whether a game directory is already cracked, and if so, with what.
+ * Offline-play setup is only for manually added games: custom games and
+ * repacks (Retigga). Library-synced games are owned platform installs and
+ * must never be modified.
  */
-export const detectCrackStatus = (gameDir: string): CrackDetection => {
-  if (!isCrackToolAvailable()) {
+export const isOfflinePlaySetupEligible = (game: {
+  libraryOrigin?: "sync" | "catalog" | "custom" | undefined;
+  executablePath?: string | null;
+}) => {
+  if (game.libraryOrigin === "sync") return false;
+  const exe = game.executablePath?.toLowerCase() ?? "";
+  return !PLATFORM_URI_SCHEMES.some((scheme) => exe.startsWith(scheme));
+};
+
+/**
+ * Detect whether a game directory already has a Steam emulator applied,
+ * and if so, which one.
+ */
+export const detectSteamEmulatorStatus = (
+  gameDir: string
+): SteamEmulatorDetection => {
+  if (!isEmulatorToolAvailable()) {
     return {
       status: "tool-unavailable",
-      reason: "SteamAutoCrack CLI is not bundled with this build",
+      reason: "Steam emulator CLI is not bundled with this build",
       gameDir,
     };
   }
@@ -298,7 +323,7 @@ export const detectCrackStatus = (gameDir: string): CrackDetection => {
     (dllSize !== null && dllSize >= GBE_EMULATOR_MIN_SIZE_BYTES)
   ) {
     return {
-      status: "cracked-goldberg",
+      status: "emulator-ready",
       reason:
         hasRne || hasDllBak
           ? "Goldberg emulator already applied (backup files present)"
@@ -307,17 +332,18 @@ export const detectCrackStatus = (gameDir: string): CrackDetection => {
     };
   }
 
-  if (hasAnySignature(gameDir, OTHER_CRACK_SIGNATURES)) {
+  if (hasAnySignature(gameDir, OTHER_EMULATOR_SIGNATURES)) {
     return {
-      status: "cracked-other",
-      reason: "Another emulator signature is present (skipping auto-crack)",
+      status: "emulator-present",
+      reason:
+        "Another emulator signature is present (skipping offline-play setup)",
       gameDir,
     };
   }
 
   return {
     status: "clean",
-    reason: "No emulator signature detected — clean Steam files",
+    reason: "No emulator signature detected — untouched Steam files",
     gameDir,
   };
 };
@@ -326,24 +352,24 @@ export const detectCrackStatus = (gameDir: string): CrackDetection => {
  * Run SteamAutoCrack on a game directory. Uses the bundled experimental
  * Goldberg emulator and the personal SteamWebAPI key (via config.json).
  */
-export const crackGame = async (
+export const applySteamEmulator = async (
   gameDir: string,
   appId: string
-): Promise<CrackResult> => {
-  const configPath = await ensureCrackConfig();
+): Promise<SteamEmulatorResult> => {
+  const configPath = await ensureEmulatorToolConfig();
   if (!configPath) {
     return {
       success: false,
       exitCode: null,
-      output: "SteamAutoCrack CLI or config unavailable",
+      output: "Steam emulator CLI or config unavailable",
     };
   }
 
   ensureGoldbergSaveFolders();
 
-  logger.log("Cracking game with SteamAutoCrack", { gameDir, appId });
+  logger.log("Setting up offline play with Steam emulator", { gameDir, appId });
 
-  const result = await runCrackTool([
+  const result = await runEmulatorTool([
     "crack",
     gameDir,
     "--config",
@@ -352,13 +378,13 @@ export const crackGame = async (
     appId,
   ]);
 
-  // Validate the result: after a successful crack the emulator DLL is huge
+  // Validate the result: after a successful setup the emulator DLL is huge
   // (or backup files exist).
-  const detection = detectCrackStatus(gameDir);
+  const detection = detectSteamEmulatorStatus(gameDir);
   const success =
-    result.exitCode === 0 && detection.status === "cracked-goldberg";
+    result.exitCode === 0 && detection.status === "emulator-ready";
 
-  logger.log("SteamAutoCrack result", {
+  logger.log("Steam emulator setup result", {
     gameDir,
     exitCode: result.exitCode,
     success,
@@ -373,24 +399,25 @@ export const crackGame = async (
 };
 
 /**
- * Auto-crack flow used at launch time: crack if clean, skip if already
- * cracked, refuse if a different crack is present.
+ * Offline-play setup flow used at launch time: apply the emulator if the
+ * files are clean, skip if it is already applied, refuse if a different
+ * emulator is present.
  */
-export const ensureGoldbergCracked = async (
+export const ensureSteamEmulatorReady = async (
   gameDir: string,
   appId: string
-): Promise<CrackDetection> => {
-  const detection = detectCrackStatus(gameDir);
+): Promise<SteamEmulatorDetection> => {
+  const detection = detectSteamEmulatorStatus(gameDir);
 
   if (detection.status === "clean") {
-    const result = await crackGame(gameDir, appId);
+    const result = await applySteamEmulator(gameDir, appId);
     if (!result.success) {
-      logger.error("SteamAutoCrack failed", {
+      logger.error("Steam emulator setup failed", {
         gameDir,
         output: result.output,
       });
     }
-    return detectCrackStatus(gameDir);
+    return detectSteamEmulatorStatus(gameDir);
   }
 
   return detection;

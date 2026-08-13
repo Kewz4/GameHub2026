@@ -120,9 +120,7 @@ const startCustomDownload = async (
       libraryOrigin: hasLinkedGame ? undefined : ("custom" as const),
     });
 
-    return response.ok
-      ? { ok: true, objectId, shop, queued }
-      : response;
+    return response.ok ? { ok: true, objectId, shop, queued } : response;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to start the download";

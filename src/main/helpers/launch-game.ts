@@ -326,22 +326,35 @@ export const launchGame = async (
     const updatedGame = { ...game, executablePath: parsedPath, launchOptions };
     await gamesSublevel.put(gameKey, updatedGame);
 
-    // Auto-crack clean Steam files before launch (SteamAutoCrack +
-    // experimental Goldberg emulator). Skipped for external/platform games
-    // and for games that already carry an emulator signature.
-    if (process.platform === "win32" && game.shop === "steam") {
+    // Set up offline play (Steam emulator) for manually added games before
+    // launch. Applies to custom games and repacks only — library-synced
+    // games are owned platform installs and are never modified. Skipped for
+    // non-Steam shops and for games that already carry an emulator.
+    if (
+      process.platform === "win32" &&
+      game.shop === "steam" &&
+      game.libraryOrigin !== "sync"
+    ) {
       try {
-        const { ensureGoldbergCracked } = await import(
-          "@main/services/crack/steam-auto-crack"
-        );
-        const gameDir = path.dirname(parsedPath);
-        const detection = await ensureGoldbergCracked(gameDir, objectId);
-        logger.log("Pre-launch crack check", {
-          objectId,
-          status: detection.status,
-        });
+        const { ensureSteamEmulatorReady, isOfflinePlaySetupEligible } =
+          await import("@main/services/steam-emulator/steam-emulator");
+        if (!isOfflinePlaySetupEligible(game)) {
+          logger.log("Pre-launch offline-play setup skipped (library-synced)", {
+            objectId,
+          });
+        } else {
+          const gameDir = path.dirname(parsedPath);
+          const detection = await ensureSteamEmulatorReady(gameDir, objectId);
+          logger.log("Pre-launch offline-play setup check", {
+            objectId,
+            status: detection.status,
+          });
+        }
       } catch (error) {
-        logger.error("Pre-launch crack check failed, continuing", error);
+        logger.error(
+          "Pre-launch offline-play setup check failed, continuing",
+          error
+        );
       }
     }
 

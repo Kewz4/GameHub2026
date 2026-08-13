@@ -104,7 +104,7 @@ export function GameContextMenu({
     handleRemoveFromLibrary,
     handleRemoveFiles,
     handleOpenGameOptions,
-    handleCrackGame,
+    handleApplySteamEmulator,
   } = useGameActions(game);
   const selectedCollectionId = searchParams.get("collection");
 
@@ -346,14 +346,14 @@ export function GameContextMenu({
               },
             ]
           : []),
-        ...(game.executablePath
+        ...(game.executablePath && getGameOrigin(game) !== "sync"
           ? [
               {
-                id: "crack-game",
-                label: t("crack_game"),
-                icon: <BugIcon size={16} />,
+                id: "apply-steam-emulator",
+                label: t("apply_steam_emulator"),
+                icon: <GearIcon size={16} />,
                 onClick: () => {
-                  void handleCrackGame();
+                  void handleApplySteamEmulator();
                 },
                 disabled: isDeleting,
               },

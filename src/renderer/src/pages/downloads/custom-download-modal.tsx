@@ -114,32 +114,29 @@ export function CustomDownloadModal({
     []
   );
 
-  const handleSearchGames = useCallback(
-    (query: string) => {
-      if (searchDebounceRef.current) {
-        window.clearTimeout(searchDebounceRef.current);
-      }
+  const handleSearchGames = useCallback((query: string) => {
+    if (searchDebounceRef.current) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
 
-      const trimmed = query.trim();
-      if (!trimmed) {
-        setSearchResults([]);
-        setIsSearching(false);
-        return;
-      }
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
 
-      setIsSearching(true);
-      searchDebounceRef.current = window.setTimeout(() => {
-        void window.electron
-          .searchCatalogueGames(trimmed, 8)
-          .then((results) => {
-            setSearchResults(results);
-            setIsSearchDropdownOpen(true);
-          })
-          .finally(() => setIsSearching(false));
-      }, 250);
-    },
-    []
-  );
+    setIsSearching(true);
+    searchDebounceRef.current = window.setTimeout(() => {
+      void window.electron
+        .searchCatalogueGames(trimmed, 8)
+        .then((results) => {
+          setSearchResults(results);
+          setIsSearchDropdownOpen(true);
+        })
+        .finally(() => setIsSearching(false));
+    }, 250);
+  }, []);
 
   const handleSelectCatalogueGame = (suggestion: CatalogueSearchSuggestion) => {
     setLinkedGame(suggestion);
@@ -349,43 +346,42 @@ export function CustomDownloadModal({
               }}
             />
             {isSearching && (
-              <p className="custom-download-modal__search-hint">
-                Searching…
-              </p>
+              <p className="custom-download-modal__search-hint">Searching…</p>
             )}
-            {isSearchDropdownOpen && !isSearching && searchResults.length > 0 && (
-              <ul
-                className="custom-download-modal__search-results"
-                role="listbox"
-              >
-                {searchResults.map((suggestion) => (
-                  <li key={`${suggestion.source}:${suggestion.objectId}`}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected="false"
-                      onClick={() => handleSelectCatalogueGame(suggestion)}
-                    >
-                      <span className="custom-download-modal__search-title">
-                        {suggestion.title}
-                      </span>
-                      <span className="custom-download-modal__search-source">
-                        {suggestion.source === "classics"
-                          ? "Console"
-                          : "PC catalogue"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {isSearchDropdownOpen &&
+              !isSearching &&
+              searchResults.length > 0 && (
+                <ul
+                  className="custom-download-modal__search-results"
+                  role="listbox"
+                >
+                  {searchResults.map((suggestion) => (
+                    <li key={`${suggestion.source}:${suggestion.objectId}`}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected="false"
+                        onClick={() => handleSelectCatalogueGame(suggestion)}
+                      >
+                        <span className="custom-download-modal__search-title">
+                          {suggestion.title}
+                        </span>
+                        <span className="custom-download-modal__search-source">
+                          {suggestion.source === "classics"
+                            ? "Console"
+                            : "PC catalogue"}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             {isSearchDropdownOpen &&
               !isSearching &&
               searchResults.length === 0 &&
               searchQuery.trim() && (
                 <p className="custom-download-modal__search-hint">
-                  No games found — the download will be added as a custom
-                  entry.
+                  No games found — the download will be added as a custom entry.
                 </p>
               )}
           </div>

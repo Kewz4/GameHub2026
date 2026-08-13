@@ -1733,13 +1733,13 @@ contextBridge.exposeInMainWorld("electron", {
   cancelGameTransfer: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("cancelGameTransfer", shop, objectId),
 
-  // SteamAutoCrack integration
-  getCrackStatus: (shop: GameShop, objectId: string) =>
-    ipcRenderer.invoke("getCrackStatus", shop, objectId),
-  crackGame: (shop: GameShop, objectId: string) =>
-    ipcRenderer.invoke("crackGame", shop, objectId),
-  checkCrackToolAvailability: () =>
-    ipcRenderer.invoke("checkCrackToolAvailability"),
+  // Steam emulator integration (offline-play setup for custom games/repacks)
+  getSteamEmulatorStatus: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("getSteamEmulatorStatus", shop, objectId),
+  applySteamEmulator: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("applySteamEmulator", shop, objectId),
+  checkSteamEmulatorToolAvailability: () =>
+    ipcRenderer.invoke("checkSteamEmulatorToolAvailability"),
 
   // Add these to the electron object in contextBridge.exposeInMainWorld
   on: (channel: string, listener: (...args: any[]) => void) => {

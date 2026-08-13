@@ -10,7 +10,7 @@ import type { EmulatorSystem } from "./emulator.types";
 
 export type FriendRequestAction = "ACCEPTED" | "REFUSED" | "CANCEL";
 export * from "./download-contract";
-export * from "./crack.types";
+export * from "./steam-emulator.types";
 export * from "./library-installation.types";
 
 export type HydraCloudFeature =

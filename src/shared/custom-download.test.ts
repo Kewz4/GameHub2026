@@ -112,8 +112,9 @@ test("extracts links from pasted markdown, quotes and surrounding junk", () => {
     "https://example.com/Game.zip"
   );
   assert.equal(
-    classifyCustomDownloadSource('"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Game"')
-      .type,
+    classifyCustomDownloadSource(
+      '"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Game"'
+    ).type,
     "magnet"
   );
   assert.equal(

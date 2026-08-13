@@ -1,23 +1,23 @@
 /**
- * SteamAutoCrack integration types (shared main <-> renderer).
+ * Steam emulator integration types (shared main <-> renderer).
  */
 
-export type CrackStatus =
+export type SteamEmulatorStatus =
   | "tool-unavailable"
   | "not-installed"
-  | "cracked-goldberg"
-  | "cracked-other"
+  | "emulator-ready"
+  | "emulator-present"
   | "clean";
 
-export interface CrackDetection {
-  status: CrackStatus;
+export interface SteamEmulatorDetection {
+  status: SteamEmulatorStatus;
   /** Short human-readable reason for the status. */
   reason: string;
-  /** Absolute path to the game directory that would be cracked. */
+  /** Absolute path to the game directory that would be set up. */
   gameDir?: string;
 }
 
-export interface CrackResult {
+export interface SteamEmulatorResult {
   success: boolean;
   /** Exit code of the CLI process (null if it never spawned). */
   exitCode: number | null;

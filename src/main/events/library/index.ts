@@ -19,7 +19,7 @@ import "./complete-epic-auth";
 import "./complete-gog-auth";
 import "./confirm-scan-games";
 import "./copy-custom-game-asset";
-import "./crack-game";
+import "./steam-emulator";
 import "./create-game-shortcut";
 import "./create-steam-shortcut";
 import "./delete-archive";

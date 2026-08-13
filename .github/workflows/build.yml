@@ -40,7 +40,7 @@ jobs:
         with:
           python-version: 3.9
 
-      - name: Install .NET SDK (SteamAutoCrack CLI build)
+      - name: Install .NET SDK (Steam emulator CLI build)
         if: matrix.os == 'windows-2022'
         uses: actions/setup-dotnet@v4
         with:

@@ -811,9 +811,9 @@
     "reply_deleted_successfully": "Reply deleted successfully.",
     "reply_deletion_failed": "Failed to delete reply. Please try again.",
     "delete_reply": "Delete reply",
-    "crack_game": "Crack with SteamAutoCrack",
-    "crack_game_success": "Crack applied successfully",
-    "crack_game_failed": "Failed to crack game"
+    "apply_steam_emulator": "Set up offline play",
+    "steam_emulator_success": "Offline play is ready",
+    "steam_emulator_failed": "Failed to set up offline play"
   },
   "activation": {
     "title": "Activate GameHub",
