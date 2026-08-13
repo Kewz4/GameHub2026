@@ -1,11 +1,15 @@
 // Steam emulator integration smoke test — runs inside Electron so the
 // bundled service gets the real `app` object.
-const { app, protocol } = require("electron");
-const path = require("node:path");
-const fs = require("node:fs");
+//
+// Top-level await (ESM) is required: the imported emulator chunk transitively
+// loads out/main/index.js, which calls protocol.registerSchemesAsPrivileged
+// at module scope, and that must run BEFORE app is ready.
+import { app, protocol } from "electron";
+import { pathToFileURL } from "node:url";
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
-// The bundled main index registers privileged schemes at module scope; the
-// imported emulator chunk transitively loads it. Mirror the registration first.
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "local",
@@ -22,9 +26,25 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-const run = async () => {
-  const service = await servicePromise;
+const repoRoot = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  ".."
+);
 
+const chunk = fs
+  .readdirSync(path.join(repoRoot, "out", "main"))
+  .find((f) => f.startsWith("steam-emulator-") && f.endsWith(".js"));
+
+if (!chunk) {
+  console.error("steam-emulator chunk not found in out/main");
+  process.exit(1);
+}
+
+const service = await import(
+  pathToFileURL(path.join(repoRoot, "out", "main", chunk)).href
+);
+
+const run = async () => {
   console.log("=== 1. emulator tool available? ===");
   console.log(service.isEmulatorToolAvailable());
 
@@ -78,7 +98,7 @@ const run = async () => {
   );
   fs.mkdirSync(testDir, { recursive: true });
   fs.writeFileSync(path.join(testDir, "Game.exe"), Buffer.alloc(1024));
-  const srcDll = "C:\\Games\\Marvel's Spider-Man 2\\steam_api64.dll.bak";
+  const srcDll = "C:\\Games\\_sm2-test-backup\\steam_api64.rne";
   if (fs.existsSync(srcDll)) {
     fs.copyFileSync(srcDll, path.join(testDir, "steam_api64.dll"));
   }
@@ -99,6 +119,12 @@ const run = async () => {
   app.exit(0);
 };
 
+// Safety: never hang the shell if app.whenReady stalls.
+setTimeout(() => {
+  console.error("TIMEOUT: app.whenReady never resolved");
+  app.exit(2);
+}, 120000);
+
 app
   .whenReady()
   .then(run)
@@ -106,21 +132,3 @@ app
     console.error("TEST FAILED:", error);
     app.exit(1);
   });
-
-// Safety: never hang the shell if app.whenReady stalls.
-setTimeout(() => {
-  console.error("TIMEOUT: app.whenReady never resolved");
-  app.exit(2);
-}, 120000);
-
-const repoRoot = path.join(__dirname, "..");
-const chunk = fs
-  .readdirSync(path.join(repoRoot, "out", "main"))
-  .find((f) => f.startsWith("steam-emulator-") && f.endsWith(".js"));
-const { pathToFileURL } = require("node:url");
-// Start importing immediately — the chunk transitively loads out/main/index.js
-// which calls protocol.registerSchemesAsPrivileged at module scope, and that
-// must run BEFORE app is ready.
-const servicePromise = chunk
-  ? import(pathToFileURL(path.join(repoRoot, "out", "main", chunk)).href)
-  : Promise.reject(new Error("steam-emulator chunk not found in out/main"));
