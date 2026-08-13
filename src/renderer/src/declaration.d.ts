@@ -812,6 +812,9 @@ declare global {
       }[];
       total: number;
     }>;
+    checkLibraryInstallation: (
+      writeThrough?: boolean
+    ) => Promise<import("@types").LibraryInstallationReport>;
     selectiveScanInstalledGames: (
       scanPaths: string[],
       dryRun?: boolean
@@ -1452,6 +1455,10 @@ declare global {
       limit?: number,
       system?: import("@types").EmulatorSystem
     ) => Promise<import("@types").CatalogueSearchResult[]>;
+    searchCatalogueGames: (
+      query: string,
+      limit?: number
+    ) => Promise<import("@types").CatalogueSearchSuggestion[]>;
     getRandomClassics: (
       limit?: number
     ) => Promise<import("@types").CatalogueSearchResult[]>;

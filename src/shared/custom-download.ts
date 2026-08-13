@@ -52,6 +52,34 @@ export interface ClassifiedCustomDownloadSource {
   remoteTorrentFile: boolean;
 }
 
+/**
+ * Users paste links with surrounding junk all the time: markdown brackets,
+ * quotes, angle brackets, trailing punctuation, or a whole line of text with
+ * the URL in the middle. Extract the first http(s)/magnet token and reject
+ * everything else, mirroring what classifyCustomDownloadSource already
+ * accepts.
+ */
+function stripPastedSourceArtifacts(input: string): string {
+  const trimmed = input.trim();
+
+  // Multi-line paste: keep the first line that actually contains a link.
+  const firstLinkLine =
+    trimmed
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => /^(?:https?:\/\/|magnet:\?)/i.test(line)) ?? "";
+
+  if (firstLinkLine) return firstLinkLine;
+
+  // Single-line junk: pull the first http(s) or magnet token out of the text.
+  const token = trimmed.match(/(?:https?:\/\/|magnet:\?)\S+/i)?.[0] ?? "";
+
+  // Strip trailing punctuation that is never part of a magnet or URL (URLs
+  // can technically end with some of these, so only strip the obviously wrong
+  // ones: closing quotes/brackets and sentence punctuation).
+  return token.replace(/[)\]}"'`.,;!]+$/, "");
+}
+
 const MULTIPART_ARCHIVE_SUFFIX = /(?:\.part\d+)?\.(?:zip|rar|7z|torrent)$/i;
 const MAX_CUSTOM_DOWNLOAD_SOURCE_LENGTH = 16 * 1024;
 
@@ -91,7 +119,7 @@ function isRemoteTorrentFileUrl(url: URL) {
 export function classifyCustomDownloadSource(
   input: string
 ): ClassifiedCustomDownloadSource {
-  const value = input.trim();
+  const value = stripPastedSourceArtifacts(input);
   if (!value) throw new Error("Paste a direct link or magnet link");
   if (value.length > MAX_CUSTOM_DOWNLOAD_SOURCE_LENGTH) {
     throw new Error("The download link is unexpectedly long");

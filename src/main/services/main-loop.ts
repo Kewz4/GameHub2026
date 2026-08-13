@@ -76,6 +76,23 @@ export const syncAllLibraries = async () => {
 };
 
 export const startMainLoop = async () => {
+  // One-time SteamAutoCrack readiness diagnostic at startup: is the CLI
+  // bundled, is the config patched, and what does each installed game's
+  // crack status look like? Logs make the auto-crack flow auditable.
+  void (async () => {
+    try {
+      const { isCrackToolAvailable, ensureCrackConfig } = await import(
+        "./crack/steam-auto-crack"
+      );
+      logger.log("SteamAutoCrack readiness", {
+        toolAvailable: isCrackToolAvailable(),
+        configReady: (await ensureCrackConfig()) !== null,
+      });
+    } catch (error) {
+      logger.error("SteamAutoCrack readiness check failed", error);
+    }
+  })();
+
   wrapInLoop(() => watchProcesses(), INTERVALS.processWatcher);
   wrapInLoop(() => DownloadManager.watchDownloads(), INTERVALS.downloadWatcher);
   wrapInLoop(

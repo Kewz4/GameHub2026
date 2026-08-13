@@ -38,6 +38,7 @@ export interface CloudSavePanelProps {
   isSyncing: boolean;
   isGameRunning: boolean;
   hasExecutablePath: boolean;
+  isEmulatedGame: boolean;
   isAutomaticSyncEnabled: boolean | null;
   hasError: boolean;
   errorMessageKey:
@@ -210,6 +211,7 @@ export function CloudSavePanel({
   isSyncing,
   isGameRunning,
   hasExecutablePath,
+  isEmulatedGame,
   isAutomaticSyncEnabled,
   hasError,
   errorMessageKey,
@@ -223,6 +225,9 @@ export function CloudSavePanel({
 }: Readonly<CloudSavePanelProps>) {
   const { t } = useTranslation("game_details");
   const { formatDateTime } = useDate();
+  // Emulated games resolve their save locations through the emulator system
+  // and bound ROM, so they never require a game executable.
+  const canResolveSaveLocations = hasExecutablePath || isEmulatedGame;
   const [isCloudSaveEnabled, setIsCloudSaveEnabled] = useState(
     isAutomaticSyncEnabled ?? false
   );
@@ -245,7 +250,7 @@ export function CloudSavePanel({
     (overview?.unconfiguredCustomPathCount ?? 0) > 0;
   const presentation = getCloudSavePresentation({
     canUseCloudSaves: true,
-    hasExecutablePath,
+    hasExecutablePath: canResolveSaveLocations,
     isChecking: isLoading && !overview,
     isSyncing,
     hasError,
@@ -375,7 +380,7 @@ export function CloudSavePanel({
           aria-label={cloudSaveToggleTitle}
           disabled={
             isUpdatingAutomaticSync ||
-            !hasExecutablePath ||
+            !canResolveSaveLocations ||
             isAutomaticSyncEnabled === null
           }
           className={`cloud-save-v2__switch ${isCloudSaveEnabled ? "cloud-save-v2__switch--enabled" : ""}`}
@@ -424,13 +429,13 @@ export function CloudSavePanel({
         </p>
       )}
 
-      {!hasExecutablePath && missingExecutableCard}
+      {!canResolveSaveLocations && missingExecutableCard}
 
-      {hasExecutablePath && snapshotPanelMode === "skeleton" && (
+      {canResolveSaveLocations && snapshotPanelMode === "skeleton" && (
         <CloudSaveSnapshotSkeleton label={t("cloud_save_v2_checking")} />
       )}
 
-      {hasExecutablePath && snapshotPanelMode === "content" && (
+      {canResolveSaveLocations && snapshotPanelMode === "content" && (
         <section className="cloud-save-v2__active-snapshot">
           <article className="cloud-save-v2__snapshot cloud-save-v2__snapshot--active">
             {activeSnapshot ? (

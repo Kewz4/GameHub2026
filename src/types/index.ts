@@ -11,6 +11,7 @@ import type { EmulatorSystem } from "./emulator.types";
 export type FriendRequestAction = "ACCEPTED" | "REFUSED" | "CANCEL";
 export * from "./download-contract";
 export * from "./crack.types";
+export * from "./library-installation.types";
 
 export type HydraCloudFeature =
   | "achievements"
@@ -184,6 +185,10 @@ export interface StartGameDownloadPayload {
   customDownload?: {
     sourceType: "link" | "magnet" | "torrent";
   };
+  /** Overrides how the entry is stamped when created. Linked catalogue
+   *  downloads omit "custom" so the game stays classified as a catalogue
+   *  entry (metadata + assets already known). */
+  libraryOrigin?: "sync" | "catalog" | "custom" | undefined;
 }
 
 export interface StartCustomDownloadPayload {
@@ -195,6 +200,10 @@ export interface StartCustomDownloadPayload {
   downloadPath: string;
   automaticallyExtract: boolean;
   automaticallyDeleteArchiveFiles: boolean;
+  /** When set, the download is linked to this catalogue game's entry instead
+   *  of creating a generic custom entry (metadata + assets already known). */
+  linkedShop?: GameShop;
+  linkedObjectId?: string;
 }
 
 export interface StartCustomDownloadResult {
@@ -729,6 +738,12 @@ export type CatalogueSearchResult = {
   deckCompatibility?: string | null;
   deckCompatibilities?: string[];
 } & Pick<ShopAssets, "libraryImageUrl" | "downloadSources">;
+
+/** Unified catalogue suggestion for the custom-download linker dropdown:
+ *  merges the hosted PC catalogue and the local console/emulated catalogue. */
+export type CatalogueSearchSuggestion = CatalogueSearchResult & {
+  source: "catalogue" | "classics";
+};
 
 export type LibraryGame = Game &
   Partial<ShopAssets> & {

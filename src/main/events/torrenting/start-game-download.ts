@@ -33,6 +33,7 @@ export const startGameDownloadImpl = async (
     targetFileName,
     alternateUris,
     emulatorSystem,
+    libraryOrigin,
   } = payload;
 
   // Console/emulator downloads are grouped under "Emulator Games/<platform>"
@@ -56,7 +57,8 @@ export const startGameDownloadImpl = async (
     title,
     objectId,
     shop,
-    libraryOrigin: payload.customDownload ? "custom" : undefined,
+    libraryOrigin:
+      libraryOrigin ?? (payload.customDownload ? "custom" : undefined),
   });
   await DownloadManager.cancelDownload(gameKey);
 

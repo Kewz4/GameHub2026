@@ -27,14 +27,16 @@ export function CloudSaveWidget() {
     hasError,
     progress,
     hasExecutablePath,
+    isEmulatedGame,
     canUseCloudSaves,
     openManager,
   } = useCloudSaveV2();
 
-  const isChecking = hasExecutablePath && isRefreshing && !overview;
+  const canResolveSaveLocations = hasExecutablePath || isEmulatedGame;
+  const isChecking = canResolveSaveLocations && isRefreshing && !overview;
   const presentation = getCloudSavePresentation({
     canUseCloudSaves,
-    hasExecutablePath,
+    hasExecutablePath: canResolveSaveLocations,
     isChecking,
     isSyncing,
     hasError,

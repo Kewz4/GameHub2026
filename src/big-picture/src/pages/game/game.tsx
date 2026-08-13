@@ -1230,7 +1230,9 @@ export default function Game() {
         <BigPictureCloudSaveProvider
           objectId={objectId!}
           shop={shop!}
-          hasExecutablePath={Boolean(game)}
+          hasExecutablePath={
+            Boolean(game?.executablePath) || game?.shop === "launchbox"
+          }
           isGameRunning={isGameRunning}
           onSelectExecutable={() => setIsGameSettingsModalOpen(true)}
         >

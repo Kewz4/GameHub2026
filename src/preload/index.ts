@@ -735,6 +735,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("extractGameDownload", shop, objectId),
   scanInstalledGames: (dryRun?: boolean) =>
     ipcRenderer.invoke("scanInstalledGames", dryRun),
+  checkLibraryInstallation: (writeThrough?: boolean) =>
+    ipcRenderer.invoke("checkLibraryInstallation", writeThrough),
   selectiveScanInstalledGames: (scanPaths: string[], dryRun?: boolean) =>
     ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths, dryRun),
   confirmScanGames: (
@@ -2147,6 +2149,8 @@ contextBridge.exposeInMainWorld("electron", {
     limit?: number,
     system?: EmulatorSystem
   ) => ipcRenderer.invoke("searchClassicsCatalogue", query, limit, system),
+  searchCatalogueGames: (query: string, limit?: number) =>
+    ipcRenderer.invoke("searchCatalogueGames", query, limit),
   getRandomClassics: (limit?: number) =>
     ipcRenderer.invoke("getRandomClassics", limit),
 

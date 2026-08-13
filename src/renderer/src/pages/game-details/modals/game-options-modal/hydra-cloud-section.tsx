@@ -10,6 +10,7 @@ export function HydraCloudSettingsSection() {
     hasError,
     progress,
     hasExecutablePath,
+    isEmulatedGame,
     openFileBrowser,
     selectExecutable,
     runCloudSaveOperation,
@@ -27,6 +28,7 @@ export function HydraCloudSettingsSection() {
         isSyncing={isSyncing}
         isGameRunning={isGameRunning}
         hasExecutablePath={hasExecutablePath}
+        isEmulatedGame={isEmulatedGame}
         isAutomaticSyncEnabled={isAutomaticSyncEnabled}
         hasError={hasError}
         errorMessageKey={hasError ? "cloud_save_v2_load_error" : null}

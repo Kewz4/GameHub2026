@@ -95,12 +95,20 @@ const startCustomDownload = async (
     }
 
     const source = await prepareSource(payload);
-    const objectId = `custom-download-${crypto.randomUUID()}`;
+
+    // Link to a known catalogue game when the renderer resolved one; otherwise
+    // fall back to a synthetic custom entry.
+    const hasLinkedGame = Boolean(payload.linkedShop && payload.linkedObjectId);
+    const objectId = hasLinkedGame
+      ? payload.linkedObjectId!
+      : `custom-download-${crypto.randomUUID()}`;
+    const shop = hasLinkedGame ? payload.linkedShop! : ("custom" as const);
+
     const queued = DownloadManager.hasActiveDownload();
     const response = await startGameDownloadImpl({
       objectId,
       title,
-      shop: "custom",
+      shop,
       downloader: Downloader.TorBox,
       uri: source.uri,
       downloadPath,
@@ -109,10 +117,11 @@ const startCustomDownload = async (
       automaticallyDeleteArchiveFiles: payload.automaticallyDeleteArchiveFiles,
       selectedFilesSize: source.fileSize,
       customDownload: { sourceType: source.sourceType },
+      libraryOrigin: hasLinkedGame ? undefined : ("custom" as const),
     });
 
     return response.ok
-      ? { ok: true, objectId, shop: "custom", queued }
+      ? { ok: true, objectId, shop, queued }
       : response;
   } catch (error) {
     const message =

@@ -8,6 +8,7 @@ import "./add-riot-games-to-library";
 import "./add-ubisoft-games-to-library";
 import "./assign-game-to-collection";
 import "./change-game-playtime";
+import "./check-library-installation";
 import "./check-steam-shortcut";
 import "./cleanup-unused-assets";
 import "./clear-library";

@@ -41,6 +41,7 @@ interface CloudSaveV2ContextValue {
   hasError: boolean;
   progress: CloudSaveSyncProgressPayload | null;
   hasExecutablePath: boolean;
+  isEmulatedGame: boolean;
   canUseCloudSaves: boolean;
   openManager: () => void;
   openFileBrowser: () => void;
@@ -119,7 +120,11 @@ export function CloudSaveV2Provider({
   // so it can scope every temporary credential to that user's namespace.
   const canUseCloudSaves = userDetails !== null;
   const hasExecutablePath = Boolean(game?.executablePath);
-  const canCheckCloudSaves = canUseCloudSaves && hasExecutablePath;
+  // Emulated games (launchbox ROMs) have no executable — their save
+  // locations resolve through the emulator system + bound ROM instead.
+  const isEmulatedGame = game?.shop === "launchbox";
+  const canCheckCloudSaves =
+    canUseCloudSaves && (hasExecutablePath || isEmulatedGame);
   const {
     overview,
     isAutomaticSyncEnabled,
@@ -348,7 +353,7 @@ export function CloudSaveV2Provider({
         overview,
         shop,
         canUseCloudSaves,
-        hasExecutablePath,
+        hasExecutablePath: hasExecutablePath || isEmulatedGame,
         isGameRunning,
         isSyncing,
         isInFlight: gamePageSyncInFlight.current,
@@ -383,6 +388,7 @@ export function CloudSaveV2Provider({
     canUseCloudSaves,
     gameKey,
     hasExecutablePath,
+    isEmulatedGame,
     isCustomPathApprovalGateActive,
     isGameRunning,
     isSyncing,
@@ -460,7 +466,7 @@ export function CloudSaveV2Provider({
 
   const runCloudSaveOperation = useCallback(
     async (resolution?: CloudSaveConflictResolution) => {
-      if (isGameRunning || !hasExecutablePath) return;
+      if (isGameRunning || !canCheckCloudSaves) return;
 
       const requestedGame = gameKey;
       setIsSyncing(true);
@@ -755,6 +761,7 @@ export function CloudSaveV2Provider({
       hasError,
       progress,
       hasExecutablePath,
+      isEmulatedGame,
       canUseCloudSaves,
       openManager,
       openFileBrowser,
@@ -767,6 +774,7 @@ export function CloudSaveV2Provider({
       canUseCloudSaves,
       hasError,
       hasExecutablePath,
+      isEmulatedGame,
       handleSelectExecutable,
       isAutomaticSyncEnabled,
       isGameRunning,
@@ -809,6 +817,7 @@ export function CloudSaveV2Provider({
         isSyncing={isSyncing}
         isGameRunning={isGameRunning}
         hasExecutablePath={hasExecutablePath}
+        isEmulatedGame={isEmulatedGame}
         isAutomaticSyncEnabled={isAutomaticSyncEnabled}
         hasError={hasError}
         errorMessageKey={

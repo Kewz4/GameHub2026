@@ -173,6 +173,19 @@ export default function Library() {
       void Promise.all([updateLibrary(), collectionsPromise]);
     });
 
+    // Audit the whole library's installation state on each page visit. Heals
+    // stale "installed" flags (files deleted outside GameHub) and re-marks
+    // games whose files came back. Emulated games are checked via their bound
+    // ROM disc instead of a game executable.
+    void window.electron
+      .checkLibraryInstallation(true)
+      .then((report) => {
+        if (report.stale.length > 0 || report.found.length > 0) {
+          updateLibrary();
+        }
+      })
+      .catch(() => {});
+
     return () => {
       unsubscribe();
     };

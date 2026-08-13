@@ -96,8 +96,30 @@ test("rejects unsupported or credential-bearing links", () => {
   assert.throws(() =>
     classifyCustomDownloadSource(`https://example.com/${"a".repeat(17_000)}`)
   );
-  assert.throws(() =>
+  // Multi-line pastes are hardened by extracting only the first link line —
+  // trailing junk is never forwarded to TorBox.
+  assert.equal(
     classifyCustomDownloadSource("https://example.com/game.zip\nInjected")
+      .value,
+    "https://example.com/game.zip"
+  );
+});
+
+test("extracts links from pasted markdown, quotes and surrounding junk", () => {
+  assert.equal(
+    classifyCustomDownloadSource("[Download](https://example.com/Game.zip)")
+      .value,
+    "https://example.com/Game.zip"
+  );
+  assert.equal(
+    classifyCustomDownloadSource('"magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Game"')
+      .type,
+    "magnet"
+  );
+  assert.equal(
+    classifyCustomDownloadSource("grab this: https://example.com/Game.rar ok?")
+      .value,
+    "https://example.com/Game.rar"
   );
 });
 

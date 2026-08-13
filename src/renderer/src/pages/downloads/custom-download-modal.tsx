@@ -10,6 +10,7 @@ import {
   DownloadIcon,
   FileIcon,
   LinkIcon,
+  SearchIcon,
   SyncIcon,
 } from "@primer/octicons-react";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +22,7 @@ import {
   suggestCustomDownloadTitle,
   type CustomDownloadEntryIntent,
 } from "@shared";
+import type { CatalogueSearchSuggestion } from "@types";
 import { Button, CheckboxField, Modal, TextField } from "@renderer/components";
 import { useAppSelector, useToast } from "@renderer/hooks";
 
@@ -58,6 +60,15 @@ export function CustomDownloadModal({
   const [deleteArchives, setDeleteArchives] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<
+    CatalogueSearchSuggestion[]
+  >([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [linkedGame, setLinkedGame] =
+    useState<CatalogueSearchSuggestion | null>(null);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const searchDebounceRef = useRef<number | null>(null);
   const hasTorBoxToken = Boolean(userPreferences?.torBoxApiToken?.trim());
 
   useEffect(() => {
@@ -68,6 +79,10 @@ export function CustomDownloadModal({
     setSource("");
     setLocalTorrentPath(null);
     setTitle("");
+    setSearchQuery("");
+    setSearchResults([]);
+    setLinkedGame(null);
+    setIsSearchDropdownOpen(false);
     setError(null);
     setSubmitting(false);
     setAutomaticallyExtract(userPreferences?.extractFilesByDefault ?? true);
@@ -98,6 +113,42 @@ export function CustomDownloadModal({
     },
     []
   );
+
+  const handleSearchGames = useCallback(
+    (query: string) => {
+      if (searchDebounceRef.current) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+
+      const trimmed = query.trim();
+      if (!trimmed) {
+        setSearchResults([]);
+        setIsSearching(false);
+        return;
+      }
+
+      setIsSearching(true);
+      searchDebounceRef.current = window.setTimeout(() => {
+        void window.electron
+          .searchCatalogueGames(trimmed, 8)
+          .then((results) => {
+            setSearchResults(results);
+            setIsSearchDropdownOpen(true);
+          })
+          .finally(() => setIsSearching(false));
+      }, 250);
+    },
+    []
+  );
+
+  const handleSelectCatalogueGame = (suggestion: CatalogueSearchSuggestion) => {
+    setLinkedGame(suggestion);
+    setTitle(suggestion.title);
+    setSearchQuery(suggestion.title);
+    setSearchResults([]);
+    setIsSearchDropdownOpen(false);
+    titleTouchedRef.current = true;
+  };
 
   const handleAttachTorrent = useCallback(async () => {
     const result = await window.electron.showOpenDialog({
@@ -162,6 +213,8 @@ export function CustomDownloadModal({
         downloadPath,
         automaticallyExtract,
         automaticallyDeleteArchiveFiles: deleteArchives,
+        linkedShop: linkedGame?.shop,
+        linkedObjectId: linkedGame?.objectId,
       });
       if (!result.ok) {
         throw new Error(result.error ?? "GameHub could not start the download");
@@ -260,9 +313,83 @@ export function CustomDownloadModal({
           onChange={(event) => {
             titleTouchedRef.current = true;
             setTitle(event.target.value);
+            setLinkedGame(null);
             setError(null);
           }}
         />
+
+        {linkedGame ? (
+          <div className="custom-download-modal__linked" role="status">
+            <LinkIcon size={16} />
+            <span>
+              Linked to {linkedGame.title}
+              {linkedGame.source === "classics" ? " (console)" : " (catalogue)"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setLinkedGame(null)}
+              disabled={submitting}
+            >
+              Unlink
+            </button>
+          </div>
+        ) : (
+          <div className="custom-download-modal__search">
+            <TextField
+              label="Link to a catalogue game (optional)"
+              value={searchQuery}
+              placeholder="Search games to attach metadata…"
+              disabled={submitting}
+              rightContent={<SearchIcon size={16} />}
+              onChange={(event) => {
+                const value = event.target.value;
+                setSearchQuery(value);
+                setError(null);
+                handleSearchGames(value);
+              }}
+            />
+            {isSearching && (
+              <p className="custom-download-modal__search-hint">
+                Searching…
+              </p>
+            )}
+            {isSearchDropdownOpen && !isSearching && searchResults.length > 0 && (
+              <ul
+                className="custom-download-modal__search-results"
+                role="listbox"
+              >
+                {searchResults.map((suggestion) => (
+                  <li key={`${suggestion.source}:${suggestion.objectId}`}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected="false"
+                      onClick={() => handleSelectCatalogueGame(suggestion)}
+                    >
+                      <span className="custom-download-modal__search-title">
+                        {suggestion.title}
+                      </span>
+                      <span className="custom-download-modal__search-source">
+                        {suggestion.source === "classics"
+                          ? "Console"
+                          : "PC catalogue"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {isSearchDropdownOpen &&
+              !isSearching &&
+              searchResults.length === 0 &&
+              searchQuery.trim() && (
+                <p className="custom-download-modal__search-hint">
+                  No games found — the download will be added as a custom
+                  entry.
+                </p>
+              )}
+          </div>
+        )}
 
         <TextField
           label="Download folder"
