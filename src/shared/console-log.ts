@@ -258,26 +258,158 @@ export function consoleLogChannelOf(
 }
 
 const SECRET_VALUE_PATTERN =
-  /((?:^|[^\w])["']?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|session[_-]?token|authorization|api[_-]?key|api[_-]?token|password|secret|client[_-]?secret|cookie)\b["']?\s*[=:]\s*)(["']?)([^\s,"'}&]+)\2/gim;
+  /((?:^|[^\w])["']?(?:(?:[a-z][a-z0-9_-]*)?(?:token|api[_-]?key)|authorization|password|secret|client[_-]?secret|cookie|x-amz-(?:credential|signature|security-token))\b["']?\s*[=:]\s*)(["']?)([^\s,"'}&]+)\2/gim;
+
+const SECRET_KEY_NAMES = new Set([
+  "authorization",
+  "proxyauthorization",
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "sessiontoken",
+  "authtoken",
+  "bearertoken",
+  "apikey",
+  "apitoken",
+  "password",
+  "passwd",
+  "secret",
+  "clientsecret",
+  "privatekey",
+  "accesskeyid",
+  "secretaccesskey",
+  "cookie",
+  "setcookie",
+  "credential",
+  "signature",
+  "securitytoken",
+  "jwt",
+]);
+
+const normalizeSecretKey = (key: string) =>
+  key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const isSecretLogKey = (key: string) => {
+  const normalized = normalizeSecretKey(key);
+  return (
+    SECRET_KEY_NAMES.has(normalized) ||
+    normalized === "token" ||
+    normalized.endsWith("token") ||
+    normalized.endsWith("accesstoken") ||
+    normalized.endsWith("refreshtoken") ||
+    normalized.endsWith("sessiontoken") ||
+    normalized.endsWith("securitytoken") ||
+    normalized.endsWith("authtoken") ||
+    normalized.endsWith("apitoken") ||
+    normalized.endsWith("apikey") ||
+    normalized.endsWith("password") ||
+    normalized.endsWith("clientsecret") ||
+    normalized.endsWith("privatekey") ||
+    normalized.endsWith("secretaccesskey") ||
+    normalized.endsWith("credential") ||
+    normalized.endsWith("signature")
+  );
+};
+
+const ALWAYS_SECRET_QUERY_KEYS = new Set([
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "session_token",
+  "security_token",
+  "api_key",
+  "api_token",
+  "key",
+  "signature",
+  "sig",
+  "credential",
+  "x-amz-credential",
+  "x-amz-signature",
+  "x-amz-security-token",
+]);
+
+const AUTH_CONTEXT_QUERY_KEYS = new Set([
+  "client_id",
+  "code_challenge",
+  "code_verifier",
+  "redirect_uri",
+  "response_type",
+  "state",
+]);
+
+const normalizeQueryKey = (key: string) => {
+  try {
+    return decodeURIComponent(key.replace(/\+/g, " ")).toLowerCase();
+  } catch {
+    return key.toLowerCase();
+  }
+};
+
+/**
+ * Redact credentials inside URLs without treating every innocent `code` or
+ * `token` query parameter as authentication material. Generic OAuth names are
+ * hidden only on auth/callback URLs (or alongside presigning parameters),
+ * while explicit token and X-Amz credential names are always hidden.
+ */
+function redactUrlQuerySecrets(rawUrl: string): string {
+  const queryStart = rawUrl.indexOf("?");
+  if (queryStart < 0) return rawUrl;
+
+  const hashStart = rawUrl.indexOf("#", queryStart);
+  const base = rawUrl.slice(0, queryStart);
+  const query = rawUrl.slice(
+    queryStart + 1,
+    hashStart < 0 ? rawUrl.length : hashStart
+  );
+  const hash = hashStart < 0 ? "" : rawUrl.slice(hashStart);
+  const parts = query.split("&");
+  const names = parts.map((part) =>
+    normalizeQueryKey(part.slice(0, Math.max(0, part.indexOf("="))))
+  );
+  const authContext =
+    /\/(?:auth|authorize|callback|login|oauth2?|signin|token)(?:\/|$)/i.test(
+      base
+    ) ||
+    names.some((name) => AUTH_CONTEXT_QUERY_KEYS.has(name)) ||
+    names.some((name) => name.startsWith("x-amz-"));
+
+  const redactedQuery = parts
+    .map((part, index) => {
+      const separator = part.indexOf("=");
+      if (separator < 0) return part;
+      const name = names[index];
+      const isGenericAuthSecret =
+        authContext && (name === "token" || name === "code");
+      if (!ALWAYS_SECRET_QUERY_KEYS.has(name) && !isGenericAuthSecret) {
+        return part;
+      }
+      return `${part.slice(0, separator + 1)}[redacted]`;
+    })
+    .join("&");
+
+  return `${base}?${redactedQuery}${hash}`;
+}
 
 export function redactConsoleLogText(text: string): string {
   return text
-    .replace(/(\bBearer\s+)[^\s,"']+/gi, "$1[redacted]")
-    .replace(/(\bhttps?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, "$1[redacted]@")
-    .replace(SECRET_VALUE_PATTERN, "$1$2[redacted]$2")
+    .replace(/\bhttps?:\/\/[^\s"'<>\])}]+/gi, redactUrlQuerySecrets)
+    .replace(/(\b(?:Bearer|Basic)\s+)[^\s,"']+/gi, "$1[redacted]")
     .replace(
-      /([?&](?:access_token|refresh_token|id_token|token|api_key|key|signature|sig|credential|x-amz-signature|x-amz-credential)=)[^&#\s]+/gi,
-      "$1[redacted]"
-    );
+      /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
+      "[redacted-jwt]"
+    )
+    .replace(/(\bhttps?:\/\/)[^/\s:@]+:[^/\s@]+@/gi, "$1[redacted]@")
+    .replace(SECRET_VALUE_PATTERN, "$1$2[redacted]$2");
 }
 
-function serializableLogValue(
+function sanitizeConsoleLogValueInternal(
   value: unknown,
   seen: WeakSet<object>,
   depth: number
 ): unknown {
   if (value === null || value === undefined) return value;
-  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "string") return redactConsoleLogText(value);
+  if (typeof value === "boolean") return value;
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : String(value);
   }
@@ -285,39 +417,97 @@ function serializableLogValue(
   if (typeof value === "symbol" || typeof value === "function") {
     return String(value);
   }
-  if (depth > 6) return "[Max depth]";
+  if (depth > 8) return "[Max depth]";
 
   if (value instanceof Error) {
-    return {
-      name: value.name,
-      message: value.message,
-      stack: value.stack,
-      cause: serializableLogValue(value.cause, seen, depth + 1),
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+
+    const result: Record<string, unknown> = {
+      name: redactConsoleLogText(value.name),
+      message: redactConsoleLogText(value.message),
+      stack: value.stack ? redactConsoleLogText(value.stack) : undefined,
     };
+    if (value.cause !== undefined) {
+      result.cause = sanitizeConsoleLogValueInternal(
+        value.cause,
+        seen,
+        depth + 1
+      );
+    }
+    // Axios and Node errors attach useful enumerable metadata (code, config,
+    // response, syscall, path) to Error instances. Preserve it, but apply the
+    // exact same recursive secret handling as regular objects.
+    for (const [key, item] of Object.entries(value)) {
+      if (key in result) continue;
+      result[key] = isSecretLogKey(key)
+        ? "[redacted]"
+        : sanitizeConsoleLogValueInternal(item, seen, depth + 1);
+    }
+    return result;
   }
 
   if (typeof value !== "object") return String(value);
   if (seen.has(value)) return "[Circular]";
   seen.add(value);
 
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof URL) return redactConsoleLogText(value.toString());
+  if (ArrayBuffer.isView(value)) {
+    return `[${value.constructor.name} ${value.byteLength} bytes]`;
+  }
+  if (value instanceof ArrayBuffer) {
+    return `[ArrayBuffer ${value.byteLength} bytes]`;
+  }
+
   if (Array.isArray(value)) {
-    return value.map((item) => serializableLogValue(item, seen, depth + 1));
+    return value.map((item) =>
+      sanitizeConsoleLogValueInternal(item, seen, depth + 1)
+    );
+  }
+
+  if (value instanceof Map) {
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of value) {
+      const stringKey = String(key);
+      result[stringKey] = isSecretLogKey(stringKey)
+        ? "[redacted]"
+        : sanitizeConsoleLogValueInternal(item, seen, depth + 1);
+    }
+    return result;
+  }
+
+  if (value instanceof Set) {
+    return [...value].map((item) =>
+      sanitizeConsoleLogValueInternal(item, seen, depth + 1)
+    );
   }
 
   const result: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    result[key] = serializableLogValue(item, seen, depth + 1);
+    result[key] = isSecretLogKey(key)
+      ? "[redacted]"
+      : sanitizeConsoleLogValueInternal(item, seen, depth + 1);
   }
   return result;
+}
+
+/**
+ * Produce a circular-safe, loggable copy without mutating the source value.
+ * This is used before every electron-log transport, so secrets never reach
+ * either the on-disk logs or a development console in the first place.
+ */
+export function sanitizeConsoleLogValue(value: unknown): unknown {
+  return sanitizeConsoleLogValueInternal(value, new WeakSet<object>(), 0);
 }
 
 export function formatConsoleLogData(values: unknown[]): string {
   const seen = new WeakSet<object>();
   const text = values
     .map((value) => {
-      if (typeof value === "string") return value;
-      const normalized = serializableLogValue(value, seen, 0);
+      const normalized = sanitizeConsoleLogValueInternal(value, seen, 0);
       if (normalized === undefined) return "undefined";
+      if (typeof normalized === "string") return normalized;
       try {
         return JSON.stringify(normalized);
       } catch {

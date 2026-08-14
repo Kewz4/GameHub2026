@@ -20,7 +20,7 @@ import {
   useToast,
   useUserDetails,
 } from "@renderer/hooks";
-import { AuthPage } from "@shared";
+import { AuthPage, removeDiacritics } from "@shared";
 
 import { routes } from "./routes";
 
@@ -250,11 +250,11 @@ export function Sidebar() {
   };
 
   const handleFilter: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+    const normalizedQuery = removeDiacritics(event.target.value).toLowerCase();
+
     setFilteredLibrary(
       sortedLibrary.filter((game) =>
-        game.title
-          .toLowerCase()
-          .includes(event.target.value.toLocaleLowerCase())
+        removeDiacritics(game.title).toLowerCase().includes(normalizedQuery)
       )
     );
   };

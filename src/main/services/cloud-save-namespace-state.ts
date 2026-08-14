@@ -1,6 +1,7 @@
 import {
   cloudSaveCustomPathsSublevel,
   cloudSavePendingDeletionsSublevel,
+  cloudSavePendingPostExitSublevel,
   cloudSaveSyncAnchorsSublevel,
   db,
   levelKeys,
@@ -160,6 +161,7 @@ const completeCloudSaveNamespaceMigrationInQueue = async (
     collect("custom-paths", cloudSaveCustomPathsSublevel.iterator()),
     collect("sync-anchors", cloudSaveSyncAnchorsSublevel.iterator()),
     collect("pending-deletions", cloudSavePendingDeletionsSublevel.iterator()),
+    collect("pending-post-exit", cloudSavePendingPostExitSublevel.iterator()),
   ]);
 
   const operations = planCloudSaveLocalNamespaceMigration(
@@ -171,6 +173,7 @@ const completeCloudSaveNamespaceMigrationInQueue = async (
     "custom-paths": cloudSaveCustomPathsSublevel,
     "sync-anchors": cloudSaveSyncAnchorsSublevel,
     "pending-deletions": cloudSavePendingDeletionsSublevel,
+    "pending-post-exit": cloudSavePendingPostExitSublevel,
   } as const;
   const batch = db.batch();
   for (const operation of operations) {

@@ -2,6 +2,10 @@ import os from "node:os";
 import path from "node:path";
 
 import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import {
+  isProtocolExecutablePath,
+  selectGameExecutablePath,
+} from "@main/helpers/game-executable-path";
 import type { Game, GameShop, LudusaviBackup } from "@types";
 
 import {
@@ -43,12 +47,9 @@ const stableAutomaticKey = (
 const getPhysicalExecutablePath = (
   game: Game | null | undefined
 ): string | null => {
-  const candidates = [game?.nativeExecutablePath, game?.executablePath];
-  for (const candidate of candidates) {
-    if (!candidate || candidate.includes("://")) continue;
-    return candidate;
-  }
-  return null;
+  if (!game) return null;
+  const candidate = selectGameExecutablePath(game);
+  return candidate && !isProtocolExecutablePath(candidate) ? candidate : null;
 };
 
 const pathBeforeGlob = (value: string): string => {

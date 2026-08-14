@@ -43,6 +43,8 @@ export interface SteamAchievement {
 export interface UserAchievement extends SteamAchievement {
   unlocked: boolean;
   unlockTime: number | null;
+  /** Local/R2-backed image captured when this achievement was unlocked. */
+  imageUrl?: string | null;
   /** Present only for locked, stat-gated achievements that report fractional
    *  progress in the local achievement file. */
   progress?: { current: number; max: number };

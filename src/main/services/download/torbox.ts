@@ -348,7 +348,8 @@ export class TorBoxClient {
       if (info) {
         logger.log(
           `[torbox] torrent ${id} state=${info.download_state} ` +
-            `progress=${(progress * 100).toFixed(1)}% cached=${info.cached} ` +
+            `progress=${(progress * 100).toFixed(1)}% ` +
+            `finished=${info.download_finished} present=${info.download_present} ` +
             `speed=${info.download_speed} eta=${info.eta} files=${info.files?.length ?? 0}`
         );
         onProgress?.({
@@ -735,7 +736,7 @@ export class TorBoxClient {
         const info = await this.getWebDownloadInfo(web.id);
         const speed = info?.download_speed ?? 0;
         if (speed > best) best = speed;
-        if (info?.download_finished || (info?.progress ?? 0) >= 1) {
+        if (isTorBoxItemReady(info)) {
           return { id: web.id, speed: Number.MAX_SAFE_INTEGER };
         }
         await this.sleep(1500);

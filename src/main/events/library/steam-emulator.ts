@@ -1,5 +1,6 @@
-import path from "node:path";
+import { app } from "electron";
 import { GameShop } from "@types";
+import { selectGameExecutablePath } from "@main/helpers/game-executable-path";
 import { registerEvent } from "../register-event";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { logger } from "@main/services";
@@ -8,27 +9,34 @@ import {
   detectSteamEmulatorStatus,
   isEmulatorToolAvailable,
   ensureEmulatorToolConfig,
-  isOfflinePlaySetupEligible,
   type SteamEmulatorDetection,
   type SteamEmulatorResult,
 } from "@main/services/steam-emulator/steam-emulator";
+import { resolveSafeSteamEmulatorTarget } from "@main/services/steam-emulator/steam-emulator-target";
 
-const getGameDirectory = async (
+const getGameTarget = async (
   shop: GameShop,
   objectId: string
-): Promise<string | null> => {
+): Promise<
+  | {
+      gameDir: string;
+      game: NonNullable<Awaited<ReturnType<typeof gamesSublevel.get>>>;
+    }
+  | { reason: string }
+> => {
   const game = await gamesSublevel
     .get(levelKeys.game(shop, objectId))
     .catch(() => null);
 
-  const executablePath = game?.nativeExecutablePath ?? game?.executablePath;
-  if (!executablePath) return null;
-
-  // Only local paths point at a real install folder worth setting up.
-  if (/^[a-z]+:\/\//i.test(executablePath)) return null;
-
-  const gameDir = path.dirname(executablePath);
-  return gameDir;
+  if (!game) return { reason: "Game was not found in the library" };
+  const executablePath = selectGameExecutablePath(game);
+  const target = await resolveSafeSteamEmulatorTarget(game, executablePath, [
+    process.resourcesPath,
+    app.getAppPath(),
+    app.getPath("userData"),
+  ]);
+  if (!target.ok || !target.gameDir) return { reason: target.reason };
+  return { gameDir: target.gameDir, game };
 };
 
 export const getSteamEmulatorStatus = async (
@@ -36,15 +44,15 @@ export const getSteamEmulatorStatus = async (
   shop: GameShop,
   objectId: string
 ): Promise<SteamEmulatorDetection | null> => {
-  const gameDir = await getGameDirectory(shop, objectId);
-  if (!gameDir) {
+  const target = await getGameTarget(shop, objectId);
+  if (!("gameDir" in target)) {
     return {
       status: "not-installed",
-      reason: "Game executable not bound",
+      reason: target.reason,
     };
   }
 
-  return detectSteamEmulatorStatus(gameDir);
+  return detectSteamEmulatorStatus(target.gameDir);
 };
 
 export const applySteamEmulatorToGame = async (
@@ -52,27 +60,12 @@ export const applySteamEmulatorToGame = async (
   shop: GameShop,
   objectId: string
 ): Promise<SteamEmulatorResult> => {
-  const game = await gamesSublevel
-    .get(levelKeys.game(shop, objectId))
-    .catch(() => null);
-
-  // Offline-play setup is only for manually added games (custom games and
-  // repacks). Platform-synced games are owned installs and must never be
-  // modified.
-  if (game && !isOfflinePlaySetupEligible(game)) {
+  const target = await getGameTarget(shop, objectId);
+  if (!("gameDir" in target)) {
     return {
       success: false,
       exitCode: null,
-      output: "Library-synced games are not eligible for offline-play setup",
-    };
-  }
-
-  const gameDir = await getGameDirectory(shop, objectId);
-  if (!gameDir) {
-    return {
-      success: false,
-      exitCode: null,
-      output: "Game executable not bound",
+      output: target.reason,
     };
   }
 
@@ -87,9 +80,13 @@ export const applySteamEmulatorToGame = async (
   logger.log("Manual offline-play setup requested", {
     shop,
     objectId,
-    gameDir,
+    gameDir: target.gameDir,
   });
-  return applySteamEmulator(gameDir, objectId);
+  return applySteamEmulator(target.gameDir, objectId, [
+    process.resourcesPath,
+    app.getAppPath(),
+    app.getPath("userData"),
+  ]);
 };
 
 export const checkSteamEmulatorToolAvailability = async () => {

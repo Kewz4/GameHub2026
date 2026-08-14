@@ -8,10 +8,10 @@ import {
 } from "../../src/main/services/overlay-activation-policy.ts";
 
 describe("overlay activation policy", () => {
-  it("keeps the ready toast inside wide, medium, and narrow game windows", () => {
+  it("anchors the ready toast to the game window's right edge", () => {
     assert.deepEqual(
       calculateActivationToastBounds({ x: 0, y: 0, width: 1920, height: 1080 }),
-      { x: 1076, y: 24, width: 820, height: 118 }
+      { x: 1480, y: 24, width: 440, height: 64 }
     );
     assert.deepEqual(
       calculateActivationToastBounds({
@@ -20,21 +20,59 @@ describe("overlay activation policy", () => {
         width: 640,
         height: 480,
       }),
-      { x: 124, y: 74, width: 592, height: 148 }
+      { x: 300, y: 74, width: 440, height: 64 }
+    );
+    const wide = calculateActivationToastBounds({
+      x: 80,
+      y: 40,
+      width: 1920,
+      height: 1080,
+    });
+    assert.equal(
+      80 + 1920 - (wide.x + wide.width),
+      0,
+      "the toast host must share the game window's right coordinate"
+    );
+    const negativeMonitor = calculateActivationToastBounds({
+      x: -1920,
+      y: -120,
+      width: 1280,
+      height: 720,
+    });
+    assert.equal(
+      -1920 + 1280 - (negativeMonitor.x + negativeMonitor.width),
+      0,
+      "negative monitor coordinates retain the same right-edge anchor"
     );
     assert.deepEqual(
       calculateActivationToastBounds({
-        x: -400,
+        x: -340,
         y: 0,
-        width: 400,
+        width: 340,
         height: 300,
       }),
-      { x: -376, y: 24, width: 352, height: 184 }
+      { x: -316, y: 24, width: 316, height: 82 }
     );
   });
 
+  it("reserves only the extra height the error copy needs", () => {
+    const target = { x: -1440, y: 60, width: 1440, height: 900 };
+    assert.deepEqual(calculateActivationToastBounds(target, "ready"), {
+      x: -440,
+      y: 84,
+      width: 440,
+      height: 64,
+    });
+    assert.deepEqual(calculateActivationToastBounds(target, "error"), {
+      x: -440,
+      y: 84,
+      width: 440,
+      height: 80,
+    });
+  });
+
   it("caps the toast when the target itself is smaller than the desired toast", () => {
-    const target = { x: 12, y: 34, width: 220, height: 150 };
+    const target = { x: 12, y: 34, width: 220, height: 50 };
     const toast = calculateActivationToastBounds(target);
 
     assert.equal(toast.height, target.height);
@@ -111,5 +149,10 @@ describe("overlay activation policy", () => {
     assert.equal(canShowActivationToast(true, false, true), true);
     assert.equal(canShowActivationToast(true, true, true), false);
     assert.equal(canShowActivationToast(false, false, true), false);
+    assert.equal(
+      canShowActivationToast(true, false, true, false),
+      false,
+      "disabled input isolation must not advertise an unusable shortcut"
+    );
   });
 });

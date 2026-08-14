@@ -8,6 +8,7 @@ import {
   ensureLocalTorrentFile,
   parseLocalTorrentFile,
 } from "@main/services/download/torrent-file";
+import { getGlobalTrackers } from "@main/helpers";
 
 const mapTorrentFilesError = (error: unknown) => {
   const rpcError =
@@ -28,6 +29,8 @@ const mapTorrentFilesError = (error: unknown) => {
         return DownloadError.TorrentTooManyFiles;
       case "metadata_busy":
         return DownloadError.TorrentMetadataTimeout;
+      case "invalid_trackers":
+        return DownloadError.TorrentInvalidTrackers;
       default:
         return DownloadError.TorrentFilesUnavailable;
     }
@@ -74,10 +77,12 @@ const getTorrentFiles = async (
   }
 
   try {
+    const trackers = await getGlobalTrackers();
     const response = await PythonRPC.rpc.call<TorrentFilesResponse>(
       "torrent_files",
       {
         magnet,
+        trackers,
         timeout_ms: 45_000,
       },
       {

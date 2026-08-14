@@ -1,12 +1,8 @@
 import { registerEvent } from "../register-event";
 import type { GameShop } from "@types";
 import { createGame } from "@main/services/library-sync";
-import {
-  downloadsSublevel,
-  gamesShopAssetsSublevel,
-  gamesSublevel,
-  levelKeys,
-} from "@main/level";
+import { gamesShopAssetsSublevel, gamesSublevel, levelKeys } from "@main/level";
+import { clearFinishedDownload } from "@main/helpers";
 import { AchievementWatcherManager } from "@main/services/achievements/achievement-watcher-manager";
 import {
   findPlayniteCacheEntryForGame,
@@ -33,7 +29,7 @@ const addGameToLibrary = async (
   const cachedPlaytime = cachedPlaytimeRecord?.[1] ?? null;
 
   if (game) {
-    await downloadsSublevel.del(gameKey);
+    await clearFinishedDownload(shop, objectId);
 
     game.isDeleted = false;
     game.addedToLibraryAt ??= new Date();

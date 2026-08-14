@@ -47,6 +47,7 @@ import type {
   SelectCloudSaveCustomPathApprovalResult,
   ConfirmCloudSaveCustomPathApprovalResult,
   ConfirmCloudSaveCustomPathRebindApprovalResult,
+  DeleteAchievementSouvenirRequest,
 } from "@types";
 import type { AuthPage } from "@shared";
 
@@ -560,7 +561,10 @@ contextBridge.exposeInMainWorld("electron", {
     executablePath: string,
     iconUrl?: string,
     logoImageUrl?: string,
-    libraryHeroImageUrl?: string
+    libraryHeroImageUrl?: string,
+    coverImageUrl?: string,
+    libraryImageUrl?: string,
+    matchedSteamObjectId?: string | null
   ) =>
     ipcRenderer.invoke(
       "addCustomGameToLibrary",
@@ -568,7 +572,10 @@ contextBridge.exposeInMainWorld("electron", {
       executablePath,
       iconUrl,
       logoImageUrl,
-      libraryHeroImageUrl
+      libraryHeroImageUrl,
+      coverImageUrl,
+      libraryImageUrl,
+      matchedSteamObjectId
     ),
   copyCustomGameAsset: (
     sourcePath: string,
@@ -586,9 +593,12 @@ contextBridge.exposeInMainWorld("electron", {
     iconUrl?: string;
     logoImageUrl?: string;
     libraryHeroImageUrl?: string;
+    coverImageUrl?: string;
+    libraryImageUrl?: string;
     originalIconPath?: string;
     originalLogoPath?: string;
     originalHeroPath?: string;
+    matchedSteamObjectId?: string | null;
   }) => ipcRenderer.invoke("updateCustomGame", params),
   updateGameCustomAssets: (params: {
     shop: GameShop;
@@ -1471,6 +1481,12 @@ contextBridge.exposeInMainWorld("electron", {
   loginRetroAchievements: (username: string, password: string) =>
     ipcRenderer.invoke("loginRetroAchievements", username, password),
   syncRalibretroLogin: () => ipcRenderer.invoke("syncRalibretroLogin"),
+  getAchievementSouvenirs: (ownerId: string) =>
+    ipcRenderer.invoke("getAchievementSouvenirs", ownerId),
+  deleteAchievementSouvenir: (request: DeleteAchievementSouvenirRequest) =>
+    ipcRenderer.invoke("deleteAchievementSouvenir", request),
+  openAchievementSouvenirsFolder: () =>
+    ipcRenderer.invoke("openAchievementSouvenirsFolder"),
 
   /* Auth */
   getAuth: () => ipcRenderer.invoke("getAuth"),
@@ -1622,6 +1638,8 @@ contextBridge.exposeInMainWorld("electron", {
     return () =>
       ipcRenderer.removeListener("on-combined-achievements-unlocked", listener);
   },
+  achievementNotificationRendererReady: () =>
+    ipcRenderer.send("achievement-notification-renderer-ready"),
   updateAchievementCustomNotificationWindow: () =>
     ipcRenderer.invoke("updateAchievementCustomNotificationWindow"),
   hideAchievementCustomNotificationWindow: () =>

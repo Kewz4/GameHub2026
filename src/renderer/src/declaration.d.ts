@@ -86,6 +86,8 @@ import type {
   ConfirmCloudSaveCustomPathRebindApprovalResult,
   LudusaviBackupScanEntry,
   LudusaviImportResult,
+  DeleteAchievementSouvenirRequest,
+  ProfileAchievementSouvenir,
 } from "@types";
 
 export interface DriveInfo {
@@ -587,7 +589,8 @@ declare global {
       logoImageUrl?: string,
       libraryHeroImageUrl?: string,
       coverImageUrl?: string,
-      libraryImageUrl?: string
+      libraryImageUrl?: string,
+      matchedSteamObjectId?: string | null
     ) => Promise<Game>;
     updateCustomGame: (params: {
       shop: GameShop;
@@ -596,9 +599,12 @@ declare global {
       iconUrl?: string;
       logoImageUrl?: string;
       libraryHeroImageUrl?: string;
+      coverImageUrl?: string;
+      libraryImageUrl?: string;
       originalIconPath?: string;
       originalLogoPath?: string;
       originalHeroPath?: string;
+      matchedSteamObjectId?: string | null;
     }) => Promise<Game>;
     copyCustomGameAsset: (
       sourcePath: string,
@@ -930,7 +936,7 @@ declare global {
     getDownloadSourcesSinceValue: () => Promise<string | null>;
 
     /* Hardware */
-    getDiskFreeSpace: (path: string) => Promise<DiskUsage>;
+    getDiskFreeSpace: (path: string) => Promise<DiskUsage | null>;
     checkFolderWritePermission: (path: string) => Promise<boolean>;
 
     /* Cloud save */
@@ -1609,6 +1615,13 @@ declare global {
       password: string
     ) => Promise<{ success: boolean; token?: string; error?: string }>;
     syncRalibretroLogin: () => Promise<boolean>;
+    getAchievementSouvenirs: (
+      ownerId: string
+    ) => Promise<ProfileAchievementSouvenir[]>;
+    deleteAchievementSouvenir: (
+      request: DeleteAchievementSouvenirRequest
+    ) => Promise<void>;
+    openAchievementSouvenirsFolder: () => Promise<void>;
 
     /* Profile */
     getMe: () => Promise<UserDetails | null>;
@@ -1679,6 +1692,7 @@ declare global {
         position: AchievementCustomNotificationPosition
       ) => void
     ) => () => Electron.IpcRenderer;
+    achievementNotificationRendererReady: () => void;
     updateAchievementCustomNotificationWindow: () => Promise<void>;
     hideAchievementCustomNotificationWindow: () => Promise<void>;
     showAchievementTestNotification: () => Promise<void>;

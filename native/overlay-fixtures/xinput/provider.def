@@ -1,0 +1,10 @@
+LIBRARY "xinput1_3"
+EXPORTS
+    XInputEnable @5
+    XInputGetKeystroke @8
+    XInputGetState @2
+    XInputSetState @3
+    XInputGetStateEx @100 NONAME
+    GameHubSyntheticXInputGetProviderSnapshot @1001
+    GameHubSyntheticXInputSetPhysical @1002
+    GameHubSyntheticXInputQueueKeystrokes @1003

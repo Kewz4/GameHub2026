@@ -1,0 +1,3 @@
+LIBRARY "gamehub-overlay-qa-child-parent-bootstrap64"
+EXPORTS
+  GameHubChildQaGetParentSnapshot

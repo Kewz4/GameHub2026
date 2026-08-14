@@ -8,6 +8,7 @@ import { app, protocol } from "electron";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 protocol.registerSchemesAsPrivileged([
@@ -26,10 +27,42 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-const repoRoot = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  ".."
+const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+for (const entry of fs.readdirSync(os.tmpdir(), { withFileTypes: true })) {
+  if (
+    !entry.isDirectory() ||
+    !entry.name.startsWith("gamehub-steam-emulator-smoke-")
+  ) {
+    continue;
+  }
+  try {
+    fs.rmSync(path.join(os.tmpdir(), entry.name), {
+      recursive: true,
+      force: true,
+    });
+  } catch {
+    // A still-running smoke process owns this sandbox; leave it untouched.
+  }
+}
+const smokeRoot = fs.mkdtempSync(
+  path.join(os.tmpdir(), "gamehub-steam-emulator-smoke-")
 );
+
+// The service intentionally uses the real Windows roaming AppData rather than
+// Electron's portable appData redirect. Point APPDATA at this disposable root
+// before importing the production bundle so a scratch app id can never seed
+// achievement state into the user's real GSE Saves folder.
+process.env.APPDATA = smokeRoot;
+app.setPath("userData", path.join(smokeRoot, "GameHub"));
+process.once("exit", () => {
+  try {
+    fs.rmSync(smokeRoot, { recursive: true, force: true });
+  } catch {
+    // Electron may still hold its LevelDB handle during the synchronous exit
+    // event. The next smoke run removes stale sandbox roots before creating a
+    // new one; never turn successful product verification into an exit error.
+  }
+});
 
 const chunk = fs
   .readdirSync(path.join(repoRoot, "out", "main"))

@@ -18,6 +18,7 @@ import {
   getNewUnlockedAchievements,
 } from "./achievement-sync-policy";
 import { syncAchievementsToHydraCloud } from "./achievement-cloud-sync";
+import { AchievementSouvenirService } from "./achievement-souvenir-service";
 
 const isRareAchievement = (points: number) => {
   const rawPercentage = (50 - Math.sqrt(points)) * 2;
@@ -115,6 +116,37 @@ export const mergeAchievements = async (
     achievementPayloadFingerprint(storedUnlockedAchievements) !==
     achievementPayloadFingerprint(unlockedAchievements);
 
+  const souvenirRecordKeys: string[] = [];
+  if (
+    newAchievements.length > 0 &&
+    publishNotification &&
+    process.platform !== "linux" &&
+    userPreferences.enableAchievementSouvenirs === true
+  ) {
+    for (const unlocked of newAchievements) {
+      const definition = achievementsData.find(
+        (candidate) =>
+          candidate.name.toUpperCase() === unlocked.name.toUpperCase()
+      );
+      if (!definition) continue;
+      try {
+        const recordKey = await AchievementSouvenirService.capture(
+          game,
+          definition,
+          unlocked.unlockTime
+        );
+        if (recordKey) souvenirRecordKeys.push(recordKey);
+      } catch (error) {
+        achievementsLogger.warn(
+          "Failed to capture achievement souvenir",
+          game.objectId,
+          unlocked.name,
+          error
+        );
+      }
+    }
+  }
+
   if (
     newAchievements.length &&
     publishNotification &&
@@ -197,6 +229,12 @@ export const mergeAchievements = async (
         publishOsNotification();
       }
     }
+  }
+
+  // Upload begins only after the notification is published, keeping GameHub's
+  // own toast out of the captured frame and network latency off its hot path.
+  for (const recordKey of souvenirRecordKeys) {
+    void AchievementSouvenirService.sync(recordKey);
   }
 
   const shouldSyncWithRemote =

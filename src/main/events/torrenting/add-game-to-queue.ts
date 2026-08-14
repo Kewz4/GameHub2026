@@ -7,10 +7,11 @@ import {
   logger,
 } from "@main/services";
 import { createGame } from "@main/services/library-sync";
-import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
-import { parseBytes } from "@shared";
+import { gamesSublevel, levelKeys } from "@main/level";
+import { Downloader, parseBytes } from "@shared";
 import {
   emulatorPlatformFolder,
+  getGlobalTrackers,
   handleDownloadError,
   isKnownDownloadError,
   prepareGameEntry,
@@ -47,6 +48,8 @@ const addGameToQueue = async (
 
   const parsedFileSize = parseBytes(fileSize ?? null);
   const gameKey = levelKeys.game(shop, objectId);
+  const customTrackers =
+    downloader === Downloader.Torrent ? await getGlobalTrackers() : undefined;
 
   const download: Download = {
     shop,
@@ -71,6 +74,7 @@ const addGameToQueue = async (
     targetFileName,
     alternateUris,
     emulatorSystem: emulatorSystem ?? null,
+    customTrackers,
   };
 
   try {
@@ -90,7 +94,6 @@ const addGameToQueue = async (
   await prepareGameEntry({ gameKey, title, objectId, shop });
 
   try {
-    await downloadsSublevel.put(gameKey, download);
     await DownloadOrchestrator.enqueuePreparedDownload(download);
 
     const updatedGame = await gamesSublevel.get(gameKey);

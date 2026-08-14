@@ -12,3 +12,6 @@ import "./lookup-game-achievements";
 import "./load-retroachievements-list";
 import "./login-retroachievements";
 import "./sync-ralibretro-login";
+import "./get-achievement-souvenirs";
+import "./delete-achievement-souvenir";
+import "./open-achievement-souvenirs-folder";

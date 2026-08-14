@@ -88,9 +88,17 @@ type HydraNativeModule = {
   ) => Promise<void>;
   // In-game overlay natives (Windows-only; no-op fallbacks elsewhere).
   startOverlayKeyboardWatcher: () => boolean;
+  stopOverlayKeyboardWatcher: () => boolean;
   getOverlayKeyboardEventCount: () => number;
   getOverlayGamepadButtons: () => number;
   getForegroundProcessId: () => number;
+  getOverlayInjectionRisk: (pid: number) => {
+    safe: boolean;
+    reason?: string | null;
+    moduleName?: string | null;
+    module_name?: string | null;
+  };
+  getProcessCreationTimeTicks: (pid: number) => string | null;
   isCurrentProcessElevated: () => boolean;
   getProcessAccessStatus: (pid: number) => {
     canInject?: boolean;
@@ -150,7 +158,8 @@ type HydraNativeModule = {
   };
   injectInputHook: (
     pid: number,
-    dllPath: string
+    dllPath: string,
+    expectedCreationTicks: string
   ) => { injected: boolean; stage: string; errorCode: number };
   // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
   getAudioSessions: () => NativeAudioSession[];
@@ -433,6 +442,14 @@ export class NativeAddon {
     }
   }
 
+  public static stopOverlayKeyboardWatcher(): boolean {
+    try {
+      return this.load().stopOverlayKeyboardWatcher();
+    } catch {
+      return false;
+    }
+  }
+
   public static getOverlayKeyboardEventCount(): number {
     try {
       return this.load().getOverlayKeyboardEventCount();
@@ -446,6 +463,34 @@ export class NativeAddon {
       return this.load().getOverlayGamepadButtons();
     } catch {
       return 0;
+    }
+  }
+
+  public static getOverlayInjectionRisk(pid: number) {
+    const unavailable = {
+      safe: false,
+      reason: "module-scan-unavailable",
+      moduleName: null as string | null,
+    };
+    if (process.platform !== "win32" || pid <= 4) return unavailable;
+    try {
+      const risk = this.load().getOverlayInjectionRisk(pid);
+      return {
+        safe: risk.safe,
+        reason: risk.reason ?? null,
+        moduleName: risk.moduleName ?? risk.module_name ?? null,
+      };
+    } catch {
+      return unavailable;
+    }
+  }
+
+  public static getProcessCreationTimeTicks(pid: number) {
+    if (process.platform !== "win32" || pid <= 4) return null;
+    try {
+      return this.load().getProcessCreationTimeTicks(pid) ?? null;
+    } catch {
+      return null;
     }
   }
 
@@ -691,12 +736,15 @@ export class NativeAddon {
    * Inject the input gate into `pid`. Safe to call repeatedly: loading the same
    * DLL twice returns the existing module without starting a second worker.
    */
-  public static injectInputHook(pid: number): {
+  public static injectInputHook(
+    pid: number,
+    expectedCreationTicks: string
+  ): {
     injected: boolean;
     stage: string;
     errorCode: number;
   } {
-    if (process.platform !== "win32" || !pid) {
+    if (process.platform !== "win32" || !pid || !expectedCreationTicks) {
       return { injected: false, stage: "unsupported", errorCode: 0 };
     }
     try {
@@ -707,7 +755,7 @@ export class NativeAddon {
       if (!fs.existsSync(dllPath)) {
         return { injected: false, stage: "not-packaged", errorCode: 0 };
       }
-      return this.load().injectInputHook(pid, dllPath);
+      return this.load().injectInputHook(pid, dllPath, expectedCreationTicks);
     } catch (error) {
       return {
         injected: false,

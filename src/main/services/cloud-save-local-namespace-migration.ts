@@ -3,7 +3,8 @@ import { isDeepStrictEqual } from "node:util";
 export type CloudSaveLocalNamespaceStore =
   | "custom-paths"
   | "sync-anchors"
-  | "pending-deletions";
+  | "pending-deletions"
+  | "pending-post-exit";
 
 export interface CloudSaveLocalNamespaceEntry {
   store: CloudSaveLocalNamespaceStore;

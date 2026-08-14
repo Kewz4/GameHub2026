@@ -5,7 +5,6 @@ import {
 import cn from "classnames";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
 import { EyeClosedIcon } from "@primer/octicons-react";
-import Ellipses from "@renderer/assets/icons/ellipses.png";
 import "./achievement-notification.scss";
 
 interface AchievementNotificationProps {
@@ -47,6 +46,7 @@ export function AchievementNotificationItem({
               src={achievement.iconUrl}
               alt={achievement.title}
               className="achievement-notification__icon"
+              decoding="sync"
             />
             <div className="achievement-notification__text-container">
               <p className="achievement-notification__title">
@@ -61,16 +61,6 @@ export function AchievementNotificationItem({
                 {achievement.description}
               </p>
             </div>
-          </div>
-
-          <div className="achievement-notification__additional-overlay">
-            <div className="achievement-notification__dark-overlay"></div>
-            <img
-              className="achievement-notification__ellipses-overlay"
-              src={Ellipses}
-              alt=""
-            />
-            <div className="achievement-notification__trophy-overlay"></div>
           </div>
         </div>
       </div>

@@ -325,6 +325,40 @@ export interface UserProfile {
   hasCompletedWrapped2025: boolean;
 }
 
+export interface ProfileAchievementSouvenir {
+  ownerId: string;
+  shop: GameShop;
+  objectId: string;
+  achievementName: string;
+  achievementDisplayName: string;
+  gameTitle: string;
+  gameIconUrl: string | null;
+  imageUrl: string;
+  unlockTime: number;
+}
+
+export interface AchievementSouvenirRecord {
+  schemaVersion: 1;
+  ownerId: string;
+  shop: GameShop;
+  objectId: string;
+  achievementName: string;
+  achievementDisplayName: string;
+  gameTitle: string;
+  gameIconUrl: string | null;
+  unlockTime: number;
+  localPath: string | null;
+  r2Key: string | null;
+  status: "local" | "synced" | "pending-delete";
+  updatedAt: number;
+}
+
+export interface DeleteAchievementSouvenirRequest {
+  shop: GameShop;
+  objectId: string;
+  achievementName: string;
+}
+
 export interface UpdateProfileRequest {
   displayName?: string;
   profileVisibility?: ProfileVisibility;

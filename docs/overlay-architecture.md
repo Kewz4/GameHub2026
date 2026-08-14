@@ -16,7 +16,7 @@ All created in `src/main/services/overlay-manager.ts`:
 | --------------- | ------ | ---------------------------- | ----------- | --------- | ----------------- |
 | `overlayWindow` | full   | matches game window bounds   | yes         | yes       | `#/overlay`       |
 | `fpsWindow`     | pinned | 218×116                      | yes         | no        | `#/overlay-fps`   |
-| `toastWindow`   | toast  | up to 820 wide; 118–184 high | yes         | no        | `#/overlay-toast` |
+| `toastWindow`   | toast  | 440×64 ready; compact 316×82 | yes         | no        | `#/overlay-toast` |
 
 **All windows** use:
 
@@ -167,10 +167,12 @@ Renders a compact overlay in the top-left corner showing:
 
 #### Toast Mode
 
-Top-right activation notification:
+Right-edge activation notification:
 
-- Green dot + "Overlay ready" message
-- Right-click to dismiss
+- flush to the game client edge with an NVIDIA-style right-origin entrance
+- compact GameHub black card with no outer border, shadow or translucent halo
+- honest shortcut/error copy; normal ready copy is suppressed while live input
+  isolation is disabled
 - Auto-destroy after 8s (managed by main process)
 - `pointer-events: none`
 
@@ -360,11 +362,13 @@ One Guide-button press toggles the overlay, matching the `Shift+F3` keyboard sho
 
 ## In-game Input Isolation
 
-Foreground focus alone does not stop games polling XInput 1.3, global Win32 keyboard state, or background Raw Input. On Windows, `gamehub-inputhook.dll` is therefore prewarmed inside one unambiguous visible render PID. Launch helpers remain session roots but are never injection targets; Khazan specifically hands off from `steamclient_loader_x64.exe` to `BBQ-Win64-Shipping.exe`.
+Foreground focus alone does not stop games polling XInput, global Win32 keyboard state, Raw Input, DirectInput, or Windows.Gaming.Input. The native gate protocol therefore binds one unambiguous render PID to its exact process-creation identity and requires a generation-scoped capability acknowledgement before a visible overlay could be armed.
 
-Injection success is not readiness. The launcher and DLL share a generation-scoped record containing owner PID, render PID, block state, acknowledged PID/generation, capability mask, observed unsupported-module mask, and hook status. The DLL publishes the acknowledgement only after a complete module snapshot and successful IAT coverage sweep. Immediately before showing the interactive window, the main process verifies the exact PID/generation and required XInput, Win32 keyboard, Raw Input, and late-binding capabilities; the native setter independently checks the same record. Blur, hide, target handoff, native failure, and shutdown synchronously clear blocking.
+The current Windows release deliberately sets `OVERLAY_LIVE_INPUT_ISOLATION_ENABLED` to `false`. Attaching the existing IAT/GetProcAddress hook only after the first shortcut cannot revoke polling function pointers cached earlier by game or middleware startup code. The kill switch is enforced inside `waitUntilReady`, `inspect`, `activate`, and `prepare`, before any shared readiness record is trusted. A stale resident DLL or same-user mapping writer therefore cannot authorize `set(true)` or show the interactive window. The normal “shortcut available” toast is suppressed; an explicit shortcut receives only the focusless, mouse-ignored error toast. The game is never suspended.
 
-The current hook does **not** claim universal controller isolation. DirectInput (`dinput.dll`/`dinput8.dll`), GameInput (`gameinput.dll`/`gameinputredist.dll`), and Windows.Gaming.Input are detected conservatively from loaded modules and make overlay opening fail safe. This can reject a game that loaded but never polls one of those modules; that false-positive tradeoff is intentional until those APIs are hooked. Direct raw-HID polling is also unsupported, but `hid.dll` presence is not treated as proof because it is commonly loaded transitively. If readiness is late, stale, incomplete, or unsupported, GameHub keeps the interactive overlay closed and shows a noninteractive error toast rather than opening fail-open.
+The dormant native work remains fail-closed: DirectInput reports unsupported whenever `dinput.dll` or `dinput8.dll` is present; the Windows.Gaming.Input implementation is capability- and topology-fenced; GameInput, HIDAPI, SDL, WinUSB, anti-cheat, incomplete module scans, identity mismatch, and incomplete readiness all reject activation. Do not enable live isolation merely because those unit tests pass—the cached-pointer acceptance gap is architectural.
+
+A future release needs a dedicated native launch supervisor and a first-DLL bootstrap such as a pinned, audited Detours flow, not `CREATE_SUSPENDED` followed by the current remote `LoadLibraryW` injector. Windows serializes process initialization and remote-thread DLL initialization, so that naive sequence can time out or deadlock. Loader-based titles such as Khazan additionally require child-creation interception that instruments the exact selected renderer before its entry point. The complete fixture-first design, multi-stack capability contract and production gates are maintained in [`overlay-supervised-launch.md`](./overlay-supervised-launch.md).
 
 ---
 

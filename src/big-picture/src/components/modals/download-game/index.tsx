@@ -83,6 +83,7 @@ interface DownloadDirectorySuggestion {
   path: string;
   freeBytes: number;
   totalBytes: number;
+  usageState: "ready" | "unavailable";
 }
 
 function hasActiveLibraryDownload(
@@ -711,19 +712,22 @@ function DownloadGameOptions({
 
       const suggestions = await Promise.all(
         resolvedDirectories.allPaths.map(async (path) => {
-          let diskUsage: DiskUsage = { free: 0, total: 0 };
+          let diskUsage: DiskUsage | null = null;
 
           try {
             diskUsage = await globalThis.window.electron.getDiskFreeSpace(path);
           } catch {
-            diskUsage = { free: 0, total: 0 };
+            diskUsage = null;
           }
 
           return {
             title: getDownloadDirectoryTitle(path),
             path,
-            freeBytes: diskUsage.free,
-            totalBytes: diskUsage.total,
+            freeBytes: diskUsage?.free ?? 0,
+            totalBytes: diskUsage?.total ?? 0,
+            usageState: diskUsage
+              ? ("ready" as const)
+              : ("unavailable" as const),
           };
         })
       );
@@ -948,6 +952,7 @@ function DownloadGameOptions({
                 path={directory.path}
                 freeBytes={directory.freeBytes}
                 totalBytes={directory.totalBytes}
+                usageState={directory.usageState}
                 isSelected={selectedDownloadPath === directory.path}
                 showSelectedIndicator
                 onClick={() => handleSelectDownloadPath(directory.path)}

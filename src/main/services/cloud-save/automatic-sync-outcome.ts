@@ -23,6 +23,11 @@ export const getPendingDeletionAutomaticSyncOutcome = (
       }
     : null;
 
+export const shouldSkipAutomaticCloudSaveDuringLaunch = (
+  trigger: CloudSaveAutomaticSyncTrigger,
+  launchSessionActive: boolean
+) => trigger === "game-page-open" && launchSessionActive;
+
 export const classifyAutomaticCloudSaveFailure = (
   trigger: CloudSaveAutomaticSyncTrigger,
   latestStage?: CloudSaveSyncProgressStage

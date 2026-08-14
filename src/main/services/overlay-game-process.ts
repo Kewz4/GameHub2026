@@ -24,10 +24,14 @@ export const findOverlayGameProcesses = async (
   const targets = getOverlayProcessTargets(game);
   if (!targets.length) return [];
 
-  const [processes, foregroundPid] = await Promise.all([
+  const [nativeProcesses, foregroundPid] = await Promise.all([
     NativeAddon.listProcesses(),
     Promise.resolve(NativeAddon.getForegroundProcessId()),
   ]);
+  const processes = nativeProcesses.map((candidate) => ({
+    ...candidate,
+    startTime: candidate.startTime ?? candidate.start_time,
+  }));
 
   const ranked = rankOverlayGameProcesses(
     processes,

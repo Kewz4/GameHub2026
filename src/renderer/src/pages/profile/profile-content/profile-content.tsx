@@ -22,6 +22,7 @@ import { AnimatePresence } from "framer-motion";
 import "./profile-content.scss";
 import type { ProfileGameSort } from "./profile-library-data";
 import { ProfileAchievementsTab } from "./profile-achievements-tab";
+import { ProfileSouvenirsTab } from "./profile-souvenirs-tab";
 
 interface UserReview {
   id: string;
@@ -83,6 +84,8 @@ export function ProfileContent() {
     hasMoreLibraryGames,
     isLoadingLibraryGames,
     localLibraryCount,
+    souvenirs,
+    refreshSouvenirs,
   } = useContext(userProfileContext);
   const { userDetails } = useUserDetails();
   const [statsIndex, setStatsIndex] = useState(0);
@@ -352,6 +355,8 @@ export function ProfileContent() {
             activeTab={activeTab}
             reviewsTotalCount={reviewsTotalCount}
             showAchievements={isMe}
+            souvenirsTotalCount={souvenirs.length}
+            showSouvenirs={isMe}
             onTabChange={setActiveTab}
           />
 
@@ -387,6 +392,13 @@ export function ProfileContent() {
 
               {activeTab === "achievements" && isMe && (
                 <ProfileAchievementsTab />
+              )}
+
+              {activeTab === "souvenirs" && isMe && (
+                <ProfileSouvenirsTab
+                  souvenirs={souvenirs}
+                  onRefresh={refreshSouvenirs}
+                />
               )}
             </AnimatePresence>
           </div>

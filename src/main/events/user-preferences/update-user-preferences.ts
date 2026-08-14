@@ -10,28 +10,38 @@ import { DownloadManager } from "@main/services";
 import { OverlayManager } from "@main/services/overlay-manager";
 import { getDownloadDirectoryPreferences } from "@shared";
 import { enqueueUserPreferencesMutation } from "./user-preferences-mutation-queue";
+import { normalizeGlobalTrackerPreferencePatch } from "./global-tracker-preferences";
 
 const updateUserPreferences = async (
   _event: Electron.IpcMainInvokeEvent,
   preferences: Partial<UserPreferences>
 ) => {
+  const validatedPreferences =
+    normalizeGlobalTrackerPreferencePatch(preferences);
+
   const userPreferences = await db.get<string, UserPreferences | null>(
     levelKeys.userPreferences,
     { valueEncoding: "json" }
   );
 
-  if (preferences.language) {
-    await db.put<string, string>(levelKeys.language, preferences.language, {
-      valueEncoding: "utf8",
-    });
+  if (validatedPreferences.language) {
+    await db.put<string, string>(
+      levelKeys.language,
+      validatedPreferences.language,
+      {
+        valueEncoding: "utf8",
+      }
+    );
 
-    i18next.changeLanguage(preferences.language);
-    patchUserProfile({ language: preferences.language }).catch(() => {});
+    i18next.changeLanguage(validatedPreferences.language);
+    patchUserProfile({ language: validatedPreferences.language }).catch(
+      () => {}
+    );
   }
 
   const mergedPreferences = {
     ...userPreferences,
-    ...preferences,
+    ...validatedPreferences,
   };
   const normalizedDownloadDirectoryPreferences =
     getDownloadDirectoryPreferences(mergedPreferences, defaultDownloadsPath);
@@ -72,15 +82,15 @@ const updateUserPreferences = async (
   // (toggle the overlay / performance HUD without needing a relaunch).
   OverlayManager.applyUserPreferences(updatedPreferences);
 
-  if (Object.hasOwn(preferences, "maxDownloadSpeedBytesPerSecond")) {
+  if (Object.hasOwn(validatedPreferences, "maxDownloadSpeedBytesPerSecond")) {
     await DownloadManager.applyDownloadSpeedLimit(
-      preferences.maxDownloadSpeedBytesPerSecond ?? null
+      validatedPreferences.maxDownloadSpeedBytesPerSecond ?? null
     );
   }
 
-  if (Object.hasOwn(preferences, "torrentNetworkInterface")) {
+  if (Object.hasOwn(validatedPreferences, "torrentNetworkInterface")) {
     await DownloadManager.applyNetworkInterface(
-      preferences.torrentNetworkInterface ?? null
+      validatedPreferences.torrentNetworkInterface ?? null
     );
   }
 

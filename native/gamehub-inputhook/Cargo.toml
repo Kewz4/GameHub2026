@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [
   "Win32_Foundation",
+  "Win32_Devices_HumanInterfaceDevice",
   "Win32_Security",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_LibraryLoader",
@@ -21,6 +22,12 @@ windows-sys = { version = "0.61.2", features = [
   "Win32_UI_Input",
   "Win32_UI_Input_KeyboardAndMouse",
 ] }
+windows = { version = "0.61.3", features = [
+  "Foundation",
+  "Gaming_Input",
+  "Win32_System_WinRT",
+] }
+windows-collections = "0.2.0"
 
 [profile.release]
 # This code runs inside somebody else's process. A Rust panic unwinding into a

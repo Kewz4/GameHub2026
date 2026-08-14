@@ -16,6 +16,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { app } from "electron";
 import type {
+  AchievementSouvenirRecord,
   CloudSaveV2LibraryEntry,
   GameArtifact,
   GameArtifactWithGame,
@@ -44,6 +45,13 @@ import {
   sanitizeProfileImageCacheComponent,
   selectLatestProfileImageObject,
 } from "./profile-image-helpers";
+import { achievementSouvenirsPath } from "@main/constants";
+import {
+  achievementSouvenirR2Key,
+  achievementSouvenirScreenshotPath,
+  isAchievementSouvenirRecord,
+} from "./achievements/achievement-souvenir-policy";
+import { AchievementSouvenirLocalStorage } from "./achievements/achievement-souvenir-local-storage";
 
 export type {
   R2CloudSaveV2ControlDocument,
@@ -118,6 +126,13 @@ const dec = (v: string | undefined | null): string => {
     return v ?? "";
   }
 };
+
+const souvenirMetadataValue = (value: string | null | undefined, max = 240) =>
+  enc((value ?? "").slice(0, max));
+
+const achievementSouvenirLocalStorage = new AchievementSouvenirLocalStorage(
+  achievementSouvenirsPath
+);
 
 export class R2Sync {
   private static _client: S3Client | null = null;
@@ -1087,6 +1102,228 @@ export class R2Sync {
     });
     this.profileImageDownloads.set(lookupKey, lookup);
     return lookup;
+  }
+
+  // ── Achievement souvenirs ─────────────────────────────────────────────
+
+  static async uploadAchievementSouvenir(
+    record: AchievementSouvenirRecord,
+    filePath: string
+  ): Promise<string> {
+    if (
+      !isAchievementSouvenirRecord(record) ||
+      record.status === "pending-delete"
+    ) {
+      throw new Error("achievement_souvenir_record_invalid");
+    }
+    const key = achievementSouvenirR2Key(
+      record.ownerId,
+      record.shop,
+      record.objectId,
+      record.achievementName
+    );
+    const stat = await fs.promises.stat(filePath);
+    if (!stat.isFile() || stat.size <= 0 || stat.size > 25 * 1024 * 1024) {
+      throw new Error("achievement_souvenir_file_invalid");
+    }
+
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: fs.createReadStream(filePath),
+        ContentLength: stat.size,
+        ContentType: "image/jpeg",
+        Metadata: {
+          schema: "1",
+          ownerid: souvenirMetadataValue(record.ownerId, 512),
+          shop: souvenirMetadataValue(record.shop, 32),
+          objectid: souvenirMetadataValue(record.objectId, 1_024),
+          achievementname: souvenirMetadataValue(record.achievementName, 512),
+          achievementdisplayname: souvenirMetadataValue(
+            record.achievementDisplayName
+          ),
+          gametitle: souvenirMetadataValue(record.gameTitle),
+          gameiconurl: souvenirMetadataValue(record.gameIconUrl, 512),
+          unlocktime: String(record.unlockTime),
+          updatedat: String(record.updatedAt),
+        },
+      })
+    );
+    this.headCache.delete(key);
+    logger.log("R2: uploaded achievement souvenir", {
+      shop: record.shop,
+      objectId: record.objectId,
+      achievementName: record.achievementName,
+    });
+    return key;
+  }
+
+  static async listAchievementSouvenirs(
+    ownerId: string,
+    game?: { shop: GameShop; objectId: string }
+  ): Promise<AchievementSouvenirRecord[]> {
+    const root = `users/${enc(ownerId)}/achievement-souvenirs/`;
+    const prefix = game
+      ? `${root}${enc(game.shop)}/${enc(game.objectId)}/`
+      : root;
+    const objects: Array<{ Key: string; LastModified?: Date }> = [];
+    let continuationToken: string | undefined;
+
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: R2_BUCKET,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+          MaxKeys: 1_000,
+        })
+      );
+      for (const object of page.Contents ?? []) {
+        if (object.Key?.startsWith(prefix)) {
+          objects.push({ Key: object.Key, LastModified: object.LastModified });
+        }
+      }
+      if (objects.length > 10_000) {
+        throw new Error("achievement_souvenir_remote_limit_exceeded");
+      }
+      continuationToken = page.IsTruncated
+        ? page.NextContinuationToken
+        : undefined;
+      if (page.IsTruncated && !continuationToken) {
+        throw new Error("achievement_souvenir_remote_page_invalid");
+      }
+    } while (continuationToken);
+
+    const records = await Promise.all(
+      objects.map(async (object) => {
+        const head = await this.headArtifact(object.Key);
+        const metadata = head?.Metadata;
+        if (!metadata || metadata.schema !== "1") return null;
+        const unlockTime = Number(metadata.unlocktime);
+        const updatedAt = Number(metadata.updatedat);
+        const record: AchievementSouvenirRecord = {
+          schemaVersion: 1,
+          ownerId: dec(metadata.ownerid),
+          shop: dec(metadata.shop) as GameShop,
+          objectId: dec(metadata.objectid),
+          achievementName: dec(metadata.achievementname),
+          achievementDisplayName: dec(metadata.achievementdisplayname),
+          gameTitle: dec(metadata.gametitle),
+          gameIconUrl: dec(metadata.gameiconurl) || null,
+          unlockTime,
+          localPath: null,
+          r2Key: object.Key,
+          status: "synced",
+          updatedAt: Number.isFinite(updatedAt)
+            ? updatedAt
+            : (object.LastModified?.getTime() ?? Date.now()),
+        };
+        if (
+          record.ownerId !== ownerId ||
+          !isAchievementSouvenirRecord(record) ||
+          achievementSouvenirR2Key(
+            record.ownerId,
+            record.shop,
+            record.objectId,
+            record.achievementName
+          ) !== object.Key
+        ) {
+          return null;
+        }
+        return record;
+      })
+    );
+    return records.filter(
+      (record): record is AchievementSouvenirRecord => record !== null
+    );
+  }
+
+  static async cacheAchievementSouvenir(
+    record: AchievementSouvenirRecord
+  ): Promise<string> {
+    if (!record.r2Key || record.status === "pending-delete") {
+      throw new Error("achievement_souvenir_remote_key_missing");
+    }
+    const expectedKey = achievementSouvenirR2Key(
+      record.ownerId,
+      record.shop,
+      record.objectId,
+      record.achievementName
+    );
+    if (record.r2Key !== expectedKey) {
+      throw new Error("achievement_souvenir_remote_key_invalid");
+    }
+    const destinationPath = achievementSouvenirScreenshotPath(
+      achievementSouvenirsPath,
+      {
+        ownerId: record.ownerId,
+        shop: record.shop,
+        objectId: record.objectId,
+        gameTitle: record.gameTitle,
+        achievementName: record.achievementName,
+        achievementDisplayName: record.achievementDisplayName,
+      }
+    );
+    const head = await this.headArtifact(record.r2Key);
+    const reconciledCachedPath =
+      await achievementSouvenirLocalStorage.reconcilePersistedPath(
+        record.ownerId,
+        destinationPath
+      );
+    const cached = reconciledCachedPath
+      ? await fs.promises.stat(reconciledCachedPath).catch(() => null)
+      : null;
+    if (
+      reconciledCachedPath &&
+      cached?.isFile() &&
+      cached.size > 0 &&
+      (head?.ContentLength == null || cached.size === head.ContentLength)
+    ) {
+      return reconciledCachedPath;
+    }
+
+    await achievementSouvenirLocalStorage.prepareOwnedFilePath(
+      record.ownerId,
+      destinationPath
+    );
+    const partialPath = `${destinationPath}.${process.pid}-${crypto.randomUUID()}.part`;
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: R2_BUCKET, Key: record.r2Key })
+      );
+      await pipeline(
+        response.Body as Readable,
+        fs.createWriteStream(partialPath, { flags: "wx" })
+      );
+      const downloaded = await fs.promises.stat(partialPath);
+      if (
+        downloaded.size <= 0 ||
+        (response.ContentLength != null &&
+          downloaded.size !== response.ContentLength)
+      ) {
+        throw new Error("achievement_souvenir_download_invalid");
+      }
+      await fs.promises.rm(destinationPath, { force: true });
+      await fs.promises.rename(partialPath, destinationPath);
+      return destinationPath;
+    } finally {
+      await fs.promises.rm(partialPath, { force: true }).catch(() => null);
+    }
+  }
+
+  static async deleteAchievementSouvenir(
+    ownerId: string,
+    key: string
+  ): Promise<void> {
+    const prefix = `users/${enc(ownerId)}/achievement-souvenirs/`;
+    if (!key.startsWith(prefix) || key.includes("\\")) {
+      throw new Error("achievement_souvenir_remote_key_invalid");
+    }
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key })
+    );
+    this.headCache.delete(key);
   }
 
   private static async downloadLatestImageByKind(

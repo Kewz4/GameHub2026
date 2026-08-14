@@ -1,8 +1,8 @@
-import type { GameShop } from "@types";
+import type { GameShop, UserAchievement } from "@types";
 import { TrophyIcon } from "@phosphor-icons/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FocusItem, VerticalFocusGroup } from "../../components";
+import { FocusItem, ImageLightbox, VerticalFocusGroup } from "../../components";
 import {
   AchievementRow,
   AvailablePointsBar,
@@ -28,6 +28,8 @@ export default function GameAchievements() {
     shop!
   );
   const { userDetails } = useUserDetails();
+  const [selectedSouvenir, setSelectedSouvenir] =
+    useState<UserAchievement | null>(null);
 
   const unlockedCount = useMemo(
     () => achievements.filter((a) => a.unlocked).length,
@@ -118,6 +120,7 @@ export default function GameAchievements() {
                     <AchievementRow
                       key={achievement.name}
                       achievement={achievement}
+                      onOpenSouvenir={setSelectedSouvenir}
                     />
                   ))}
                 </ul>
@@ -125,6 +128,14 @@ export default function GameAchievements() {
             )}
           </section>
         </div>
+
+        {selectedSouvenir?.imageUrl ? (
+          <ImageLightbox
+            src={selectedSouvenir.imageUrl}
+            alt={`${selectedSouvenir.displayName} achievement souvenir`}
+            onClose={() => setSelectedSouvenir(null)}
+          />
+        ) : null}
       </div>
     </VerticalFocusGroup>
   );

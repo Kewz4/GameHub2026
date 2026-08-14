@@ -7,6 +7,7 @@ import {
   canonicalizeAchievementDefinitions,
   canonicalizeUnlockedAchievements,
 } from "@main/services/achievements/achievement-sync-policy";
+import { AchievementSouvenirService } from "@main/services/achievements/achievement-souvenir-service";
 
 export const getUnlockedAchievements = async (
   objectId: string,
@@ -36,6 +37,11 @@ export const getUnlockedAchievements = async (
     cachedAchievements?.unlockedAchievements
   );
   const achievementProgress = cachedAchievements?.achievementProgress ?? [];
+  const souvenirImages = await AchievementSouvenirService.getGameImages(
+    shop,
+    objectId,
+    !useCachedData
+  );
 
   return achievementsData
     .map((achievementData) => {
@@ -57,6 +63,9 @@ export const getUnlockedAchievements = async (
           ...achievementData,
           unlocked: true,
           unlockTime: unlockedAchievementData.unlockTime,
+          imageUrl:
+            souvenirImages.get(achievementData.name.trim().toUpperCase()) ??
+            null,
         };
       }
 

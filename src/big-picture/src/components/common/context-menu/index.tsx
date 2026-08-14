@@ -253,6 +253,11 @@ export function ContextMenu({
                 <FocusItem
                   key={item.id}
                   id={focusId}
+                  actions={{
+                    primary: () => {
+                      void handleItemSelect(item);
+                    },
+                  }}
                   navigationState={item.disabled ? "disabled" : "active"}
                   asChild
                 >

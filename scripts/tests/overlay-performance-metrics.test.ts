@@ -195,6 +195,7 @@ const gateStatus = (
 test("blocks only after the injected worker positively acknowledges readiness", async () => {
   const writes: Array<[number, boolean]> = [];
   let finishInjection: (ready: boolean) => void = () => undefined;
+  let injectionAttempts = 0;
   let status = gateStatus(42);
   const controller = new OverlayInputGateController({
     create: () => true,
@@ -202,16 +203,23 @@ test("blocks only after the injected worker positively acknowledges readiness", 
       writes.push([pid, blocked]);
       return true;
     },
-    inject: () =>
-      new Promise<boolean>((resolve) => {
+    inject: () => {
+      injectionAttempts += 1;
+      return new Promise<boolean>((resolve) => {
         finishInjection = resolve;
-      }),
+      });
+    },
     status: () => status,
   });
 
   controller.initialize();
   controller.setTarget(42);
-  const readiness = controller.waitUntilReady(42, 100, 1);
+  assert.equal(injectionAttempts, 0, "target detection alone must not inject");
+  // Leave enough real-clock headroom for the full parallel overlay suite.
+  // The assertions below, rather than a 100 ms scheduler race, prove that
+  // LoadLibrary completion alone cannot arm the gate.
+  const readiness = controller.waitUntilReady(42, 1_000, 1);
+  assert.equal(injectionAttempts, 1, "explicit activation prepares the hook");
   assert.equal(
     writes.some(([pid, blocked]) => pid === 42 && blocked),
     false
@@ -273,13 +281,126 @@ test("a stale injection cannot block a new target", async () => {
     readyGeneration: 7,
     capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
   });
+  const currentReadiness = controller.waitUntilReady(20, 10, 1);
   injections.get(20)?.(true);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal((await controller.waitUntilReady(20, 10, 1)).ready, true);
+  assert.equal((await currentReadiness).ready, true);
   assert.equal(controller.activate(20), true);
   assert.deepEqual(writes.at(-1), [20, true]);
   controller.setTarget(0);
   assert.deepEqual(writes.at(-1), [0, false]);
+});
+
+test("the same PID with a new creation identity starts a fresh generation", async () => {
+  const writes: Array<[number, boolean]> = [];
+  const injections: string[] = [];
+  let status = gateStatus(42, {
+    ready: true,
+    readyPid: 42,
+    readyGeneration: 7,
+    capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+  });
+  const controller = new OverlayInputGateController({
+    create: () => true,
+    set: (pid, blocked) => {
+      writes.push([pid, blocked]);
+      if (pid === 0) status = gateStatus(0);
+      return true;
+    },
+    inject: async (_pid, identity) => {
+      injections.push(identity);
+      status = gateStatus(42, {
+        ready: true,
+        readyPid: 42,
+        readyGeneration: 7,
+        capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+      });
+      return true;
+    },
+    status: () => status,
+  });
+  controller.initialize();
+  controller.setTarget(42, "creation-a");
+  assert.equal((await controller.waitUntilReady(42, 20, 1)).ready, true);
+
+  controller.setTarget(42, "creation-b");
+  assert.equal(controller.inspect(42).ready, false);
+  assert.equal((await controller.waitUntilReady(42, 20, 1)).ready, true);
+  assert.deepEqual(injections, ["creation-a", "creation-b"]);
+  assert.ok(
+    writes.some(([pid, blocked]) => pid === 0 && !blocked),
+    "PID reuse must clear the native target/generation first"
+  );
+});
+
+test("a transient injection failure can be retried for the same target", async () => {
+  let attempts = 0;
+  const readyStatus = (ready: boolean): OverlayInputGateNativeStatus => ({
+    ready,
+    ownerPid: 1,
+    targetPid: 42,
+    blocked: false,
+    generation: 1,
+    readyPid: ready ? 42 : 0,
+    readyGeneration: ready ? 1 : 0,
+    capabilityMask: ready ? OVERLAY_INPUT_REQUIRED_CAPABILITIES : 0,
+    unsupportedModuleMask: 0,
+    hookStatus: ready ? 4 : 0,
+  });
+  let status = readyStatus(false);
+  const controller = new OverlayInputGateController({
+    create: () => true,
+    set: () => true,
+    inject: async () => {
+      attempts += 1;
+      if (attempts === 2) status = readyStatus(true);
+      return attempts > 1;
+    },
+    status: () => status,
+  });
+  controller.initialize();
+  controller.setTarget(42);
+
+  assert.equal((await controller.waitUntilReady(42, 5, 1)).ready, false);
+  assert.equal((await controller.waitUntilReady(42, 50, 1)).ready, true);
+  assert.equal(attempts, 2);
+});
+
+test("a late handshake after an indeterminate injection result is accepted", async () => {
+  let status: OverlayInputGateNativeStatus = {
+    ready: false,
+    ownerPid: 1,
+    targetPid: 77,
+    blocked: false,
+    generation: 1,
+    readyPid: 0,
+    readyGeneration: 0,
+    capabilityMask: 0,
+    unsupportedModuleMask: 0,
+    hookStatus: 0,
+  };
+  const controller = new OverlayInputGateController({
+    create: () => true,
+    set: () => true,
+    inject: async () => {
+      setTimeout(() => {
+        status = {
+          ...status,
+          ready: true,
+          readyPid: 77,
+          readyGeneration: 1,
+          capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+          hookStatus: 4,
+        };
+      }, 10);
+      return false;
+    },
+    status: () => status,
+  });
+  controller.initialize();
+  controller.setTarget(77);
+
+  assert.equal((await controller.waitUntilReady(77, 100, 2)).ready, true);
 });
 
 test("rejects a ready hook when an unsupported input stack is observed", async () => {
@@ -314,6 +435,75 @@ test("rejects a ready hook when an unsupported input stack is observed", async (
   );
 });
 
+test("failed revalidation never releases an already latched visible gate", () => {
+  const writes: Array<[number, boolean]> = [];
+  const controller = new OverlayInputGateController({
+    create: () => true,
+    set: (pid, blocked) => {
+      writes.push([pid, blocked]);
+      return false;
+    },
+    inject: async () => true,
+    status: () =>
+      gateStatus(55, {
+        blocked: true,
+        unsupportedModuleMask: 2,
+      }),
+  });
+  // Seed through a normal adapter first; then the status itself proves the
+  // native latch is active even though readiness was invalidated.
+  (controller as unknown as { created: boolean; targetPid: number }).created =
+    true;
+  (controller as unknown as { created: boolean; targetPid: number }).targetPid =
+    55;
+
+  assert.equal(controller.activate(55), false);
+  assert.deepEqual(writes, []);
+});
+
+test("a disabled live policy rejects even a forged ready record", async () => {
+  const writes: Array<[number, boolean]> = [];
+  let injectionAttempts = 0;
+  let statusReads = 0;
+  const controller = new OverlayInputGateController({
+    authorized: () => false,
+    create: () => true,
+    set: (pid, blocked) => {
+      writes.push([pid, blocked]);
+      return true;
+    },
+    inject: async () => {
+      injectionAttempts += 1;
+      return false;
+    },
+    status: () => {
+      statusReads += 1;
+      return gateStatus(55, {
+        ready: true,
+        readyPid: 55,
+        readyGeneration: 7,
+        capabilityMask: OVERLAY_INPUT_REQUIRED_CAPABILITIES,
+      });
+    },
+  });
+
+  controller.initialize();
+  controller.setTarget(55, "creation-a");
+  assert.deepEqual(await controller.waitUntilReady(55, 10, 1), {
+    ready: false,
+    reason: "unavailable",
+    status: null,
+  });
+  assert.equal(controller.inspect(55).ready, false);
+  assert.equal(controller.activate(55), false);
+  assert.equal(injectionAttempts, 0);
+  assert.equal(statusReads, 0);
+  assert.equal(
+    writes.some(([pid, blocked]) => pid === 55 && blocked),
+    false
+  );
+});
+
 test(
   "the injected Win32 gate neutralizes a real input poll and restores it",
   { skip: process.platform !== "win32" },
@@ -330,13 +520,18 @@ test(
       createOverlayInputGate(): boolean;
       setOverlayInputGate(pid: number, blocked: boolean): boolean;
       getOverlayInputGateStatus?: (pid: number) => OverlayInputGateNativeStatus;
+      getProcessCreationTimeTicks?: (pid: number) => string | null;
       injectInputHook(
         pid: number,
-        dllPath: string
+        dllPath: string,
+        expectedCreationTicks: string
       ): { injected: boolean; stage: string; errorCode: number };
     };
     const getGateStatus = native.getOverlayInputGateStatus;
-    if (typeof getGateStatus !== "function") {
+    if (
+      typeof getGateStatus !== "function" ||
+      typeof native.getProcessCreationTimeTicks !== "function"
+    ) {
       context.skip(
         "native addon has not been rebuilt with gate status support"
       );
@@ -365,7 +560,22 @@ test(
       assert.equal(native.createOverlayInputGate(), true);
       assert.equal(native.setOverlayInputGate(targetPid, false), true);
 
-      const injection = native.injectInputHook(targetPid, hookPath);
+      const creationTicks = native.getProcessCreationTimeTicks(targetPid);
+      assert.ok(creationTicks, "fixture process identity is unavailable");
+      assert.deepEqual(
+        native.injectInputHook(
+          targetPid,
+          hookPath,
+          (BigInt(creationTicks) + 1n).toString()
+        ),
+        { injected: false, stage: "identity", errorCode: 0 },
+        "a PID with the wrong creation identity must never be injected"
+      );
+      const injection = native.injectInputHook(
+        targetPid,
+        hookPath,
+        creationTicks
+      );
       assert.deepEqual(injection, {
         injected: true,
         stage: "ok",
@@ -395,6 +605,13 @@ test(
       fixture.stdin.write("poll\n");
       assert.equal(await nextLine(), "POLL\t1");
       assert.equal(native.setOverlayInputGate(targetPid, true), true);
+      fixture.stdin.write("poll\n");
+      assert.equal(await nextLine(), "POLL\t0");
+      assert.equal(
+        native.setOverlayInputGate(targetPid, true),
+        true,
+        "repeated activation must be idempotent without pulsing the latch"
+      );
       fixture.stdin.write("poll\n");
       assert.equal(await nextLine(), "POLL\t0");
       assert.equal(native.setOverlayInputGate(0, false), true);

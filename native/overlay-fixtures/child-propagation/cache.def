@@ -1,0 +1,7 @@
+LIBRARY "gamehub-overlay-qa-child-cache64"
+EXPORTS
+  GameHubChildQaCacheInitialized
+  GameHubChildQaCachedCreateProcessW
+  GameHubChildQaCachedCreateProcessA
+  GameHubChildQaCallCachedCreateProcessW
+  GameHubChildQaCallCachedCreateProcessA

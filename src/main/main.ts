@@ -165,6 +165,14 @@ export const loadState = async () => {
     WSClient.connect();
   });
 
+  // Resume V2 post-exit uploads only after authentication and account
+  // namespace preparation have settled. Records for other accounts remain
+  // fenced in LevelDB and are never replayed under the active credentials.
+  const { replayPendingCloudSavePostExit } = await import(
+    "./services/cloud-save/pending-post-exit"
+  );
+  void replayPendingCloudSavePostExit();
+
   const downloadToResume =
     await DownloadOrchestrator.bootstrapDownloadsOnStartup();
   const normalizedDownloads = await downloadsSublevel

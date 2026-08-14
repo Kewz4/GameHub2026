@@ -25,6 +25,12 @@ import {
 } from "./custom-path-approval";
 import { shouldRunV2AutomaticCloudSave } from "./automatic-sync-mode";
 import { finalizeCloudSaveLaunchSession } from "./launch-session-finalizer";
+import { runWithCloudSaveAccountSession } from "./account-session";
+import {
+  persistPendingCloudSavePostExit,
+  runPersistedCloudSavePostExit,
+  trackCloudSavePostExitOperation,
+} from "./pending-post-exit";
 
 export interface AutomaticCloudSaveLaunchPreparation {
   mode: CloudSaveAutomaticSyncMode;
@@ -175,7 +181,7 @@ export const prepareAutomaticCloudSaveLaunch = async (
 };
 
 /** Run the V2 post-exit sync captured by the launch session. */
-export const runAutomaticCloudSaveAfterExit = async (
+const runAutomaticCloudSaveAfterExitInAccount = async (
   objectId: string,
   shop: GameShop,
   expectedSessionToken?: string
@@ -188,13 +194,35 @@ export const runAutomaticCloudSaveAfterExit = async (
     return;
   }
 
+  const activeSession = cloudSaveLaunchSessions.get(objectId, shop);
+  if (
+    !activeSession ||
+    activeSession.token !== expectedSessionToken ||
+    activeSession.phase === "finalizing"
+  ) {
+    logger.warn("[Cloud Save] Ignoring exit without an active launch session", {
+      shop,
+      objectId,
+    });
+    return;
+  }
+
+  // Commit the V2 continuation to LevelDB before claiming the in-memory
+  // finalizer. A crash, quit, or update after this point can replay the exact
+  // environment/base-hash/session-token CAS context without guessing.
+  const pending = await persistPendingCloudSavePostExit(activeSession);
+
   const finalized = await finalizeCloudSaveLaunchSession(
     cloudSaveLaunchSessions,
     objectId,
     shop,
     {
       v2: async (session) => {
-        await runAutomaticCloudSavePostExit(objectId, shop, session);
+        if (pending) {
+          await runPersistedCloudSavePostExit(pending.key, pending.record);
+        } else {
+          await runAutomaticCloudSavePostExit(objectId, shop, session);
+        }
       },
     },
     expectedSessionToken
@@ -207,3 +235,18 @@ export const runAutomaticCloudSaveAfterExit = async (
     });
   }
 };
+
+export const runAutomaticCloudSaveAfterExit = (
+  objectId: string,
+  shop: GameShop,
+  expectedSessionToken?: string
+) =>
+  trackCloudSavePostExitOperation(
+    runWithCloudSaveAccountSession(() =>
+      runAutomaticCloudSaveAfterExitInAccount(
+        objectId,
+        shop,
+        expectedSessionToken
+      )
+    )
+  );

@@ -10,7 +10,7 @@ const legacyId = "6ce66cac-e77d-4c40-95c2-13954092fe15";
 const accountId = "account-123";
 
 describe("local Cloud Save namespace migration", () => {
-  it("moves custom paths, anchors, and pending deletion operation IDs", () => {
+  it("moves every durable Cloud Save V2 account-scoped record", () => {
     const entries: CloudSaveLocalNamespaceEntry[] = [
       {
         store: "custom-paths",
@@ -37,6 +37,16 @@ describe("local Cloud Save namespace migration", () => {
           operationId: "same-r2-fence-operation",
         },
       },
+      {
+        store: "pending-post-exit",
+        key: JSON.stringify([legacyId, "steam", "1"]),
+        value: {
+          schemaVersion: 1,
+          objectId: "1",
+          shop: "steam",
+          session: { token: "launch-session" },
+        },
+      },
     ];
 
     const operations = planCloudSaveLocalNamespaceMigration(
@@ -45,8 +55,8 @@ describe("local Cloud Save namespace migration", () => {
       accountId
     );
 
-    assert.equal(operations.filter(({ type }) => type === "put").length, 3);
-    assert.equal(operations.filter(({ type }) => type === "del").length, 3);
+    assert.equal(operations.filter(({ type }) => type === "put").length, 4);
+    assert.equal(operations.filter(({ type }) => type === "del").length, 4);
     assert.ok(
       operations.some(
         (operation) =>
@@ -55,6 +65,14 @@ describe("local Cloud Save namespace migration", () => {
           operation.key === JSON.stringify([accountId, "steam", "1"]) &&
           (operation.value as { operationId: string }).operationId ===
             "same-r2-fence-operation"
+      )
+    );
+    assert.ok(
+      operations.some(
+        (operation) =>
+          operation.type === "put" &&
+          operation.store === "pending-post-exit" &&
+          operation.key === JSON.stringify([accountId, "steam", "1"])
       )
     );
   });

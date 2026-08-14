@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   classifyAutomaticCloudSaveFailure,
   getPendingDeletionAutomaticSyncOutcome,
+  shouldSkipAutomaticCloudSaveDuringLaunch,
 } from "./automatic-sync-outcome.js";
 
 describe("automatic cloud save sync outcome", () => {
@@ -32,6 +33,21 @@ describe("automatic cloud save sync outcome", () => {
     assert.equal(
       classifyAutomaticCloudSaveFailure("post-exit", "analyzing"),
       "failed"
+    );
+  });
+
+  it("skips passive game-page refreshes while a launch owns the save", () => {
+    assert.equal(
+      shouldSkipAutomaticCloudSaveDuringLaunch("game-page-open", true),
+      true
+    );
+    assert.equal(
+      shouldSkipAutomaticCloudSaveDuringLaunch("pre-launch", true),
+      false
+    );
+    assert.equal(
+      shouldSkipAutomaticCloudSaveDuringLaunch("game-page-open", false),
+      false
     );
   });
 });

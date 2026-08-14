@@ -2,8 +2,11 @@ import {
   downloadsSublevel,
   gamesShopAssetsSublevel,
   gamesSublevel,
+  levelKeys,
 } from "@main/level";
 import type { GameShop } from "@types";
+import { DownloadOrchestrator } from "@main/services/download-orchestrator";
+import { discardDownloadEntryIfSafe } from "@main/services/download/download-entry-retention";
 
 interface PrepareGameEntryParams {
   gameKey: string;
@@ -12,6 +15,26 @@ interface PrepareGameEntryParams {
   shop: GameShop;
   libraryOrigin?: "sync" | "catalog" | "custom";
 }
+
+export const clearFinishedDownload = async (
+  shop: GameShop,
+  objectId: string
+): Promise<void> => {
+  const downloadKey = levelKeys.game(shop, objectId);
+
+  await discardDownloadEntryIfSafe(
+    downloadKey,
+    { shop, objectId },
+    {
+      read: (key) => downloadsSublevel.get(key),
+      remove: async (key) => {
+        await downloadsSublevel.del(key).catch(() => {});
+      },
+      afterRemove: (identity) =>
+        DownloadOrchestrator.syncAfterDownloadRemoved(identity).catch(() => {}),
+    }
+  );
+};
 
 export const prepareGameEntry = async ({
   gameKey,
@@ -22,8 +45,6 @@ export const prepareGameEntry = async ({
 }: PrepareGameEntryParams): Promise<void> => {
   const game = await gamesSublevel.get(gameKey);
   const gameAssets = await gamesShopAssetsSublevel.get(gameKey);
-
-  await downloadsSublevel.del(gameKey);
 
   if (game) {
     await gamesSublevel.put(gameKey, {

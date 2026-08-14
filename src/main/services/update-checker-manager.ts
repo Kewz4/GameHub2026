@@ -9,6 +9,10 @@ import fs from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { logger } from "./logger";
+import {
+  CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+  drainCloudSavePostExitOperations,
+} from "./cloud-save/pending-post-exit";
 
 const { autoUpdater } = updater;
 
@@ -254,8 +258,18 @@ export class UpdateCheckerManager {
     });
   }
 
-  static applyNsisUpdate(): void {
+  static async applyNsisUpdate(): Promise<void> {
     this.sendEvent({ type: "applying" });
+    const drain = await drainCloudSavePostExitOperations(
+      CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS
+    );
+    if (!drain.drained) {
+      logger.warn("[Cloud Save] Update drain reached its deadline", {
+        pending: drain.pending,
+        timeoutMs: CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+        updateKind: "nsis",
+      });
+    }
     this.isApplyingUpdate = true;
     // Delay before quitting to let the renderer flush — avoids ERROR 32.
     setTimeout(() => {
@@ -371,8 +385,18 @@ export class UpdateCheckerManager {
     this.sendEvent({ type: "downloaded", version });
   }
 
-  static applyPortableUpdate(): void {
+  static async applyPortableUpdate(): Promise<void> {
     this.sendEvent({ type: "applying" });
+    const drain = await drainCloudSavePostExitOperations(
+      CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS
+    );
+    if (!drain.drained) {
+      logger.warn("[Cloud Save] Update drain reached its deadline", {
+        pending: drain.pending,
+        timeoutMs: CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+        updateKind: "portable",
+      });
+    }
     this.isApplyingUpdate = true;
 
     const exeDir =

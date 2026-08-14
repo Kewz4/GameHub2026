@@ -11,12 +11,23 @@ const {
   selectTorBoxDownloadFile,
 } = await import(modulePath);
 
-test("uses materialized TorBox flags instead of progress or completed state", () => {
-  assert.equal(isTorBoxItemReady({ download_finished: true }), true);
-  assert.equal(isTorBoxItemReady({ cached: true }), true);
-  assert.equal(isTorBoxItemReady({ download_state: "uploading" }), true);
+test("requires TorBox to report the download as both finished and present", () => {
   assert.equal(
-    isTorBoxItemReady({ download_state: "completed", download_present: true }),
+    isTorBoxItemReady({
+      download_finished: true,
+      download_present: true,
+    }),
+    true
+  );
+  assert.equal(isTorBoxItemReady({ download_finished: true }), false);
+  assert.equal(isTorBoxItemReady({ download_present: true }), false);
+  assert.equal(isTorBoxItemReady({ cached: true }), false);
+  assert.equal(isTorBoxItemReady({ download_state: "uploading" }), false);
+  assert.equal(
+    isTorBoxItemReady({
+      download_state: "completed",
+      download_present: true,
+    }),
     false
   );
   assert.equal(

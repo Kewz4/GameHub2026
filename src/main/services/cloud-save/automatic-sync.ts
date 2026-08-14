@@ -20,12 +20,14 @@ import { isCloudSaveEnvironmentChangedError } from "./environment-guard";
 import { isCloudSaveExecutableMissingError } from "./executable-path-guard";
 import {
   canUploadCloudSaveAfterLaunch,
+  getCloudSaveLaunchSession,
   type CloudSaveLaunchSession,
 } from "./launch-guard";
 import { CloudSaveOperationCoordinator } from "./operation-coordinator";
 import {
   classifyAutomaticCloudSaveFailure,
   getPendingDeletionAutomaticSyncOutcome,
+  shouldSkipAutomaticCloudSaveDuringLaunch,
   type AutomaticCloudSaveSyncOutcome,
 } from "./automatic-sync-outcome";
 import { isCloudSaveDeletionPending } from "./pending-deletion";
@@ -103,6 +105,20 @@ const runAutomaticCloudSaveSyncDetailedInAccount = async (
     launchSessionToken === undefined &&
     !(await getCloudSaveAutomaticSyncEnabled(objectId, shop))
   ) {
+    return { status: "skipped", result: null };
+  }
+
+  if (
+    shouldSkipAutomaticCloudSaveDuringLaunch(
+      trigger,
+      getCloudSaveLaunchSession(objectId, shop) !== null
+    )
+  ) {
+    logger.debug("[Cloud Save] Passive sync skipped during active launch", {
+      shop,
+      objectId,
+      trigger,
+    });
     return { status: "skipped", result: null };
   }
 

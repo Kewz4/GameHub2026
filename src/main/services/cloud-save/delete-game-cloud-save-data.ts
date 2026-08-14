@@ -25,6 +25,7 @@ import {
   clearCloudSavePendingDeletion,
   markCloudSaveRemoteDeletionStarted,
 } from "./pending-deletion";
+import { clearPendingCloudSavePostExitForGame } from "./pending-post-exit";
 import {
   beginR2CloudSaveGameDeletion,
   deleteR2CloudSaveGameObjects,
@@ -51,6 +52,7 @@ const deleteGameCloudSaveDataInAccount = async (
         executeDeleteGameCloudSaveData({
           beginPendingDeletion: async () => {
             const pending = await beginCloudSavePendingDeletion(objectId, shop);
+            await clearPendingCloudSavePostExitForGame(objectId, shop);
             deletionOperationId = pending.operationId;
             return pending.phase;
           },

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { registerEvent } from "../register-event";
 import { gamesSublevel } from "@main/level";
 import { logger } from "@main/services";
+import { selectGameExecutablePath } from "@main/helpers/game-executable-path";
 
 export interface LibraryInstallationReport {
   total: number;
@@ -43,7 +44,7 @@ const getGamePrimaryPath = (game: {
     );
   }
 
-  return game.nativeExecutablePath ?? game.executablePath ?? null;
+  return selectGameExecutablePath(game);
 };
 
 const isProtocolUri = (value: string | null | undefined) =>

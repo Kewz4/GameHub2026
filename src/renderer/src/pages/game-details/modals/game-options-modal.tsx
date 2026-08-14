@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "@renderer/components";
 import {
   formatBytes,
@@ -25,6 +26,10 @@ import {
   useToast,
   useUserDetails,
 } from "@renderer/hooks";
+import {
+  useSteamMatchSearch,
+  type SteamMatchSuggestion,
+} from "@renderer/hooks/use-steam-match-search";
 import { RemoveGameFromLibraryModal } from "./remove-from-library-modal";
 import { ResetAchievementsModal } from "./reset-achievements-modal";
 import { ChangeGamePlaytimeModal } from "./change-game-playtime-modal";
@@ -40,7 +45,7 @@ import { Wrench } from "lucide-react";
 import { GameAssetsSettings } from "./game-assets-settings";
 import { debounce } from "lodash-es";
 import { levelDBService } from "@renderer/services/leveldb.service";
-import { getGameKey } from "@renderer/helpers";
+import { buildGameDetailsPath, getGameKey } from "@renderer/helpers";
 import "./game-options-modal.scss";
 import { logger } from "@renderer/logger";
 import { GameOptionsSidebar } from "./game-options-modal/sidebar";
@@ -71,6 +76,7 @@ export function GameOptionsModal({
   initialCategory,
 }: Readonly<GameOptionsModalProps>) {
   const { t } = useTranslation("game_details");
+  const navigate = useNavigate();
 
   const { showSuccessToast, showErrorToast } = useToast();
   const { updateLibrary } = useLibrary();
@@ -96,6 +102,14 @@ export function GameOptionsModal({
   const [showRemoveGameModal, setShowRemoveGameModal] = useState(false);
   const [gameTitle, setGameTitle] = useState(game.title ?? "");
   const [updatingGameTitle, setUpdatingGameTitle] = useState(false);
+  const {
+    suggestions: steamMatchSuggestions,
+    isSearching: isSearchingSteamMatch,
+    clearSuggestions: clearSteamMatchSuggestions,
+  } = useSteamMatchSearch(
+    gameTitle,
+    visible && game.shop === "custom" && !updatingGameTitle
+  );
   const [launchOptions, setLaunchOptions] = useState(game.launchOptions ?? "");
   const [showResetAchievementsModal, setShowResetAchievementsModal] =
     useState(false);
@@ -622,6 +636,49 @@ export function GameOptionsModal({
   const handleChangeGameTitle = (event: React.ChangeEvent<HTMLInputElement>) =>
     setGameTitle(event.target.value);
 
+  const handleSelectSteamMatch = async (suggestion: SteamMatchSuggestion) => {
+    if (game.shop !== "custom" || updatingGameTitle) return;
+
+    setUpdatingGameTitle(true);
+    setGameTitle(suggestion.title);
+    clearSteamMatchSuggestions();
+
+    try {
+      const assets = await window.electron
+        .getGameAssets(suggestion.objectId, "steam", suggestion.title)
+        .catch(() => null);
+      const matchedGame = await window.electron.updateCustomGame({
+        shop: game.shop,
+        objectId: game.objectId,
+        title: suggestion.title,
+        iconUrl: assets?.iconUrl || suggestion.iconUrl || undefined,
+        logoImageUrl: assets?.logoImageUrl || game.logoImageUrl || undefined,
+        libraryHeroImageUrl:
+          assets?.libraryHeroImageUrl || game.libraryHeroImageUrl || undefined,
+        coverImageUrl: assets?.coverImageUrl || undefined,
+        libraryImageUrl: assets?.libraryImageUrl || undefined,
+        matchedSteamObjectId: suggestion.objectId,
+      });
+
+      await updateLibrary();
+      showSuccessToast(
+        t("custom_game_modal_match_selected", {
+          ns: "sidebar",
+          title: suggestion.title,
+        })
+      );
+      onClose();
+      navigate(buildGameDetailsPath(matchedGame));
+    } catch (error) {
+      setGameTitle(game.title ?? "");
+      showErrorToast(
+        error instanceof Error ? error.message : t("edit_game_modal_failed")
+      );
+    } finally {
+      setUpdatingGameTitle(false);
+    }
+  };
+
   const handleBlurGameTitle = async () => {
     if (updatingGameTitle) return;
     const trimmed = gameTitle.trim();
@@ -852,6 +909,9 @@ export function GameOptionsModal({
                 onDeleteSteamShortcut={handleDeleteSteamShortcut}
                 onChangeGameTitle={handleChangeGameTitle}
                 onBlurGameTitle={handleBlurGameTitle}
+                steamMatchSuggestions={steamMatchSuggestions}
+                isSearchingSteamMatch={isSearchingSteamMatch}
+                onSelectSteamMatch={handleSelectSteamMatch}
                 onChangeLaunchOptions={handleChangeLaunchOptions}
                 onClearLaunchOptions={handleClearLaunchOptions}
                 isTransferring={isTransferring}
@@ -918,6 +978,9 @@ export function GameOptionsModal({
                 onDeleteSteamShortcut={handleDeleteSteamShortcut}
                 onChangeGameTitle={handleChangeGameTitle}
                 onBlurGameTitle={handleBlurGameTitle}
+                steamMatchSuggestions={steamMatchSuggestions}
+                isSearchingSteamMatch={isSearchingSteamMatch}
+                onSelectSteamMatch={handleSelectSteamMatch}
                 onChangeLaunchOptions={handleChangeLaunchOptions}
                 onClearLaunchOptions={handleClearLaunchOptions}
                 isTransferring={isTransferring}

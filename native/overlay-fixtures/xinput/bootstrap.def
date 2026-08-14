@@ -1,0 +1,10 @@
+LIBRARY "gamehub-overlay-qa-xinput-bootstrap64"
+EXPORTS
+    GameHubXInputQaGetBootstrapSnapshot
+    GameHubXInputQaBeginBlock
+    GameHubXInputQaRequestClose
+    GameHubXInputQaObserveRelease
+    GameHubXInputQaInvalidateTopology
+    GameHubXInputQaRevalidate
+    GameHubXInputQaDetach
+    GameHubXInputQaAttachLateForNegativeControl

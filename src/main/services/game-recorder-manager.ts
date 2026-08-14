@@ -29,6 +29,7 @@ import {
   screen,
   shell,
   type DesktopCapturerSource,
+  type NativeImage,
 } from "electron";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
@@ -1211,6 +1212,71 @@ export class GameRecorderManager {
   public static async probeCaptureCapabilities() {
     await this.probeNativeEncoder();
     return this.getState();
+  }
+
+  /**
+   * Capture the currently foreground game through the same exact-window / full
+   * display selection used by the recorder. This is intentionally on-demand:
+   * achievement souvenirs work even when gameplay recording is disabled.
+   */
+  public static async captureActiveGameFrame(game: Game): Promise<NativeImage> {
+    if (process.platform === "linux") {
+      throw new Error("achievement_souvenir_capture_linux_unavailable");
+    }
+
+    const candidates = await findOverlayGameProcesses(
+      game,
+      this.targetPid,
+      Boolean(this.targetPid)
+    );
+    const foregroundPid =
+      process.platform === "win32"
+        ? NativeAddon.getForegroundProcessId()
+        : (candidates[0]?.pid ?? 0);
+    const target = candidates.find(
+      (candidate) => candidate.pid === foregroundPid
+    );
+    if (!target) throw new Error("achievement_souvenir_game_not_foreground");
+
+    const bounds = NativeAddon.getProcessWindowBounds(target.pid);
+    if (!bounds) throw new Error("achievement_souvenir_window_unavailable");
+    const targetWindowId = bounds.windowId ?? bounds.window_id ?? null;
+    const display = screen.getDisplayMatching({
+      x: bounds.x,
+      y: bounds.y,
+      width: Math.max(1, bounds.width),
+      height: Math.max(1, bounds.height),
+    });
+    const thumbnailSize = {
+      width: Math.max(1, Math.min(display.size.width, 3_840)),
+      height: Math.max(1, Math.min(display.size.height, 2_160)),
+    };
+    const [screens, windows] = await Promise.all([
+      desktopCapturer.getSources({ types: ["screen"], thumbnailSize }),
+      desktopCapturer.getSources({
+        types: ["window"],
+        thumbnailSize,
+        fetchWindowIcons: false,
+      }),
+    ]);
+    const windowSource = targetWindowId
+      ? (windows.find((candidate) =>
+          sourceMatchesWindow(candidate, targetWindowId)
+        ) ?? null)
+      : null;
+    const screenSource =
+      screens.find(
+        (candidate) => candidate.display_id === String(display.id)
+      ) ?? null;
+    const source =
+      windowSource && !isGameWindowDisplaySized(bounds, display)
+        ? windowSource
+        : (screenSource ?? windowSource);
+
+    if (!source || source.thumbnail.isEmpty()) {
+      throw new Error("achievement_souvenir_capture_unavailable");
+    }
+    return source.thumbnail;
   }
 
   private static async probeNativeEncoder() {

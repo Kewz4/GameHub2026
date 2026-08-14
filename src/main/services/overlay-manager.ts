@@ -26,8 +26,9 @@ import {
 import { overlayFpsMonitor } from "./overlay-fps-monitor";
 import { WindowManager } from "./window-manager";
 import { GameRecorderManager } from "./game-recorder-manager";
-import { OverlayBroker } from "./overlay-broker";
+import { destroyOverlayWindow } from "./overlay-window-lifecycle";
 import {
+  OVERLAY_LIVE_INPUT_ISOLATION_ENABLED,
   OverlayInputGateController,
   type OverlayInputGateFailureReason,
 } from "./overlay-input-gate";
@@ -36,6 +37,7 @@ import {
   calculateActivationToastBounds,
   canShowActivationToast,
   isOverlayInteractionForeground,
+  type OverlayActivationToastKind,
 } from "./overlay-activation-policy";
 
 const PREFERRED_SHORTCUT = "Shift+F3";
@@ -90,6 +92,7 @@ const emptyPerformance = (): HydraOverlayPerformance => ({
 export class OverlayManager {
   private static overlayWindow: BrowserWindow | null = null;
   private static toastWindow: BrowserWindow | null = null;
+  private static toastKind: OverlayActivationToastKind = "ready";
   private static fpsWindow: BrowserWindow | null = null;
   private static activeGame: Game | null = null;
   private static servicesActive = false;
@@ -111,6 +114,7 @@ export class OverlayManager {
   private static targetRefreshPending = false;
   private static lastTargetRefreshAt = 0;
   private static targetExecutable: string | null = null;
+  private static targetCreationTicks: string | null = null;
   private static activationToastPending = false;
   private static activationToastShown = false;
   private static overlayRendererReady = false;
@@ -123,26 +127,25 @@ export class OverlayManager {
     (ready: boolean) => void
   >();
   private static inputGate = new OverlayInputGateController({
+    authorized: () => OVERLAY_LIVE_INPUT_ISOLATION_ENABLED,
     create: () => NativeAddon.createOverlayInputGate(),
     set: (targetPid, blocked) =>
       NativeAddon.setOverlayInputGate(targetPid, blocked),
     status: (targetPid) => NativeAddon.getOverlayInputGateStatus(targetPid),
-    inject: async (targetPid) => {
-      const direct = NativeAddon.injectInputHook(targetPid);
-      if (direct.injected) return true;
-
-      logger.warn("Direct overlay input-hook injection failed", {
+    inject: async (targetPid, targetCreationTicks) => {
+      // TEMPORARY FAIL-CLOSED RELEASE POLICY: the current hook is injected on
+      // the first overlay shortcut. A game can cache polling function pointers
+      // before that moment, which an IAT-only sweep cannot revoke. Until the
+      // launcher owns a pre-entry/suspended launch bootstrap with process-wide
+      // detours, never claim complete isolation or load the DLL into a live
+      // game. The noninteractive error toast remains available and the game is
+      // never suspended.
+      logger.warn("Overlay input-hook injection disabled", {
         targetPid,
-        stage: direct.stage,
-        errorCode: direct.errorCode,
+        targetCreationTicks,
+        reason: "pre-entry-isolation-required",
       });
-      if (!(await OverlayBroker.ensureInstalled())) return false;
-      const reply = await OverlayBroker.request(
-        "inject",
-        String(targetPid),
-        OverlayBroker.inputHookPath()
-      );
-      return Boolean(reply?.ok && reply.fields[0] === "true");
+      return false;
     },
     log: (level, message, details) => logger[level](message, details),
   });
@@ -150,12 +153,6 @@ export class OverlayManager {
   public static initialize() {
     GameRecorderManager.initialize();
     this.inputGate.initialize();
-    // Install the highest-integrity helper once. This is intentionally kicked
-    // off at launcher startup rather than when the user opens the overlay, so
-    // the one-time UAC prompt can never interrupt a live game.
-    if (process.platform === "win32") {
-      void OverlayBroker.ensureInstalled();
-    }
     overlayFpsMonitor.setUpdateHandler((metrics) =>
       this.updatePerformance(metrics)
     );
@@ -620,28 +617,48 @@ export class OverlayManager {
           return;
         }
         if (gateReadiness && !gateReadiness.ready) {
-          this.inputGate.release();
           logger.warn("Overlay input protection was not ready", {
             targetPid: openingTargetPid,
             reason: gateReadiness.reason,
             status: gateReadiness.status,
           });
-          this.showInputGateErrorToast(currentBounds, gateReadiness.reason);
+        }
+        const inputGateActivated =
+          process.platform !== "win32" ||
+          (Boolean(gateReadiness?.ready) &&
+            this.inputGate.activate(openingTargetPid));
+        if (!inputGateActivated) {
+          this.inputGate.release();
+          logger.warn("Overlay input isolation activation failed", {
+            targetPid: openingTargetPid,
+            reason: gateReadiness?.ready
+              ? "unavailable"
+              : gateReadiness?.reason,
+            gateStatus: gateReadiness?.status ?? null,
+          });
+          this.showInputGateErrorToast(
+            currentBounds,
+            gateReadiness?.ready
+              ? "unavailable"
+              : (gateReadiness?.reason ?? "unavailable")
+          );
           return;
         }
+        const isolatedBounds = this.getTargetBounds();
         if (
-          process.platform === "win32" &&
-          !this.inputGate.activate(openingTargetPid)
+          this.targetPid !== openingTargetPid ||
+          !isolatedBounds ||
+          !this.isTargetForeground(false)
         ) {
-          const readiness = this.inputGate.inspect(openingTargetPid);
           this.inputGate.release();
-          const reason = readiness.ready ? "unavailable" : readiness.reason;
-          logger.warn("Overlay input protection activation failed", {
-            targetPid: openingTargetPid,
-            reason,
-            status: readiness.status,
+          logger.warn("Overlay show aborted after input isolation", {
+            targetChanged: this.targetPid !== openingTargetPid,
+            hasBounds: Boolean(isolatedBounds),
+            isolationMode: "hook",
           });
-          this.showInputGateErrorToast(currentBounds, reason);
+          if (isolatedBounds) {
+            this.showInputGateErrorToast(isolatedBounds, "target-changed");
+          }
           return;
         }
         this.activationToastPending = false;
@@ -649,7 +666,7 @@ export class OverlayManager {
         this.destroyToast();
         this.fpsWindow?.hide();
         this.fpsWindow?.setAlwaysOnTop(false);
-        this.placeWindowOverGame(overlayWindow, currentBounds);
+        this.placeWindowOverGame(overlayWindow, isolatedBounds);
         overlayWindow.setAlwaysOnTop(false);
         overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
         this.overlayActivationGraceUntil =
@@ -782,13 +799,18 @@ export class OverlayManager {
     showPinnedPerformance: boolean
   ) {
     this.overlayActivationGraceUntil = 0;
-    // Clear the in-game hook before hiding or returning focus. This call is
-    // synchronous and fail-open, including when Electron's hide event is late.
-    this.inputGate.release();
     const overlayWindow = this.overlayWindow;
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.hide();
-      overlayWindow.setAlwaysOnTop(false);
+    try {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        // Hide first. Releasing the native latch while an interactive overlay
+        // is still visible creates a short but real double-input interval.
+        // Electron hide() is synchronous at the BrowserWindow state boundary.
+        overlayWindow.hide();
+        overlayWindow.setAlwaysOnTop(false);
+      }
+    } finally {
+      // Never strand the game if a native BrowserWindow operation throws.
+      this.inputGate.release();
     }
     if (
       showPinnedPerformance &&
@@ -833,6 +855,7 @@ export class OverlayManager {
       transparent: true,
       backgroundColor: "#00000000",
       frame: false,
+      hasShadow: false,
       resizable: false,
       movable: false,
       minimizable: false,
@@ -859,12 +882,16 @@ export class OverlayManager {
 
     overlayWindow.on("closed", () => {
       this.inputGate.release();
-      this.overlayWindow = null;
-      this.lastOverlayPlacement = null;
-      this.overlayRendererReady = false;
-      this.rendererContextGeneration = -1;
-      for (const resolve of this.overlayRendererReadyWaiters) resolve(false);
-      this.overlayRendererReadyWaiters.clear();
+      // Teardown clears the reference before destroy(); do not let a delayed
+      // `closed` event from the previous session wipe a replacement renderer.
+      if (this.overlayWindow === overlayWindow) {
+        this.overlayWindow = null;
+        this.lastOverlayPlacement = null;
+        this.overlayRendererReady = false;
+        this.rendererContextGeneration = -1;
+        for (const resolve of this.overlayRendererReadyWaiters) resolve(false);
+        this.overlayRendererReadyWaiters.clear();
+      }
     });
     overlayWindow.on("focus", () => {
       if (
@@ -884,8 +911,18 @@ export class OverlayManager {
       }
     });
     overlayWindow.on("blur", () => {
-      this.inputGate.release();
-      setTimeout(() => this.synchronizeTargetWindows(), 50);
+      // Fullscreen games often reclaim foreground for one frame while Electron
+      // is completing show/focus. Releasing input isolation immediately caused
+      // the visible -> hidden -> visible flash. Keep the gate armed during a
+      // short focus hand-off, then hide synchronously only for a real Alt+Tab.
+      setTimeout(() => {
+        if (overlayWindow.isDestroyed() || !overlayWindow.isVisible()) return;
+        if (!this.isTargetForeground(true)) {
+          this.hideOverlayWindow(false, false);
+          return;
+        }
+        this.synchronizeTargetWindows();
+      }, 75);
     });
     overlayWindow.on("hide", () => {
       this.inputGate.release();
@@ -935,21 +972,28 @@ export class OverlayManager {
           visiblePids: [...visiblePids],
         });
       }
-      const targetPid = target?.pid ?? 0;
-      const targetExecutable = target?.exe ?? null;
+      const candidatePid = target?.pid ?? 0;
+      const targetCreationTicks = candidatePid
+        ? NativeAddon.getProcessCreationTimeTicks(candidatePid)
+        : null;
+      const targetPid =
+        process.platform !== "win32" || targetCreationTicks ? candidatePid : 0;
+      const targetExecutable = targetPid ? (target?.exe ?? null) : null;
       const targetChanged =
         targetPid !== this.targetPid ||
-        targetExecutable !== this.targetExecutable;
+        targetExecutable !== this.targetExecutable ||
+        targetCreationTicks !== this.targetCreationTicks;
       if (targetChanged && this.overlayWindow?.isVisible()) {
-        // Release the old PID before publishing a loader -> renderer handoff.
+        // Release the old hook before publishing a loader -> renderer handoff.
         this.hideOverlayWindow(false, false);
       }
       this.targetPid = targetPid;
       this.targetExecutable = targetExecutable;
+      this.targetCreationTicks = targetPid ? targetCreationTicks : null;
       this.lastTargetRefreshAt = Date.now();
       if (targetChanged) {
         this.lastOverlayPlacement = null;
-        this.inputGate.setTarget(targetPid);
+        this.inputGate.setTarget(targetPid, this.targetCreationTicks ?? "");
         logger.info("GameHub overlay render target changed", {
           pid: targetPid,
           executable: targetExecutable,
@@ -1086,10 +1130,15 @@ export class OverlayManager {
         const readiness = this.inputGate.inspect(this.targetPid);
         if (!readiness.ready) {
           // The worker republishes its unsupported-module mask on every scan.
-          // If a game loads DirectInput/GameInput/WGI after opening, stop the
-          // block and close the interactive surface on this same poll tick.
+          // If a game loads DirectInput/GameInput/WGI after opening, close on
+          // this same poll tick. Unsupported input APIs remain closed rather
+          // than using a process suspension that could strand the game if its
+          // elevated owner were terminated.
           this.hideOverlayWindow(false, false);
-          this.showInputGateErrorToast(bounds, readiness.reason);
+          this.showInputGateErrorToast(
+            bounds,
+            readiness.ready ? "unavailable" : readiness.reason
+          );
           return;
         }
       }
@@ -1108,15 +1157,13 @@ export class OverlayManager {
     // can open immediately, not merely that a shortcut was registered.
     this.ensureOverlayWindow(bounds);
 
-    const inputGateReady =
-      process.platform !== "win32" || this.inputGate.inspect().ready;
     if (
       canShowActivationToast(
         this.activationToastPending,
         this.activationToastShown,
-        this.overlayRendererReady
+        this.overlayRendererReady,
+        OVERLAY_LIVE_INPUT_ISOLATION_ENABLED
       ) &&
-      inputGateReady &&
       !this.toastWindow
     ) {
       this.showActivationToast(bounds);
@@ -1133,9 +1180,13 @@ export class OverlayManager {
   }
 
   private static getActivationToastBounds(
-    targetBounds: Electron.Rectangle
+    targetBounds: Electron.Rectangle,
+    kind: OverlayActivationToastKind = this.toastKind
   ): Electron.Rectangle {
-    return calculateActivationToastBounds(this.toElectronBounds(targetBounds));
+    return calculateActivationToastBounds(
+      this.toElectronBounds(targetBounds),
+      kind
+    );
   }
 
   private static showActivationToast(targetBounds: Electron.Rectangle) {
@@ -1147,7 +1198,8 @@ export class OverlayManager {
       return;
     }
     this.destroyToast();
-    const toastBounds = this.getActivationToastBounds(targetBounds);
+    this.toastKind = "ready";
+    const toastBounds = this.getActivationToastBounds(targetBounds, "ready");
 
     const toastWindow = new BrowserWindow({
       ...toastBounds,
@@ -1155,6 +1207,7 @@ export class OverlayManager {
       transparent: true,
       backgroundColor: "#00000000",
       frame: false,
+      hasShadow: false,
       focusable: false,
       resizable: false,
       skipTaskbar: true,
@@ -1179,7 +1232,7 @@ export class OverlayManager {
       }
       this.activationToastPending = false;
       this.activationToastShown = true;
-      toastWindow.setBounds(this.getActivationToastBounds(bounds));
+      toastWindow.setBounds(this.getActivationToastBounds(bounds, "ready"));
       toastWindow.setAlwaysOnTop(true, "screen-saver", 1);
       toastWindow.showInactive();
       setTimeout(() => {
@@ -1199,13 +1252,15 @@ export class OverlayManager {
   ) {
     if (!this.activeGame) return;
     this.destroyToast();
-    const toastBounds = this.getActivationToastBounds(targetBounds);
+    this.toastKind = "error";
+    const toastBounds = this.getActivationToastBounds(targetBounds, "error");
     const toastWindow = new BrowserWindow({
       ...toastBounds,
       show: false,
       transparent: true,
       backgroundColor: "#00000000",
       frame: false,
+      hasShadow: false,
       focusable: false,
       resizable: false,
       skipTaskbar: true,
@@ -1231,7 +1286,7 @@ export class OverlayManager {
         if (this.toastWindow === toastWindow) this.destroyToast();
         return;
       }
-      toastWindow.setBounds(this.getActivationToastBounds(bounds));
+      toastWindow.setBounds(this.getActivationToastBounds(bounds, "error"));
       toastWindow.setAlwaysOnTop(true, "screen-saver", 1);
       toastWindow.showInactive();
       setTimeout(() => {
@@ -1249,6 +1304,7 @@ export class OverlayManager {
       this.toastWindow.destroy();
     }
     this.toastWindow = null;
+    this.toastKind = "ready";
   }
 
   private static updatePerformance(metrics: HydraOverlayPerformance) {
@@ -1274,6 +1330,7 @@ export class OverlayManager {
     // resources until the launcher exits.
     this.servicesActive = false;
     this.hideOverlayWindow(false, false);
+    this.destroyOverlayWindow();
     this.destroyToast();
     this.unregisterShortcut();
     this.stopControllerPolling();
@@ -1285,9 +1342,22 @@ export class OverlayManager {
     this.inputGate.setTarget(0);
     this.targetPid = 0;
     this.targetExecutable = null;
+    this.targetCreationTicks = null;
     this.lastOverlayPlacement = null;
     this.activationToastPending = false;
     this.activationToastShown = false;
+  }
+
+  private static destroyOverlayWindow() {
+    const overlayWindow = this.overlayWindow;
+    destroyOverlayWindow(overlayWindow, () => {
+      if (this.overlayWindow === overlayWindow) this.overlayWindow = null;
+    });
+    this.lastOverlayPlacement = null;
+    this.overlayRendererReady = false;
+    this.rendererContextGeneration = -1;
+    for (const resolve of this.overlayRendererReadyWaiters) resolve(false);
+    this.overlayRendererReadyWaiters.clear();
   }
 
   private static showFpsWindow(targetBounds = this.getTargetBounds()) {
@@ -1449,6 +1519,12 @@ export class OverlayManager {
   private static stopControllerPolling() {
     if (this.controllerPoll) clearInterval(this.controllerPoll);
     this.controllerPoll = null;
+    if (process.platform === "win32") {
+      const stopped = NativeAddon.stopOverlayKeyboardWatcher();
+      if (!stopped) {
+        logger.warn("GameHub Raw Input shortcut watcher did not stop cleanly");
+      }
+    }
     this.keyboardEventCount = 0;
     this.wasControllerTogglePressed = false;
     this.previousGamepadButtons = 0;
@@ -1500,7 +1576,6 @@ export class OverlayManager {
   private static dispose() {
     this.stopActiveServices();
     this.inputGate.dispose();
-    void OverlayBroker.shutdown();
     this.performance = emptyPerformance();
   }
 }

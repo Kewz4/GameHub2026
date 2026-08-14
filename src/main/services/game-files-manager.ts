@@ -417,12 +417,13 @@ export class GameFilesManager {
           `[GameFilesManager] Auto-detected executable for ${this.objectId}: ${foundExePath}`
         );
 
-        await gamesSublevel.put(this.gameKey, {
+        const updatedGame = {
           ...game,
           executablePath: foundExePath,
           nativeExecutablePath: foundExePath,
           isInstalledLocally: true,
-        });
+        };
+        await gamesSublevel.put(this.gameKey, updatedGame);
 
         WindowManager.sendToAppWindows("on-library-batch-complete");
 
@@ -435,16 +436,29 @@ export class GameFilesManager {
         if (process.platform === "win32" && game.shop === "steam") {
           void (async () => {
             try {
-              const { ensureSteamEmulatorReady, isOfflinePlaySetupEligible } =
-                await import("./steam-emulator/steam-emulator");
-              if (!isOfflinePlaySetupEligible(game)) {
+              const { ensureSteamEmulatorReady } = await import(
+                "./steam-emulator/steam-emulator"
+              );
+              const { resolveSafeSteamEmulatorTarget } = await import(
+                "./steam-emulator/steam-emulator-target"
+              );
+              const target = await resolveSafeSteamEmulatorTarget(
+                updatedGame,
+                foundExePath,
+                [
+                  process.resourcesPath,
+                  app.getAppPath(),
+                  app.getPath("userData"),
+                ]
+              );
+              if (!target.ok || !target.gameDir) {
                 logger.info(
-                  `[GameFilesManager] Post-install offline-play setup skipped for ${this.objectId} (library-synced)`
+                  `[GameFilesManager] Post-install offline-play setup skipped for ${this.objectId}: ${target.reason}`
                 );
                 return;
               }
               const detection = await ensureSteamEmulatorReady(
-                path.dirname(foundExePath),
+                target.gameDir,
                 this.objectId
               );
               logger.info(

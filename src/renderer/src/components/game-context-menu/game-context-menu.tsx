@@ -30,6 +30,7 @@ import {
 } from "..";
 import { useGameCollections, useToast, useUserDetails } from "@renderer/hooks";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
+import { isOfflinePlaySetupEligible } from "@shared";
 
 interface GameContextMenuProps extends Omit<ContextMenuProps, "items"> {
   game: LibraryGame;
@@ -346,7 +347,13 @@ export function GameContextMenu({
               },
             ]
           : []),
-        ...(game.executablePath && getGameOrigin(game) !== "sync"
+        ...(game.executablePath &&
+        isOfflinePlaySetupEligible({
+          shop: game.shop,
+          objectId: game.objectId,
+          libraryOrigin: getGameOrigin(game),
+          executablePath: game.executablePath,
+        })
           ? [
               {
                 id: "apply-steam-emulator",

@@ -495,7 +495,8 @@ body.overlay-widget-dragging * {
   }
 }
 
-// Activation toast (top-right).
+// Activation toast. Production bounds place this surface on the game window's
+// right edge; the final rules below provide the edge-connected entrance.
 .overlay-toast {
   position: absolute;
   top: 22px;
@@ -2815,14 +2816,46 @@ body.overlay-widget-resizing * {
   overflow: hidden;
 }
 
+@keyframes overlay-toast-enter-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+
+  55% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .overlay-toast {
-  inset: 12px;
+  inset: 0;
   box-sizing: border-box;
   width: auto;
   max-width: none;
   height: auto;
   min-height: 0;
   align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 14px;
+  overflow: hidden;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: color-mix(in srgb, var(--color-dark-background) 98%, transparent);
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  animation: overlay-toast-enter-from-right 280ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+  transform-origin: right center;
+  will-change: transform, opacity;
+
+  &__dot {
+    box-shadow: none;
+  }
 
   &__body {
     width: 100%;
@@ -2832,20 +2865,30 @@ body.overlay-widget-resizing * {
   strong {
     flex: none;
     white-space: nowrap;
-    line-height: 1.4;
+    line-height: 1.25;
   }
 
   p {
     min-width: 0;
     white-space: normal;
     overflow-wrap: anywhere;
-    line-height: 1.45;
+    line-height: 1.3;
+  }
+
+  &--error {
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-toast {
+    animation-duration: 1ms;
   }
 }
 
 @media (max-width: 639px) {
   .overlay-toast {
-    align-items: flex-start;
+    align-items: center;
 
     &__body {
       flex-direction: column;

@@ -42,6 +42,7 @@ interface ContentForm {
   disableNsfwAlert: boolean;
   showHiddenAchievementsDescription: boolean;
   enableSteamAchievements: boolean;
+  enableAchievementSouvenirs: boolean;
   gameRecorderEnabled: boolean;
   gameRecorderResolution: GameRecorderResolution;
   gameRecorderFps: GameRecorderFps;
@@ -65,6 +66,7 @@ const DEFAULT_FORM: ContentForm = {
   disableNsfwAlert: false,
   showHiddenAchievementsDescription: false,
   enableSteamAchievements: false,
+  enableAchievementSouvenirs: false,
   gameRecorderEnabled: DEFAULT_GAME_RECORDER_PREFERENCES.enabled,
   gameRecorderResolution: DEFAULT_GAME_RECORDER_PREFERENCES.resolution,
   gameRecorderFps: DEFAULT_GAME_RECORDER_PREFERENCES.fps,
@@ -143,6 +145,8 @@ export function ContentSettingsSection({
       showHiddenAchievementsDescription:
         userPreferences.showHiddenAchievementsDescription ?? false,
       enableSteamAchievements: userPreferences.enableSteamAchievements ?? false,
+      enableAchievementSouvenirs:
+        userPreferences.enableAchievementSouvenirs ?? false,
       gameRecorderEnabled: recorderPreferences.enabled,
       gameRecorderResolution: recorderPreferences.resolution,
       gameRecorderFps: recorderPreferences.fps,
@@ -214,6 +218,20 @@ export function ContentSettingsSection({
         onChange: (checked) =>
           updateUserPreferences({ enableSteamAchievements: checked }),
       },
+      ...(globalThis.window.electron.platform !== "linux"
+        ? [
+            {
+              id: "enable-achievement-souvenirs",
+              focusId: CONTENT_ITEM_FOCUS_IDS.enableAchievementSouvenirs,
+              label: "Capture achievement souvenirs",
+              checked: form.enableAchievementSouvenirs,
+              onChange: (checked: boolean) =>
+                updateUserPreferences({
+                  enableAchievementSouvenirs: checked,
+                }),
+            },
+          ]
+        : []),
     ];
   }, [form]);
 

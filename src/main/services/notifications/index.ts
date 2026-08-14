@@ -183,7 +183,7 @@ export const publishNotificationUpdateReadyToInstall = async (
     icon: trayIcon,
   })
     .on("click", () => {
-      restartAndInstallUpdate();
+      void restartAndInstallUpdate();
     })
     .show();
 

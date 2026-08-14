@@ -3,6 +3,7 @@ import log from "electron-log";
 import path from "path";
 import type { ConsoleLogEntry, ConsoleLogSnapshot } from "@shared";
 import { formatConsoleLogData } from "@shared";
+import { sanitizeLogMessageBeforeTransport } from "./logger-sanitizer";
 
 log.transports.file.resolvePathFn = (
   _: log.PathVariables,
@@ -30,6 +31,13 @@ log.transports.file.resolvePathFn = (
 
   return path.join(logsPath, "logs.txt");
 };
+
+// electron-log serializes Error/Axios objects directly for the file
+// transport. Those objects can contain request headers and account tokens far
+// below the top level, so formatting-only redaction in the Shift+S window is
+// too late. Sanitize a non-mutating, circular-safe copy before *any* transport
+// receives the message while retaining error names, stacks and status codes.
+log.hooks.push(sanitizeLogMessageBeforeTransport);
 
 // Keep a bounded session history even while the console window is closed. The
 // old sender-only transport silently discarded startup and background logs,

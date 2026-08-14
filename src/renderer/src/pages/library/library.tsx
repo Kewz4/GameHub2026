@@ -26,7 +26,7 @@ import {
 } from "@primer/octicons-react";
 import { useTranslation } from "react-i18next";
 import { Tooltip } from "react-tooltip";
-import { AuthPage } from "@shared";
+import { AuthPage, removeDiacritics } from "@shared";
 import { GameCollection, LibraryGame } from "@types";
 import {
   Button,
@@ -500,10 +500,10 @@ export default function Library() {
 
     if (!deferredSearchQuery.trim()) return filtered;
 
-    const queryLower = deferredSearchQuery.toLowerCase();
+    const queryLower = removeDiacritics(deferredSearchQuery).toLowerCase();
     return filtered.filter((game) => {
       if (!game.title) return false;
-      const titleLower = game.title.toLowerCase();
+      const titleLower = removeDiacritics(game.title).toLowerCase();
       let queryIndex = 0;
 
       for (

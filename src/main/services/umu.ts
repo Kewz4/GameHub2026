@@ -8,6 +8,7 @@ import { logsPath } from "@main/constants";
 import { logger } from "./logger";
 import type { ProtonVersion } from "@types";
 import { resolveLaunchCommand } from "@main/helpers/resolve-launch-command";
+import { redactConsoleLogText } from "@shared";
 
 const isValidProtonDirectory = (directoryPath: string) => {
   const protonFilePath = path.join(directoryPath, "proton");
@@ -212,6 +213,7 @@ export class Umu {
       launchOptions?: string | null;
       useMangohud?: boolean;
       useGamemode?: boolean;
+      onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
     }
   ): Promise<void> {
     const QUICK_EXIT_THRESHOLD_MS = 3000;
@@ -256,7 +258,7 @@ export class Umu {
 
     const launchHeader =
       `\n[${new Date().toISOString()}] Launching with umu-run\n` +
-      `Command: ${launchCommand}\n`;
+      `Command: ${redactConsoleLogText(launchCommand)}\n`;
 
     fs.appendFileSync(umuLogPath, launchHeader);
 
@@ -324,6 +326,11 @@ export class Umu {
           quickExitTimer = null;
         }
 
+        if (settled) {
+          options?.onExit?.(code, signal);
+          return;
+        }
+
         finalize(() => {
           closeLogFileDescriptor();
           const earlyExitError = new Error(
@@ -347,7 +354,9 @@ export class Umu {
           closeLogFileDescriptor();
           fs.appendFileSync(
             umuLogPath,
-            `[${new Date().toISOString()}] Failed to spawn umu-run (${resolvedLaunchCommand.command}): ${String(error)}\n`
+            redactConsoleLogText(
+              `[${new Date().toISOString()}] Failed to spawn umu-run (${resolvedLaunchCommand.command}): ${String(error)}\n`
+            )
           );
           reject(error);
         });

@@ -44,7 +44,7 @@ use std::mem::{size_of, zeroed};
 #[cfg(target_os = "windows")]
 use std::ptr::{null, null_mut};
 #[cfg(target_os = "windows")]
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering as AtomicOrdering};
 #[cfg(target_os = "windows")]
 use std::sync::mpsc;
 #[cfg(target_os = "windows")]
@@ -67,7 +67,8 @@ use windows_sys::Win32::Security::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+    CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, Process32FirstW, Process32NextW,
+    MODULEENTRY32W, PROCESSENTRY32W, TH32CS_SNAPMODULE, TH32CS_SNAPMODULE32, TH32CS_SNAPPROCESS,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryExW};
@@ -92,7 +93,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::SetActiveWindow;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::{
     GetRawInputData, RegisterRawInputDevices, HRAWINPUT, RAWINPUT, RAWINPUTDEVICE, RAWINPUTHEADER,
-    RIDEV_INPUTSINK, RID_INPUT, RIM_TYPEKEYBOARD,
+    RIDEV_INPUTSINK, RIDEV_REMOVE, RID_INPUT, RIM_TYPEKEYBOARD,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Shell::{
@@ -100,11 +101,12 @@ use windows_sys::Win32::UI::Shell::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, CreateWindowExW, DefWindowProcW, DispatchMessageW, EnumWindows,
-    GetClientRect, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW,
-    GetWindowThreadProcessId, IsIconic, IsWindowVisible, RegisterClassW, SetForegroundWindow,
-    SetWindowPos, ShowWindow, TranslateMessage, GWL_EXSTYLE, GW_OWNER, HWND_MESSAGE, HWND_TOPMOST,
-    MSG, SWP_NOACTIVATE, SW_HIDE, SW_RESTORE, SW_SHOWNORMAL, WM_INPUT, WNDCLASSW, WS_EX_TOOLWINDOW,
+    BringWindowToTop, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
+    EnumWindows, GetClientRect, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongW,
+    GetWindowThreadProcessId, IsIconic, IsWindowVisible, PostMessageW, PostQuitMessage,
+    RegisterClassW, SetForegroundWindow, SetWindowPos, ShowWindow, TranslateMessage, GWL_EXSTYLE,
+    GW_OWNER, HWND_MESSAGE, HWND_TOPMOST, MSG, SWP_NOACTIVATE, SW_HIDE, SW_RESTORE, SW_SHOWNORMAL,
+    WM_APP, WM_INPUT, WNDCLASSW, WS_EX_TOOLWINDOW,
 };
 
 // Per-app volume mixer (Core Audio) — higher-level `windows` COM bindings.
@@ -123,6 +125,10 @@ use windows::Win32::System::Com::{
 #[cfg(target_os = "windows")]
 static RAW_INPUT_STARTED: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "windows")]
+static RAW_INPUT_CLASS_REGISTERED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "windows")]
+static RAW_INPUT_WINDOW: AtomicUsize = AtomicUsize::new(0);
+#[cfg(target_os = "windows")]
 static SHIFT_DOWN: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "windows")]
 static F3_DOWN: AtomicBool = AtomicBool::new(false);
@@ -134,6 +140,8 @@ static POLLED_COMBO_LATCHED: AtomicBool = AtomicBool::new(false);
 static OVERLAY_KEYBOARD_EVENTS: AtomicU32 = AtomicU32::new(0);
 #[cfg(target_os = "windows")]
 static LAST_SHORTCUT_EVENT: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+#[cfg(target_os = "windows")]
+const RAW_INPUT_STOP_MESSAGE: u32 = WM_APP + 0x247;
 
 #[cfg(target_os = "windows")]
 #[repr(C)]
@@ -342,6 +350,35 @@ pub fn start_overlay_keyboard_watcher() -> bool {
 }
 
 #[napi]
+pub fn stop_overlay_keyboard_watcher() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        if !RAW_INPUT_STARTED.load(AtomicOrdering::Acquire) {
+            return true;
+        }
+
+        let window = RAW_INPUT_WINDOW.load(AtomicOrdering::Acquire) as HWND;
+        if window.is_null() || unsafe { PostMessageW(window, RAW_INPUT_STOP_MESSAGE, 0, 0) } == 0 {
+            return false;
+        }
+
+        // The message window owns registration removal and teardown on its own
+        // thread. Wait only for a bounded interval so shutdown can never hang.
+        for _ in 0..100 {
+            if !RAW_INPUT_STARTED.load(AtomicOrdering::Acquire) {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        false
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    true
+}
+
+#[napi]
 pub fn get_overlay_keyboard_event_count() -> u32 {
     #[cfg(target_os = "windows")]
     {
@@ -405,6 +442,21 @@ unsafe extern "system" fn raw_input_window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    if message == RAW_INPUT_STOP_MESSAGE {
+        let remove_keyboard = RAWINPUTDEVICE {
+            usUsagePage: 0x01,
+            usUsage: 0x06,
+            dwFlags: RIDEV_REMOVE,
+            hwndTarget: null_mut(),
+        };
+        unsafe {
+            RegisterRawInputDevices(&remove_keyboard, 1, size_of::<RAWINPUTDEVICE>() as u32);
+            DestroyWindow(window);
+            PostQuitMessage(0);
+        }
+        return 0;
+    }
+
     if message == WM_INPUT {
         let mut input: RAWINPUT = unsafe { zeroed() };
         let mut size = size_of::<RAWINPUT>() as u32;
@@ -438,7 +490,10 @@ fn run_raw_input_thread(sender: mpsc::SyncSender<bool>) {
             ..zeroed()
         };
 
-        if RegisterClassW(&window_class) == 0 {
+        if !RAW_INPUT_CLASS_REGISTERED.swap(true, AtomicOrdering::AcqRel)
+            && RegisterClassW(&window_class) == 0
+        {
+            RAW_INPUT_CLASS_REGISTERED.store(false, AtomicOrdering::Release);
             let _ = sender.send(false);
             return;
         }
@@ -469,16 +524,25 @@ fn run_raw_input_thread(sender: mpsc::SyncSender<bool>) {
             hwndTarget: window,
         };
         if RegisterRawInputDevices(&keyboard, 1, size_of::<RAWINPUTDEVICE>() as u32) == 0 {
+            DestroyWindow(window);
             let _ = sender.send(false);
             return;
         }
 
+        RAW_INPUT_WINDOW.store(window as usize, AtomicOrdering::Release);
         let _ = sender.send(true);
         let mut message: MSG = zeroed();
         while GetMessageW(&mut message, null_mut(), 0, 0) > 0 {
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
+
+        RAW_INPUT_WINDOW.store(0, AtomicOrdering::Release);
+        SHIFT_DOWN.store(false, AtomicOrdering::Release);
+        F3_DOWN.store(false, AtomicOrdering::Release);
+        COMBO_LATCHED.store(false, AtomicOrdering::Release);
+        POLLED_COMBO_LATCHED.store(false, AtomicOrdering::Release);
+        RAW_INPUT_STARTED.store(false, AtomicOrdering::Release);
     }
 }
 
@@ -1240,8 +1304,205 @@ pub struct NativeProcessPayload {
     pub exe: Option<String>,
     pub pid: u32,
     pub name: String,
+    /// Unix epoch seconds from the OS process record. Used only as a stable
+    /// ranking tiebreaker when multiple candidate render processes exist.
+    pub start_time: f64,
     pub environ: Option<HashMap<String, String>>,
     pub cwd: Option<String>,
+}
+
+#[napi(object)]
+pub struct OverlayInjectionRisk {
+    pub safe: bool,
+    pub reason: Option<String>,
+    pub module_name: Option<String>,
+}
+
+fn classify_overlay_injection_module(module: &str) -> Option<&'static str> {
+    let module = module.to_ascii_lowercase();
+    const ANTI_CHEAT: &[&str] = &[
+        "easyanticheat",
+        "eaanticheat",
+        "battleye",
+        "beservice",
+        "bedaisy",
+        "vgk",
+        "vgc.dll",
+        "vgc.exe",
+        "faceit",
+        "equ8",
+        "ricochet",
+        "randgrid",
+        "pnkbstr",
+        "xigncode",
+        "nprotect",
+        "gameguard",
+        "mhyprot",
+        "wellbia",
+        "hoyokprotect",
+        "anticheatexpert",
+    ];
+    const UNHANDLED_INPUT: &[&str] = &[
+        "dinput",
+        "gameinput",
+        "windows.gaming.input",
+        "hidapi",
+        "sdl2",
+        "sdl3",
+        "winusb",
+    ];
+    if ANTI_CHEAT.iter().any(|token| module.contains(token)) {
+        Some("anti-cheat-module")
+    } else if UNHANDLED_INPUT.iter().any(|token| module.contains(token)) {
+        Some("unhandled-input-module")
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "windows")]
+const WIN32_ERROR_NO_MORE_FILES: u32 = 18;
+
+#[cfg(target_os = "windows")]
+fn module_snapshot_finished_cleanly(has_next_module: bool, last_error: u32) -> bool {
+    has_next_module || last_error == WIN32_ERROR_NO_MORE_FILES
+}
+
+#[napi]
+pub fn get_overlay_injection_risk(pid: u32) -> OverlayInjectionRisk {
+    #[cfg(target_os = "windows")]
+    {
+        if pid <= 4 {
+            return OverlayInjectionRisk {
+                safe: false,
+                reason: Some("unsafe-pid".into()),
+                module_name: None,
+            };
+        }
+        let snapshot =
+            unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid) };
+        if snapshot == INVALID_HANDLE_VALUE {
+            return OverlayInjectionRisk {
+                safe: false,
+                reason: Some("module-scan-unavailable".into()),
+                module_name: None,
+            };
+        }
+        let mut entry: MODULEENTRY32W = unsafe { zeroed() };
+        entry.dwSize = size_of::<MODULEENTRY32W>() as u32;
+        let mut has_module = unsafe { Module32FirstW(snapshot, &mut entry) } != 0;
+        if !has_module {
+            unsafe { CloseHandle(snapshot) };
+            return OverlayInjectionRisk {
+                safe: false,
+                reason: Some("module-scan-incomplete".into()),
+                module_name: None,
+            };
+        }
+        while has_module {
+            let end = entry
+                .szModule
+                .iter()
+                .position(|value| *value == 0)
+                .unwrap_or(entry.szModule.len());
+            let module = String::from_utf16_lossy(&entry.szModule[..end]).to_ascii_lowercase();
+            let risk = classify_overlay_injection_module(&module);
+            if let Some(reason) = risk {
+                unsafe { CloseHandle(snapshot) };
+                return OverlayInjectionRisk {
+                    safe: false,
+                    reason: Some(reason.into()),
+                    module_name: Some(module),
+                };
+            }
+            has_module = unsafe { Module32NextW(snapshot, &mut entry) } != 0;
+            if !module_snapshot_finished_cleanly(has_module, unsafe { GetLastError() }) {
+                unsafe { CloseHandle(snapshot) };
+                return OverlayInjectionRisk {
+                    safe: false,
+                    reason: Some("module-scan-incomplete".into()),
+                    module_name: None,
+                };
+            }
+        }
+        unsafe { CloseHandle(snapshot) };
+        OverlayInjectionRisk {
+            safe: true,
+            reason: None,
+            module_name: None,
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = pid;
+        OverlayInjectionRisk {
+            safe: false,
+            reason: Some("unsupported-platform".into()),
+            module_name: None,
+        }
+    }
+}
+
+#[napi]
+pub fn get_process_creation_time_ticks(pid: u32) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        win_inject::process_creation_time_ticks(pid).map(|ticks| ticks.to_string())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = pid;
+        None
+    }
+}
+
+#[cfg(test)]
+mod overlay_injection_risk_tests {
+    use super::classify_overlay_injection_module;
+
+    #[cfg(target_os = "windows")]
+    use super::module_snapshot_finished_cleanly;
+
+    #[test]
+    fn rejects_anticheat_and_unhandled_input_modules() {
+        assert_eq!(
+            classify_overlay_injection_module("EasyAntiCheat_EOS.dll"),
+            Some("anti-cheat-module")
+        );
+        for module in ["hidapi.dll", "SDL3.dll", "gameinput.dll"] {
+            assert_eq!(
+                classify_overlay_injection_module(module),
+                Some("unhandled-input-module"),
+                "{module}"
+            );
+        }
+        // The system HID library is loaded transitively by many titles and is
+        // not evidence that the game polls raw HID directly. The injected gate
+        // still rejects explicit HIDAPI/SDL/GameInput/DirectInput stacks.
+        assert_eq!(classify_overlay_injection_module("hid.dll"), None);
+        assert_eq!(classify_overlay_injection_module("xinput1_4.dll"), None);
+        for module in [
+            "EAAntiCheat.GameService.dll",
+            "Randgrid.sys",
+            "vgc.exe",
+            "PnkBstrB.exe",
+        ] {
+            assert_eq!(
+                classify_overlay_injection_module(module),
+                Some("anti-cheat-module"),
+                "{module}"
+            );
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn accepts_only_a_complete_module_snapshot() {
+        assert!(module_snapshot_finished_cleanly(true, 0));
+        assert!(module_snapshot_finished_cleanly(false, 18));
+        assert!(!module_snapshot_finished_cleanly(false, 5));
+        assert!(!module_snapshot_finished_cleanly(false, 299));
+    }
 }
 
 #[napi]
@@ -1306,6 +1567,7 @@ pub fn list_processes() -> Vec<NativeProcessPayload> {
                     .map(|value| value.to_string_lossy().to_string()),
                 pid: process.pid().as_u32(),
                 name: process.name().to_string_lossy().to_string(),
+                start_time: process.start_time() as f64,
                 cwd: if include_linux_extras {
                     process
                         .cwd()
@@ -1575,12 +1837,16 @@ pub fn set_overlay_input_gate(target_pid: u32, blocked: bool) -> bool {
         };
         unsafe {
             let words = *view as *mut u32;
-            // Always release first. Blur/hide keeps the same target and its
-            // readiness generation; a process handoff invalidates everything.
-            std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 0);
             std::ptr::write_volatile(words.add(INPUT_GATE_OWNER_PID_WORD), GetCurrentProcessId());
 
             let current_target = std::ptr::read_volatile(words.add(INPUT_GATE_TARGET_PID_WORD));
+            let was_blocked = std::ptr::read_volatile(words.add(INPUT_GATE_BLOCKED_WORD)) != 0;
+            if !blocked || current_target != target_pid {
+                // Release before a target handoff and when Electron has already
+                // hidden the overlay. A repeated activation for the same target
+                // must never pulse BLOCKED to zero while the UI is visible.
+                std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 0);
+            }
             if current_target != target_pid {
                 // READY_PID is the commit word written by the injected worker.
                 // Clear it before changing PID/generation so a stale process
@@ -1600,24 +1866,60 @@ pub fn set_overlay_input_gate(target_pid: u32, blocked: bool) -> bool {
             }
 
             if blocked && target_pid != 0 {
-                let generation = std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
-                let ready_pid = std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
+                let generation_before =
+                    std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
                 let ready_generation =
                     std::ptr::read_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD));
                 let capability_mask =
                     std::ptr::read_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD));
                 let unsupported_module_mask =
                     std::ptr::read_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD));
-                let safe = generation != 0
+                // READY_PID is the worker's commit word and must be read after
+                // its payload. Generation brackets reject a concurrent target
+                // transition.
+                let ready_pid = std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
+                let generation_after =
+                    std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                let safe = generation_before == generation_after
+                    && generation_after != 0
                     && ready_pid == target_pid
-                    && ready_generation == generation
+                    && ready_generation == generation_after
                     && (capability_mask & INPUT_GATE_REQUIRED_CAPABILITIES)
                         == INPUT_GATE_REQUIRED_CAPABILITIES
                     && unsupported_module_mask == 0;
                 if !safe {
+                    // If an already-visible overlay revalidates concurrently
+                    // with invalidation, retain the fail-safe latch. The caller
+                    // hides first and then explicitly releases it.
+                    if was_blocked {
+                        std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 1);
+                    }
                     return false;
                 }
                 std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 1);
+
+                // Invalidation may race the store above. Re-read the commit
+                // record after arming; on mismatch return false but keep the
+                // latch so no covered API leaks before Electron hides.
+                let committed_ready_pid =
+                    std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
+                let committed_generation =
+                    std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                let committed_ready_generation =
+                    std::ptr::read_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD));
+                let committed_capabilities =
+                    std::ptr::read_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD));
+                let committed_unsupported =
+                    std::ptr::read_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD));
+                if committed_ready_pid != target_pid
+                    || committed_generation != generation_after
+                    || committed_ready_generation != committed_generation
+                    || (committed_capabilities & INPUT_GATE_REQUIRED_CAPABILITIES)
+                        != INPUT_GATE_REQUIRED_CAPABILITIES
+                    || committed_unsupported != 0
+                {
+                    return false;
+                }
             }
         }
         true
@@ -1745,13 +2047,24 @@ pub struct InputHookInjection {
 
 #[napi]
 #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn inject_input_hook(pid: u32, dll_path: String) -> InputHookInjection {
+pub fn inject_input_hook(
+    pid: u32,
+    dll_path: String,
+    expected_creation_ticks: String,
+) -> InputHookInjection {
     #[cfg(target_os = "windows")]
     {
         // Unelevated fast path. A game running at higher integrity than the
         // launcher fails here with stage "open" / ERROR_ACCESS_DENIED, which is
         // the caller's cue to go through the elevated broker instead.
-        let outcome = win_inject::inject_dll(pid, &dll_path);
+        let Ok(expected_creation_ticks) = expected_creation_ticks.parse::<u64>() else {
+            return InputHookInjection {
+                injected: false,
+                stage: "identity".to_string(),
+                error_code: 0,
+            };
+        };
+        let outcome = win_inject::inject_dll(pid, &dll_path, expected_creation_ticks);
         InputHookInjection {
             injected: outcome.injected,
             stage: outcome.stage.to_string(),
@@ -1760,9 +2073,24 @@ pub fn inject_input_hook(pid: u32, dll_path: String) -> InputHookInjection {
     }
 
     #[cfg(not(target_os = "windows"))]
+    let _ = expected_creation_ticks;
+    #[cfg(not(target_os = "windows"))]
     InputHookInjection {
         injected: false,
         stage: "unsupported".to_string(),
         error_code: 0,
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod raw_input_lifecycle_tests {
+    use super::{start_overlay_keyboard_watcher, stop_overlay_keyboard_watcher};
+
+    #[test]
+    fn raw_input_watcher_stops_and_restarts_cleanly() {
+        assert!(start_overlay_keyboard_watcher());
+        assert!(stop_overlay_keyboard_watcher());
+        assert!(start_overlay_keyboard_watcher());
+        assert!(stop_overlay_keyboard_watcher());
     }
 }

@@ -1,21 +1,18 @@
 import { registerEvent } from "../register-event";
 import type { Download, StartGameDownloadPayload } from "@types";
-import {
-  DownloadManager,
-  DownloadOrchestrator,
-  HydraApi,
-  logger,
-} from "@main/services";
+import { DownloadOrchestrator, HydraApi, logger } from "@main/services";
 import { createGame } from "@main/services/library-sync";
 import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import {
   emulatorPlatformFolder,
+  getGlobalTrackers,
   handleDownloadError,
   isKnownDownloadError,
   prepareGameEntry,
 } from "@main/helpers";
 import path from "node:path";
 import type { EmulatorSystem } from "@types";
+import { Downloader } from "@shared";
 
 export const startGameDownloadImpl = async (
   payload: StartGameDownloadPayload
@@ -47,6 +44,8 @@ export const startGameDownloadImpl = async (
     : payload.downloadPath;
 
   const gameKey = levelKeys.game(shop, objectId);
+  const customTrackers =
+    downloader === Downloader.Torrent ? await getGlobalTrackers() : undefined;
 
   logger.log(
     `[Downloads] Start requested for ${gameKey} (downloader=${downloader})`
@@ -60,7 +59,6 @@ export const startGameDownloadImpl = async (
     libraryOrigin:
       libraryOrigin ?? (payload.customDownload ? "custom" : undefined),
   });
-  await DownloadManager.cancelDownload(gameKey);
 
   const download: Download = {
     shop,
@@ -86,10 +84,10 @@ export const startGameDownloadImpl = async (
     fileSize: selectedFilesSize ?? null,
     emulatorSystem: emulatorSystem ?? null,
     customDownload: payload.customDownload,
+    customTrackers,
   };
 
   try {
-    await downloadsSublevel.put(gameKey, download);
     await DownloadOrchestrator.startPreparedDownload(download);
 
     const updatedGame = await gamesSublevel.get(gameKey);

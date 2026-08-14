@@ -19,6 +19,7 @@
  */
 
 import fs from "node:fs";
+import crypto from "node:crypto";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -658,11 +659,17 @@ async function prepareIsolatedClone() {
 
 async function patchIsolatedPreferences() {
   const { ClassicLevel } = await import("classic-level");
+  const sharp = (await import("sharp")).default;
   const databasePath = path.join(isolatedData, "gamehub-db");
   const database = new ClassicLevel(databasePath, { valueEncoding: "json" });
 
   try {
     await database.open();
+    const user = await database.get("user");
+    ensure(
+      user && typeof user === "object" && typeof user.id === "string",
+      "The populated clone does not contain an authenticated user."
+    );
     const current = await database.get("userPreferences").catch((error) => {
       if (error?.code === "LEVEL_NOT_FOUND") return {};
       throw error;
@@ -672,7 +679,87 @@ async function patchIsolatedPreferences() {
       onboardingComplete: true,
       enableVirtualKeyboard: true,
       gameRecorderEnabled: true,
+      achievementSouvenirCaptureEnabled: true,
+      appendGlobalTrackers: true,
+      globalTrackers: [
+        "udp://tracker.example.test:6969/announce",
+        "https://tracker.example.test/announce",
+      ],
     });
+
+    const achievementName = "QA_VISUAL_SOUVENIR";
+    const ownerHash = crypto
+      .createHash("sha256")
+      .update(user.id, "utf8")
+      .digest("hex");
+    const achievementHash = crypto
+      .createHash("sha256")
+      .update(achievementName, "utf8")
+      .digest("hex")
+      .slice(0, 16);
+    const gameHash = crypto
+      .createHash("sha256")
+      .update("steam\0" + "620", "utf8")
+      .digest("hex")
+      .slice(0, 12);
+    const souvenirPath = path.join(
+      isolatedData,
+      "Screenshots",
+      "Achievements",
+      "accounts",
+      `owner-${ownerHash}`,
+      `Portal 2-${gameHash}`,
+      `Right on Time-${achievementHash}.jpeg`
+    );
+    await fs.promises.mkdir(path.dirname(souvenirPath), { recursive: true });
+    const souvenirArtwork = Buffer.from(`
+      <svg width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#080808"/>
+            <stop offset="0.58" stop-color="#171717"/>
+            <stop offset="1" stop-color="#050505"/>
+          </linearGradient>
+          <radialGradient id="halo" cx="50%" cy="45%" r="55%">
+            <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+            <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="1280" height="720" fill="url(#bg)"/>
+        <rect width="1280" height="720" fill="url(#halo)"/>
+        <g fill="none" stroke="#ffffff" stroke-width="9" opacity="0.9">
+          <circle cx="640" cy="286" r="108"/>
+          <path d="M593 290l31 32 69-78" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+        <text x="640" y="465" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial" font-size="54" font-weight="700">RIGHT ON TIME</text>
+        <text x="640" y="520" text-anchor="middle" fill="#b8b8b8" font-family="Segoe UI, Arial" font-size="26" letter-spacing="4">ACHIEVEMENT UNLOCKED · PORTAL 2</text>
+        <rect x="80" y="74" width="1120" height="572" rx="30" fill="none" stroke="#ffffff" stroke-opacity="0.13" stroke-width="2"/>
+        <text x="104" y="122" fill="#ffffff" font-family="Segoe UI, Arial" font-size="23" font-weight="700" letter-spacing="3">GAMEHUB SOUVENIR</text>
+      </svg>
+    `);
+    await sharp(souvenirArtwork).jpeg({ quality: 88 }).toFile(souvenirPath);
+
+    const souvenirs = database.sublevel("achievement-souvenirs", {
+      valueEncoding: "json",
+    });
+    await souvenirs.put(
+      JSON.stringify([user.id, "steam", "620", achievementName]),
+      {
+        schemaVersion: 1,
+        ownerId: user.id,
+        shop: "steam",
+        objectId: "620",
+        achievementName,
+        achievementDisplayName: "Right on Time",
+        gameTitle: "Portal 2",
+        gameIconUrl: null,
+        unlockTime: Date.now() - 60_000,
+        localPath: souvenirPath,
+        r2Key: `users/${encodeURIComponent(user.id)}/achievement-souvenirs/steam/620/qa-visual.jpeg`,
+        status: "synced",
+        updatedAt: Date.now(),
+      }
+    );
   } finally {
     await database.close().catch(() => undefined);
   }
@@ -1743,7 +1830,7 @@ try {
 
   const page = await findMainWindow(electronApp);
   page.on("pageerror", (error) => {
-    report.pageErrors.push(sanitizeText(error));
+    report.pageErrors.push(sanitizeText(error?.stack ?? error));
   });
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -2038,6 +2125,171 @@ try {
       }
     );
   }
+
+  await runCase(
+    "bp-profile-own-souvenirs-controller-full-hd",
+    {
+      area: "big-picture-profile",
+      profile: "own",
+      view: "souvenirs",
+      fixture: "account-scoped-local-only",
+      input: "dpad-and-primary-back",
+      viewport: VIEWPORTS[2].id,
+    },
+    async () => {
+      await applyViewport(page, VIEWPORTS[2]);
+      await navigateHash(page, "/big-picture/profile", ".bp-profile", {
+        bounce: true,
+      });
+      await waitForProfileReadiness(page);
+
+      await focusNavigationItem(
+        page,
+        page.locator("#profile-tab-souvenirs"),
+        "profile-tab-souvenirs"
+      );
+      await page.waitForFunction(
+        () =>
+          globalThis.document
+            .querySelector(".bp-profile")
+            ?.getAttribute("data-profile-view") === "souvenirs"
+      );
+
+      const souvenir = page.locator(
+        "#profile-souvenir\\:steam\\:620\\:QA_VISUAL_SOUVENIR"
+      );
+      await souvenir.waitFor({ state: "visible", timeout: 30_000 });
+      await souvenir.locator("img").waitFor({ state: "visible" });
+      ensure(
+        await souvenir.locator("img").evaluate((image) => image.complete),
+        "The account-scoped souvenir image did not finish decoding."
+      );
+      await focusNavigationItem(
+        page,
+        souvenir,
+        "profile-souvenir:steam:620:QA_VISUAL_SOUVENIR"
+      );
+      const galleryScreenshot = await captureViewport(
+        page,
+        "bp-profile-own-souvenirs-controller",
+        VIEWPORTS[2]
+      );
+
+      await pressGamepadButton(page, GAMEPAD_BUTTON.a);
+      const lightbox = page.locator(".image-lightbox__surface");
+      await lightbox.waitFor({ state: "visible", timeout: 10_000 });
+      const lightboxScreenshot = await captureViewport(
+        page,
+        "bp-profile-own-souvenir-lightbox-controller",
+        VIEWPORTS[2]
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.b);
+      await lightbox.waitFor({ state: "hidden", timeout: 10_000 });
+      ensure(
+        (await page.evaluate(
+          () =>
+            globalThis.document.querySelector("[data-focus-visible='true']")
+              ?.id ?? null
+        )) === "profile-souvenir:steam:620:QA_VISUAL_SOUVENIR",
+        "Closing the souvenir lightbox did not preserve controller focus."
+      );
+      await assertResponsiveSurface(page, ".bp-profile");
+      return {
+        ...(galleryScreenshot ? { screenshot: galleryScreenshot } : {}),
+        ...(lightboxScreenshot
+          ? { lightboxScreenshot: lightboxScreenshot }
+          : {}),
+      };
+    }
+  );
+
+  await runCase(
+    "desktop-profile-own-souvenirs-full-hd",
+    {
+      area: "desktop-profile",
+      profile: "own",
+      view: "souvenirs",
+      fixture: "account-scoped-local-only",
+      viewport: VIEWPORTS[2].id,
+    },
+    async () => {
+      await applyViewport(page, VIEWPORTS[2]);
+      await navigateHash(
+        page,
+        `/profile/${encodeURIComponent(fixture.userId)}`,
+        ".profile__wrapper",
+        { bounce: true }
+      );
+
+      const souvenirsTab = page.getByRole("button", { name: /Souvenirs/i });
+      await souvenirsTab.waitFor({ state: "visible", timeout: 30_000 });
+      await souvenirsTab.click();
+      const souvenirs = page.locator(".profile-souvenirs");
+      await souvenirs.waitFor({ state: "visible", timeout: 20_000 });
+      const preview = page.getByRole("button", {
+        name: "View Right on Time souvenir",
+      });
+      await preview.waitFor({ state: "visible", timeout: 20_000 });
+      const previewImage = preview.locator("img");
+      await previewImage.waitFor({ state: "visible" });
+      ensure(
+        await previewImage.evaluate(
+          (image) => image.complete && image.naturalWidth > 0
+        ),
+        "The desktop souvenir preview did not decode."
+      );
+      ensure(
+        (await page
+          .getByRole("button", {
+            name: "Delete Right on Time souvenir",
+          })
+          .count()) === 1,
+        "The desktop souvenir delete action is missing."
+      );
+      const galleryScreenshot = await captureViewport(
+        page,
+        "desktop-profile-own-souvenirs",
+        VIEWPORTS[2]
+      );
+
+      await preview.click();
+      const lightbox = page.locator(".fullscreen-media-modal");
+      await lightbox.waitFor({ state: "visible", timeout: 10_000 });
+      const lightboxScreenshot = await captureViewport(
+        page,
+        "desktop-profile-own-souvenir-lightbox",
+        VIEWPORTS[2]
+      );
+      await page.keyboard.press("Escape");
+      await lightbox.waitFor({ state: "hidden", timeout: 10_000 });
+
+      await page
+        .getByRole("button", { name: "Delete Right on Time souvenir" })
+        .click();
+      const deleteDialog = page.locator(".modal:has(.confirmation-modal)");
+      await deleteDialog.waitFor({ state: "visible", timeout: 10_000 });
+      ensure(
+        (await deleteDialog.locator("h3").innerText()) ===
+          "Delete achievement souvenir?",
+        "The desktop delete confirmation title is incorrect."
+      );
+      await deleteDialog.getByRole("button", { name: "Cancel" }).click();
+      await deleteDialog.waitFor({ state: "hidden", timeout: 10_000 });
+      ensure(
+        qaApiProxy.state.mutationRequests.length === 0,
+        `Desktop souvenir inspection attempted a network write: ${JSON.stringify(
+          qaApiProxy.state.mutationRequests
+        )}`
+      );
+      await assertResponsiveSurface(page, ".profile__wrapper");
+      return {
+        ...(galleryScreenshot ? { screenshot: galleryScreenshot } : {}),
+        ...(lightboxScreenshot
+          ? { lightboxScreenshot: lightboxScreenshot }
+          : {}),
+      };
+    }
+  );
 
   await runCase(
     "bp-friends-populated-controller-full-hd",
@@ -2361,6 +2613,46 @@ try {
       );
     }
   }
+
+  await runCase(
+    "desktop-settings-global-trackers-full-hd",
+    {
+      area: "desktop-settings",
+      category: "downloads",
+      feature: "global-trackers",
+      fixture: "local-preferences-only",
+      viewport: VIEWPORTS[2].id,
+    },
+    async () => {
+      await applyViewport(page, VIEWPORTS[2]);
+      await navigateHash(
+        page,
+        "/settings?tab=downloads",
+        ".settings__container"
+      );
+      const trackers = page.locator(".settings-global-trackers");
+      await trackers.waitFor({ state: "visible", timeout: 20_000 });
+      await trackers.scrollIntoViewIfNeeded();
+      const trackerInput = page.locator("#settings-global-trackers-input");
+      const trackerText = await trackerInput.inputValue();
+      ensure(
+        trackerText.includes("udp://tracker.example.test:6969/announce") &&
+          trackerText.includes("https://tracker.example.test/announce"),
+        "The global tracker settings did not load the isolated local fixture."
+      );
+      ensure(
+        await page.locator("#settings-append-global-trackers").isChecked(),
+        "The append-global-trackers preference did not render as enabled."
+      );
+      const screenshot = await captureViewport(
+        page,
+        "desktop-settings-global-trackers",
+        VIEWPORTS[2]
+      );
+      await assertResponsiveSurface(page, ".settings__container");
+      return screenshot ? { screenshot } : {};
+    }
+  );
 
   await runCase(
     "controller-dpad-focus-polling",

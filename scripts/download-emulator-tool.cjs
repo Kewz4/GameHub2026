@@ -5,7 +5,7 @@
  * Or add to package.json build hook (build:win).
  *
  * The SteamAutoCrack release zip only ships the GUI exe, so this script:
- *   1. Downloads the latest SteamAutoCrack.zip release
+ *   1. Downloads and verifies a pinned SteamAutoCrack.zip release
  *   2. Extracts the Goldberg/ emulator bundle (regular + experimental) and
  *      the TEMP/ working dir into ./emulator-tool
  *   3. Shallow-clones Steam-auto-crack, patches a System.CommandLine API
@@ -19,50 +19,94 @@
  */
 
 const https = require("node:https");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const { execFileSync } = require("node:child_process");
 
-const OUT_DIR = path.join(__dirname, "..", "emulator-tool");
+const FINAL_OUT_DIR = path.join(__dirname, "..", "emulator-tool");
+let assemblyOutDir = FINAL_OUT_DIR;
 const REPO_URL = "https://github.com/SteamAutoCracks/Steam-auto-crack.git";
-const RELEASE_ZIP_URL =
-  "https://github.com/SteamAutoCracks/Steam-auto-crack/releases/latest/download/SteamAutoCrack.zip";
+const UPSTREAM_VERSION = "3.5.0.6";
+const UPSTREAM_COMMIT = "f687bc287b762b0843052122ad56196dde2ad9a3";
+const RELEASE_ZIP_SHA256 =
+  "3ec9f826cdff35f0a69560c47350c15622559c670edec542f594e89b9f047d58";
+const RELEASE_ZIP_URL = `https://github.com/SteamAutoCracks/Steam-auto-crack/releases/download/${UPSTREAM_VERSION}/SteamAutoCrack.zip`;
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+function sha256File(filePath) {
+  return crypto
+    .createHash("sha256")
+    .update(fs.readFileSync(filePath))
+    .digest("hex");
+}
+
 function download(url, dest) {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    const get = (u) => {
-      https
-        .get(
-          u,
-          { headers: { "User-Agent": "gamehub-build-script" } },
-          (res) => {
-            if (
-              res.statusCode >= 300 &&
-              res.statusCode < 400 &&
-              res.headers.location
-            ) {
-              file.close();
-              get(res.headers.location);
-              return;
-            }
-            if (res.statusCode !== 200) {
-              file.close();
-              reject(new Error(`HTTP ${res.statusCode} for ${u}`));
-              return;
-            }
-            res.pipe(file);
-            file.on("finish", () => file.close(resolve));
-          }
-        )
-        .on("error", reject);
+    const partial = `${dest}.partial-${process.pid}`;
+    let settled = false;
+    fs.rmSync(partial, { force: true });
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      fs.rmSync(partial, { force: true });
+      reject(error);
     };
-    get(url);
+    const get = (rawUrl, redirectsLeft) => {
+      const request = https.get(
+        rawUrl,
+        { headers: { "User-Agent": "gamehub-build-script" } },
+        (res) => {
+          const status = res.statusCode ?? 0;
+          if (status >= 300 && status < 400 && res.headers.location) {
+            res.resume();
+            if (redirectsLeft <= 0) {
+              fail(new Error(`Too many redirects downloading ${url}`));
+              return;
+            }
+            get(new URL(res.headers.location, rawUrl).href, redirectsLeft - 1);
+            return;
+          }
+          if (status !== 200) {
+            res.resume();
+            fail(new Error(`HTTP ${status} for ${rawUrl}`));
+            return;
+          }
+
+          const file = fs.createWriteStream(partial, { flags: "wx" });
+          file.once("error", (error) => {
+            res.destroy();
+            fail(error);
+          });
+          res.once("error", (error) => {
+            file.destroy();
+            fail(error);
+          });
+          file.once("finish", () => {
+            file.close((error) => {
+              if (error) return fail(error);
+              if (settled) return;
+              try {
+                fs.rmSync(dest, { force: true });
+                fs.renameSync(partial, dest);
+                settled = true;
+                resolve();
+              } catch (publishError) {
+                fail(publishError);
+              }
+            });
+          });
+          res.pipe(file);
+        }
+      );
+      request.once("error", fail);
+    };
+    get(url, 5);
   });
 }
 
@@ -71,6 +115,13 @@ async function downloadReleaseBundle() {
   const zipPath = path.join(tmp, "SteamAutoCrack.zip");
   console.log("Downloading SteamAutoCrack release zip…");
   await download(RELEASE_ZIP_URL, zipPath);
+  const archiveHash = sha256File(zipPath);
+  if (archiveHash !== RELEASE_ZIP_SHA256) {
+    throw new Error(
+      `SteamAutoCrack ${UPSTREAM_VERSION} archive integrity check failed`
+    );
+  }
+  console.log(`✓ verified SteamAutoCrack ${UPSTREAM_VERSION} archive`);
 
   const extractDir = path.join(tmp, "extracted");
   ensureDir(extractDir);
@@ -87,10 +138,10 @@ async function downloadReleaseBundle() {
     execFileSync("tar", ["-xf", zipPath, "-C", extractDir]);
   }
 
-  ensureDir(OUT_DIR);
+  ensureDir(assemblyOutDir);
   for (const folder of ["Goldberg", "TEMP"]) {
     const src = path.join(extractDir, folder);
-    const dest = path.join(OUT_DIR, folder);
+    const dest = path.join(assemblyOutDir, folder);
     if (!fs.existsSync(src)) continue;
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, { recursive: true });
@@ -104,10 +155,22 @@ async function buildCli() {
   // The release zip doesn't ship the CLI — build it from source.
   // Requires the .NET SDK (net10.0-windows target).
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sac-src-"));
-  console.log("Cloning Steam-auto-crack source…");
-  execFileSync("git", ["clone", "--depth", "1", REPO_URL, tmp], {
-    stdio: "inherit",
-  });
+  console.log(`Cloning Steam-auto-crack ${UPSTREAM_VERSION} source…`);
+  execFileSync(
+    "git",
+    ["clone", "--depth", "1", "--branch", UPSTREAM_VERSION, REPO_URL, tmp],
+    { stdio: "inherit" }
+  );
+  const checkedOutCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: tmp,
+    encoding: "utf8",
+  }).trim();
+  if (checkedOutCommit !== UPSTREAM_COMMIT) {
+    throw new Error(
+      `SteamAutoCrack ${UPSTREAM_VERSION} source integrity check failed`
+    );
+  }
+  console.log(`✓ verified source commit ${UPSTREAM_COMMIT.slice(0, 12)}`);
 
   const programPath = path.join(tmp, "SteamAutoCrack.CLI", "Program.cs");
   let program = fs.readFileSync(programPath, "utf8");
@@ -159,8 +222,8 @@ async function buildCli() {
     { stdio: "inherit" }
   );
 
-  ensureDir(OUT_DIR);
-  fs.cpSync(path.join(tmp, "cli-build"), OUT_DIR, {
+  ensureDir(assemblyOutDir);
+  fs.cpSync(path.join(tmp, "cli-build"), assemblyOutDir, {
     recursive: true,
     force: true,
   });
@@ -170,10 +233,38 @@ async function buildCli() {
 }
 
 async function main() {
-  ensureDir(OUT_DIR);
-  await downloadReleaseBundle();
-  await buildCli();
-  console.log("Steam emulator bundle ready in", OUT_DIR);
+  // Never merge verified inputs into a prior gitignored tree: doing so could
+  // silently ship stale local binaries that are absent on a clean CI runner.
+  const stagingDir = `${FINAL_OUT_DIR}.staging-${process.pid}`;
+  const previousDir = `${FINAL_OUT_DIR}.previous-${process.pid}`;
+  fs.rmSync(stagingDir, { recursive: true, force: true });
+  fs.rmSync(previousDir, { recursive: true, force: true });
+  ensureDir(stagingDir);
+  assemblyOutDir = stagingDir;
+
+  try {
+    await downloadReleaseBundle();
+    await buildCli();
+
+    if (fs.existsSync(FINAL_OUT_DIR)) {
+      fs.renameSync(FINAL_OUT_DIR, previousDir);
+    }
+    try {
+      fs.renameSync(stagingDir, FINAL_OUT_DIR);
+    } catch (error) {
+      if (!fs.existsSync(FINAL_OUT_DIR) && fs.existsSync(previousDir)) {
+        fs.renameSync(previousDir, FINAL_OUT_DIR);
+      }
+      throw error;
+    }
+    fs.rmSync(previousDir, { recursive: true, force: true });
+    console.log("Steam emulator bundle ready in", FINAL_OUT_DIR);
+  } finally {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    if (!fs.existsSync(FINAL_OUT_DIR) && fs.existsSync(previousDir)) {
+      fs.renameSync(previousDir, FINAL_OUT_DIR);
+    }
+  }
 }
 
 main().catch((err) => {

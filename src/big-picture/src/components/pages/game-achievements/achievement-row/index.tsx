@@ -7,9 +7,13 @@ import { getAchievementRowId } from "../navigation";
 
 export interface AchievementRowProps {
   achievement: UserAchievement;
+  onOpenSouvenir?: (achievement: UserAchievement) => void;
 }
 
-export function AchievementRow({ achievement }: Readonly<AchievementRowProps>) {
+export function AchievementRow({
+  achievement,
+  onOpenSouvenir,
+}: Readonly<AchievementRowProps>) {
   const { formatDateTime } = useDate();
   const unlockedAt =
     achievement.unlockTime != null
@@ -19,7 +23,12 @@ export function AchievementRow({ achievement }: Readonly<AchievementRowProps>) {
   return (
     <FocusItem
       id={getAchievementRowId(achievement.name)}
-      actions={{ primary: "off" }}
+      actions={{
+        primary:
+          achievement.imageUrl && onOpenSouvenir
+            ? () => onOpenSouvenir(achievement)
+            : "off",
+      }}
       asChild
     >
       <li className="game-achievements-row">
@@ -76,6 +85,18 @@ export function AchievementRow({ achievement }: Readonly<AchievementRowProps>) {
         </div>
 
         <div className="game-achievements-row__meta">
+          {achievement.imageUrl ? (
+            <button
+              type="button"
+              tabIndex={-1}
+              className="game-achievements-row__souvenir"
+              onClick={() => onOpenSouvenir?.(achievement)}
+              aria-label={`View ${achievement.displayName} achievement souvenir`}
+            >
+              <img src={achievement.imageUrl} alt="" draggable={false} />
+            </button>
+          ) : null}
+
           {achievement.points != undefined ? (
             <div
               className="game-achievements-row__points"

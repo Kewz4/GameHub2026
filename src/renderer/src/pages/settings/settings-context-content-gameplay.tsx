@@ -41,6 +41,7 @@ export function SettingsContextContentGameplay() {
     hideMatureGames: false,
     showHiddenAchievementsDescription: false,
     enableSteamAchievements: false,
+    enableAchievementSouvenirs: false,
     enableNewDownloadOptionsBadges: true,
     ...DEFAULT_HYDRA_OVERLAY_PREFERENCES,
     gameRecorderEnabled: DEFAULT_GAME_RECORDER_PREFERENCES.enabled,
@@ -94,6 +95,8 @@ export function SettingsContextContentGameplay() {
       showHiddenAchievementsDescription:
         userPreferences.showHiddenAchievementsDescription ?? false,
       enableSteamAchievements: userPreferences.enableSteamAchievements ?? false,
+      enableAchievementSouvenirs:
+        userPreferences.enableAchievementSouvenirs ?? false,
       enableNewDownloadOptionsBadges:
         userPreferences.enableNewDownloadOptionsBadges ?? true,
       overlayEnabled:
@@ -239,6 +242,40 @@ export function SettingsContextContentGameplay() {
             })
           }
         />
+
+        <CheckboxField
+          id="settings-enable-achievement-souvenirs"
+          label={t("enable_achievement_souvenirs", {
+            defaultValue: "Capture achievement souvenirs",
+          })}
+          checked={form.enableAchievementSouvenirs}
+          disabled={window.electron.platform === "linux"}
+          onChange={() =>
+            handleChange({
+              enableAchievementSouvenirs: !form.enableAchievementSouvenirs,
+            })
+          }
+        />
+        <HelperText>
+          {window.electron.platform === "linux"
+            ? t("achievement_souvenirs_linux_unavailable", {
+                defaultValue:
+                  "Souvenir capture is paused on Linux until portal-safe capture is available.",
+              })
+            : t("achievement_souvenirs_description", {
+                defaultValue:
+                  "Captures the foreground game before the achievement toast, keeps a local copy, and mirrors it to your private GameHub R2 storage. No subscription is required.",
+              })}
+        </HelperText>
+        <Button
+          type="button"
+          theme="outline"
+          onClick={() => window.electron.openAchievementSouvenirsFolder()}
+        >
+          {t("open_achievement_souvenirs_folder", {
+            defaultValue: "Open souvenir folder",
+          })}
+        </Button>
 
         <CheckboxField
           id="settings-new-download-option-badges"

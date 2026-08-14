@@ -38,11 +38,16 @@
 
 #![cfg(windows)]
 
+mod direct_input;
+mod release_fence;
+mod windows_gaming_input;
+
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, FALSE, HANDLE, HMODULE, INVALID_HANDLE_VALUE, TRUE, WAIT_TIMEOUT,
+    CloseHandle, GetLastError, ERROR_NO_MORE_FILES, FALSE, HANDLE, HMODULE, INVALID_HANDLE_VALUE,
+    TRUE, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, MODULEENTRY32W, TH32CS_SNAPMODULE,
@@ -92,7 +97,7 @@ const CAPABILITY_XINPUT: u32 = 1 << 0;
 const CAPABILITY_WIN32_KEYBOARD: u32 = 1 << 1;
 const CAPABILITY_RAW_INPUT: u32 = 1 << 2;
 const CAPABILITY_LATE_BINDING: u32 = 1 << 3;
-const REQUIRED_CAPABILITIES: u32 =
+const REQUIRED_BASE_CAPABILITIES: u32 =
     CAPABILITY_XINPUT | CAPABILITY_WIN32_KEYBOARD | CAPABILITY_RAW_INPUT | CAPABILITY_LATE_BINDING;
 
 const UNSUPPORTED_DIRECT_INPUT: u32 = 1 << 0;
@@ -115,37 +120,30 @@ static REAL_GET_PROC_ADDRESS: AtomicUsize = AtomicUsize::new(0);
 /// overlay owns the controller.
 const ERROR_DEVICE_NOT_CONNECTED: u32 = 1167;
 
-/// True while GameHub wants the game to see no input.
 #[inline]
-fn blocking() -> bool {
+unsafe fn gate_word(view: usize, index: usize) -> &'static AtomicU32 {
+    unsafe { &*((view as *const AtomicU32).add(index)) }
+}
+
+/// Raw, generation-scoped block latch. It deliberately does not consult the
+/// readiness/capability words: after activation, invalidation must keep every
+/// already-covered API neutral until the launcher has hidden the overlay and
+/// explicitly released BLOCKED. Owner death and target/generation changes
+/// still break the latch immediately without locks or callbacks.
+#[inline]
+pub(crate) fn gate_latched() -> bool {
     let view = FLAG_VIEW.load(Ordering::Acquire);
     if view == 0 {
         return false;
     }
-    let words = view as *const u32;
-    // Aligned u32 stores are atomic on Windows. The launcher writes BLOCKED
-    // last, so any concurrent target transition fails open.
-    let blocked = unsafe { std::ptr::read_volatile(words.add(BLOCKED_WORD)) };
-    if blocked == 0 {
-        return false;
-    }
-    let owner = unsafe { std::ptr::read_volatile(words.add(OWNER_PID_WORD)) };
-    let target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
-    let generation = unsafe { std::ptr::read_volatile(words.add(TARGET_GENERATION_WORD)) };
-    let ready_pid = unsafe { std::ptr::read_volatile(words.add(READY_PID_WORD)) };
-    let ready_generation = unsafe { std::ptr::read_volatile(words.add(READY_GENERATION_WORD)) };
-    let capability_mask = unsafe { std::ptr::read_volatile(words.add(CAPABILITY_MASK_WORD)) };
-    let unsupported_module_mask =
-        unsafe { std::ptr::read_volatile(words.add(UNSUPPORTED_MODULE_MASK_WORD)) };
-    owner != 0
+    let blocked = unsafe { gate_word(view, BLOCKED_WORD).load(Ordering::Acquire) };
+    let owner = unsafe { gate_word(view, OWNER_PID_WORD).load(Ordering::Acquire) };
+    let target = unsafe { gate_word(view, TARGET_PID_WORD).load(Ordering::Acquire) };
+    blocked != 0
+        && owner != 0
         && owner == OWNER_PID.load(Ordering::Acquire)
         && OWNER_ALIVE.load(Ordering::Acquire)
         && target == unsafe { GetCurrentProcessId() }
-        && ready_pid == target
-        && generation != 0
-        && ready_generation == generation
-        && (capability_mask & REQUIRED_CAPABILITIES) == REQUIRED_CAPABILITIES
-        && unsupported_module_mask == 0
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +165,7 @@ type GetProcAddressFn = unsafe extern "system" fn(HMODULE, *const u8) -> *const 
 const XINPUT_STATE_SIZE: usize = 16;
 
 unsafe extern "system" fn hook_xinput_get_state(user_index: u32, state: *mut c_void) -> u32 {
-    if blocking() {
+    if gate_latched() {
         if !state.is_null() {
             unsafe { std::ptr::write_bytes(state as *mut u8, 0, XINPUT_STATE_SIZE) };
         }
@@ -184,7 +182,7 @@ unsafe extern "system" fn hook_xinput_get_state(user_index: u32, state: *mut c_v
 }
 
 unsafe extern "system" fn hook_xinput_get_state_ex(user_index: u32, state: *mut c_void) -> u32 {
-    if blocking() {
+    if gate_latched() {
         if !state.is_null() {
             unsafe { std::ptr::write_bytes(state as *mut u8, 0, XINPUT_STATE_SIZE) };
         }
@@ -198,7 +196,7 @@ unsafe extern "system" fn hook_xinput_get_state_ex(user_index: u32, state: *mut 
 }
 
 unsafe extern "system" fn hook_get_async_key_state(key: i32) -> i16 {
-    if blocking() {
+    if gate_latched() {
         return 0;
     }
     let real = REAL_GET_ASYNC_KEY_STATE.load(Ordering::Acquire);
@@ -209,7 +207,7 @@ unsafe extern "system" fn hook_get_async_key_state(key: i32) -> i16 {
 }
 
 unsafe extern "system" fn hook_get_key_state(key: i32) -> i16 {
-    if blocking() {
+    if gate_latched() {
         return 0;
     }
     let real = REAL_GET_KEY_STATE.load(Ordering::Acquire);
@@ -220,7 +218,7 @@ unsafe extern "system" fn hook_get_key_state(key: i32) -> i16 {
 }
 
 unsafe extern "system" fn hook_get_keyboard_state(state: *mut u8) -> i32 {
-    if blocking() {
+    if gate_latched() {
         if !state.is_null() {
             // The API contract is a 256-entry table; all-zero means every key
             // is up and no toggle is set.
@@ -242,7 +240,7 @@ unsafe extern "system" fn hook_get_raw_input_data(
     size: *mut u32,
     header_size: u32,
 ) -> u32 {
-    if blocking() {
+    if gate_latched() {
         // Zero bytes copied reads as "no input available" to every caller.
         if !size.is_null() {
             unsafe { std::ptr::write(size, 0) };
@@ -269,7 +267,7 @@ unsafe extern "system" fn hook_get_raw_input_buffer(
     size: *mut u32,
     header_size: u32,
 ) -> u32 {
-    if blocking() {
+    if gate_latched() {
         return 0;
     }
     let real = REAL_GET_RAW_INPUT_BUFFER.load(Ordering::Acquire);
@@ -290,7 +288,14 @@ unsafe extern "system" fn hook_get_proc_address(module: HMODULE, name: *const u8
     if resolved.is_null() {
         return resolved;
     }
-    match resolved as usize {
+    let resolved_address = resolved as usize;
+    if let Some(replacement) = direct_input::late_bound_replacement(resolved_address) {
+        return replacement as *const c_void;
+    }
+    if let Some(replacement) = windows_gaming_input::late_bound_replacement(resolved_address) {
+        return replacement as *const c_void;
+    }
+    match resolved_address {
         address if address == REAL_XINPUT_GET_STATE.load(Ordering::Acquire) => {
             hook_xinput_get_state as XInputGetStateFn as *const c_void
         }
@@ -345,7 +350,7 @@ struct ImageImportDescriptor {
 
 /// Guard every header read: a module can be unmapped between enumeration and
 /// inspection, and a torn read inside a game is a crash the user blames on us.
-unsafe fn readable(pointer: *const c_void, len: usize) -> bool {
+pub(crate) unsafe fn readable(pointer: *const c_void, len: usize) -> bool {
     if pointer.is_null() {
         return false;
     }
@@ -504,6 +509,9 @@ unsafe fn patch_module(base: usize, replacements: &[(usize, usize)]) -> PatchCov
 struct LoadedModules {
     bases: Vec<usize>,
     unsupported_module_mask: u32,
+    direct_input_legacy_loaded: bool,
+    direct_input8_loaded: bool,
+    windows_gaming_input_loaded: bool,
     snapshot_complete: bool,
 }
 
@@ -518,18 +526,24 @@ struct LoadedModules {
 fn loaded_modules() -> LoadedModules {
     let mut bases = Vec::new();
     let mut unsupported_module_mask = 0u32;
+    let mut direct_input_legacy_loaded = false;
+    let mut direct_input8_loaded = false;
+    let mut windows_gaming_input_loaded = false;
     let snapshot: HANDLE =
         unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId()) };
     if snapshot == INVALID_HANDLE_VALUE {
         return LoadedModules {
             bases,
             unsupported_module_mask,
+            direct_input_legacy_loaded,
+            direct_input8_loaded,
+            windows_gaming_input_loaded,
             snapshot_complete: false,
         };
     }
     let mut entry: MODULEENTRY32W = unsafe { std::mem::zeroed() };
     entry.dwSize = std::mem::size_of::<MODULEENTRY32W>() as u32;
-    let snapshot_complete = unsafe { Module32FirstW(snapshot, &mut entry) } != 0;
+    let mut snapshot_complete = unsafe { Module32FirstW(snapshot, &mut entry) } != 0;
     if snapshot_complete {
         loop {
             bases.push(entry.modBaseAddr as usize);
@@ -541,18 +555,25 @@ fn loaded_modules() -> LoadedModules {
             let module_name =
                 String::from_utf16_lossy(&entry.szModule[..name_length]).to_ascii_lowercase();
             match module_name.as_str() {
-                "dinput.dll" | "dinput8.dll" => {
-                    unsupported_module_mask |= UNSUPPORTED_DIRECT_INPUT;
+                "dinput.dll" => {
+                    direct_input_legacy_loaded = true;
+                }
+                "dinput8.dll" => {
+                    direct_input8_loaded = true;
                 }
                 "gameinput.dll" | "gameinputredist.dll" => {
                     unsupported_module_mask |= UNSUPPORTED_GAME_INPUT;
                 }
                 "windows.gaming.input.dll" => {
+                    windows_gaming_input_loaded = true;
                     unsupported_module_mask |= UNSUPPORTED_WINDOWS_GAMING_INPUT;
                 }
                 _ => {}
             }
             if unsafe { Module32NextW(snapshot, &mut entry) } == 0 {
+                if unsafe { GetLastError() } != ERROR_NO_MORE_FILES {
+                    snapshot_complete = false;
+                }
                 break;
             }
         }
@@ -561,6 +582,9 @@ fn loaded_modules() -> LoadedModules {
     LoadedModules {
         bases,
         unsupported_module_mask,
+        direct_input_legacy_loaded,
+        direct_input8_loaded,
+        windows_gaming_input_loaded,
         snapshot_complete,
     }
 }
@@ -577,7 +601,7 @@ fn wide(text: &str) -> Vec<u16> {
 /// Deliberately does not `LoadLibrary` XInput into a game that never used it —
 /// there would be nothing to gate, and forcing an unexpected DLL into a process
 /// is the kind of side effect that breaks games.
-fn resolve(module: &str, symbol: &[u8]) -> usize {
+pub(crate) fn resolve(module: &str, symbol: &[u8]) -> usize {
     let handle = unsafe { GetModuleHandleW(wide(module).as_ptr()) };
     if handle.is_null() {
         return 0;
@@ -629,6 +653,8 @@ fn map_flag() -> bool {
 }
 
 fn capture_originals() {
+    direct_input::capture_originals();
+    windows_gaming_input::capture_originals();
     // XInput ships under several names; whichever the game loaded is the one
     // worth gating. 1.3 is the one that never gates on focus by itself.
     for module in ["xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll"] {
@@ -672,7 +698,7 @@ fn capture_originals() {
 }
 
 fn replacement_table() -> Vec<(usize, usize)> {
-    let mut table: Vec<(usize, usize)> = Vec::with_capacity(8);
+    let mut table: Vec<(usize, usize)> = Vec::with_capacity(12);
     let mut push = |slot: &AtomicUsize, hook: usize| {
         let original = slot.load(Ordering::Acquire);
         if original != 0 {
@@ -711,6 +737,10 @@ fn replacement_table() -> Vec<(usize, usize)> {
         &REAL_GET_PROC_ADDRESS,
         hook_get_proc_address as GetProcAddressFn as usize,
     );
+    table.extend(direct_input::replacements());
+    if let Some(replacement) = windows_gaming_input::replacement() {
+        table.push(replacement);
+    }
     table
 }
 
@@ -740,50 +770,68 @@ fn capability_mask() -> u32 {
 /// launcher reads READY_PID as the commit word. Re-checking target/generation
 /// before that final store prevents a late loader (for example Khazan's
 /// steamclient_loader_x64.exe) from acknowledging its BBQ render child.
-fn publish_hook_state(capabilities: u32, unsupported_modules: u32, status: u32) {
+fn publish_hook_state(
+    capabilities: u32,
+    unsupported_modules: u32,
+    status: u32,
+    wgi_publish_token: u64,
+) -> bool {
     let view = FLAG_VIEW.load(Ordering::Acquire);
-    if view == 0 || !OWNER_ALIVE.load(Ordering::Acquire) {
-        return;
+    if view == 0 || !OWNER_ALIVE.load(Ordering::Acquire) || unsupported_modules != 0 {
+        return false;
     }
-    let words = view as *mut u32;
     let current_pid = unsafe { GetCurrentProcessId() };
-    let target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
-    let generation = unsafe { std::ptr::read_volatile(words.add(TARGET_GENERATION_WORD)) };
+    let target = unsafe { gate_word(view, TARGET_PID_WORD).load(Ordering::Acquire) };
+    let generation = unsafe { gate_word(view, TARGET_GENERATION_WORD).load(Ordering::Acquire) };
     if target != current_pid || generation == 0 {
-        return;
+        return false;
     }
 
+    // READY_PID is the commit word. Clear an earlier commit before changing
+    // any payload so the launcher can never observe mixed generations.
     unsafe {
-        std::ptr::write_volatile(words.add(CAPABILITY_MASK_WORD), capabilities);
-        std::ptr::write_volatile(words.add(UNSUPPORTED_MODULE_MASK_WORD), unsupported_modules);
-        std::ptr::write_volatile(words.add(HOOK_STATUS_WORD), status);
-        std::ptr::write_volatile(words.add(READY_GENERATION_WORD), generation);
+        gate_word(view, READY_PID_WORD).store(0, Ordering::Release);
+        gate_word(view, CAPABILITY_MASK_WORD).store(capabilities, Ordering::Release);
+        gate_word(view, UNSUPPORTED_MODULE_MASK_WORD).store(unsupported_modules, Ordering::Release);
+        gate_word(view, HOOK_STATUS_WORD).store(status, Ordering::Release);
+        gate_word(view, READY_GENERATION_WORD).store(generation, Ordering::Release);
     }
 
-    let current_target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
-    let current_generation = unsafe { std::ptr::read_volatile(words.add(TARGET_GENERATION_WORD)) };
-    if current_target == current_pid && current_generation == generation {
-        unsafe { std::ptr::write_volatile(words.add(READY_PID_WORD), current_pid) };
+    let current_target = unsafe { gate_word(view, TARGET_PID_WORD).load(Ordering::Acquire) };
+    let current_generation =
+        unsafe { gate_word(view, TARGET_GENERATION_WORD).load(Ordering::Acquire) };
+    let wgi_current =
+        wgi_publish_token == 0 || windows_gaming_input::publish_token_is_current(wgi_publish_token);
+    if current_target == current_pid
+        && current_generation == generation
+        && OWNER_ALIVE.load(Ordering::Acquire)
+        && wgi_current
+    {
+        unsafe { gate_word(view, READY_PID_WORD).store(current_pid, Ordering::Release) };
+        return true;
     }
+    false
 }
 
-fn invalidate_hook_state(status: u32) {
+pub(crate) fn invalidate_hook_state(status: u32) {
     let view = FLAG_VIEW.load(Ordering::Acquire);
     if view == 0 {
         return;
     }
-    let words = view as *mut u32;
     let current_pid = unsafe { GetCurrentProcessId() };
-    let target = unsafe { std::ptr::read_volatile(words.add(TARGET_PID_WORD)) };
+    let target = unsafe { gate_word(view, TARGET_PID_WORD).load(Ordering::Acquire) };
     if target != current_pid {
         return;
     }
-    // The game stops suppressing input immediately; the launcher observes the
-    // cleared readiness on its next 125 ms target poll and hides the overlay.
+    // READY_PID is invalidated synchronously, but BLOCKED deliberately remains
+    // latched. Already-covered hooks keep returning neutral input until the
+    // launcher observes this record, hides the overlay and explicitly clears
+    // BLOCKED. Clearing here created a fail-open input window during that poll.
     unsafe {
-        std::ptr::write_volatile(words.add(BLOCKED_WORD), 0);
-        std::ptr::write_volatile(words.add(READY_PID_WORD), 0);
-        std::ptr::write_volatile(words.add(HOOK_STATUS_WORD), status);
+        gate_word(view, READY_PID_WORD).store(0, Ordering::Release);
+        gate_word(view, READY_GENERATION_WORD).store(0, Ordering::Release);
+        gate_word(view, CAPABILITY_MASK_WORD).store(0, Ordering::Release);
+        gate_word(view, HOOK_STATUS_WORD).store(status, Ordering::Release);
     }
 }
 
@@ -792,7 +840,7 @@ fn gate_requested() -> bool {
     if view == 0 {
         return false;
     }
-    unsafe { std::ptr::read_volatile((view as *const u32).add(BLOCKED_WORD)) != 0 }
+    unsafe { gate_word(view, BLOCKED_WORD).load(Ordering::Acquire) != 0 }
 }
 
 /// Re-apply the patch forever. Games load renderer plugins, anti-cheat shims
@@ -819,7 +867,7 @@ unsafe extern "system" fn worker(_parameter: *mut c_void) -> u32 {
         let owner = if view == 0 {
             0
         } else {
-            unsafe { std::ptr::read_volatile((view as *const u32).add(OWNER_PID_WORD)) }
+            unsafe { gate_word(view, OWNER_PID_WORD).load(Ordering::Acquire) }
         };
         if owner != monitored_owner {
             OWNER_ALIVE.store(false, Ordering::Release);
@@ -864,23 +912,69 @@ unsafe extern "system" fn worker(_parameter: *mut c_void) -> u32 {
                 let module_count = modules.bases.len() as u32;
                 HOOK_STATUS.store(200 + module_count, Ordering::Release);
                 let mut coverage = PatchCoverage::default();
-                for base in modules.bases {
-                    let module_coverage = unsafe { patch_module(base, &table) };
+                for base in &modules.bases {
+                    let module_coverage = unsafe { patch_module(*base, &table) };
                     coverage.covered = coverage.covered.saturating_add(module_coverage.covered);
                     coverage.failed = coverage.failed.saturating_add(module_coverage.failed);
                 }
-                let capabilities = capability_mask();
+                let direct_input = direct_input::sweep(
+                    modules.direct_input_legacy_loaded,
+                    modules.direct_input8_loaded,
+                );
+                coverage.covered = coverage.covered.saturating_add(direct_input.covered);
+                coverage.failed = coverage.failed.saturating_add(direct_input.failed);
+
+                let wgi = windows_gaming_input::sweep(modules.windows_gaming_input_loaded);
+                coverage.covered = coverage.covered.saturating_add(wgi.covered);
+                coverage.failed = coverage.failed.saturating_add(wgi.failed);
+
+                let mut capabilities = capability_mask();
+                if direct_input.capability_ready {
+                    capabilities |= direct_input::CAPABILITY_DIRECT_INPUT;
+                }
+                if wgi.capability_ready {
+                    capabilities |= windows_gaming_input::CAPABILITY_WINDOWS_GAMING_INPUT;
+                }
+                let mut unsupported_modules = modules.unsupported_module_mask;
+                if direct_input.unsupported {
+                    unsupported_modules |= UNSUPPORTED_DIRECT_INPUT;
+                }
+                if wgi.capability_ready {
+                    unsupported_modules &= !UNSUPPORTED_WINDOWS_GAMING_INPUT;
+                } else if wgi.unsupported {
+                    unsupported_modules |= UNSUPPORTED_WINDOWS_GAMING_INPUT;
+                }
                 let status = 300 + coverage.covered.min((u32::MAX - 300) as usize) as u32;
                 HOOK_STATUS.store(status, Ordering::Release);
                 let coverage_complete = coverage.covered > 0 && coverage.failed == 0;
+                let mut required_capabilities = REQUIRED_BASE_CAPABILITIES;
+                if modules.direct_input_legacy_loaded || modules.direct_input8_loaded {
+                    required_capabilities |= direct_input::CAPABILITY_DIRECT_INPUT;
+                }
+                if modules.windows_gaming_input_loaded {
+                    required_capabilities |= windows_gaming_input::CAPABILITY_WINDOWS_GAMING_INPUT;
+                }
                 let capabilities_complete =
-                    (capabilities & REQUIRED_CAPABILITIES) == REQUIRED_CAPABILITIES;
-                if coverage_complete && capabilities_complete {
-                    publish_hook_state(capabilities, modules.unsupported_module_mask, status);
-                    HOOKS_READY.store(true, Ordering::Release);
+                    (capabilities & required_capabilities) == required_capabilities;
+                if coverage_complete && capabilities_complete && unsupported_modules == 0 {
+                    let published = publish_hook_state(
+                        capabilities,
+                        unsupported_modules,
+                        status,
+                        wgi.publish_token,
+                    );
+                    HOOKS_READY.store(published, Ordering::Release);
+                    if !published {
+                        invalidate_hook_state(status);
+                    }
                 } else {
                     HOOKS_READY.store(false, Ordering::Release);
                     invalidate_hook_state(status);
+                }
+                if direct_input.fast_sweep || wgi.fast_sweep {
+                    module_scan_tick = 0;
+                    unsafe { Sleep(100) };
+                    continue;
                 }
             } else {
                 const NO_HOOKS_STATUS: u32 = 2_600;

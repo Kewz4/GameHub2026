@@ -18,6 +18,7 @@ import {
   raBadgeUrl,
   type RaRecentAchievement,
 } from "./ra-api";
+import { AchievementSouvenirService } from "../achievement-souvenir-service";
 
 /**
  * Maps a launchbox game's `platform` string back to its EmulatorSystem.
@@ -254,6 +255,33 @@ export class RaWatcherManager {
       (prefs?.achievementCustomNotificationsEnabled ?? true) &&
       process.platform !== "darwin";
     const position = prefs?.achievementCustomNotificationPosition ?? "top-left";
+    let souvenirRecordKey: string | null = null;
+    if (
+      prefs?.enableAchievementSouvenirs === true &&
+      process.platform !== "linux"
+    ) {
+      const definition = definitions.find(
+        (candidate) => candidate.name === String(achievement.achievementId)
+      );
+      const earned = unlocked.find(
+        (candidate) => candidate.name === String(achievement.achievementId)
+      );
+      if (definition && earned) {
+        souvenirRecordKey = await AchievementSouvenirService.capture(
+          game,
+          definition,
+          earned.unlockTime
+        ).catch((error) => {
+          achievementsLogger.warn(
+            "Failed to capture RetroAchievements souvenir",
+            game.objectId,
+            achievement.achievementId,
+            error
+          );
+          return null;
+        });
+      }
+    }
     const achievementsInfo = [
       {
         title: achievement.title,
@@ -297,6 +325,10 @@ export class RaWatcherManager {
         gameTitle: achievement.gameTitle || game.title,
         gameIcon: game.iconUrl ?? null,
       });
+    }
+
+    if (souvenirRecordKey) {
+      void AchievementSouvenirService.sync(souvenirRecordKey);
     }
 
     WindowManager.sendToAppWindows("on-achievement-unlocked");

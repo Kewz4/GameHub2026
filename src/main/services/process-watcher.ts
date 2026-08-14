@@ -6,6 +6,7 @@ import { db, gamesSublevel, levelKeys } from "@main/level";
 import { logger, networkLogger } from "./logger";
 import { PowerSaveBlockerManager } from "./power-save-blocker";
 import { OverlayManager } from "./overlay-manager";
+import { shouldActivateOverlayGame } from "./overlay-active-game";
 import fs from "node:fs";
 import path from "node:path";
 import { AchievementWatcherManager } from "./achievements/achievement-watcher-manager";
@@ -20,6 +21,7 @@ import {
   type LinuxProcessInfo,
 } from "./linux-process-match";
 import { isWindowsBatchFile } from "@main/helpers/windows-batch-command";
+import { selectGameExecutablePath } from "@main/helpers/game-executable-path";
 import { runAutomaticCloudSaveAfterExit } from "./cloud-save/automatic-sync-lifecycle";
 import {
   clearCloudSaveLaunchGuard,
@@ -392,8 +394,11 @@ export const watchProcesses = async () => {
       externalLaunch = null;
     }
 
-    // nativeExecutablePath is set for Legendary/GOG games so we can track their real process
-    const executablePath = game.nativeExecutablePath ?? game.executablePath;
+    // Platform URI games use nativeExecutablePath as their discovered process
+    // target. For local/repacked games, however, that value can point at an old
+    // extraction after the user moves the folder; prefer whichever local
+    // candidate still exists so the launch session is not orphaned.
+    const executablePath = selectGameExecutablePath(game);
     const isProtocolUrl = executablePath
       ? /^[a-z][a-z\d+.-]*:\/\//i.test(executablePath)
       : false;
@@ -745,12 +750,10 @@ function onTickGame(game: Game) {
   )!;
 
   const overlayGame = OverlayManager.getActiveGame();
-  if (
-    overlayGame?.objectId === game.objectId &&
-    overlayGame.shop === game.shop
-  ) {
+  if (shouldActivateOverlayGame(overlayGame, game)) {
     // Refresh executable metadata and give a failed shortcut registration a
-    // chance to re-arm while this remains the active overlay session.
+    // chance to re-arm. A null slot means a newer overlapping game just
+    // closed, so this surviving session becomes active again.
     OverlayManager.setActiveGame(game);
   }
 

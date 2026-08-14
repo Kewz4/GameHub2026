@@ -63,6 +63,30 @@ export const isCompletedLikeDownload = (download: Download) => {
   return download.status === "complete" || download.status === "seeding";
 };
 
+/**
+ * A completed torrent may still own a live Python/libtorrent seeding session.
+ * Treat both the explicit state and the persisted intent as authoritative so a
+ * library refresh cannot make that session invisible and uncontrollable.
+ */
+export const isSeedingDownload = (download: Download) => {
+  return download.status === "seeding" || download.shouldSeed;
+};
+
+/**
+ * Passive library/import flows may discard only terminal download history.
+ * Explicit start/restart and delete flows intentionally use their own cleanup
+ * paths and must not use this predicate.
+ */
+export const canDiscardDownload = (download: Download) => {
+  if (download.status === "removed") return true;
+
+  if (isActiveLikeDownload(download) || isSeedingDownload(download)) {
+    return false;
+  }
+
+  return isCompletedLikeDownload(download);
+};
+
 function orderIdsByLayoutState(
   downloads: Download[],
   preferredOrder: string[]

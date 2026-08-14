@@ -8,7 +8,10 @@ import { findLegendaryBinary } from "@main/services/legendary";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import type { UserPreferences } from "@types";
 import { parseExecutablePath } from "../helpers/parse-executable-path";
-import { clearCloudSaveLaunchGuard } from "@main/services/cloud-save/launch-guard";
+import {
+  clearCloudSaveLaunchGuard,
+  clearPendingCloudSaveLaunchSession,
+} from "@main/services/cloud-save/launch-guard";
 import { prepareAutomaticCloudSaveLaunch } from "@main/services/cloud-save/automatic-sync-lifecycle";
 import { runWithCloudSaveLaunchGate } from "@main/services/cloud-save/operation-gate";
 import {
@@ -29,6 +32,31 @@ const EXTERNAL_URL_SCHEMES = [
   "origin2://",
   "link2ea://",
 ];
+
+// shell.openPath can report success even when a game immediately crashes
+// before the two-second process watcher observes it. Do not let that abandoned
+// attempt reserve Cloud Saves V2 forever and block every later launch/sync.
+const LOCAL_LAUNCH_DETECTION_TIMEOUT_MS = 30_000;
+
+const schedulePendingLocalLaunchExpiry = (
+  shop: GameShop,
+  objectId: string,
+  sessionToken: string | null
+) => {
+  if (!sessionToken) return;
+  const timer = setTimeout(() => {
+    if (!clearPendingCloudSaveLaunchSession(objectId, shop, sessionToken)) {
+      return;
+    }
+    WindowManager.closeGameLauncherWindow();
+    logger.warn("Game process did not appear after launch", {
+      shop,
+      objectId,
+      timeoutMs: LOCAL_LAUNCH_DETECTION_TIMEOUT_MS,
+    });
+  }, LOCAL_LAUNCH_DETECTION_TIMEOUT_MS);
+  timer.unref();
+};
 
 const beginTrackedExternalLaunch = async (
   shop: GameShop,
@@ -185,6 +213,11 @@ export const openGame = async (
       }
 
       await launchGame({ shop, objectId, executablePath, launchOptions });
+      schedulePendingLocalLaunchExpiry(
+        shop,
+        objectId,
+        preparation.sessionToken
+      );
     } catch (error) {
       clearExternalGameLaunch(levelKeys.game(shop, objectId));
       clearCloudSaveLaunchGuard(
@@ -192,6 +225,17 @@ export const openGame = async (
         shop,
         preparation.sessionToken ?? undefined
       );
+      WindowManager.closeGameLauncherWindow();
+      logger.error("Game launch failed", {
+        shop,
+        objectId,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorCode:
+          error && typeof error === "object" && "code" in error
+            ? error.code
+            : undefined,
+      });
       throw error;
     }
   });

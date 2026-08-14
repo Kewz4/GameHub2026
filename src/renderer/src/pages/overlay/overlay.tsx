@@ -1973,7 +1973,7 @@ export default function Overlay() {
             <strong>
               {inputGateError
                 ? "Overlay input protection unavailable"
-                : "The overlay is ready"}
+                : "Overlay shortcut available"}
             </strong>
             {inputGateError ? (
               <p>{inputGateError}</p>

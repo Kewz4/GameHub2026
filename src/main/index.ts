@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  crashReporter,
   globalShortcut,
   net,
   powerMonitor,
@@ -12,6 +13,7 @@ import path from "node:path";
 import fs from "node:fs";
 import url from "node:url";
 import os from "node:os";
+import { formatConsoleLogData } from "../shared/console-log";
 
 // ── Early startup log — written before any async work so crashes are visible ──
 function appendStartupLog(message: string): void {
@@ -24,7 +26,7 @@ function appendStartupLog(message: string): void {
     fs.mkdirSync(logDir, { recursive: true });
     fs.appendFileSync(
       path.join(logDir, "startup.log"),
-      `[${new Date().toISOString()}] ${message}\n`,
+      `[${new Date().toISOString()}] ${formatConsoleLogData([message])}\n`,
       "utf8"
     );
   } catch {
@@ -36,40 +38,17 @@ appendStartupLog(`startup pid=${process.pid} packaged=${app.isPackaged}`);
 
 // Catch main-process crashes before the logger is ready.
 process.on("uncaughtException", (err) => {
-  try {
-    const logPath = path.join(
-      process.env.APPDATA ?? path.join(os.homedir(), "AppData/Roaming"),
-      "GameHub",
-      "startup.log"
-    );
-    fs.appendFileSync(
-      logPath,
-      `[${new Date().toISOString()}] UNCAUGHT ${err?.stack ?? err}\n`,
-      "utf8"
-    );
-  } catch {
-    // ignore
-  }
+  // This handler outlives logger initialisation, so it must apply the same
+  // recursive redaction as electron-log. Axios Error instances can carry
+  // Authorization/cookie/R2 credentials below `config` and `request`.
+  appendStartupLog(`UNCAUGHT ${formatConsoleLogData([err])}`);
+  // Continuing after an uncaught exception leaves process-wide invariants
+  // unknowable (including overlay input isolation). The write above is
+  // synchronous; terminate so external owner-death watchdogs can recover.
+  process.exit(1);
 });
 process.on("unhandledRejection", (reason) => {
-  try {
-    const logPath = path.join(
-      process.env.APPDATA ?? path.join(os.homedir(), "AppData/Roaming"),
-      "GameHub",
-      "startup.log"
-    );
-    const msg =
-      reason instanceof Error
-        ? (reason.stack ?? String(reason))
-        : String(reason);
-    fs.appendFileSync(
-      logPath,
-      `[${new Date().toISOString()}] UNHANDLED_REJECTION ${msg}\n`,
-      "utf8"
-    );
-  } catch {
-    // ignore
-  }
+  appendStartupLog(`UNHANDLED_REJECTION ${formatConsoleLogData([reason])}`);
 });
 
 // Ensure app name matches productName so electron-updater uses
@@ -204,6 +183,10 @@ if (_portableExeDir) {
   }
 }
 
+// Keep native crash dumps local. Starting only after portable paths are set
+// ensures ZIP/portable installs write beneath their own data directory.
+crashReporter.start({ uploadToServer: false });
+
 // Let Chromium's HTTP/image disk cache grow to 2 GB (default is ~a few hundred
 // MB with LRU eviction). Game art (covers/heroes/screenshots) dominates load
 // time on every navigation, so a bigger cache means far fewer refetches. The
@@ -238,6 +221,11 @@ import { UpdateCheckerManager } from "./services/update-checker-manager";
 import { GameRecorderManager } from "./services/game-recorder-manager";
 import { NativeAddon } from "./services/native-addon";
 import { getCloudSaveAutomaticSyncEnabled } from "./services/cloud-save/automatic-sync-settings";
+import {
+  CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+  drainCloudSavePostExitOperations,
+} from "./services/cloud-save/pending-post-exit";
+import { AppQuitCleanupCoordinator } from "./services/app-quit-cleanup";
 
 const { autoUpdater } = updater;
 
@@ -327,6 +315,7 @@ app.whenReady().then(async () => {
   refreshShortcuts();
 
   electronApp.setAppUserModelId("io.gamehub.launcher");
+  logger.info("Crash dumps directory", app.getPath("crashDumps"));
 
   // Wire the in-game overlay (perf HUD via PresentMon, injected surface via
   // asdf-overlay, Shift+F3 / Guide toggle). Idempotent; safe on all OSes.
@@ -585,6 +574,23 @@ app.on("browser-window-created", (_, window) => {
   optimizer.watchWindowShortcuts(window);
 });
 
+app.on("child-process-gone", (_event, details) => {
+  logger.error("Child process gone", {
+    type: details.type,
+    reason: details.reason,
+    exitCode: details.exitCode,
+    serviceName: details.serviceName,
+    name: details.name,
+  });
+});
+
+app.on("render-process-gone", (_event, _webContents, details) => {
+  logger.error("Render process gone", {
+    reason: details.reason,
+    exitCode: details.exitCode,
+  });
+});
+
 const handleRunGame = async (shop: GameShop, objectId: string) => {
   const gameKey = levelKeys.game(shop, objectId);
   const game = await gamesSublevel.get(gameKey);
@@ -699,32 +705,52 @@ app.on("window-all-closed", () => {
   WindowManager.mainWindow = null;
 });
 
-let canAppBeClosed = false;
-
-app.on("before-quit", async (e) => {
-  await Lock.releaseLock();
-
-  // Update install in progress — quit immediately so the NSIS installer (or
-  // portable batch file) can overwrite the exe without "file in use" errors.
-  // Still back up auth so NSIS doesn't wipe Epic/GOG sessions, but skip the
-  // async cleanup (PythonRPC kill, playtime flush) that would race the
-  // installer and leave the old process alive.
-  if (UpdateCheckerManager.isApplyingUpdate) {
-    backupAuth();
-    return;
-  }
-
-  if (!canAppBeClosed) {
-    e.preventDefault();
+const quitCleanup = new AppQuitCleanupCoordinator(
+  async () => {
+    await Lock.releaseLock().catch((error: unknown) => {
+      logger.error("Error releasing the app lock during quit", error);
+    });
     PowerSaveBlockerManager.reset();
     /* Disconnects Python RPC */
     PythonRPC.kill();
-    await clearGamesPlaytime();
+    await clearGamesPlaytime().catch((error: unknown) => {
+      logger.error("Failed to flush game state during quit", error);
+    });
+    const cloudSaveDrain = await drainCloudSavePostExitOperations(
+      CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS
+    );
+    if (!cloudSaveDrain.drained) {
+      logger.warn("[Cloud Save] Quit drain reached its deadline", {
+        pending: cloudSaveDrain.pending,
+        timeoutMs: CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+      });
+    }
     // Backup Epic/GOG auth so NSIS updates don't wipe sessions permanently.
     backupAuth();
-    canAppBeClosed = true;
-    app.quit();
+  },
+  () => app.quit(),
+  (error: unknown) => {
+    logger.error("Unexpected app quit cleanup failure", error);
+    backupAuth();
   }
+);
+
+app.on("before-quit", (e) => {
+  // Update install in progress — the update path already performed its
+  // bounded cloud-save drain. Do not delay the installer here.
+  if (UpdateCheckerManager.isApplyingUpdate) {
+    backupAuth();
+    void Lock.releaseLock().catch((error: unknown) => {
+      logger.error("Error releasing the app lock for update", error);
+    });
+    return;
+  }
+
+  quitCleanup.handleBeforeQuit(e);
+});
+
+app.on("will-quit", () => {
+  logger.info("Application will quit");
 });
 
 app.on("activate", () => {

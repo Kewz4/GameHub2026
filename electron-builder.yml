@@ -34,9 +34,19 @@ files:
   - "!src/*"
   - "!native/*/target"
   - "!native/*/target/**"
+  # Fixture-only supervised-overlay research is release-gated source, never a
+  # runtime payload. A separately reviewed/signed production bootstrap must be
+  # added explicitly instead of being swept into app.asar by a broad glob.
+  - "!native/gamehub-overlay-supervisor{,/**}"
+  - "!native/overlay-fixtures{,/**}"
+  - "!third_party/microsoft-detours{,/**}"
+  - "!scripts/build-overlay-qa-supervisor.cjs"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
+  # The tool is copied once via win.extraResources. Excluding it from app.asar
+  # prevents duplication and guarantees a local legacy config/key is not packed.
+  - "!emulator-tool{,/**}"
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
 asarUnpack:
   - resources/**
@@ -56,6 +66,12 @@ win:
     # build that skipped the download doesn't fail packaging.
     - from: emulator-tool
       to: emulator-tool
+      filter:
+        - "**/*"
+        - "!config.json"
+        - "!TEMP/**"
+        - "!**/*.pdb"
+        - "!**/*.log"
     # PresentMon backs the in-game overlay's FPS / frame-time HUD (downloaded by
     # postinstall into ./presentmon). Directory form so a missing binary on a
     # non-overlay build doesn't fail packaging.

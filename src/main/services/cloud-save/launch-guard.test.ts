@@ -51,6 +51,39 @@ describe("cloud save launch guard", () => {
     assert.equal(reservations.size, 0);
   });
 
+  it("releases an undetected pending launch without touching a running one", () => {
+    const reservations = new Map<string, string>();
+    const store = new CloudSaveLaunchSessionStore(
+      (key, token) => reservations.set(key, token),
+      (key, token) => {
+        if (reservations.get(key) === token) reservations.delete(key);
+      }
+    );
+    const pending = store.start("pending-game", "steam", "v2");
+    store.markPending("pending-game", "steam", pending.token);
+
+    assert.equal(
+      store.abortPending("pending-game", "steam", "wrong-token"),
+      false
+    );
+    assert.equal(
+      store.abortPending("pending-game", "steam", pending.token),
+      true
+    );
+    assert.equal(store.get("pending-game", "steam"), null);
+    assert.equal(reservations.size, 0);
+
+    const running = store.start("running-game", "steam", "v2");
+    store.markPending("running-game", "steam", running.token);
+    store.markRunning("running-game", "steam", running.token);
+    assert.equal(
+      store.abortPending("running-game", "steam", running.token),
+      false
+    );
+    assert.equal(store.get("running-game", "steam")?.phase, "running");
+    assert.equal(store.abort("running-game", "steam", running.token), true);
+  });
+
   it("binds environment state to one exactly-once finalization claim", () => {
     const store = new CloudSaveLaunchSessionStore();
     const session = store.start("game", "epic", "v2");

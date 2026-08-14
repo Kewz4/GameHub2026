@@ -3,6 +3,8 @@ export const OVERLAY_INPUT_CAPABILITY = {
   win32Keyboard: 1 << 1,
   rawInput: 1 << 2,
   lateBinding: 1 << 3,
+  directInput: 1 << 4,
+  windowsGamingInput: 1 << 5,
 } as const;
 
 export const OVERLAY_INPUT_REQUIRED_CAPABILITIES =
@@ -16,6 +18,14 @@ export const OVERLAY_INPUT_UNSUPPORTED_MODULE = {
   gameInput: 1 << 1,
   windowsGamingInput: 1 << 2,
 } as const;
+
+// Live IAT-only attachment cannot revoke polling function pointers that a game
+// cached before the first overlay shortcut. Keep interactive Win32 activation
+// disabled until the launcher has a proven pre-entry isolation bootstrap. This
+// is deliberately checked by the controller (not only by its inject adapter),
+// so a stale/resident DLL or forged shared-memory readiness record cannot
+// authorize a visible overlay.
+export const OVERLAY_LIVE_INPUT_ISOLATION_ENABLED = false;
 
 export type OverlayInputGateNativeStatus = {
   ready: boolean;
@@ -47,8 +57,9 @@ export type OverlayInputGateReadiness =
 export type OverlayInputGateAdapter = {
   create: () => boolean;
   set: (targetPid: number, blocked: boolean) => boolean;
-  inject: (targetPid: number) => Promise<boolean>;
+  inject: (targetPid: number, targetIdentity: string) => Promise<boolean>;
   status: (targetPid: number) => OverlayInputGateNativeStatus;
+  authorized?: () => boolean;
   log?: (
     level: "info" | "warn",
     message: string,
@@ -87,6 +98,7 @@ const EMPTY_STATUS: OverlayInputGateNativeStatus = {
 export class OverlayInputGateController {
   private created = false;
   private targetPid = 0;
+  private targetIdentity = "";
   private generation = 0;
   private preparation: Promise<boolean> | null = null;
   private readonly adapter: OverlayInputGateAdapter;
@@ -105,29 +117,35 @@ export class OverlayInputGateController {
   }
 
   /**
-   * Clear the previous target synchronously, publish the new PID/generation,
-   * then prewarm injection in the background. Loader processes are filtered by
-   * the caller; this controller accepts exactly one render PID at a time.
+   * Clear the previous target synchronously and publish its PID/generation.
+   * Injection is deliberately lazy: merely detecting or foregrounding a game
+   * must never load a DLL. Only the explicit shortcut/Guide activation path
+   * calls waitUntilReady(), which starts preparation.
    */
-  public setTarget(targetPid: number) {
+  public setTarget(targetPid: number, targetIdentity = "") {
     const nextPid =
       Number.isInteger(targetPid) && targetPid > 0 ? targetPid : 0;
-    if (nextPid === this.targetPid) return;
+    const nextIdentity = nextPid ? targetIdentity : "";
+    if (nextPid === this.targetPid && nextIdentity === this.targetIdentity) {
+      return;
+    }
+    const reusingPidWithNewIdentity = nextPid > 0 && nextPid === this.targetPid;
 
     this.release();
     this.generation += 1;
     this.targetPid = nextPid;
+    this.targetIdentity = nextIdentity;
     this.preparation = null;
 
     if (!this.initialize()) return;
+    if (reusingPidWithNewIdentity && !this.adapter.set(0, false)) {
+      this.created = false;
+      return;
+    }
     if (!this.adapter.set(nextPid, false)) {
       this.created = false;
       return;
     }
-    if (!nextPid) return;
-
-    const generation = this.generation;
-    this.preparation = this.prepare(nextPid, generation);
   }
 
   /** Wait for the target DLL's positive, generation-scoped handshake. */
@@ -136,6 +154,10 @@ export class OverlayInputGateController {
     timeoutMs = 3_000,
     pollIntervalMs = 25
   ): Promise<OverlayInputGateReadiness> {
+    if (!this.isAuthorized()) {
+      this.release();
+      return { ready: false, reason: "unavailable", status: null };
+    }
     if (!this.created || targetPid !== this.targetPid || targetPid <= 0) {
       return {
         ready: false,
@@ -148,15 +170,35 @@ export class OverlayInputGateController {
     }
 
     const generation = this.generation;
-    const prepared = await (this.preparation ?? Promise.resolve(false));
+    const targetIdentity = this.targetIdentity;
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    if (!this.preparation) {
+      const preparation = this.prepare(targetPid, targetIdentity, generation);
+      this.preparation = preparation;
+      void preparation.then((prepared) => {
+        if (!prepared && this.preparation === preparation) {
+          // A transient injection refusal must not poison this PID forever.
+          // The next explicit shortcut may retry; target/generation fencing
+          // still prevents a late completion from authorizing another game.
+          this.preparation = null;
+        }
+      });
+    }
+    const preparation = this.preparation;
+    let preparationTimer: ReturnType<typeof setTimeout> | null = null;
+    const prepared = await Promise.race([
+      preparation,
+      new Promise<false>((resolve) => {
+        preparationTimer = setTimeout(
+          () => resolve(false),
+          Math.max(0, deadline - Date.now())
+        );
+      }),
+    ]);
+    if (preparationTimer) clearTimeout(preparationTimer);
     if (generation !== this.generation || targetPid !== this.targetPid) {
       return { ready: false, reason: "target-changed", status: null };
     }
-    if (!prepared) {
-      return { ready: false, reason: "unavailable", status: this.readStatus() };
-    }
-
-    const deadline = Date.now() + Math.max(0, timeoutMs);
     let status = this.readStatus();
     for (;;) {
       const evaluated = this.evaluateStatus(targetPid, status);
@@ -167,7 +209,11 @@ export class OverlayInputGateController {
         return { ready: false, reason: "target-changed", status };
       }
       if (Date.now() >= deadline) {
-        return { ready: false, reason: "timeout", status };
+        return {
+          ready: false,
+          reason: prepared ? "timeout" : "unavailable",
+          status,
+        };
       }
       await new Promise((resolve) =>
         setTimeout(resolve, Math.max(1, pollIntervalMs))
@@ -181,17 +227,28 @@ export class OverlayInputGateController {
    * The native setter independently enforces the same readiness record.
    */
   public activate(targetPid: number) {
+    if (!this.isAuthorized()) {
+      this.release();
+      return false;
+    }
     if (!this.created || targetPid !== this.targetPid || targetPid <= 0) {
       return false;
     }
-    const readiness = this.evaluateStatus(targetPid, this.readStatus());
+    const currentStatus = this.readStatus();
+    const readiness = this.evaluateStatus(targetPid, currentStatus);
     if (!readiness.ready) {
-      this.release();
+      // If native isolation is already latched, keep it latched until the
+      // caller hides the overlay. Releasing here creates a visible double-input
+      // interval during a focus-triggered revalidation failure.
+      if (!currentStatus.blocked) this.release();
       return false;
     }
     const blocked = this.adapter.set(targetPid, true);
     if (!blocked) {
-      this.adapter.set(targetPid, false);
+      // Native activation preserves an existing fail-safe latch when its
+      // post-arm read detects concurrent invalidation. The caller will hide
+      // synchronously and release afterwards.
+      if (!currentStatus.blocked) this.adapter.set(targetPid, false);
       this.adapter.log?.("warn", "Overlay input gate refused activation", {
         targetPid,
       });
@@ -201,6 +258,10 @@ export class OverlayInputGateController {
 
   /** Revalidate an active target, including newly observed input modules. */
   public inspect(targetPid = this.targetPid): OverlayInputGateReadiness {
+    if (!this.isAuthorized()) {
+      this.release();
+      return { ready: false, reason: "unavailable", status: null };
+    }
     if (!this.created || targetPid !== this.targetPid || targetPid <= 0) {
       return {
         ready: false,
@@ -226,15 +287,25 @@ export class OverlayInputGateController {
     this.release();
     this.generation += 1;
     this.targetPid = 0;
+    this.targetIdentity = "";
     this.preparation = null;
     if (this.created) this.adapter.set(0, false);
     this.created = false;
   }
 
-  private async prepare(targetPid: number, generation: number) {
+  private async prepare(
+    targetPid: number,
+    targetIdentity: string,
+    generation: number
+  ) {
+    if (!this.isAuthorized()) return false;
     try {
-      const injected = await this.adapter.inject(targetPid);
-      if (generation !== this.generation || targetPid !== this.targetPid) {
+      const injected = await this.adapter.inject(targetPid, targetIdentity);
+      if (
+        generation !== this.generation ||
+        targetPid !== this.targetPid ||
+        targetIdentity !== this.targetIdentity
+      ) {
         return false;
       }
       if (!injected) {
@@ -262,6 +333,10 @@ export class OverlayInputGateController {
     } catch {
       return EMPTY_STATUS;
     }
+  }
+
+  private isAuthorized() {
+    return this.adapter.authorized?.() ?? true;
   }
 
   private evaluateStatus(

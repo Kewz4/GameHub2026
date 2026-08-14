@@ -95,8 +95,11 @@ export const getThemeSoundPath = (
 
 export * from "./reg-parser";
 export * from "./launch-game";
+export * from "./game-executable-path";
+export * from "./open-native-game-executable";
 export * from "./download-error-handler";
 export * from "./download-game-helper";
+export * from "./global-trackers";
 export * from "./launch-classics-game";
 
 import type { EmulatorSystem } from "@types";

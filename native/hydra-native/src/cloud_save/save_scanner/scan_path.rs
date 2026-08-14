@@ -73,6 +73,32 @@ fn portable_relative_path(path: &Path) -> String {
         .join("/")
 }
 
+// Insomniac's PC games place crash reporter state beside their real settings:
+//   .../crs/reports/<uuid>.dmp
+//   .../crs/attachments/<uuid>/crash-report.txt
+// A directory manifest for `crs` therefore used to upload multi-megabyte crash
+// dumps on every failure. Match only those two reporter layouts; notably,
+// `crs/settings.dat`, `crs/metadata`, and unrelated .dmp files remain eligible.
+fn is_transient_crash_report_path(path: &Path) -> bool {
+    let normalized = format!("/{}", portable_relative_path(path)).to_ascii_lowercase();
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+
+    (normalized.contains("/crs/reports/")
+        && path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("dmp")))
+        || (normalized.contains("/crs/attachments/")
+            && file_name.eq_ignore_ascii_case("crash-report.txt"))
+}
+
+fn should_skip_scanned_file(path: &Path) -> bool {
+    is_cloud_save_artifact_path(path) || is_transient_crash_report_path(path)
+}
+
 fn canonical_path(path: &Path) -> Result<String, String> {
     std::fs::canonicalize(path)
         .map_err(|error| format!("cloud_save_filesystem_error: {error}"))
@@ -372,7 +398,7 @@ fn scan_directory(
         .follow_links(follow_links)
     {
         let entry = entry.map_err(|error| format!("cloud_save_filesystem_error: {error}"))?;
-        if !entry.file_type().is_file() || is_cloud_save_artifact_path(entry.path()) {
+        if !entry.file_type().is_file() || should_skip_scanned_file(entry.path()) {
             continue;
         }
 
@@ -409,7 +435,7 @@ fn add_file(
     budget: &mut ScanBudget,
     store_user_id: Option<&str>,
 ) -> Result<String, String> {
-    if is_cloud_save_artifact_path(file) {
+    if should_skip_scanned_file(file) {
         return Ok(String::new());
     }
     let resolved_root = canonical_path(root)?;
@@ -860,6 +886,42 @@ mod tests {
         assert!(relative_paths.contains(&".hydra-restore-save.dat"));
         assert!(relative_paths.contains(&".hydra-delete-save.dat"));
         assert!(relative_paths.contains(&"save.dat"));
+    }
+
+    #[test]
+    fn excludes_insomniac_crash_dumps_but_keeps_crs_settings() {
+        let temp = tempdir().unwrap();
+        let crs = temp.path().join("crs");
+        let reports = crs.join("reports");
+        let attachments = crs.join("attachments").join("incident-id");
+        let unrelated_reports = temp.path().join("reports");
+        fs::create_dir_all(&reports).unwrap();
+        fs::create_dir_all(&attachments).unwrap();
+        fs::create_dir_all(&unrelated_reports).unwrap();
+        fs::write(crs.join("settings.dat"), b"settings").unwrap();
+        fs::write(crs.join("metadata"), b"metadata").unwrap();
+        fs::write(reports.join("incident.dmp"), b"large crash dump").unwrap();
+        fs::write(
+            attachments.join("crash-report.txt"),
+            b"crash report metadata",
+        )
+        .unwrap();
+        fs::write(attachments.join("user-note.txt"), b"user data").unwrap();
+        fs::write(unrelated_reports.join("state.dmp"), b"game data").unwrap();
+
+        let scanned = scan_resolved_path(&temp.path().display().to_string(), true, None).unwrap();
+        let relative_paths = scanned[0]
+            .files
+            .iter()
+            .map(|file| file.relative_path.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(!relative_paths.contains(&"crs/reports/incident.dmp"));
+        assert!(!relative_paths.contains(&"crs/attachments/incident-id/crash-report.txt"));
+        assert!(relative_paths.contains(&"crs/settings.dat"));
+        assert!(relative_paths.contains(&"crs/metadata"));
+        assert!(relative_paths.contains(&"crs/attachments/incident-id/user-note.txt"));
+        assert!(relative_paths.contains(&"reports/state.dmp"));
     }
 
     #[cfg(unix)]

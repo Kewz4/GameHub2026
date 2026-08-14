@@ -4,9 +4,11 @@ import {
   UsersIcon,
   TrophyIcon,
   GameControllerIcon,
+  ImagesSquareIcon,
 } from "@phosphor-icons/react";
 import type {
   AchievementGameStat,
+  ProfileAchievementSouvenir,
   UserGame,
   UserLibraryResponse,
   UserProfile,
@@ -17,6 +19,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Button,
   GridFocusGroup,
+  ImageLightbox,
   Tabs,
   Typography,
   VerticalFocusGroup,
@@ -34,11 +37,14 @@ import {
   PROFILE_GAMES_TAB_ID,
   PROFILE_PAGE_ACTIONS_REGION_ID,
   PROFILE_PAGE_GAMES_REGION_ID,
+  PROFILE_PAGE_SOUVENIRS_REGION_ID,
   PROFILE_PAGE_REGION_ID,
   PROFILE_PAGE_SORT_REGION_ID,
   PROFILE_PAGE_TABS_REGION_ID,
   PROFILE_RETRY_BUTTON_ID,
+  PROFILE_SOUVENIRS_TAB_ID,
   getProfileGameFocusId,
+  getProfileSouvenirFocusId,
   getProfileSortFocusId,
 } from "./navigation";
 import {
@@ -136,6 +142,9 @@ export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [games, setGames] = useState<UserGame[]>([]);
+  const [souvenirs, setSouvenirs] = useState<ProfileAchievementSouvenir[]>([]);
+  const [selectedSouvenir, setSelectedSouvenir] =
+    useState<ProfileAchievementSouvenir | null>(null);
   const [activeView, setActiveView] = useState<BigPictureProfileView>("games");
   const [sortBy, setSortBy] = useState<BigPictureProfileSort>("playedRecently");
   const [loading, setLoading] = useState(true);
@@ -160,6 +169,16 @@ export default function Profile() {
     const achievementStatsRequest: Promise<AchievementGameStat[]> = isOwnProfile
       ? globalThis.window.electron.getAchievementGames()
       : Promise.resolve([]);
+    const souvenirsRequest: Promise<ProfileAchievementSouvenir[]> = isOwnProfile
+      ? globalThis.window.electron.getAchievementSouvenirs(userId)
+      : Promise.resolve([]);
+    void souvenirsRequest
+      .then((result) => {
+        if (requestId === loadRequestIdRef.current) setSouvenirs(result);
+      })
+      .catch(() => {
+        if (requestId === loadRequestIdRef.current) setSouvenirs([]);
+      });
 
     const [profileResult, statsResult, libraryResult, achievementsResult] =
       await Promise.allSettled([
@@ -208,6 +227,8 @@ export default function Profile() {
     setProfile(null);
     setStats(null);
     setGames([]);
+    setSouvenirs([]);
+    setSelectedSouvenir(null);
     setActiveView("games");
     setSortBy("playedRecently");
     setLoading(true);
@@ -255,6 +276,7 @@ export default function Profile() {
   }, [stats, games]);
 
   const displayedGames = useMemo(() => {
+    if (activeView === "souvenirs") return [];
     const selectedGames =
       activeView === "achievements"
         ? games.filter(profileGameHasAchievements)
@@ -289,8 +311,22 @@ export default function Profile() {
           </span>
         ),
       },
+      ...(isOwnProfile
+        ? [
+            {
+              id: PROFILE_SOUVENIRS_TAB_ID,
+              value: "souvenirs" as const,
+              label: (
+                <span className="bp-profile__tab-label">
+                  <ImagesSquareIcon size={18} />
+                  Souvenirs
+                </span>
+              ),
+            },
+          ]
+        : []),
     ],
-    []
+    [isOwnProfile]
   );
 
   const sortTabs = useMemo(
@@ -494,27 +530,86 @@ export default function Profile() {
               ariaLabel="Profile content"
               className="bp-profile__view-tabs"
             />
-            <Tabs
-              items={sortTabs}
-              value={sortBy}
-              onValueChange={setSortBy}
-              variant="segmented"
-              regionId={PROFILE_PAGE_SORT_REGION_ID}
-              ariaLabel="Sort profile games"
-              className="bp-profile__sort-tabs"
-            />
+            {activeView !== "souvenirs" ? (
+              <Tabs
+                items={sortTabs}
+                value={sortBy}
+                onValueChange={setSortBy}
+                variant="segmented"
+                regionId={PROFILE_PAGE_SORT_REGION_ID}
+                ariaLabel="Sort profile games"
+                className="bp-profile__sort-tabs"
+              />
+            ) : null}
           </div>
 
           <div className="bp-profile__section__heading">
             <Typography className="bp-profile__section__title">
-              {activeView === "achievements" ? "Achievements" : "Games"}
+              {activeView === "achievements"
+                ? "Achievements"
+                : activeView === "souvenirs"
+                  ? "Achievement souvenirs"
+                  : "Games"}
             </Typography>
             <Typography className="bp-profile__section__count">
-              {formatNumber(displayedGames.length)} shown
+              {formatNumber(
+                activeView === "souvenirs"
+                  ? souvenirs.length
+                  : displayedGames.length
+              )}{" "}
+              shown
             </Typography>
           </div>
 
-          {displayedGames.length === 0 ? (
+          {activeView === "souvenirs" ? (
+            souvenirs.length === 0 ? (
+              <div className="bp-profile__empty" role="status">
+                <ImagesSquareIcon size={34} aria-hidden="true" />
+                <div>
+                  <Typography className="bp-profile__empty__title">
+                    No achievement souvenirs yet
+                  </Typography>
+                  <Typography className="bp-profile__empty__description">
+                    Enable souvenir capture in Content & gameplay, then unlock
+                    an achievement.
+                  </Typography>
+                </div>
+              </div>
+            ) : (
+              <GridFocusGroup
+                regionId={PROFILE_PAGE_SOUVENIRS_REGION_ID}
+                className="bp-profile__souvenirs"
+              >
+                {souvenirs.map((souvenir) => (
+                  <Button
+                    key={`${souvenir.shop}:${souvenir.objectId}:${souvenir.achievementName}`}
+                    focusId={getProfileSouvenirFocusId(
+                      souvenir.shop,
+                      souvenir.objectId,
+                      souvenir.achievementName
+                    )}
+                    variant="tertiary"
+                    className="bp-profile__souvenir"
+                    aria-label={`View ${souvenir.achievementDisplayName} souvenir from ${souvenir.gameTitle}`}
+                    onClick={() => setSelectedSouvenir(souvenir)}
+                  >
+                    <span className="bp-profile__souvenir__inner">
+                      <img
+                        src={souvenir.imageUrl}
+                        alt=""
+                        className="bp-profile__souvenir__image"
+                        draggable={false}
+                      />
+                      <span className="bp-profile__souvenir__copy">
+                        <strong>{souvenir.achievementDisplayName}</strong>
+                        <span>{souvenir.gameTitle}</span>
+                      </span>
+                    </span>
+                  </Button>
+                ))}
+              </GridFocusGroup>
+            )
+          ) : displayedGames.length === 0 ? (
             <div className="bp-profile__empty" role="status">
               {activeView === "achievements" ? (
                 <TrophyIcon size={34} aria-hidden="true" />
@@ -610,6 +705,14 @@ export default function Profile() {
             </GridFocusGroup>
           )}
         </section>
+
+        {selectedSouvenir ? (
+          <ImageLightbox
+            src={selectedSouvenir.imageUrl}
+            alt={`${selectedSouvenir.achievementDisplayName} achievement souvenir`}
+            onClose={() => setSelectedSouvenir(null)}
+          />
+        ) : null}
       </section>
     </VerticalFocusGroup>
   );

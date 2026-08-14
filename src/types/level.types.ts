@@ -148,6 +148,8 @@ export interface Download {
   customDownload?: {
     sourceType: "link" | "magnet" | "torrent";
   };
+  /** Validated, user-configured trackers captured when this torrent was added. */
+  customTrackers?: string[];
 }
 
 export interface DownloadLayoutState {
@@ -268,6 +270,8 @@ export interface UserPreferences {
   extractFilesByDefault?: boolean;
   deleteArchiveFilesAfterExtractionByDefault?: boolean;
   enableSteamAchievements?: boolean;
+  /** Capture an achievement souvenir locally and mirror it to account R2. */
+  enableAchievementSouvenirs?: boolean;
   retroAchievementsUsername?: string;
   retroAchievementsApiKey?: string;
   /**
@@ -282,6 +286,9 @@ export interface UserPreferences {
   createStartMenuShortcut?: boolean;
   maxDownloadSpeedBytesPerSecond?: number | null;
   torrentNetworkInterface?: string | null;
+  /** Local-only tracker URLs appended to newly created torrents when enabled. */
+  globalTrackers?: string[];
+  appendGlobalTrackers?: boolean;
   defaultProtonPath?: string | null;
   defaultWinePrefixPath?: string | null;
   autoRunMangohud?: boolean;

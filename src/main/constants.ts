@@ -74,6 +74,12 @@ export const controllerTestersPath = app.isPackaged
 
 export const backupsPath = path.join(getUserDataPath(), "Backups");
 
+export const achievementSouvenirsPath = path.join(
+  getUserDataPath(),
+  "Screenshots",
+  "Achievements"
+);
+
 /** Root folder under which portable emulator builds are installed. */
 export const emulatorsInstallPath = path.join(getUserDataPath(), "emulators");
 

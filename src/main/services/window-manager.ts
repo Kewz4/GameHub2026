@@ -31,6 +31,7 @@ import { orderBy, slice } from "lodash-es";
 import path from "node:path";
 import UserAgent from "user-agents";
 import { AUTH_REBRAND_CSS, AUTH_REBRAND_JS } from "./auth-rebrand";
+import { CoalescedWindowCreation } from "./coalesced-window-creation";
 import { HydraApi } from "./hydra-api";
 import { setConsoleWindowSender } from "./logger";
 
@@ -45,20 +46,26 @@ export class WindowManager {
   private static friendsWindow: Electron.BrowserWindow | null = null;
   private static authWindow: Electron.BrowserWindow | null = null;
   private static deferredMainMaximize = false;
+  private static readonly notificationWindowCreation =
+    new CoalescedWindowCreation<Electron.BrowserWindow>();
 
   private static readonly AUTH_WINDOW_WIDTH = 600;
   private static readonly AUTH_WINDOW_HEIGHT = 640;
   private static readonly AUTH_WINDOW_TITLE_BAR_HEIGHT = 34;
   private static readonly AUTH_WINDOW_BORDER = 1;
+  private static readonly DEFAULT_WINDOW_WIDTH = 1200;
+  private static readonly DEFAULT_WINDOW_HEIGHT = 860;
+  private static readonly MIN_WINDOW_WIDTH = 1024;
+  private static readonly MIN_WINDOW_HEIGHT = 600;
 
   private static readonly editorWindows: Map<string, BrowserWindow> = new Map();
 
   private static initialConfigInitializationMainWindow: Electron.BrowserWindowConstructorOptions =
     {
-      width: 1200,
-      height: 860,
-      minWidth: 1024,
-      minHeight: 860,
+      width: WindowManager.DEFAULT_WINDOW_WIDTH,
+      height: WindowManager.DEFAULT_WINDOW_HEIGHT,
+      minWidth: WindowManager.MIN_WINDOW_WIDTH,
+      minHeight: WindowManager.MIN_WINDOW_HEIGHT,
       backgroundColor: "#1c1c1c",
       titleBarStyle: process.platform === "linux" ? "default" : "hidden",
       icon,
@@ -82,13 +89,13 @@ export class WindowManager {
     // HMR for renderer base on electron-vite cli.
     // Load the remote URL for development or the local html file for production.
     if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-      window.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}#/${hash}`);
+      return window.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}#/${hash}`);
     } else {
       // This fork ships the renderer bundled inside the app. Upstream Hydra
       // hosts a per-version renderer on a CDN subdomain, but we don't deploy
       // there — loading that remote URL would show a blank window — so always
       // load the local file in production.
-      window.loadFile(path.join(__dirname, "../renderer/index.html"), {
+      return window.loadFile(path.join(__dirname, "../renderer/index.html"), {
         hash,
       });
     }
@@ -149,6 +156,45 @@ export class WindowManager {
     return data ?? { isMaximized: false, height: 860, width: 1200 };
   }
 
+  private static fitToWorkArea<
+    T extends { x?: number; y?: number; width?: number; height?: number },
+  >(bounds: T) {
+    const savedWidth = bounds.width ?? this.DEFAULT_WINDOW_WIDTH;
+    const savedHeight = bounds.height ?? this.DEFAULT_WINDOW_HEIGHT;
+    const savedX = bounds.x;
+    const savedY = bounds.y;
+    const hasSavedPosition = savedX !== undefined && savedY !== undefined;
+    const { workArea } = hasSavedPosition
+      ? screen.getDisplayMatching({
+          x: savedX,
+          y: savedY,
+          width: savedWidth,
+          height: savedHeight,
+        })
+      : screen.getPrimaryDisplay();
+    const minWidth = Math.min(this.MIN_WINDOW_WIDTH, workArea.width);
+    const minHeight = Math.min(this.MIN_WINDOW_HEIGHT, workArea.height);
+    const width = Math.max(minWidth, Math.min(savedWidth, workArea.width));
+    const height = Math.max(minHeight, Math.min(savedHeight, workArea.height));
+
+    if (!hasSavedPosition) {
+      return { ...bounds, minWidth, minHeight, width, height };
+    }
+
+    const maxX = Math.max(workArea.x, workArea.x + workArea.width - width);
+    const maxY = Math.max(workArea.y, workArea.y + workArea.height - height);
+
+    return {
+      ...bounds,
+      minWidth,
+      minHeight,
+      width,
+      height,
+      x: Math.min(Math.max(savedX, workArea.x), maxX),
+      y: Math.min(Math.max(savedY, workArea.y), maxY),
+    };
+  }
+
   private static updateInitialConfig(
     newConfig: Partial<Electron.BrowserWindowConstructorOptions>
   ) {
@@ -170,7 +216,7 @@ export class WindowManager {
     const { isMaximized = false, ...configWithoutMaximized } =
       await this.loadScreenConfig();
 
-    this.updateInitialConfig(configWithoutMaximized);
+    this.updateInitialConfig(this.fitToWorkArea(configWithoutMaximized));
 
     this.mainWindow = new BrowserWindow(
       this.initialConfigInitializationMainWindow
@@ -705,12 +751,7 @@ export class WindowManager {
   private static async raiseAndShowOverlay(): Promise<Electron.BrowserWindow | null> {
     if (process.platform === "darwin") return null;
 
-    if (!this.notificationWindow || this.notificationWindow.isDestroyed()) {
-      this.notificationWindow = null;
-      await this.createNotificationWindow();
-    }
-
-    const win = this.notificationWindow;
+    const win = await this.createNotificationWindow();
     if (!win || win.isDestroyed()) return null;
 
     this.raiseOverFullscreen(win);
@@ -767,11 +808,22 @@ export class WindowManager {
     return false;
   }
 
-  public static async createNotificationWindow() {
-    if (this.notificationWindow) return;
+  public static createNotificationWindow() {
+    return this.notificationWindowCreation.getOrCreate(
+      () => {
+        if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+          return this.notificationWindow;
+        }
+        this.notificationWindow = null;
+        return null;
+      },
+      () => this.createNotificationWindowInternal()
+    );
+  }
 
+  private static async createNotificationWindowInternal(): Promise<Electron.BrowserWindow | null> {
     if (process.platform === "darwin" || process.platform === "linux") {
-      return;
+      return null;
     }
 
     const userPreferences = await db.get<string, UserPreferences | undefined>(
@@ -785,14 +837,14 @@ export class WindowManager {
       userPreferences?.achievementNotificationsEnabled === false ||
       userPreferences?.achievementCustomNotificationsEnabled === false
     ) {
-      return;
+      return null;
     }
 
     const { x, y } = await this.getNotificationWindowPosition(
       userPreferences?.achievementCustomNotificationPosition
     );
 
-    this.notificationWindow = new BrowserWindow({
+    const notificationWindow = new BrowserWindow({
       transparent: true,
       maximizable: false,
       autoHideMenuBar: true,
@@ -811,14 +863,55 @@ export class WindowManager {
         sandbox: false,
       },
     });
-    this.notificationWindow.setIgnoreMouseEvents(true);
-
-    this.notificationWindow.setAlwaysOnTop(true, "screen-saver", 1);
-    this.loadWindowURL(this.notificationWindow, "achievement-notification");
-
-    this.notificationWindow.once("ready-to-show", () => {
-      // Window stays hidden until a notification is actually sent.
+    this.notificationWindow = notificationWindow;
+    notificationWindow.once("closed", () => {
+      if (this.notificationWindow === notificationWindow) {
+        this.notificationWindow = null;
+      }
     });
+    notificationWindow.setIgnoreMouseEvents(true);
+    notificationWindow.setAlwaysOnTop(true, "screen-saver", 1);
+
+    // `did-finish-load` is too early: React effects may not have subscribed to
+    // the unlock channels yet. Wait for a renderer message sent only after the
+    // listeners are installed, so the very first unlock cannot be dropped.
+    const rendererReady = new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (ready: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        notificationWindow.webContents.removeListener(
+          "ipc-message",
+          onIpcMessage
+        );
+        notificationWindow.removeListener("closed", onClosedBeforeReady);
+        resolve(ready);
+      };
+      const onIpcMessage = (_event: Electron.Event, channel: string) => {
+        if (channel === "achievement-notification-renderer-ready") {
+          finish(true);
+        }
+      };
+      const onClosedBeforeReady = () => finish(false);
+      const timeout = setTimeout(() => finish(false), 5_000);
+      notificationWindow.webContents.on("ipc-message", onIpcMessage);
+      notificationWindow.once("closed", onClosedBeforeReady);
+    });
+
+    try {
+      await this.loadWindowURL(notificationWindow, "achievement-notification");
+    } catch {
+      if (!notificationWindow.isDestroyed()) notificationWindow.destroy();
+      await rendererReady;
+      return null;
+    }
+
+    if (!(await rendererReady)) {
+      if (!notificationWindow.isDestroyed()) notificationWindow.destroy();
+      return null;
+    }
+    return notificationWindow;
   }
 
   public static async showAchievementTestNotification() {
@@ -848,19 +941,25 @@ export class WindowManager {
       return;
     }
 
-    this.notificationWindow?.show();
-    this.notificationWindow?.webContents.send(
-      "on-achievement-unlocked",
-      position,
-      testAchievements
-    );
+    await this.showAchievementNotification(position, testAchievements);
   }
 
   public static async closeNotificationWindow() {
-    if (this.notificationWindow) {
-      this.notificationWindow.close();
+    const currentWindow = this.notificationWindow;
+    if (currentWindow && !currentWindow.isDestroyed()) {
+      currentWindow.close();
+    }
+    if (this.notificationWindow === currentWindow) {
       this.notificationWindow = null;
     }
+
+    // Creation may still be awaiting preferences or renderer readiness. Let it
+    // settle, then close a window it published after the first check.
+    await this.notificationWindowCreation.waitForPending();
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.close();
+    }
+    this.notificationWindow = null;
   }
 
   /**

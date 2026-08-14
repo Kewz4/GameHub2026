@@ -1,6 +1,6 @@
 import type { AchievementGameStat, UserGame } from "@types";
 
-export type BigPictureProfileView = "games" | "achievements";
+export type BigPictureProfileView = "games" | "achievements" | "souvenirs";
 
 export type BigPictureProfileSort =
   | "playedRecently"

@@ -31,6 +31,8 @@ export interface ProcessPayload {
   exe: string | null;
   pid: number;
   name: string;
+  startTime?: number;
+  start_time?: number;
   environ?: Record<string, string> | null;
   cwd?: string | null;
 }

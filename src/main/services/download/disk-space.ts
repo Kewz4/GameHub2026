@@ -1,6 +1,6 @@
-import checkDiskSpace from "check-disk-space";
 import { MINIMUM_FREE_DISK_SPACE_BYTES } from "@shared";
 import type { Download } from "@types";
+import { getDiskUsage } from "../disk-usage";
 
 /**
  * Free space is re-read on a timer rather than on every progress tick: the
@@ -24,24 +24,20 @@ const getRemainingBytes = (download: Download) => {
 export const getDownloadDiskSpace = async (
   download: Download
 ): Promise<DownloadDiskSpace | null> => {
-  try {
-    const { free } = await checkDiskSpace(download.downloadPath);
+  const usage = await getDiskUsage(download.downloadPath);
 
-    // An unknown file size still has to clear the headroom, so a download of
-    // indeterminate size cannot start onto an already-full drive.
-    const requiredBytes = Math.max(
-      getRemainingBytes(download),
-      MINIMUM_FREE_DISK_SPACE_BYTES
-    );
+  if (!usage) return null;
 
-    return {
-      freeBytes: free,
-      requiredBytes,
-      hasEnoughSpace: free >= requiredBytes,
-    };
-  } catch {
-    // An unreadable path (removed drive, permissions) must not be treated as
-    // "full" — the caller carries on and the download fails on its own terms.
-    return null;
-  }
+  // An unknown file size still has to clear the headroom, so a download of
+  // indeterminate size cannot start onto an already-full drive.
+  const requiredBytes = Math.max(
+    getRemainingBytes(download),
+    MINIMUM_FREE_DISK_SPACE_BYTES
+  );
+
+  return {
+    freeBytes: usage.free,
+    requiredBytes,
+    hasEnoughSpace: usage.free >= requiredBytes,
+  };
 };

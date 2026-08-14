@@ -70,19 +70,9 @@ export function normalizeTorBoxProgress(progress: unknown) {
   return Math.max(0, Math.min(normalized, 1));
 }
 
-/**
- * TorBox explicitly documents `completed` as a client state that must not be
- * used to decide download availability. The materialized/cached flags are the
- * authoritative signal; progress is display-only.
- */
+/** TorBox only exposes a downloadable item once it is finished and present. */
 export function isTorBoxItemReady(item: TorBoxReadyState | null | undefined) {
-  if (!item || item.download_present === false) return false;
-  return (
-    item.download_finished === true ||
-    item.cached === true ||
-    item.download_state === "cached" ||
-    item.download_state === "uploading"
-  );
+  return Boolean(item?.download_finished && item.download_present);
 }
 
 export function findMatchingTorBoxWebDownload<

@@ -35,6 +35,10 @@ describe("settings backup policy", () => {
       retroAchievementsToken: "secret",
       spotifyClientId: "client-id",
       torrentNetworkInterface: "Ethernet 2",
+      globalTrackers: [
+        "https://private-tracker.example/announce?passkey=secret",
+      ],
+      appendGlobalTrackers: true,
       exophaseUserId: "session-dependent-user",
     });
 

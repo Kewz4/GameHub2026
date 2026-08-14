@@ -5,6 +5,7 @@ import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import type { LibraryGame, ShortcutLocation } from "@types";
 import { FileIcon } from "@primer/octicons-react";
 import { HardDrive, X, FolderOpen } from "lucide-react";
+import type { SteamMatchSuggestion } from "@renderer/hooks/use-steam-match-search";
 
 interface DriveInfo {
   root: string;
@@ -35,6 +36,9 @@ interface GeneralSettingsSectionProps {
   onDeleteSteamShortcut: () => Promise<void>;
   onChangeGameTitle: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onBlurGameTitle: () => Promise<void>;
+  steamMatchSuggestions?: SteamMatchSuggestion[];
+  isSearchingSteamMatch?: boolean;
+  onSelectSteamMatch?: (suggestion: SteamMatchSuggestion) => void;
   onChangeLaunchOptions: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onClearLaunchOptions: () => Promise<void>;
   isTransferring: boolean;
@@ -105,6 +109,9 @@ export function GeneralSettingsSection({
   onDeleteSteamShortcut,
   onChangeGameTitle,
   onBlurGameTitle,
+  steamMatchSuggestions = [],
+  isSearchingSteamMatch = false,
+  onSelectSteamMatch = () => {},
   onChangeLaunchOptions,
   onClearLaunchOptions,
   isTransferring,
@@ -207,10 +214,53 @@ export function GeneralSettingsSection({
             placeholder={t("edit_game_modal_enter_title")}
             value={gameTitle}
             onChange={onChangeGameTitle}
-            onBlur={() => void onBlurGameTitle()}
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget as HTMLElement | null;
+              if (
+                nextTarget?.closest(
+                  ".game-options-modal__steam-match-suggestion"
+                )
+              ) {
+                return;
+              }
+              void onBlurGameTitle();
+            }}
             theme="dark"
             disabled={updatingGameTitle}
           />
+
+          {game.shop === "custom" &&
+            (isSearchingSteamMatch || steamMatchSuggestions.length > 0) && (
+              <div className="game-options-modal__steam-match-suggestions">
+                <span className="game-options-modal__steam-match-suggestions-title">
+                  {isSearchingSteamMatch
+                    ? t("custom_game_modal_match_searching", {
+                        ns: "sidebar",
+                      })
+                    : t("custom_game_modal_match_steam_title", {
+                        ns: "sidebar",
+                      })}
+                </span>
+                <ul className="game-options-modal__steam-match-suggestions-list">
+                  {steamMatchSuggestions.map((suggestion) => (
+                    <li key={suggestion.objectId}>
+                      <button
+                        type="button"
+                        className="game-options-modal__steam-match-suggestion"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => onSelectSteamMatch(suggestion)}
+                        disabled={updatingGameTitle}
+                      >
+                        {suggestion.iconUrl ? (
+                          <img src={suggestion.iconUrl} alt="" />
+                        ) : null}
+                        <span>{suggestion.title}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
         </div>
       )}
 

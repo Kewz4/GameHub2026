@@ -157,6 +157,22 @@ export class CloudSaveLaunchSessionStore {
     return this.removeOwned(objectId, shop, session.token);
   }
 
+  /** Abort only a launch which never reached a detected running process. */
+  public abortPending(
+    objectId: string,
+    shop: GameShop,
+    token: string
+  ): boolean {
+    const session = this.getOwned(objectId, shop, token);
+    if (
+      !session ||
+      (session.phase !== "preparing" && session.phase !== "pending")
+    ) {
+      return false;
+    }
+    return this.removeOwned(objectId, shop, token);
+  }
+
   public get(objectId: string, shop: GameShop): CloudSaveLaunchSession | null {
     const session = this.sessions.get(getKey(objectId, shop));
     return session ? copySession(session) : null;
@@ -246,6 +262,12 @@ export const clearCloudSaveLaunchGuard = (
   shop: GameShop,
   token?: string
 ) => cloudSaveLaunchSessions.abort(objectId, shop, token);
+
+export const clearPendingCloudSaveLaunchSession = (
+  objectId: string,
+  shop: GameShop,
+  token: string
+) => cloudSaveLaunchSessions.abortPending(objectId, shop, token);
 
 /** @deprecated Prefer startCloudSaveLaunchSession for full session ownership. */
 export const setCloudSaveLaunchGuard = (

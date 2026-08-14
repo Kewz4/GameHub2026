@@ -3,7 +3,7 @@ import fs from "node:fs";
 
 import { getDownloadsPath } from "../helpers/get-downloads-path";
 import { registerEvent } from "../register-event";
-import { downloadsSublevel, levelKeys } from "@main/level";
+import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import { GameShop } from "@types";
 
 const getGameInstallerActionType = async (
@@ -15,6 +15,20 @@ const getGameInstallerActionType = async (
   const download = await downloadsSublevel.get(downloadKey);
 
   if (!download?.folderName) return "open-folder";
+
+  const game = await gamesSublevel.get(downloadKey).catch(() => null);
+  const localExecutablePath = game?.executablePath;
+
+  // Installer files remain in the download folder after a successful install.
+  // Suppress the Install action only while the resolved local executable still
+  // exists; a stale path keeps Install available as a recovery path.
+  if (
+    localExecutablePath &&
+    !/^[a-z][a-z\d+.-]*:\/\//i.test(localExecutablePath) &&
+    fs.existsSync(localExecutablePath)
+  ) {
+    return "open-folder";
+  }
 
   const gamePath = path.join(
     download.downloadPath ?? (await getDownloadsPath()),

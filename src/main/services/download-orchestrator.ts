@@ -407,7 +407,20 @@ export class DownloadOrchestrator {
     return this.runExclusive(() => this.startPreparedDownloadImpl(download));
   }
 
+  private static async installPreparedDownload(download: Download) {
+    const downloadKey = getGameKey(download);
+
+    // Explicit replacement is serialized with every other layout mutation.
+    // Cancel/invalidate the old same-key runtime before exposing the new row;
+    // DownloadManager also serializes this boundary with JS/Python status
+    // persistence, so an in-flight old poll cannot overwrite the replacement.
+    await DownloadManager.installDownloadReplacement(downloadKey, () =>
+      downloadsSublevel.put(downloadKey, download)
+    );
+  }
+
   private static async startPreparedDownloadImpl(download: Download) {
+    await this.installPreparedDownload(download);
     const { downloads } = await this.getDownloadsWithLayout();
     const currentActiveDownload =
       downloads.find(
@@ -435,6 +448,7 @@ export class DownloadOrchestrator {
   }
 
   private static async enqueuePreparedDownloadImpl(download: Download) {
+    await this.installPreparedDownload(download);
     await this.queueDownload(download);
     WindowManager.sendDownloadsUpdated();
 

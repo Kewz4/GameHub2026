@@ -5,6 +5,7 @@ import { findGameRootFromExe } from "../helpers/find-game-root";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { logger } from "@main/services";
 import type { GameShop } from "@types";
+import { enqueueGameRecordMutation } from "./game-record-mutation-queue";
 
 const updateExecutablePath = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -18,16 +19,20 @@ const updateExecutablePath = async (
 
   const gameKey = levelKeys.game(shop, objectId);
 
-  const game = await gamesSublevel.get(gameKey);
-  if (!game) return;
+  await enqueueGameRecordMutation(gameKey, async () => {
+    const game = await gamesSublevel.get(gameKey);
+    if (!game) return;
 
-  // Update immediately without size so UI responds fast
-  await gamesSublevel.put(gameKey, {
-    ...game,
-    executablePath: parsedPath,
-    installedSizeInBytes: parsedPath ? game.installedSizeInBytes : null,
-    automaticCloudSync:
-      executablePath === null ? false : game.automaticCloudSync,
+    // Update immediately without size so UI responds fast. Sharing this queue
+    // with post-installer discovery guarantees an explicit user selection wins
+    // over an in-flight automatic match.
+    await gamesSublevel.put(gameKey, {
+      ...game,
+      executablePath: parsedPath,
+      installedSizeInBytes: parsedPath ? game.installedSizeInBytes : null,
+      automaticCloudSync:
+        executablePath === null ? false : game.automaticCloudSync,
+    });
   });
 
   // Calculate size in background and update later
@@ -43,12 +48,14 @@ const updateExecutablePath = async (
 
         const installedSizeInBytes = await getDirectorySize(gameRoot);
 
-        const currentGame = await gamesSublevel.get(gameKey);
-        if (!currentGame) return;
+        await enqueueGameRecordMutation(gameKey, async () => {
+          const currentGame = await gamesSublevel.get(gameKey);
+          if (!currentGame || currentGame.executablePath !== parsedPath) return;
 
-        await gamesSublevel.put(gameKey, {
-          ...currentGame,
-          installedSizeInBytes,
+          await gamesSublevel.put(gameKey, {
+            ...currentGame,
+            installedSizeInBytes,
+          });
         });
       })
       .catch((err) => {
@@ -71,13 +78,15 @@ const updateTrackingExecutablePaths = async (
 
   const gameKey = levelKeys.game(shop, objectId);
 
-  const game = await gamesSublevel.get(gameKey);
-  if (!game) return;
+  await enqueueGameRecordMutation(gameKey, async () => {
+    const game = await gamesSublevel.get(gameKey);
+    if (!game) return;
 
-  await gamesSublevel.put(gameKey, {
-    ...game,
-    trackingExecutablePaths: parsedPaths,
-    trackingExecutablePathsUpdatedAt: parsedPaths.length ? new Date() : null,
+    await gamesSublevel.put(gameKey, {
+      ...game,
+      trackingExecutablePaths: parsedPaths,
+      trackingExecutablePathsUpdatedAt: parsedPaths.length ? new Date() : null,
+    });
   });
 };
 

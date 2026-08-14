@@ -43,4 +43,6 @@ export const levelKeys = {
   cloudSaveAutomaticSyncSettings: "cloud-save-automatic-sync-settings",
   cloudSaveCustomPaths: "cloud-save-custom-paths",
   cloudSavePendingDeletions: "cloud-save-pending-deletions",
+  cloudSavePendingPostExit: "cloud-save-pending-post-exit",
+  achievementSouvenirs: "achievement-souvenirs",
 };

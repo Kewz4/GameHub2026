@@ -1,7 +1,13 @@
 import { darkenColor, ensureArray } from "@renderer/helpers";
 import { mergeResolvedProfileImages } from "@shared";
 import { useAppSelector, useToast } from "@renderer/hooks";
-import type { Badge, UserProfile, UserStats, UserGame } from "@types";
+import type {
+  Badge,
+  ProfileAchievementSouvenir,
+  UserProfile,
+  UserStats,
+  UserGame,
+} from "@types";
 import { average } from "color.js";
 
 import { createContext, useCallback, useEffect, useRef, useState } from "react";
@@ -32,6 +38,8 @@ export interface UserProfileContext {
   localLibraryCount: number | null;
   /** Total unlocked achievements across ALL local games — accurate for own profile, null otherwise */
   localAchievementSum: number | null;
+  souvenirs: ProfileAchievementSouvenir[];
+  refreshSouvenirs: () => Promise<void>;
 }
 
 export const DEFAULT_USER_PROFILE_BACKGROUND = "#151515B3";
@@ -53,6 +61,8 @@ export const userProfileContext = createContext<UserProfileContext>({
   isLoadingLibraryGames: false,
   localLibraryCount: null,
   localAchievementSum: null,
+  souvenirs: [],
+  refreshSouvenirs: async () => {},
 });
 
 const { Provider } = userProfileContext;
@@ -88,6 +98,7 @@ export function UserProfileContextProvider({
   const [localAchievementSum, setLocalAchievementSum] = useState<number | null>(
     null
   );
+  const [souvenirs, setSouvenirs] = useState<ProfileAchievementSouvenir[]>([]);
   const profileRequestRef = useRef(0);
   const libraryRequestRef = useRef(0);
 
@@ -118,6 +129,21 @@ export function UserProfileContextProvider({
       .then((stats) => {
         setUserStats(stats);
       });
+  }, [userId]);
+
+  const refreshSouvenirs = useCallback(async () => {
+    const requestId = profileRequestRef.current;
+
+    try {
+      const result = await window.electron.getAchievementSouvenirs(userId);
+      if (requestId === profileRequestRef.current) {
+        setSouvenirs(result);
+      }
+    } catch {
+      if (requestId === profileRequestRef.current) {
+        setSouvenirs([]);
+      }
+    }
   }, [userId]);
 
   // Local games (including custom, Steam, GOG, Epic synced) only exist locally —
@@ -328,6 +354,7 @@ export function UserProfileContextProvider({
   const getUserProfile = useCallback(async () => {
     const requestId = ++profileRequestRef.current;
     getUserStats();
+    void refreshSouvenirs();
 
     // Start the R2/local image lookup alongside the API request. It must never
     // block the profile itself, and null results must preserve a valid fallback.
@@ -362,13 +389,17 @@ export function UserProfileContextProvider({
         });
 
         if (userProfile.profileImageUrl) {
-          getHeroBackgroundFromImageUrl(userProfile.profileImageUrl).then(
-            (color) => {
+          void getHeroBackgroundFromImageUrl(userProfile.profileImageUrl)
+            .then((color) => {
               if (requestId === profileRequestRef.current) {
                 setHeroBackground(color);
               }
-            }
-          );
+            })
+            .catch(() => {
+              if (requestId === profileRequestRef.current) {
+                setHeroBackground(DEFAULT_USER_PROFILE_BACKGROUND);
+              }
+            });
         }
       })
       .catch(() => {
@@ -379,6 +410,7 @@ export function UserProfileContextProvider({
   }, [
     navigate,
     getUserStats,
+    refreshSouvenirs,
     showErrorToast,
     userId,
     userDetails?.backgroundImageUrl,
@@ -402,6 +434,7 @@ export function UserProfileContextProvider({
     setUserProfile(null);
     setLibraryGames([]);
     setPinnedGames([]);
+    setSouvenirs([]);
     setHeroBackground(DEFAULT_USER_PROFILE_BACKGROUND);
     setLibraryPage(0);
     setHasMoreLibraryGames(true);
@@ -439,6 +472,8 @@ export function UserProfileContextProvider({
         isLoadingLibraryGames,
         localLibraryCount,
         localAchievementSum,
+        souvenirs,
+        refreshSouvenirs,
       }}
     >
       {children}

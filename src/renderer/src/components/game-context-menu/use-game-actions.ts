@@ -248,7 +248,13 @@ export function useGameActions(game: LibraryGame) {
 
   const handleApplySteamEmulator = async () => {
     try {
-      await window.electron.applySteamEmulator(game.shop, game.objectId);
+      const result = await window.electron.applySteamEmulator(
+        game.shop,
+        game.objectId
+      );
+      if (!result.success) {
+        throw new Error(result.output || "Steam emulator setup failed");
+      }
       showSuccessToast(t("steam_emulator_success"));
     } catch (error) {
       showErrorToast(t("steam_emulator_failed"));
