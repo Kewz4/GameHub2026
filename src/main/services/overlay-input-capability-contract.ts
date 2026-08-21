@@ -128,6 +128,8 @@ const BACKEND_STATES = new Set<string>([
 ]);
 const UINT64_MAX = 18_446_744_073_709_551_615n;
 const UINT64_DECIMAL = /^[1-9]\d{0,19}$/u;
+const VOLUME_SERIAL = /^(?!0{16}$)[0-9A-F]{16}$/u;
+const FILE_ID = /^(?!0{32}$)[0-9A-F]{32}$/u;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -160,6 +162,8 @@ const parseIdentity = (
       "pid",
       "creationTicks",
       "canonicalExecutablePath",
+      "volumeSerial",
+      "fileId",
     ]) ||
     typeof value.sessionId !== "string" ||
     !isValidOverlayQaSessionId(value.sessionId) ||
@@ -168,7 +172,11 @@ const parseIdentity = (
     value.pid < 1 ||
     value.pid > 0xffff_ffff ||
     !isUint64Decimal(value.creationTicks) ||
-    typeof value.canonicalExecutablePath !== "string"
+    typeof value.canonicalExecutablePath !== "string" ||
+    typeof value.volumeSerial !== "string" ||
+    !VOLUME_SERIAL.test(value.volumeSerial) ||
+    typeof value.fileId !== "string" ||
+    !FILE_ID.test(value.fileId)
   ) {
     return null;
   }
@@ -181,6 +189,8 @@ const parseIdentity = (
     pid: value.pid,
     creationTicks: value.creationTicks,
     canonicalExecutablePath: value.canonicalExecutablePath,
+    volumeSerial: value.volumeSerial,
+    fileId: value.fileId,
   };
 };
 
@@ -309,9 +319,19 @@ export const validateOverlayInputCapabilityReport = (
   unsafeReport: unknown,
   unsafeExpected: unknown
 ): OverlayInputCapabilityEvaluation => {
-  const expected = parseExpectation(unsafeExpected);
+  let expected: OverlayInputCapabilityExpectation | null;
+  try {
+    expected = parseExpectation(unsafeExpected);
+  } catch {
+    return { valid: false, reason: "invalid-expectation" };
+  }
   if (!expected) return { valid: false, reason: "invalid-expectation" };
-  const envelope = parseReportEnvelope(unsafeReport);
+  let envelope: ParsedReport | null;
+  try {
+    envelope = parseReportEnvelope(unsafeReport);
+  } catch {
+    return { valid: false, reason: "invalid-report" };
+  }
   if (!envelope) return { valid: false, reason: "invalid-report" };
 
   if (
@@ -319,7 +339,9 @@ export const validateOverlayInputCapabilityReport = (
     envelope.identity.pid !== expected.identity.pid ||
     envelope.identity.creationTicks !== expected.identity.creationTicks ||
     envelope.identity.canonicalExecutablePath !==
-      expected.identity.canonicalExecutablePath
+      expected.identity.canonicalExecutablePath ||
+    envelope.identity.volumeSerial !== expected.identity.volumeSerial ||
+    envelope.identity.fileId !== expected.identity.fileId
   ) {
     return { valid: false, reason: "target-identity-mismatch" };
   }

@@ -184,7 +184,12 @@ const sameIdentity = (
   left.sessionId === right.sessionId &&
   left.pid === right.pid &&
   left.creationTicks === right.creationTicks &&
-  left.canonicalExecutablePath === right.canonicalExecutablePath;
+  left.canonicalExecutablePath === right.canonicalExecutablePath &&
+  left.volumeSerial === right.volumeSerial &&
+  left.fileId === right.fileId;
+
+const VOLUME_SERIAL = /^(?!0{16}$)[0-9A-F]{16}$/u;
+const FILE_ID = /^(?!0{32}$)[0-9A-F]{32}$/u;
 
 const serviceError = (
   code: OverlaySupervisedLaunchServiceErrorCode,
@@ -222,7 +227,10 @@ const normalizeTimeouts = (
 const normalizePlan = (
   plan: OverlaySupervisedLaunchPlan,
   trustedTarget: OverlayNativeVerifiedTarget
-): OverlaySupervisedLaunchPlan => {
+): Readonly<{
+  plan: OverlaySupervisedLaunchPlan;
+  trustedTarget: OverlayNativeVerifiedTarget;
+}> => {
   const executablePath = normalizeOverlayQaExecutablePath(plan.executablePath);
   const canonicalExecutablePath = normalizeOverlayQaExecutablePath(
     plan.canonicalExecutablePath
@@ -253,8 +261,8 @@ const normalizePlan = (
   }
   if (
     trustedTarget.canonicalExecutablePath !== canonicalExecutablePath ||
-    !/^[1-9A-F][0-9A-F]{0,31}$/u.test(trustedTarget.volumeSerial) ||
-    !/^[1-9A-F][0-9A-F]{0,127}$/u.test(trustedTarget.fileId) ||
+    !VOLUME_SERIAL.test(trustedTarget.volumeSerial) ||
+    !FILE_ID.test(trustedTarget.fileId) ||
     !path.win32.isAbsolute(canonicalGameRoot) ||
     relativeToRoot === "" ||
     relativeToRoot === ".." ||
@@ -287,13 +295,21 @@ const normalizePlan = (
   };
 
   return Object.freeze({
-    sessionId: parsed.sessionId,
-    executablePath,
-    canonicalExecutablePath,
-    command,
-    args: Object.freeze([...parsed.args]),
-    workingDirectory: path.win32.dirname(canonicalExecutablePath),
-    env: Object.freeze({}),
+    plan: Object.freeze({
+      sessionId: parsed.sessionId,
+      executablePath,
+      canonicalExecutablePath,
+      command,
+      args: Object.freeze([...parsed.args]),
+      workingDirectory: path.win32.dirname(canonicalExecutablePath),
+      env: Object.freeze({}),
+    }),
+    trustedTarget: Object.freeze({
+      canonicalExecutablePath,
+      canonicalGameRoot,
+      volumeSerial: trustedTarget.volumeSerial,
+      fileId: trustedTarget.fileId,
+    }),
   });
 };
 
@@ -312,6 +328,7 @@ export class OverlaySupervisedLaunchService {
   });
   private state: OverlaySupervisedLaunchServiceState = "idle";
   private plan: OverlaySupervisedLaunchPlan | null = null;
+  private trustedTarget: OverlayNativeVerifiedTarget | null = null;
   private identity: OverlayQaSupervisedTargetIdentity | null = null;
   private helper: OverlaySupervisorHelperAdapter | null = null;
   private timeoutHandle: unknown = null;
@@ -361,7 +378,9 @@ export class OverlaySupervisedLaunchService {
           "Native target verifier rejected the requested game executable."
         );
       }
-      this.plan = normalizePlan(unsafePlan, trustedTarget);
+      const normalized = normalizePlan(unsafePlan, trustedTarget);
+      this.plan = normalized.plan;
+      this.trustedTarget = normalized.trustedTarget;
       this.helper = this.options.helperFactory.start(
         OVERLAY_SUPERVISOR_HELPER_ARGS
       );
@@ -606,11 +625,15 @@ export class OverlaySupervisedLaunchService {
         );
         return;
       }
-      if (event.canonicalExecutablePath !== this.plan.canonicalExecutablePath) {
+      if (
+        event.canonicalExecutablePath !== this.plan.canonicalExecutablePath ||
+        event.volumeSerial !== this.trustedTarget?.volumeSerial ||
+        event.fileId !== this.trustedTarget?.fileId
+      ) {
         this.fail(
           serviceError(
             "identity-mismatch",
-            "Suspended executable did not match."
+            "Suspended executable path or pinned file identity did not match."
           )
         );
         return;
@@ -629,6 +652,8 @@ export class OverlaySupervisedLaunchService {
         pid: event.pid,
         creationTicks: event.creationTicks,
         canonicalExecutablePath: event.canonicalExecutablePath,
+        volumeSerial: event.volumeSerial,
+        fileId: event.fileId,
       });
       this.state = "suspended";
       this.armTimeout(

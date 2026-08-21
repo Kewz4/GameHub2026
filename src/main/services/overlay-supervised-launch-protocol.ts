@@ -90,6 +90,8 @@ const fail = (
 
 const byteLength = (value: string) => Buffer.byteLength(value, "utf8");
 const containsNull = (value: string) => value.includes("\0");
+const VOLUME_SERIAL = /^(?!0{16}$)[0-9A-F]{16}$/u;
+const FILE_ID = /^(?!0{32}$)[0-9A-F]{32}$/u;
 
 /** JSON permits escaped lone surrogates even though they are not valid UTF-8. */
 const isWellFormedUnicode = (value: string) => {
@@ -311,11 +313,21 @@ const parseIdentity = (
   if (!canonicalExecutablePath) {
     return fail("invalid-schema", "Invalid canonical executable path.");
   }
+  if (
+    typeof value.volumeSerial !== "string" ||
+    !VOLUME_SERIAL.test(value.volumeSerial) ||
+    typeof value.fileId !== "string" ||
+    !FILE_ID.test(value.fileId)
+  ) {
+    return fail("invalid-schema", "Invalid pinned executable file identity.");
+  }
   return {
     sessionId: value.sessionId as string,
     pid,
     creationTicks,
     canonicalExecutablePath,
+    volumeSerial: value.volumeSerial,
+    fileId: value.fileId,
   };
 };
 
@@ -410,6 +422,8 @@ export const parseOverlaySupervisorCommandLine = (
             "pid",
             "creationTicks",
             "canonicalExecutablePath",
+            "volumeSerial",
+            "fileId",
             "reason",
           ]
         : [
@@ -419,6 +433,8 @@ export const parseOverlaySupervisorCommandLine = (
             "pid",
             "creationTicks",
             "canonicalExecutablePath",
+            "volumeSerial",
+            "fileId",
           ]
     );
     const parsedIdentity = parseIdentity(value);
@@ -466,6 +482,8 @@ export const parseOverlaySupervisorEventLine = (
       "pid",
       "creationTicks",
       "canonicalExecutablePath",
+      "volumeSerial",
+      "fileId",
     ]);
     return Object.freeze({
       version: OVERLAY_SUPERVISOR_PROTOCOL_VERSION,

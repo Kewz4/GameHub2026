@@ -13,6 +13,8 @@ import {
 const MAX_WINDOWS_PID = 0xffff_ffff;
 const MAX_CREATION_TICKS = 0xffff_ffff_ffff_ffffn;
 const CREATION_TICKS = /^[1-9]\d*$/;
+const VOLUME_SERIAL = /^(?!0{16}$)[0-9A-F]{16}$/u;
+const FILE_ID = /^(?!0{32}$)[0-9A-F]{32}$/u;
 
 export type OverlayQaRuntimeProvider = () => OverlaySupervisedQaRuntime;
 
@@ -36,12 +38,20 @@ const normalizeIdentity = (
   const canonicalExecutablePath = normalizeOverlayQaExecutablePath(
     identity.canonicalExecutablePath
   );
-  if (!canonicalExecutablePath) return null;
+  if (
+    !canonicalExecutablePath ||
+    !VOLUME_SERIAL.test(identity.volumeSerial) ||
+    !FILE_ID.test(identity.fileId)
+  ) {
+    return null;
+  }
   return Object.freeze({
     sessionId: identity.sessionId,
     pid: identity.pid,
     creationTicks: identity.creationTicks,
     canonicalExecutablePath,
+    volumeSerial: identity.volumeSerial,
+    fileId: identity.fileId,
   });
 };
 
@@ -52,12 +62,15 @@ const sameIdentity = (
   left.sessionId === right.sessionId &&
   left.pid === right.pid &&
   left.creationTicks === right.creationTicks &&
-  left.canonicalExecutablePath === right.canonicalExecutablePath;
+  left.canonicalExecutablePath === right.canonicalExecutablePath &&
+  left.volumeSerial === right.volumeSerial &&
+  left.fileId === right.fileId;
 
 /**
  * Process-lifetime, one-session-at-a-time authorization for the unpackaged QA
  * supervisor. Every operation is fenced by the full process identity; a PID,
- * session ID or creation-time replay can never advance another target.
+ * session ID, creation-time replay or swapped executable file can never
+ * advance another target.
  */
 export class OverlayQaAuthorizationRegistry {
   private active: OverlayQaAuthorizationState | null = null;

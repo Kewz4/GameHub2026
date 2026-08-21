@@ -9,6 +9,7 @@
 #include <charconv>
 #include <cstdint>
 #include <exception>
+#include <iomanip>
 #include <limits>
 #include <map>
 #include <sstream>
@@ -79,15 +80,28 @@ struct DecisionRequest {
   DWORD pid = 0;
   std::uint64_t creation_ticks = 0;
   std::wstring canonical_executable;
+  std::string volume_serial;
+  std::string file_id;
 };
 
 struct SuspendedFixture {
   UniqueHandle process;
   UniqueHandle thread;
   UniqueHandle job;
+  UniqueHandle pinned_executable;
+  UniqueHandle pinned_marker;
   DWORD pid = 0;
   std::uint64_t creation_ticks = 0;
   std::wstring canonical_executable;
+  std::string volume_serial;
+  std::string file_id;
+};
+
+struct PinnedFile {
+  UniqueHandle handle;
+  std::wstring canonical_path;
+  std::string volume_serial;
+  std::string file_id;
 };
 
 std::wstring JoinPath(const std::wstring& parent, const std::wstring& child) {
@@ -140,19 +154,11 @@ std::wstring ModulePath() {
   }
 }
 
-std::wstring CanonicalizeExistingPath(const std::wstring& path,
-                                      bool directory) {
-  const DWORD flags = directory ? FILE_FLAG_BACKUP_SEMANTICS : 0;
-  UniqueHandle handle(
-      CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
-                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                  nullptr, OPEN_EXISTING, flags, nullptr));
-  if (!handle) throw std::runtime_error("canonical-open-failed");
-
+std::wstring CanonicalPathFromHandle(HANDLE handle) {
   std::vector<wchar_t> buffer(512);
   while (true) {
     const DWORD length = GetFinalPathNameByHandleW(
-        handle.Get(), buffer.data(), static_cast<DWORD>(buffer.size()),
+        handle, buffer.data(), static_cast<DWORD>(buffer.size()),
         FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
     if (length == 0) throw std::runtime_error("canonical-path-failed");
     if (length < buffer.size()) {
@@ -161,6 +167,61 @@ std::wstring CanonicalizeExistingPath(const std::wstring& path,
     if (length >= 32'768) throw std::runtime_error("canonical-path-too-long");
     buffer.resize(static_cast<std::size_t>(length) + 1);
   }
+}
+
+std::wstring CanonicalizeExistingPath(const std::wstring& path,
+                                      bool directory) {
+  const DWORD flags = directory ? FILE_FLAG_BACKUP_SEMANTICS : 0;
+  UniqueHandle handle(
+      CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                  nullptr, OPEN_EXISTING, flags, nullptr));
+  if (!handle) throw std::runtime_error("canonical-open-failed");
+  return CanonicalPathFromHandle(handle.Get());
+}
+
+std::string FixedHex64(std::uint64_t value) {
+  std::ostringstream output;
+  output << std::uppercase << std::hex << std::setfill('0') << std::setw(16)
+         << value;
+  return output.str();
+}
+
+std::string FixedHex128(const FILE_ID_128& value) {
+  std::ostringstream output;
+  output << std::uppercase << std::hex << std::setfill('0');
+  bool nonzero = false;
+  for (const BYTE byte : value.Identifier) {
+    nonzero = nonzero || byte != 0;
+    output << std::setw(2) << static_cast<unsigned int>(byte);
+  }
+  if (!nonzero) throw std::runtime_error("pinned-file-id-zero");
+  return output.str();
+}
+
+PinnedFile OpenPinnedFile(const std::wstring& path) {
+  PinnedFile pinned;
+  // A metadata-only handle does not reliably establish an exclusive sharing
+  // contract on Windows. Keep a real read handle open so replacement or
+  // mutation cannot race the verified identity between verification and the
+  // suspended launch decision.
+  pinned.handle.Reset(CreateFileW(path.c_str(), GENERIC_READ | FILE_READ_ATTRIBUTES,
+                                  FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                  FILE_ATTRIBUTE_NORMAL, nullptr));
+  if (!pinned.handle) throw std::runtime_error("pinned-file-open-failed");
+  pinned.canonical_path = CanonicalPathFromHandle(pinned.handle.Get());
+
+  FILE_ID_INFO identity{};
+  if (!GetFileInformationByHandleEx(pinned.handle.Get(), FileIdInfo, &identity,
+                                    sizeof(identity))) {
+    throw std::runtime_error("pinned-file-identity-failed");
+  }
+  if (identity.VolumeSerialNumber == 0) {
+    throw std::runtime_error("pinned-volume-serial-zero");
+  }
+  pinned.volume_serial = FixedHex64(identity.VolumeSerialNumber);
+  pinned.file_id = FixedHex128(identity.FileId);
+  return pinned;
 }
 
 std::wstring ProcessImagePath(HANDLE process) {
@@ -331,10 +392,12 @@ bool ParseDecision(const std::string& frame, const PrepareRequest& launch,
           ? std::vector<std::string>{"version",       "type",
                                      "sessionId",     "pid",
                                      "creationTicks", "canonicalExecutablePath",
+                                     "volumeSerial",  "fileId",
                                      "reason"}
-          : std::vector<std::string>{
-                "version", "type",          "sessionId",
-                "pid",     "creationTicks", "canonicalExecutablePath"};
+          : std::vector<std::string>{"version",       "type",
+                                     "sessionId",     "pid",
+                                     "creationTicks", "canonicalExecutablePath",
+                                     "volumeSerial",  "fileId"};
   if (!HasExactKeys(root, expected)) {
     *error = "invalid decision object keys";
     return false;
@@ -344,6 +407,8 @@ bool ParseDecision(const std::string& frame, const PrepareRequest& launch,
   const JsonValue* pid = Member(root, "pid");
   const JsonValue* creation_ticks = Member(root, "creationTicks");
   const JsonValue* canonical_path = Member(root, "canonicalExecutablePath");
+  const JsonValue* volume_serial = Member(root, "volumeSerial");
+  const JsonValue* file_id = Member(root, "fileId");
   std::uint64_t parsed_ticks = 0;
   if (version->type != JsonValue::Type::kInteger || version->integer != 1 ||
       session_id->type != JsonValue::Type::kString ||
@@ -355,7 +420,11 @@ bool ParseDecision(const std::string& frame, const PrepareRequest& launch,
       !ParseUnsignedTicks(creation_ticks->string, &parsed_ticks) ||
       parsed_ticks != fixture.creation_ticks ||
       canonical_path->type != JsonValue::Type::kString ||
-      canonical_path->string.find('\0') != std::string::npos) {
+      canonical_path->string.find('\0') != std::string::npos ||
+      volume_serial->type != JsonValue::Type::kString ||
+      volume_serial->string != fixture.volume_serial ||
+      file_id->type != JsonValue::Type::kString ||
+      file_id->string != fixture.file_id) {
     *error = "invalid decision values";
     return false;
   }
@@ -383,6 +452,8 @@ bool ParseDecision(const std::string& frame, const PrepareRequest& launch,
   request->session_id = session_id->string;
   request->pid = static_cast<DWORD>(pid->integer);
   request->creation_ticks = parsed_ticks;
+  request->volume_serial = volume_serial->string;
+  request->file_id = file_id->string;
   return true;
 }
 
@@ -421,7 +492,9 @@ std::string IdentityFrame(const char* type, const PrepareRequest& request,
          << JsonEscape(request.session_id) << "\",\"pid\":" << fixture.pid
          << ",\"creationTicks\":\"" << fixture.creation_ticks
          << "\",\"canonicalExecutablePath\":\""
-         << JsonEscape(WideToUtf8(fixture.canonical_executable)) << "\"}";
+         << JsonEscape(WideToUtf8(fixture.canonical_executable))
+         << "\",\"volumeSerial\":\"" << fixture.volume_serial
+         << "\",\"fileId\":\"" << fixture.file_id << "\"}";
   return output.str();
 }
 
@@ -577,10 +650,12 @@ SuspendedFixture CreateSuspendedFixture(const PrepareRequest& request,
   const std::wstring supervisor_path =
       CanonicalizeExistingPath(ModulePath(), false);
   const std::wstring supervisor_directory = ParentPath(supervisor_path);
-  const std::wstring fixture_path = CanonicalizeExistingPath(
-      JoinPath(supervisor_directory, kFixtureName), false);
-  const std::wstring marker_path = CanonicalizeExistingPath(
-      JoinPath(supervisor_directory, kMarkerName), false);
+  PinnedFile fixture_file =
+      OpenPinnedFile(JoinPath(supervisor_directory, kFixtureName));
+  PinnedFile marker_file =
+      OpenPinnedFile(JoinPath(supervisor_directory, kMarkerName));
+  const std::wstring& fixture_path = fixture_file.canonical_path;
+  const std::wstring& marker_path = marker_file.canonical_path;
   const std::wstring results_directory = CanonicalizeExistingPath(
       JoinPath(supervisor_directory, kResultsDirectoryName), true);
 
@@ -637,6 +712,10 @@ SuspendedFixture CreateSuspendedFixture(const PrepareRequest& request,
   startup_extended.StartupInfo.cb = sizeof(startup_extended);
   PROCESS_INFORMATION process_information{};
   SuspendedFixture fixture;
+  fixture.pinned_executable = std::move(fixture_file.handle);
+  fixture.pinned_marker = std::move(marker_file.handle);
+  fixture.volume_serial = std::move(fixture_file.volume_serial);
+  fixture.file_id = std::move(fixture_file.file_id);
   fixture.job.Reset(CreateJobObjectW(nullptr, nullptr));
   if (!fixture.job) throw std::runtime_error("private-job-create-failed");
   ArmPrivateJob(fixture.job.Get());

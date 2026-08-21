@@ -14,6 +14,8 @@ const identity = {
   pid: 42,
   creationTicks: "133700000000000000",
   canonicalExecutablePath: String.raw`C:\Games\Fixture\fixture.exe`,
+  volumeSerial: "00000000000000A1",
+  fileId: "000000000000000000000000000000B2",
 } as const;
 const expected = {
   identity,
@@ -86,6 +88,17 @@ describe("overlay multi-stack capability contract", () => {
       [{ ...report(), completeModuleSnapshot: "false" }, "invalid-report"],
       [{ ...report(), requiredChildRoutes: true }, "invalid-report"],
       [{ ...report(), extra: true }, "invalid-report"],
+      [
+        new Proxy(
+          {},
+          {
+            ownKeys() {
+              throw new Error("untrusted report trap");
+            },
+          }
+        ),
+        "invalid-report",
+      ],
     ];
     for (const [value, expectedReason] of malformed) {
       assert.doesNotThrow(() =>
@@ -93,6 +106,15 @@ describe("overlay multi-stack capability contract", () => {
       );
       assert.equal(reason(value), expectedReason);
     }
+    const throwingExpectation = {
+      get identity(): never {
+        throw new Error("untrusted expectation getter");
+      },
+    };
+    assert.deepEqual(
+      validateOverlayInputCapabilityReport(report(), throwingExpectation),
+      { valid: false, reason: "invalid-expectation" }
+    );
   });
 
   it("rejects malformed expectations and exact target/commit mismatches", () => {
@@ -107,11 +129,32 @@ describe("overlay multi-stack capability contract", () => {
         requiredChildRoutes: ["shell-execute", "create-process-w-a"],
       },
       { ...expected, identity: { ...identity, pid: 0 } },
+      { ...expected, identity: { ...identity, volumeSerial: "A1" } },
+      { ...expected, identity: { ...identity, fileId: "B2" } },
     ]) {
       assert.equal(reason(report(), value), "invalid-expectation");
     }
     assert.equal(
       reason(report({ identity: { ...identity, creationTicks: "99" } })),
+      "target-identity-mismatch"
+    );
+    assert.equal(
+      reason(
+        report({
+          identity: { ...identity, volumeSerial: "00000000000000A2" },
+        })
+      ),
+      "target-identity-mismatch"
+    );
+    assert.equal(
+      reason(
+        report({
+          identity: {
+            ...identity,
+            fileId: "000000000000000000000000000000B3",
+          },
+        })
+      ),
       "target-identity-mismatch"
     );
     assert.equal(reason(report({ generation: 16 })), "stale-generation");

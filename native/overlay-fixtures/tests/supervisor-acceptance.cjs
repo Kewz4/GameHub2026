@@ -13,6 +13,7 @@ const fixturePath = path.join(
   buildRoot,
   "gamehub-overlay-preentry-fixture.exe"
 );
+const markerPath = path.join(buildRoot, "gamehub-overlay-qa-marker64.dll");
 const resultsRoot = path.join(buildRoot, "qa-results");
 const fixtureImageName = path.basename(fixturePath);
 
@@ -43,6 +44,8 @@ const identityFrame = (type, suspended, extra = {}) => ({
   pid: suspended.pid,
   creationTicks: suspended.creationTicks,
   canonicalExecutablePath: suspended.canonicalExecutablePath,
+  volumeSerial: suspended.volumeSerial,
+  fileId: suspended.fileId,
   ...extra,
 });
 
@@ -109,16 +112,20 @@ const assertIdentity = (frame, type, launch) => {
   assert.deepEqual(Object.keys(frame).sort(), [
     "canonicalExecutablePath",
     "creationTicks",
+    "fileId",
     "pid",
     "sessionId",
     "type",
     "version",
+    "volumeSerial",
   ]);
   assert.equal(frame.version, 1);
   assert.equal(frame.type, type);
   assert.equal(frame.sessionId, launch.sessionId);
   assert.ok(Number.isInteger(frame.pid) && frame.pid > 4);
   assert.match(frame.creationTicks, /^[1-9]\d*$/u);
+  assert.match(frame.volumeSerial, /^(?!0{16}$)[0-9A-F]{16}$/u);
+  assert.match(frame.fileId, /^(?!0{32}$)[0-9A-F]{32}$/u);
   assert.equal(
     path.normalize(frame.canonicalExecutablePath).toLowerCase(),
     path.normalize(fixturePath).toLowerCase()
@@ -264,6 +271,40 @@ const testAbort = async () => {
   assert.equal(fs.existsSync(resultPath(label)), false);
 };
 
+const testPinnedFilesRejectReplacement = async () => {
+  const label = "pinned-file-share";
+  cleanResult(label);
+  const launch = launchFrame(label, ["must-not-run"]);
+  const supervisor = spawnSupervisor();
+  supervisor.write(launch);
+  const suspended = await supervisor.nextFrame();
+
+  for (const pinnedPath of [fixturePath, markerPath]) {
+    let writableHandle;
+    let openError;
+    try {
+      writableHandle = fs.openSync(pinnedPath, "r+");
+    } catch (error) {
+      openError = error;
+    } finally {
+      if (writableHandle !== undefined) fs.closeSync(writableHandle);
+    }
+    assert.ok(
+      openError &&
+        typeof openError === "object" &&
+        ["EBUSY", "EACCES", "EPERM"].includes(openError.code),
+      `${path.basename(pinnedPath)} unexpectedly allowed writable access`
+    );
+  }
+
+  supervisor.write(identityFrame("abort", suspended, { reason: "qa-abort" }));
+  const aborted = await supervisor.nextFrame();
+  assertIdentity(aborted, "aborted", launch);
+  assert.equal((await supervisor.exit).code, 0);
+  await waitForProcessExit(suspended.pid);
+  assert.equal(fs.existsSync(resultPath(label)), false);
+};
+
 const testEof = async () => {
   const label = "eof";
   cleanResult(label);
@@ -300,23 +341,51 @@ const testTimeout = async () => {
 };
 
 const testIdentityAndOneShot = async () => {
-  const label = "identity-mismatch";
-  cleanResult(label);
-  const launch = launchFrame(label, ["must-not-run"]);
-  const supervisor = spawnSupervisor();
-  supervisor.write(launch);
-  const suspended = await supervisor.nextFrame();
-  supervisor.write({
-    ...identityFrame("commit", suspended),
-    creationTicks: `${BigInt(suspended.creationTicks) + 1n}`,
-  });
-  const error = await supervisor.nextFrame();
-  assert.equal(error.type, "error");
-  assert.equal(error.stage, "decision");
-  assert.match(error.message, /decision|identity|invalid/u);
-  assert.notEqual((await supervisor.exit).code, 0);
-  await waitForProcessExit(suspended.pid);
-  assert.equal(fs.existsSync(resultPath(label)), false);
+  const mutations = [
+    [
+      "ticks",
+      (suspended) => ({
+        creationTicks: `${BigInt(suspended.creationTicks) + 1n}`,
+      }),
+    ],
+    [
+      "volume",
+      (suspended) => ({
+        volumeSerial:
+          suspended.volumeSerial === "FFFFFFFFFFFFFFFF"
+            ? "FFFFFFFFFFFFFFFE"
+            : "FFFFFFFFFFFFFFFF",
+      }),
+    ],
+    [
+      "file",
+      (suspended) => ({
+        fileId:
+          suspended.fileId === "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+            ? "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE"
+            : "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+      }),
+    ],
+  ];
+  for (const [suffix, mutate] of mutations) {
+    const label = `identity-mismatch-${suffix}`;
+    cleanResult(label);
+    const launch = launchFrame(label, ["must-not-run"]);
+    const supervisor = spawnSupervisor();
+    supervisor.write(launch);
+    const suspended = await supervisor.nextFrame();
+    supervisor.write({
+      ...identityFrame("commit", suspended),
+      ...mutate(suspended),
+    });
+    const error = await supervisor.nextFrame();
+    assert.equal(error.type, "error");
+    assert.equal(error.stage, "decision");
+    assert.match(error.message, /decision|identity|invalid/u);
+    assert.notEqual((await supervisor.exit).code, 0);
+    await waitForProcessExit(suspended.pid);
+    assert.equal(fs.existsSync(resultPath(label)), false);
+  }
 };
 
 const testFixtureBoundary = async () => {
@@ -406,6 +475,10 @@ const testAtomicJobCrashWindow = async () => {
 const tests = [
   ["commit + Windows quoting + loader-order marker", testCommitAndQuoting],
   ["abort kills never-started fixture", testAbort],
+  [
+    "target and marker stay write/delete pinned",
+    testPinnedFilesRejectReplacement,
+  ],
   ["EOF kills never-started fixture", testEof],
   ["timeout kills never-started fixture", testTimeout],
   ["full identity mismatch fails closed", testIdentityAndOneShot],

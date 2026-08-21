@@ -1,0 +1,10 @@
+LIBRARY "gamehub-overlay-qa-wgi-bootstrap64"
+EXPORTS
+  GameHubWgiQaGetBootstrapSnapshot
+  GameHubWgiQaBeginBlock
+  GameHubWgiQaExplicitRevalidate
+  GameHubWgiQaObserveRelease
+  GameHubWgiQaDetach
+  GameHubWgiQaAttachLateForNegativeControl
+  GameHubWgiQaArmPausedReader
+  GameHubWgiQaTopologyChanged

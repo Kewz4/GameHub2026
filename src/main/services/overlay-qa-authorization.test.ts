@@ -27,6 +27,8 @@ const identity = (
   pid: 42,
   creationTicks: "133700000000000000",
   canonicalExecutablePath: executable,
+  volumeSerial: "00000000000000A1",
+  fileId: "000000000000000000000000000000B2",
   ...overrides,
 });
 
@@ -67,7 +69,7 @@ describe("overlay QA authorization registry", () => {
     assert.equal(registry.getState()?.sessionId, firstSession);
   });
 
-  it("fences every transition by session, PID, creation time, and canonical path", () => {
+  it("fences every transition by process and pinned executable identity", () => {
     const registry = new OverlayQaAuthorizationRegistry(allowedRuntime);
     const target = identity();
     assert.equal(registry.beginSuspended(target), true);
@@ -79,6 +81,8 @@ describe("overlay QA authorization registry", () => {
       identity({
         canonicalExecutablePath: String.raw`C:\Games\Other\Other.exe`,
       }),
+      identity({ volumeSerial: "00000000000000A2" }),
+      identity({ fileId: "000000000000000000000000000000B3" }),
     ]) {
       assert.equal(registry.isCurrent(stale), false);
       assert.equal(registry.canPrepare(stale), false);
@@ -126,6 +130,10 @@ describe("overlay QA authorization registry", () => {
       identity({ creationTicks: "0" }),
       identity({ creationTicks: "not-a-number" }),
       identity({ creationTicks: "18446744073709551616" }),
+      identity({ volumeSerial: "A1" }),
+      identity({ volumeSerial: "0000000000000000" }),
+      identity({ fileId: "B2" }),
+      identity({ fileId: "00000000000000000000000000000000" }),
       identity({ canonicalExecutablePath: "steam://run/2651280" }),
       identity({
         canonicalExecutablePath: String.raw`\\server\games\Game.exe`,

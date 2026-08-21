@@ -20,6 +20,8 @@ const identity = {
   pid: 42,
   creationTicks: "133700000000000000",
   canonicalExecutablePath: executable,
+  volumeSerial: "00000000000000A1",
+  fileId: "000000000000000000000000000000B2",
 };
 
 const eventLine = (type: "suspended" | "resumed" | "aborted") =>
@@ -138,13 +140,19 @@ describe("overlay supervisor newline JSON protocol", () => {
     assertProtocolError(() => decoder.push("\n"), "empty-line");
   });
 
-  it("rejects invalid session, PID, FILETIME, and canonical path identities", () => {
+  it("rejects malformed process and pinned executable identities", () => {
     const invalid: Array<Record<string, unknown>> = [
       { ...identity, sessionId: "short" },
       { ...identity, pid: 4 },
       { ...identity, pid: 42.5 },
       { ...identity, creationTicks: "0" },
       { ...identity, creationTicks: "18446744073709551616" },
+      { ...identity, volumeSerial: "A1" },
+      { ...identity, volumeSerial: "0000000000000000" },
+      { ...identity, volumeSerial: "00000000000000a1" },
+      { ...identity, fileId: "B2" },
+      { ...identity, fileId: "00000000000000000000000000000000" },
+      { ...identity, fileId: "000000000000000000000000000000b2" },
       { ...identity, canonicalExecutablePath: "steam://run/1" },
       {
         ...identity,

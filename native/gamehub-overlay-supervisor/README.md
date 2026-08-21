@@ -5,7 +5,8 @@ one adjacent executable named `gamehub-overlay-preentry-fixture.exe`; it cannot
 launch an arbitrary game. The requested executable and working directory are
 accepted only on standard input and must resolve by file handle to the exact
 adjacent fixture and supervisor directory. The DLL path is never accepted from
-the caller.
+the caller. The executable and marker are opened without write/delete sharing
+and held pinned through suspended creation and the commit decision.
 
 The supervisor accepts newline-delimited JSON over a piped standard input and
 writes newline-delimited JSON to standard output. Its only command-line
@@ -42,9 +43,18 @@ complete identity from that event:
   "sessionId": "same session",
   "pid": 1234,
   "creationTicks": "full FILETIME",
-  "canonicalExecutablePath": "exact path from suspended event"
+  "canonicalExecutablePath": "exact path from suspended event",
+  "volumeSerial": "16 uppercase hexadecimal digits",
+  "fileId": "32 uppercase hexadecimal digits"
 }
 ```
+
+The volume serial and 128-bit file ID come from the supervisor's pinned file
+handle. They are included in every suspended/resumed/aborted event and must be
+echoed exactly by the decision. A coordinator independently retains its trusted
+game-database proof and aborts before first entry if either field differs; this
+closes a verifier-to-`CreateProcessW` replacement window without relying on
+JavaScript path case-folding.
 
 EOF, malformed input, identity mismatch, a second launch, or the commit deadline
 terminates and waits for the never-started child. A successful commit performs

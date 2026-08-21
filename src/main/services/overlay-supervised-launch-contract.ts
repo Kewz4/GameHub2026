@@ -86,12 +86,23 @@ export type OverlaySupervisedLaunchPolicyResult =
       reason: OverlaySupervisedLaunchPolicyFailureReason;
     };
 
+/**
+ * Exact pinned-file identity emitted by the native supervisor. Fixed-width
+ * uppercase hexadecimal avoids JS/Win32 case-folding and integer precision.
+ */
+export interface OverlayQaPinnedFileIdentity {
+  volumeSerial: string;
+  fileId: string;
+}
+
 /** Exact identity used for every state transition and native revalidation. */
 export interface OverlayQaSupervisedTargetIdentity {
   sessionId: string;
   pid: number;
   creationTicks: string;
   canonicalExecutablePath: string;
+  volumeSerial: string;
+  fileId: string;
 }
 
 export interface OverlayQaAuthorizationState

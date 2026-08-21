@@ -1,0 +1,11 @@
+LIBRARY "gamehub-wgi-qa-cache64"
+EXPORTS
+  GameHubWgiQaGetCacheSnapshot
+  GameHubWgiQaGetTopology
+  GameHubWgiQaGetProviderSnapshot
+  GameHubWgiQaSetFault
+  GameHubWgiQaMutateTopology
+  GameHubWgiQaSetNeutral
+  GameHubWgiQaExerciseOverRelease
+  GameHubWgiQaActivate
+  GameHubWgiQaPoll

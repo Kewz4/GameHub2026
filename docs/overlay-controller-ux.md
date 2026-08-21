@@ -78,14 +78,15 @@ repeat, shoulder non-repeat, spatial scoring, digital widget constraints,
 foreground activation/input blocking, controller DOM contracts, destructive
 confirmation, theme contrast math, and recorder presentation.
 
-`scripts/shoot-overlay.mjs` is the Electron/Playwright acceptance harness. It
-injects a standard `navigator.getGamepads()` device and validates browser and
+`scripts/shoot-overlay.mjs` is an Electron/Playwright acceptance harness. It is
+designed to inject a standard `navigator.getGamepads()` device and validate browser and
 native action paths, blur rejection, scoped bumpers, range/list engagement,
 offscreen Spotify queue traversal, controller text entry, widget move/resize,
 Unpin reachability, confirmation focus restoration, computed dark/light/custom
 contrast, the input-protection error toast, and the no-flash open path. It writes
 explicit controller screenshots at 1920×1080 and 1280×720. The harness is
-intentionally not run until the integrated application source is stable.
+intentionally not run until the integrated application source is stable and is
+not a current release gate.
 
 ## Known platform boundary
 

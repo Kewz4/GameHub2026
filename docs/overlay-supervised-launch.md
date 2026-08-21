@@ -3,9 +3,11 @@
 ## Status
 
 This is an experimental, fixture-first architecture for interactive overlay
-input isolation on manually managed Windows games. Production activation stays
-disabled through `OVERLAY_LIVE_INPUT_ISOLATION_ENABLED` until every acceptance
-gate in this document passes.
+input isolation on manually managed Windows games. Both production gates remain
+disabled: `OVERLAY_LIVE_INPUT_ISOLATION_ENABLED = false` and
+`OVERLAY_SUPERVISED_LAUNCH_PRODUCTION_ENABLED = false`. The supervised service
+has no production helper adapter or launch-path integration. Only isolated
+synthetic fixtures and contract tests are release-gated.
 
 The existing attach-after-launch injector is not an authorization mechanism.
 It can patch imports it finds, but it cannot revoke a function pointer that a
@@ -15,15 +17,18 @@ overlay.
 
 ## Why the two target games need supervision
 
-The real render executables use several input paths at once:
+Static observations from local target executables and adjacent modules used to
+design these fixtures indicated several possible input paths. Presence or a
+binary string/import is not runtime coverage or compatibility proof:
 
 - Marvel's Spider-Man 2 uses Windows.Gaming.Input Gamepad and
-  RawGameController, Raw Input, dynamically resolved XInput, HID/SetupAPI and
-  controller middleware paths. Its local AppCompat entry also requests
-  `RUNASADMIN`.
+  RawGameController, Raw Input, dynamically resolved XInput 1.4/9.1.0,
+  HID/SetupAPI, `SteamInput006`, `SteamController008` and libScePad/controller
+  middleware paths. Its local AppCompat entry also requests `RUNASADMIN`.
 - The First Berserker: Khazan starts through
   `steamclient_loader_x64.exe`, then creates `BBQ-Win64-Shipping.exe`. The
-  renderer uses XInput, Raw Input/HID and DirectInput.
+  renderer uses XInput 1.3, Raw Input/HID, DirectInput, `SteamInput006`,
+  `SteamController008` and bundled libScePad paths.
 
 Focus alone cannot isolate either title. DirectInput explicitly permits
 `DISCL_BACKGROUND`, meaning a device may be acquired while the game is not the
@@ -31,7 +36,7 @@ active window. The input hook must be present before the game or its launcher
 can cache polling entry points, and it must propagate only to an exact,
 configured render child.
 
-## Trusted sequence
+## Target production sequence — not currently wired
 
 ```text
 GameHub (asInvoker)
@@ -65,19 +70,23 @@ random session ID
 + PID
 + 64-bit creation FILETIME
 + canonical executable path
-+ live process handle held by the supervisor
++ pinned executable volume serial + 128-bit file ID
++ live process and executable file handles held by the supervisor
 + bootstrap generation/capability handshake
 ```
 
 PID-only state is never accepted because Windows may reuse process IDs after a
 process object is released.
 
-The current TypeScript target verifier is only a policy boundary for the
-fixture spike. Generic game wiring remains blocked until the trusted canonical
-path, volume serial and file ID are carried into the native protocol, checked
-again from an open handle, and held across process creation. A caller-echoed
-path or a preflight result that is discarded before `CreateProcessW` does not
-close the file-replacement/TOCTOU window.
+The QA fixture supervisor now opens the exact executable without write/delete
+sharing, holds that handle across `CreateProcessW` and the commit decision,
+and emits its fixed-width volume serial and 128-bit file ID in every identity
+event. The TypeScript coordinator independently retains the verifier proof and
+requires an exact match before authorizing the suspended process; commit and
+abort echo the same identity. Generic game wiring remains blocked because the
+native helper still accepts only the adjacent synthetic fixture and there is
+no production trusted-root/file verifier or signed helper adapter yet. A
+caller-echoed path alone is never sufficient.
 
 ## Pre-entry mechanism
 
@@ -125,16 +134,17 @@ GameHub stays `asInvoker`. If suspended creation returns
 supervisor using `ShellExecuteExW` with the `runas` verb. This must not mutate
 AppCompat, create a scheduled task, or expose a persistent privileged service.
 
-The elevated helper accepts one opaque session and exits with it. Both ends of
-the named pipe verify peer PID, creation time, installed canonical path and
-Authenticode signer. Production enablement additionally requires signed and
-timestamped supervisor and input-hook binaries, with CI verification.
+A future elevated helper would have to accept exactly one opaque session and
+exit with it. Both pipe endpoints would have to verify peer PID, creation time,
+installed canonical path and Authenticode signer. No production elevation
+adapter is currently implemented. Production enablement additionally requires
+signed and timestamped supervisor and input-hook binaries, with CI verification.
 
 ## Input capability contract
 
 Readiness is presence-scoped and all required paths must be covered:
 
-- XInput variants: GetState, GetStateEx and GetKeystroke;
+- XInput variants: GetState, GetStateEx, GetKeystroke, Enable and SetState;
 - Win32 keyboard state APIs;
 - Raw Input data and buffer APIs;
 - late resolution/module loading;
@@ -147,19 +157,37 @@ Readiness is presence-scoped and all required paths must be covered:
   (`CreateProcessW/A` in the current synthetic fixture); other creation APIs
   remain separate unsupported capabilities.
 
-`overlay-input-capability-contract.ts` strictly validates this report as a
-release-gated invariant. It accepts `unknown`, never throws for malformed
-native data, and requires every known backend exactly once, an exact
+`overlay-input-capability-contract.ts` defines an isolated, release-tested QA
+evaluator for this report. It has no production caller and does not advance
+the launch coordinator. It accepts `unknown`, never throws for malformed native
+data, and requires every known backend exactly once, an exact
 session/PID/creation-time/generation/topology/native-commit identity, pre-entry
 inline detours, an absence-monitor epoch independently retained by the caller,
 and a release fence. Required child-creation routes are an exact canonical,
 duplicate-free set retained on both sides; every listed route must be covered.
-DirectInput
-legacy/8, individual WGI projections, controller middleware and child-creation
-routes are separate entries. Missing, unknown and unsupported/faulted fields
-fail closed. This validator is only one authorization input; an authenticated
-monotonic native publisher plus file/signature/mitigation, game-root and
-anti-cheat policy remain independent requirements.
+DirectInput legacy/8, individual WGI projections, controller middleware and
+child-creation routes are separate entries. Missing, unknown and
+unsupported/faulted fields
+fail closed. It currently has no authenticated native publisher or non-test
+integration with the supervisor, launch path or input gate, so it cannot prove
+that a reported behavior occurred. A future authorization path would also need
+file/signature/mitigation, game-root and anti-cheat policy.
+
+The existing fixed nine-word `Local\GameHubOverlayInputBlock` mapping is not
+an authenticated publisher: a same-session process can pre-create it or forge
+its readiness words. Production supervision therefore requires a
+cryptographically random one-shot channel, collision rejection, an inherited
+secret unavailable through the public namespace, exact slot-level coverage
+and an atomic authenticated commit binding the full identity/generation tuple.
+The legacy mapping and aggregate `covered > 0` accounting may never be used to
+enable the production switch.
+
+This channel can authenticate against stale, blind or map-only publishers; it
+is not a security boundary against a hostile process running as the same
+Windows object owner. That owner can generally obtain `WRITE_DAC` and re-ACL
+peer process objects. Defending that stronger threat requires a separate
+integrity/AppContainer or service boundary, not a stronger claim about a
+same-token shared mapping.
 
 Direct HID reads and any other observed path remain a hard refusal until
 separately instrumented and proven. General asynchronous HID isolation needs
@@ -167,6 +195,20 @@ shadow buffers/OVERLAPPED completion fencing; robust device-wide support may
 ultimately require physical-device hiding plus a virtual controller. A module
 name is not evidence of complete coverage; runtime capability telemetry and
 deterministic fixtures are required.
+
+`overlay-controller-middleware-capability-contract.ts` supplies another
+isolated, release-tested QA evaluator for those remaining stacks. It is not a
+native authorization or hook implementation. It binds a complete observed
+module/interface inventory to exact HID endpoint and handle generations;
+requires each synchronous, overlapped, APC, event and IOCP route; namespaces
+report schemas by operation, control semantic, transfer direction and report
+ID; and requires neutralization for device-to-host transfers plus transfer-
+specific hold/replay for host-to-device transfers. `SteamInput006` and
+`SteamController008` remain separate exact revisions, unknown revisions fail
+closed, and observed libScePad remains `abi-unverified`. This validator is not
+a native HID/Steam/libScePad implementation, is not yet composed with the
+coarse input-capability evaluator, and has no native collector supplying its
+report. It does not make either real title compatible by itself.
 
 While blocked, XInput must preserve connected identity and return a neutral
 successful reading with stable packet semantics, rather than pretending the
@@ -246,6 +288,28 @@ Only after these gates pass may the guarded populated-launcher harness run
 Spider-Man 2 and Khazan. Both sessions require controller isolation held for
 at least 60 seconds, visible overlay screenshots, focus evidence, child/session
 telemetry, exact cleanup and an unchanged original database hash.
+
+### Current accepted QA evidence
+
+The repository currently release-gates the fixture-only supervisor, generic
+cached-body detour, exact `CreateProcessW/A` child propagation, synthetic
+XInput 1.3 subset, synthetic six-projection WGI, synthetic DirectInput 8, and
+authenticated one-shot channel harnesses, plus a synthetic x64 WARP D3D11
+render fixture. Their clean acceptance suites cover loader order, cached
+function bodies, exact process/file identity, bounded crash cleanup, immutable
+WGI publication generations, DirectInput buffered and immediate state
+restoration across repeated generations, authenticated atomic readiness/release
+records, and the render fixture's declared getter-visible base-D3D11.0 state and
+lifetime boundary. These binaries are excluded from packaged runtime output.
+
+This evidence is deliberately narrower than game compatibility. The child
+fixture does not cover every Windows process-creation API, XInput does not yet
+cover every system DLL variant, WGI is a synthetic SDK-ABI provider rather
+than real controller hardware, and the channel is not a security boundary
+against a hostile process running as the same Windows object owner. Direct
+HID, exact Steam/controller middleware revisions, elevation, anti-cheat and
+real-title render/input integration remain required before either target game
+can be advertised as interactive-overlay compatible.
 
 ## Primary sources
 

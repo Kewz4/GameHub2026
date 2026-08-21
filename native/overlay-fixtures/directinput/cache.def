@@ -1,0 +1,13 @@
+LIBRARY "gamehub-directinput-qa-cache64"
+EXPORTS
+    GameHubDiQaGetCacheSnapshot
+    GameHubDiQaGetProviderSnapshot
+    GameHubDiQaGetRootA
+    GameHubDiQaGetRootW
+    GameHubDiQaGetDeviceA
+    GameHubDiQaGetDeviceW
+    GameHubDiQaSetPhysical
+    GameHubDiQaSetActionMapResult
+    GameHubDiQaSetRange
+    GameHubDiQaReleaseAll
+    GameHubDiQaTamperPollSlotForNegativeControl

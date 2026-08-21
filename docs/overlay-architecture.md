@@ -4,6 +4,12 @@
 
 GameHub's in-game overlay is a transparent `BrowserWindow` attached to the detected game window. It supports three modes: **full** (a freeform Steam-style widget workspace), **pinned** (corner FPS chip), and **toast** (activation notification). All three are React components served from the same renderer bundle and differentiated by URL hash.
 
+The production renderer remains out of process. A separately researched
+pre-entry in-process compositor is QA-only and must pass the render, input and
+supervisor gates in [overlay-render-hook-research.md](overlay-render-hook-research.md)
+and [overlay-supervised-launch.md](overlay-supervised-launch.md) before it can
+replace or augment this window path.
+
 ---
 
 ## Window Management
@@ -39,6 +45,11 @@ Full overlay additionally disables `backgroundThrottling: false` (keeps performa
 ### Lifecycle
 
 Called from `process-watcher.ts` (game detection loop, 2s interval):
+
+This diagram describes the window flow after successful input authorization.
+In the current Windows production configuration, the interactive branch is
+unreachable: Shift+F3 or Guide receives the noninteractive refusal toast
+because live input isolation is disabled.
 
 ```
 Game detected → OverlayManager.setActiveGame(game)
@@ -356,7 +367,14 @@ The same state/API drives the overlay controls and the running-game actions in t
 
 `overlay-manager.ts:startControllerPolling()` uses `NativeAddon.pollGamepadState()` at 32ms intervals (Raw Input API on Windows). When the overlay is open, D-pad presses are translated to navigation actions and sent to the renderer via `on-overlay-gamepad-action`.
 
-One Guide-button press toggles the overlay, matching the `Shift+F3` keyboard shortcut. Directional input uses spatial navigation. Range inputs and selects require Select to enter edit mode and Select/Back to leave it, so D-pad movement does not accidentally change volume or replay settings. Shoulder actions switch the music tabs. Widget size, visibility, reset and layout locking are all controller reachable.
+When an authorized interactive overlay is open, one Guide-button press requests
+a toggle, matching the `Shift+F3` keyboard shortcut. With the current production
+gate disabled, neither Guide nor Shift+F3 can open the interactive window.
+Directional input uses spatial navigation. Range inputs and selects require
+Select to enter edit mode and Select/Back to leave it, so D-pad movement does
+not accidentally change volume or replay settings. Shoulder actions switch the
+music tabs. Widget size, visibility, reset and layout locking are all controller
+reachable.
 
 ---
 

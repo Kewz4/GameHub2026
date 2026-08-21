@@ -37,6 +37,8 @@ const identity: OverlayQaSupervisedTargetIdentity = {
   pid: 42,
   creationTicks: "133700000000000000",
   canonicalExecutablePath: executable,
+  volumeSerial: "00000000000000A1",
+  fileId: "000000000000000000000000000000B2",
 };
 
 const makePlan = (id = sessionId): OverlaySupervisedLaunchPlan => {
@@ -202,8 +204,8 @@ const makeFixture = (
         return {
           canonicalExecutablePath: plan.canonicalExecutablePath,
           canonicalGameRoot: String.raw`C:\Games\Spider Man 2`,
-          volumeSerial: "A1",
-          fileId: "B2",
+          volumeSerial: identity.volumeSerial,
+          fileId: identity.fileId,
         };
       },
     },
@@ -293,20 +295,20 @@ describe("overlay supervised launch service", () => {
       {
         canonicalExecutablePath: executable,
         canonicalGameRoot: String.raw`C:\Windows\System32`,
-        volumeSerial: "A1",
-        fileId: "B2",
+        volumeSerial: identity.volumeSerial,
+        fileId: identity.fileId,
       },
       {
         canonicalExecutablePath: executable,
         canonicalGameRoot: String.raw`C:\Games\Other`,
-        volumeSerial: "A1",
-        fileId: "B2",
+        volumeSerial: identity.volumeSerial,
+        fileId: identity.fileId,
       },
       {
         canonicalExecutablePath: executable,
         canonicalGameRoot: String.raw`C:\Games\Spider Man 2`,
         volumeSerial: "",
-        fileId: "B2",
+        fileId: identity.fileId,
       },
     ]) {
       const helper = new FakeHelper();
@@ -340,8 +342,8 @@ describe("overlay supervised launch service", () => {
             verify: (plan) => ({
               canonicalExecutablePath: plan.canonicalExecutablePath,
               canonicalGameRoot: String.raw`C:\Games\Spider Man 2`,
-              volumeSerial: "A1",
-              fileId: "B2",
+              volumeSerial: identity.volumeSerial,
+              fileId: identity.fileId,
             }),
           },
           timeouts: { preparedMs: 5_001, commitMs: 5_000 },
@@ -385,13 +387,15 @@ describe("overlay supervised launch service", () => {
     }
   });
 
-  it("rejects mismatched session/path and malformed PID/FILETIME identities", async () => {
+  it("rejects mismatched process/file identity and malformed native events", async () => {
     const targets: Array<OverlayQaSupervisedTargetIdentity> = [
       { ...identity, sessionId: "different_supervised_session_0000001" },
       {
         ...identity,
         canonicalExecutablePath: String.raw`C:\Games\Other\Game.exe`,
       },
+      { ...identity, volumeSerial: "00000000000000A2" },
+      { ...identity, fileId: "000000000000000000000000000000B3" },
       { ...identity, pid: 4 },
       { ...identity, creationTicks: "0" },
     ];
@@ -415,6 +419,8 @@ describe("overlay supervised launch service", () => {
     for (const stale of [
       { ...identity, pid: 43 },
       { ...identity, creationTicks: "133700000000000001" },
+      { ...identity, volumeSerial: "00000000000000A2" },
+      { ...identity, fileId: "000000000000000000000000000000B3" },
       {
         ...identity,
         canonicalExecutablePath: String.raw`C:\Games\Other\Game.exe`,
