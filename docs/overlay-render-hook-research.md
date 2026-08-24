@@ -23,29 +23,39 @@ only as an architectural reference.
 
 The Windows DXGI QA evidence schema is implemented in
 `src/main/services/overlay-render-capability-contract.ts`. It is an isolated,
-release-tested evaluator with no production caller; it does not authorize
-injection or advance the supervised-launch state machine. The evaluator
+release-tested evaluator whose only coordinator caller is a QA acceptance seam;
+it has no production caller and does not authorize injection or advance a
+packaged launch. The evaluator
 requires the full pinned process identity, the already-authorized input
 generation, exact native commit/topology generations, an architecture-matched
 payload, a complete backend/surface report, pre-entry cached-pointer detours,
 a nonblocking/allocation-free Present path and a hook-reader teardown fence.
-Malformed or self-reported unsupported/fault evidence fails closed. Report
-authenticity, monotonic native publication and coordinator wiring remain
-mandatory native work. Vulkan/OpenGL are deliberately not accepted by this
-Windows schema; the MangoHud-derived Linux lifecycle needs its own
-backend-specific contract and fixtures.
+Malformed or self-reported unsupported/fault evidence fails closed. The QA
+coordinator now proves the intended post-resume validation order and exact
+cross-report binding, but report authenticity, monotonic native publication and
+same-process native coordinator wiring remain mandatory work. Vulkan/OpenGL are
+deliberately not accepted by this Windows schema; the MangoHud-derived Linux
+lifecycle needs its own backend-specific contract and fixtures.
 
 The schema is coarse self-attestation: a `covered` state or hot-path Boolean is
 not measured native proof. It does not encode D3D11.1 constant-buffer ranges,
 extended UAV slots, hidden SO/UAV counters or trailing-null RTV topology, and
 it cannot distinguish a terminal-error test seam from real device removal.
 
-The release-gated native render evidence is limited to the isolated synthetic
-x64 WARP D3D11 fixture in `native/overlay-fixtures/dxgi-d3d11`. It proves its
-declared getter-visible base-D3D11.0 subset, exact cached method bodies,
-swap-chain/device/immediate-context identity, resize/destruction handling and a
-late-reader detach barrier. It does not prove D3D11.1 hidden state, D3D12,
-Vulkan, OpenGL, hardware-driver behavior, production wiring or a real game.
+The release-gated native render evidence now includes isolated synthetic x64
+WARP D3D11 and D3D12 fixtures. D3D11 proves its declared getter-visible
+base-D3D11.0 subset, exact cached method bodies, swap-chain/device/immediate-
+context identity, resize/destruction handling and a late-reader detach barrier.
+D3D12 proves exact creation-time command-queue identity, cached `Present` and
+`Present1`, failed/successful resize with an external fence, nonblocking
+contention skips, fixture-owned command resources and reader-fenced detach. A
+post-execute `Signal` failure globally retires the submitted slot until an
+independent exact-queue idle fence recovers it; a stale event wake is rejected
+by re-reading the exact fence value, and a real bounded timeout poisons and
+retains the registration/resources instead of reusing or freeing them.
+Neither proves D3D11.1 hidden state, D3D12 device removal/final-release
+invalidation, Vulkan, OpenGL, hardware-driver behavior, production wiring or a
+real game.
 
 ## What is worth adopting
 

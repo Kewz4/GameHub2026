@@ -210,7 +210,7 @@ assert.equal(barrier.detachWaitingExclusiveObserved, true);
 assert.equal(barrier.lateEntrantAdmissionAttempted, true);
 assert.equal(barrier.lateEntrantWaitingForAdmission, true);
 assert.equal(barrier.lateEntrantBlockedBeforeAdmission, true);
-assert.equal(barrier.lateEntrantPresentResult, 0);
+assertHiddenWindowPresentSucceeded(barrier.lateEntrantPresentResult);
 assert.equal(barrier.lateEntrantForwardedAfterDetach, true);
 assert.ok(barrier.postDetachPresentForwards >= 1);
 assert.equal(barrier.barrierDetachResult, 0);

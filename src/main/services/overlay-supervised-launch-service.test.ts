@@ -23,6 +23,7 @@ import {
 
 const sessionId = "supervised_qa_session_000000000001";
 const executable = String.raw`C:\Games\Spider Man 2\Spider-Man2.exe`;
+const TARGET_CONTENT_SHA256 = "a".repeat(64);
 const runtime: OverlaySupervisedQaRuntime = {
   platform: "win32",
   isPackaged: false,
@@ -206,6 +207,7 @@ const makeFixture = (
           canonicalGameRoot: String.raw`C:\Games\Spider Man 2`,
           volumeSerial: identity.volumeSerial,
           fileId: identity.fileId,
+          contentSha256: TARGET_CONTENT_SHA256,
         };
       },
     },
@@ -297,18 +299,28 @@ describe("overlay supervised launch service", () => {
         canonicalGameRoot: String.raw`C:\Windows\System32`,
         volumeSerial: identity.volumeSerial,
         fileId: identity.fileId,
+        contentSha256: TARGET_CONTENT_SHA256,
       },
       {
         canonicalExecutablePath: executable,
         canonicalGameRoot: String.raw`C:\Games\Other`,
         volumeSerial: identity.volumeSerial,
         fileId: identity.fileId,
+        contentSha256: TARGET_CONTENT_SHA256,
       },
       {
         canonicalExecutablePath: executable,
         canonicalGameRoot: String.raw`C:\Games\Spider Man 2`,
         volumeSerial: "",
         fileId: identity.fileId,
+        contentSha256: TARGET_CONTENT_SHA256,
+      },
+      {
+        canonicalExecutablePath: executable,
+        canonicalGameRoot: String.raw`C:\Games\Spider Man 2`,
+        volumeSerial: identity.volumeSerial,
+        fileId: identity.fileId,
+        contentSha256: "A".repeat(64),
       },
     ]) {
       const helper = new FakeHelper();
@@ -344,6 +356,7 @@ describe("overlay supervised launch service", () => {
               canonicalGameRoot: String.raw`C:\Games\Spider Man 2`,
               volumeSerial: identity.volumeSerial,
               fileId: identity.fileId,
+              contentSha256: TARGET_CONTENT_SHA256,
             }),
           },
           timeouts: { preparedMs: 5_001, commitMs: 5_000 },
@@ -668,7 +681,7 @@ describe("overlay supervised launch service", () => {
       const fixture = makeFixture();
       await suspend(fixture);
       close(fixture.helper);
-      assert.equal(fixture.service.getState(), "failed");
+      assert.equal(fixture.service.getState(), "launch-outcome-unknown");
       assert.equal(fixture.registry.getState(), null);
       assert.equal(fixture.helper.terminated, true);
     }
@@ -687,6 +700,7 @@ describe("overlay supervised launch service", () => {
           writeResult === false ? "stdin-eof" : "stdin-write"
         )
       );
+      assert.equal(fixture.service.getState(), "launch-outcome-unknown");
     }
   });
 
@@ -707,6 +721,7 @@ describe("overlay supervised launch service", () => {
       await assert.rejects(pending, (error) =>
         assertServiceError(error, "helper-error")
       );
+      assert.equal(fixture.service.getState(), "launch-outcome-unknown");
     }
     {
       const fixture = makeFixture();
@@ -715,12 +730,14 @@ describe("overlay supervised launch service", () => {
       await assert.rejects(pending, (error) =>
         assertServiceError(error, "helper-exit")
       );
+      assert.equal(fixture.service.getState(), "launch-outcome-unknown");
     }
     {
       const fixture = makeFixture();
       await suspend(fixture);
       fixture.helper.emitExit(1);
       assert.equal(fixture.service.getLastError()?.code, "helper-exit");
+      assert.equal(fixture.service.getState(), "launch-outcome-unknown");
       assert.equal(fixture.registry.getState(), null);
     }
   });

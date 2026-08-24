@@ -6,8 +6,11 @@ This is an experimental, fixture-first architecture for interactive overlay
 input isolation on manually managed Windows games. Both production gates remain
 disabled: `OVERLAY_LIVE_INPUT_ISOLATION_ENABLED = false` and
 `OVERLAY_SUPERVISED_LAUNCH_PRODUCTION_ENABLED = false`. The supervised service
-has no production helper adapter or launch-path integration. Only isolated
-synthetic fixtures and contract tests are release-gated.
+and guarded Node helper adapter have no packaged launch-path integration, and
+the adapter's independent `OVERLAY_SUPERVISED_LAUNCH_ADAPTER_PRODUCTION_ENABLED`
+gate is also `false`. The native helper still accepts only its adjacent QA
+fixture; the new static preflight, adapter and capability transport are
+release-gated evidence, not a production game launcher.
 
 The existing attach-after-launch injector is not an authorization mechanism.
 It can patch imports it finds, but it cannot revoke a function pointer that a
@@ -23,18 +26,67 @@ binary string/import is not runtime coverage or compatibility proof:
 
 - Marvel's Spider-Man 2 uses Windows.Gaming.Input Gamepad and
   RawGameController, Raw Input, dynamically resolved XInput 1.4/9.1.0,
-  HID/SetupAPI, `SteamInput006`, `SteamController008` and libScePad/controller
+  HID/SetupAPI, `SteamInput006`, `SteamController008` and controller
   middleware paths. Its local AppCompat entry also requests `RUNASADMIN`.
 - The First Berserker: Khazan starts through
   `steamclient_loader_x64.exe`, then creates `BBQ-Win64-Shipping.exe`. The
-  renderer uses XInput 1.3, Raw Input/HID, DirectInput, `SteamInput006`,
-  `SteamController008` and bundled libScePad paths.
+  renderer uses XInput 1.3, Raw Input/HID, `SteamInput006` and bundled
+  libScePad paths.
 
 Focus alone cannot isolate either title. DirectInput explicitly permits
 `DISCL_BACKGROUND`, meaning a device may be acquired while the game is not the
 active window. The input hook must be present before the game or its launcher
 can cache polling entry points, and it must propagate only to an exact,
 configured render child.
+
+## Static target preflight
+
+`overlay-pe-import-inspector.ts` now provides a bounded, read-only x86/x64 PE
+prefilter for ordinary and delay imports plus exact embedded Steam, WGI and
+GameInput interface tokens in ASCII or UTF-16. `overlay-static-target-preflight.ts`
+composes it with a non-recursive,
+bounded inventory of DLL names adjacent to the launch and render images. It
+rejects incomplete or changing files/directories, overlapping or ambiguous PE
+section mappings, ambiguous duplicate DLL names, symlinks, a mismatched
+inspected path, unknown render/child routes and any unverified HID or libScePad
+requirement. Full-file SHA-256 and schema/ABI proof digests can come only from
+constructor-owned trusted providers, not the launch request.
+
+This remains pathname evidence. It never loads an image and cannot authorize a
+launch: the supervisor must independently retain the exact executable handle,
+volume/file ID and process identity across suspended creation and resume.
+The default Node inspector is still synchronous, so an event-loop timer cannot
+forcibly interrupt a hostile or stalled filesystem scan; production needs a
+terminateable worker/native scanner. Likewise, Node's path-based `spawn` cannot
+retain the verified helper file handle through `CreateProcessW`, leaving a
+final replacement window. A signed/hash-pinned native bootstrap with a retained
+handle and authenticated helper identity receipt is still mandatory.
+
+The local target snapshot used for this work found the following concrete
+surfaces; counts and imports may change with a game update:
+
+- `Spider-Man2.exe` is x64, SHA-256
+  `7615601ea642e074fad40167bbb20f5929382d463074a5d5f771976de0a4b885`,
+  and exposed 1,100 ordinary/delay imports, including
+  direct HID feature access, Raw Input, `CreateProcessW/A`, Steam API and D3D12
+  symbols. Both `SteamInput006` and `SteamController008` plus the
+  `Windows.Gaming.Input` namespace token were present, so every known WGI
+  projection is conservatively required. It remains blocked without exact HID
+  report-schema/runtime coverage.
+- Khazan's x64 loader SHA-256 is
+  `99b13814bda3424ad0477d2400c9160235983e59cd7d2682042b71e4500817ae`
+  and it exposed 115 imports including `CreateProcessW`. Its x64 renderer
+  SHA-256 is
+  `aa3e59b2a8656176530fabe349b36b0996018274c38f56894b6def8940c34632`
+  and it exposed 1,074 imports including DXGI, D3D11/D3D12, XInput 1.3, HID,
+  Raw Input and Steam API. Adjacent `libScePad.dll` itself imports HID plus
+  `CreateFileW`, `ReadFile` and `WriteFile`; therefore XInput/Raw Input coverage
+  alone cannot isolate Khazan.
+
+Community reverse-engineering such as duaLib and OpenOrbis is useful for naming
+`scePadRead`/`scePadReadState`, vibration and light-bar surfaces, but it is not
+an authoritative Windows libScePad ABI proof. No compatibility shim is enabled
+from that research; `libscepad-abi-unverified` remains fail-closed.
 
 ## Target production sequence — not currently wired
 
@@ -80,7 +132,8 @@ process object is released.
 
 The QA fixture supervisor now opens the exact executable without write/delete
 sharing, holds that handle across `CreateProcessW` and the commit decision,
-and emits its fixed-width volume serial and 128-bit file ID in every identity
+hashes/revalidates its content, and emits its fixed-width volume serial and
+128-bit file ID in every identity
 event. The TypeScript coordinator independently retains the verifier proof and
 requires an exact match before authorizing the suspended process; commit and
 abort echo the same identity. Generic game wiring remains blocked because the
@@ -158,9 +211,10 @@ Readiness is presence-scoped and all required paths must be covered:
   remain separate unsupported capabilities.
 
 `overlay-input-capability-contract.ts` defines an isolated, release-tested QA
-evaluator for this report. It has no production caller and does not advance
-the launch coordinator. It accepts `unknown`, never throws for malformed native
-data, and requires every known backend exactly once, an exact
+evaluator for this report. Its only coordinator caller is the isolated QA
+acceptance path described below; it has no production caller and cannot advance
+a packaged launch. It accepts `unknown`, never throws for malformed native data,
+and requires every known backend exactly once, an exact
 session/PID/creation-time/generation/topology/native-commit identity, pre-entry
 inline detours, an absence-monitor epoch independently retained by the caller,
 and a release fence. Required child-creation routes are an exact canonical,
@@ -172,6 +226,47 @@ fail closed. It currently has no authenticated native publisher or non-test
 integration with the supervisor, launch path or input gate, so it cannot prove
 that a reported behavior occurred. A future authorization path would also need
 file/signature/mitigation, game-root and anti-cheat policy.
+
+## QA-only end-to-end composition
+
+`overlay-qa-end-to-end-coordinator.ts` is an isolated acceptance seam. The
+guarded `overlay-supervised-launch-production-adapter.ts` composes that seam
+with fixed helper arguments, static capability preflight, fail-closed
+anti-cheat inventory, exact suspended/resumed identity revalidation and bounded
+operations, but it is deliberately disconnected from `open-game` and guarded
+by a third disabled production constant. While the target is suspended, the
+evidence interface may only open its channel and retain static target-identity
+and architecture expectations. The coordinator then marks the target prepared
+and commits the existing helper.
+Only after the helper reports the exact target resumed may the evidence adapter
+authenticate runtime module/input and render/Present publications. The overlay
+stays unauthorized and hidden/pass-through until both reports validate and the
+registry reaches `interactive`.
+
+The acceptance suite binds the authenticated receipt and both reports to one
+exact session, PID, creation time, canonical executable, volume/file ID, input
+and render generation, topology epoch and native commit. Forged, stale and
+incomplete render evidence revokes overlay authorization and releases the
+evidence session. Because the supervised game is already running at that point,
+these failures explicitly forbid a second normal-launch fallback. A lost commit
+acknowledgement preserves the existing `launch-outcome-unknown` terminal rule.
+Channel open, post-resume authentication and release are independently bounded;
+a timed-out authentication is revoked so a late result cannot restore
+interactive authorization, and a failed or timed-out release fails closed.
+
+The adapter binds the preflight's exact content hash, recomputed capability
+profile, required input backends, child routes, target architecture and
+candidate render backend to the evidence bootstrap and authenticated report
+before interaction. Steam/HID/controller strings remain hints: when those
+routes are observed, the coordinator additionally validates the exact
+controller middleware report's module identities, generations, ABI/schema
+digests, endpoint routes and Steam methods against the same commit tuple. A
+malformed, incomplete, duplicated or out-of-order profile fails before the
+helper starts. A constructor-owned lifetime guard must remain armed across the
+interactive session for process-tree, module, service and driver anti-cheat
+detection; a violation revokes the evidence session. This is still QA
+composition: the native helper/evidence implementation is not a signed generic
+production payload and no real game publishes this evidence yet.
 
 The existing fixed nine-word `Local\GameHubOverlayInputBlock` mapping is not
 an authenticated publisher: a same-session process can pre-create it or forge
@@ -205,10 +300,10 @@ report schemas by operation, control semantic, transfer direction and report
 ID; and requires neutralization for device-to-host transfers plus transfer-
 specific hold/replay for host-to-device transfers. `SteamInput006` and
 `SteamController008` remain separate exact revisions, unknown revisions fail
-closed, and observed libScePad remains `abi-unverified`. This validator is not
-a native HID/Steam/libScePad implementation, is not yet composed with the
-coarse input-capability evaluator, and has no native collector supplying its
-report. It does not make either real title compatible by itself.
+closed, and observed libScePad remains `abi-unverified`. The QA coordinator now
+composes this validator with the coarse input/render reports, but there is no
+native HID/Steam/libScePad collector supplying the report. It does not make
+either real title compatible by itself.
 
 While blocked, XInput must preserve connected identity and return a neutral
 successful reading with stable packet semantics, rather than pretending the
@@ -257,9 +352,10 @@ anti-cheat behavior is not bypassed. Refusal launches the game normally only
 when doing so cannot corrupt cloud-launch state; it never advertises the
 interactive overlay as ready.
 
-After a commit frame is sent, loss of the resume acknowledgement is an
-explicit `launch-outcome-unknown` terminal state. It must never trigger a
-normal-launch fallback: the supervised process may already be running. A
+After any launch command may have reached the helper, a failure without an
+exact native `never-created` or `terminated` outcome is an explicit
+`launch-outcome-unknown` terminal state. It must never trigger a normal-launch
+fallback: the supervised process may already be running. A
 future process/cloud coordinator must retain that uncertain identity in a
 separate durable outcome token even though overlay authorization is revoked.
 
@@ -293,14 +389,19 @@ telemetry, exact cleanup and an unchanged original database hash.
 
 The repository currently release-gates the fixture-only supervisor, generic
 cached-body detour, exact `CreateProcessW/A` child propagation, synthetic
-XInput 1.3 subset, synthetic six-projection WGI, synthetic DirectInput 8, and
-authenticated one-shot channel harnesses, plus a synthetic x64 WARP D3D11
-render fixture. Their clean acceptance suites cover loader order, cached
-function bodies, exact process/file identity, bounded crash cleanup, immutable
-WGI publication generations, DirectInput buffered and immediate state
-restoration across repeated generations, authenticated atomic readiness/release
-records, and the render fixture's declared getter-visible base-D3D11.0 state and
-lifetime boundary. These binaries are excluded from packaged runtime output.
+XInput 1.3 subset, synthetic six-projection WGI, synthetic DirectInput 8,
+authenticated one-shot channel harnesses and the same-target supervised
+evidence transport, plus synthetic x64 WARP D3D11 and D3D12 render fixtures.
+Their clean acceptance suites cover loader order, cached function bodies, exact
+process/file identity, bounded crash cleanup, immutable WGI publication
+generations, DirectInput buffered and immediate state restoration across
+repeated generations, authenticated atomic readiness/release records, and the
+render fixtures' declared D3D11 state/lifetime and D3D12 queue/fence/lifecycle
+boundaries, including failed queue signals and stale fence wakes. The QA-only
+TypeScript coordinator additionally tests the intended supervisor-to-post-
+resume evidence state ordering, exact input/render/controller report binding,
+lifetime-guard revocation and ambiguous-outcome no-relaunch behavior. These
+binaries and the coordinator remain excluded from packaged runtime paths.
 
 This evidence is deliberately narrower than game compatibility. The child
 fixture does not cover every Windows process-creation API, XInput does not yet
@@ -331,5 +432,7 @@ can be advertised as interactive-overlay compatible.
 - User-mode HID report acquisition: <https://learn.microsoft.com/windows-hardware/drivers/hid/obtaining-hid-reports>
 - RawGameController: <https://learn.microsoft.com/windows/uwp/gaming/raw-game-controller>
 - Steam Input API: <https://partner.steamgames.com/doc/api/isteaminput>
+- duaLib compatibility research: <https://github.com/WujekFoliarz/duaLib>
+- OpenOrbis Pad API research: <https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/master/docs/MD/PS4%20Libraries/Pad.md>
 - UAC architecture: <https://learn.microsoft.com/windows/security/application-security/application-control/user-account-control/architecture>
 - Running with administrator privileges: <https://learn.microsoft.com/windows/win32/secbp/running-with-administrator-privileges>

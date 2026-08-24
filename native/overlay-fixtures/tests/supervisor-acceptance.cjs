@@ -178,8 +178,25 @@ const fixtureProcessCount = () => {
   );
   if (result.error) throw result.error;
   if (result.status !== 0) {
+    const processName = path.parse(fixtureImageName).name.replaceAll("'", "''");
+    const fallback = childProcess.spawnSync(
+      "powershell.exe",
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `$ErrorActionPreference = 'Stop'; @((Get-Process -Name '${processName}' -ErrorAction SilentlyContinue)).Count`,
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 5_000 }
+    );
+    if (fallback.error) throw fallback.error;
+    const fallbackCount = fallback.stdout.trim();
+    if (fallback.status === 0 && /^(?:0|[1-9]\d*)$/u.test(fallbackCount)) {
+      return Number(fallbackCount);
+    }
     throw new Error(
-      `tasklist failed with ${result.status}: ${result.stderr || result.stdout}`
+      `process enumeration failed: tasklist ${result.status}: ${result.stderr || result.stdout}; PowerShell ${fallback.status}: ${fallback.stderr || fallback.stdout}`
     );
   }
   let count = 0;

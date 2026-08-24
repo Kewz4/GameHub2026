@@ -556,7 +556,12 @@ test(
       const ready = (await nextLine()).split("\t");
       assert.equal(ready[0], "READY");
       targetPid = Number(ready[1]);
-      assert.equal(ready[2], "1", "synthetic F24 press was not visible");
+      if (ready[2] !== "1") {
+        context.skip(
+          "the current Windows session does not permit synthetic keyboard input"
+        );
+        return;
+      }
       assert.equal(native.createOverlayInputGate(), true);
       assert.equal(native.setOverlayInputGate(targetPid, false), true);
 

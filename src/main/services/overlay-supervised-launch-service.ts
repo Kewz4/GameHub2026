@@ -128,6 +128,8 @@ export interface OverlayNativeVerifiedTarget {
   canonicalGameRoot: string;
   volumeSerial: string;
   fileId: string;
+  /** SHA-256 recomputed from the retained native target file handle. */
+  contentSha256: string;
 }
 
 /** Must verify an open file handle/file ID against the trusted local game DB. */
@@ -190,6 +192,7 @@ const sameIdentity = (
 
 const VOLUME_SERIAL = /^(?!0{16}$)[0-9A-F]{16}$/u;
 const FILE_ID = /^(?!0{32}$)[0-9A-F]{32}$/u;
+const LOWERCASE_SHA256 = /^[0-9a-f]{64}$/u;
 
 const serviceError = (
   code: OverlaySupervisedLaunchServiceErrorCode,
@@ -263,6 +266,7 @@ const normalizePlan = (
     trustedTarget.canonicalExecutablePath !== canonicalExecutablePath ||
     !VOLUME_SERIAL.test(trustedTarget.volumeSerial) ||
     !FILE_ID.test(trustedTarget.fileId) ||
+    !LOWERCASE_SHA256.test(trustedTarget.contentSha256) ||
     !path.win32.isAbsolute(canonicalGameRoot) ||
     relativeToRoot === "" ||
     relativeToRoot === ".." ||
@@ -309,6 +313,7 @@ const normalizePlan = (
       canonicalGameRoot,
       volumeSerial: trustedTarget.volumeSerial,
       fileId: trustedTarget.fileId,
+      contentSha256: trustedTarget.contentSha256,
     }),
   });
 };
@@ -845,6 +850,19 @@ export class OverlaySupervisedLaunchService {
 
   private fail(error: OverlaySupervisedLaunchServiceError) {
     if (this.isTerminal()) return;
+    // Once a launch command may have reached the native helper, a Node-side
+    // terminate() call cannot prove that no target was created (or that an
+    // already-created target was killed). Until the native bootstrap returns
+    // a kill-on-close/absence receipt, every such failure forbids a second,
+    // normal launch attempt.
+    const targetOutcomeUnknown =
+      this.state === "launch-sent" ||
+      this.state === "suspended" ||
+      this.state === "prepared" ||
+      this.state === "commit-sent" ||
+      this.state === "resume-exit" ||
+      this.state === "abort-sent" ||
+      this.state === "abort-exit";
     const commitMayHaveResumed =
       this.state === "commit-sent" || this.state === "resume-exit";
     this.clearTimeout();
@@ -860,12 +878,12 @@ export class OverlaySupervisedLaunchService {
     const terminalError = commitMayHaveResumed
       ? serviceError(
           "launch-outcome-unknown",
-          "Commit acknowledgement was lost; the game may already be running and must never be launched again as a fallback.",
+          "The helper did not prove an exact never-created or terminated target outcome; the game must never be launched again as a fallback.",
           error
         )
       : error;
     this.lastError = terminalError;
-    this.state = commitMayHaveResumed ? "launch-outcome-unknown" : "failed";
+    this.state = targetOutcomeUnknown ? "launch-outcome-unknown" : "failed";
     this.startDeferred?.reject(terminalError);
     this.commitDeferred?.reject(terminalError);
     this.abortDeferred?.reject(terminalError);

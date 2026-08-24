@@ -40,6 +40,22 @@ const readCompleteJson = (filePath) => {
   return JSON.parse(text);
 };
 
+const readCompleteTextWithin = (filePath, timeoutMs = 5_000) => {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const text = fs.readFileSync(filePath, "utf8");
+      if (text.endsWith("\n")) return text;
+      lastError = new Error(`${filePath} was not fully flushed`);
+    } catch (error) {
+      lastError = error;
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+  }
+  throw new Error(`could not read complete ${filePath}: ${lastError ?? ""}`);
+};
+
 const assertExact = (mode, label, expectedHook) => {
   const runResult = run(mode, label);
   assert.equal(runResult.result.error, undefined);
@@ -148,16 +164,7 @@ const crashStart = childProcess.spawn(
 crashStart.unref();
 assert.equal(fs.existsSync(crashParentResult), false);
 assert.equal(fs.existsSync(crashChildResult), false);
-const deadline = Date.now() + 5_000;
-while (!fs.existsSync(crashProof) && Date.now() < deadline) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
-}
-assert.ok(
-  fs.existsSync(crashProof),
-  "child marker did not observe parent death"
-);
-const [pidText, creationTicksText] = fs
-  .readFileSync(crashProof, "utf8")
+const [pidText, creationTicksText] = readCompleteTextWithin(crashProof)
   .trim()
   .split(",");
 const childPid = Number(pidText);
