@@ -80,16 +80,29 @@ function RestoreModal({
   onClose,
   onRestored,
 }: Readonly<RestoreModalProps>) {
-  const { showErrorToast, showSuccessToast } = useBigPictureToast();
+  const { t } = useTranslation("settings");
+  const { showErrorToast, showSuccessToast, showWarningToast } =
+    useBigPictureToast();
   return (
     <EmulationCloudRestoreModal
       save={save}
       platform={platform}
       onClose={onClose}
       onRestored={onRestored}
-      onRestoreSuccess={() =>
-        showSuccessToast("Cloud save restored", SETTINGS_TOAST_OPTIONS)
-      }
+      onRestoreSuccess={(result) => {
+        if (result.requiresManualImport) {
+          showWarningToast(t("cloud_restore_exported_title"), {
+            ...SETTINGS_TOAST_OPTIONS,
+            duration: 12_000,
+            message: t("cloud_restore_exported_description", {
+              path: result.exportedPath ?? "",
+            }),
+          });
+          return;
+        }
+
+        showSuccessToast("Cloud save restored", SETTINGS_TOAST_OPTIONS);
+      }}
       onRestoreError={() =>
         showErrorToast("Failed to restore cloud save", SETTINGS_TOAST_OPTIONS)
       }

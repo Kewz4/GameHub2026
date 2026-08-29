@@ -12,7 +12,13 @@ import {
   DEFAULT_HYDRA_OVERLAY_PREFERENCES,
   resolveHydraOverlayPreferences,
 } from "@shared";
-import { BrowserWindow, app, globalShortcut, screen } from "electron";
+import {
+  BrowserWindow,
+  app,
+  desktopCapturer,
+  globalShortcut,
+  screen,
+} from "electron";
 import path from "node:path";
 import { getUnlockedAchievements } from "@main/events/user/get-unlocked-achievements";
 import { getGameAssets } from "@main/events/catalogue/get-game-assets";
@@ -26,12 +32,8 @@ import {
 import { overlayFpsMonitor } from "./overlay-fps-monitor";
 import { WindowManager } from "./window-manager";
 import { GameRecorderManager } from "./game-recorder-manager";
+import { isGameWindowDisplaySized } from "./game-recorder-capture-source";
 import { destroyOverlayWindow } from "./overlay-window-lifecycle";
-import {
-  OVERLAY_LIVE_INPUT_ISOLATION_ENABLED,
-  OverlayInputGateController,
-  type OverlayInputGateFailureReason,
-} from "./overlay-input-gate";
 import {
   OVERLAY_ACTIVATION_GRACE_MS,
   calculateActivationToastBounds,
@@ -39,6 +41,12 @@ import {
   isOverlayInteractionForeground,
   type OverlayActivationToastKind,
 } from "./overlay-activation-policy";
+import {
+  evaluateOverlayWindowMode,
+  isExactDesktopWindowSource,
+  type OverlayWindowModeEligibility,
+  type OverlayWindowModeFailureReason,
+} from "./overlay-window-mode";
 
 const PREFERRED_SHORTCUT = "Shift+F3";
 const FALLBACK_SHORTCUT = "Control+Shift+F3";
@@ -63,7 +71,6 @@ const OVERLAY_FOREGROUND_RETRY_MS = 120;
  */
 const RENDERER_READY_ATTEMPTS = 4;
 const RENDERER_READY_TIMEOUT_MS = 1_500;
-const INPUT_GATE_READY_TIMEOUT_MS = 3_000;
 const GAMEPAD_REPEAT_DELAY_MS = 360;
 const GAMEPAD_REPEAT_INTERVAL_MS = 105;
 
@@ -123,36 +130,15 @@ export class OverlayManager {
   private static lastOverlayPlacement: Electron.Rectangle | null = null;
   private static overlayContextGeneration = 0;
   private static rendererContextGeneration = -1;
+  private static windowModeEligibility: OverlayWindowModeEligibility | null =
+    null;
+  private static windowModeCheck: Promise<OverlayWindowModeEligibility> | null =
+    null;
   private static overlayRendererReadyWaiters = new Set<
     (ready: boolean) => void
   >();
-  private static inputGate = new OverlayInputGateController({
-    authorized: () => OVERLAY_LIVE_INPUT_ISOLATION_ENABLED,
-    create: () => NativeAddon.createOverlayInputGate(),
-    set: (targetPid, blocked) =>
-      NativeAddon.setOverlayInputGate(targetPid, blocked),
-    status: (targetPid) => NativeAddon.getOverlayInputGateStatus(targetPid),
-    inject: async (targetPid, targetCreationTicks) => {
-      // TEMPORARY FAIL-CLOSED RELEASE POLICY: the current hook is injected on
-      // the first overlay shortcut. A game can cache polling function pointers
-      // before that moment, which an IAT-only sweep cannot revoke. Until the
-      // launcher owns a pre-entry/suspended launch bootstrap with process-wide
-      // detours, never claim complete isolation or load the DLL into a live
-      // game. The noninteractive error toast remains available and the game is
-      // never suspended.
-      logger.warn("Overlay input-hook injection disabled", {
-        targetPid,
-        targetCreationTicks,
-        reason: "pre-entry-isolation-required",
-      });
-      return false;
-    },
-    log: (level, message, details) => logger[level](message, details),
-  });
-
   public static initialize() {
     GameRecorderManager.initialize();
-    this.inputGate.initialize();
     overlayFpsMonitor.setUpdateHandler((metrics) =>
       this.updatePerformance(metrics)
     );
@@ -565,6 +551,19 @@ export class OverlayManager {
       }
       this.lastToggleAt = now;
 
+      const windowMode = await this.resolveWindowModeEligibility(
+        targetBounds,
+        true
+      );
+      if (!windowMode.allowed) {
+        logger.warn("Overlay window mode rejected", {
+          targetPid: this.targetPid,
+          reason: windowMode.reason,
+        });
+        this.showOverlayUnavailableToast(targetBounds, windowMode.reason);
+        return;
+      }
+
       const overlayWindow = this.ensureOverlayWindow(targetBounds);
       if (
         !this.overlayRendererReady &&
@@ -573,19 +572,9 @@ export class OverlayManager {
         this.requestOverlayRendererContext();
       }
       const openingTargetPid = this.targetPid;
-      const inputGateReady =
-        process.platform === "win32"
-          ? this.inputGate.waitUntilReady(
-              openingTargetPid,
-              INPUT_GATE_READY_TIMEOUT_MS
-            )
-          : Promise.resolve(null);
 
       const show = async () => {
-        const [rendererReady, gateReadiness] = await Promise.all([
-          this.acquireRendererContext(overlayWindow),
-          inputGateReady,
-        ]);
+        const rendererReady = await this.acquireRendererContext(overlayWindow);
         if (
           !rendererReady ||
           overlayWindow.isDestroyed() ||
@@ -593,22 +582,16 @@ export class OverlayManager {
           this.activeGame.shop !== game.shop ||
           this.targetPid !== openingTargetPid
         ) {
-          this.inputGate.release();
           logger.warn("Overlay show aborted", {
             rendererReady,
             destroyed: overlayWindow.isDestroyed(),
             gameChanged: this.activeGame?.objectId !== game.objectId,
             targetChanged: this.targetPid !== openingTargetPid,
           });
-          if (this.targetPid !== openingTargetPid) {
-            const bounds = this.getTargetBounds();
-            if (bounds) this.showInputGateErrorToast(bounds, "target-changed");
-          }
           return;
         }
         const currentBounds = this.getTargetBounds();
         if (!currentBounds || !this.isTargetForeground(false)) {
-          this.inputGate.release();
           logger.warn("Overlay show aborted", {
             reason: !currentBounds
               ? "no target bounds"
@@ -616,49 +599,15 @@ export class OverlayManager {
           });
           return;
         }
-        if (gateReadiness && !gateReadiness.ready) {
-          logger.warn("Overlay input protection was not ready", {
-            targetPid: openingTargetPid,
-            reason: gateReadiness.reason,
-            status: gateReadiness.status,
-          });
-        }
-        const inputGateActivated =
-          process.platform !== "win32" ||
-          (Boolean(gateReadiness?.ready) &&
-            this.inputGate.activate(openingTargetPid));
-        if (!inputGateActivated) {
-          this.inputGate.release();
-          logger.warn("Overlay input isolation activation failed", {
-            targetPid: openingTargetPid,
-            reason: gateReadiness?.ready
-              ? "unavailable"
-              : gateReadiness?.reason,
-            gateStatus: gateReadiness?.status ?? null,
-          });
-          this.showInputGateErrorToast(
+        const currentWindowMode = await this.resolveWindowModeEligibility(
+          currentBounds,
+          true
+        );
+        if (!currentWindowMode.allowed) {
+          this.showOverlayUnavailableToast(
             currentBounds,
-            gateReadiness?.ready
-              ? "unavailable"
-              : (gateReadiness?.reason ?? "unavailable")
+            currentWindowMode.reason
           );
-          return;
-        }
-        const isolatedBounds = this.getTargetBounds();
-        if (
-          this.targetPid !== openingTargetPid ||
-          !isolatedBounds ||
-          !this.isTargetForeground(false)
-        ) {
-          this.inputGate.release();
-          logger.warn("Overlay show aborted after input isolation", {
-            targetChanged: this.targetPid !== openingTargetPid,
-            hasBounds: Boolean(isolatedBounds),
-            isolationMode: "hook",
-          });
-          if (isolatedBounds) {
-            this.showInputGateErrorToast(isolatedBounds, "target-changed");
-          }
           return;
         }
         this.activationToastPending = false;
@@ -666,7 +615,7 @@ export class OverlayManager {
         this.destroyToast();
         this.fpsWindow?.hide();
         this.fpsWindow?.setAlwaysOnTop(false);
-        this.placeWindowOverGame(overlayWindow, isolatedBounds);
+        this.placeWindowOverGame(overlayWindow, currentBounds);
         overlayWindow.setAlwaysOnTop(false);
         overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
         this.overlayActivationGraceUntil =
@@ -674,25 +623,25 @@ export class OverlayManager {
         overlayWindow.show();
         overlayWindow.moveTop();
         overlayWindow.focus();
-        overlayWindow.webContents.send("on-overlay-shown");
-        this.claimForeground(overlayWindow);
-        setTimeout(() => {
-          if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
-            const delayedBounds = this.getTargetBounds();
-            if (!delayedBounds || !this.isTargetForeground(true)) {
-              this.hideOverlayWindow(false, false);
-              return;
-            }
-            overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
-            this.placeWindowOverGame(overlayWindow, delayedBounds);
-            overlayWindow.moveTop();
-            overlayWindow.focus();
-            // A fullscreen game commonly grabs the foreground straight back after
-            // being covered. Re-assert it, otherwise the game keeps keyboard,
-            // mouse and controller input while the overlay is on screen.
-            this.claimForeground(overlayWindow);
+        const ownsForeground = await this.claimForeground(overlayWindow);
+        const delayedBounds = this.getTargetBounds();
+        if (
+          !ownsForeground ||
+          overlayWindow.isDestroyed() ||
+          !overlayWindow.isVisible() ||
+          !delayedBounds ||
+          this.targetPid !== openingTargetPid
+        ) {
+          this.hideOverlayWindow(false, false);
+          if (delayedBounds) {
+            this.showOverlayUnavailableToast(delayedBounds, "focus-refused");
           }
-        }, 75);
+          return;
+        }
+        overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
+        this.placeWindowOverGame(overlayWindow, delayedBounds);
+        overlayWindow.moveTop();
+        overlayWindow.webContents.send("on-overlay-shown");
       };
 
       if (overlayWindow.webContents.isLoadingMainFrame()) {
@@ -710,9 +659,7 @@ export class OverlayManager {
       }
       await show();
     } catch (error) {
-      // If BrowserWindow.show/focus throws after the native block is armed,
-      // never strand the game behind a hidden overlay.
-      this.inputGate.release();
+      this.hideOverlayWindow(false, false);
       logger.error("Overlay toggle failed", error);
     } finally {
       this.overlayTogglePending = false;
@@ -729,69 +676,64 @@ export class OverlayManager {
   }
 
   /**
-   * Claim the foreground so the game stops reading the controller.
-   *
-   * XInput already does the right thing here: Microsoft deprecated
-   * XInputEnable on Windows 10+ because "game controller input is
-   * automatically enabled/disabled by the system based on the application
-   * window focus". Once the overlay genuinely owns the foreground, an XInput
-   * 1.4 game reads neutral state without anything being hooked or suspended.
-   *
-   * The catch is that Electron's focus() loses to Windows' foreground lock
-   * over a fullscreen game, leaving the overlay merely on top while the game
-   * keeps focus — and keeps reacting to the stick. The native helper attaches
-   * to the foreground thread's input queue first, which is the documented way
-   * to make SetForegroundWindow succeed.
-   *
-   * Games that ship the older XInput 1.3 redistributable do not get the
-   * system's focus gating and will still see input; blocking those would mean
-   * hooking the API inside the game process, which is what Steam does.
+   * Require real foreground ownership before exposing interactive controls.
+   * The native helper only performs normal Win32 focus hand-off; it never
+   * modifies the game. If a game keeps display ownership, activation closes
+   * and asks for Borderless or Windowed mode.
    */
-  private static claimForeground(overlayWindow: BrowserWindow, attempt = 0) {
-    if (process.platform !== "win32" || overlayWindow.isDestroyed()) return;
-    try {
-      const handle = overlayWindow.getNativeWindowHandle();
-      // HWND is pointer-sized; Electron hands it over as raw little-endian
-      // bytes, so read the full 64 bits on x64.
-      const hwnd =
-        handle.length >= 8
-          ? Number(handle.readBigUInt64LE(0))
-          : handle.readUInt32LE(0);
-      if (!hwnd) {
-        logger.warn("Overlay window has no native handle to focus");
-        return;
+  private static async claimForeground(overlayWindow: BrowserWindow) {
+    if (process.platform !== "win32") return true;
+    for (
+      let attempt = 0;
+      attempt <= OVERLAY_FOREGROUND_ATTEMPTS;
+      attempt += 1
+    ) {
+      if (overlayWindow.isDestroyed() || !overlayWindow.isVisible()) {
+        return false;
       }
-
-      const claimed = NativeAddon.forceForegroundWindow(hwnd);
-      const foregroundPid = NativeAddon.getForegroundProcessId();
-      const won = claimed && foregroundPid !== this.targetPid;
-
-      // Report the outcome rather than assume it. If the game keeps the
-      // foreground, it also keeps keyboard, mouse and controller input, and
-      // that is invisible from the app side without this.
-      logger[won || attempt >= OVERLAY_FOREGROUND_ATTEMPTS ? "info" : "warn"](
-        "Overlay foreground claim",
-        {
-          attempt,
-          claimed,
-          foregroundPid,
-          gamePid: this.targetPid,
-          overlayHasForeground: won,
+      try {
+        const handle = overlayWindow.getNativeWindowHandle();
+        // HWND is pointer-sized; Electron hands it over as raw little-endian
+        // bytes, so read the full 64 bits on x64.
+        const hwnd =
+          handle.length >= 8
+            ? Number(handle.readBigUInt64LE(0))
+            : handle.readUInt32LE(0);
+        if (!hwnd) {
+          logger.warn("Overlay window has no native handle to focus");
+          return false;
         }
-      );
 
-      // A fullscreen game frequently wins the race on the first try, so retry
-      // a bounded number of times before giving up.
-      if (!won && attempt < OVERLAY_FOREGROUND_ATTEMPTS) {
-        setTimeout(() => {
-          if (!overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
-            this.claimForeground(overlayWindow, attempt + 1);
+        const claimed = NativeAddon.forceForegroundWindow(hwnd);
+        const foregroundPid = NativeAddon.getForegroundProcessId();
+        const won =
+          claimed && foregroundPid === process.pid && overlayWindow.isFocused();
+
+        // Report the outcome rather than assume it. If the game keeps the
+        // foreground, it also keeps keyboard, mouse and controller input, and
+        // that is invisible from the app side without this.
+        logger[won || attempt >= OVERLAY_FOREGROUND_ATTEMPTS ? "info" : "warn"](
+          "Overlay foreground claim",
+          {
+            attempt,
+            claimed,
+            foregroundPid,
+            gamePid: this.targetPid,
+            overlayHasForeground: won,
           }
-        }, OVERLAY_FOREGROUND_RETRY_MS);
+        );
+
+        if (won) return true;
+      } catch (error) {
+        logger.warn("Could not bring the overlay to the foreground", error);
       }
-    } catch (error) {
-      logger.warn("Could not bring the overlay to the foreground", error);
+      if (attempt < OVERLAY_FOREGROUND_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, OVERLAY_FOREGROUND_RETRY_MS)
+        );
+      }
     }
+    return false;
   }
 
   private static hideOverlayWindow(
@@ -800,17 +742,9 @@ export class OverlayManager {
   ) {
     this.overlayActivationGraceUntil = 0;
     const overlayWindow = this.overlayWindow;
-    try {
-      if (overlayWindow && !overlayWindow.isDestroyed()) {
-        // Hide first. Releasing the native latch while an interactive overlay
-        // is still visible creates a short but real double-input interval.
-        // Electron hide() is synchronous at the BrowserWindow state boundary.
-        overlayWindow.hide();
-        overlayWindow.setAlwaysOnTop(false);
-      }
-    } finally {
-      // Never strand the game if a native BrowserWindow operation throws.
-      this.inputGate.release();
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.hide();
+      overlayWindow.setAlwaysOnTop(false);
     }
     if (
       showPinnedPerformance &&
@@ -881,7 +815,6 @@ export class OverlayManager {
     }
 
     overlayWindow.on("closed", () => {
-      this.inputGate.release();
       // Teardown clears the reference before destroy(); do not let a delayed
       // `closed` event from the previous session wipe a replacement renderer.
       if (this.overlayWindow === overlayWindow) {
@@ -893,28 +826,7 @@ export class OverlayManager {
         this.overlayRendererReadyWaiters.clear();
       }
     });
-    overlayWindow.on("focus", () => {
-      if (
-        process.platform === "win32" &&
-        overlayWindow.isVisible() &&
-        !this.inputGate.activate(this.targetPid)
-      ) {
-        const readiness = this.inputGate.inspect(this.targetPid);
-        this.hideOverlayWindow(false, false);
-        const bounds = this.getTargetBounds();
-        if (bounds) {
-          this.showInputGateErrorToast(
-            bounds,
-            readiness.ready ? "unavailable" : readiness.reason
-          );
-        }
-      }
-    });
     overlayWindow.on("blur", () => {
-      // Fullscreen games often reclaim foreground for one frame while Electron
-      // is completing show/focus. Releasing input isolation immediately caused
-      // the visible -> hidden -> visible flash. Keep the gate armed during a
-      // short focus hand-off, then hide synchronously only for a real Alt+Tab.
       setTimeout(() => {
         if (overlayWindow.isDestroyed() || !overlayWindow.isVisible()) return;
         if (!this.isTargetForeground(true)) {
@@ -923,9 +835,6 @@ export class OverlayManager {
         }
         this.synchronizeTargetWindows();
       }, 75);
-    });
-    overlayWindow.on("hide", () => {
-      this.inputGate.release();
     });
 
     this.overlayWindow = overlayWindow;
@@ -984,7 +893,7 @@ export class OverlayManager {
         targetExecutable !== this.targetExecutable ||
         targetCreationTicks !== this.targetCreationTicks;
       if (targetChanged && this.overlayWindow?.isVisible()) {
-        // Release the old hook before publishing a loader -> renderer handoff.
+        // Hide before publishing a loader -> renderer handoff.
         this.hideOverlayWindow(false, false);
       }
       this.targetPid = targetPid;
@@ -993,7 +902,8 @@ export class OverlayManager {
       this.lastTargetRefreshAt = Date.now();
       if (targetChanged) {
         this.lastOverlayPlacement = null;
-        this.inputGate.setTarget(targetPid, this.targetCreationTicks ?? "");
+        this.windowModeEligibility = null;
+        this.windowModeCheck = null;
         logger.info("GameHub overlay render target changed", {
           pid: targetPid,
           executable: targetExecutable,
@@ -1022,6 +932,76 @@ export class OverlayManager {
     }
     if (process.platform === "win32") return null;
     return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
+  }
+
+  private static resolveWindowModeEligibility(
+    targetBounds: Electron.Rectangle,
+    force = false
+  ): Promise<OverlayWindowModeEligibility> {
+    if (!force && this.windowModeEligibility) {
+      return Promise.resolve(this.windowModeEligibility);
+    }
+    if (this.windowModeCheck) return this.windowModeCheck;
+
+    const targetPid = this.targetPid;
+    const targetCreationTicks = this.targetCreationTicks;
+    const check = (async () => {
+      if (process.platform !== "win32") {
+        return evaluateOverlayWindowMode({
+          platform: process.platform,
+          targetWindowId: null,
+          exactWindowSourceAvailable: false,
+          displaySized: false,
+        });
+      }
+
+      const nativeBounds = targetPid
+        ? NativeAddon.getProcessWindowBounds(targetPid)
+        : null;
+      const targetWindowId =
+        nativeBounds?.windowId ?? nativeBounds?.window_id ?? null;
+      const display = screen.getDisplayMatching({
+        x: targetBounds.x,
+        y: targetBounds.y,
+        width: Math.max(1, targetBounds.width),
+        height: Math.max(1, targetBounds.height),
+      });
+      const sources = targetWindowId
+        ? await desktopCapturer
+            .getSources({
+              types: ["window"],
+              thumbnailSize: { width: 0, height: 0 },
+              fetchWindowIcons: false,
+            })
+            .catch(() => [])
+        : [];
+      return evaluateOverlayWindowMode({
+        platform: process.platform,
+        targetWindowId,
+        exactWindowSourceAvailable: Boolean(
+          targetWindowId &&
+            sources.some((source) =>
+              isExactDesktopWindowSource(source.id, targetWindowId)
+            )
+        ),
+        displaySized: isGameWindowDisplaySized(nativeBounds, display),
+      });
+    })();
+
+    this.windowModeCheck = check;
+    return check
+      .then((eligibility) => {
+        if (
+          this.targetPid === targetPid &&
+          this.targetCreationTicks === targetCreationTicks
+        ) {
+          this.windowModeEligibility = eligibility;
+        }
+        return eligibility;
+      })
+      .finally(() => {
+        if (this.windowModeCheck === check) this.windowModeCheck = null;
+      });
   }
 
   private static isTargetForeground(includeOverlayWindow: boolean) {
@@ -1126,21 +1106,13 @@ export class OverlayManager {
     }
 
     if (this.overlayWindow?.isVisible()) {
-      if (process.platform === "win32") {
-        const readiness = this.inputGate.inspect(this.targetPid);
-        if (!readiness.ready) {
-          // The worker republishes its unsupported-module mask on every scan.
-          // If a game loads DirectInput/GameInput/WGI after opening, close on
-          // this same poll tick. Unsupported input APIs remain closed rather
-          // than using a process suspension that could strand the game if its
-          // elevated owner were terminated.
-          this.hideOverlayWindow(false, false);
-          this.showInputGateErrorToast(
-            bounds,
-            readiness.ready ? "unavailable" : readiness.reason
-          );
-          return;
-        }
+      if (
+        process.platform === "win32" &&
+        (NativeAddon.getForegroundProcessId() !== process.pid ||
+          !this.overlayWindow.isFocused())
+      ) {
+        this.hideOverlayWindow(false, false);
+        return;
       }
       this.overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
       this.placeWindowOverGame(this.overlayWindow, bounds);
@@ -1157,12 +1129,19 @@ export class OverlayManager {
     // can open immediately, not merely that a shortcut was registered.
     this.ensureOverlayWindow(bounds);
 
+    if (!this.windowModeEligibility && !this.windowModeCheck) {
+      void this.resolveWindowModeEligibility(bounds).then(() =>
+        this.synchronizeTargetWindows()
+      );
+      return;
+    }
+
     if (
       canShowActivationToast(
         this.activationToastPending,
         this.activationToastShown,
         this.overlayRendererReady,
-        OVERLAY_LIVE_INPUT_ISOLATION_ENABLED
+        this.windowModeEligibility?.allowed === true
       ) &&
       !this.toastWindow
     ) {
@@ -1246,9 +1225,9 @@ export class OverlayManager {
     this.toastWindow = toastWindow;
   }
 
-  private static showInputGateErrorToast(
+  private static showOverlayUnavailableToast(
     targetBounds: Electron.Rectangle,
-    reason: OverlayInputGateFailureReason
+    reason: OverlayWindowModeFailureReason | "focus-refused"
   ) {
     if (!this.activeGame) return;
     this.destroyToast();
@@ -1274,7 +1253,7 @@ export class OverlayManager {
     toastWindow.setIgnoreMouseEvents(true);
     WindowManager.loadWindowURL(
       toastWindow,
-      `overlay-toast?kind=input-gate-error&reason=${reason}`
+      `overlay-toast?kind=overlay-unavailable&reason=${reason}`
     );
     toastWindow.once("ready-to-show", () => {
       const bounds = this.getTargetBounds();
@@ -1339,10 +1318,11 @@ export class OverlayManager {
     this.destroyFpsWindow();
     this.performancePinned = false;
     this.performance = emptyPerformance();
-    this.inputGate.setTarget(0);
     this.targetPid = 0;
     this.targetExecutable = null;
     this.targetCreationTicks = null;
+    this.windowModeEligibility = null;
+    this.windowModeCheck = null;
     this.lastOverlayPlacement = null;
     this.activationToastPending = false;
     this.activationToastShown = false;
@@ -1575,7 +1555,6 @@ export class OverlayManager {
 
   private static dispose() {
     this.stopActiveServices();
-    this.inputGate.dispose();
     this.performance = emptyPerformance();
   }
 }

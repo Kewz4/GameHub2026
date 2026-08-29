@@ -32,15 +32,14 @@ extraResources:
 files:
   - "!**/.vscode/*"
   - "!src/*"
-  - "!native/*/target"
-  - "!native/*/target/**"
-  # Fixture-only supervised-overlay research is release-gated source, never a
-  # runtime payload. A separately reviewed/signed production bootstrap must be
-  # added explicitly instead of being swept into app.asar by a broad glob.
-  - "!native/gamehub-overlay-supervisor{,/**}"
-  - "!native/overlay-fixtures{,/**}"
+  # Native source and historical hook fixtures never belong in app.asar. The
+  # built, compositor-safe addon is copied separately from ./hydra-native.
+  - "!native{,/**}"
   - "!third_party/microsoft-detours{,/**}"
   - "!scripts/build-overlay-qa-supervisor.cjs"
+  - "!scripts/qa-live-overlay-acceptance.mjs"
+  - "!scripts/qa-live-overlay-policy.mjs"
+  - "!scripts/tests/qa-live-overlay-{acceptance,policy}.test.mjs"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
@@ -50,9 +49,6 @@ files:
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
 asarUnpack:
   - resources/**
-  # asdf-overlay ships a native injection DLL that must live on disk (not inside
-  # the asar) so it can be injected into the game process by the overlay.
-  - node_modules/@asdf-overlay/core/**
   - node_modules/sharp/**
   - node_modules/@img/sharp-libvips-*/**
 win:

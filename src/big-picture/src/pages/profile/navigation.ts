@@ -6,6 +6,7 @@ export const PROFILE_PAGE_GAMES_REGION_ID = "profile-page-games";
 export const PROFILE_PAGE_SOUVENIRS_REGION_ID = "profile-page-souvenirs";
 
 export const PROFILE_FRIENDS_BUTTON_ID = "profile-friends-button";
+export const PROFILE_ACHIEVEMENTS_STAT_ID = "profile-achievements-stat";
 export const PROFILE_RETRY_BUTTON_ID = "profile-retry-button";
 export const PROFILE_GAMES_TAB_ID = "profile-tab-games";
 export const PROFILE_ACHIEVEMENTS_TAB_ID = "profile-tab-achievements";

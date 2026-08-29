@@ -1,5 +1,9 @@
 # Supervised Windows overlay launch
 
+> Historical QA research only. GameHub does not use this supervised injection
+> path in normal builds. Production uses the Borderless/Windowed compositor
+> policy in [overlay-windowed-mode.md](overlay-windowed-mode.md).
+
 ## Status
 
 This is an experimental, fixture-first architecture for interactive overlay

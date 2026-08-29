@@ -2,9 +2,19 @@
 name = "hydra-native"
 version = "0.1.0"
 edition = "2021"
+autobins = false
 
 [lib]
 crate-type = ["cdylib"]
+
+[[bin]]
+name = "presentmon-bridge"
+path = "src/bin/presentmon-bridge.rs"
+
+[features]
+default = []
+# Historical fixtures only. Normal launcher builds never enable this feature.
+overlay-hook-qa = []
 
 [dependencies]
 anyhow = "1.0"
@@ -32,10 +42,9 @@ unicode-normalization = "0.1.25"
 uuid = { version = "1.11.0", features = ["v4"] }
 walkdir = "=2.5.0"
 
-# Windows-only APIs backing the in-game overlay: raw keyboard input for the
-# Shift+F3 shortcut, XInput for the
-# Guide button and navigation, and the process-access / token-elevation / ShellExecute
-# helpers the injected overlay uses to attach to the running game.
+# Windows-only APIs backing the external compositor overlay: raw keyboard input
+# for Shift+F3, XInput for the Guide button/navigation, foreground window
+# placement, audio mixing, process control, and PresentMon elevation.
 [target.'cfg(windows)'.dependencies]
 known-folders = "=1.2.0"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_IO", "Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Input", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

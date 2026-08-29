@@ -12,12 +12,7 @@ import {
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  FocusItem,
-  HorizontalFocusGroup,
-  Typography,
-  UserProfile,
-} from "../../components";
+import { FocusItem, HorizontalFocusGroup, Typography } from "../../components";
 import { IS_DESKTOP } from "../../constants";
 import { useNavigationScreenActions } from "../../hooks";
 import {
@@ -417,10 +412,6 @@ function Header() {
               onChange={(event) => handleSearchChange(event.target.value)}
             />
           </form>
-
-          <div className="header__profile">
-            <UserProfile />
-          </div>
         </header>
       </HorizontalFocusGroup>
     </div>

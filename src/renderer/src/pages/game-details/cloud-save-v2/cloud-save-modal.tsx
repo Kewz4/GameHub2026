@@ -270,6 +270,9 @@ export function CloudSavePanel({
     hasError,
   });
   const partialDescriptionKey = getCloudSavePartialDescriptionKey(overview);
+  const mappingIssueKey = overview?.mappingIssue
+    ? `cloud_save_v2_mapping_issue_${overview.mappingIssue}`
+    : null;
 
   useEffect(() => {
     setIsCloudSaveEnabled(isAutomaticSyncEnabled ?? false);
@@ -426,6 +429,13 @@ export function CloudSavePanel({
       {partialDescriptionKey && !hasError && (
         <p className="cloud-save-v2__partial-warning">
           {t(partialDescriptionKey)}
+        </p>
+      )}
+
+      {mappingIssueKey && !hasError && (
+        <p className="cloud-save-v2__partial-warning">
+          <WarningCircleIcon size={18} />
+          {t(mappingIssueKey)}
         </p>
       )}
 

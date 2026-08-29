@@ -82,6 +82,7 @@ import {
   type OverlayControllerDirection,
 } from "./overlay-controller";
 import { OverlayControllerKeyboard } from "./overlay-controller-keyboard";
+import { getOverlayUnavailableMessage } from "./overlay-unavailable";
 import {
   getOverlayRecorderTechnicalSummary,
   getOverlayReplayPresentation,
@@ -98,36 +99,6 @@ import "./overlay.scss";
 type OverlayMode = "hidden" | "toast" | "pinned" | "full";
 type MusicTab = "now-playing" | "search" | "playlists";
 type AchievementFilter = "all" | "unlocked" | "locked" | "hidden" | "missable";
-
-type OverlayInputGateErrorReason =
-  | "unavailable"
-  | "timeout"
-  | "unsupported"
-  | "target-changed";
-
-const OVERLAY_INPUT_GATE_ERROR_MESSAGES: Record<
-  OverlayInputGateErrorReason,
-  string
-> = {
-  unavailable:
-    "GameHub could not isolate input from the game, so the overlay stayed closed.",
-  timeout:
-    "The game did not confirm input protection in time, so the overlay stayed closed.",
-  unsupported:
-    "This game uses an input system GameHub cannot safely isolate yet, so the overlay stayed closed.",
-  "target-changed":
-    "The game window changed while the overlay was opening. Try again.",
-};
-
-const getOverlayInputGateError = (search: string) => {
-  const params = new URLSearchParams(search);
-  if (params.get("kind") !== "input-gate-error") return null;
-  const reason = params.get("reason") as OverlayInputGateErrorReason | null;
-  if (!reason || !(reason in OVERLAY_INPUT_GATE_ERROR_MESSAGES)) {
-    return OVERLAY_INPUT_GATE_ERROR_MESSAGES.unavailable;
-  }
-  return OVERLAY_INPUT_GATE_ERROR_MESSAGES[reason];
-};
 
 const WIDGET_LABELS: Record<OverlayWidgetId, string> = {
   performance: "Performance",
@@ -515,8 +486,8 @@ const setOverlayEditableValue = (
 
 export default function Overlay() {
   const location = useLocation();
-  const inputGateError = useMemo(
-    () => getOverlayInputGateError(location.search),
+  const overlayUnavailable = useMemo(
+    () => getOverlayUnavailableMessage(location.search),
     [location.search]
   );
   const musicProvider =
@@ -1964,19 +1935,19 @@ export default function Overlay() {
     return (
       <div className="overlay overlay--toast">
         <div
-          className={`overlay-toast${inputGateError ? " overlay-toast--error" : ""}`}
+          className={`overlay-toast${overlayUnavailable ? " overlay-toast--error" : ""}`}
           role="status"
           aria-live="polite"
         >
           <span className="overlay-toast__dot" aria-hidden="true" />
           <div className="overlay-toast__body">
             <strong>
-              {inputGateError
-                ? "Overlay input protection unavailable"
+              {overlayUnavailable
+                ? "Overlay requires Borderless or Windowed"
                 : "Overlay shortcut available"}
             </strong>
-            {inputGateError ? (
-              <p>{inputGateError}</p>
+            {overlayUnavailable ? (
+              <p>{overlayUnavailable}</p>
             ) : (
               <p>
                 Press <kbd>{context?.shortcut ?? "Shift+F3"}</kbd> or press the

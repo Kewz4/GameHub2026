@@ -1,4 +1,5 @@
 import type { CatalogueSearchResult, LibraryGame, ShopAssets } from "@types";
+import { systemForGame } from "@renderer/pages/library/console-filter";
 import { getAllFeedback } from "./recommendation-feedback";
 
 /**
@@ -131,7 +132,7 @@ export async function getRecommendedClassics(
   const anchorGenreLookups: Promise<void>[] = [];
   for (const { game, hours } of played) {
     const weight = Math.log2(1 + hours) + 0.2;
-    const system = systemOf(game.objectId);
+    const system = systemForGame(game);
     if (system) {
       systemWeight.set(system, (systemWeight.get(system) ?? 0) + weight);
     }
@@ -186,7 +187,7 @@ export async function getRecommendedClassics(
         if (seriesStem(sibling.title) !== stem) continue;
         // Same-series entries dominate; nudge same-console siblings up a bit.
         const sameSystem =
-          systemOf(sibling.objectId) === systemOf(game.objectId) ? 0.3 : 0;
+          systemOf(sibling.objectId) === systemForGame(game) ? 0.3 : 0;
         pushCandidate(
           sibling,
           3 * anchorWeight + sameSystem,

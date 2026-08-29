@@ -22,14 +22,6 @@ export function DownloadsSettingsSection({
 }: Readonly<DownloadsSettingsSectionProps>) {
   const { t } = useTranslation("game_details");
 
-  if (game.shop === "custom") {
-    return (
-      <p className="game-options-modal__category-note">
-        {t("settings_not_available_for_custom_games")}
-      </p>
-    );
-  }
-
   return (
     <div className="game-options-modal__downloads">
       <div className="game-options-modal__header">
@@ -40,13 +32,15 @@ export function DownloadsSettingsSection({
       </div>
 
       <div className="game-options-modal__row">
-        <Button
-          onClick={onOpenRepacks}
-          theme="outline"
-          disabled={deleting || isGameDownloading || !repacksLength}
-        >
-          {t("open_download_options")}
-        </Button>
+        {repacksLength > 0 && (
+          <Button
+            onClick={onOpenRepacks}
+            theme="outline"
+            disabled={deleting || isGameDownloading}
+          >
+            {t("open_download_options")}
+          </Button>
+        )}
         {game.download?.downloadPath && (
           <Button
             onClick={onOpenDownloadFolder}

@@ -21,6 +21,38 @@
       var(--background);
   }
 
+  &--details-error {
+    display: grid;
+    place-items: center;
+    padding: calc(var(--big-picture-header-height) + 48px) 48px 48px;
+  }
+
+  &__details-error-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 560px;
+    gap: calc(var(--spacing-unit) * 4);
+    color: var(--text-secondary);
+    text-align: center;
+
+    > svg {
+      color: var(--primary);
+    }
+  }
+
+  &__details-error-title {
+    color: var(--text);
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  &__details-error-copy {
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
   &__loading-shell,
   &__hero-loading {
     display: flex;

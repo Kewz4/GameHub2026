@@ -131,6 +131,8 @@ export class AchievementSouvenirLifecycle {
         objectId: game.objectId,
         achievementName: achievement.name,
         achievementDisplayName: achievement.displayName,
+        achievementDescription: achievement.description?.trim() || null,
+        achievementIconUrl: achievement.icon?.trim() || null,
         gameTitle: game.title,
         gameIconUrl: game.iconUrl,
         unlockTime,

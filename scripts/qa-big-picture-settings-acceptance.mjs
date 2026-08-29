@@ -10,11 +10,13 @@
  *
  * Required environment:
  *   PLAYWRIGHT_PACKAGE  Directory containing Playwright's index.mjs
- *   GAMEHUB_LIVE_DATA  Populated GameHub data directory to clone read-only
+ *   GAMEHUB_LIVE_DATA  Populated GameHub data directory to clone read-only,
+ *                      unless GAMEHUB_QA_SYNTHETIC_PROFILE=true
  *
  * Optional environment:
  *   GAMEHUB_R2_CREDENTIALS_URL
  *   GAMEHUB_API_URL
+ *   GAMEHUB_QA_SYNTHETIC_PROFILE=true  Build an isolated deterministic profile
  *   GAMEHUB_QA_CAPTURE_ALL_VIEWPORTS=false  Capture HD only (assert all sizes)
  */
 
@@ -29,13 +31,15 @@ import { pathToFileURL } from "node:url";
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const playwrightPackage = process.env.PLAYWRIGHT_PACKAGE?.trim();
 const sourceData = process.env.GAMEHUB_LIVE_DATA?.trim();
+const USE_SYNTHETIC_PROFILE =
+  process.env.GAMEHUB_QA_SYNTHETIC_PROFILE === "true";
 
 if (!playwrightPackage) {
   throw new Error("Set PLAYWRIGHT_PACKAGE to Playwright's package directory.");
 }
-if (!sourceData) {
+if (!sourceData && !USE_SYNTHETIC_PROFILE) {
   throw new Error(
-    "Set GAMEHUB_LIVE_DATA to the populated GameHub data folder."
+    "Set GAMEHUB_LIVE_DATA or opt into GAMEHUB_QA_SYNTHETIC_PROFILE=true."
   );
 }
 
@@ -97,6 +101,7 @@ const EMULATOR_SYSTEMS = [
 ];
 
 const OCARINA_ROUTE = "/big-picture/game/launchbox/local-n3ds-228e2f92cd0941e4";
+const QA_LOCAL_PROFILE_ID = "qa-local-kewz";
 const QA_REMOTE_PROFILE_ID = "qa-remote-raven";
 
 function qaProfileGame(
@@ -134,7 +139,91 @@ function qaProfileGame(
   };
 }
 
+function qaAssetGame(
+  origin,
+  objectId,
+  title,
+  genres,
+  { shop = "steam", description = null } = {}
+) {
+  const assetId = objectId.replaceAll(/[^a-z0-9-]/gi, "-");
+  return {
+    id: `${shop}:${objectId}`,
+    objectId,
+    shop,
+    title,
+    description:
+      description ?? `${title} is part of the deterministic GameHub QA set.`,
+    iconUrl: `${origin}/__qa/assets/${assetId}-icon.svg`,
+    libraryHeroImageUrl: `${origin}/__qa/assets/${assetId}-hero.svg`,
+    libraryImageUrl: `${origin}/__qa/assets/${assetId}-cover.svg`,
+    logoImageUrl: null,
+    logoPosition: null,
+    coverImageUrl: `${origin}/__qa/assets/${assetId}-cover.svg`,
+    downloadSources: ["GameHub QA"],
+    genres,
+    searchVector: "",
+    uri: `qa://${shop}/${objectId}`,
+  };
+}
+
+function qaCatalogueFixtures(origin) {
+  const owned = [
+    qaAssetGame(origin, "620", "Portal 2", ["Puzzle", "Adventure"]),
+    qaAssetGame(origin, "1145350", "Hades II", [
+      "Action",
+      "Roguelike",
+      "Adventure",
+    ]),
+  ];
+  const candidates = [
+    qaAssetGame(origin, "qa-cocoon", "Cocoon", ["Puzzle", "Adventure"]),
+    qaAssetGame(origin, "qa-tunic", "Tunic", ["Action", "Adventure"]),
+    qaAssetGame(origin, "qa-dead-cells", "Dead Cells", ["Action", "Roguelike"]),
+    qaAssetGame(origin, "qa-hollow-knight", "Hollow Knight", [
+      "Action",
+      "Adventure",
+    ]),
+    qaAssetGame(origin, "qa-deaths-door", "Death's Door", [
+      "Action",
+      "Adventure",
+    ]),
+    qaAssetGame(origin, "qa-celeste", "Celeste", ["Action", "Adventure"]),
+    qaAssetGame(origin, "qa-ori", "Ori and the Will of the Wisps", [
+      "Action",
+      "Adventure",
+    ]),
+    qaAssetGame(origin, "qa-obra-dinn", "Return of the Obra Dinn", [
+      "Puzzle",
+      "Adventure",
+    ]),
+    qaAssetGame(origin, "qa-animal-well", "Animal Well", [
+      "Puzzle",
+      "Adventure",
+    ]),
+    qaAssetGame(origin, "qa-prince", "Prince of Persia: The Lost Crown", [
+      "Action",
+      "Adventure",
+    ]),
+    qaAssetGame(origin, "qa-nine-sols", "Nine Sols", ["Action", "Adventure"]),
+    qaAssetGame(origin, "qa-hyper-light", "Hyper Light Drifter", [
+      "Action",
+      "Adventure",
+    ]),
+    ...Array.from({ length: 36 }, (_, index) =>
+      qaAssetGame(
+        origin,
+        `qa-discovery-${index + 1}`,
+        `Discovery Game ${index + 1}`,
+        index % 3 === 0 ? ["Puzzle", "Adventure"] : ["Action", "Adventure"]
+      )
+    ),
+  ];
+  return { owned, candidates, all: [...owned, ...candidates] };
+}
+
 function qaRemoteProfileFixtures(origin, profileId = QA_REMOTE_PROFILE_ID) {
+  const isLocalProfile = profileId === QA_LOCAL_PROFILE_ID;
   const games = [
     qaProfileGame(origin, "qa-orbit", "Orbit Fall", {
       playTimeInSeconds: 1209 * 60 * 60,
@@ -167,18 +256,24 @@ function qaRemoteProfileFixtures(origin, profileId = QA_REMOTE_PROFILE_ID) {
     profile: {
       id: profileId,
       displayName:
-        profileId === QA_REMOTE_PROFILE_ID ? "Raven QA" : "Fixture Friend",
-      profileImageUrl: `${origin}/__qa/assets/remote-avatar.svg`,
+        profileId === QA_REMOTE_PROFILE_ID
+          ? "Raven QA"
+          : isLocalProfile
+            ? "Kewz QA"
+            : "Fixture Friend",
+      profileImageUrl: `${origin}/__qa/assets/${isLocalProfile ? "local" : "remote"}-avatar.svg`,
       email: null,
       backgroundImageUrl: `${origin}/__qa/assets/remote-banner.svg`,
-      profileVisibility: "FRIENDS",
+      profileVisibility: isLocalProfile ? "PUBLIC" : "FRIENDS",
       libraryGames: [games[0], games[1]],
       recentGames: [games[1], games[2]],
       friends: [],
-      totalFriends: 37,
+      totalFriends: isLocalProfile ? 3 : 37,
       relation: null,
       currentGame: null,
-      bio: "Controller-first player · deterministic remote QA profile",
+      bio: isLocalProfile
+        ? "Synthetic populated profile · controller and responsive UI QA"
+        : "Controller-first player · deterministic remote QA profile",
       hasActiveSubscription: false,
       karma: 120,
       quirks: { backupsPerGameLimit: 0 },
@@ -187,7 +282,7 @@ function qaRemoteProfileFixtures(origin, profileId = QA_REMOTE_PROFILE_ID) {
     },
     stats: {
       libraryCount: games.length,
-      friendsCount: 37,
+      friendsCount: isLocalProfile ? 3 : 37,
       totalPlayTimeInSeconds: {
         value: 1209 * 60 * 60,
         topPercentile: 2,
@@ -236,17 +331,38 @@ function qaSvgAsset(assetName) {
   const isCover = assetName.includes("cover");
   const width = isBanner ? 1600 : isCover ? 640 : 160;
   const height = isBanner ? 500 : isCover ? 360 : 160;
-  const label = assetName
-    .replace(/-(?:banner|hero|cover|icon|avatar)\.svg$/i, "")
-    .replaceAll("-", " ")
-    .slice(0, 28);
+  const paletteIndex = [...assetName].reduce(
+    (total, character) => (total + character.charCodeAt(0)) % 4,
+    0
+  );
+  const palettes = [
+    ["#09090b", "#27272a", "#b91c1c", "#fca5a5"],
+    ["#07111f", "#172554", "#2563eb", "#93c5fd"],
+    ["#0b1210", "#134e4a", "#0f766e", "#99f6e4"],
+    ["#17120a", "#713f12", "#d97706", "#fde68a"],
+  ];
+  const [background, surface, accent, highlight] = palettes[paletteIndex];
+  const orbX = Math.round(width * (0.66 + paletteIndex * 0.035));
+  const orbY = Math.round(height * (0.3 + paletteIndex * 0.045));
+  const orbRadius = Math.round(height * (isBanner || isCover ? 0.38 : 0.33));
+  const lineWidth = Math.max(2, Math.round(height * 0.012));
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-    <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#080808"/><stop offset="1" stop-color="#3a3a3a"/></linearGradient></defs>
-    <rect width="100%" height="100%" fill="url(#g)"/>
-    <circle cx="${Math.round(width * 0.78)}" cy="${Math.round(height * 0.34)}" r="${Math.round(height * 0.24)}" fill="#f2f2f2" opacity=".14"/>
-    <path d="M0 ${Math.round(height * 0.82)} L${width} ${Math.round(height * 0.28)} L${width} ${height} L0 ${height}Z" fill="#fff" opacity=".08"/>
-    <text x="${Math.round(width * 0.08)}" y="${Math.round(height * 0.58)}" fill="#f5f5f5" font-family="Arial, sans-serif" font-size="${Math.max(18, Math.round(height * 0.12))}" font-weight="700">${label}</text>
+    <defs>
+      <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+        <stop stop-color="${background}"/>
+        <stop offset="1" stop-color="${surface}"/>
+      </linearGradient>
+      <linearGradient id="orb" x1="0" y1="0" x2="1" y2="1">
+        <stop stop-color="${highlight}" stop-opacity=".9"/>
+        <stop offset="1" stop-color="${accent}" stop-opacity=".35"/>
+      </linearGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#background)"/>
+    <circle cx="${orbX}" cy="${orbY}" r="${orbRadius}" fill="url(#orb)" opacity=".78"/>
+    <circle cx="${orbX}" cy="${orbY}" r="${Math.round(orbRadius * 0.58)}" fill="${background}" opacity=".72"/>
+    <path d="M-${Math.round(width * 0.08)} ${Math.round(height * 0.9)} L${Math.round(width * 0.72)} ${Math.round(height * 0.18)} L${Math.round(width * 1.08)} ${Math.round(height * 0.54)} L${Math.round(width * 0.28)} ${Math.round(height * 1.12)}Z" fill="${accent}" opacity=".22"/>
+    <path d="M${Math.round(width * 0.08)} ${Math.round(height * 0.78)} L${Math.round(width * 0.48)} ${Math.round(height * 0.42)} L${Math.round(width * 0.9)} ${Math.round(height * 0.78)}" fill="none" stroke="${highlight}" stroke-width="${lineWidth}" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/>
   </svg>`;
 }
 
@@ -265,6 +381,8 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
     friendsPopulated: false,
     mutationRequests: [],
     fixtureRequests: 0,
+    requestPaths: [],
+    upstreamRequests: [],
   };
   const upstreamBase = new URL(upstreamApiUrl);
 
@@ -274,6 +392,11 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
       `http://${request.headers.host ?? "127.0.0.1"}`
     );
     const origin = localUrl.origin;
+    state.requestPaths.push(
+      `${request.method ?? "UNKNOWN"} ${localUrl.pathname}`
+    );
+    if (state.requestPaths.length > 200) state.requestPaths.shift();
+    const catalogue = qaCatalogueFixtures(origin);
 
     if (localUrl.pathname.startsWith("/__qa/assets/")) {
       const svg = qaSvgAsset(path.basename(localUrl.pathname));
@@ -293,7 +416,11 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
     const remoteLibraryMatch = /^\/users\/([^/]+)\/library$/.exec(
       localUrl.pathname
     );
+    const remoteReviewsMatch = /^\/users\/([^/]+)\/reviews$/.exec(
+      localUrl.pathname
+    );
     const fixtureProfileIds = new Set([
+      QA_LOCAL_PROFILE_ID,
       QA_REMOTE_PROFILE_ID,
       "qa-friend-ingame",
       "qa-friend-online",
@@ -303,6 +430,7 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
       remoteProfileMatch?.[1] ??
       remoteStatsMatch?.[1] ??
       remoteLibraryMatch?.[1] ??
+      remoteReviewsMatch?.[1] ??
       null;
 
     if (request.method === "GET" && matchedProfileId) {
@@ -321,17 +449,48 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
             pinnedGames: fixture.games.filter((game) => game.isPinned),
           });
         }
+        if (remoteReviewsMatch) {
+          sendQaJson(response, { totalCount: 0, reviews: [] });
+        }
         return;
       }
     }
 
     if (
       request.method === "GET" &&
-      state.friendsPopulated &&
-      localUrl.pathname === "/profile/friends"
+      [
+        "/catalogue/featured",
+        "/catalogue/hot",
+        "/catalogue/weekly",
+        "/catalogue/achievements",
+      ].includes(localUrl.pathname)
     ) {
       state.fixtureRequests += 1;
-      const friends = qaFriendsFixture(origin);
+      const responseGames =
+        localUrl.pathname === "/catalogue/featured"
+          ? [catalogue.candidates[1]]
+          : localUrl.pathname === "/catalogue/achievements"
+            ? catalogue.candidates.slice(0, 8)
+            : catalogue.candidates;
+      sendQaJson(response, responseGames);
+      return;
+    }
+
+    if (
+      request.method === "POST" &&
+      localUrl.pathname === "/catalogue/search"
+    ) {
+      state.fixtureRequests += 1;
+      sendQaJson(response, {
+        count: catalogue.all.length,
+        edges: catalogue.all,
+      });
+      return;
+    }
+
+    if (request.method === "GET" && localUrl.pathname === "/profile/friends") {
+      state.fixtureRequests += 1;
+      const friends = state.friendsPopulated ? qaFriendsFixture(origin) : [];
       sendQaJson(response, {
         totalFriends: friends.length,
         onlineFriends: friends.filter((friend) => friend.isOnline).length,
@@ -342,9 +501,32 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
 
     if (
       request.method === "GET" &&
-      state.friendsPopulated &&
       localUrl.pathname === "/profile/friend-requests"
     ) {
+      state.fixtureRequests += 1;
+      sendQaJson(response, []);
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      localUrl.pathname === "/profile/games/collections"
+    ) {
+      state.fixtureRequests += 1;
+      sendQaJson(response, []);
+      return;
+    }
+
+    if (
+      request.method === "GET" &&
+      localUrl.pathname === "/profile/notifications/count"
+    ) {
+      state.fixtureRequests += 1;
+      sendQaJson(response, { count: 0 });
+      return;
+    }
+
+    if (request.method === "GET" && localUrl.pathname === "/badges") {
       state.fixtureRequests += 1;
       sendQaJson(response, []);
       return;
@@ -383,6 +565,10 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
     const target = new URL(upstreamBase);
     target.pathname = `${upstreamBase.pathname.replace(/\/$/, "")}${localUrl.pathname}`;
     target.search = localUrl.search;
+    state.upstreamRequests.push(
+      `${request.method ?? "UNKNOWN"} ${localUrl.pathname}`
+    );
+    if (state.upstreamRequests.length > 100) state.upstreamRequests.shift();
     const forwardedHeaders = {};
     for (const [key, value] of Object.entries(request.headers)) {
       if (
@@ -513,8 +699,10 @@ function sanitizeText(value) {
     isolatedPortableRoot.replaceAll("\\", "/"),
     "[qa-clone]"
   );
-  text = text.replaceAll(sourceData, "[live-data]");
-  text = text.replaceAll(sourceData.replaceAll("\\", "/"), "[live-data]");
+  if (sourceData) {
+    text = text.replaceAll(sourceData, "[live-data]");
+    text = text.replaceAll(sourceData.replaceAll("\\", "/"), "[live-data]");
+  }
   return text.slice(0, 2_000);
 }
 
@@ -529,6 +717,12 @@ function shouldCapture(viewportId) {
 async function discoverInstalledConfiguration() {
   let r2CredentialsUrl = process.env.GAMEHUB_R2_CREDENTIALS_URL?.trim();
   let hydraApiUrl = process.env.GAMEHUB_API_URL?.trim();
+  if (USE_SYNTHETIC_PROFILE) {
+    return {
+      r2CredentialsUrl: r2CredentialsUrl ?? "http://127.0.0.1:9/r2-disabled",
+      hydraApiUrl: hydraApiUrl ?? "http://127.0.0.1:9/api-disabled",
+    };
+  }
   if (r2CredentialsUrl && hydraApiUrl) {
     return { r2CredentialsUrl, hydraApiUrl };
   }
@@ -601,6 +795,24 @@ async function discoverInstalledConfiguration() {
 }
 
 async function prepareIsolatedClone() {
+  if (USE_SYNTHETIC_PROFILE) {
+    for (const required of [electronExecutable, mainEntry]) {
+      ensure(
+        fs.existsSync(required),
+        `Required final-build input is missing: ${path.basename(required)}.`
+      );
+    }
+    await Promise.all(
+      [...REQUIRED_SOURCE_DIRECTORIES, "session"].map((directory) =>
+        fs.promises.mkdir(path.join(isolatedData, directory), {
+          recursive: true,
+        })
+      )
+    );
+    await fs.promises.mkdir(screenshotRoot, { recursive: true });
+    return;
+  }
+
   for (const directory of REQUIRED_SOURCE_DIRECTORIES) {
     const source = path.join(sourceData, directory);
     ensure(
@@ -657,7 +869,225 @@ async function prepareIsolatedClone() {
   }
 }
 
-async function patchIsolatedPreferences() {
+const qaNormalizeRomTitle = (title) =>
+  title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/,\s*(the|an|a)\b/g, "")
+    .replace(/^(the|an|a)\s+/, "")
+    .replace(/[^a-z0-9]/g, "");
+
+async function seedSyntheticProfile(database, origin) {
+  const games = database.sublevel("games", { valueEncoding: "json" });
+  const assets = database.sublevel("gameShopAssets", {
+    valueEncoding: "json",
+  });
+  const achievements = database.sublevel("gameAchievements", {
+    valueEncoding: "json",
+  });
+  const metadata = database.sublevel("gamehubMeta", {
+    valueEncoding: "json",
+  });
+  const minerva = database.sublevel("minervaCatalogue", {
+    valueEncoding: "json",
+  });
+
+  const profileUser = {
+    id: QA_LOCAL_PROFILE_ID,
+    displayName: "Kewz QA",
+    profileImageUrl: `${origin}/__qa/assets/local-avatar.svg`,
+    backgroundImageUrl: `${origin}/__qa/assets/local-banner.svg`,
+    subscription: null,
+  };
+  await database.put("user", profileUser);
+  await database.put("auth", {
+    accessToken: "qa-read-only-access-token",
+    refreshToken: "qa-read-only-refresh-token",
+    tokenExpirationTimestamp: Date.now() + 24 * 60 * 60 * 1000,
+    workwondersJwt: "qa-read-only-workwonders-token",
+  });
+  await database.put("language", "en-US");
+
+  const localGames = [
+    {
+      shop: "launchbox",
+      objectId: "local-n3ds-228e2f92cd0941e4",
+      title: "The Legend of Zelda - Ocarina of Time 3D",
+      platform: "Nintendo 3DS",
+      genres: ["Puzzle", "Adventure"],
+      playTimeInMilliseconds: 31 * 3_600_000,
+      favorite: true,
+      isPinned: true,
+      achievementCount: 8,
+      unlockedAchievementCount: 4,
+    },
+    {
+      shop: "launchbox",
+      objectId: "local-switch-botw-qa",
+      title: "The Legend of Zelda: Breath of the Wild",
+      platform: "Nintendo Switch",
+      genres: ["Action", "Adventure"],
+      playTimeInMilliseconds: 95 * 3_600_000,
+      favorite: true,
+      achievementCount: 0,
+      unlockedAchievementCount: 0,
+    },
+    {
+      shop: "steam",
+      objectId: "620",
+      title: "Portal 2",
+      platform: "Windows",
+      genres: ["Puzzle", "Adventure"],
+      playTimeInMilliseconds: 48 * 3_600_000,
+      favorite: true,
+      achievementCount: 51,
+      unlockedAchievementCount: 23,
+    },
+    {
+      shop: "steam",
+      objectId: "1145350",
+      title: "Hades II",
+      platform: "Windows",
+      genres: ["Action", "Roguelike", "Adventure"],
+      playTimeInMilliseconds: 82 * 3_600_000,
+      favorite: false,
+      achievementCount: 30,
+      unlockedAchievementCount: 18,
+    },
+  ];
+
+  for (const [index, fixtureGame] of localGames.entries()) {
+    const key = `${fixtureGame.shop}:${fixtureGame.objectId}`;
+    const art = qaAssetGame(
+      origin,
+      fixtureGame.objectId,
+      fixtureGame.title,
+      fixtureGame.genres,
+      { shop: fixtureGame.shop }
+    );
+    await games.put(key, {
+      ...fixtureGame,
+      iconUrl: art.iconUrl,
+      libraryHeroImageUrl: art.libraryHeroImageUrl,
+      logoImageUrl: null,
+      remoteId: `qa-remote-${index}`,
+      isDeleted: false,
+      isInstalledLocally: false,
+      executablePath: null,
+      lastTimePlayed: new Date(Date.now() - index * 86_400_000).toISOString(),
+      addedToLibraryAt: new Date(
+        Date.now() - (index + 10) * 86_400_000
+      ).toISOString(),
+      libraryOrigin: "sync",
+      hasManuallyUpdatedPlaytime: false,
+      automaticCloudSync: false,
+    });
+    await assets.put(key, art);
+  }
+
+  const achievementIcon = `${origin}/__qa/assets/achievement-clock-icon.svg`;
+  const achievementDefinitions = Array.from({ length: 8 }, (_, index) => ({
+    name: `QA_ACHIEVEMENT_${index + 1}`,
+    displayName:
+      index === 0 ? "Right on Time" : `Controller Milestone ${index + 1}`,
+    description:
+      index === 0
+        ? "Complete the chamber before the countdown reaches zero."
+        : "A deterministic achievement used for populated controller QA.",
+    icon: achievementIcon,
+    icongray: achievementIcon,
+    hidden: false,
+    points: 10,
+  }));
+  await achievements.put("launchbox:local-n3ds-228e2f92cd0941e4", {
+    achievements: achievementDefinitions,
+    unlockedAchievements: achievementDefinitions.slice(0, 4).map((item, i) => ({
+      name: item.name,
+      unlockTime: Date.now() - i * 60_000,
+    })),
+    updatedAt: Date.now(),
+    language: "en",
+  });
+  await achievements.put("steam:620", {
+    achievements: achievementDefinitions,
+    unlockedAchievements: achievementDefinitions.slice(0, 6).map((item, i) => ({
+      name: item.name,
+      unlockTime: Date.now() - i * 60_000,
+    })),
+    updatedAt: Date.now(),
+    language: "en",
+  });
+
+  const classics = [
+    [
+      "n3ds",
+      "The Legend of Zelda: Ocarina of Time 3D",
+      ["Puzzle", "Adventure"],
+    ],
+    ["n3ds", "The Legend of Zelda: Majora's Mask 3D", ["Puzzle", "Adventure"]],
+    [
+      "n3ds",
+      "The Legend of Zelda: A Link Between Worlds",
+      ["Action", "Adventure"],
+    ],
+    [
+      "switch",
+      "The Legend of Zelda: Link's Awakening",
+      ["Puzzle", "Adventure"],
+    ],
+    ["wiiu", "The Legend of Zelda: The Wind Waker HD", ["Action", "Adventure"]],
+    ["wii", "The Legend of Zelda: Twilight Princess", ["Action", "Adventure"]],
+    ["gc", "Metroid Prime", ["Action", "Adventure"]],
+    ["n64", "Super Mario 64", ["Platformer", "Adventure"]],
+  ];
+  for (const [index, [system, title, genres]] of classics.entries()) {
+    const normalized = qaNormalizeRomTitle(title);
+    const artId = `classic-${system}-${index}`;
+    const meta = {
+      title,
+      description:
+        index === 0
+          ? "Link travels through time to stop Ganondorf and save Hyrule in this expanded Nintendo 3DS adventure."
+          : `${title} is part of the deterministic classics recommendation fixture.`,
+      genres,
+      releaseYear: 2011 + index,
+      coverImageUrl: `${origin}/__qa/assets/${artId}-cover.svg`,
+      libraryImageUrl: `${origin}/__qa/assets/${artId}-cover.svg`,
+      libraryHeroImageUrl: `${origin}/__qa/assets/${artId}-hero.svg`,
+      logoImageUrl: null,
+      iconUrl: `${origin}/__qa/assets/${artId}-icon.svg`,
+      boxImageUrl: `${origin}/__qa/assets/${artId}-cover.svg`,
+      screenshots: [
+        `${origin}/__qa/assets/${artId}-hero.svg`,
+        `${origin}/__qa/assets/${artId}-cover.svg`,
+      ],
+      developers: index === 0 ? ["Nintendo EAD", "Grezzo"] : ["Nintendo"],
+      publishers: ["Nintendo"],
+      ageRating: index === 0 ? { name: "RP", system: "CERO" } : null,
+      ratingScore: index === 0 ? 95 : 88,
+      series: index < 6 ? "The Legend of Zelda" : null,
+      hltb: { main: 25, mainExtra: 32, completionist: 40 },
+    };
+    await metadata.put(`${system}:${normalized}`, meta);
+    await minerva.put(`${system}:${normalized}:${index}`, {
+      entry: {
+        system,
+        title,
+        region: "World",
+        filename: `${title}.zip`,
+        romPath: `${title}.rom`,
+        magnet: null,
+        torrentUrl: null,
+        downloadUrl: null,
+        contentType: "game",
+      },
+      cachedAt: Date.now(),
+    });
+  }
+}
+
+async function patchIsolatedPreferences(assetOrigin) {
   const { ClassicLevel } = await import("classic-level");
   const sharp = (await import("sharp")).default;
   const databasePath = path.join(isolatedData, "gamehub-db");
@@ -665,6 +1095,9 @@ async function patchIsolatedPreferences() {
 
   try {
     await database.open();
+    if (USE_SYNTHETIC_PROFILE) {
+      await seedSyntheticProfile(database, assetOrigin);
+    }
     const user = await database.get("user");
     ensure(
       user && typeof user === "object" && typeof user.id === "string",
@@ -751,8 +1184,11 @@ async function patchIsolatedPreferences() {
         objectId: "620",
         achievementName,
         achievementDisplayName: "Right on Time",
+        achievementDescription:
+          "Complete the chamber before the countdown reaches zero.",
+        achievementIconUrl: `${assetOrigin}/__qa/assets/achievement-clock-icon.svg`,
         gameTitle: "Portal 2",
-        gameIconUrl: null,
+        gameIconUrl: `${assetOrigin}/__qa/assets/620-icon.svg`,
         unlockTime: Date.now() - 60_000,
         localPath: souvenirPath,
         r2Key: `users/${encodeURIComponent(user.id)}/achievement-souvenirs/steam/620/qa-visual.jpeg`,
@@ -996,6 +1432,47 @@ async function waitForCatalogueReadiness(page) {
   );
 }
 
+async function waitForHomeRecommendationReadiness(page) {
+  await page
+    .waitForFunction(
+      () => {
+        const text =
+          globalThis.document.querySelector(".home-page")?.textContent;
+        return Boolean(
+          text?.includes("Recommended for you") &&
+            text.includes("Because you played") &&
+            text.includes("Recommended classics")
+        );
+      },
+      undefined,
+      { timeout: 45_000 }
+    )
+    .catch(() => undefined);
+  const rows = await page
+    .locator(".home-page .focus-carousel")
+    .evaluateAll((carousels) =>
+      carousels.map((carousel) => ({
+        title: carousel.querySelector("h2")?.textContent?.trim() ?? "",
+        horizontalCards: carousel.querySelectorAll(
+          ".game-card--horizontal, [data-card-variant='horizontal']"
+        ).length,
+        cards: carousel.querySelectorAll(".focus-carousel__slide").length,
+      }))
+    );
+  ensure(
+    rows.some((row) => row.title === "Recommended for you" && row.cards > 0),
+    `The ML recommendation row did not populate: ${JSON.stringify(rows)}`
+  );
+  ensure(
+    rows.some((row) => row.title.startsWith("Because you played")),
+    `The because-you-played row did not populate: ${JSON.stringify(rows)}`
+  );
+  ensure(
+    rows.some((row) => row.title === "Recommended classics" && row.cards > 0),
+    `The classics recommendation row did not populate: ${JSON.stringify(rows)}`
+  );
+}
+
 async function waitForProfileReadiness(page) {
   await page
     .locator('.bp-profile[data-profile-ready="true"]')
@@ -1008,9 +1485,12 @@ async function waitForProfileReadiness(page) {
     state: "visible",
     timeout: 15_000,
   });
+  const alerts = await page
+    .locator(".bp-profile__status[role='alert']")
+    .allInnerTexts();
   ensure(
-    (await page.locator(".bp-profile__status[role='alert']").count()) === 0,
-    "The profile settled into a partial or failed state."
+    alerts.length === 0,
+    `The profile settled into a partial or failed state: ${alerts.join(" | ")}; recent API: ${JSON.stringify(qaApiProxy?.state.requestPaths.slice(-12) ?? [])}`
   );
 }
 
@@ -1156,6 +1636,9 @@ async function focusNavigationItem(page, locator, expectedId = null) {
       });
     }
     await item.focus();
+    await item.evaluate((element) => {
+      element.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
     await page.waitForTimeout(100);
     focusedId = await page.evaluate(() => {
       return (
@@ -1704,7 +2187,9 @@ async function applyViewport(page, viewport) {
     width: viewport.width,
     height: viewport.height,
   });
-  await page.waitForTimeout(180);
+  // Chromium briefly paints a compositor-only dimensions badge after a live
+  // resize. Waiting here keeps proof screenshots free of that transient UI.
+  await page.waitForTimeout(900);
 }
 
 async function putQaEmulatorState(electronApp, config, configured) {
@@ -1733,7 +2218,9 @@ const report = {
   suite: "big-picture-settings-acceptance",
   executionMode: CASE_FILTER ? "targeted" : "full",
   startedAt: new Date().toISOString(),
-  source: "isolated-populated-profile-clone-with-read-only-route-fixtures",
+  source: USE_SYNTHETIC_PROFILE
+    ? "isolated-synthetic-populated-profile-with-read-only-route-fixtures"
+    : "isolated-populated-profile-clone-with-read-only-route-fixtures",
   expectedCoverage: {
     bigPictureRoutes: 12,
     bigPictureSettingsTabs: BP_SETTINGS_TABS.length,
@@ -1791,13 +2278,13 @@ let fatalError = null;
 
 try {
   await prepareIsolatedClone();
-  // Patch the clone directly before Electron starts. Calling the production
-  // updateUserPreferences IPC would also schedule an R2 settings backup; a
-  // visual acceptance runner must never write remote account state.
-  await patchIsolatedPreferences();
   const { r2CredentialsUrl, hydraApiUrl } =
     await discoverInstalledConfiguration();
   qaApiProxy = await startReadOnlyHydraApiProxy(hydraApiUrl);
+  // Patch the clone directly before Electron starts. Calling the production
+  // updateUserPreferences IPC would also schedule an R2 settings backup; a
+  // visual acceptance runner must never write remote account state.
+  await patchIsolatedPreferences(qaApiProxy.url);
   const { _electron: electron } = await import(
     pathToFileURL(path.join(playwrightPackage, "index.mjs")).href
   );
@@ -1830,7 +2317,12 @@ try {
 
   const page = await findMainWindow(electronApp);
   page.on("pageerror", (error) => {
-    report.pageErrors.push(sanitizeText(error?.stack ?? error));
+    const recentRequests = qaApiProxy?.state.requestPaths.slice(-12) ?? [];
+    const upstreamRequests =
+      qaApiProxy?.state.upstreamRequests.slice(-12) ?? [];
+    report.pageErrors.push(
+      `${sanitizeText(error?.stack || error?.message || String(error))}; upstream API: ${JSON.stringify(upstreamRequests)}; recent API: ${JSON.stringify(recentRequests)}`
+    );
   });
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -1890,6 +2382,287 @@ try {
   // installs the browser listener lazily when the BP hooks first synchronize.
   await navigateHash(page, "/big-picture", ".home-page");
   await installMockXboxGamepad(page);
+
+  await runCase(
+    "bp-home-populated-controller-full-hd",
+    {
+      area: "big-picture-home",
+      fixture: "deterministic-populated-read-only",
+      input: "dpad",
+      viewport: VIEWPORTS[2].id,
+    },
+    async () => {
+      await applyViewport(page, VIEWPORTS[2]);
+      await navigateHash(page, "/big-picture", ".home-page", { bounce: true });
+      await waitForHomeRecommendationReadiness(page);
+      const horizontalRows = await page
+        .locator('.home-page .focus-carousel[data-card-variant="horizontal"]')
+        .count();
+      ensure(
+        horizontalRows >= 3,
+        `The populated home did not render the requested horizontal rows (${horizontalRows}).`
+      );
+      const firstRecommendation = page
+        .locator('[id^="home-recommended-game-"]')
+        .first();
+      const firstId = await focusNavigationItem(page, firstRecommendation);
+      await pressGamepadButton(page, GAMEPAD_BUTTON.right);
+      const focusedAfterRight = await page.evaluate(
+        () =>
+          globalThis.document.querySelector("[data-focus-visible='true']")
+            ?.id ?? null
+      );
+      ensure(
+        focusedAfterRight?.startsWith("home-recommended-game-") &&
+          focusedAfterRight !== firstId,
+        `Controller Right did not advance the ML recommendation row (${focusedAfterRight}).`
+      );
+      const screenshot = await captureViewport(
+        page,
+        "bp-home-populated-controller",
+        VIEWPORTS[2]
+      );
+      await assertResponsiveSurface(page, ".home-page");
+      return screenshot ? { screenshot } : {};
+    }
+  );
+
+  await runCase(
+    "bp-library-nested-console-filters-controller-full-hd",
+    {
+      area: "big-picture-library",
+      fixture: "deterministic-populated-read-only",
+      input: "dpad-a-lb-rb",
+      viewport: VIEWPORTS[2].id,
+    },
+    async () => {
+      await applyViewport(page, VIEWPORTS[2]);
+      await navigateHash(page, "/big-picture/library", ".library-page", {
+        bounce: true,
+      });
+      const heroFallback = page.locator(".hero__logo__fallback");
+      await heroFallback.waitFor({ state: "visible", timeout: 20_000 });
+      const heroTitleGeometry = await heroFallback.evaluate((title) => {
+        const titleRect = title.getBoundingClientRect();
+        const logoRect = title.parentElement?.getBoundingClientRect() ?? null;
+        return {
+          titleTop: titleRect.top,
+          titleRight: titleRect.right,
+          titleBottom: titleRect.bottom,
+          titleLeft: titleRect.left,
+          logoTop: logoRect?.top ?? null,
+          logoRight: logoRect?.right ?? null,
+          logoBottom: logoRect?.bottom ?? null,
+          logoLeft: logoRect?.left ?? null,
+          fontSize: Number.parseFloat(
+            globalThis.getComputedStyle(title).fontSize
+          ),
+        };
+      });
+      ensure(
+        heroTitleGeometry.logoTop !== null &&
+          heroTitleGeometry.titleTop >= heroTitleGeometry.logoTop - 1 &&
+          heroTitleGeometry.titleRight <= heroTitleGeometry.logoRight + 1 &&
+          heroTitleGeometry.titleBottom <= heroTitleGeometry.logoBottom + 1 &&
+          heroTitleGeometry.titleLeft >= heroTitleGeometry.logoLeft - 1 &&
+          heroTitleGeometry.fontSize <= 40.5,
+        `The long Library hero fallback title is clipped or oversized: ${JSON.stringify(heroTitleGeometry)}`
+      );
+
+      await focusNavigationItem(
+        page,
+        page.locator("#library-hero-launch-button"),
+        "library-hero-launch-button"
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.a);
+      const downloadDialog = page.getByRole("dialog", {
+        name: "The Legend of Zelda - Ocarina of Time 3D",
+      });
+      await downloadDialog.waitFor({ state: "visible", timeout: 20_000 });
+      ensure(
+        (await downloadDialog
+          .getByText("Pick a repack from your download sources", {
+            exact: true,
+          })
+          .count()) === 1,
+        "Controller A on the Library hero Download Game action did not open the real download flow."
+      );
+      const downloadModalScreenshot = await captureViewport(
+        page,
+        "bp-library-hero-download-modal-controller",
+        VIEWPORTS[2]
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.b);
+      await downloadDialog.waitFor({ state: "hidden", timeout: 10_000 });
+      ensure(
+        (await page.evaluate(
+          () =>
+            globalThis.document.querySelector("[data-focus-visible='true']")
+              ?.id ?? null
+        )) === "library-hero-launch-button",
+        "Closing the Library hero download modal did not restore controller focus."
+      );
+
+      const consoleParentId = "library-filters-platform-pill-console";
+      await pressGamepadButton(page, GAMEPAD_BUTTON.down);
+      await moveGamepadFocusTo(page, consoleParentId, GAMEPAD_BUTTON.right, 20);
+      await pressGamepadButton(page, GAMEPAD_BUTTON.a);
+      const consoleRow = page.locator(
+        '[data-focus-region-id="library-filters-consoles"]'
+      );
+      await consoleRow.waitFor({ state: "visible", timeout: 10_000 });
+      await focusNavigationItem(
+        page,
+        page.locator("#library-filters-console-pill-all"),
+        "library-filters-console-pill-all"
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.right);
+      ensure(
+        (await page.evaluate(
+          () =>
+            globalThis.document.querySelector("[data-focus-visible='true']")
+              ?.id ?? null
+        )) === "library-filters-console-pill-n3ds",
+        "Controller Right did not enter the nested Nintendo 3DS console filter."
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.a);
+      ensure(
+        (await page
+          .locator("#library-filters-console-pill-n3ds")
+          .getAttribute("aria-pressed")) === "true",
+        "Controller A did not select the Nintendo 3DS filter."
+      );
+      const libraryText = await page.locator(".library-page").innerText();
+      ensure(
+        libraryText.includes("Ocarina of Time 3D") &&
+          !libraryText.includes("Breath of the Wild"),
+        "The selected 3DS filter did not isolate the nested console library."
+      );
+      await page.locator(".library-page").evaluate((libraryPage) => {
+        libraryPage.scrollTop = 0;
+      });
+      await page.waitForTimeout(220);
+      const screenshot = await captureViewport(
+        page,
+        "bp-library-nested-console-filters-controller",
+        VIEWPORTS[2]
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.rb);
+      ensure(
+        (await page
+          .locator("#library-filters-tab-favorites")
+          .getAttribute("aria-selected")) === "true",
+        "R1/RB did not switch the Library tab to Favorites."
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.lb);
+      ensure(
+        (await page
+          .locator("#library-filters-tab-all")
+          .getAttribute("aria-selected")) === "true",
+        "L1/LB did not switch the Library tab back to All."
+      );
+
+      const libraryCard = page
+        .locator('[id^="library-focus-grid-item-"]')
+        .first();
+      const libraryCardId = await focusNavigationItem(page, libraryCard);
+      await pressGamepadButton(page, GAMEPAD_BUTTON.y);
+      const gameContextMenu = page.getByRole("menu", {
+        name: "Game context menu",
+      });
+      await gameContextMenu.waitFor({ state: "visible", timeout: 10_000 });
+      const removeFromLibrary = gameContextMenu.getByRole("menuitem", {
+        name: "Remove from Library",
+      });
+      const removeFocusId = await removeFromLibrary.getAttribute("id");
+      ensure(removeFocusId, "The Remove from Library action has no focus id.");
+      await focusNavigationItem(page, removeFromLibrary, removeFocusId);
+      await pressGamepadButton(page, GAMEPAD_BUTTON.a);
+      const removeDialog = page.getByRole("dialog", {
+        name: "Remove from library?",
+      });
+      await removeDialog.waitFor({ state: "visible", timeout: 10_000 });
+      const removeConfirmationScreenshot = await captureViewport(
+        page,
+        "bp-library-remove-confirmation-controller",
+        VIEWPORTS[2]
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.b);
+      await removeDialog.waitFor({ state: "hidden", timeout: 10_000 });
+      ensure(
+        (await page.evaluate(
+          () =>
+            globalThis.document.querySelector("[data-focus-visible='true']")
+              ?.id ?? null
+        )) === libraryCardId,
+        "Closing the Remove from Library confirmation did not restore card focus."
+      );
+      ensure(
+        qaApiProxy.state.mutationRequests.length === 0,
+        "Inspecting the Remove from Library confirmation attempted a write."
+      );
+      await assertResponsiveSurface(page, ".library-page");
+      return {
+        ...(screenshot ? { screenshot } : {}),
+        ...(downloadModalScreenshot ? { downloadModalScreenshot } : {}),
+        ...(removeConfirmationScreenshot
+          ? { removeConfirmationScreenshot }
+          : {}),
+      };
+    }
+  );
+
+  await runCase(
+    "bp-profile-sidebar-avatar-achievements-stat-controller-full-hd",
+    {
+      area: "big-picture-profile",
+      fixture: "deterministic-populated-read-only",
+      input: "a",
+      viewport: VIEWPORTS[2].id,
+    },
+    async () => {
+      await applyViewport(page, VIEWPORTS[2]);
+      await navigateHash(page, "/big-picture/profile", ".bp-profile", {
+        bounce: true,
+      });
+      await waitForProfileReadiness(page);
+      const profileAvatar = page.locator("#big-picture-sidebar-profile img");
+      await profileAvatar.waitFor({ state: "visible", timeout: 20_000 });
+      ensure(
+        await profileAvatar.evaluate(
+          (image) =>
+            image.complete && image.naturalWidth > 0 && image.alt === "Profile"
+        ),
+        "The sidebar Profile route did not render the signed-in profile picture."
+      );
+      await focusNavigationItem(
+        page,
+        page.locator("#profile-achievements-stat"),
+        "profile-achievements-stat"
+      );
+      await pressGamepadButton(page, GAMEPAD_BUTTON.a);
+      const profileState = await page
+        .locator(".bp-profile")
+        .evaluate((root) => ({
+          view: root.getAttribute("data-profile-view"),
+          focus:
+            globalThis.document.querySelector("[data-focus-visible='true']")
+              ?.id ?? null,
+        }));
+      ensure(
+        profileState.view === "achievements" &&
+          profileState.focus === "profile-tab-achievements",
+        `The profile achievement statistic did not route to the tab: ${JSON.stringify(profileState)}`
+      );
+      const screenshot = await captureViewport(
+        page,
+        "bp-profile-sidebar-avatar-achievements-stat-controller",
+        VIEWPORTS[2]
+      );
+      await assertResponsiveSurface(page, ".bp-profile");
+      return screenshot ? { screenshot } : {};
+    }
+  );
 
   const encodedGameRoute = `${encodeURIComponent(
     fixture.game.shop
@@ -1962,6 +2735,66 @@ try {
         async () => {
           await applyViewport(page, viewport);
           await navigateHash(page, route.path, route.selector);
+          let screenshot = null;
+          if (route.id === "home") {
+            await waitForHomeRecommendationReadiness(page);
+            await page.locator(".home-page").evaluate((homePage) => {
+              homePage.scrollTop = 0;
+            });
+            await page.waitForTimeout(220);
+            screenshot = await captureViewport(
+              page,
+              `bp-route-${route.id}`,
+              viewport
+            );
+            const firstRecommendation = page
+              .locator('[id^="home-recommended-game-"]')
+              .first();
+            const firstId = await focusNavigationItem(
+              page,
+              firstRecommendation
+            );
+            await pressGamepadButton(page, GAMEPAD_BUTTON.right);
+            const focusedAfterRight = await page.evaluate(
+              () =>
+                globalThis.document.querySelector("[data-focus-visible='true']")
+                  ?.id ?? null
+            );
+            ensure(
+              focusedAfterRight?.startsWith("home-recommended-game-") &&
+                focusedAfterRight !== firstId,
+              `Controller Right did not traverse the ${viewport.id} Home recommendation row (${focusedAfterRight}).`
+            );
+          }
+          if (route.id === "library") {
+            await page
+              .locator(".hero__logo__fallback")
+              .waitFor({ state: "visible", timeout: 20_000 });
+            await page.locator(".library-page").evaluate((libraryPage) => {
+              libraryPage.scrollTop = 0;
+            });
+            await page.waitForTimeout(220);
+            screenshot = await captureViewport(
+              page,
+              `bp-route-${route.id}`,
+              viewport
+            );
+            await focusNavigationItem(
+              page,
+              page.locator("#library-filters-tab-all"),
+              "library-filters-tab-all"
+            );
+            await pressGamepadButton(page, GAMEPAD_BUTTON.right);
+            ensure(
+              (await page.evaluate(
+                () =>
+                  globalThis.document.querySelector(
+                    "[data-focus-visible='true']"
+                  )?.id ?? null
+              )) === "library-filters-tab-favorites",
+              `Controller Right did not traverse the ${viewport.id} Library tabs.`
+            );
+          }
           if (route.id === "cloud-saves") {
             await page
               .locator(".cloud-saves-page__status")
@@ -1983,6 +2816,32 @@ try {
             await assertProfileDatasetDedupe(page);
             if (route.id === "profile-id") {
               await assertRemoteProfileFixture(page);
+            }
+            if (route.id === "profile-own") {
+              await page.locator(".bp-profile").evaluate((profilePage) => {
+                profilePage.scrollTop = 0;
+              });
+              await page.waitForTimeout(220);
+              screenshot = await captureViewport(
+                page,
+                `bp-route-${route.id}`,
+                viewport
+              );
+              await focusNavigationItem(
+                page,
+                page.locator("#profile-tab-games"),
+                "profile-tab-games"
+              );
+              await pressGamepadButton(page, GAMEPAD_BUTTON.right);
+              ensure(
+                (await page.evaluate(
+                  () =>
+                    globalThis.document.querySelector(
+                      "[data-focus-visible='true']"
+                    )?.id ?? null
+                )) === "profile-tab-achievements",
+                `Controller Right did not traverse the ${viewport.id} Profile tabs.`
+              );
             }
           }
           if (route.id === "game") {
@@ -2028,7 +2887,7 @@ try {
               "The real cloned Kewz Friends case no longer reflects its truthful empty state."
             );
           }
-          const screenshot = await captureViewport(
+          screenshot ??= await captureViewport(
             page,
             `bp-route-${route.id}`,
             viewport
@@ -2159,10 +3018,24 @@ try {
         "#profile-souvenir\\:steam\\:620\\:QA_VISUAL_SOUVENIR"
       );
       await souvenir.waitFor({ state: "visible", timeout: 30_000 });
-      await souvenir.locator("img").waitFor({ state: "visible" });
+      const souvenirImage = souvenir.locator(".bp-profile__souvenir__image");
+      await souvenirImage.waitFor({ state: "visible" });
       ensure(
-        await souvenir.locator("img").evaluate((image) => image.complete),
+        await souvenirImage.evaluate(
+          (image) => image.complete && image.naturalWidth > 0
+        ),
         "The account-scoped souvenir image did not finish decoding."
+      );
+      const souvenirText = await souvenir.innerText();
+      ensure(
+        souvenirText.includes("Right on Time") &&
+          souvenirText.includes(
+            "Complete the chamber before the countdown reaches zero."
+          ) &&
+          (await souvenir
+            .locator(".bp-profile__souvenir__achievement-icon")
+            .count()) === 1,
+        "The Big Picture souvenir does not show its achievement icon, title, and description."
       );
       await focusNavigationItem(
         page,
@@ -2230,7 +3103,7 @@ try {
         name: "View Right on Time souvenir",
       });
       await preview.waitFor({ state: "visible", timeout: 20_000 });
-      const previewImage = preview.locator("img");
+      const previewImage = preview.locator(":scope > img");
       await previewImage.waitFor({ state: "visible" });
       ensure(
         await previewImage.evaluate(

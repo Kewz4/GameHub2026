@@ -357,8 +357,13 @@ export default function Home() {
   const hardPlatinums = useHardPlatinums();
   const hotGames = useHotGames();
   const weeklyGames = useWeeklyGames();
+  const recommendationLanguage = (
+    i18n.resolvedLanguage ??
+    i18n.language ??
+    "en"
+  ).split("-")[0];
   const { recommended, becauseYouPlayed, recommendedClassics } =
-    useRecommendedRows(i18n.language.split("-")[0]);
+    useRecommendedRows(recommendationLanguage);
 
   useEffect(() => {
     void updateLibrary();
@@ -678,7 +683,7 @@ export default function Home() {
         />
         <FocusCarousel
           title="Recommended for you"
-          cardVariant="vertical"
+          cardVariant="horizontal"
           games={recommended}
           regionId={HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID}
           getItemId={getHomeRecommendedGameItemId}
@@ -693,7 +698,7 @@ export default function Home() {
           <FocusCarousel
             key={`because-${row.anchorTitle}`}
             title={`Because you played ${row.anchorTitle}`}
-            cardVariant="vertical"
+            cardVariant="horizontal"
             games={row.games}
             regionId={getHomeBecauseCarouselRegionId(shelfIndex)}
             getItemId={(game) => getHomeBecauseGameItemId(shelfIndex, game)}
@@ -709,7 +714,7 @@ export default function Home() {
         ))}
         <FocusCarousel
           title="Recommended classics"
-          cardVariant="vertical"
+          cardVariant="horizontal"
           games={recommendedClassics}
           regionId={HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID}
           getItemId={getHomeClassicsGameItemId}

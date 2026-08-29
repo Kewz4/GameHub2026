@@ -2836,6 +2836,7 @@ body.overlay-widget-resizing * {
   inset: 0;
   box-sizing: border-box;
   width: auto;
+  min-width: 0;
   max-width: none;
   height: auto;
   min-height: 0;
@@ -2858,7 +2859,8 @@ body.overlay-widget-resizing * {
   }
 
   &__body {
-    width: 100%;
+    flex: 1 1 auto;
+    width: auto;
     min-width: 0;
   }
 
@@ -2877,6 +2879,12 @@ body.overlay-widget-resizing * {
 
   &--error {
     border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+
+    strong {
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
   }
 }
 

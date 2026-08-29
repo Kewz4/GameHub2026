@@ -6,11 +6,16 @@ import { MAX_MINUTES_TO_SHOW_IN_PLAYTIME } from "@renderer/constants";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
 import { ClockIcon, TrophyIcon } from "@primer/octicons-react";
 import { Award } from "lucide-react";
-import { AchievementsBreakdownModal } from "./achievements-breakdown-modal";
 import { totalProfilePlayTimeInSeconds } from "./profile-library-data";
 import "./user-stats-box.scss";
 
-export function UserStatsBox() {
+interface UserStatsBoxProps {
+  onSelectAchievements: () => void;
+}
+
+export function UserStatsBox({
+  onSelectAchievements,
+}: Readonly<UserStatsBoxProps>) {
   const {
     userStats,
     isMe,
@@ -22,8 +27,6 @@ export function UserStatsBox() {
   const { userDetails } = useUserDetails();
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
-  const [showAchievementsBreakdown, setShowAchievementsBreakdown] =
-    useState(false);
   // Total unlocked achievements across ALL games that have them — including
   // games not in the local library (Exophase/PSN catalogue imports).
   const [allAchievementsSum, setAllAchievementsSum] = useState(0);
@@ -131,9 +134,9 @@ export function UserStatsBox() {
                 <button
                   type="button"
                   className="user-stats__list-description user-stats__list-description--clickable"
-                  onClick={() => setShowAchievementsBreakdown(true)}
-                  title={t("view_achievements_per_game", {
-                    defaultValue: "View achievements per game",
+                  onClick={onSelectAchievements}
+                  title={t("open_achievements_tab", {
+                    defaultValue: "Open achievements tab",
                   })}
                 >
                   <TrophyIcon /> {achievementSum ?? 0} {t("achievements")}
@@ -198,13 +201,6 @@ export function UserStatsBox() {
           </li>
         )}
       </ul>
-
-      {isMe && (
-        <AchievementsBreakdownModal
-          visible={showAchievementsBreakdown}
-          onClose={() => setShowAchievementsBreakdown(false)}
-        />
-      )}
     </div>
   );
 }

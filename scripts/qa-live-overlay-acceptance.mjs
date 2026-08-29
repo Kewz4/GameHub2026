@@ -905,7 +905,7 @@ function overlayToastKind(url) {
   const suffix = fragment.slice(marker.length);
   if (suffix !== "" && !suffix.startsWith("?")) return null;
   const parameters = new URLSearchParams(suffix.slice(1));
-  if (parameters.get("kind") === "input-gate-error") return "refusal";
+  if (parameters.get("kind") === "overlay-unavailable") return "refusal";
   return suffix === "" ? "ready" : null;
 }
 
@@ -915,7 +915,7 @@ export function findReadyToast(diagnostics) {
   );
 }
 
-export function findInputGateToast(diagnostics) {
+export function findOverlayUnavailableToast(diagnostics) {
   return diagnostics?.windows?.find(
     (window) => window.visible && overlayToastKind(window.url) === "refusal"
   );
@@ -923,7 +923,8 @@ export function findInputGateToast(diagnostics) {
 
 export function hasRequiredToastEvidence(diagnostics, kind) {
   if (kind === "ready") return Boolean(findReadyToast(diagnostics));
-  if (kind === "refusal") return Boolean(findInputGateToast(diagnostics));
+  if (kind === "refusal")
+    return Boolean(findOverlayUnavailableToast(diagnostics));
   return false;
 }
 
@@ -2120,7 +2121,7 @@ async function main() {
         50
       );
       const toastResult = toastState.diagnostics;
-      const gateToast = findInputGateToast(toastResult);
+      const gateToast = findOverlayUnavailableToast(toastResult);
       ensure(
         gateToast,
         "The expected input-gate refusal notification did not appear."
@@ -2163,7 +2164,7 @@ async function main() {
         "The target bounds changed before refusal-toast capture."
       );
       validateRightEdgeToastGeometry(
-        findInputGateToast(beforeCapture),
+        findOverlayUnavailableToast(beforeCapture),
         beforeCapture.targetBounds,
         "refusal"
       );

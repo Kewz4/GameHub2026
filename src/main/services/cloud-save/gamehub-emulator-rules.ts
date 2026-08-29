@@ -239,8 +239,8 @@ const wildcardSegmentMatches = (pattern: string, value: string) => {
   return new RegExp(`${source}$`, "i").test(value);
 };
 
-/** Bind a RALibretro glob to the exact per-ROM filename carried remotely. */
-const ralibretroCandidateForFile = (
+/** Bind a file glob to the exact filename carried by the remote manifest. */
+const candidateForRemoteFile = (
   pattern: string,
   relativePath: string,
   platform: CloudSavePathContext["platform"]
@@ -254,10 +254,11 @@ const ralibretroCandidateForFile = (
     return null;
   }
 
+  const api = pathApiFor(platform);
   const marker = /[\\/]\*\*[\\/]/.exec(pattern);
-  if (!marker || marker.index === 0) return null;
-  const root = pattern.slice(0, marker.index);
-  const filenamePattern = pattern.slice(marker.index + marker[0].length);
+  const filenamePattern = marker
+    ? pattern.slice(marker.index + marker[0].length)
+    : api.basename(pattern);
   if (
     !filenamePattern ||
     filenamePattern.includes("/") ||
@@ -266,10 +267,16 @@ const ralibretroCandidateForFile = (
   ) {
     return null;
   }
-  return pathApiFor(platform).join(root, portableRelativePath);
+  if (marker) {
+    if (marker.index === 0) return null;
+    return api.join(pattern.slice(0, marker.index), portableRelativePath);
+  }
+  const parent = api.dirname(pattern);
+  if (HAS_GLOB.test(parent)) return null;
+  return api.join(parent, portableRelativePath);
 };
 
-const buildRalibretroRules = (
+const buildFileRules = (
   input: BuildGameHubEmulatorRulesInput
 ): CloudSaveRule[] => {
   const backupPaths = sortedUniquePaths(input.backupPaths, input.platform);
@@ -297,7 +304,7 @@ const buildRalibretroRules = (
 
     const prospectiveMatches = input.restorePatterns
       .map((pattern) =>
-        ralibretroCandidateForFile(pattern, relativePath, input.platform)
+        candidateForRemoteFile(pattern, relativePath, input.platform)
       )
       .filter((candidate): candidate is string => Boolean(candidate));
     const candidates = sortedUniquePaths(
@@ -307,6 +314,7 @@ const buildRalibretroRules = (
 
     if (group.kind === "legacy") {
       if (
+        input.binary !== "ralibretro" ||
         candidates.length !== 1 ||
         !isKnownLegacyRawPath(group.rawPath, input.shop, input.objectId)
       ) {
@@ -341,7 +349,12 @@ const isProfileBased = (input: BuildGameHubEmulatorRulesInput) =>
 export const buildGameHubEmulatorRules = (
   input: BuildGameHubEmulatorRulesInput
 ): CloudSaveRule[] => {
-  if (input.binary === "ralibretro") return buildRalibretroRules(input);
+  if (
+    input.binary === "ralibretro" ||
+    (input.binary === "dolphin" && input.system === "gc")
+  ) {
+    return buildFileRules(input);
+  }
 
   const candidates = sortedUniquePaths(
     [

@@ -215,6 +215,8 @@ export interface UserPreferences {
   startMinimized?: boolean;
   launchToLibraryPage?: boolean;
   launchInBigPicture?: boolean;
+  /** Persist the compact desktop shell without affecting Big Picture. */
+  hideSidebar?: boolean;
   hideClassicsBookmark?: boolean;
   classicsUseHeroLayout?: boolean;
   bigPictureSoundsEnabled?: boolean;

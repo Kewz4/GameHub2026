@@ -43,7 +43,7 @@ process.on("uncaughtException", (err) => {
   // Authorization/cookie/R2 credentials below `config` and `request`.
   appendStartupLog(`UNCAUGHT ${formatConsoleLogData([err])}`);
   // Continuing after an uncaught exception leaves process-wide invariants
-  // unknowable (including overlay input isolation). The write above is
+  // unknowable (including overlay window ownership). The write above is
   // synchronous; terminate so external owner-death watchdogs can recover.
   process.exit(1);
 });
@@ -317,8 +317,8 @@ app.whenReady().then(async () => {
   electronApp.setAppUserModelId("io.gamehub.launcher");
   logger.info("Crash dumps directory", app.getPath("crashDumps"));
 
-  // Wire the in-game overlay (perf HUD via PresentMon, injected surface via
-  // asdf-overlay, Shift+F3 / Guide toggle). Idempotent; safe on all OSes.
+  // Wire the compositor-backed Borderless/Windowed overlay (perf HUD via
+  // PresentMon, Shift+F3 / Guide toggle). Idempotent; safe on all OSes.
   OverlayManager.initialize();
 
   protocol.handle("local", (request) => {

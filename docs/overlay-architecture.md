@@ -4,11 +4,10 @@
 
 GameHub's in-game overlay is a transparent `BrowserWindow` attached to the detected game window. It supports three modes: **full** (a freeform Steam-style widget workspace), **pinned** (corner FPS chip), and **toast** (activation notification). All three are React components served from the same renderer bundle and differentiated by URL hash.
 
-The production renderer remains out of process. A separately researched
-pre-entry in-process compositor is QA-only and must pass the render, input and
-supervisor gates in [overlay-render-hook-research.md](overlay-render-hook-research.md)
-and [overlay-supervised-launch.md](overlay-supervised-launch.md) before it can
-replace or augment this window path.
+The production renderer remains out of process and is supported only for
+Borderless or Windowed games. Exclusive fullscreen is refused explicitly; see
+[overlay-windowed-mode.md](overlay-windowed-mode.md). The older hook and
+supervised-launch documents are retained only as historical QA research.
 
 ---
 
@@ -451,7 +450,7 @@ In development, `ELECTRON_RENDERER_URL` is set for HMR. In production, all windo
 | `src/main/services/overlay-manager.ts`                     | Window creation, positioning, gamepad, shortcuts, lifecycle |
 | `src/main/services/overlay-game-process.ts`                | Game window detection and ranking                           |
 | `src/main/services/overlay-game-process-ranking.ts`        | Single visible render-PID and loader handoff policy         |
-| `src/main/services/overlay-input-gate.ts`                  | Readiness, capability and synchronous release controller    |
+| `src/main/services/overlay-window-mode.ts`                 | Borderless/Windowed compositor eligibility and refusal      |
 | `src/main/services/overlay-fps-monitor.ts`                 | PresentMon/MangoHud frame time → FPS calculation            |
 | `src/main/services/overlay-music-player.ts`                | Deezer search, yt-dlp audio resolution, queue, playlists    |
 | `src/main/services/spotify-service.ts`                     | PKCE, encrypted tokens and Spotify Web API/Connect client   |
@@ -459,7 +458,7 @@ In development, `ELECTRON_RENDERER_URL` is set for HMR. In production, all windo
 | `src/shared/game-recorder-quality.ts`                      | Pixel-rate bitrate and media-constraint policy              |
 | `src/main/services/game-process-control-manager.ts`        | Safe pause/resume/close state machine                       |
 | `native/hydra-native/src/bin/presentmon-bridge.rs`         | Elevated share-readable PresentMon bridge                   |
-| `native/gamehub-inputhook/src/lib.rs`                      | Target-scoped XInput/Win32/Raw Input gate and handshake     |
+| `src/main/services/windows-game-capture.ts`                | Exact-window SDR achievement souvenir capture               |
 | `src/main/services/gamepad-state.ts`                       | Raw Input gamepad state polling                             |
 | `src/main/services/overlay-shortcut.ts`                    | Native keyboard hook for Shift+F3                           |
 | `src/main/events/overlay/index.ts`                         | IPC handlers: context, notes, pins, audio sessions          |

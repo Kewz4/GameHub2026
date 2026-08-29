@@ -15,6 +15,7 @@ import { getCachedCloudSaveOverview } from "./cloud-save-overview-cache";
 import { cloudSaveFileKey } from "./cloud-save-contract";
 import { getUnconfiguredCloudSaveCustomPathCandidates } from "./custom-path-approval-policy";
 import { getFirstSyncState, getSuggestedCloudSaveAction } from "./sync-game";
+import { getEmulatorCloudSaveMappingIssue } from "./emulator-cloud-save-support";
 
 const loadCloudSaveOverview = async (
   objectId: string,
@@ -42,6 +43,10 @@ const loadCloudSaveOverview = async (
         ...analysis.customPathBindings.unresolved,
       ].map(({ rawPath }) => rawPath)
     ).length;
+  const mappingIssue =
+    analysis.customPathBindings.ready.length > 0
+      ? null
+      : await getEmulatorCloudSaveMappingIssue(objectId, shop);
   recordLatestCloudSaveObservation(
     objectId,
     shop,
@@ -69,6 +74,7 @@ const loadCloudSaveOverview = async (
     warnings: analysis.localSnapshot.coverage.filter(
       (item) => item.warningCodes.length > 0
     ),
+    mappingIssue,
   };
 };
 

@@ -346,7 +346,9 @@ try {
       kind === "error" ? fixture.expectedError : fixture.expectedReady;
     await setHostBounds(expected);
     const query =
-      kind === "error" ? "?kind=input-gate-error&reason=unsupported" : "";
+      kind === "error"
+        ? "?kind=overlay-unavailable&reason=exclusive-fullscreen"
+        : "";
     await page.goto(`${rendererUrl}#/overlay-toast${query}`);
     const selector =
       kind === "error" ? ".overlay-toast--error" : ".overlay-toast";

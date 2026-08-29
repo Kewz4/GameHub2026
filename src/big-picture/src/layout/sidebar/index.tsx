@@ -22,7 +22,8 @@ import {
   VerticalFocusGroup,
 } from "../../components";
 import { IS_DESKTOP } from "../../constants";
-import { useLibrary, useSearch } from "../../hooks";
+import { useLibrary, useSearch, useUserDetails } from "../../hooks";
+import { resolveImageSource } from "../../helpers";
 import type { FocusOverrides } from "../../services";
 import {
   BIG_PICTURE_SIDEBAR_EXIT_ID,
@@ -109,6 +110,8 @@ function SidebarRouter({
 }: Readonly<SidebarRouterProps>) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { userDetails } = useUserDetails();
+  const profileImageUrl = resolveImageSource(userDetails?.profileImageUrl);
   const activeSidebarItemId = getBigPictureSidebarItemIdFromPathname(pathname);
   const handleExitBigPicture = () => {
     if (IS_DESKTOP) {
@@ -123,13 +126,19 @@ function SidebarRouter({
     <div className="sidebar-router-container">
       {routes.map((route) => {
         const itemId = BIG_PICTURE_SIDEBAR_ITEM_IDS[route.key];
+        const routeIcon =
+          route.key === "profile" && profileImageUrl ? (
+            profileImageUrl
+          ) : (
+            <route.icon size={24} />
+          );
 
         return (
           <RouteAnchor
             key={route.label}
             label={route.label}
             href={route.path}
-            icon={<route.icon size={24} />}
+            icon={routeIcon}
             active={activeSidebarItemId === itemId}
             focusId={itemId}
             focusActions={{ primary: () => navigate(route.path) }}

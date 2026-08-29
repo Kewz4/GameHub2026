@@ -112,6 +112,29 @@ export function ProfileSouvenirsTab({
                     loading="lazy"
                     draggable={false}
                   />
+                  <span
+                    className="profile-souvenirs__notification"
+                    aria-hidden="true"
+                  >
+                    {souvenir.achievementIconUrl ? (
+                      <img
+                        className="profile-souvenirs__achievement-icon"
+                        src={souvenir.achievementIconUrl}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="profile-souvenirs__achievement-icon profile-souvenirs__achievement-icon--placeholder">
+                        <ImageIcon size={18} />
+                      </span>
+                    )}
+                    <span className="profile-souvenirs__notification-copy">
+                      <strong>{souvenir.achievementDisplayName}</strong>
+                      <span>
+                        {souvenir.achievementDescription || souvenir.gameTitle}
+                      </span>
+                    </span>
+                  </span>
                 </button>
 
                 <div className="profile-souvenirs__details">

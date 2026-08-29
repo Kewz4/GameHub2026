@@ -111,6 +111,9 @@ export function BigPictureCloudSaveModal({
   const hasUnconfiguredCustomPaths =
     (overview?.unconfiguredCustomPathCount ?? 0) > 0;
   const partialDescriptionKey = getCloudSavePartialDescriptionKey(overview);
+  const mappingIssueKey = overview?.mappingIssue
+    ? `cloud_save_v2_mapping_issue_${overview.mappingIssue}`
+    : null;
   const showEmptySnapshot = shouldShowCloudSaveEmptySnapshot({
     overview,
     isLoading,
@@ -245,6 +248,13 @@ export function BigPictureCloudSaveModal({
           <p className="big-picture-cloud-save__notice big-picture-cloud-save__notice--warning">
             <WarningCircleIcon size={20} weight="fill" />
             {t(partialDescriptionKey)}
+          </p>
+        ) : null}
+
+        {mappingIssueKey && !hasError ? (
+          <p className="big-picture-cloud-save__notice big-picture-cloud-save__notice--warning">
+            <WarningCircleIcon size={20} weight="fill" />
+            {t(mappingIssueKey)}
           </p>
         ) : null}
 

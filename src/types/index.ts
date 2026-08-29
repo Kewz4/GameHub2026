@@ -331,6 +331,8 @@ export interface ProfileAchievementSouvenir {
   objectId: string;
   achievementName: string;
   achievementDisplayName: string;
+  achievementDescription?: string | null;
+  achievementIconUrl?: string | null;
   gameTitle: string;
   gameIconUrl: string | null;
   imageUrl: string;
@@ -344,6 +346,10 @@ export interface AchievementSouvenirRecord {
   objectId: string;
   achievementName: string;
   achievementDisplayName: string;
+  /** Optional for schema-v1 records created before souvenir presentation metadata was added. */
+  achievementDescription?: string | null;
+  /** Optional for schema-v1 records created before souvenir presentation metadata was added. */
+  achievementIconUrl?: string | null;
   gameTitle: string;
   gameIconUrl: string | null;
   unlockTime: number;

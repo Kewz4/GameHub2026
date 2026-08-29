@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { EmulatorSystem, GameShop } from "@types";
+import type { EmulatorBinary, EmulatorSystem, GameShop } from "@types";
 import { systemFromObjectId, platformToSystem } from "@main/helpers";
 import { levelKeys, gamesSublevel } from "@main/level";
 import { getEmulatorConfig } from "./emulators-repository";
@@ -13,6 +13,7 @@ import { getPs1MemcardDirs } from "./ps1-memcard-dirs";
 import { readGamesYml, buildPathToTitleIdIndex } from "./emulation-cloud-saves";
 import {
   resolveConsoleSaveNeedle,
+  readDiscGameCode,
   searchAzaharSaveTreeForTitleId,
   searchSaveTreeForNeedle,
 } from "./emulator-title-id";
@@ -24,6 +25,12 @@ import {
   pathContainsFile,
   resolveStoredGameRomPath,
 } from "./emulator-save-paths";
+import { getEmulatorCloudSaveStrategy } from "./emulator-cloud-save-strategy";
+import {
+  buildDolphinGciRestorePatterns,
+  findDolphinGciFilesForGame,
+  resolveDolphinGciCardFolders,
+} from "./dolphin-gci-saves";
 
 /**
  * Resolves the on-disk save-data folders for the folder-based standalone
@@ -129,7 +136,7 @@ export const systemForGame = async (
 
 export interface EmulatorSaveLocation {
   system: EmulatorSystem;
-  binary: string;
+  binary: EmulatorBinary;
   /** The emulator executable (used to find sibling databases like games.yml). */
   executablePath: string;
   /**
@@ -303,6 +310,23 @@ export const resolveEmulatorGameSaveFolder = async (
     }
   }
 
+  if (loc.binary === "dolphin" && loc.system === "gc") {
+    const game = await gamesSublevel
+      .get(levelKeys.game(shop, objectId))
+      .catch(() => null);
+    const romPath = resolveStoredGameRomPath(game);
+    const gameCode = romPath ? readDiscGameCode(romPath) : null;
+    if (gameCode) {
+      const cards = resolveDolphinGciCardFolders(
+        path.dirname(loc.executablePath),
+        gameCode
+      );
+      const saves = findDolphinGciFilesForGame(cards, gameCode);
+      if (saves.length > 0) return path.dirname(saves[0]);
+      if (cards.length > 0) return cards[0];
+    }
+  }
+
   if (loc.system === "wiiu") {
     const titleId = await resolveWiiuTitleId(shop, objectId);
     if (titleId && titleId.length === 16) {
@@ -366,10 +390,12 @@ export const resolveEmulatorBackupFolders = async (
   const loc = await resolveEmulatorSaveLocation(shop, objectId);
   if (!loc) return [];
 
+  const strategy = getEmulatorCloudSaveStrategy(loc.system, loc.binary);
+
   // RALibretro's Saves directory is shared by every core and game. Register
   // only this ROM's exact save payload; if it has not saved yet, there is
   // nothing safe to upload.
-  if (loc.binary === "ralibretro") {
+  if (strategy === "per-rom-files") {
     const game = await gamesSublevel
       .get(levelKeys.game(shop, objectId))
       .catch(() => null);
@@ -377,14 +403,27 @@ export const resolveEmulatorBackupFolders = async (
     return romPath ? findRalibretroSaveFiles(loc.folders, romPath) : [];
   }
 
+  // Dolphin's GCI-folder card stores each save as an independent file. Match
+  // the same first-four-byte game code Dolphin uses internally and never touch
+  // a shared .raw card image.
+  if (strategy === "per-title-files") {
+    const game = await gamesSublevel
+      .get(levelKeys.game(shop, objectId))
+      .catch(() => null);
+    const romPath = resolveStoredGameRomPath(game);
+    const gameCode = romPath ? readDiscGameCode(romPath) : null;
+    if (!gameCode) return [];
+    const cards = resolveDolphinGciCardFolders(
+      path.dirname(loc.executablePath),
+      gameCode
+    );
+    return findDolphinGciFilesForGame(cards, gameCode);
+  }
+
   // These formats use shared memory-card images. Uploading a whole card from a
   // single game's automatic sync can overwrite unrelated games on restore;
   // the dedicated memory-card manager is the safe per-save path instead.
-  if (
-    loc.binary === "pcsx2" ||
-    loc.binary === "duckstation" ||
-    (loc.binary === "dolphin" && loc.system === "gc")
-  ) {
+  if (strategy === "dedicated-memory-card-manager") {
     return [];
   }
 
@@ -438,11 +477,8 @@ export const resolveEmulatorRestorePatterns = async (
 ): Promise<string[]> => {
   const loc = await resolveEmulatorSaveLocation(shop, objectId);
   if (!loc) return [];
-  if (
-    loc.binary === "pcsx2" ||
-    loc.binary === "duckstation" ||
-    (loc.binary === "dolphin" && loc.system === "gc")
-  ) {
+  const strategy = getEmulatorCloudSaveStrategy(loc.system, loc.binary);
+  if (strategy === "dedicated-memory-card-manager") {
     return [];
   }
 
@@ -450,6 +486,14 @@ export const resolveEmulatorRestorePatterns = async (
     .get(levelKeys.game(shop, objectId))
     .catch(() => null);
   const romPath = resolveStoredGameRomPath(game);
+
+  if (strategy === "per-title-files") {
+    const gameCode = romPath ? readDiscGameCode(romPath) : null;
+    if (!gameCode) return [];
+    return buildDolphinGciRestorePatterns(
+      resolveDolphinGciCardFolders(path.dirname(loc.executablePath), gameCode)
+    );
+  }
 
   let identity: string | null = null;
   if (loc.system === "wiiu") {

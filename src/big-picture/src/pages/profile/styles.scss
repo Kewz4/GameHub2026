@@ -8,6 +8,8 @@
   min-height: calc(100% + var(--big-picture-header-height));
   overflow-x: hidden;
   overflow-y: auto;
+  scroll-padding-top: var(--big-picture-focus-scroll-clearance);
+  scroll-padding-bottom: 96px;
   color: var(--text);
   background: var(--background);
 
@@ -197,6 +199,25 @@
     border: 1px solid var(--secondary-border);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.045);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+
+    &--interactive {
+      cursor: pointer;
+      transition:
+        background-color 160ms ease,
+        border-color 160ms ease;
+
+      &:hover,
+      &[data-focus-visible="true"],
+      &:focus-visible {
+        border-color: var(--text-secondary);
+        background: rgba(255, 255, 255, 0.08);
+        outline: 2px solid var(--text);
+        outline-offset: 3px;
+      }
+    }
 
     &__icon {
       display: flex;
@@ -338,6 +359,66 @@
       aspect-ratio: 16 / 9;
       object-fit: cover;
       background: #080808;
+    }
+
+    &__preview {
+      position: relative;
+      display: block;
+    }
+
+    &__notification {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 62px;
+      padding: 11px 12px;
+      border-top: 1px solid var(--secondary-border);
+      background: color-mix(in srgb, var(--background) 92%, transparent);
+      text-align: left;
+    }
+
+    &__achievement-icon {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      border-radius: 6px;
+      object-fit: cover;
+
+      &--placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--secondary);
+        color: var(--text-secondary);
+      }
+    }
+
+    &__notification-copy {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 2px;
+
+      strong,
+      span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      strong {
+        color: var(--text);
+        font-size: 0.82rem;
+      }
+
+      span {
+        color: var(--text-secondary);
+        font-size: 0.7rem;
+      }
     }
 
     &__copy {

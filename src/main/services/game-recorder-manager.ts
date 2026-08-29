@@ -45,6 +45,7 @@ import {
   probeNativeRecorderEncoder,
   type NativeRecorderCompletedSegment,
 } from "./game-recorder-native-session";
+import { captureWindowsGameWindowFrame } from "./windows-game-capture";
 
 const TARGET_POLL_INTERVAL_MS = 750;
 const FOREGROUND_PRIVACY_POLL_INTERVAL_MS = 100;
@@ -1214,11 +1215,7 @@ export class GameRecorderManager {
     return this.getState();
   }
 
-  /**
-   * Capture the currently foreground game through the same exact-window / full
-   * display selection used by the recorder. This is intentionally on-demand:
-   * achievement souvenirs work even when gameplay recording is disabled.
-   */
+  /** Capture a foreground game frame without ever falling back to the desktop. */
   public static async captureActiveGameFrame(game: Game): Promise<NativeImage> {
     if (process.platform === "linux") {
       throw new Error("achievement_souvenir_capture_linux_unavailable");
@@ -1251,6 +1248,25 @@ export class GameRecorderManager {
       width: Math.max(1, Math.min(display.size.width, 3_840)),
       height: Math.max(1, Math.min(display.size.height, 2_160)),
     };
+
+    if (process.platform === "win32") {
+      const windows = await desktopCapturer.getSources({
+        types: ["window"],
+        thumbnailSize: { width: 0, height: 0 },
+        fetchWindowIcons: false,
+      });
+      const windowSource = targetWindowId
+        ? (windows.find((candidate) =>
+            sourceMatchesWindow(candidate, targetWindowId)
+          ) ?? null)
+        : null;
+      if (!windowSource) {
+        throw new Error("achievement_souvenir_borderless_window_required");
+      }
+
+      return captureWindowsGameWindowFrame(windowSource.id);
+    }
+
     const [screens, windows] = await Promise.all([
       desktopCapturer.getSources({ types: ["screen"], thumbnailSize }),
       desktopCapturer.getSources({

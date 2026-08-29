@@ -40,6 +40,7 @@ import {
   publishCloudSaveSnapshotProposal,
 } from "./cloud-save/r2-snapshot-publication";
 import { listCloudSaveV2LibraryIndex } from "./cloud-save/cloud-save-v2-library-index";
+import { listEmulationSaveR2Index } from "./cloud-save/emulation-save-r2-index";
 import {
   getProfileImageCacheFileName,
   sanitizeProfileImageCacheComponent,
@@ -52,6 +53,10 @@ import {
   isAchievementSouvenirRecord,
 } from "./achievements/achievement-souvenir-policy";
 import { AchievementSouvenirLocalStorage } from "./achievements/achievement-souvenir-local-storage";
+import {
+  achievementSouvenirMetadataFromRecord,
+  achievementSouvenirRecordFromMetadata,
+} from "./achievements/achievement-souvenir-r2-metadata";
 
 export type {
   R2CloudSaveV2ControlDocument,
@@ -126,9 +131,6 @@ const dec = (v: string | undefined | null): string => {
     return v ?? "";
   }
 };
-
-const souvenirMetadataValue = (value: string | null | undefined, max = 240) =>
-  enc((value ?? "").slice(0, max));
 
 const achievementSouvenirLocalStorage = new AchievementSouvenirLocalStorage(
   achievementSouvenirsPath
@@ -1134,20 +1136,7 @@ export class R2Sync {
         Body: fs.createReadStream(filePath),
         ContentLength: stat.size,
         ContentType: "image/jpeg",
-        Metadata: {
-          schema: "1",
-          ownerid: souvenirMetadataValue(record.ownerId, 512),
-          shop: souvenirMetadataValue(record.shop, 32),
-          objectid: souvenirMetadataValue(record.objectId, 1_024),
-          achievementname: souvenirMetadataValue(record.achievementName, 512),
-          achievementdisplayname: souvenirMetadataValue(
-            record.achievementDisplayName
-          ),
-          gametitle: souvenirMetadataValue(record.gameTitle),
-          gameiconurl: souvenirMetadataValue(record.gameIconUrl, 512),
-          unlocktime: String(record.unlockTime),
-          updatedat: String(record.updatedAt),
-        },
+        Metadata: achievementSouvenirMetadataFromRecord(record),
       })
     );
     this.headCache.delete(key);
@@ -1200,25 +1189,11 @@ export class R2Sync {
         const head = await this.headArtifact(object.Key);
         const metadata = head?.Metadata;
         if (!metadata || metadata.schema !== "1") return null;
-        const unlockTime = Number(metadata.unlocktime);
-        const updatedAt = Number(metadata.updatedat);
-        const record: AchievementSouvenirRecord = {
-          schemaVersion: 1,
-          ownerId: dec(metadata.ownerid),
-          shop: dec(metadata.shop) as GameShop,
-          objectId: dec(metadata.objectid),
-          achievementName: dec(metadata.achievementname),
-          achievementDisplayName: dec(metadata.achievementdisplayname),
-          gameTitle: dec(metadata.gametitle),
-          gameIconUrl: dec(metadata.gameiconurl) || null,
-          unlockTime,
-          localPath: null,
-          r2Key: object.Key,
-          status: "synced",
-          updatedAt: Number.isFinite(updatedAt)
-            ? updatedAt
-            : (object.LastModified?.getTime() ?? Date.now()),
-        };
+        const record = achievementSouvenirRecordFromMetadata(
+          metadata,
+          object.Key,
+          object.LastModified?.getTime() ?? Date.now()
+        );
         if (
           record.ownerId !== ownerId ||
           !isAchievementSouvenirRecord(record) ||
@@ -1693,33 +1668,50 @@ export class R2Sync {
       ? `users/${userId}/emulation-saves/${platform}/`
       : `users/${userId}/emulation-saves/`;
 
-    const list = await this.client
-      .send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix }))
-      .catch(() => null);
-
-    const objects = (list?.Contents ?? []).filter((o) => o.Key);
-
-    const artifacts = await Promise.all(
-      objects.map(async (o) => {
-        const head = await this.headArtifact(o.Key!);
-        const m = head?.Metadata ?? {};
+    const objects = await listEmulationSaveR2Index({
+      prefix,
+      relativeSegmentCount: platform ? 2 : 3,
+      listPage: async (continuationToken) => {
+        const page = await this.client.send(
+          new ListObjectsV2Command({
+            Bucket: R2_BUCKET,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+            MaxKeys: 1_000,
+          })
+        );
         return {
-          id: o.Key!,
-          platform: m.platform ?? "",
-          emulator: m.emulator ?? ("" as EmulationArtifact["emulator"]),
-          saveIdentity: dec(m.saveidentity),
-          fileName: dec(m.filename),
-          label: dec(m.label) || null,
-          shop: m.shop || null,
-          objectId: m.objectid || null,
-          artifactLengthInBytes: o.Size ?? 0,
-          hostname: dec(m.hostname),
-          localLastModifiedAt: m.locallastmodifiedat || null,
-          createdAt: (o.LastModified ?? new Date()).toISOString(),
-          updatedAt: (o.LastModified ?? new Date()).toISOString(),
-        } as EmulationArtifact;
-      })
-    );
+          objects: (page.Contents ?? []).map((object) => ({
+            key: object.Key,
+            size: object.Size,
+            lastModified: object.LastModified,
+          })),
+          isTruncated: page.IsTruncated === true,
+          nextContinuationToken: page.NextContinuationToken,
+        };
+      },
+      loadMetadata: async (key) =>
+        (await this.headArtifact(key))?.Metadata ?? null,
+    });
+
+    const artifacts = objects.map((object) => {
+      const m = object.metadata;
+      return {
+        id: object.key,
+        platform: m.platform ?? "",
+        emulator: m.emulator ?? ("" as EmulationArtifact["emulator"]),
+        saveIdentity: dec(m.saveidentity),
+        fileName: dec(m.filename),
+        label: dec(m.label) || null,
+        shop: m.shop || null,
+        objectId: m.objectid || null,
+        artifactLengthInBytes: object.size,
+        hostname: dec(m.hostname),
+        localLastModifiedAt: m.locallastmodifiedat || null,
+        createdAt: object.lastModified.toISOString(),
+        updatedAt: object.lastModified.toISOString(),
+      } as EmulationArtifact;
+    });
 
     return artifacts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -1729,6 +1721,7 @@ export class R2Sync {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key })
     );
+    this.headCache.delete(key);
     logger.log(`R2: deleted emulation save ${key}`);
   }
 
@@ -1766,6 +1759,7 @@ export class R2Sync {
         MetadataDirective: "REPLACE",
       })
     );
+    this.headCache.delete(key);
     logger.log(`R2: updated label for emulation save ${key}`);
   }
 }

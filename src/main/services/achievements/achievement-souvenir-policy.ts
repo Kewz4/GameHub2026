@@ -163,6 +163,8 @@ export const profileAchievementSouvenirFromRecord = (
   objectId: record.objectId,
   achievementName: record.achievementName,
   achievementDisplayName: record.achievementDisplayName,
+  achievementDescription: record.achievementDescription ?? null,
+  achievementIconUrl: record.achievementIconUrl ?? null,
   gameTitle: record.gameTitle,
   gameIconUrl: record.gameIconUrl,
   imageUrl,
@@ -186,6 +188,12 @@ export const isAchievementSouvenirRecord = (
       typeof record.achievementName === "string" &&
       normalizeAchievementSouvenirName(record.achievementName).length > 0 &&
       typeof record.achievementDisplayName === "string" &&
+      (record.achievementDescription === undefined ||
+        record.achievementDescription === null ||
+        typeof record.achievementDescription === "string") &&
+      (record.achievementIconUrl === undefined ||
+        record.achievementIconUrl === null ||
+        typeof record.achievementIconUrl === "string") &&
       typeof record.gameTitle === "string" &&
       (record.gameIconUrl === null || typeof record.gameIconUrl === "string") &&
       Number.isFinite(record.unlockTime) &&

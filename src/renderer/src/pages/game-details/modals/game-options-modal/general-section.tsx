@@ -45,7 +45,6 @@ interface GeneralSettingsSectionProps {
   transferProgress: number;
   drives: DriveInfo[];
   onStartTransfer: (destPath: string) => Promise<void>;
-  onCancelDriveSelection: () => void;
   transferSpeed?: number;
   transferETA?: number;
   showCancelConfirm?: boolean;
@@ -118,7 +117,6 @@ export function GeneralSettingsSection({
   transferProgress,
   drives,
   onStartTransfer,
-  onCancelDriveSelection,
   transferSpeed = 0,
   transferETA = 0,
   showCancelConfirm = false,
@@ -199,7 +197,6 @@ export function GeneralSettingsSection({
     setSelectedDrive(null);
     setCustomPath("");
     setError(null);
-    onCancelDriveSelection();
   };
 
   const effectiveDest = selectedDrive || customPath.trim();

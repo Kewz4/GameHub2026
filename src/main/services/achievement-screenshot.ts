@@ -10,6 +10,7 @@ import {
 import { AchievementSouvenirLocalStorage } from "./achievements/achievement-souvenir-local-storage";
 import { GameRecorderManager } from "./game-recorder-manager";
 import { achievementsLogger } from "./logger";
+import { encodeSdrScreenshotJpeg } from "./screenshot-encoding";
 
 const SCREENSHOT_QUALITY = 82;
 const MAX_WIDTH = 1_920;
@@ -77,7 +78,10 @@ export class AchievementScreenshotService {
     const frame = await GameRecorderManager.captureActiveGameFrame(game);
     const outputPath = this.getPath(ownerId, game, achievement);
     const image = resizeToFit(frame);
-    const jpeg = image.toJPEG(SCREENSHOT_QUALITY);
+    const jpeg = await encodeSdrScreenshotJpeg(
+      image.toPNG(),
+      SCREENSHOT_QUALITY
+    );
     if (!jpeg.length) throw new Error("achievement_souvenir_encode_failed");
 
     await this.localStorage.prepareOwnedFilePath(ownerId, outputPath);

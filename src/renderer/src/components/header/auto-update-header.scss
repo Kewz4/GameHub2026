@@ -1,32 +1,66 @@
 @use "../../scss/globals.scss";
 
 .auto-update-sub-header {
-  border-bottom: solid 1px var(--color-text);
-  padding: calc(globals.$spacing-unit / 2) calc(globals.$spacing-unit * 3);
+  border-bottom: solid 1px globals.$border-color;
+  background-color: color-mix(
+    in srgb,
+    var(--color-dark-background) 94%,
+    var(--color-text-bright)
+  );
 
-  &__new-version-link {
-    display: flex;
+  &__new-version-link,
+  &__new-version-button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: globals.$spacing-unit;
-    color: #8e919b;
-    font-size: 12px;
+    gap: calc(globals.$spacing-unit * 1.5);
+    width: 100%;
+    min-height: 52px;
+    padding: globals.$spacing-unit calc(globals.$spacing-unit * 3);
+    color: var(--color-text-bright);
+    text-align: left;
+    text-decoration: none;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: background-color ease 0.2s;
+
+    &:hover {
+      background-color: rgba(var(--fg-rgb), 0.05);
+      text-decoration: none;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-text-bright);
+      outline-offset: -2px;
+    }
   }
 
   &__new-version-icon {
-    color: globals.$success-color;
+    color: var(--color-text);
   }
 
-  &__new-version-button {
+  &__copy {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: globals.$spacing-unit;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    font-size: globals.$small-font-size;
     color: var(--color-text);
-    font-size: 12px;
 
-    &:hover {
-      text-decoration: underline;
-      cursor: pointer;
+    strong {
+      overflow: hidden;
+      color: var(--color-text-bright);
+      font-size: globals.$body-font-size;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
+  }
+
+  &__chevron {
+    color: var(--color-text);
+    opacity: 0.7;
   }
 }

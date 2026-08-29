@@ -24,7 +24,6 @@ import type {
 } from "@types";
 
 import { logger } from "./logger";
-import type { OverlayInputGateNativeStatus } from "./overlay-input-gate";
 
 type NativeProcessProfileImageResponse = {
   imagePath?: string;
@@ -92,20 +91,8 @@ type HydraNativeModule = {
   getOverlayKeyboardEventCount: () => number;
   getOverlayGamepadButtons: () => number;
   getForegroundProcessId: () => number;
-  getOverlayInjectionRisk: (pid: number) => {
-    safe: boolean;
-    reason?: string | null;
-    moduleName?: string | null;
-    module_name?: string | null;
-  };
   getProcessCreationTimeTicks: (pid: number) => string | null;
   isCurrentProcessElevated: () => boolean;
-  getProcessAccessStatus: (pid: number) => {
-    canInject?: boolean;
-    can_inject?: boolean;
-    errorCode?: number;
-    error_code?: number;
-  };
   launchElevated: (
     executable: string,
     parameters: string,
@@ -134,33 +121,6 @@ type HydraNativeModule = {
   placeOverlayWindow: (windowHandle: Buffer, pid: number) => boolean;
   focusProcessWindow: (pid: number) => boolean;
   forceForegroundWindow: (windowHandle: number) => boolean;
-  createOverlayInputGate: () => boolean;
-  setOverlayInputBlock: (blocked: boolean) => boolean;
-  setOverlayInputGate: (targetPid: number, blocked: boolean) => boolean;
-  getOverlayInputGateStatus: (targetPid: number) => {
-    ready: boolean;
-    ownerPid?: number;
-    owner_pid?: number;
-    targetPid?: number;
-    target_pid?: number;
-    blocked: boolean;
-    generation: number;
-    readyPid?: number;
-    ready_pid?: number;
-    readyGeneration?: number;
-    ready_generation?: number;
-    capabilityMask?: number;
-    capability_mask?: number;
-    unsupportedModuleMask?: number;
-    unsupported_module_mask?: number;
-    hookStatus?: number;
-    hook_status?: number;
-  };
-  injectInputHook: (
-    pid: number,
-    dllPath: string,
-    expectedCreationTicks: string
-  ) => { injected: boolean; stage: string; errorCode: number };
   // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
   getAudioSessions: () => NativeAudioSession[];
   setAudioSessionVolume: (pid: number, volume: number) => boolean;
@@ -466,25 +426,6 @@ export class NativeAddon {
     }
   }
 
-  public static getOverlayInjectionRisk(pid: number) {
-    const unavailable = {
-      safe: false,
-      reason: "module-scan-unavailable",
-      moduleName: null as string | null,
-    };
-    if (process.platform !== "win32" || pid <= 4) return unavailable;
-    try {
-      const risk = this.load().getOverlayInjectionRisk(pid);
-      return {
-        safe: risk.safe,
-        reason: risk.reason ?? null,
-        moduleName: risk.moduleName ?? risk.module_name ?? null,
-      };
-    } catch {
-      return unavailable;
-    }
-  }
-
   public static getProcessCreationTimeTicks(pid: number) {
     if (process.platform !== "win32" || pid <= 4) return null;
     try {
@@ -507,18 +448,6 @@ export class NativeAddon {
       return this.load().isCurrentProcessElevated();
     } catch {
       return false;
-    }
-  }
-
-  public static getProcessAccessStatus(pid: number) {
-    try {
-      const status = this.load().getProcessAccessStatus(pid);
-      return {
-        canInject: status.canInject ?? status.can_inject ?? false,
-        errorCode: status.errorCode ?? status.error_code ?? 0,
-      };
-    } catch {
-      return { canInject: false, errorCode: 0 };
     }
   }
 
@@ -633,135 +562,14 @@ export class NativeAddon {
    * to the overlay's own widgets. Electron's focus() is not sufficient over a
    * fullscreen game because of Windows' foreground lock.
    *
-   * This does NOT stop the game reading input, which was the original claim
-   * here. Logging proved otherwise: the overlay wins the foreground on the
-   * first attempt (`overlayHasForeground: true`) and games keep responding,
-   * because XInput 1.3 does no focus gating, `GetAsyncKeyState` is global, and
-   * `RIDEV_INPUTSINK` raw input is a request for background delivery. Gating
-   * those is what setOverlayInputBlock + injectInputHook are for.
+   * The compositor overlay is only authorized for Borderless or Windowed
+   * games. Exclusive fullscreen is refused rather than modifying game memory.
    */
   public static forceForegroundWindow(windowHandle: number): boolean {
     try {
       return this.load().forceForegroundWindow(windowHandle);
     } catch {
       return false;
-    }
-  }
-
-  // ── In-game input gate ────────────────────────────────────────────────────
-  // A DLL injected into the game answers XInput / GetAsyncKeyState / raw input
-  // with neutral state while a shared flag is set, which is the only way to
-  // take input off a game that does not honour focus. Every entry point below
-  // can fail (a protected process, a bitness mismatch, an antivirus block).
-  // An injection result only means LoadLibrary completed; callers must require
-  // getOverlayInputGateStatus().ready before exposing an interactive overlay.
-
-  private static resolveInputHookPath() {
-    const root = app.isPackaged ? process.resourcesPath : app.getAppPath();
-    return path.join(root, "hydra-native", "gamehub-inputhook.dll");
-  }
-
-  /** Create the shared flag. Idempotent; call before injecting. */
-  public static createOverlayInputGate(): boolean {
-    try {
-      return this.load().createOverlayInputGate();
-    } catch {
-      return false;
-    }
-  }
-
-  /** Gate or ungate the game's input. Takes effect on the game's next poll. */
-  public static setOverlayInputBlock(blocked: boolean): boolean {
-    try {
-      return this.load().setOverlayInputBlock(blocked);
-    } catch {
-      return false;
-    }
-  }
-
-  /** Gate input only inside the selected render process. */
-  public static setOverlayInputGate(
-    targetPid: number,
-    blocked: boolean
-  ): boolean {
-    try {
-      return this.load().setOverlayInputGate(targetPid, blocked);
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Read the worker-published hook handshake for exactly one target PID. The
-   * generation fields prevent a late reply from a previous render process
-   * (for example Khazan's loader before its BBQ render child) being accepted.
-   */
-  public static getOverlayInputGateStatus(
-    targetPid: number
-  ): OverlayInputGateNativeStatus {
-    const empty: OverlayInputGateNativeStatus = {
-      ready: false,
-      ownerPid: 0,
-      targetPid: 0,
-      blocked: false,
-      generation: 0,
-      readyPid: 0,
-      readyGeneration: 0,
-      capabilityMask: 0,
-      unsupportedModuleMask: 0,
-      hookStatus: 0,
-    };
-    if (process.platform !== "win32" || targetPid <= 0) return empty;
-    try {
-      const status = this.load().getOverlayInputGateStatus(targetPid);
-      return {
-        ready: status.ready,
-        ownerPid: status.ownerPid ?? status.owner_pid ?? 0,
-        targetPid: status.targetPid ?? status.target_pid ?? 0,
-        blocked: status.blocked,
-        generation: status.generation,
-        readyPid: status.readyPid ?? status.ready_pid ?? 0,
-        readyGeneration: status.readyGeneration ?? status.ready_generation ?? 0,
-        capabilityMask: status.capabilityMask ?? status.capability_mask ?? 0,
-        unsupportedModuleMask:
-          status.unsupportedModuleMask ?? status.unsupported_module_mask ?? 0,
-        hookStatus: status.hookStatus ?? status.hook_status ?? 0,
-      };
-    } catch {
-      return empty;
-    }
-  }
-
-  /**
-   * Inject the input gate into `pid`. Safe to call repeatedly: loading the same
-   * DLL twice returns the existing module without starting a second worker.
-   */
-  public static injectInputHook(
-    pid: number,
-    expectedCreationTicks: string
-  ): {
-    injected: boolean;
-    stage: string;
-    errorCode: number;
-  } {
-    if (process.platform !== "win32" || !pid || !expectedCreationTicks) {
-      return { injected: false, stage: "unsupported", errorCode: 0 };
-    }
-    try {
-      const dllPath = this.resolveInputHookPath();
-      // Distinguished from an injection refusal on purpose: a missing file
-      // means the DLL was not packaged, which is a build problem, not a
-      // permissions one.
-      if (!fs.existsSync(dllPath)) {
-        return { injected: false, stage: "not-packaged", errorCode: 0 };
-      }
-      return this.load().injectInputHook(pid, dllPath, expectedCreationTicks);
-    } catch (error) {
-      return {
-        injected: false,
-        stage: `threw: ${error instanceof Error ? error.message : String(error)}`,
-        errorCode: 0,
-      };
     }
   }
 

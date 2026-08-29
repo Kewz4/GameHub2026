@@ -2073,29 +2073,31 @@ try {
     BrowserWindow.getAllWindows()[0]?.setContentSize(592, 148);
   });
   await page.goto(
-    `${pathToFileURL(renderer).href}#/overlay-toast?kind=input-gate-error&reason=unsupported`
+    `${pathToFileURL(renderer).href}#/overlay-toast?kind=overlay-unavailable&reason=exclusive-fullscreen`
   );
   await page.waitForSelector(".overlay-toast--error");
-  const inputGateErrorText = await page
+  const overlayUnavailableText = await page
     .locator(".overlay-toast--error")
     .textContent();
   if (
-    !inputGateErrorText?.includes("Overlay input protection unavailable") ||
-    !inputGateErrorText.includes(
-      "This game uses an input system GameHub cannot safely isolate yet, so the overlay stayed closed."
+    !overlayUnavailableText?.includes(
+      "Overlay requires Borderless or Windowed"
+    ) ||
+    !overlayUnavailableText.includes(
+      "Exclusive fullscreen is not supported. Switch the game to Borderless or Windowed."
     )
   ) {
     throw new Error(
-      `Input-gate error toast rendered unexpected copy: ${inputGateErrorText}`
+      `Overlay-unavailable toast rendered unexpected copy: ${overlayUnavailableText}`
     );
   }
-  const inputGateErrorOutput = path.join(
+  const overlayUnavailableOutput = path.join(
     repositoryRoot,
     "artifacts",
     "overlay",
-    "gamehub-overlay-input-gate-error.png"
+    "gamehub-overlay-borderless-required.png"
   );
-  await page.screenshot({ path: inputGateErrorOutput, fullPage: true });
+  await page.screenshot({ path: overlayUnavailableOutput, fullPage: true });
 
   console.log(
     JSON.stringify(
@@ -2108,7 +2110,7 @@ try {
         firstOpenTransitions,
         secondOpenTransitions,
         contrastResults,
-        inputGateErrorOutput,
+        overlayUnavailableOutput,
         toastResults,
         widgetToggles: widgetToggleCount,
         nativeIconBytes: nativeIconDataUrl.length,

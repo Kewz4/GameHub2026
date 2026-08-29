@@ -1,5 +1,9 @@
 # Overlay render-hook research
 
+> Historical QA research only. GameHub does not ship or build this in-process
+> hook path. Production uses the Borderless/Windowed compositor policy in
+> [overlay-windowed-mode.md](overlay-windowed-mode.md).
+
 ## Status and scope
 
 Reviewed on 2026-08-20 at these exact upstream revisions:

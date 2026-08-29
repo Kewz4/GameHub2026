@@ -3,7 +3,6 @@ import {
   DashIcon,
   ScreenFullIcon,
   ScreenNormalIcon,
-  VideoIcon,
   XIcon,
 } from "@primer/octicons-react";
 import {
@@ -52,6 +51,7 @@ import {
 import { buildExternalResourceUrl } from "./helpers/external-resources";
 import { levelDBService } from "./services/leveldb.service";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
+import { isDesktopSidebarVisible } from "./components/sidebar/sidebar-visibility";
 
 export interface AppProps {
   children: React.ReactNode;
@@ -524,15 +524,6 @@ export function App() {
           />
           <h4>GameHub</h4>
 
-          <button
-            type="button"
-            className="title-bar__big-picture"
-            onClick={() => globalThis.window.electron.openBigPictureWindow()}
-          >
-            <VideoIcon size={14} />
-            {t("big_picture", { ns: "sidebar" })}
-          </button>
-
           {window.electron.platform === "linux" && (
             <div className="title-bar__window-controls">
               <button
@@ -608,7 +599,7 @@ export function App() {
       <ClassicsScanModal />
 
       <main>
-        <Sidebar />
+        {isDesktopSidebarVisible(userPreferences) && <Sidebar />}
 
         <article className="container">
           <Header />

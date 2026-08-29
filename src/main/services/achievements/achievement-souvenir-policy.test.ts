@@ -11,6 +11,7 @@ import {
   isUnownedLegacyAchievementSouvenirPath,
   isAchievementSouvenirRecord,
   mergeAchievementSouvenirRecords,
+  profileAchievementSouvenirFromRecord,
   selectAchievementSouvenirCleanupCandidates,
 } from "./achievement-souvenir-policy";
 
@@ -159,9 +160,42 @@ describe("achievement souvenir policy", () => {
   });
 
   it("rejects malformed persisted records", () => {
+    // Existing schema-v1 records predate the presentation fields and remain
+    // valid so upgrades never discard a user's screenshots.
     assert.equal(isAchievementSouvenirRecord(baseRecord), true);
+    assert.deepEqual(
+      profileAchievementSouvenirFromRecord(baseRecord, "local:one.jpeg"),
+      {
+        ownerId: "user-1",
+        shop: "steam",
+        objectId: "123",
+        achievementName: "ACH_WIN",
+        achievementDisplayName: "Win / Once",
+        achievementDescription: null,
+        achievementIconUrl: null,
+        gameTitle: "CON",
+        gameIconUrl: null,
+        imageUrl: "local:one.jpeg",
+        unlockTime: 100,
+      }
+    );
+    assert.equal(
+      isAchievementSouvenirRecord({
+        ...baseRecord,
+        achievementDescription: "Win once without taking damage.",
+        achievementIconUrl: "https://cdn.example/win.png",
+      }),
+      true
+    );
     assert.equal(
       isAchievementSouvenirRecord({ ...baseRecord, ownerId: "" }),
+      false
+    );
+    assert.equal(
+      isAchievementSouvenirRecord({
+        ...baseRecord,
+        achievementIconUrl: 42,
+      }),
       false
     );
   });

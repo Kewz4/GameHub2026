@@ -115,6 +115,7 @@ const overview = (
   unresolvedRemoteVariantCount: 0,
   unconfiguredCustomPathCount: 0,
   warnings: [],
+  mappingIssue: null,
   ...overrides,
 });
 

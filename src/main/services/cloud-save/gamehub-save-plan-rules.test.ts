@@ -390,6 +390,64 @@ describe("GameHub emulator V2 rules", () => {
     });
   });
 
+  it("rebinds GameCube GCI files by stable region, slot, and filename", async () => {
+    await withTempDir((directory) => {
+      const sourceInstall = path.join(directory, "source", "dolphin");
+      const targetInstall = path.join(directory, "target", "dolphin");
+      const sourceRoot = path.join(sourceInstall, "User", "GC");
+      const targetRoot = path.join(targetInstall, "User", "GC");
+      const filename = "01-GMSE-MarioSunshine.gci";
+      const sourceFile = path.join(sourceRoot, "USA", "Card A", filename);
+      const targetPattern = path.join(targetRoot, "USA", "Card A", "*.gci");
+      const targetFile = path.join(targetRoot, "USA", "Card A", filename);
+
+      const uploaded = rules({
+        binary: "dolphin",
+        system: "gc",
+        emulatorInstallDir: sourceInstall,
+        saveRoots: [sourceRoot],
+        backupPaths: [sourceFile],
+        restorePatterns: [],
+      });
+      assert.equal(uploaded.length, 1);
+      assert.equal(uploaded[0].kind, "file");
+
+      const restored = rules({
+        binary: "dolphin",
+        system: "gc",
+        emulatorInstallDir: targetInstall,
+        saveRoots: [targetRoot],
+        backupPaths: [],
+        restorePatterns: [targetPattern],
+        remoteFiles: [
+          {
+            rawPath: uploaded[0].rawPath,
+            relativePath: filename,
+          },
+        ],
+      });
+      assert.equal(restored.length, 1);
+      assert.equal(restored[0].rawPath, uploaded[0].rawPath);
+      assert.equal(restored[0].preferredPath, targetFile);
+
+      const wrongSlot = rules({
+        binary: "dolphin",
+        system: "gc",
+        emulatorInstallDir: targetInstall,
+        saveRoots: [targetRoot],
+        backupPaths: [],
+        restorePatterns: [path.join(targetRoot, "USA", "Card B", "*.gci")],
+        remoteFiles: [
+          {
+            rawPath: uploaded[0].rawPath,
+            relativePath: filename,
+          },
+        ],
+      });
+      assert.deepEqual(wrongSlot, []);
+    });
+  });
+
   it("never widens wildcard-only or unknown emulator identities", async () => {
     await withTempDir((directory) => {
       const installDir = path.join(directory, "eden");

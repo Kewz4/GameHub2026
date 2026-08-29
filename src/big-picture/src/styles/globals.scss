@@ -34,6 +34,9 @@
   --spacing-unit: 0.25rem;
   --big-picture-header-height: 56px;
   --big-picture-header-footprint: var(--big-picture-header-height);
+  --big-picture-focus-scroll-clearance: calc(
+    var(--big-picture-header-footprint) + 96px
+  );
 }
 
 * {

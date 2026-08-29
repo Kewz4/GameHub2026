@@ -172,7 +172,7 @@ export function read3dsTitleId(romPath: string): string | null {
 }
 
 /** Read a GameCube/Wii disc's 6-char game code from the header (raw images). */
-function readDiscGameCode(romPath: string): string | null {
+export function readDiscGameCode(romPath: string): string | null {
   const ext = path.extname(romPath).toLowerCase();
   // Only raw, uncompressed images carry the code at offset 0. .rvz/.wia are
   // compressed and .wbfs has a wrapper — skip those (fall back to console-wide).
@@ -222,6 +222,10 @@ export function resolveConsoleSaveNeedle(
     // Wii disc saves live at title/00010000/<hex(code[0:4])>/ — the first four
     // ASCII chars of the game code, hex-encoded.
     return Buffer.from(code.slice(0, 4), "ascii").toString("hex").toLowerCase();
+  }
+
+  if (system === "gc") {
+    return readDiscGameCode(romPath);
   }
 
   return null;

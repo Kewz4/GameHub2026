@@ -408,7 +408,9 @@ export function ProfileContent() {
           <div className="profile-content__right-content">
             {userStats && (
               <ProfileSection title={t("stats")} defaultOpen={true}>
-                <UserStatsBox />
+                <UserStatsBox
+                  onSelectAchievements={() => setActiveTab("achievements")}
+                />
               </ProfileSection>
             )}
             {userProfile?.badges.length > 0 && (

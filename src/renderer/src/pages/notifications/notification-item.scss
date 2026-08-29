@@ -1,48 +1,75 @@
 @use "../../scss/globals.scss";
 
 .notification-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: calc(globals.$spacing-unit * 2);
-  padding: calc(globals.$spacing-unit * 2);
-  background-color: var(--color-dark-background);
-  border: 1px solid globals.$border-color;
-  border-radius: 8px;
-  transition: all ease 0.2s;
+  background: transparent;
+  border-bottom: 1px solid rgba(var(--fg-rgb), 0.12);
   position: relative;
-  opacity: 0.4;
   width: 100%;
-  text-align: left;
+  transition: background-color ease 0.2s;
 
   &:hover {
     background-color: rgba(var(--fg-rgb), 0.03);
-    opacity: 0.6;
   }
 
   &--unread {
-    border-left: 3px solid globals.$brand-teal;
-    opacity: 1;
-
-    &:hover {
-      opacity: 1;
-    }
+    background-color: rgba(var(--fg-rgb), 0.025);
 
     .notification-item__title {
       color: var(--color-text-bright);
     }
+
+    .notification-item__unread-dot {
+      opacity: 1;
+    }
+  }
+
+  &__main {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: calc(globals.$spacing-unit * 2);
+    min-width: 0;
+    width: 100%;
+    padding: calc(globals.$spacing-unit * 2);
+    padding-left: calc(globals.$spacing-unit * 2.5);
+    color: inherit;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--color-text-bright);
+      outline-offset: -2px;
+    }
+  }
+
+  &__unread-dot {
+    position: absolute;
+    left: globals.$spacing-unit;
+    top: 50%;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: var(--color-text-bright);
+    opacity: 0;
+    transform: translateY(-50%);
   }
 
   &__picture {
     flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--color-background);
-    color: var(--color-text-bright);
+    background: transparent;
+    color: var(--color-text);
 
     img {
       width: 100%;
@@ -56,18 +83,17 @@
   }
 
   &__badge-picture {
-    border-radius: 8px;
-    background-color: var(--color-background);
+    border-radius: 6px;
 
     img {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       object-fit: contain;
     }
   }
 
   &__review-picture {
-    color: #f5a623;
+    color: var(--color-text);
   }
 
   &__content {
@@ -81,7 +107,7 @@
   &__title {
     font-size: globals.$body-font-size;
     font-weight: 600;
-    color: var(--color-text-bright);
+    color: var(--color-text);
   }
 
   &__description {
@@ -104,24 +130,32 @@
     display: flex;
     gap: globals.$spacing-unit;
     flex-shrink: 0;
+    padding-right: calc(globals.$spacing-unit * 2);
   }
 
   &__dismiss {
-    position: absolute;
-    top: calc(globals.$spacing-unit / 2);
-    right: calc(globals.$spacing-unit / 2);
     background: transparent;
     border: none;
     color: var(--color-text);
     cursor: pointer;
-    padding: calc(globals.$spacing-unit / 2);
-    border-radius: 50%;
-    transition: all ease 0.2s;
-    opacity: 0.5;
+    width: 36px;
+    height: 36px;
+    margin-right: globals.$spacing-unit;
+    border-radius: 6px;
+    transition:
+      color ease 0.2s,
+      background-color ease 0.2s;
+    opacity: 0.65;
 
     &:hover {
       opacity: 1;
       background-color: rgba(var(--fg-rgb), 0.1);
+    }
+
+    &:focus-visible {
+      opacity: 1;
+      outline: 2px solid var(--color-text-bright);
+      outline-offset: 1px;
     }
   }
 }

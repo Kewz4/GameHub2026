@@ -24,22 +24,10 @@ const outputPresentMonBridgePath = path.join(
   outputDir,
   "presentmon-bridge.exe"
 );
-// Injected into the game to gate XInput / GetAsyncKeyState / raw input while
-// the overlay is open. A separate crate because Cargo allows only one [lib]
-// per package, but it shares hydra-native's target directory so CI's Rust
-// cache and electron-builder's `!native/hydra-native/target` exclusion both
-// keep covering it.
-const inputHookManifestPath = path.join(
-  projectRoot,
-  "native",
-  "gamehub-inputhook",
-  "Cargo.toml"
-);
-const outputInputHookPath = path.join(outputDir, "gamehub-inputhook.dll");
-// Elevated helper: registered once as a Scheduled Task at RunLevel Highest so
-// injection and PresentMon get an administrator token without prompting on
-// every game launch.
-const outputBrokerPath = path.join(outputDir, "gamehub-overlay-broker.exe");
+const obsoleteOverlayHookArtifacts = [
+  path.join(outputDir, "gamehub-inputhook.dll"),
+  path.join(outputDir, "gamehub-overlay-broker.exe"),
+];
 
 const sourceLibraryNameByPlatform = {
   linux: "libhydra_native.so",
@@ -125,6 +113,9 @@ const build = async () => {
   }
 
   fs.mkdirSync(outputDir, { recursive: true });
+  for (const obsoleteArtifact of obsoleteOverlayHookArtifacts) {
+    fs.rmSync(obsoleteArtifact, { force: true });
+  }
   fs.copyFileSync(sourceLibraryPath, outputNodePath);
 
   if (process.platform === "win32") {
@@ -139,39 +130,6 @@ const build = async () => {
       );
     }
     fs.copyFileSync(sourcePresentMonBridgePath, outputPresentMonBridgePath);
-
-    console.log("Building gamehub-inputhook (overlay input gate)...");
-    await run("cargo", [
-      "build",
-      "--release",
-      "--manifest-path",
-      inputHookManifestPath,
-      "--target-dir",
-      cargoTargetDir,
-    ]);
-    const sourceInputHookPath = path.join(
-      cargoTargetDir,
-      "release",
-      "gamehub_inputhook.dll"
-    );
-    if (!fs.existsSync(sourceInputHookPath)) {
-      throw new Error(
-        `Input hook build output not found at ${sourceInputHookPath}`
-      );
-    }
-    fs.copyFileSync(sourceInputHookPath, outputInputHookPath);
-
-    const sourceBrokerPath = path.join(
-      cargoTargetDir,
-      "release",
-      "gamehub-overlay-broker.exe"
-    );
-    if (!fs.existsSync(sourceBrokerPath)) {
-      throw new Error(
-        `Overlay broker build output not found at ${sourceBrokerPath}`
-      );
-    }
-    fs.copyFileSync(sourceBrokerPath, outputBrokerPath);
   }
 
   await copySidecarLibrariesOnWindows(path.dirname(sourceLibraryPath));

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Button,
+  FocusItem,
   GridFocusGroup,
   ImageLightbox,
   Tabs,
@@ -28,11 +29,13 @@ import { IS_DESKTOP } from "../../constants";
 import {
   useFormat,
   useHeaderTitle,
+  useNavigation,
   useNavigationScreenActions,
   useUserDetails,
 } from "../../hooks";
 import {
   PROFILE_ACHIEVEMENTS_TAB_ID,
+  PROFILE_ACHIEVEMENTS_STAT_ID,
   PROFILE_FRIENDS_BUTTON_ID,
   PROFILE_GAMES_TAB_ID,
   PROFILE_PAGE_ACTIONS_REGION_ID,
@@ -63,6 +66,8 @@ interface ProfileStatCardProps {
   icon: React.ReactNode;
   label: string;
   value: string;
+  focusId?: string;
+  onActivate?: () => void;
 }
 
 interface CompleteProfileLibrary {
@@ -74,9 +79,11 @@ function ProfileStatCard({
   icon,
   label,
   value,
+  focusId,
+  onActivate,
 }: Readonly<ProfileStatCardProps>) {
-  return (
-    <div className="bp-profile__stat-card">
+  const content = (
+    <>
       <div className="bp-profile__stat-card__icon">{icon}</div>
       <div className="bp-profile__stat-card__body">
         <Typography className="bp-profile__stat-card__value">
@@ -86,7 +93,24 @@ function ProfileStatCard({
           {label}
         </Typography>
       </div>
-    </div>
+    </>
+  );
+
+  if (!focusId || !onActivate) {
+    return <div className="bp-profile__stat-card">{content}</div>;
+  }
+
+  return (
+    <FocusItem id={focusId} actions={{ primary: onActivate }} asChild>
+      <button
+        type="button"
+        className="bp-profile__stat-card bp-profile__stat-card--interactive"
+        aria-label={`Open ${label.toLowerCase()} tab`}
+        onClick={onActivate}
+      >
+        {content}
+      </button>
+    </FocusItem>
   );
 }
 
@@ -134,6 +158,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { userId: routeUserId } = useParams<{ userId: string }>();
   const { userDetails } = useUserDetails();
+  const { setFocus } = useNavigation();
   const { formatNumber, formatPlayTime } = useFormat();
 
   const userId = routeUserId ?? userDetails?.id ?? null;
@@ -288,6 +313,12 @@ export default function Profile() {
   const friendsCount = stats?.friendsCount ?? profile?.totalFriends ?? 0;
   const totalPlayTime = stats?.totalPlayTimeInSeconds?.value ?? 0;
   const visibility = privacyLabel(profile);
+  const openAchievementsTab = useCallback(() => {
+    setActiveView("achievements");
+    globalThis.window.requestAnimationFrame(() => {
+      setFocus(PROFILE_ACHIEVEMENTS_TAB_ID);
+    });
+  }, [setFocus]);
 
   const viewTabs = useMemo(
     () => [
@@ -507,6 +538,8 @@ export default function Profile() {
             icon={<TrophyIcon size={28} />}
             label="Achievements"
             value={formatNumber(achievementTotal)}
+            focusId={PROFILE_ACHIEVEMENTS_STAT_ID}
+            onActivate={openAchievementsTab}
           />
           <ProfileStatCard
             icon={<UsersIcon size={28} />}
@@ -594,12 +627,38 @@ export default function Profile() {
                     onClick={() => setSelectedSouvenir(souvenir)}
                   >
                     <span className="bp-profile__souvenir__inner">
-                      <img
-                        src={souvenir.imageUrl}
-                        alt=""
-                        className="bp-profile__souvenir__image"
-                        draggable={false}
-                      />
+                      <span className="bp-profile__souvenir__preview">
+                        <img
+                          src={souvenir.imageUrl}
+                          alt=""
+                          className="bp-profile__souvenir__image"
+                          draggable={false}
+                        />
+                        <span
+                          className="bp-profile__souvenir__notification"
+                          aria-hidden="true"
+                        >
+                          {souvenir.achievementIconUrl ? (
+                            <img
+                              src={souvenir.achievementIconUrl}
+                              alt=""
+                              className="bp-profile__souvenir__achievement-icon"
+                              draggable={false}
+                            />
+                          ) : (
+                            <span className="bp-profile__souvenir__achievement-icon bp-profile__souvenir__achievement-icon--placeholder">
+                              <TrophyIcon size={20} />
+                            </span>
+                          )}
+                          <span className="bp-profile__souvenir__notification-copy">
+                            <strong>{souvenir.achievementDisplayName}</strong>
+                            <span>
+                              {souvenir.achievementDescription ||
+                                souvenir.gameTitle}
+                            </span>
+                          </span>
+                        </span>
+                      </span>
                       <span className="bp-profile__souvenir__copy">
                         <strong>{souvenir.achievementDisplayName}</strong>
                         <span>{souvenir.gameTitle}</span>

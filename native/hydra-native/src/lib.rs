@@ -29,8 +29,6 @@ use image::{AnimationDecoder, ImageFormat, ImageReader};
 use napi::bindgen_prelude::{Buffer, Error};
 use napi_derive::napi;
 
-#[cfg(target_os = "windows")]
-mod win_inject;
 use sysinfo::{ProcessesToUpdate, System};
 use uuid::Uuid;
 
@@ -54,10 +52,12 @@ use std::thread;
 #[cfg(target_os = "windows")]
 use std::time::{Duration, Instant};
 
+#[cfg(all(target_os = "windows", feature = "overlay-hook-qa"))]
+use windows_sys::Win32::Foundation::GetLastError;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::{
-    CloseHandle, FreeLibrary, GetLastError, HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT,
-    RECT, WPARAM,
+    CloseHandle, FreeLibrary, FILETIME, HWND, INVALID_HANDLE_VALUE, LPARAM, LRESULT, POINT, RECT,
+    WPARAM,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
@@ -67,12 +67,15 @@ use windows_sys::Win32::Security::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, Module32FirstW, Module32NextW, Process32FirstW, Process32NextW,
-    MODULEENTRY32W, PROCESSENTRY32W, TH32CS_SNAPMODULE, TH32CS_SNAPMODULE32, TH32CS_SNAPPROCESS,
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
+#[cfg(all(target_os = "windows", feature = "overlay-hook-qa"))]
+use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+    Module32FirstW, Module32NextW, MODULEENTRY32W, TH32CS_SNAPMODULE, TH32CS_SNAPMODULE32,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryExW};
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "overlay-hook-qa"))]
 use windows_sys::Win32::System::Memory::{
     CreateFileMappingW, MapViewOfFile, OpenFileMappingW, FILE_MAP_READ, FILE_MAP_WRITE,
     PAGE_READWRITE,
@@ -81,10 +84,13 @@ use windows_sys::Win32::System::Memory::{
 use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess, OpenProcess, OpenProcessToken,
-    TerminateProcess, WaitForSingleObject, PROCESS_CREATE_THREAD,
-    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE, PROCESS_VM_OPERATION, PROCESS_VM_READ,
-    PROCESS_VM_WRITE,
+    GetCurrentProcess, GetCurrentProcessId, GetExitCodeProcess, GetProcessTimes, OpenProcess,
+    OpenProcessToken, TerminateProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_TERMINATE,
+};
+#[cfg(all(target_os = "windows", feature = "overlay-hook-qa"))]
+use windows_sys::Win32::System::Threading::{
+    PROCESS_CREATE_THREAD, PROCESS_VM_OPERATION, PROCESS_VM_READ, PROCESS_VM_WRITE,
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
@@ -546,40 +552,45 @@ fn run_raw_input_thread(sender: mpsc::SyncSender<bool>) {
     }
 }
 
-#[napi(object)]
-pub struct ProcessAccessStatus {
-    pub can_inject: bool,
-    pub error_code: u32,
-}
+#[cfg(feature = "overlay-hook-qa")]
+mod overlay_process_access_qa {
+    use super::*;
 
-#[napi]
-#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn get_process_access_status(pid: u32) -> ProcessAccessStatus {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let rights = PROCESS_CREATE_THREAD
-            | PROCESS_QUERY_LIMITED_INFORMATION
-            | PROCESS_VM_OPERATION
-            | PROCESS_VM_WRITE
-            | PROCESS_VM_READ;
-        let handle = OpenProcess(rights, 0, pid);
-        if handle.is_null() {
-            return ProcessAccessStatus {
-                can_inject: false,
-                error_code: GetLastError(),
-            };
-        }
-        CloseHandle(handle);
-        ProcessAccessStatus {
-            can_inject: true,
-            error_code: 0,
-        }
+    #[napi(object)]
+    pub struct ProcessAccessStatus {
+        pub can_inject: bool,
+        pub error_code: u32,
     }
 
-    #[cfg(not(target_os = "windows"))]
-    ProcessAccessStatus {
-        can_inject: false,
-        error_code: 0,
+    #[napi]
+    #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+    pub fn get_process_access_status(pid: u32) -> ProcessAccessStatus {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            let rights = PROCESS_CREATE_THREAD
+                | PROCESS_QUERY_LIMITED_INFORMATION
+                | PROCESS_VM_OPERATION
+                | PROCESS_VM_WRITE
+                | PROCESS_VM_READ;
+            let handle = OpenProcess(rights, 0, pid);
+            if handle.is_null() {
+                return ProcessAccessStatus {
+                    can_inject: false,
+                    error_code: GetLastError(),
+                };
+            }
+            CloseHandle(handle);
+            ProcessAccessStatus {
+                can_inject: true,
+                error_code: 0,
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        ProcessAccessStatus {
+            can_inject: false,
+            error_code: 0,
+        }
     }
 }
 
@@ -1311,135 +1322,27 @@ pub struct NativeProcessPayload {
     pub cwd: Option<String>,
 }
 
-#[napi(object)]
-pub struct OverlayInjectionRisk {
-    pub safe: bool,
-    pub reason: Option<String>,
-    pub module_name: Option<String>,
-}
-
-fn classify_overlay_injection_module(module: &str) -> Option<&'static str> {
-    let module = module.to_ascii_lowercase();
-    const ANTI_CHEAT: &[&str] = &[
-        "easyanticheat",
-        "eaanticheat",
-        "battleye",
-        "beservice",
-        "bedaisy",
-        "vgk",
-        "vgc.dll",
-        "vgc.exe",
-        "faceit",
-        "equ8",
-        "ricochet",
-        "randgrid",
-        "pnkbstr",
-        "xigncode",
-        "nprotect",
-        "gameguard",
-        "mhyprot",
-        "wellbia",
-        "hoyokprotect",
-        "anticheatexpert",
-    ];
-    const UNHANDLED_INPUT: &[&str] = &[
-        "dinput",
-        "gameinput",
-        "windows.gaming.input",
-        "hidapi",
-        "sdl2",
-        "sdl3",
-        "winusb",
-    ];
-    if ANTI_CHEAT.iter().any(|token| module.contains(token)) {
-        Some("anti-cheat-module")
-    } else if UNHANDLED_INPUT.iter().any(|token| module.contains(token)) {
-        Some("unhandled-input-module")
-    } else {
-        None
-    }
-}
-
 #[cfg(target_os = "windows")]
-const WIN32_ERROR_NO_MORE_FILES: u32 = 18;
-
-#[cfg(target_os = "windows")]
-fn module_snapshot_finished_cleanly(has_next_module: bool, last_error: u32) -> bool {
-    has_next_module || last_error == WIN32_ERROR_NO_MORE_FILES
-}
-
-#[napi]
-pub fn get_overlay_injection_risk(pid: u32) -> OverlayInjectionRisk {
-    #[cfg(target_os = "windows")]
-    {
-        if pid <= 4 {
-            return OverlayInjectionRisk {
-                safe: false,
-                reason: Some("unsafe-pid".into()),
-                module_name: None,
-            };
-        }
-        let snapshot =
-            unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid) };
-        if snapshot == INVALID_HANDLE_VALUE {
-            return OverlayInjectionRisk {
-                safe: false,
-                reason: Some("module-scan-unavailable".into()),
-                module_name: None,
-            };
-        }
-        let mut entry: MODULEENTRY32W = unsafe { zeroed() };
-        entry.dwSize = size_of::<MODULEENTRY32W>() as u32;
-        let mut has_module = unsafe { Module32FirstW(snapshot, &mut entry) } != 0;
-        if !has_module {
-            unsafe { CloseHandle(snapshot) };
-            return OverlayInjectionRisk {
-                safe: false,
-                reason: Some("module-scan-incomplete".into()),
-                module_name: None,
-            };
-        }
-        while has_module {
-            let end = entry
-                .szModule
-                .iter()
-                .position(|value| *value == 0)
-                .unwrap_or(entry.szModule.len());
-            let module = String::from_utf16_lossy(&entry.szModule[..end]).to_ascii_lowercase();
-            let risk = classify_overlay_injection_module(&module);
-            if let Some(reason) = risk {
-                unsafe { CloseHandle(snapshot) };
-                return OverlayInjectionRisk {
-                    safe: false,
-                    reason: Some(reason.into()),
-                    module_name: Some(module),
-                };
-            }
-            has_module = unsafe { Module32NextW(snapshot, &mut entry) } != 0;
-            if !module_snapshot_finished_cleanly(has_module, unsafe { GetLastError() }) {
-                unsafe { CloseHandle(snapshot) };
-                return OverlayInjectionRisk {
-                    safe: false,
-                    reason: Some("module-scan-incomplete".into()),
-                    module_name: None,
-                };
-            }
-        }
-        unsafe { CloseHandle(snapshot) };
-        OverlayInjectionRisk {
-            safe: true,
-            reason: None,
-            module_name: None,
-        }
+fn process_creation_time_ticks(pid: u32) -> Option<u64> {
+    if pid <= 4 {
+        return None;
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = pid;
-        OverlayInjectionRisk {
-            safe: false,
-            reason: Some("unsupported-platform".into()),
-            module_name: None,
+
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            return None;
         }
+
+        let mut creation: FILETIME = zeroed();
+        let mut exit: FILETIME = zeroed();
+        let mut kernel: FILETIME = zeroed();
+        let mut user: FILETIME = zeroed();
+        let succeeded =
+            GetProcessTimes(process, &mut creation, &mut exit, &mut kernel, &mut user) != 0;
+        CloseHandle(process);
+
+        succeeded.then(|| ((creation.dwHighDateTime as u64) << 32) | creation.dwLowDateTime as u64)
     }
 }
 
@@ -1447,7 +1350,7 @@ pub fn get_overlay_injection_risk(pid: u32) -> OverlayInjectionRisk {
 pub fn get_process_creation_time_ticks(pid: u32) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        win_inject::process_creation_time_ticks(pid).map(|ticks| ticks.to_string())
+        process_creation_time_ticks(pid).map(|ticks| ticks.to_string())
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -1456,52 +1359,189 @@ pub fn get_process_creation_time_ticks(pid: u32) -> Option<String> {
     }
 }
 
-#[cfg(test)]
-mod overlay_injection_risk_tests {
-    use super::classify_overlay_injection_module;
+#[cfg(feature = "overlay-hook-qa")]
+mod overlay_injection_risk_qa {
+    use super::*;
 
-    #[cfg(target_os = "windows")]
-    use super::module_snapshot_finished_cleanly;
+    #[napi(object)]
+    pub struct OverlayInjectionRisk {
+        pub safe: bool,
+        pub reason: Option<String>,
+        pub module_name: Option<String>,
+    }
 
-    #[test]
-    fn rejects_anticheat_and_unhandled_input_modules() {
-        assert_eq!(
-            classify_overlay_injection_module("EasyAntiCheat_EOS.dll"),
-            Some("anti-cheat-module")
-        );
-        for module in ["hidapi.dll", "SDL3.dll", "gameinput.dll"] {
-            assert_eq!(
-                classify_overlay_injection_module(module),
-                Some("unhandled-input-module"),
-                "{module}"
-            );
-        }
-        // The system HID library is loaded transitively by many titles and is
-        // not evidence that the game polls raw HID directly. The injected gate
-        // still rejects explicit HIDAPI/SDL/GameInput/DirectInput stacks.
-        assert_eq!(classify_overlay_injection_module("hid.dll"), None);
-        assert_eq!(classify_overlay_injection_module("xinput1_4.dll"), None);
-        for module in [
-            "EAAntiCheat.GameService.dll",
-            "Randgrid.sys",
+    fn classify_overlay_injection_module(module: &str) -> Option<&'static str> {
+        let module = module.to_ascii_lowercase();
+        const ANTI_CHEAT: &[&str] = &[
+            "easyanticheat",
+            "eaanticheat",
+            "battleye",
+            "beservice",
+            "bedaisy",
+            "vgk",
+            "vgc.dll",
             "vgc.exe",
-            "PnkBstrB.exe",
-        ] {
-            assert_eq!(
-                classify_overlay_injection_module(module),
-                Some("anti-cheat-module"),
-                "{module}"
-            );
+            "faceit",
+            "equ8",
+            "ricochet",
+            "randgrid",
+            "pnkbstr",
+            "xigncode",
+            "nprotect",
+            "gameguard",
+            "mhyprot",
+            "wellbia",
+            "hoyokprotect",
+            "anticheatexpert",
+        ];
+        const UNHANDLED_INPUT: &[&str] = &[
+            "dinput",
+            "gameinput",
+            "windows.gaming.input",
+            "hidapi",
+            "sdl2",
+            "sdl3",
+            "winusb",
+        ];
+        if ANTI_CHEAT.iter().any(|token| module.contains(token)) {
+            Some("anti-cheat-module")
+        } else if UNHANDLED_INPUT.iter().any(|token| module.contains(token)) {
+            Some("unhandled-input-module")
+        } else {
+            None
         }
     }
 
     #[cfg(target_os = "windows")]
-    #[test]
-    fn accepts_only_a_complete_module_snapshot() {
-        assert!(module_snapshot_finished_cleanly(true, 0));
-        assert!(module_snapshot_finished_cleanly(false, 18));
-        assert!(!module_snapshot_finished_cleanly(false, 5));
-        assert!(!module_snapshot_finished_cleanly(false, 299));
+    const WIN32_ERROR_NO_MORE_FILES: u32 = 18;
+
+    #[cfg(target_os = "windows")]
+    fn module_snapshot_finished_cleanly(has_next_module: bool, last_error: u32) -> bool {
+        has_next_module || last_error == WIN32_ERROR_NO_MORE_FILES
+    }
+
+    #[napi]
+    pub fn get_overlay_injection_risk(pid: u32) -> OverlayInjectionRisk {
+        #[cfg(target_os = "windows")]
+        {
+            if pid <= 4 {
+                return OverlayInjectionRisk {
+                    safe: false,
+                    reason: Some("unsafe-pid".into()),
+                    module_name: None,
+                };
+            }
+            let snapshot =
+                unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid) };
+            if snapshot == INVALID_HANDLE_VALUE {
+                return OverlayInjectionRisk {
+                    safe: false,
+                    reason: Some("module-scan-unavailable".into()),
+                    module_name: None,
+                };
+            }
+            let mut entry: MODULEENTRY32W = unsafe { zeroed() };
+            entry.dwSize = size_of::<MODULEENTRY32W>() as u32;
+            let mut has_module = unsafe { Module32FirstW(snapshot, &mut entry) } != 0;
+            if !has_module {
+                unsafe { CloseHandle(snapshot) };
+                return OverlayInjectionRisk {
+                    safe: false,
+                    reason: Some("module-scan-incomplete".into()),
+                    module_name: None,
+                };
+            }
+            while has_module {
+                let end = entry
+                    .szModule
+                    .iter()
+                    .position(|value| *value == 0)
+                    .unwrap_or(entry.szModule.len());
+                let module = String::from_utf16_lossy(&entry.szModule[..end]).to_ascii_lowercase();
+                let risk = classify_overlay_injection_module(&module);
+                if let Some(reason) = risk {
+                    unsafe { CloseHandle(snapshot) };
+                    return OverlayInjectionRisk {
+                        safe: false,
+                        reason: Some(reason.into()),
+                        module_name: Some(module),
+                    };
+                }
+                has_module = unsafe { Module32NextW(snapshot, &mut entry) } != 0;
+                if !module_snapshot_finished_cleanly(has_module, unsafe { GetLastError() }) {
+                    unsafe { CloseHandle(snapshot) };
+                    return OverlayInjectionRisk {
+                        safe: false,
+                        reason: Some("module-scan-incomplete".into()),
+                        module_name: None,
+                    };
+                }
+            }
+            unsafe { CloseHandle(snapshot) };
+            OverlayInjectionRisk {
+                safe: true,
+                reason: None,
+                module_name: None,
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = pid;
+            OverlayInjectionRisk {
+                safe: false,
+                reason: Some("unsupported-platform".into()),
+                module_name: None,
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod overlay_injection_risk_tests {
+        use super::classify_overlay_injection_module;
+
+        #[cfg(target_os = "windows")]
+        use super::module_snapshot_finished_cleanly;
+
+        #[test]
+        fn rejects_anticheat_and_unhandled_input_modules() {
+            assert_eq!(
+                classify_overlay_injection_module("EasyAntiCheat_EOS.dll"),
+                Some("anti-cheat-module")
+            );
+            for module in ["hidapi.dll", "SDL3.dll", "gameinput.dll"] {
+                assert_eq!(
+                    classify_overlay_injection_module(module),
+                    Some("unhandled-input-module"),
+                    "{module}"
+                );
+            }
+            // The system HID library is loaded transitively by many titles and is
+            // not evidence that the game polls raw HID directly. The injected gate
+            // still rejects explicit HIDAPI/SDL/GameInput/DirectInput stacks.
+            assert_eq!(classify_overlay_injection_module("hid.dll"), None);
+            assert_eq!(classify_overlay_injection_module("xinput1_4.dll"), None);
+            for module in [
+                "EAAntiCheat.GameService.dll",
+                "Randgrid.sys",
+                "vgc.exe",
+                "PnkBstrB.exe",
+            ] {
+                assert_eq!(
+                    classify_overlay_injection_module(module),
+                    Some("anti-cheat-module"),
+                    "{module}"
+                );
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        #[test]
+        fn accepts_only_a_complete_module_snapshot() {
+            assert!(module_snapshot_finished_cleanly(true, 0));
+            assert!(module_snapshot_finished_cleanly(false, 18));
+            assert!(!module_snapshot_finished_cleanly(false, 5));
+            assert!(!module_snapshot_finished_cleanly(false, 299));
+        }
     }
 }
 
@@ -1713,372 +1753,359 @@ fn mime_type_from_image_format(format: Option<ImageFormat>) -> Option<&'static s
 // answers those APIs with neutral state while this flag is set. The launcher
 // only owns the flag and the injection.
 
-/// Shared with the injected DLL, which opens the same named mapping.
-#[cfg(target_os = "windows")]
-const INPUT_GATE_MAPPING_NAME: &str = "Local\\GameHubOverlayInputBlock";
+#[cfg(feature = "overlay-hook-qa")]
+mod overlay_input_gate_qa {
+    use super::*;
 
-/// Cross-process layout, expressed as aligned u32 words so every update is an
-/// atomic Win32 store. The injected worker positively acknowledges the exact
-/// target generation after its first complete patch sweep; LoadLibrary success
-/// alone is intentionally not treated as readiness. Writers clear BLOCKED and
-/// READY_PID before changing a target, so torn or stale updates fail safe.
-#[cfg(target_os = "windows")]
-const INPUT_GATE_WORDS: usize = 9;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_OWNER_PID_WORD: usize = 0;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_TARGET_PID_WORD: usize = 1;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_BLOCKED_WORD: usize = 2;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_GENERATION_WORD: usize = 3;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_READY_PID_WORD: usize = 4;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_READY_GENERATION_WORD: usize = 5;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_CAPABILITY_MASK_WORD: usize = 6;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD: usize = 7;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_HOOK_STATUS_WORD: usize = 8;
-#[cfg(target_os = "windows")]
-const INPUT_GATE_REQUIRED_CAPABILITIES: u32 = 0x0f;
-
-#[cfg(target_os = "windows")]
-static INPUT_GATE_VIEW: OnceLock<usize> = OnceLock::new();
-#[cfg(target_os = "windows")]
-static INPUT_GATE_MAPPING_HANDLE: OnceLock<usize> = OnceLock::new();
-
-#[cfg(target_os = "windows")]
-fn wide_string(text: &str) -> Vec<u16> {
-    text.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-/// Create the shared flag. Idempotent: repeated calls reuse the first view.
-#[napi]
-pub fn create_overlay_input_gate() -> bool {
+    /// Shared with the injected DLL, which opens the same named mapping.
     #[cfg(target_os = "windows")]
-    {
-        if INPUT_GATE_VIEW.get().is_some() {
-            return true;
+    const INPUT_GATE_MAPPING_NAME: &str = "Local\\GameHubOverlayInputBlock";
+
+    /// Cross-process layout, expressed as aligned u32 words so every update is an
+    /// atomic Win32 store. The injected worker positively acknowledges the exact
+    /// target generation after its first complete patch sweep; LoadLibrary success
+    /// alone is intentionally not treated as readiness. Writers clear BLOCKED and
+    /// READY_PID before changing a target, so torn or stale updates fail safe.
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_WORDS: usize = 9;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_OWNER_PID_WORD: usize = 0;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_TARGET_PID_WORD: usize = 1;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_BLOCKED_WORD: usize = 2;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_GENERATION_WORD: usize = 3;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_READY_PID_WORD: usize = 4;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_READY_GENERATION_WORD: usize = 5;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_CAPABILITY_MASK_WORD: usize = 6;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD: usize = 7;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_HOOK_STATUS_WORD: usize = 8;
+    #[cfg(target_os = "windows")]
+    const INPUT_GATE_REQUIRED_CAPABILITIES: u32 = 0x0f;
+
+    #[cfg(target_os = "windows")]
+    static INPUT_GATE_VIEW: OnceLock<usize> = OnceLock::new();
+    #[cfg(target_os = "windows")]
+    static INPUT_GATE_MAPPING_HANDLE: OnceLock<usize> = OnceLock::new();
+
+    #[cfg(target_os = "windows")]
+    fn wide_string(text: &str) -> Vec<u16> {
+        text.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    /// Create the shared flag. Idempotent: repeated calls reuse the first view.
+    #[napi]
+    pub fn create_overlay_input_gate() -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            if INPUT_GATE_VIEW.get().is_some() {
+                return true;
+            }
+            unsafe {
+                let mapping_name = wide_string(INPUT_GATE_MAPPING_NAME);
+                let mapping = CreateFileMappingW(
+                    INVALID_HANDLE_VALUE,
+                    null(),
+                    PAGE_READWRITE,
+                    0,
+                    (size_of::<u32>() * INPUT_GATE_WORDS) as u32,
+                    mapping_name.as_ptr(),
+                );
+                if mapping.is_null() {
+                    return false;
+                }
+                let view = MapViewOfFile(
+                    mapping,
+                    FILE_MAP_WRITE,
+                    0,
+                    0,
+                    size_of::<u32>() * INPUT_GATE_WORDS,
+                );
+                if view.Value.is_null() {
+                    CloseHandle(mapping);
+                    return false;
+                }
+                let words = view.Value as *mut u32;
+                for index in 0..INPUT_GATE_WORDS {
+                    std::ptr::write_volatile(words.add(index), 0);
+                }
+                std::ptr::write_volatile(
+                    words.add(INPUT_GATE_OWNER_PID_WORD),
+                    GetCurrentProcessId(),
+                );
+                // A mapped view keeps the section's bytes alive but not its name
+                // available to OpenFileMapping. Retain the creator handle for the
+                // launcher lifetime so injected processes can discover it.
+                let _ = INPUT_GATE_MAPPING_HANDLE.set(mapping as usize);
+                let _ = INPUT_GATE_VIEW.set(view.Value as usize);
+                true
+            }
         }
+
+        #[cfg(not(target_os = "windows"))]
+        false
+    }
+
+    /// Diagnostic used by the native regression fixture to prove the named
+    /// mapping is visible across a process boundary.
+    #[napi]
+    pub fn is_overlay_input_gate_visible() -> bool {
+        #[cfg(target_os = "windows")]
         unsafe {
-            let mapping_name = wide_string(INPUT_GATE_MAPPING_NAME);
-            let mapping = CreateFileMappingW(
-                INVALID_HANDLE_VALUE,
-                null(),
-                PAGE_READWRITE,
-                0,
-                (size_of::<u32>() * INPUT_GATE_WORDS) as u32,
-                mapping_name.as_ptr(),
-            );
+            let name = wide_string(INPUT_GATE_MAPPING_NAME);
+            let mapping = OpenFileMappingW(FILE_MAP_READ, 0, name.as_ptr());
             if mapping.is_null() {
                 return false;
             }
-            let view = MapViewOfFile(
-                mapping,
-                FILE_MAP_WRITE,
-                0,
-                0,
-                size_of::<u32>() * INPUT_GATE_WORDS,
-            );
-            if view.Value.is_null() {
-                CloseHandle(mapping);
+            CloseHandle(mapping);
+            return true;
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        false
+    }
+
+    /// Set or clear the gate for exactly one render process. The injected DLL also
+    /// verifies that this launcher process is still alive; a launcher crash can
+    /// therefore never strand a running game with its input blocked.
+    #[napi]
+    #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+    pub fn set_overlay_input_gate(target_pid: u32, blocked: bool) -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            let Some(view) = INPUT_GATE_VIEW.get() else {
                 return false;
+            };
+            unsafe {
+                let words = *view as *mut u32;
+                std::ptr::write_volatile(
+                    words.add(INPUT_GATE_OWNER_PID_WORD),
+                    GetCurrentProcessId(),
+                );
+
+                let current_target = std::ptr::read_volatile(words.add(INPUT_GATE_TARGET_PID_WORD));
+                let was_blocked = std::ptr::read_volatile(words.add(INPUT_GATE_BLOCKED_WORD)) != 0;
+                if !blocked || current_target != target_pid {
+                    // Release before a target handoff and when Electron has already
+                    // hidden the overlay. A repeated activation for the same target
+                    // must never pulse BLOCKED to zero while the UI is visible.
+                    std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 0);
+                }
+                if current_target != target_pid {
+                    // READY_PID is the commit word written by the injected worker.
+                    // Clear it before changing PID/generation so a stale process
+                    // can never authorize blocking the new render child.
+                    std::ptr::write_volatile(words.add(INPUT_GATE_READY_PID_WORD), 0);
+                    std::ptr::write_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD), 0);
+                    std::ptr::write_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD), 0);
+                    std::ptr::write_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD), 0);
+                    std::ptr::write_volatile(words.add(INPUT_GATE_HOOK_STATUS_WORD), 0);
+                    std::ptr::write_volatile(words.add(INPUT_GATE_TARGET_PID_WORD), target_pid);
+                    let previous = std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                    let mut next = previous.wrapping_add(1);
+                    if next == 0 {
+                        next = 1;
+                    }
+                    std::ptr::write_volatile(words.add(INPUT_GATE_GENERATION_WORD), next);
+                }
+
+                if blocked && target_pid != 0 {
+                    let generation_before =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                    let ready_generation =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD));
+                    let capability_mask =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD));
+                    let unsupported_module_mask =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD));
+                    // READY_PID is the worker's commit word and must be read after
+                    // its payload. Generation brackets reject a concurrent target
+                    // transition.
+                    let ready_pid = std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
+                    let generation_after =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                    let safe = generation_before == generation_after
+                        && generation_after != 0
+                        && ready_pid == target_pid
+                        && ready_generation == generation_after
+                        && (capability_mask & INPUT_GATE_REQUIRED_CAPABILITIES)
+                            == INPUT_GATE_REQUIRED_CAPABILITIES
+                        && unsupported_module_mask == 0;
+                    if !safe {
+                        // If an already-visible overlay revalidates concurrently
+                        // with invalidation, retain the fail-safe latch. The caller
+                        // hides first and then explicitly releases it.
+                        if was_blocked {
+                            std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 1);
+                        }
+                        return false;
+                    }
+                    std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 1);
+
+                    // Invalidation may race the store above. Re-read the commit
+                    // record after arming; on mismatch return false but keep the
+                    // latch so no covered API leaks before Electron hides.
+                    let committed_ready_pid =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
+                    let committed_generation =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                    let committed_ready_generation =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD));
+                    let committed_capabilities =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD));
+                    let committed_unsupported =
+                        std::ptr::read_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD));
+                    if committed_ready_pid != target_pid
+                        || committed_generation != generation_after
+                        || committed_ready_generation != committed_generation
+                        || (committed_capabilities & INPUT_GATE_REQUIRED_CAPABILITIES)
+                            != INPUT_GATE_REQUIRED_CAPABILITIES
+                        || committed_unsupported != 0
+                    {
+                        return false;
+                    }
+                }
             }
-            let words = view.Value as *mut u32;
-            for index in 0..INPUT_GATE_WORDS {
-                std::ptr::write_volatile(words.add(index), 0);
-            }
-            std::ptr::write_volatile(words.add(INPUT_GATE_OWNER_PID_WORD), GetCurrentProcessId());
-            // A mapped view keeps the section's bytes alive but not its name
-            // available to OpenFileMapping. Retain the creator handle for the
-            // launcher lifetime so injected processes can discover it.
-            let _ = INPUT_GATE_MAPPING_HANDLE.set(mapping as usize);
-            let _ = INPUT_GATE_VIEW.set(view.Value as usize);
             true
         }
+
+        #[cfg(not(target_os = "windows"))]
+        false
     }
 
-    #[cfg(not(target_os = "windows"))]
-    false
-}
-
-/// Diagnostic used by the native regression fixture to prove the named
-/// mapping is visible across a process boundary.
-#[napi]
-pub fn is_overlay_input_gate_visible() -> bool {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let name = wide_string(INPUT_GATE_MAPPING_NAME);
-        let mapping = OpenFileMappingW(FILE_MAP_READ, 0, name.as_ptr());
-        if mapping.is_null() {
-            return false;
-        }
-        CloseHandle(mapping);
-        return true;
+    /// Snapshot of the worker-published input isolation handshake.
+    #[napi(object)]
+    pub struct OverlayInputGateStatus {
+        pub ready: bool,
+        pub owner_pid: u32,
+        pub target_pid: u32,
+        pub blocked: bool,
+        pub generation: u32,
+        pub ready_pid: u32,
+        pub ready_generation: u32,
+        pub capability_mask: u32,
+        pub unsupported_module_mask: u32,
+        pub hook_status: u32,
     }
 
-    #[cfg(not(target_os = "windows"))]
-    false
-}
-
-/// Set or clear the gate for exactly one render process. The injected DLL also
-/// verifies that this launcher process is still alive; a launcher crash can
-/// therefore never strand a running game with its input blocked.
-#[napi]
-#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn set_overlay_input_gate(target_pid: u32, blocked: bool) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        let Some(view) = INPUT_GATE_VIEW.get() else {
-            return false;
-        };
-        unsafe {
-            let words = *view as *mut u32;
-            std::ptr::write_volatile(words.add(INPUT_GATE_OWNER_PID_WORD), GetCurrentProcessId());
-
-            let current_target = std::ptr::read_volatile(words.add(INPUT_GATE_TARGET_PID_WORD));
-            let was_blocked = std::ptr::read_volatile(words.add(INPUT_GATE_BLOCKED_WORD)) != 0;
-            if !blocked || current_target != target_pid {
-                // Release before a target handoff and when Electron has already
-                // hidden the overlay. A repeated activation for the same target
-                // must never pulse BLOCKED to zero while the UI is visible.
-                std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 0);
-            }
-            if current_target != target_pid {
-                // READY_PID is the commit word written by the injected worker.
-                // Clear it before changing PID/generation so a stale process
-                // can never authorize blocking the new render child.
-                std::ptr::write_volatile(words.add(INPUT_GATE_READY_PID_WORD), 0);
-                std::ptr::write_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD), 0);
-                std::ptr::write_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD), 0);
-                std::ptr::write_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD), 0);
-                std::ptr::write_volatile(words.add(INPUT_GATE_HOOK_STATUS_WORD), 0);
-                std::ptr::write_volatile(words.add(INPUT_GATE_TARGET_PID_WORD), target_pid);
-                let previous = std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
-                let mut next = previous.wrapping_add(1);
-                if next == 0 {
-                    next = 1;
-                }
-                std::ptr::write_volatile(words.add(INPUT_GATE_GENERATION_WORD), next);
-            }
-
-            if blocked && target_pid != 0 {
+    #[napi]
+    #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+    pub fn get_overlay_input_gate_status(requested_pid: u32) -> OverlayInputGateStatus {
+        #[cfg(target_os = "windows")]
+        {
+            let Some(view) = INPUT_GATE_VIEW.get() else {
+                return OverlayInputGateStatus {
+                    ready: false,
+                    owner_pid: 0,
+                    target_pid: 0,
+                    blocked: false,
+                    generation: 0,
+                    ready_pid: 0,
+                    ready_generation: 0,
+                    capability_mask: 0,
+                    unsupported_module_mask: 0,
+                    hook_status: 0,
+                };
+            };
+            unsafe {
+                let words = *view as *const u32;
+                // Read generation on both sides of the payload. If the launcher is
+                // transitioning targets, the snapshot is never reported ready.
                 let generation_before =
                     std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                let owner_pid = std::ptr::read_volatile(words.add(INPUT_GATE_OWNER_PID_WORD));
+                let target_pid = std::ptr::read_volatile(words.add(INPUT_GATE_TARGET_PID_WORD));
+                let blocked = std::ptr::read_volatile(words.add(INPUT_GATE_BLOCKED_WORD)) != 0;
+                let ready_pid = std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
                 let ready_generation =
                     std::ptr::read_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD));
                 let capability_mask =
                     std::ptr::read_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD));
                 let unsupported_module_mask =
                     std::ptr::read_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD));
-                // READY_PID is the worker's commit word and must be read after
-                // its payload. Generation brackets reject a concurrent target
-                // transition.
-                let ready_pid = std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
-                let generation_after =
-                    std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
-                let safe = generation_before == generation_after
-                    && generation_after != 0
-                    && ready_pid == target_pid
-                    && ready_generation == generation_after
-                    && (capability_mask & INPUT_GATE_REQUIRED_CAPABILITIES)
-                        == INPUT_GATE_REQUIRED_CAPABILITIES
-                    && unsupported_module_mask == 0;
-                if !safe {
-                    // If an already-visible overlay revalidates concurrently
-                    // with invalidation, retain the fail-safe latch. The caller
-                    // hides first and then explicitly releases it.
-                    if was_blocked {
-                        std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 1);
-                    }
-                    return false;
-                }
-                std::ptr::write_volatile(words.add(INPUT_GATE_BLOCKED_WORD), 1);
-
-                // Invalidation may race the store above. Re-read the commit
-                // record after arming; on mismatch return false but keep the
-                // latch so no covered API leaks before Electron hides.
-                let committed_ready_pid =
-                    std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
-                let committed_generation =
-                    std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
-                let committed_ready_generation =
-                    std::ptr::read_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD));
-                let committed_capabilities =
-                    std::ptr::read_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD));
-                let committed_unsupported =
-                    std::ptr::read_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD));
-                if committed_ready_pid != target_pid
-                    || committed_generation != generation_after
-                    || committed_ready_generation != committed_generation
-                    || (committed_capabilities & INPUT_GATE_REQUIRED_CAPABILITIES)
-                        != INPUT_GATE_REQUIRED_CAPABILITIES
-                    || committed_unsupported != 0
-                {
-                    return false;
+                let hook_status = std::ptr::read_volatile(words.add(INPUT_GATE_HOOK_STATUS_WORD));
+                let generation = std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
+                let ready = requested_pid != 0
+                    && owner_pid == GetCurrentProcessId()
+                    && target_pid == requested_pid
+                    && ready_pid == requested_pid
+                    && generation_before == generation
+                    && generation != 0
+                    && ready_generation == generation;
+                OverlayInputGateStatus {
+                    ready,
+                    owner_pid,
+                    target_pid,
+                    blocked,
+                    generation,
+                    ready_pid,
+                    ready_generation,
+                    capability_mask,
+                    unsupported_module_mask,
+                    hook_status,
                 }
             }
         }
-        true
-    }
 
-    #[cfg(not(target_os = "windows"))]
-    false
-}
-
-/// Snapshot of the worker-published input isolation handshake.
-#[napi(object)]
-pub struct OverlayInputGateStatus {
-    pub ready: bool,
-    pub owner_pid: u32,
-    pub target_pid: u32,
-    pub blocked: bool,
-    pub generation: u32,
-    pub ready_pid: u32,
-    pub ready_generation: u32,
-    pub capability_mask: u32,
-    pub unsupported_module_mask: u32,
-    pub hook_status: u32,
-}
-
-#[napi]
-#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn get_overlay_input_gate_status(requested_pid: u32) -> OverlayInputGateStatus {
-    #[cfg(target_os = "windows")]
-    {
-        let Some(view) = INPUT_GATE_VIEW.get() else {
-            return OverlayInputGateStatus {
-                ready: false,
-                owner_pid: 0,
-                target_pid: 0,
-                blocked: false,
-                generation: 0,
-                ready_pid: 0,
-                ready_generation: 0,
-                capability_mask: 0,
-                unsupported_module_mask: 0,
-                hook_status: 0,
-            };
-        };
-        unsafe {
-            let words = *view as *const u32;
-            // Read generation on both sides of the payload. If the launcher is
-            // transitioning targets, the snapshot is never reported ready.
-            let generation_before = std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
-            let owner_pid = std::ptr::read_volatile(words.add(INPUT_GATE_OWNER_PID_WORD));
-            let target_pid = std::ptr::read_volatile(words.add(INPUT_GATE_TARGET_PID_WORD));
-            let blocked = std::ptr::read_volatile(words.add(INPUT_GATE_BLOCKED_WORD)) != 0;
-            let ready_pid = std::ptr::read_volatile(words.add(INPUT_GATE_READY_PID_WORD));
-            let ready_generation =
-                std::ptr::read_volatile(words.add(INPUT_GATE_READY_GENERATION_WORD));
-            let capability_mask =
-                std::ptr::read_volatile(words.add(INPUT_GATE_CAPABILITY_MASK_WORD));
-            let unsupported_module_mask =
-                std::ptr::read_volatile(words.add(INPUT_GATE_UNSUPPORTED_MODULE_MASK_WORD));
-            let hook_status = std::ptr::read_volatile(words.add(INPUT_GATE_HOOK_STATUS_WORD));
-            let generation = std::ptr::read_volatile(words.add(INPUT_GATE_GENERATION_WORD));
-            let ready = requested_pid != 0
-                && owner_pid == GetCurrentProcessId()
-                && target_pid == requested_pid
-                && ready_pid == requested_pid
-                && generation_before == generation
-                && generation != 0
-                && ready_generation == generation;
-            OverlayInputGateStatus {
-                ready,
-                owner_pid,
-                target_pid,
-                blocked,
-                generation,
-                ready_pid,
-                ready_generation,
-                capability_mask,
-                unsupported_module_mask,
-                hook_status,
-            }
+        #[cfg(not(target_os = "windows"))]
+        OverlayInputGateStatus {
+            ready: false,
+            owner_pid: 0,
+            target_pid: 0,
+            blocked: false,
+            generation: 0,
+            ready_pid: 0,
+            ready_generation: 0,
+            capability_mask: 0,
+            unsupported_module_mask: 0,
+            hook_status: 0,
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
-    OverlayInputGateStatus {
-        ready: false,
-        owner_pid: 0,
-        target_pid: 0,
-        blocked: false,
-        generation: 0,
-        ready_pid: 0,
-        ready_generation: 0,
-        capability_mask: 0,
-        unsupported_module_mask: 0,
-        hook_status: 0,
+    /// Compatibility entry point for older renderer code. It can clear the gate,
+    /// but deliberately refuses to create an unscoped block.
+    #[napi]
+    #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+    pub fn set_overlay_input_block(blocked: bool) -> bool {
+        if blocked {
+            return false;
+        }
+        set_overlay_input_gate(0, false)
     }
-}
 
-/// Compatibility entry point for older renderer code. It can clear the gate,
-/// but deliberately refuses to create an unscoped block.
-#[napi]
-#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn set_overlay_input_block(blocked: bool) -> bool {
-    if blocked {
-        return false;
+    /// Retained as a binary-compatible no-op for older addon callers. Production
+    /// overlay support is compositor-only and never injects into a game process.
+    #[napi(object)]
+    pub struct InputHookInjection {
+        pub injected: bool,
+        /// Which step failed, so a refusal can be told apart from a crash: an
+        /// "open" failure is a protected or higher-integrity process, "thread" is
+        /// usually antivirus blocking CreateRemoteThread, and "load" means the
+        /// game's loader rejected the DLL (most often a bitness mismatch).
+        pub stage: String,
+        /// GetLastError at the point of failure, 0 on success.
+        pub error_code: u32,
     }
-    set_overlay_input_gate(0, false)
-}
 
-/// Load gamehub-inputhook into `pid` via the standard
-/// VirtualAllocEx + WriteProcessMemory + CreateRemoteThread(LoadLibraryW)
-/// sequence. Injecting the same DLL twice is harmless — the loader returns the
-/// already-mapped module and no second worker thread starts — so callers may
-/// retry without tracking state.
-#[napi(object)]
-pub struct InputHookInjection {
-    pub injected: bool,
-    /// Which step failed, so a refusal can be told apart from a crash: an
-    /// "open" failure is a protected or higher-integrity process, "thread" is
-    /// usually antivirus blocking CreateRemoteThread, and "load" means the
-    /// game's loader rejected the DLL (most often a bitness mismatch).
-    pub stage: String,
-    /// GetLastError at the point of failure, 0 on success.
-    pub error_code: u32,
-}
-
-#[napi]
-#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-pub fn inject_input_hook(
-    pid: u32,
-    dll_path: String,
-    expected_creation_ticks: String,
-) -> InputHookInjection {
-    #[cfg(target_os = "windows")]
-    {
-        // Unelevated fast path. A game running at higher integrity than the
-        // launcher fails here with stage "open" / ERROR_ACCESS_DENIED, which is
-        // the caller's cue to go through the elevated broker instead.
-        let Ok(expected_creation_ticks) = expected_creation_ticks.parse::<u64>() else {
-            return InputHookInjection {
-                injected: false,
-                stage: "identity".to_string(),
-                error_code: 0,
-            };
-        };
-        let outcome = win_inject::inject_dll(pid, &dll_path, expected_creation_ticks);
+    #[napi]
+    #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+    pub fn inject_input_hook(
+        pid: u32,
+        dll_path: String,
+        expected_creation_ticks: String,
+    ) -> InputHookInjection {
+        let _ = (pid, dll_path, expected_creation_ticks);
         InputHookInjection {
-            injected: outcome.injected,
-            stage: outcome.stage.to_string(),
-            error_code: outcome.error_code,
+            injected: false,
+            stage: "removed-windowed-overlay-only".to_string(),
+            error_code: 0,
         }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    let _ = expected_creation_ticks;
-    #[cfg(not(target_os = "windows"))]
-    InputHookInjection {
-        injected: false,
-        stage: "unsupported".to_string(),
-        error_code: 0,
     }
 }
 

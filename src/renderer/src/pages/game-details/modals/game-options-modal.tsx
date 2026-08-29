@@ -1,7 +1,7 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Modal } from "@renderer/components";
+import { Button, Modal } from "@renderer/components";
 import {
   formatBytes,
   GAMEMODE_SITE_URL,
@@ -40,6 +40,7 @@ import {
   FileDirectoryIcon,
   GearIcon,
   ImageIcon,
+  SearchIcon,
 } from "@primer/octicons-react";
 import { Wrench } from "lucide-react";
 import { GameAssetsSettings } from "./game-assets-settings";
@@ -795,18 +796,30 @@ export function GameOptionsModal({
             },
           ]
         : []),
-      {
-        id: "downloads" as const,
-        label: t("settings_category_downloads"),
-        icon: <DownloadIcon size={16} />,
-      },
+      ...(game.shop !== "custom" &&
+      (repacks.length > 0 || Boolean(game.download?.downloadPath))
+        ? [
+            {
+              id: "downloads" as const,
+              label: t("settings_category_downloads"),
+              icon: <DownloadIcon size={16} />,
+            },
+          ]
+        : []),
       {
         id: "danger_zone" as const,
         label: t("settings_category_danger_zone"),
         icon: <AlertIcon size={16} />,
       },
     ],
-    [shouldShowWinePrefixConfiguration, isWiiUGame, t]
+    [
+      shouldShowWinePrefixConfiguration,
+      isWiiUGame,
+      game.shop,
+      game.download?.downloadPath,
+      repacks.length,
+      t,
+    ]
   );
 
   useEffect(() => {
@@ -918,7 +931,6 @@ export function GameOptionsModal({
                 transferProgress={transferProgress}
                 drives={drives}
                 onStartTransfer={handleStartTransfer}
-                onCancelDriveSelection={() => {}}
                 transferSpeed={transferSpeed}
                 transferETA={transferETA}
                 showCancelConfirm={showCancelConfirm}
@@ -930,24 +942,37 @@ export function GameOptionsModal({
               />
             )}
             {selectedCategory === "general" && (
-              <div className="game-options-modal__lookup">
-                <h3>Achievements</h3>
-                <p>
-                  Search Exophase for this game and load its achievement
-                  definitions and your unlocks.
-                </p>
-                <button
-                  type="button"
-                  className="game-options-modal__lookup-button"
+              <div className="game-options-modal__section">
+                <div className="game-options-modal__header">
+                  <h2>{t("achievements", { defaultValue: "Achievements" })}</h2>
+                  <h4 className="game-options-modal__header-description">
+                    {t("lookup_achievements_exophase_description", {
+                      defaultValue:
+                        "Search Exophase for this game and load its achievement definitions and your unlocks.",
+                    })}
+                  </h4>
+                </div>
+                <Button
+                  theme="outline"
                   disabled={lookupLoading}
+                  aria-busy={lookupLoading}
                   onClick={handleLookupAchievements}
                 >
+                  <SearchIcon size={16} />
                   {lookupLoading
-                    ? "Looking up…"
-                    : "Look up achievements on Exophase"}
-                </button>
+                    ? t("looking_up_achievements", {
+                        defaultValue: "Looking up achievements…",
+                      })
+                    : t("lookup_achievements_exophase", {
+                        defaultValue: "Look up achievements on Exophase",
+                      })}
+                </Button>
                 {lookupStatus && (
-                  <p className="game-options-modal__lookup-status">
+                  <p
+                    className="game-options-modal__lookup-status"
+                    role="status"
+                    aria-live="polite"
+                  >
                     {lookupStatus}
                   </p>
                 )}
@@ -987,7 +1012,6 @@ export function GameOptionsModal({
                 transferProgress={transferProgress}
                 drives={drives}
                 onStartTransfer={handleStartTransfer}
-                onCancelDriveSelection={() => {}}
                 transferSpeed={transferSpeed}
                 transferETA={transferETA}
                 showCancelConfirm={showCancelConfirm}

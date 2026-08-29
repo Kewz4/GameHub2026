@@ -150,8 +150,9 @@ function EmulationCloudSaveSettings({
   game: LibraryGame;
   platform: EmulationSavePlatform;
 }>) {
-  const { t } = useTranslation("big_picture");
-  const { showErrorToast, showSuccessToast } = useBigPictureToast();
+  const { t } = useTranslation(["big_picture", "settings"]);
+  const { showErrorToast, showSuccessToast, showWarningToast } =
+    useBigPictureToast();
   const [saves, setSaves] = useState<EmulationCloudSave[]>([]);
   const [records, setRecords] = useState<MemoryCardSaveRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -306,7 +307,20 @@ function EmulationCloudSaveSettings({
           setRestoreTarget(null);
           void load();
         }}
-        onRestoreSuccess={() => showSuccessToast("Cloud save restored")}
+        onRestoreSuccess={(result) => {
+          if (result.requiresManualImport) {
+            showWarningToast(t("settings:cloud_restore_exported_title"), {
+              duration: 12_000,
+              message: t("settings:cloud_restore_exported_description", {
+                path: result.exportedPath ?? "",
+              }),
+              fallbackVisual: "settings",
+            });
+            return;
+          }
+
+          showSuccessToast("Cloud save restored");
+        }}
         onRestoreError={() => showErrorToast("Failed to restore cloud save")}
         regionId="emu-saves-restore-modal-region"
         actionsRegionId="emu-saves-restore-modal-actions"

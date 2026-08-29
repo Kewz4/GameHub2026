@@ -2,7 +2,7 @@ import { registerEvent } from "../register-event";
 
 import type { UserPreferences } from "@types";
 import i18next from "i18next";
-import { BrowserWindow } from "electron";
+import { app, BrowserWindow } from "electron";
 import { defaultDownloadsPath } from "@main/constants";
 import { db, levelKeys } from "@main/level";
 import { patchUserProfile } from "../profile/update-profile";
@@ -34,9 +34,13 @@ const updateUserPreferences = async (
     );
 
     i18next.changeLanguage(validatedPreferences.language);
-    patchUserProfile({ language: validatedPreferences.language }).catch(
-      () => {}
-    );
+    const isReadOnlyVisualQa =
+      !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true";
+    if (!isReadOnlyVisualQa) {
+      patchUserProfile({ language: validatedPreferences.language }).catch(
+        () => {}
+      );
+    }
   }
 
   const mergedPreferences = {

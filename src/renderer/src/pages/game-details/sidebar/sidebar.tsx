@@ -26,6 +26,7 @@ import "./sidebar.scss";
 import { GameLanguageSection } from "./game-language-section";
 import { ControllerSupportSection } from "./controller-support-section";
 import { ConsoleMetadataSection } from "./console-metadata-section";
+import { hasRenderableRequirements } from "./sidebar-presentation";
 
 const ProtonDBSection = lazy(async () => {
   const mod = await import("./protondb-section");
@@ -134,6 +135,9 @@ export function Sidebar({
   const { t } = useTranslation("game_details");
   const { formatDateTime } = useDate();
   const { numberFormatter } = useFormat();
+  const hasRequirements = hasRenderableRequirements(
+    shopDetails?.pc_requirements
+  );
 
   useEffect(() => {
     // Console/emulated games aren't in the Hydra backend, so resolve HLTB live
@@ -333,7 +337,7 @@ export function Sidebar({
 
       {/* PC system requirements are meaningless for emulated/console games —
           the requirement is the emulator's, not the game's. */}
-      {shop !== "launchbox" && (
+      {shop !== "launchbox" && hasRequirements && (
         <SidebarSection title={t("requirements")}>
           <div className="requirement__button-container">
             <Button

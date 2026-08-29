@@ -24,7 +24,9 @@ const LIKE_SYNTHETIC_HOURS = 8;
  * A catalogue edge as the backend actually returns it — `searchVector` carries
  * the game's Steam tags as numeric ids and isn't in the shared type.
  */
-type CatalogueEdge = CatalogueSearchResult & { searchVector?: string | null };
+export type CatalogueEdge = CatalogueSearchResult & {
+  searchVector?: string | null;
+};
 
 /** A "Because you played {anchor}" shelf for one of the user's taste clusters. */
 export interface BecauseYouPlayedRow {
@@ -158,6 +160,28 @@ const normalizeTitle = (title: string) =>
     .trim();
 
 /**
+ * Search results are popularity ordered, not identity ordered. Never borrow
+ * facets from the first fuzzy result: that made Breath of the Wild inherit
+ * hunting/survival tags when the catalogue had no exact match.
+ */
+export function selectCatalogueEdgeForGame(
+  game: { shop: string; objectId: string; title: string },
+  edges: readonly CatalogueEdge[]
+): CatalogueEdge | null {
+  const identityMatch = edges.find(
+    (edge) => edge.objectId === game.objectId && edge.shop === game.shop
+  );
+  if (identityMatch) return identityMatch;
+
+  const wantedTitle = normalizeTitle(game.title);
+  if (!wantedTitle) return null;
+
+  return (
+    edges.find((edge) => normalizeTitle(edge.title) === wantedTitle) ?? null
+  );
+}
+
+/**
  * Look up a game's real genres + tags by matching it to a catalogue edge (whose
  * searchVector carries the tags). Steam games match on objectId (= appid);
  * others fall back to a normalized-title match. Cached per session so repeat
@@ -180,11 +204,8 @@ async function fetchGameFacets(
   });
   if (!edges.length) return null;
 
-  const wantTitle = normalizeTitle(game.title);
-  const match =
-    edges.find((e) => e.objectId === game.objectId && e.shop === game.shop) ??
-    edges.find((e) => normalizeTitle(e.title) === wantTitle) ??
-    edges[0];
+  const match = selectCatalogueEdgeForGame(game, edges);
+  if (!match) return null;
 
   const facets = {
     genres: match.genres ?? [],
@@ -493,6 +514,11 @@ export function useRecommendedRows(language: string): RecommendedRows {
   );
 
   useEffect(() => {
+    if (!globalThis.window.electron) {
+      setRows(EMPTY_ROWS);
+      return;
+    }
+
     const cached = sessionCache.get(language);
     if (cached) {
       setRows(cached);
@@ -502,9 +528,9 @@ export function useRecommendedRows(language: string): RecommendedRows {
     let isMounted = true;
 
     async function load() {
-      const sources = (await globalThis.window.electron.leveldb.values(
-        "downloadSources"
-      )) as DownloadSource[];
+      const sources = (await globalThis.window.electron.leveldb
+        .values("downloadSources")
+        .catch(() => [])) as DownloadSource[];
       const downloadSourceIds = [...sources]
         .sort(
           (a, b) =>

@@ -6,6 +6,10 @@ const overlaySource = readFileSync(
   "src/renderer/src/pages/overlay/overlay.tsx",
   "utf8"
 );
+const overlayUnavailableSource = readFileSync(
+  "src/renderer/src/pages/overlay/overlay-unavailable.ts",
+  "utf8"
+);
 const widgetFrameSource = readFileSync(
   "src/renderer/src/pages/overlay/overlay-widget-frame.tsx",
   "utf8"
@@ -155,17 +159,22 @@ test("GameHub overlay chrome uses monochrome highlight tokens", () => {
   assert.match(overlayHarness, /assertOverlayThemeContrast/);
 });
 
-test("input-protection failures render a branded noninteractive toast", () => {
-  assert.match(overlaySource, /params\.get\("kind"\) !== "input-gate-error"/);
-  assert.match(overlaySource, /Overlay input protection unavailable/);
+test("unsupported window modes render a branded noninteractive toast", () => {
+  assert.match(
+    overlayUnavailableSource,
+    /params\.get\("kind"\) !== "overlay-unavailable"/
+  );
+  assert.match(overlaySource, /Overlay requires Borderless or Windowed/);
   for (const reason of [
-    "unavailable",
-    "timeout",
-    "unsupported",
-    "target-changed",
+    "exclusive-fullscreen",
+    "window-compositor-unavailable",
+    "focus-refused",
   ]) {
-    assert.match(overlaySource, new RegExp(`(?:"${reason}"|${reason}:)`));
+    assert.match(
+      overlayUnavailableSource,
+      new RegExp(`(?:"${reason}"|${reason}:)`)
+    );
   }
   assert.match(overlayStyles, /\.overlay-toast[\s\S]*?&--error/);
-  assert.match(overlayHarness, /reason=unsupported/);
+  assert.match(overlayHarness, /reason=exclusive-fullscreen/);
 });

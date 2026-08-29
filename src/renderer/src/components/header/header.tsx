@@ -11,6 +11,8 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeftIcon,
   SearchIcon,
+  SidebarCollapseIcon,
+  SidebarExpandIcon,
   SyncIcon,
   XIcon,
 } from "@primer/octicons-react";
@@ -32,6 +34,12 @@ import { SearchDropdown, ScanApprovalModal } from "@renderer/components";
 import { buildGameDetailsPath } from "@renderer/helpers";
 import type { EmulatorSystem, GameShop } from "@types";
 import { debounce } from "lodash-es";
+import {
+  getNextDesktopSidebarHidden,
+  isDesktopSidebarVisible,
+} from "@renderer/components/sidebar/sidebar-visibility";
+
+const HEADER_TOOLTIP_STYLE = { zIndex: 1 };
 
 const pathTitle: Record<string, string> = {
   "/": "home",
@@ -46,6 +54,7 @@ export function Header() {
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const scanButtonTooltipId = useId();
   const refreshButtonTooltipId = useId();
+  const sidebarToggleTooltipId = useId();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -62,6 +71,25 @@ export function Header() {
   const librarySearchValue = useAppSelector(
     (state) => state.library.searchQuery
   );
+
+  const userPreferences = useAppSelector(
+    (state) => state.userPreferences.value
+  );
+  const [sidebarPreferencePending, setSidebarPreferencePending] =
+    useState(false);
+  const sidebarVisible = isDesktopSidebarVisible(userPreferences);
+
+  const handleToggleSidebar = async () => {
+    if (!userPreferences || sidebarPreferencePending) return;
+    setSidebarPreferencePending(true);
+    try {
+      await window.electron.updateUserPreferences({
+        hideSidebar: getNextDesktopSidebarHidden(userPreferences),
+      });
+    } finally {
+      setSidebarPreferencePending(false);
+    }
+  };
 
   const isOnLibraryPage = location.pathname.startsWith("/library");
   const isOnCataloguePage = location.pathname.startsWith("/catalogue");
@@ -444,6 +472,30 @@ export function Header() {
         <section className="header__section header__section--left">
           <button
             type="button"
+            className="header__action-button header__sidebar-toggle"
+            aria-controls="desktop-sidebar"
+            aria-expanded={sidebarVisible}
+            aria-label={t(sidebarVisible ? "hide_sidebar" : "show_sidebar", {
+              ns: "sidebar",
+            })}
+            disabled={!userPreferences || sidebarPreferencePending}
+            onClick={() => void handleToggleSidebar()}
+            data-tooltip-id={sidebarToggleTooltipId}
+            data-tooltip-content={t(
+              sidebarVisible ? "hide_sidebar" : "show_sidebar",
+              { ns: "sidebar" }
+            )}
+            data-tooltip-place="bottom"
+          >
+            {sidebarVisible ? (
+              <SidebarCollapseIcon size={18} />
+            ) : (
+              <SidebarExpandIcon size={18} />
+            )}
+          </button>
+
+          <button
+            type="button"
             className={cn("header__back-button", {
               "header__back-button--enabled": location.key !== "default",
             })}
@@ -533,10 +585,12 @@ export function Header() {
         </section>
       </header>
 
+      <Tooltip id={sidebarToggleTooltipId} style={HEADER_TOOLTIP_STYLE} />
+
       {isOnLibraryPage && window.electron.platform === "win32" && (
         <>
-          <Tooltip id={scanButtonTooltipId} style={{ zIndex: 1 }} />
-          <Tooltip id={refreshButtonTooltipId} style={{ zIndex: 1 }} />
+          <Tooltip id={scanButtonTooltipId} style={HEADER_TOOLTIP_STYLE} />
+          <Tooltip id={refreshButtonTooltipId} style={HEADER_TOOLTIP_STYLE} />
         </>
       )}
 

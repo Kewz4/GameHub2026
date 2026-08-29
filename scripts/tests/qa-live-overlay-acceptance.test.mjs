@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import {
   boundsMatch,
   diagnosticsMatchTargetIdentity,
-  findInputGateToast,
+  findOverlayUnavailableToast,
   findReadyToast,
   hasRequiredToastEvidence,
   isBoundRenderTargetState,
@@ -146,12 +146,12 @@ describe("live overlay acceptance evidence", () => {
     const refusal = {
       windows: [
         {
-          url: "file:///renderer/index.html#/overlay-toast?kind=input-gate-error&reason=unsupported",
+          url: "file:///renderer/index.html#/overlay-toast?kind=overlay-unavailable&reason=exclusive-fullscreen",
           visible: true,
         },
       ],
     };
-    assert.equal(findInputGateToast(refusal)?.visible, true);
+    assert.equal(findOverlayUnavailableToast(refusal)?.visible, true);
     assert.equal(hasRequiredToastEvidence(refusal, "refusal"), true);
     assert.equal(hasRequiredToastEvidence(refusal, "ready"), false);
 
@@ -160,7 +160,7 @@ describe("live overlay acceptance evidence", () => {
       {
         windows: [
           {
-            url: "file:///renderer/index.html#/overlay-toast?kind=input-gate-error",
+            url: "file:///renderer/index.html#/overlay-toast?kind=overlay-unavailable",
             visible: false,
           },
         ],
@@ -168,7 +168,7 @@ describe("live overlay acceptance evidence", () => {
       {
         windows: [
           {
-            url: "file:///renderer/index.html#/overlay-toast-extra?kind=input-gate-error",
+            url: "file:///renderer/index.html#/overlay-toast-extra?kind=overlay-unavailable",
             visible: true,
           },
         ],
@@ -176,7 +176,7 @@ describe("live overlay acceptance evidence", () => {
       {
         windows: [
           {
-            url: "file:///renderer/index.html#/other#/overlay-toast?kind=input-gate-error",
+            url: "file:///renderer/index.html#/other#/overlay-toast?kind=overlay-unavailable",
             visible: true,
           },
         ],

@@ -119,4 +119,33 @@
     border-radius: 9999px;
     white-space: nowrap;
   }
+
+  &__console-row {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing-unit) * 3);
+    min-width: 0;
+  }
+
+  &__console-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  &__console-pills {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing-unit) * 2);
+    min-width: 0;
+    overflow-x: auto;
+    padding: 2px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
 }

@@ -2,6 +2,7 @@ import type {
   EmulationCloudSave,
   EmulationSavePlatform,
   MemcardRestoreTarget,
+  MemcardRestoreResult,
 } from "@types";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -38,7 +39,7 @@ interface EmulationCloudRestoreModalProps {
   platform: EmulationSavePlatform;
   onClose: () => void;
   onRestored: () => void;
-  onRestoreSuccess: () => void;
+  onRestoreSuccess: (result: MemcardRestoreResult) => void;
   onRestoreError: () => void;
   regionId: string;
   actionsRegionId: string;
@@ -134,8 +135,8 @@ export function EmulationCloudRestoreModal({
       );
 
       if (result.ok) {
-        onRestoreSuccess();
-        onRestored();
+        onRestoreSuccess(result);
+        if (!result.requiresManualImport) onRestored();
         onClose();
       } else {
         onRestoreError();

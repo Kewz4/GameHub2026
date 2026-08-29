@@ -22,6 +22,8 @@ const game = {
 const achievement = {
   name: "ACH_WIN",
   displayName: "Winner",
+  description: "Defeat the final boss.",
+  icon: "https://cdn.example/achievement.png",
 } as SteamAchievement;
 
 class MemoryStore {
@@ -128,11 +130,27 @@ describe("achievement souvenir lifecycle", () => {
     assert.ok(accountARecord?.localPath);
     assert.ok(accountBRecord?.localPath);
     assert.notEqual(accountARecord.localPath, accountBRecord.localPath);
+    assert.equal(
+      accountARecord.achievementDescription,
+      "Defeat the final boss."
+    );
+    assert.equal(
+      accountARecord.achievementIconUrl,
+      "https://cdn.example/achievement.png"
+    );
 
     const accountBProfile = await lifecycle.listProfile("account-b");
     assert.equal(accountBProfile.length, 1);
     assert.equal(accountBProfile[0].ownerId, "account-b");
     assert.equal(accountBProfile[0].imageUrl.includes("account-a"), false);
+    assert.equal(
+      accountBProfile[0].achievementDescription,
+      "Defeat the final boss."
+    );
+    assert.equal(
+      accountBProfile[0].achievementIconUrl,
+      "https://cdn.example/achievement.png"
+    );
     assert.deepEqual(await lifecycle.listProfile("account-a"), []);
     assert.deepEqual(cleanupOwners, ["account-a", "account-b"]);
 

@@ -51,6 +51,10 @@ export function CloudSavesSection({ config, refreshKey }: Readonly<Props>) {
     setRefreshing(true);
     try {
       setSaves(await window.electron.listEmulationSaves(platform));
+    } catch {
+      // The account-scoped R2 service rejects signed-out/stale sessions. Keep
+      // the memory-card screen usable without surfacing an unhandled promise.
+      setSaves([]);
     } finally {
       setRefreshing(false);
     }

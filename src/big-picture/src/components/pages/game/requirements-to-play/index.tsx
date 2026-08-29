@@ -84,6 +84,14 @@ export function RequirementsToPlay({
     () => parseRequirementRows(normalizedHtml),
     [normalizedHtml]
   );
+  const hasRequirements = useMemo(
+    () =>
+      Boolean(normalizeRequirementsHtml(shopDetails.pc_requirements.minimum)) ||
+      Boolean(
+        normalizeRequirementsHtml(shopDetails.pc_requirements.recommended)
+      ),
+    [shopDetails.pc_requirements]
+  );
 
   useEffect(() => {
     const removeLeftBumper = onButtonPressed(
@@ -127,6 +135,8 @@ export function RequirementsToPlay({
     selectRequirementByIndex,
     selectedTabIndex,
   ]);
+
+  if (!hasRequirements) return null;
 
   return (
     <FocusItem

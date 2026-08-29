@@ -563,6 +563,7 @@ export function Sidebar() {
 
   return (
     <aside
+      id="desktop-sidebar"
       ref={sidebarRef}
       className={cn("sidebar", {
         "sidebar--resizing": isResizing,

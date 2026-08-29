@@ -3,6 +3,7 @@ export const LIBRARY_HERO_ACTIONS_REGION_ID = "library-hero-actions";
 export const LIBRARY_HERO_LAUNCH_BUTTON_ID = "library-hero-launch-button";
 export const LIBRARY_HERO_FAVORITE_BUTTON_ID = "library-hero-favorite-button";
 export const LIBRARY_FILTERS_TOOLBAR_REGION_ID = "library-filters-toolbar";
+export const LIBRARY_FILTERS_CONSOLE_REGION_ID = "library-filters-consoles";
 export const LIBRARY_FILTERS_TABS_REGION_ID = "library-filters-tabs";
 export const LIBRARY_FILTERS_SEARCH_INPUT_ID = "library-filters-search-input";
 export const LIBRARY_FILTERS_SORT_SELECT_ID = "library-filters-sort-select";
@@ -15,8 +16,6 @@ export const LIBRARY_FILTERS_ALL_TAB_ID = "library-filters-tab-all";
 export const LIBRARY_FILTERS_FAVORITES_TAB_ID = "library-filters-tab-favorites";
 export const LIBRARY_FILTERS_COMPLETED_TAB_ID = "library-filters-tab-completed";
 
-export const LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID =
-  "library-filters-new-folder-button";
 export const LIBRARY_FILTERS_SCAN_BUTTON_ID = "library-filters-scan-button";
 export const LIBRARY_EMPTY_REFRESH_BUTTON_ID = "library-empty-refresh-button";
 export const LIBRARY_FILTERED_EMPTY_RESET_BUTTON_ID =
@@ -28,6 +27,15 @@ export const LIBRARY_FILTERS_PLATFORM_PILL_PREFIX =
 
 export function getLibraryFiltersPlatformPillId(platform: string) {
   return `${LIBRARY_FILTERS_PLATFORM_PILL_PREFIX}-${platform}`;
+}
+
+export const LIBRARY_FILTERS_CONSOLE_ALL_PILL_ID =
+  "library-filters-console-pill-all";
+export const LIBRARY_FILTERS_CONSOLE_PILL_PREFIX =
+  "library-filters-console-pill";
+
+export function getLibraryFiltersConsolePillId(system: string) {
+  return `${LIBRARY_FILTERS_CONSOLE_PILL_PREFIX}-${system}`;
 }
 
 /** Prefix + collection id → stable FocusItem id for user collections */

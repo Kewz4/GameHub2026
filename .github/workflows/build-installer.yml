@@ -175,7 +175,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             native/hydra-native/target
-          key: ${{ runner.os }}-cargo-hydra-native-${{ hashFiles('native/hydra-native/Cargo.lock', 'native/gamehub-inputhook/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-hydra-native-${{ hashFiles('native/hydra-native/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-hydra-native-
 
@@ -225,8 +225,6 @@ jobs:
           yarn test:python-rpc
           yarn test:steam-emulator
           yarn test:overlay
-          yarn test:overlay-native-qa
-          cargo test --manifest-path native/gamehub-inputhook/Cargo.toml --all-targets
           cargo test --manifest-path native/hydra-native/Cargo.toml --lib --bins
           yarn test:recorder
           yarn test:cloud-sync

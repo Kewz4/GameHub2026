@@ -10,10 +10,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: calc(globals.$spacing-unit * 2);
-    padding: calc(globals.$spacing-unit * 3);
-    border: 1px solid globals.$border-color;
-    border-radius: 12px;
-    background: var(--color-dark-background);
+    padding-block: 0 calc(globals.$spacing-unit * 2);
 
     h2 {
       margin: 0 0 globals.$spacing-unit;
@@ -55,6 +52,7 @@
   }
 
   &__preview {
+    position: relative;
     display: block;
     width: 100%;
     aspect-ratio: 16 / 9;
@@ -69,7 +67,7 @@
       outline-offset: -3px;
     }
 
-    img {
+    > img {
       display: block;
       width: 100%;
       height: 100%;
@@ -77,8 +75,67 @@
       transition: transform 180ms ease;
     }
 
-    &:hover img {
+    &:hover > img {
       transform: scale(1.025);
+    }
+  }
+
+  &__notification {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: calc(globals.$spacing-unit * 1.25);
+    min-height: 58px;
+    padding: calc(globals.$spacing-unit * 1.5);
+    background: color-mix(
+      in srgb,
+      var(--color-dark-background) 92%,
+      transparent
+    );
+    border-top: 1px solid globals.$border-color;
+    text-align: left;
+  }
+
+  &__achievement-icon {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    object-fit: cover;
+
+    &--placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: globals.$border-color;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__notification-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+
+    strong,
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    strong {
+      color: var(--color-text-bright);
+      font-size: 0.84rem;
+    }
+
+    span {
+      color: var(--color-text-secondary);
+      font-size: 0.72rem;
     }
   }
 
@@ -173,7 +230,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .profile-souvenirs__preview img {
+  .profile-souvenirs__preview > img {
     transition: none;
   }
 }

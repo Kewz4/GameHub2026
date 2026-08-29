@@ -103,6 +103,13 @@ export const writePortableSetup = (
         // portable.txt makes Dolphin use <install>/User for all data.
         ensureFile(path.join(installDir, "portable.txt"));
         ensureDir(path.join(installDir, "User", "Config"));
+        // Dolphin's current default is already device 8 (GCI Folder), but
+        // persist it for managed installs so Cloud Saves never has to infer a
+        // memory-card mode from a changing emulator default.
+        ensureFile(
+          path.join(installDir, "User", "Config", "Dolphin.ini"),
+          "[Core]\nSlotA = 8\n"
+        );
         ensureDir(path.join(installDir, "User", "Wii"));
         ensureDir(path.join(installDir, "User", "GC"));
         break;

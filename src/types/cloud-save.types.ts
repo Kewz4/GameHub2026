@@ -319,7 +319,14 @@ export interface CloudSaveOverview extends CloudSaveStateResult {
   unresolvedRemoteVariantCount: number;
   unconfiguredCustomPathCount: number;
   warnings: UserLocationCoverage[];
+  mappingIssue: CloudSaveMappingIssue | null;
 }
+
+export type CloudSaveMappingIssue =
+  | "emulator-unavailable"
+  | "shared-memory-card"
+  | "gamecube-gci-unavailable"
+  | "title-identity-unavailable";
 
 /** The single active V2 snapshot shown in the account-wide Cloud Saves page. */
 export interface CloudSaveV2LibraryEntry extends RemoteSnapshotSummary {

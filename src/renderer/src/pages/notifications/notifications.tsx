@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BellIcon } from "@primer/octicons-react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "framer-motion";
@@ -21,9 +21,6 @@ import type {
 import "./notifications.scss";
 
 type NotificationFilter = "all" | "unread";
-
-const STAGGER_DELAY_MS = 70;
-const EXIT_DURATION_MS = 250;
 
 export default function Notifications() {
   const { t, i18n } = useTranslation("notifications_page");
@@ -49,7 +46,6 @@ export default function Notifications() {
     skip: 0,
   });
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const clearingTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   const fetchLocalNotifications = useCallback(async () => {
     try {
@@ -143,13 +139,6 @@ export default function Notifications() {
     );
 
     return () => unsubscribe();
-  }, []);
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      clearingTimeoutsRef.current.forEach(clearTimeout);
-    };
   }, []);
 
   const mergedNotifications = useMemo<MergedNotification[]>(() => {
@@ -282,72 +271,25 @@ export default function Notifications() {
     [apiNotifications, showErrorToast, t, notifyCountChange]
   );
 
-  const removeNotificationFromState = useCallback(
-    (notification: MergedNotification) => {
-      if (notification.source === "api") {
-        setApiNotifications((prev) =>
-          prev.filter((n) => n.id !== notification.id)
-        );
-      } else {
-        setLocalNotifications((prev) =>
-          prev.filter((n) => n.id !== notification.id)
-        );
-      }
-    },
-    []
-  );
-
-  const removeNotificationWithDelay = useCallback(
-    (notification: MergedNotification, delayMs: number): Promise<void> => {
-      return new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          removeNotificationFromState(notification);
-          resolve();
-        }, delayMs);
-
-        clearingTimeoutsRef.current.push(timeout);
-      });
-    },
-    [removeNotificationFromState]
-  );
-
   const handleClearAll = useCallback(async () => {
     if (isClearing) return;
 
     try {
       setIsClearing(true);
 
-      // Clear any existing timeouts
-      clearingTimeoutsRef.current.forEach(clearTimeout);
-      clearingTimeoutsRef.current = [];
-
-      // Snapshot current notifications for staggered removal
-      const notificationsToRemove = [...displayedNotifications];
-      const totalNotifications = notificationsToRemove.length;
-
-      if (totalNotifications === 0) {
+      if (displayedNotifications.length === 0) {
         setIsClearing(false);
         return;
       }
 
-      // Remove items one by one with staggered delays for visual effect
-      const removalPromises = notificationsToRemove.map((notification, index) =>
-        removeNotificationWithDelay(notification, index * STAGGER_DELAY_MS)
-      );
-
-      // Wait for all items to be removed from state
-      await Promise.all(removalPromises);
-
-      // Wait for the last exit animation to complete
-      await new Promise((resolve) => setTimeout(resolve, EXIT_DURATION_MS));
-
-      // Perform actual backend deletions (state is already cleared by staggered removal)
       if (userDetails) {
         await window.electron.hydraApi.delete(`/profile/notifications/all`, {
           needsAuth: true,
         });
       }
       await window.electron.clearAllLocalNotifications();
+      setApiNotifications([]);
+      setLocalNotifications([]);
       setPagination({ total: 0, hasMore: false, skip: 0 });
       notifyCountChange({ resetApiUnread: true });
       showSuccessToast(t("cleared_all"));
@@ -356,12 +298,10 @@ export default function Notifications() {
       showErrorToast(t("failed_to_clear"));
     } finally {
       setIsClearing(false);
-      clearingTimeoutsRef.current = [];
     }
   }, [
     displayedNotifications,
     isClearing,
-    removeNotificationWithDelay,
     userDetails,
     showSuccessToast,
     showErrorToast,
@@ -402,14 +342,13 @@ export default function Notifications() {
     return (
       <motion.div
         key={key}
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
+        layout="position"
+        initial={false}
         exit={{
           opacity: 0,
-          x: 80,
-          transition: { duration: EXIT_DURATION_MS / 1000 },
+          y: -4,
+          transition: { duration: 0.15 },
         }}
-        transition={{ duration: 0.2 }}
       >
         {notification.source === "local" ? (
           <LocalNotificationItem
@@ -511,37 +450,27 @@ export default function Notifications() {
           </div>
         </div>
 
-        {/* Keep AnimatePresence mounted during clearing to preserve exit animations */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={filter}
-            className="notifications__content-wrapper"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 10 }}
-            transition={{ duration: 0.2 }}
-          >
-            {hasNoNotifications && !isClearing ? (
-              <div className="notifications__empty">
-                <div className="notifications__icon-container">
-                  <BellIcon size={24} />
-                </div>
-                <h2>{t("empty_title")}</h2>
-                <p>
-                  {filter === "unread"
-                    ? t("empty_filter_description")
-                    : t("empty_description")}
-                </p>
+        <div className="notifications__content-wrapper">
+          {hasNoNotifications && !isClearing ? (
+            <div className="notifications__empty">
+              <div className="notifications__icon-container">
+                <BellIcon size={24} />
               </div>
-            ) : (
-              <div className="notifications__list">
-                <AnimatePresence>
-                  {displayedNotifications.map(renderNotification)}
-                </AnimatePresence>
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+              <h2>{t("empty_title")}</h2>
+              <p>
+                {filter === "unread"
+                  ? t("empty_filter_description")
+                  : t("empty_description")}
+              </p>
+            </div>
+          ) : (
+            <div className="notifications__list">
+              <AnimatePresence>
+                {displayedNotifications.map(renderNotification)}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
 
         {pagination.hasMore && !isClearing && (
           <div className="notifications__load-more">
