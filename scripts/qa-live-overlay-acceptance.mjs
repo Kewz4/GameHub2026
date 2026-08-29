@@ -13,10 +13,10 @@
  * Required environment:
  *   PLAYWRIGHT_PACKAGE=<directory containing Playwright's index.mjs>
  *   GAMEHUB_LIVE_DATA=<populated portable GameHub data directory>
- *   GAMEHUB_QA_OVERLAY_TARGET=spider-man-2|khazan
- *   GAMEHUB_QA_LIVE_OVERLAY_MODE=preflight-only|expect-refusal
+ *   GAMEHUB_QA_OVERLAY_TARGET=hades-ii|spider-man-2|khazan
+ *   GAMEHUB_QA_LIVE_OVERLAY_MODE=preflight-only|launch-only|expect-refusal
  *
- * Required only for expect-refusal (which launches the selected game):
+ * Required for launch-only and expect-refusal (which launch the selected game):
  *   GAMEHUB_QA_LIVE_OVERLAY_ACK=I_UNDERSTAND_THIS_LAUNCHES_A_GAME
  *
  * Optional environment:
@@ -46,10 +46,25 @@ const LIVE_INPUT_SWITCH_DECLARATION =
   /\bconst OVERLAY_LIVE_INPUT_ISOLATION_ENABLED = false;/u;
 const LIVE_INPUT_ENABLED_DECLARATION =
   /\bconst OVERLAY_LIVE_INPUT_ISOLATION_ENABLED = true;/u;
+const BORDERLESS_EXTERNAL_WINDOW_POLICY = Object.freeze([
+  'mode: "windowed-or-borderless"',
+  'reason: displaySized ? "exclusive-fullscreen"',
+  "Overlay window mode rejected",
+]);
 let processInventoryDegraded = false;
 let processInventorySource = "cim";
 
 const TARGETS = Object.freeze({
+  "hades-ii": {
+    id: "hades-ii",
+    objectId: "1145350",
+    titlePatterns: [/^hades\s*(?:ii|2)$/iu, /hades\s*(?:ii|2)/iu],
+    executablePath: "C:\\Games\\Hades II\\Ship\\Hades2.exe",
+    trackingExecutablePaths: [],
+    processNames: ["hades2.exe"],
+    renderProcessName: "hades2.exe",
+    processRoot: "C:\\Games\\Hades II",
+  },
   "spider-man-2": {
     id: "spider-man-2",
     objectId: "2651280",
@@ -145,14 +160,21 @@ function inspectBuiltLiveInputPolicy(mainEntry) {
   const source = fs.readFileSync(mainEntry, "utf8");
   const disabled = LIVE_INPUT_SWITCH_DECLARATION.test(source);
   const enabled = LIVE_INPUT_ENABLED_DECLARATION.test(source);
+  const borderlessExternalWindow = BORDERLESS_EXTERNAL_WINDOW_POLICY.every(
+    (marker) => source.includes(marker)
+  );
   ensure(
-    disabled && !enabled,
-    "The current built main process does not contain the expected disabled live-input policy. Rebuild before refusal QA."
+    !enabled && (disabled || borderlessExternalWindow),
+    "The current built main process exposes neither the disabled legacy live-input policy nor the borderless external-window policy. Rebuild before live overlay QA."
   );
   return Object.freeze({
-    liveInputIsolationEnabled: false,
-    killSwitchConfirmed: true,
-    evidence: "built-main-disabled-constant",
+    liveInputIsolationEnabled: disabled ? false : null,
+    killSwitchConfirmed: disabled,
+    borderlessExternalWindow,
+    exclusiveFullscreenRefused: borderlessExternalWindow,
+    evidence: disabled
+      ? "built-main-disabled-constant"
+      : "built-main-borderless-external-window-policy",
   });
 }
 
@@ -202,7 +224,7 @@ async function hashFile(filePath, hash) {
   });
 }
 
-async function hashDirectory(directory) {
+export async function hashDirectory(directory) {
   const hash = crypto.createHash("sha256");
   const visit = async (current, relativeRoot = "") => {
     const entries = await fs.promises.readdir(current, { withFileTypes: true });
@@ -251,7 +273,7 @@ function runProcessInventoryCommand(command) {
   }
 }
 
-function listWindowsProcesses() {
+export function listWindowsProcesses() {
   const cimCommand = `$ErrorActionPreference = 'Stop'
 $inventory = @(Get-CimInstance Win32_Process | ForEach-Object {
   $creationDate = ''
@@ -369,7 +391,7 @@ export function sameProcessIdentity(left, right) {
     left?.pid > 0 &&
     left.pid === right?.pid &&
     left.creationDate !== "" &&
-    left.creationDate === right.creationDate &&
+    creationTimesMatch(left.creationDate, right.creationDate) &&
     typeof left.executablePath === "string" &&
     left.executablePath !== "" &&
     typeof right?.executablePath === "string" &&
@@ -379,11 +401,23 @@ export function sameProcessIdentity(left, right) {
   );
 }
 
+export function creationTimesMatch(left, right, toleranceTicks = 10_000n) {
+  try {
+    const delta = BigInt(left) - BigInt(right);
+    return (delta < 0n ? -delta : delta) <= toleranceTicks;
+  } catch {
+    return false;
+  }
+}
+
 export function diagnosticsMatchTargetIdentity(diagnostics, targetIdentity) {
   if (!diagnostics || !targetIdentity) return false;
   return (
     diagnostics.targetPid === targetIdentity.pid &&
-    diagnostics.targetCreationTimeTicks === targetIdentity.creationDate &&
+    creationTimesMatch(
+      diagnostics.targetCreationTimeTicks,
+      targetIdentity.creationDate
+    ) &&
     typeof diagnostics.targetExecutable === "string" &&
     diagnostics.targetExecutable !== "" &&
     typeof targetIdentity.executablePath === "string" &&
@@ -548,7 +582,7 @@ function terminateValidatedTargetProcess(
   return stopExactProcessWithPowerShell(current);
 }
 
-async function waitFor(
+export async function waitFor(
   description,
   readValue,
   predicate,
@@ -572,7 +606,7 @@ async function waitFor(
   throw new Error(`${description} timed out after ${timeoutMs} ms.${detail}`);
 }
 
-async function prepareClone(sourceData, cloneData) {
+export async function prepareClone(sourceData, cloneData) {
   const sourceDatabase = path.join(sourceData, "gamehub-db");
   ensure(
     fs.existsSync(sourceDatabase),
@@ -651,7 +685,7 @@ async function prepareClone(sourceData, cloneData) {
   return { cloudGamesDisabled, credentialsStripped: true };
 }
 
-function makeChildEnvironment(cloneRoot) {
+export function makeChildEnvironment(cloneRoot) {
   const environment = { ...process.env };
   for (const key of Object.keys(environment)) {
     if (
@@ -681,7 +715,7 @@ function makeChildEnvironment(cloneRoot) {
   return environment;
 }
 
-async function findMainWindow(electronApp) {
+export async function findMainWindow(electronApp) {
   await electronApp.firstWindow({ timeout: 40_000 });
   let updateCheckerProceeded = false;
   for (let attempt = 0; attempt < 160; attempt += 1) {
@@ -773,15 +807,29 @@ async function mainControl(electronApp, action, payload = {}) {
           gameHubElevated: NativeAddon.isCurrentProcessElevated(),
           processAccess:
             targetPid > 0
-              ? NativeAddon.getProcessAccessStatus(targetPid)
+              ? typeof NativeAddon.getProcessAccessStatus === "function"
+                ? NativeAddon.getProcessAccessStatus(targetPid)
+                : {
+                    canInject: null,
+                    errorCode: null,
+                    unsupported: true,
+                  }
               : { canInject: false, errorCode: 0 },
           injectionRisk:
             targetPid > 0
-              ? NativeAddon.getOverlayInjectionRisk(targetPid)
+              ? typeof NativeAddon.getOverlayInjectionRisk === "function"
+                ? NativeAddon.getOverlayInjectionRisk(targetPid)
+                : {
+                    safe: false,
+                    reason: "unsupported",
+                    moduleName: null,
+                  }
               : { safe: false, reason: "no-target", moduleName: null },
           gateStatus:
             targetPid > 0
-              ? NativeAddon.getOverlayInputGateStatus(targetPid)
+              ? typeof NativeAddon.getOverlayInputGateStatus === "function"
+                ? NativeAddon.getOverlayInputGateStatus(targetPid)
+                : null
               : null,
           gateReadiness:
             targetPid > 0
@@ -930,6 +978,7 @@ export function hasRequiredToastEvidence(diagnostics, kind) {
 
 export function requiredToastEvidenceForMode(mode) {
   if (mode === LIVE_OVERLAY_QA_MODE.preflightOnly) return null;
+  if (mode === LIVE_OVERLAY_QA_MODE.launchOnly) return null;
   if (mode === LIVE_OVERLAY_QA_MODE.expectRefusal) return "refusal";
   throw new Error(`Unsupported live-overlay QA mode: ${String(mode)}.`);
 }
@@ -1620,7 +1669,7 @@ async function main() {
   ensure(process.platform === "win32", "Live overlay QA is Windows-only.");
   const mode = parseLiveOverlayQaMode(process.env.GAMEHUB_QA_LIVE_OVERLAY_MODE);
   const requiredToastEvidence = requiredToastEvidenceForMode(mode);
-  if (mode === LIVE_OVERLAY_QA_MODE.expectRefusal) {
+  if (mode !== LIVE_OVERLAY_QA_MODE.preflightOnly) {
     ensure(
       process.env.GAMEHUB_QA_LIVE_OVERLAY_ACK === LIVE_ACKNOWLEDGEMENT,
       "Refusing to launch a game without the exact live-overlay acknowledgement."
@@ -1640,7 +1689,10 @@ async function main() {
       : null;
   const targetId = process.env.GAMEHUB_QA_OVERLAY_TARGET?.trim();
   const spec = TARGETS[targetId];
-  ensure(spec, "GAMEHUB_QA_OVERLAY_TARGET must be spider-man-2 or khazan.");
+  ensure(
+    spec,
+    "GAMEHUB_QA_OVERLAY_TARGET must be hades-ii, spider-man-2, or khazan."
+  );
   const sourceData = process.env.GAMEHUB_LIVE_DATA?.trim();
   const playwrightPackage = process.env.PLAYWRIGHT_PACKAGE?.trim();
   ensure(
@@ -1689,7 +1741,6 @@ async function main() {
     path.join(ROOT, "out", "preload", "index.mjs"),
     path.join(ROOT, "out", "renderer", "index.html"),
     path.join(ROOT, "hydra-native", "hydra-native.node"),
-    path.join(ROOT, "hydra-native", "gamehub-inputhook.dll"),
     path.join(playwrightPackage, "index.mjs"),
   ]) {
     ensure(
@@ -1818,12 +1869,15 @@ async function main() {
         ) ?? null,
       (item) =>
         Boolean(
-          item?.creationDate === inspected.electronMainCreationTimeTicks &&
+          creationTimesMatch(
+            item?.creationDate,
+            inspected.electronMainCreationTimeTicks
+          ) &&
             item.executablePath &&
             path.resolve(item.executablePath).toLowerCase() ===
               path.resolve(electronExecutable).toLowerCase()
         ),
-      5_000,
+      20_000,
       100
     );
     ensure(inspected.readOnlyVisualQa, "Read-only visual QA mode is inactive.");
@@ -1937,7 +1991,7 @@ async function main() {
         ),
         500
       );
-      const targetIdentity = await waitFor(
+      const targetInventoryItem = await waitFor(
         "Exact GameHub overlay render-target identity",
         () =>
           listWindowsProcesses().find(
@@ -1946,12 +2000,25 @@ async function main() {
         (item) =>
           Boolean(
             item &&
-              isExactRenderProcess(item, spec) &&
-              item.creationDate === targetReady.targetCreationTimeTicks
+              spec.processNames.includes(item.name) &&
+              (isExactRenderProcess(item, spec) ||
+                (mode === LIVE_OVERLAY_QA_MODE.launchOnly &&
+                  !item.executablePath &&
+                  item.name === spec.renderProcessName)) &&
+              creationTimesMatch(
+                item.creationDate,
+                targetReady.targetCreationTimeTicks
+              )
           ),
         5_000,
         100
       );
+      const targetIdentity = targetInventoryItem.executablePath
+        ? targetInventoryItem
+        : {
+            ...targetInventoryItem,
+            executablePath: targetReady.targetExecutable,
+          };
       const targetAcquiredState = {
         diagnostics: targetReady,
         processItem: targetIdentity,
@@ -1976,6 +2043,9 @@ async function main() {
           pid: targetIdentity.pid,
           creationTimeTicks: targetIdentity.creationDate,
           executablePath: targetIdentity.executablePath,
+          inventoryExecutablePathAvailable: Boolean(
+            targetInventoryItem.executablePath
+          ),
         },
         targetWindowDetected: true,
         gameHubElevated: targetReady.gameHubElevated,
@@ -1991,299 +2061,310 @@ async function main() {
           ),
         ],
       };
-      await page
-        .evaluate(() => globalThis.window.electron.closeGameLauncherWindow())
-        .catch(() => undefined);
-      const focusAttempt = await acquireGameForeground({
-        electronApp,
-        spec,
-        targetPid: targetReady.targetPid,
-        targetIdentity,
-        manualTimeoutMs: manualFocusTimeoutMs,
-        syntheticFocusAllowed,
-      });
-      const { identityCheckpoints: focusIdentityCheckpoints, ...focusReport } =
-        focusAttempt;
-      report.launch.focusAttempt = focusReport;
-      report.launch.identityCheckpoints.push(...focusIdentityCheckpoints);
-      const foregroundState = await waitForBoundRenderTargetState(
-        "Game foreground focus",
-        electronApp,
-        spec,
-        targetIdentity,
-        (state) =>
-          isBoundRenderTargetState(state, spec, targetIdentity, {
-            requireForeground: true,
-            requireBounds: true,
-          }),
-        8_000,
-        250
-      );
-      const foreground = foregroundState.diagnostics;
-      report.launch.identityCheckpoints.push(
-        makeRenderTargetIdentityCheckpoint(
-          foregroundState,
+      if (mode === LIVE_OVERLAY_QA_MODE.launchOnly) {
+        report.overlay = {
+          attempted: false,
+          outcome: "not-run-launch-only",
+          requiredToastEvidence,
+        };
+        report.outcome = "launch-observed";
+      } else {
+        await page
+          .evaluate(() => globalThis.window.electron.closeGameLauncherWindow())
+          .catch(() => undefined);
+        const focusAttempt = await acquireGameForeground({
+          electronApp,
+          spec,
+          targetPid: targetReady.targetPid,
+          targetIdentity,
+          manualTimeoutMs: manualFocusTimeoutMs,
+          syntheticFocusAllowed,
+        });
+        const {
+          identityCheckpoints: focusIdentityCheckpoints,
+          ...focusReport
+        } = focusAttempt;
+        report.launch.focusAttempt = focusReport;
+        report.launch.identityCheckpoints.push(...focusIdentityCheckpoints);
+        const foregroundState = await waitForBoundRenderTargetState(
+          "Game foreground focus",
+          electronApp,
           spec,
           targetIdentity,
-          "settled foreground focus",
-          { requireForeground: true, requireBounds: true }
-        )
-      );
-
-      const beforeToggleState = await readBoundRenderTargetState(
-        electronApp,
-        targetIdentity
-      );
-      report.launch.identityCheckpoints.push(
-        makeRenderTargetIdentityCheckpoint(
-          beforeToggleState,
-          spec,
-          targetIdentity,
-          "immediately before explicit toggle",
-          { requireForeground: true, requireBounds: true }
-        )
-      );
-      await mainControl(electronApp, "toggle-overlay");
-      const toggleState = await waitForBoundRenderTargetState(
-        "Overlay visibility or explicit input-gate refusal",
-        electronApp,
-        spec,
-        targetIdentity,
-        (state) => {
-          const diagnostics = state.diagnostics;
-          return (
-            Boolean(findOverlayWindow(diagnostics)) ||
-            hasRequiredToastEvidence(diagnostics, requiredToastEvidence) ||
-            (!diagnostics.overlayTogglePending &&
-              (diagnostics.gateReadiness?.reason === "unavailable" ||
-                diagnostics.gateReadiness?.reason === "unsupported" ||
-                diagnostics.processAccess?.canInject === false ||
-                diagnostics.injectionRisk?.safe === false))
-          );
-        },
-        12_000,
-        100
-      );
-      const toggleResult = toggleState.diagnostics;
-      report.launch.identityCheckpoints.push(
-        makeRenderTargetIdentityCheckpoint(
-          toggleState,
-          spec,
-          targetIdentity,
-          "toggle outcome",
-          { requireBounds: true }
-        )
-      );
-
-      const overlayWindow = findOverlayWindow(toggleResult);
-      if (overlayWindow) {
-        await mainControl(electronApp, "hide-overlay").catch(() => undefined);
-        throw new Error(
-          "The interactive external overlay became visible in expect-refusal mode."
+          (state) =>
+            isBoundRenderTargetState(state, spec, targetIdentity, {
+              requireForeground: true,
+              requireBounds: true,
+            }),
+          8_000,
+          250
         );
-      }
+        const foreground = foregroundState.diagnostics;
+        report.launch.identityCheckpoints.push(
+          makeRenderTargetIdentityCheckpoint(
+            foregroundState,
+            spec,
+            targetIdentity,
+            "settled foreground focus",
+            { requireForeground: true, requireBounds: true }
+          )
+        );
 
-      const readiness = toggleResult.gateReadiness;
-      const refusal = evaluateExpectedOverlayRefusal({
-        mode,
-        overlayVisible: false,
-        gateReason: readiness?.reason ?? null,
-        accessBlocked: toggleResult.processAccess.canInject === false,
-        moduleBlocked: toggleResult.injectionRisk.safe === false,
-        unsupportedModuleMask:
-          toggleResult.gateStatus?.unsupportedModuleMask ?? 0,
-        liveInputKillSwitchConfirmed: builtInputPolicy.killSwitchConfirmed,
-      });
-      ensure(
-        refusal.accepted,
-        `No accepted safety refusal was proven (${refusal.reason}).`
-      );
-      ensure(
-        toggleResult.gateStatus?.blocked !== true,
-        "Expected refusal left the native input latch blocked."
-      );
-      ensure(
-        requiredToastEvidence === "refusal",
-        "Expect-refusal mode did not select refusal-toast evidence."
-      );
-      const toastState = await waitForBoundRenderTargetState(
-        "Visible right-edge input-gate refusal notification",
-        electronApp,
-        spec,
-        targetIdentity,
-        (state) =>
-          isBoundRenderTargetState(state, spec, targetIdentity, {
-            requireForeground: true,
-            requireBounds: true,
-          }) &&
-          hasRequiredToastEvidence(state.diagnostics, requiredToastEvidence),
-        8_000,
-        50
-      );
-      const toastResult = toastState.diagnostics;
-      const gateToast = findOverlayUnavailableToast(toastResult);
-      ensure(
-        gateToast,
-        "The expected input-gate refusal notification did not appear."
-      );
-      report.launch.identityCheckpoints.push(
-        makeRenderTargetIdentityCheckpoint(
-          toastState,
+        const beforeToggleState = await readBoundRenderTargetState(
+          electronApp,
+          targetIdentity
+        );
+        report.launch.identityCheckpoints.push(
+          makeRenderTargetIdentityCheckpoint(
+            beforeToggleState,
+            spec,
+            targetIdentity,
+            "immediately before explicit toggle",
+            { requireForeground: true, requireBounds: true }
+          )
+        );
+        await mainControl(electronApp, "toggle-overlay");
+        const toggleState = await waitForBoundRenderTargetState(
+          "Overlay visibility or explicit input-gate refusal",
+          electronApp,
           spec,
           targetIdentity,
-          "required refusal toast",
-          { requireForeground: true, requireBounds: true }
-        )
-      );
-      const notificationGeometry = validateRightEdgeToastGeometry(
-        gateToast,
-        toastResult.targetBounds,
-        "refusal"
-      );
-      const notificationPresentation = await inspectToastPresentation(
-        electronApp,
-        "gate-error"
-      );
-      const beforeCaptureState = await readBoundRenderTargetState(
-        electronApp,
-        targetIdentity
-      );
-      const beforeCapture = ensureBoundRenderTargetState(
-        beforeCaptureState,
-        spec,
-        targetIdentity,
-        "immediately before refusal-toast capture",
-        { requireForeground: true, requireBounds: true }
-      );
-      ensure(
-        hasRequiredToastEvidence(beforeCapture, requiredToastEvidence),
-        "The required refusal notification disappeared before capture."
-      );
-      ensure(
-        boundsMatch(beforeCapture.targetBounds, toastResult.targetBounds),
-        "The target bounds changed before refusal-toast capture."
-      );
-      validateRightEdgeToastGeometry(
-        findOverlayUnavailableToast(beforeCapture),
-        beforeCapture.targetBounds,
-        "refusal"
-      );
-      report.launch.identityCheckpoints.push(
-        makeRenderTargetIdentityCheckpoint(
+          (state) => {
+            const diagnostics = state.diagnostics;
+            return (
+              Boolean(findOverlayWindow(diagnostics)) ||
+              hasRequiredToastEvidence(diagnostics, requiredToastEvidence) ||
+              (!diagnostics.overlayTogglePending &&
+                (diagnostics.gateReadiness?.reason === "unavailable" ||
+                  diagnostics.gateReadiness?.reason === "unsupported" ||
+                  diagnostics.processAccess?.canInject === false ||
+                  diagnostics.injectionRisk?.safe === false))
+            );
+          },
+          12_000,
+          100
+        );
+        const toggleResult = toggleState.diagnostics;
+        report.launch.identityCheckpoints.push(
+          makeRenderTargetIdentityCheckpoint(
+            toggleState,
+            spec,
+            targetIdentity,
+            "toggle outcome",
+            { requireBounds: true }
+          )
+        );
+
+        const overlayWindow = findOverlayWindow(toggleResult);
+        if (overlayWindow) {
+          await mainControl(electronApp, "hide-overlay").catch(() => undefined);
+          throw new Error(
+            "The interactive external overlay became visible in expect-refusal mode."
+          );
+        }
+
+        const readiness = toggleResult.gateReadiness;
+        const refusal = evaluateExpectedOverlayRefusal({
+          mode,
+          overlayVisible: false,
+          gateReason: readiness?.reason ?? null,
+          accessBlocked: toggleResult.processAccess.canInject === false,
+          moduleBlocked: toggleResult.injectionRisk.safe === false,
+          unsupportedModuleMask:
+            toggleResult.gateStatus?.unsupportedModuleMask ?? 0,
+          liveInputKillSwitchConfirmed: builtInputPolicy.killSwitchConfirmed,
+        });
+        ensure(
+          refusal.accepted,
+          `No accepted safety refusal was proven (${refusal.reason}).`
+        );
+        ensure(
+          toggleResult.gateStatus?.blocked !== true,
+          "Expected refusal left the native input latch blocked."
+        );
+        ensure(
+          requiredToastEvidence === "refusal",
+          "Expect-refusal mode did not select refusal-toast evidence."
+        );
+        const toastState = await waitForBoundRenderTargetState(
+          "Visible right-edge input-gate refusal notification",
+          electronApp,
+          spec,
+          targetIdentity,
+          (state) =>
+            isBoundRenderTargetState(state, spec, targetIdentity, {
+              requireForeground: true,
+              requireBounds: true,
+            }) &&
+            hasRequiredToastEvidence(state.diagnostics, requiredToastEvidence),
+          8_000,
+          50
+        );
+        const toastResult = toastState.diagnostics;
+        const gateToast = findOverlayUnavailableToast(toastResult);
+        ensure(
+          gateToast,
+          "The expected input-gate refusal notification did not appear."
+        );
+        report.launch.identityCheckpoints.push(
+          makeRenderTargetIdentityCheckpoint(
+            toastState,
+            spec,
+            targetIdentity,
+            "required refusal toast",
+            { requireForeground: true, requireBounds: true }
+          )
+        );
+        const notificationGeometry = validateRightEdgeToastGeometry(
+          gateToast,
+          toastResult.targetBounds,
+          "refusal"
+        );
+        const notificationPresentation = await inspectToastPresentation(
+          electronApp,
+          "gate-error"
+        );
+        const beforeCaptureState = await readBoundRenderTargetState(
+          electronApp,
+          targetIdentity
+        );
+        const beforeCapture = ensureBoundRenderTargetState(
           beforeCaptureState,
           spec,
           targetIdentity,
           "immediately before refusal-toast capture",
           { requireForeground: true, requireBounds: true }
-        )
-      );
-      const compositePath = path.join(
-        artifactRoot,
-        `${spec.id}-input-gate-refusal-over-game.png`
-      );
-      captureDesktopRegion(compositePath, beforeCapture.targetBounds);
-      report.screenshots.push(pngEvidence(compositePath));
-      const afterCompositeCaptureState = await readBoundRenderTargetState(
-        electronApp,
-        targetIdentity
-      );
-      const afterCompositeCapture = ensureBoundRenderTargetState(
-        afterCompositeCaptureState,
-        spec,
-        targetIdentity,
-        "immediately after refusal-toast desktop capture",
-        { requireForeground: true, requireBounds: true }
-      );
-      ensure(
-        hasRequiredToastEvidence(
-          afterCompositeCapture,
-          requiredToastEvidence
-        ) &&
-          boundsMatch(
-            afterCompositeCapture.targetBounds,
-            beforeCapture.targetBounds
-          ),
-        "The required refusal notification or target bounds changed during desktop capture."
-      );
-      report.launch.identityCheckpoints.push(
-        makeRenderTargetIdentityCheckpoint(
+        );
+        ensure(
+          hasRequiredToastEvidence(beforeCapture, requiredToastEvidence),
+          "The required refusal notification disappeared before capture."
+        );
+        ensure(
+          boundsMatch(beforeCapture.targetBounds, toastResult.targetBounds),
+          "The target bounds changed before refusal-toast capture."
+        );
+        validateRightEdgeToastGeometry(
+          findOverlayUnavailableToast(beforeCapture),
+          beforeCapture.targetBounds,
+          "refusal"
+        );
+        report.launch.identityCheckpoints.push(
+          makeRenderTargetIdentityCheckpoint(
+            beforeCaptureState,
+            spec,
+            targetIdentity,
+            "immediately before refusal-toast capture",
+            { requireForeground: true, requireBounds: true }
+          )
+        );
+        const compositePath = path.join(
+          artifactRoot,
+          `${spec.id}-input-gate-refusal-over-game.png`
+        );
+        captureDesktopRegion(compositePath, beforeCapture.targetBounds);
+        report.screenshots.push(pngEvidence(compositePath));
+        const afterCompositeCaptureState = await readBoundRenderTargetState(
+          electronApp,
+          targetIdentity
+        );
+        const afterCompositeCapture = ensureBoundRenderTargetState(
           afterCompositeCaptureState,
           spec,
           targetIdentity,
           "immediately after refusal-toast desktop capture",
           { requireForeground: true, requireBounds: true }
-        )
-      );
-      const toastPath = path.join(
-        artifactRoot,
-        `${spec.id}-input-gate-refusal-window.png`
-      );
-      ensure(
-        await screenshotElectronWindow(electronApp, "gate-error", toastPath),
-        "The required refusal notification could not be captured directly."
-      );
-      report.screenshots.push(pngEvidence(toastPath));
-      const afterToastCaptureState = await readBoundRenderTargetState(
-        electronApp,
-        targetIdentity
-      );
-      const afterToastCapture = ensureBoundRenderTargetState(
-        afterToastCaptureState,
-        spec,
-        targetIdentity,
-        "immediately after direct refusal-toast capture",
-        { requireForeground: true, requireBounds: true }
-      );
-      ensure(
-        hasRequiredToastEvidence(afterToastCapture, requiredToastEvidence) &&
-          boundsMatch(
-            afterToastCapture.targetBounds,
-            beforeCapture.targetBounds
-          ),
-        "The required refusal notification or target bounds changed during direct capture."
-      );
-      report.launch.identityCheckpoints.push(
-        makeRenderTargetIdentityCheckpoint(
+        );
+        ensure(
+          hasRequiredToastEvidence(
+            afterCompositeCapture,
+            requiredToastEvidence
+          ) &&
+            boundsMatch(
+              afterCompositeCapture.targetBounds,
+              beforeCapture.targetBounds
+            ),
+          "The required refusal notification or target bounds changed during desktop capture."
+        );
+        report.launch.identityCheckpoints.push(
+          makeRenderTargetIdentityCheckpoint(
+            afterCompositeCaptureState,
+            spec,
+            targetIdentity,
+            "immediately after refusal-toast desktop capture",
+            { requireForeground: true, requireBounds: true }
+          )
+        );
+        const toastPath = path.join(
+          artifactRoot,
+          `${spec.id}-input-gate-refusal-window.png`
+        );
+        ensure(
+          await screenshotElectronWindow(electronApp, "gate-error", toastPath),
+          "The required refusal notification could not be captured directly."
+        );
+        report.screenshots.push(pngEvidence(toastPath));
+        const afterToastCaptureState = await readBoundRenderTargetState(
+          electronApp,
+          targetIdentity
+        );
+        const afterToastCapture = ensureBoundRenderTargetState(
           afterToastCaptureState,
           spec,
           targetIdentity,
           "immediately after direct refusal-toast capture",
           { requireForeground: true, requireBounds: true }
-        )
-      );
-      report.overlay = {
-        attempted: true,
-        outcome: "expected-refusal",
-        refusalReason: refusal.reason,
-        explicitToggle: true,
-        externalWindowOnly: true,
-        supervisedLaunch: false,
-        inProcessCompositor: false,
-        sameIntegrityProcessAccess:
-          toggleResult.processAccess.canInject === true,
-        processAccessErrorCode: toggleResult.processAccess.errorCode,
-        injectionRiskSafe: toggleResult.injectionRisk.safe,
-        injectionRiskReason: toggleResult.injectionRisk.reason,
-        injectionRiskModule: toggleResult.injectionRisk.moduleName,
-        gateReason: readiness?.reason ?? null,
-        capabilityMask: toggleResult.gateStatus?.capabilityMask ?? 0,
-        unsupportedModuleMask:
-          toggleResult.gateStatus?.unsupportedModuleMask ?? 0,
-        errorToastVisible: true,
-        requiredToastEvidence,
-        requiredToastEvidenceObserved: true,
-        exactRenderTargetIdentityBoundThroughCapture: true,
-        targetBoundsStableThroughCapture: true,
-        directToastCaptureRequired: true,
-        notificationGeometry,
-        notificationPresentation,
-      };
-      report.outcome = "expected-refusal-observed";
+        );
+        ensure(
+          hasRequiredToastEvidence(afterToastCapture, requiredToastEvidence) &&
+            boundsMatch(
+              afterToastCapture.targetBounds,
+              beforeCapture.targetBounds
+            ),
+          "The required refusal notification or target bounds changed during direct capture."
+        );
+        report.launch.identityCheckpoints.push(
+          makeRenderTargetIdentityCheckpoint(
+            afterToastCaptureState,
+            spec,
+            targetIdentity,
+            "immediately after direct refusal-toast capture",
+            { requireForeground: true, requireBounds: true }
+          )
+        );
+        report.overlay = {
+          attempted: true,
+          outcome: "expected-refusal",
+          refusalReason: refusal.reason,
+          explicitToggle: true,
+          externalWindowOnly: true,
+          supervisedLaunch: false,
+          inProcessCompositor: false,
+          sameIntegrityProcessAccess:
+            toggleResult.processAccess.canInject === true,
+          processAccessErrorCode: toggleResult.processAccess.errorCode,
+          injectionRiskSafe: toggleResult.injectionRisk.safe,
+          injectionRiskReason: toggleResult.injectionRisk.reason,
+          injectionRiskModule: toggleResult.injectionRisk.moduleName,
+          gateReason: readiness?.reason ?? null,
+          capabilityMask: toggleResult.gateStatus?.capabilityMask ?? 0,
+          unsupportedModuleMask:
+            toggleResult.gateStatus?.unsupportedModuleMask ?? 0,
+          errorToastVisible: true,
+          requiredToastEvidence,
+          requiredToastEvidenceObserved: true,
+          exactRenderTargetIdentityBoundThroughCapture: true,
+          targetBoundsStableThroughCapture: true,
+          directToastCaptureRequired: true,
+          notificationGeometry,
+          notificationPresentation,
+        };
+        report.outcome = "expected-refusal-observed";
 
-      ensure(
-        foreground.targetPid === toggleResult.targetPid,
-        "Overlay target changed during the acceptance toggle."
-      );
+        ensure(
+          foreground.targetPid === toggleResult.targetPid,
+          "Overlay target changed during the acceptance toggle."
+        );
+      }
     }
   } catch (error) {
     report.outcome = "failed";

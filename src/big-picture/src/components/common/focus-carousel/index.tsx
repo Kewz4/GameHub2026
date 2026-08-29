@@ -15,11 +15,10 @@ import { HorizontalFocusGroup } from "../horizontal-focus-group";
 import { HorizontalStoreGameCard } from "../horizontal-store-game-card";
 import { VerticalStoreGameCard } from "../vertical-store-game-card";
 import {
-  getGameCoverImageSource,
   getGameIdentityKey,
-  getGameLandscapeImageSource,
   getOptionalItemFocusTarget,
 } from "../../../helpers";
+import { getCarouselArtworkSources } from "./artwork";
 
 import "./styles.scss";
 
@@ -478,7 +477,7 @@ function FocusCarouselCard({
   if (cardVariant === "horizontal") {
     return (
       <HorizontalStoreGameCard
-        coverImageUrl={getGameLandscapeImageSource(game)}
+        coverImageUrls={getCarouselArtworkSources(game, "landscape")}
         gameTitle={game.title}
         downloadSourceCount={game.downloadSources.length}
         onClick={onClick}
@@ -489,7 +488,7 @@ function FocusCarouselCard({
 
   return (
     <VerticalStoreGameCard
-      coverImageUrl={getGameCoverImageSource(game)}
+      coverImageUrls={getCarouselArtworkSources(game, "portrait")}
       gameTitle={game.title}
       downloadSourceCount={game.downloadSources.length}
       onClick={onClick}

@@ -38,6 +38,7 @@ export * from "./supported-languages";
 export * from "./use-hls-video";
 export * from "./tracker-list";
 export * from "./path-presentation";
+export * from "./recommendation-identity";
 
 export class UserNotLoggedInError extends Error {
   constructor() {

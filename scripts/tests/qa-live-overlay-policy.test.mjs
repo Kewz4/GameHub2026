@@ -24,11 +24,12 @@ const refusal = (overrides = {}) =>
 describe("live overlay QA policy", () => {
   it("requires one explicit non-interactive mode", () => {
     assert.equal(parseLiveOverlayQaMode("preflight-only"), "preflight-only");
+    assert.equal(parseLiveOverlayQaMode("launch-only"), "launch-only");
     assert.equal(parseLiveOverlayQaMode(" expect-refusal "), "expect-refusal");
     for (const value of [undefined, "", "interactive", "passed-visible"]) {
       assert.throws(() => parseLiveOverlayQaMode(value), {
         message:
-          "GAMEHUB_QA_LIVE_OVERLAY_MODE must be preflight-only or expect-refusal.",
+          "GAMEHUB_QA_LIVE_OVERLAY_MODE must be preflight-only, launch-only, or expect-refusal.",
       });
     }
   });

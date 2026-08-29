@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   boundsMatch,
+  creationTimesMatch,
   diagnosticsMatchTargetIdentity,
   findOverlayUnavailableToast,
   findReadyToast,
@@ -45,6 +46,14 @@ const boundState = (overrides = {}) => ({
 
 describe("live overlay acceptance evidence", () => {
   it("binds both diagnostics and process inventory to PID, creation, and exact render path", () => {
+    assert.equal(
+      creationTimesMatch("133725123456789012", "133725123456789016"),
+      true
+    );
+    assert.equal(
+      creationTimesMatch("133725123456789012", "133725123456809012"),
+      false
+    );
     assert.equal(sameProcessIdentity(targetIdentity, targetIdentity), true);
     assert.equal(
       sameProcessIdentity(targetIdentity, {
@@ -66,7 +75,7 @@ describe("live overlay acceptance evidence", () => {
     );
 
     for (const changed of [
-      boundState({ processItem: { creationDate: "133725123456789013" } }),
+      boundState({ processItem: { creationDate: "133725123456809012" } }),
       boundState({
         processItem: {
           executablePath: "C:\\Games\\Fixture\\replacement.exe",
@@ -135,6 +144,10 @@ describe("live overlay acceptance evidence", () => {
   it("requires the exact visible toast kind selected by the QA mode", () => {
     assert.equal(
       requiredToastEvidenceForMode(LIVE_OVERLAY_QA_MODE.preflightOnly),
+      null
+    );
+    assert.equal(
+      requiredToastEvidenceForMode(LIVE_OVERLAY_QA_MODE.launchOnly),
       null
     );
     assert.equal(

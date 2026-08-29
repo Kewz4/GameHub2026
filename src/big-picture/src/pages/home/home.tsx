@@ -33,9 +33,9 @@ import {
   buildLibraryToastOptions,
   getBigPictureGameAchievementsPath,
   getBigPictureGameDetailsPath,
-  getGameLandscapeImageSource,
   getItemFocusTarget,
 } from "../../helpers";
+import { getCarouselArtworkSources } from "../../components/common/focus-carousel/artwork";
 import {
   BIG_PICTURE_HEADER_REGION_ID,
   BIG_PICTURE_SIDEBAR_ITEM_IDS,
@@ -811,7 +811,10 @@ export default function Home() {
                     id={itemId}
                   >
                     <ChallengeGameCard
-                      coverImageUrl={getGameLandscapeImageSource(game)}
+                      coverImageUrls={getCarouselArtworkSources(
+                        game,
+                        "landscape"
+                      )}
                       downloadSources={game.downloadSources}
                       gameTitle={game.title}
                       genres={game.genres}

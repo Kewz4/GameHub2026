@@ -2,9 +2,10 @@ import "./styles.scss";
 
 import cn from "classnames";
 import type { MouseEventHandler } from "react";
+import { useValidatedArtworkSource } from "../focus-carousel/artwork";
 
 export interface VerticalStoreGameCardProps {
-  coverImageUrl?: string | null;
+  coverImageUrls?: readonly string[];
   gameTitle: string;
   downloadSourceCount: number;
   forceHovered?: boolean;
@@ -22,7 +23,7 @@ function getDownloadSourcesLabel(downloadSourceCount: number) {
 }
 
 export function VerticalStoreGameCard({
-  coverImageUrl,
+  coverImageUrls = [],
   gameTitle,
   downloadSourceCount,
   forceHovered = false,
@@ -35,16 +36,28 @@ export function VerticalStoreGameCard({
     "vertical-store-game-card--force-hovered": forceHovered,
   });
   const TitleTag = onClick == null ? "h3" : "span";
+  const { activeSource, handleError, handleLoad, imageKey, isReady } =
+    useValidatedArtworkSource({
+      sources: coverImageUrls,
+      orientation: "portrait",
+      onExhausted: onCoverImageError,
+    });
 
   const inner = (
     <>
-      <div className="vertical-store-game-card__cover">
-        {coverImageUrl ? (
+      <div
+        className="vertical-store-game-card__cover"
+        data-artwork-orientation="portrait"
+      >
+        {activeSource ? (
           <img
-            src={coverImageUrl}
+            key={imageKey}
+            src={activeSource}
             alt={gameTitle}
             draggable={false}
-            onError={onCoverImageError}
+            data-artwork-ready={isReady || undefined}
+            onError={handleError}
+            onLoad={handleLoad}
           />
         ) : (
           <div

@@ -57,6 +57,28 @@ const normalize = (title: string) =>
     .trim();
 
 /**
+ * Local classics searches are relevance ordered, so their first result is not
+ * necessarily the queried game. Resolve the anchor by identity or exact
+ * normalized title before learning genres from it.
+ */
+export function selectClassicsCatalogueResultForGame(
+  game: Pick<LibraryGame, "shop" | "objectId" | "title">,
+  results: readonly CatalogueSearchResult[]
+): CatalogueSearchResult | null {
+  const identityMatch = results.find(
+    (result) => result.shop === game.shop && result.objectId === game.objectId
+  );
+  if (identityMatch) return identityMatch;
+
+  const wantedTitle = normalize(game.title);
+  if (!wantedTitle) return null;
+
+  return (
+    results.find((result) => normalize(result.title) === wantedTitle) ?? null
+  );
+}
+
+/**
  * Derive the series stem of a title: take the part before a subtitle separator
  * (colon/dash), then drop trailing numerals, roman numerals and edition words.
  * "The Legend of Zelda: Ocarina of Time 3D" → "the legend of zelda";
@@ -143,9 +165,7 @@ export async function getRecommendedClassics(
         window.electron
           .searchClassicsCatalogue(game.title, 3)
           .then((results) => {
-            const self = results.find(
-              (r) => normalize(r.title) === normalize(game.title)
-            );
+            const self = selectClassicsCatalogueResultForGame(game, results);
             for (const genre of self?.genres ?? []) {
               genreWeight.set(genre, (genreWeight.get(genre) ?? 0) + weight);
             }

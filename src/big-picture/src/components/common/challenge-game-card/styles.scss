@@ -17,6 +17,7 @@
     outline-color 0.2s ease-in-out;
 
   &__cover {
+    position: relative;
     flex: 0 0 280px;
     width: 280px;
     aspect-ratio: 200 / 103;
@@ -32,7 +33,15 @@
     }
 
     img {
+      position: absolute;
+      inset: 0;
       object-fit: cover;
+      object-position: center;
+      visibility: hidden;
+
+      &[data-artwork-ready] {
+        visibility: visible;
+      }
     }
   }
 

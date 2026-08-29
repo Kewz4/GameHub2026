@@ -2,10 +2,11 @@ import "./styles.scss";
 
 import type { MouseEventHandler } from "react";
 
+import { useValidatedArtworkSource } from "../focus-carousel/artwork";
 import { SourceAnchor } from "../source-anchor";
 
 export interface ChallengeGameCardProps {
-  coverImageUrl?: string | null;
+  coverImageUrls?: readonly string[];
   gameTitle: string;
   genres: string[];
   downloadSources: string[];
@@ -16,13 +17,18 @@ export interface ChallengeGameCardProps {
 const MAX_VISIBLE_SOURCES = 3;
 
 export function ChallengeGameCard({
-  coverImageUrl,
+  coverImageUrls = [],
   gameTitle,
   genres,
   downloadSources,
   onClick,
   onContextMenu,
 }: Readonly<ChallengeGameCardProps>) {
+  const { activeSource, handleError, handleLoad, imageKey, isReady } =
+    useValidatedArtworkSource({
+      sources: coverImageUrls,
+      orientation: "landscape",
+    });
   const visibleSources = downloadSources.slice(0, MAX_VISIBLE_SOURCES);
   const hiddenSourcesCount = Math.max(
     0,
@@ -36,9 +42,20 @@ export function ChallengeGameCard({
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
-      <div className="challenge-game-card__cover">
-        {coverImageUrl ? (
-          <img src={coverImageUrl} alt={gameTitle} draggable={false} />
+      <div
+        className="challenge-game-card__cover"
+        data-artwork-orientation="landscape"
+      >
+        {activeSource ? (
+          <img
+            key={imageKey}
+            src={activeSource}
+            alt={gameTitle}
+            draggable={false}
+            data-artwork-ready={isReady || undefined}
+            onError={handleError}
+            onLoad={handleLoad}
+          />
         ) : (
           <div
             className="challenge-game-card__cover-placeholder"

@@ -1,5 +1,6 @@
 export const LIVE_OVERLAY_QA_MODE = Object.freeze({
   preflightOnly: "preflight-only",
+  launchOnly: "launch-only",
   expectRefusal: "expect-refusal",
 });
 
@@ -12,7 +13,7 @@ export function parseLiveOverlayQaMode(value) {
   const mode = String(value ?? "").trim();
   if (!LIVE_OVERLAY_QA_MODES.has(mode)) {
     throw new Error(
-      "GAMEHUB_QA_LIVE_OVERLAY_MODE must be preflight-only or expect-refusal."
+      "GAMEHUB_QA_LIVE_OVERLAY_MODE must be preflight-only, launch-only, or expect-refusal."
     );
   }
   return mode;

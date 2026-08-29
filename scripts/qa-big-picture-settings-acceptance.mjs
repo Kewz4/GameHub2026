@@ -33,6 +33,9 @@ const playwrightPackage = process.env.PLAYWRIGHT_PACKAGE?.trim();
 const sourceData = process.env.GAMEHUB_LIVE_DATA?.trim();
 const USE_SYNTHETIC_PROFILE =
   process.env.GAMEHUB_QA_SYNTHETIC_PROFILE === "true";
+const POPULATED_PROFILE_FIXTURE = USE_SYNTHETIC_PROFILE
+  ? "deterministic-populated-read-only"
+  : "live-populated-read-only-clone";
 
 if (!playwrightPackage) {
   throw new Error("Set PLAYWRIGHT_PACKAGE to Playwright's package directory.");
@@ -123,7 +126,7 @@ function qaProfileGame(
     title,
     iconUrl: `${origin}/__qa/assets/${objectId}-icon.svg`,
     libraryHeroImageUrl: `${origin}/__qa/assets/${objectId}-hero.svg`,
-    libraryImageUrl: `${origin}/__qa/assets/${objectId}-cover.svg`,
+    libraryImageUrl: `${origin}/__qa/assets/${objectId}-landscape.svg`,
     logoImageUrl: null,
     logoPosition: null,
     coverImageUrl: `${origin}/__qa/assets/${objectId}-cover.svg`,
@@ -156,7 +159,7 @@ function qaAssetGame(
       description ?? `${title} is part of the deterministic GameHub QA set.`,
     iconUrl: `${origin}/__qa/assets/${assetId}-icon.svg`,
     libraryHeroImageUrl: `${origin}/__qa/assets/${assetId}-hero.svg`,
-    libraryImageUrl: `${origin}/__qa/assets/${assetId}-cover.svg`,
+    libraryImageUrl: `${origin}/__qa/assets/${assetId}-landscape.svg`,
     logoImageUrl: null,
     logoPosition: null,
     coverImageUrl: `${origin}/__qa/assets/${assetId}-cover.svg`,
@@ -328,9 +331,10 @@ function qaFriendsFixture(origin) {
 
 function qaSvgAsset(assetName) {
   const isBanner = assetName.includes("banner") || assetName.includes("hero");
+  const isLandscape = assetName.includes("landscape");
   const isCover = assetName.includes("cover");
-  const width = isBanner ? 1600 : isCover ? 640 : 160;
-  const height = isBanner ? 500 : isCover ? 360 : 160;
+  const width = isBanner ? 1600 : isLandscape ? 920 : isCover ? 600 : 160;
+  const height = isBanner ? 500 : isLandscape ? 430 : isCover ? 900 : 160;
   const paletteIndex = [...assetName].reduce(
     (total, character) => (total + character.charCodeAt(0)) % 4,
     0
@@ -378,6 +382,7 @@ function sendQaJson(response, value, statusCode = 200) {
 
 async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
   const state = {
+    catalogueSearches: [],
     friendsPopulated: false,
     mutationRequests: [],
     fixtureRequests: 0,
@@ -481,9 +486,73 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
       localUrl.pathname === "/catalogue/search"
     ) {
       state.fixtureRequests += 1;
+      const chunks = [];
+      for await (const chunk of request) {
+        chunks.push(Buffer.from(chunk));
+      }
+      let searchBody = {};
+      try {
+        searchBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      } catch {
+        searchBody = {};
+      }
+      const title =
+        typeof searchBody.title === "string" ? searchBody.title.trim() : "";
+      const genres = Array.isArray(searchBody.genres)
+        ? searchBody.genres.filter((genre) => typeof genre === "string")
+        : [];
+      const tags = Array.isArray(searchBody.tags)
+        ? searchBody.tags.filter((tag) => Number.isFinite(Number(tag)))
+        : [];
+      state.catalogueSearches.push({ title, genres, tags });
+
+      let edges = catalogue.all;
+      if (title) {
+        const normalizedTitle = title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, " ")
+          .trim();
+
+        if (normalizedTitle.includes("breath of the wild")) {
+          edges = [
+            qaAssetGame(origin, "518790", "theHunter: Call of the Wild", [
+              "Survival",
+              "Hunting",
+            ]),
+            qaAssetGame(
+              origin,
+              "botw-reference",
+              "The Legend of Zelda - Breath of the Wild",
+              ["Action", "Adventure"]
+            ),
+          ];
+        } else {
+          edges = catalogue.all.filter((game) => {
+            const normalizedGameTitle = game.title
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, " ")
+              .trim();
+            return (
+              normalizedGameTitle.includes(normalizedTitle) ||
+              normalizedTitle.includes(normalizedGameTitle)
+            );
+          });
+        }
+      } else if (genres.length > 0) {
+        edges = catalogue.all.filter((game) =>
+          genres.every((genre) => game.genres.includes(genre))
+        );
+      }
+
+      const take = Number.isFinite(Number(searchBody.take))
+        ? Math.max(0, Number(searchBody.take))
+        : edges.length;
+      const skip = Number.isFinite(Number(searchBody.skip))
+        ? Math.max(0, Number(searchBody.skip))
+        : 0;
       sendQaJson(response, {
-        count: catalogue.all.length,
-        edges: catalogue.all,
+        count: edges.length,
+        edges: edges.slice(skip, skip + take),
       });
       return;
     }
@@ -1053,7 +1122,7 @@ async function seedSyntheticProfile(database, origin) {
       genres,
       releaseYear: 2011 + index,
       coverImageUrl: `${origin}/__qa/assets/${artId}-cover.svg`,
-      libraryImageUrl: `${origin}/__qa/assets/${artId}-cover.svg`,
+      libraryImageUrl: `${origin}/__qa/assets/${artId}-landscape.svg`,
       libraryHeroImageUrl: `${origin}/__qa/assets/${artId}-hero.svg`,
       logoImageUrl: null,
       iconUrl: `${origin}/__qa/assets/${artId}-icon.svg`,
@@ -1454,7 +1523,7 @@ async function waitForHomeRecommendationReadiness(page) {
       carousels.map((carousel) => ({
         title: carousel.querySelector("h2")?.textContent?.trim() ?? "",
         horizontalCards: carousel.querySelectorAll(
-          ".game-card--horizontal, [data-card-variant='horizontal']"
+          ".horizontal-store-game-card"
         ).length,
         cards: carousel.querySelectorAll(".focus-carousel__slide").length,
       }))
@@ -1471,6 +1540,404 @@ async function waitForHomeRecommendationReadiness(page) {
     rows.some((row) => row.title === "Recommended classics" && row.cards > 0),
     `The classics recommendation row did not populate: ${JSON.stringify(rows)}`
   );
+
+  return rows;
+}
+
+async function waitForCatalogueSearchesToSettle(state) {
+  const startedAt = Date.now();
+  let lastCount = -1;
+  let lastChangeAt = startedAt;
+
+  while (Date.now() - startedAt < 15_000) {
+    const nextCount = state.catalogueSearches.filter((search) =>
+      Boolean(search.title)
+    ).length;
+    if (nextCount !== lastCount) {
+      lastCount = nextCount;
+      lastChangeAt = Date.now();
+    }
+    if (nextCount > 0 && Date.now() - lastChangeAt >= 1_000) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(
+    `The initial desktop catalogue searches did not settle: ${JSON.stringify({
+      searches: state.catalogueSearches,
+      requests: state.requestPaths.slice(-30),
+    })}`
+  );
+}
+
+async function getHomeArtworkEvidence(
+  page,
+  { expectBotwFixture = false } = {}
+) {
+  await page.waitForFunction(
+    (allowPlaceholders) => {
+      const requiredTitles = [
+        "Recommended for you",
+        "Recommended classics",
+        "Popular on GameHub",
+        "Trending Right Now",
+      ];
+      const rows = [...globalThis.document.querySelectorAll(".focus-carousel")];
+
+      const hasRequiredRows = requiredTitles.every((requiredTitle) =>
+        rows.some(
+          (candidate) =>
+            candidate.querySelector("h2")?.textContent?.trim() === requiredTitle
+        )
+      );
+      if (!hasRequiredRows) return false;
+
+      return rows.every((row) => {
+        const cards = [
+          ...row.querySelectorAll(
+            ".horizontal-store-game-card, .vertical-store-game-card"
+          ),
+        ];
+        return (
+          cards.length > 0 &&
+          cards.every((card) => {
+            const image = card.querySelector("img");
+            const readyImage =
+              image instanceof HTMLImageElement &&
+              image.complete &&
+              image.naturalWidth > 0 &&
+              image.naturalHeight > 0 &&
+              image.hasAttribute("data-artwork-ready");
+            const placeholder = card.querySelector(
+              ".horizontal-store-game-card__cover-placeholder, .vertical-store-game-card__cover-placeholder"
+            );
+            return readyImage || (allowPlaceholders && Boolean(placeholder));
+          })
+        );
+      });
+    },
+    !USE_SYNTHETIC_PROFILE,
+    { timeout: 30_000 }
+  );
+
+  const rows = await page
+    .locator(".home-page .focus-carousel")
+    .evaluateAll((carousels) =>
+      carousels.map((carousel) => {
+        const title = carousel.querySelector("h2")?.textContent?.trim() ?? "";
+        const horizontalCard = carousel.querySelector(
+          ".horizontal-store-game-card"
+        );
+        const verticalCard = carousel.querySelector(
+          ".vertical-store-game-card"
+        );
+        const card = horizontalCard ?? verticalCard;
+        const cover = card?.querySelector(
+          ".horizontal-store-game-card__cover, .vertical-store-game-card__cover"
+        );
+        const image = carousel.querySelector("img[data-artwork-ready]");
+        const cardRect = card?.getBoundingClientRect();
+        const coverRect = cover?.getBoundingClientRect();
+        const expectedOrientation =
+          carousel.getAttribute("data-card-variant") === "vertical"
+            ? "portrait"
+            : "landscape";
+        const covers = [
+          ...carousel.querySelectorAll(
+            ".horizontal-store-game-card__cover, .vertical-store-game-card__cover"
+          ),
+        ];
+        const artworkAudit = covers.reduce(
+          (audit, artworkCover) => {
+            const artworkImage = artworkCover.querySelector("img");
+            const placeholder = artworkCover.querySelector(
+              ".horizontal-store-game-card__cover-placeholder, .vertical-store-game-card__cover-placeholder"
+            );
+            const slotOrientation = artworkCover.getAttribute(
+              "data-artwork-orientation"
+            );
+            audit.total += 1;
+            if (slotOrientation !== expectedOrientation) {
+              audit.mismatchedSlots += 1;
+            }
+            if (!(artworkImage instanceof HTMLImageElement)) {
+              if (placeholder) audit.placeholders += 1;
+              else audit.missing += 1;
+              return audit;
+            }
+            if (
+              !artworkImage.complete ||
+              artworkImage.naturalWidth <= 0 ||
+              artworkImage.naturalHeight <= 0 ||
+              !artworkImage.hasAttribute("data-artwork-ready")
+            ) {
+              audit.notReady += 1;
+              return audit;
+            }
+            audit.readyImages += 1;
+            const naturalRatio =
+              artworkImage.naturalWidth / artworkImage.naturalHeight;
+            const matches =
+              expectedOrientation === "portrait"
+                ? naturalRatio <= 0.9
+                : naturalRatio >= 1.15;
+            if (!matches) audit.mismatchedImages += 1;
+            return audit;
+          },
+          {
+            total: 0,
+            readyImages: 0,
+            placeholders: 0,
+            missing: 0,
+            notReady: 0,
+            mismatchedSlots: 0,
+            mismatchedImages: 0,
+          }
+        );
+        const titles = [...carousel.querySelectorAll("h3, span")]
+          .filter((item) =>
+            item.matches(
+              ".horizontal-store-game-card__title, .vertical-store-game-card__title"
+            )
+          )
+          .map((item) => item.textContent?.trim() ?? "")
+          .filter(Boolean);
+
+        return {
+          title,
+          variant: carousel.getAttribute("data-card-variant"),
+          cards: carousel.querySelectorAll(".focus-carousel__slide").length,
+          titles,
+          artworkAudit,
+          card: cardRect
+            ? {
+                width: cardRect.width,
+                height: cardRect.height,
+                ratio:
+                  cardRect.height > 0 ? cardRect.width / cardRect.height : 0,
+              }
+            : null,
+          cover: coverRect
+            ? {
+                width: coverRect.width,
+                height: coverRect.height,
+                ratio:
+                  coverRect.height > 0 ? coverRect.width / coverRect.height : 0,
+              }
+            : null,
+          image:
+            image instanceof HTMLImageElement
+              ? {
+                  src: image.src,
+                  naturalWidth: image.naturalWidth,
+                  naturalHeight: image.naturalHeight,
+                  naturalRatio:
+                    image.naturalHeight > 0
+                      ? image.naturalWidth / image.naturalHeight
+                      : 0,
+                  objectFit: globalThis.getComputedStyle(image).objectFit,
+                }
+              : null,
+        };
+      })
+    );
+
+  const horizontalTitles = [
+    "Recommended for you",
+    "Recommended classics",
+    "Trending Right Now",
+  ];
+  const horizontalRows = rows.filter(
+    (row) =>
+      horizontalTitles.includes(row.title) ||
+      row.title.startsWith("Because you played")
+  );
+  ensure(
+    horizontalRows.length >= 4,
+    `Home is missing one or more landscape recommendation rows: ${JSON.stringify(rows)}`
+  );
+  for (const row of horizontalRows) {
+    ensure(
+      row.variant === "horizontal" &&
+        row.cards > 0 &&
+        row.artworkAudit.total === row.cards &&
+        row.artworkAudit.readyImages > 0 &&
+        row.artworkAudit.readyImages + row.artworkAudit.placeholders ===
+          row.cards &&
+        (!USE_SYNTHETIC_PROFILE ||
+          (row.artworkAudit.readyImages === row.cards &&
+            row.artworkAudit.placeholders === 0)) &&
+        row.artworkAudit.missing === 0 &&
+        row.artworkAudit.notReady === 0 &&
+        row.artworkAudit.mismatchedSlots === 0 &&
+        row.artworkAudit.mismatchedImages === 0 &&
+        row.card?.ratio > 1.45 &&
+        row.cover?.ratio > 2.05 &&
+        row.cover.ratio < 2.25 &&
+        row.image?.naturalRatio > 1.45 &&
+        row.image.objectFit === "cover",
+      `${row.title} does not pair a landscape slot with landscape artwork: ${JSON.stringify(row)}`
+    );
+  }
+
+  const popular = rows.find((row) => row.title === "Popular on GameHub");
+  ensure(
+    popular?.variant === "vertical" &&
+      popular.cards > 0 &&
+      popular.artworkAudit.total === popular.cards &&
+      popular.artworkAudit.readyImages > 0 &&
+      popular.artworkAudit.readyImages + popular.artworkAudit.placeholders ===
+        popular.cards &&
+      (!USE_SYNTHETIC_PROFILE ||
+        (popular.artworkAudit.readyImages === popular.cards &&
+          popular.artworkAudit.placeholders === 0)) &&
+      popular.artworkAudit.missing === 0 &&
+      popular.artworkAudit.notReady === 0 &&
+      popular.artworkAudit.mismatchedSlots === 0 &&
+      popular.artworkAudit.mismatchedImages === 0 &&
+      popular.card?.ratio < 0.85 &&
+      popular.cover?.ratio > 0.63 &&
+      popular.cover.ratio < 0.72 &&
+      popular.image?.naturalRatio < 0.85 &&
+      popular.image.objectFit === "cover",
+    `Popular on GameHub does not pair a portrait slot with portrait artwork: ${JSON.stringify(popular)}`
+  );
+
+  const becauseRows = rows.filter((row) =>
+    row.title.startsWith("Because you played")
+  );
+  ensure(
+    becauseRows.every(
+      (row) => !row.title.toLowerCase().includes("breath of the wild")
+    ),
+    `An emulated BOTW entry still drives a PC recommendation shelf: ${JSON.stringify(becauseRows)}`
+  );
+  if (expectBotwFixture) {
+    const classics = rows.find((row) => row.title === "Recommended classics");
+    ensure(
+      classics?.titles.some((title) =>
+        title.toLowerCase().includes("the legend of zelda")
+      ),
+      `The console recommendation path did not surface Zelda-family classics: ${JSON.stringify(classics)}`
+    );
+    ensure(
+      rows.every((row) =>
+        row.titles.every(
+          (title) =>
+            !title.toLowerCase().includes("thehunter") &&
+            !title.toLowerCase().includes("hunting simulator")
+        )
+      ),
+      `A hunting title leaked into the populated BOTW acceptance set: ${JSON.stringify(rows)}`
+    );
+  }
+
+  return rows;
+}
+
+async function getHomeChallengeArtworkEvidence(page) {
+  await page.waitForFunction(
+    (allowPlaceholders) => {
+      const cards = [
+        ...globalThis.document.querySelectorAll(
+          ".home-page__challenge-grid .challenge-game-card"
+        ),
+      ];
+      return (
+        cards.length > 0 &&
+        cards.every((card) => {
+          const image = card.querySelector("img");
+          const readyImage =
+            image instanceof HTMLImageElement &&
+            image.complete &&
+            image.naturalWidth > 0 &&
+            image.naturalHeight > 0 &&
+            image.hasAttribute("data-artwork-ready");
+          const placeholder = card.querySelector(
+            ".challenge-game-card__cover-placeholder"
+          );
+          return readyImage || (allowPlaceholders && Boolean(placeholder));
+        })
+      );
+    },
+    !USE_SYNTHETIC_PROFILE,
+    { timeout: 30_000 }
+  );
+
+  const cards = await page
+    .locator(".home-page__challenge-grid .challenge-game-card")
+    .evaluateAll((items) =>
+      items.map((card) => {
+        const cover = card.querySelector(".challenge-game-card__cover");
+        const image = cover?.querySelector("img");
+        const coverRect = cover?.getBoundingClientRect();
+        const naturalRatio =
+          image instanceof HTMLImageElement && image.naturalHeight > 0
+            ? image.naturalWidth / image.naturalHeight
+            : 0;
+
+        return {
+          title:
+            card
+              .querySelector(".challenge-game-card__title")
+              ?.textContent?.trim() ?? "",
+          slotOrientation: cover?.getAttribute("data-artwork-orientation"),
+          coverRatio:
+            coverRect && coverRect.height > 0
+              ? coverRect.width / coverRect.height
+              : 0,
+          placeholder: Boolean(
+            cover?.querySelector(".challenge-game-card__cover-placeholder")
+          ),
+          image:
+            image instanceof HTMLImageElement
+              ? {
+                  src: image.src,
+                  ready: image.hasAttribute("data-artwork-ready"),
+                  naturalWidth: image.naturalWidth,
+                  naturalHeight: image.naturalHeight,
+                  naturalRatio,
+                  objectFit: globalThis.getComputedStyle(image).objectFit,
+                }
+              : null,
+        };
+      })
+    );
+
+  ensure(
+    cards.length > 0 &&
+      cards.some((card) => card.image?.ready) &&
+      cards.every(
+        (card) =>
+          card.slotOrientation === "landscape" &&
+          card.coverRatio > 1.85 &&
+          card.coverRatio < 2.05 &&
+          (card.image?.ready
+            ? card.image.naturalRatio >= 1.45 &&
+              card.image.objectFit === "cover"
+            : !USE_SYNTHETIC_PROFILE && card.placeholder)
+      ),
+    `The hard-platinums grid does not consistently use validated landscape artwork: ${JSON.stringify(cards)}`
+  );
+
+  return cards;
+}
+
+async function scrollHomeRowIntoView(page, rowTitle) {
+  await page.evaluate((title) => {
+    const home = globalThis.document.querySelector(".home-page");
+    const row = [
+      ...globalThis.document.querySelectorAll(".focus-carousel"),
+    ].find(
+      (candidate) =>
+        candidate.querySelector("h2")?.textContent?.trim() === title
+    );
+    if (!(home instanceof HTMLElement) || !(row instanceof HTMLElement)) {
+      throw new Error(`Could not find Home row: ${title}`);
+    }
+    row.scrollIntoView({ block: "start", inline: "nearest" });
+    home.scrollTop = Math.max(0, home.scrollTop - 88);
+  }, rowTitle);
+  await page.waitForTimeout(260);
 }
 
 async function waitForProfileReadiness(page) {
@@ -2364,6 +2831,11 @@ try {
     );
     return {
       userId: user?.id ?? null,
+      hasBotwFixture: library.some(
+        (candidate) =>
+          !candidate.isDeleted &&
+          candidate.title?.toLowerCase().includes("breath of the wild")
+      ),
       game: game
         ? { shop: String(game.shop), objectId: String(game.objectId) }
         : null,
@@ -2378,6 +2850,44 @@ try {
     "The emulator configuration map is not exhaustive."
   );
 
+  // A real populated profile may restore its last Desktop route instead of
+  // opening Home. Force a clean Library -> Home transition so this acceptance
+  // case always mounts the Desktop recommendation pipeline before comparing it
+  // with Big Picture. Reload on Library to reset renderer-session recommendation
+  // caches that startup Home may already have populated, then collect only the
+  // fresh Desktop Home requests.
+  await navigateHash(page, "/library", ".library__content");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.locator(".library__content").waitFor({
+    state: "visible",
+    timeout: 20_000,
+  });
+  qaApiProxy.state.catalogueSearches.length = 0;
+  await navigateHash(page, "/", ".home__content");
+  await waitForCatalogueSearchesToSettle(qaApiProxy.state);
+  const desktopCatalogueSearchTitles = qaApiProxy.state.catalogueSearches
+    .map((search) => search.title)
+    .filter(Boolean);
+  ensure(
+    desktopCatalogueSearchTitles.length > 0,
+    "Desktop Home did not exercise its populated PC recommendation path."
+  );
+  ensure(
+    desktopCatalogueSearchTitles.every(
+      (title) => !title.toLowerCase().includes("breath of the wild")
+    ),
+    `Desktop Home sent BOTW through the PC catalogue facet path: ${JSON.stringify(desktopCatalogueSearchTitles)}`
+  );
+  if (USE_SYNTHETIC_PROFILE) {
+    ensure(
+      ["Hades II", "Portal 2"].every((title) =>
+        desktopCatalogueSearchTitles.includes(title)
+      ),
+      `Desktop Home did not exercise both deterministic PC anchors: ${JSON.stringify(desktopCatalogueSearchTitles)}`
+    );
+  }
+  qaApiProxy.state.catalogueSearches.length = 0;
+
   // Mount Big Picture before dispatching `gamepadconnected`; its singleton
   // installs the browser listener lazily when the BP hooks first synchronize.
   await navigateHash(page, "/big-picture", ".home-page");
@@ -2387,7 +2897,7 @@ try {
     "bp-home-populated-controller-full-hd",
     {
       area: "big-picture-home",
-      fixture: "deterministic-populated-read-only",
+      fixture: POPULATED_PROFILE_FIXTURE,
       input: "dpad",
       viewport: VIEWPORTS[2].id,
     },
@@ -2395,6 +2905,10 @@ try {
       await applyViewport(page, VIEWPORTS[2]);
       await navigateHash(page, "/big-picture", ".home-page", { bounce: true });
       await waitForHomeRecommendationReadiness(page);
+      const homeRows = await getHomeArtworkEvidence(page, {
+        expectBotwFixture: fixture.hasBotwFixture,
+      });
+      const challengeCards = await getHomeChallengeArtworkEvidence(page);
       const horizontalRows = await page
         .locator('.home-page .focus-carousel[data-card-variant="horizontal"]')
         .count();
@@ -2422,8 +2936,59 @@ try {
         "bp-home-populated-controller",
         VIEWPORTS[2]
       );
+      await scrollHomeRowIntoView(page, "Recommended classics");
+      const classicsScreenshot = await captureViewport(
+        page,
+        "bp-home-recommended-classics",
+        VIEWPORTS[2]
+      );
+      await scrollHomeRowIntoView(page, "Popular on GameHub");
+      const popularScreenshot = await captureViewport(
+        page,
+        "bp-home-popular-portrait-artwork",
+        VIEWPORTS[2]
+      );
+      await page
+        .locator(".home-page__challenge-section")
+        .scrollIntoViewIfNeeded();
+      await page.waitForTimeout(260);
+      const challengeScreenshot = await captureViewport(
+        page,
+        "bp-home-hard-platinums-landscape-artwork",
+        VIEWPORTS[2]
+      );
+
+      const catalogueSearchTitles = qaApiProxy.state.catalogueSearches
+        .map((search) => search.title)
+        .filter(Boolean);
+      ensure(
+        catalogueSearchTitles.every(
+          (title) => !title.toLowerCase().includes("breath of the wild")
+        ),
+        `BOTW was sent through the PC catalogue facet path: ${JSON.stringify(catalogueSearchTitles)}`
+      );
       await assertResponsiveSurface(page, ".home-page");
-      return screenshot ? { screenshot } : {};
+      return {
+        ...(screenshot ? { screenshot } : {}),
+        ...(classicsScreenshot ? { classicsScreenshot } : {}),
+        ...(popularScreenshot ? { popularScreenshot } : {}),
+        ...(challengeScreenshot ? { challengeScreenshot } : {}),
+        botwPcPipelineExclusion: {
+          desktopCatalogueFacetRequest: false,
+          bigPictureCatalogueFacetRequest: false,
+          bigPictureBecauseYouPlayedShelf: false,
+        },
+        classicsEvidence: {
+          botwFixturePresent: fixture.hasBotwFixture,
+          zeldaFamilyVisible: fixture.hasBotwFixture ? true : null,
+          exactBotwRoutingTest:
+            "src/big-picture/src/pages/home/recommender-classics.test.ts",
+        },
+        desktopCatalogueSearchTitles,
+        bigPictureCatalogueSearchTitles: catalogueSearchTitles,
+        homeRows,
+        challengeCards,
+      };
     }
   );
 
@@ -2431,7 +2996,7 @@ try {
     "bp-library-nested-console-filters-controller-full-hd",
     {
       area: "big-picture-library",
-      fixture: "deterministic-populated-read-only",
+      fixture: POPULATED_PROFILE_FIXTURE,
       input: "dpad-a-lb-rb",
       viewport: VIEWPORTS[2].id,
     },
@@ -2616,7 +3181,7 @@ try {
     "bp-profile-sidebar-avatar-achievements-stat-controller-full-hd",
     {
       area: "big-picture-profile",
-      fixture: "deterministic-populated-read-only",
+      fixture: POPULATED_PROFILE_FIXTURE,
       input: "a",
       viewport: VIEWPORTS[2].id,
     },
@@ -3168,7 +3733,7 @@ try {
     "bp-friends-populated-controller-full-hd",
     {
       area: "big-picture-friends",
-      fixture: "deterministic-populated-read-only",
+      fixture: POPULATED_PROFILE_FIXTURE,
       input: "dpad-and-primary",
       viewport: VIEWPORTS[2].id,
     },

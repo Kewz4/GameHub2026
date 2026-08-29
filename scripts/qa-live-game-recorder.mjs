@@ -163,6 +163,49 @@ function resolveElevatedCleanupSignal() {
   return resolved;
 }
 
+function probeProcessAccessStatus(pid) {
+  if (!Number.isInteger(pid) || pid <= 4) {
+    return { canInject: false, errorCode: 0, unsupported: false };
+  }
+  const script = `$ErrorActionPreference = 'Stop'
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class GameHubRecorderQaProcessAccess {
+  [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
+  [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
+}
+'@
+$handle = [GameHubRecorderQaProcessAccess]::OpenProcess(0x043A, $false, ${pid})
+$errorCode = if ($handle -eq [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::GetLastWin32Error() } else { 0 }
+if ($handle -ne [IntPtr]::Zero) { [void][GameHubRecorderQaProcessAccess]::CloseHandle($handle) }
+[PSCustomObject]@{ CanInject = ($handle -ne [IntPtr]::Zero); ErrorCode = $errorCode } | ConvertTo-Json -Compress`;
+  const result = spawnSync(
+    "powershell.exe",
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      Buffer.from(script, "utf16le").toString("base64"),
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 10_000 }
+  );
+  if (result.status !== 0 || !result.stdout?.trim()) {
+    return { canInject: null, errorCode: null, unsupported: true };
+  }
+  try {
+    const parsed = JSON.parse(result.stdout);
+    return {
+      canInject: parsed.CanInject === true,
+      errorCode: Number(parsed.ErrorCode) || 0,
+      unsupported: false,
+    };
+  } catch {
+    return { canInject: null, errorCode: null, unsupported: true };
+  }
+}
+
 function createSanitizer(context) {
   const sensitivePaths = new Set();
   const addPath = (value) => {
@@ -645,7 +688,13 @@ async function mainControl(electronApp, mainModuleUrl, action, payload = {}) {
           targetPid,
           processAccess:
             targetPid > 0
-              ? NativeAddon.getProcessAccessStatus(targetPid)
+              ? typeof NativeAddon.getProcessAccessStatus === "function"
+                ? NativeAddon.getProcessAccessStatus(targetPid)
+                : {
+                    canInject: null,
+                    errorCode: null,
+                    unsupported: true,
+                  }
               : { canInject: false, errorCode: 0 },
           foregroundPid: NativeAddon.getForegroundProcessId(),
           completedSegmentCount: segments?.length ?? null,
@@ -1428,6 +1477,9 @@ async function runTarget(context, runtime, target) {
       newCompletedSegmentAfterResume: true,
     };
 
+    if (resumed.processAccess?.unsupported) {
+      resumed.processAccess = probeProcessAccessStatus(resumed.targetPid);
+    }
     const elevatedTarget =
       resumed.processAccess?.canInject === false &&
       resumed.processAccess?.errorCode === 5;

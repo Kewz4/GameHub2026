@@ -39,6 +39,7 @@ files:
   - "!scripts/build-overlay-qa-supervisor.cjs"
   - "!scripts/qa-live-overlay-acceptance.mjs"
   - "!scripts/qa-live-overlay-policy.mjs"
+  - "!scripts/qa-live-emulator-launch.mjs"
   - "!scripts/tests/qa-live-overlay-{acceptance,policy}.test.mjs"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
