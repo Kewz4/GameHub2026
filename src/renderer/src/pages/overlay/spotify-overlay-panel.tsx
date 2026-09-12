@@ -987,7 +987,7 @@ export function SpotifyOverlayPanel({
           <span>
             {isReconnect
               ? "Spotify authorization has expired or changed."
-              : "Spotify opens a secure PKCE authorization window."}
+              : "Sign in securely in your browser."}
           </span>
           {visibleError ? (
             <span className="spotify-overlay-panel__state-error">
@@ -1115,31 +1115,30 @@ export function SpotifyOverlayPanel({
                 </span>
               )}
               <div className="spotify-overlay-panel__now-copy">
-                <small>Now playing on Spotify</small>
-                <strong title={currentItem?.title}>
-                  {currentItem?.title ?? "Nothing playing"}
-                </strong>
+                {currentItem?.externalUrl ? (
+                  <button
+                    type="button"
+                    className="spotify-overlay-panel__title-link"
+                    title={currentItem.title}
+                    aria-label={`Open ${currentItem.title} in Spotify`}
+                    onClick={() => openItem(currentItem)}
+                  >
+                    <span>{currentItem.title}</span>
+                    <ExternalLink size={12} aria-hidden="true" />
+                  </button>
+                ) : (
+                  <strong title={currentItem?.title}>
+                    {currentItem?.title ?? "Nothing playing"}
+                  </strong>
+                )}
                 <span title={currentItem?.subtitle}>
                   {currentItem?.subtitle ??
                     "Start playback in Spotify or choose from your library."}
                 </span>
-                {currentItem?.externalUrl ? (
-                  <button
-                    type="button"
-                    className="spotify-overlay-panel__text-action"
-                    onClick={() => openItem(currentItem)}
-                  >
-                    Open in Spotify
-                    <ExternalLink size={12} aria-hidden="true" />
-                  </button>
-                ) : null}
               </div>
             </div>
 
             <div className="spotify-overlay-panel__device">
-              <label htmlFor={`${panelId}-device`}>
-                Spotify Connect device
-              </label>
               <div className="spotify-overlay-panel__device-controls">
                 <OverlaySelect
                   ariaLabel="Spotify Connect device"
@@ -1180,13 +1179,13 @@ export function SpotifyOverlayPanel({
                   Use device
                 </button>
               </div>
-              <small>
-                {playbackRestricted
-                  ? `${currentDeviceName} does not accept remote controls.`
-                  : devices.length
-                    ? `Active: ${currentDeviceName}`
+              {(playbackRestricted || !devices.length) && (
+                <small>
+                  {playbackRestricted
+                    ? `${currentDeviceName} does not accept remote controls.`
                     : "Open the Spotify app on a device, then refresh."}
-              </small>
+                </small>
+              )}
             </div>
 
             <label className="spotify-overlay-panel__progress">

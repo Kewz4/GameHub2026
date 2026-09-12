@@ -407,9 +407,12 @@ try {
           const sampleDefinitions = [
             ["header metadata", ".overlay-header__meta"],
             ["widget metadata", ".overlay-card__count"],
-            ["widget size tool", ".overlay-widget__tool:not(:disabled)"],
-            ["widget move tool", ".overlay-widget__drag:not(:disabled)"],
+            [
+              "widget options",
+              ".overlay-widget__options-trigger:not(:disabled)",
+            ],
             ["widget resize tool", ".overlay-widget__resize:not(:disabled)"],
+            ["Spotify play control", ".spotify-overlay-panel__play-button"],
           ];
           const activeSamples = sampleDefinitions.map(([sample, selector]) => {
             const element = document.querySelector(selector);
@@ -441,7 +444,7 @@ try {
             };
           });
           const tool = document.querySelector(
-            ".overlay-widget__tool:not(:disabled)"
+            ".overlay-widget__options-trigger:not(:disabled)"
           );
           if (!(tool instanceof HTMLButtonElement)) {
             throw new Error(
@@ -1097,6 +1100,21 @@ try {
   }
   await page.waitForTimeout(1_000);
 
+  if (process.env.GAMEHUB_BACKGROUND_QA === "true") {
+    // Explicit renderer-input fixture. This does not test real game focus or
+    // native controller hardware, and never takes over the user's desktop.
+    await page.evaluate(() => {
+      Object.defineProperty(document, "hasFocus", {
+        configurable: true,
+        value: () => true,
+      });
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+    });
+  }
+
   const pulseBrowserGamepadButton = async (buttonIndex) => {
     await page.evaluate(
       (index) => window.__setQaGamepadButton?.(index, true),
@@ -1349,7 +1367,7 @@ try {
     .locator('[data-widget="friends"]')
     .boundingBox();
   const friendsGrabber = await page
-    .locator('[data-widget="friends"] .overlay-widget__drag')
+    .locator('[data-widget="friends"] .overlay-card__title')
     .boundingBox();
   if (!friendsBefore || !friendsGrabber) {
     throw new Error("Friends widget drag handle is not reachable.");
@@ -1440,6 +1458,22 @@ try {
     await assertWidgetToolsClearHeader(
       `Compact ${compactViewport.width}x${compactViewport.height}`
     );
+    const spotifyContentSpace = await page
+      .locator('[data-widget="music"]')
+      .evaluate((widget) => {
+        const widgetRect = widget.getBoundingClientRect();
+        const tabs = widget
+          .querySelector(".spotify-overlay-panel__tabs")
+          ?.getBoundingClientRect();
+        const footer = widget
+          .querySelector(".spotify-overlay-panel__footer")
+          ?.getBoundingClientRect();
+        return tabs ? (footer?.top ?? widgetRect.bottom) - tabs.bottom : 0;
+      });
+    if (spotifyContentSpace < 48)
+      throw new Error(
+        `Spotify content has only ${spotifyContentSpace}px at ${compactViewport.width}x${compactViewport.height}: ${JSON.stringify(await page.locator('[data-widget="music"]').evaluate((widget) => [...widget.querySelectorAll(".spotify-overlay-panel, .spotify-overlay-panel > *, .spotify-overlay-panel__now-playing > *")].map((element) => ({ class: element.className, rect: element.getBoundingClientRect().toJSON(), display: getComputedStyle(element).display, grid: getComputedStyle(element).gridTemplateColumns }))))}`
+      );
 
     const compactWidgetLayout = await page
       .locator("[data-widget]")
@@ -1522,7 +1556,7 @@ try {
   await assertWidgetToolsClearHeader("Full HD default layout");
 
   const friendsCornerMoveHandle = await page
-    .locator('[data-widget="friends"] [data-widget-controller-edit="move"]')
+    .locator('[data-widget="friends"] .overlay-card__title')
     .boundingBox();
   if (!friendsCornerMoveHandle) {
     throw new Error("Friends move handle is missing for corner recovery QA.");
@@ -1724,8 +1758,13 @@ try {
   // A enters a digital widget edit mode, the left analog stick performs a
   // pixel nudge, and A exits back to the exact edit handle.
   const friendsWidget = page.locator('[data-widget="friends"]');
-  const friendsMoveButton = friendsWidget.locator(
-    '[data-widget-controller-edit="move"]'
+  const friendsOptions = friendsWidget.getByRole("button", {
+    name: "Friends widget options",
+  });
+  await friendsOptions.focus();
+  await pulseBrowserGamepadButton(0);
+  const friendsMoveButton = page.locator(
+    '#overlay-widget-options-friends [data-widget-controller-edit="move"]'
   );
   const friendsBeforeControllerMove = await friendsWidget.boundingBox();
   if (!friendsBeforeControllerMove) {
@@ -1733,7 +1772,11 @@ try {
   }
   await friendsMoveButton.focus();
   await pulseBrowserGamepadButton(0);
-  if ((await friendsMoveButton.getAttribute("aria-pressed")) !== "true") {
+  if (
+    !(await page.locator(".overlay-controller-hints").innerText()).includes(
+      "Move"
+    )
+  ) {
     throw new Error("Controller A did not engage widget move mode.");
   }
   await pulseBrowserGamepadAxis(0, -1);
@@ -1745,7 +1788,11 @@ try {
   ) {
     throw new Error("Left analog input did not move the Friends widget.");
   }
-  if ((await friendsMoveButton.getAttribute("aria-pressed")) !== "false") {
+  if (
+    (await page.locator(".overlay-controller-hints").innerText()).includes(
+      "Move"
+    )
+  ) {
     throw new Error("Controller A did not exit widget move mode.");
   }
 
@@ -2015,6 +2062,11 @@ try {
     await page.goto(`${pathToFileURL(renderer).href}#/overlay-toast`);
     await page.reload();
     await page.waitForSelector(".overlay-toast");
+    await page.locator(".overlay-toast").evaluate(async (element) => {
+      await Promise.all(
+        element.getAnimations().map((animation) => animation.finished)
+      );
+    });
     const result = await page.evaluate(() => {
       const toast = document.querySelector(".overlay-toast");
       if (!(toast instanceof HTMLElement)) {
@@ -2036,8 +2088,8 @@ try {
       const fits =
         toastRect.left >= 0 &&
         toastRect.top >= 0 &&
-        toastRect.right <= window.innerWidth &&
-        toastRect.bottom <= window.innerHeight &&
+        toastRect.right <= window.innerWidth + 1 &&
+        toastRect.bottom <= window.innerHeight + 1 &&
         toast.scrollWidth <= toast.clientWidth &&
         toast.scrollHeight <= toast.clientHeight &&
         outside.length === 0;

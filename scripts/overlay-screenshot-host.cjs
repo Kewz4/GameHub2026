@@ -9,6 +9,13 @@ app.whenReady().then(() => {
     show: true,
     frame: false,
     backgroundColor: "#070707",
+    ...(process.env.GAMEHUB_BACKGROUND_QA === "true"
+      ? {
+          opacity: 0,
+          focusable: false,
+          skipTaskbar: true,
+        }
+      : {}),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -17,6 +24,8 @@ app.whenReady().then(() => {
       partition: `overlay-screenshot-${Date.now()}`,
     },
   });
+  if (process.env.GAMEHUB_BACKGROUND_QA === "true")
+    window.setIgnoreMouseEvents(true);
   window.removeMenu();
   void window.loadURL("about:blank");
 });

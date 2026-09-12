@@ -308,6 +308,11 @@ try {
         });
         control.OverlayManager.overlayWindow = overlay;
         await globalThis.__windowManager.loadWindowURL(overlay, "overlay");
+        // Chromium may stop producing screenshot frames after resizing a
+        // never-shown window. The background QA policy already makes it fully
+        // transparent, non-focusable and click-through before this call.
+        if (process.env.GAMEHUB_BACKGROUND_QA === "true")
+          overlay.showInactive();
       },
       { game: hades, preload: path.join(root, "out/preload/index.mjs") }
     );
@@ -327,6 +332,10 @@ try {
       Object.defineProperty(document, "visibilityState", {
         configurable: true,
         get: () => "visible",
+      });
+      Object.defineProperty(navigator, "getGamepads", {
+        configurable: true,
+        value: () => [],
       });
     });
     const send = async (action) => {
@@ -389,6 +398,18 @@ try {
     await send("accept");
     await overlay.locator("#overlay-widget-menu").waitFor({ state: "visible" });
     await send("back");
+    await overlay.evaluate(() => {
+      window.__overlayAuditFocus = [];
+      document.addEventListener("focusin", (event) => {
+        window.__overlayAuditFocus.push({
+          target:
+            event.target?.getAttribute?.("aria-label") ??
+            event.target?.className,
+          open: document.querySelector(".overlay-widget-options")?.id,
+        });
+        window.__overlayAuditFocus = window.__overlayAuditFocus.slice(-12);
+      });
+    });
     await overlay.locator("#overlay-widget-menu").waitFor({ state: "hidden" });
     await overlay.getByRole("button", { name: "Widgets", exact: true }).focus();
     await send("accept");
@@ -407,6 +428,124 @@ try {
       menusDismissed: 2,
       input: "real overlay IPC with simulated controller actions",
     });
+    await send("back");
+    for (const viewport of [
+      { width: 1920, height: 1080 },
+      { width: 1280, height: 720 },
+      { width: 900, height: 640 },
+    ]) {
+      await app.evaluate(
+        (_electron, viewport) =>
+          globalThis.__gameHubRecorderQaControl.OverlayManager.overlayWindow.setContentSize(
+            viewport.width,
+            viewport.height
+          ),
+        viewport
+      );
+      await overlay.waitForFunction(
+        ({ width, height }) =>
+          window.innerWidth === width && window.innerHeight === height,
+        viewport
+      );
+      await overlay.waitForTimeout(200);
+      const titles = await overlay
+        .locator(".overlay-card__title h2")
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            title: element.textContent,
+            clipped: element.scrollWidth > element.clientWidth + 1,
+          }))
+        );
+      if (titles.some((title) => title.clipped))
+        throw new Error(
+          `Clipped overlay titles: ${JSON.stringify({ viewport, titles })}`
+        );
+      for (const id of widgetIds) {
+        const trigger = overlay.locator(
+          `[data-widget="${id}"] .overlay-widget__options-trigger`
+        );
+        await trigger.focus();
+        await send("accept");
+        const menu = overlay.locator(`#overlay-widget-options-${id}`);
+        await menu.waitFor({ state: "visible" });
+        await send("down");
+        const menuState = await overlay.evaluate((id) => {
+          const menu = document.getElementById(`overlay-widget-options-${id}`);
+          return {
+            retained: !!menu?.contains(document.activeElement),
+            focus: window.__overlayAuditFocus,
+          };
+        }, id);
+        if (!menuState.retained)
+          throw new Error(
+            `${id} options lost controller scope: ${JSON.stringify(menuState)}`
+          );
+        await send("back");
+        await menu.waitFor({ state: "hidden" });
+        if (
+          !(await trigger.evaluate(
+            (element) => element === document.activeElement
+          ))
+        )
+          throw new Error(`${id} options did not restore focus.`);
+      }
+      const chrome = await overlay
+        .locator(".overlay-card")
+        .evaluateAll((elements) =>
+          elements.map((element) => ({
+            id: element.dataset.widget,
+            border: getComputedStyle(element).borderWidth,
+            blur: getComputedStyle(element).backdropFilter,
+            headerControls: element.querySelectorAll(
+              ".overlay-card__tools button"
+            ).length,
+          }))
+        );
+      if (
+        chrome.some(
+          (item) =>
+            item.border !== "0px" ||
+            item.blur !== "none" ||
+            item.headerControls !== 1
+        )
+      )
+        throw new Error(`Overlay chrome drift: ${JSON.stringify(chrome)}`);
+      record(`overlay-taste-${viewport.width}x${viewport.height}`, {
+        titles,
+        optionsMenus: widgetIds.length,
+        chrome,
+      });
+      await capture(
+        overlay,
+        `overlay-taste-${viewport.width}x${viewport.height}`
+      );
+    }
+    if (
+      await overlay
+        .getByRole("button", { name: "Search music", exact: true })
+        .count()
+    ) {
+      await overlay
+        .getByRole("button", { name: "Search music", exact: true })
+        .focus();
+      await send("accept");
+      await overlay
+        .getByRole("textbox", {
+          name: "Search tracks and artists",
+          exact: true,
+        })
+        .waitFor();
+      if (
+        !(await overlay
+          .getByRole("textbox", {
+            name: "Search tracks and artists",
+            exact: true,
+          })
+          .evaluate((element) => element === document.activeElement))
+      )
+        throw new Error("Empty music action did not focus search.");
+      record("overlay-empty-music-search", { passed: true });
+    }
     await capture(overlay, "overlay-populated-controller");
   }
 
@@ -613,6 +752,28 @@ try {
     await capture(page, "cloud-saves-live");
   }
 } catch (error) {
+  if (mode === "overlay-ui" && app) {
+    const overlay = app
+      .windows()
+      .find((window) => /#\/?overlay$/.test(window.url()));
+    if (overlay)
+      record(
+        "overlay-failure-state",
+        await overlay
+          .evaluate(() => ({
+            focus: window.__overlayAuditFocus,
+            active: document.activeElement?.outerHTML?.slice(0, 800),
+            menus: [
+              ...document.querySelectorAll('[data-controller-scope="true"]'),
+            ].map((element) => ({
+              id: element.id,
+              text: element.textContent?.slice(0, 100),
+            })),
+            mode: document.querySelector(".overlay")?.className,
+          }))
+          .catch(() => null)
+      );
+  }
   if (mode === "music" && desktopPage) {
     record(
       "music-failure-state",

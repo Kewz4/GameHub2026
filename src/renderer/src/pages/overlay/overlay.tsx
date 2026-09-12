@@ -10,17 +10,12 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import {
-  AppsIcon,
-  GraphIcon,
   LockIcon,
   MuteIcon,
-  NoteIcon,
-  PeopleIcon,
   PlusIcon,
   SearchIcon,
   SyncIcon,
   TrashIcon,
-  TrophyIcon,
   UnlockIcon,
   UnmuteIcon,
   XIcon,
@@ -28,6 +23,7 @@ import {
 import {
   AlertTriangle,
   CalendarDays,
+  ChartLine,
   CheckCircle2,
   ChevronDown,
   CircleAlert,
@@ -51,6 +47,9 @@ import {
   SkipBack,
   SkipForward,
   Square,
+  StickyNote,
+  Trophy,
+  Users,
   Video,
 } from "lucide-react";
 import type {
@@ -539,6 +538,7 @@ export default function Overlay() {
     widgetId: OverlayWidgetId;
     mode: OverlayWidgetControllerEditMode;
   } | null>(null);
+  const controllerWidgetEditTriggerRef = useRef<HTMLElement | null>(null);
   const [closeGameConfirmOpen, setCloseGameConfirmOpen] = useState(false);
   const rendererReadySentRef = useRef(false);
   const contextRequestIdRef = useRef(0);
@@ -562,6 +562,10 @@ export default function Overlay() {
   const toggleControllerWidgetEdit = useCallback(
     (widgetId: OverlayWidgetId, mode: OverlayWidgetControllerEditMode) => {
       if (layoutLocked) return;
+      controllerWidgetEditTriggerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       setControllerWidgetEdit((current) =>
         current?.widgetId === widgetId && current.mode === mode
           ? null
@@ -1078,9 +1082,12 @@ export default function Overlay() {
           const { widgetId, mode: editMode } = controllerWidgetEdit;
           setControllerWidgetEdit(null);
           window.requestAnimationFrame(() => {
-            const editButton = document.querySelector<HTMLElement>(
-              `[data-widget="${widgetId}"] [data-widget-controller-edit="${editMode}"]`
-            );
+            const editButton = controllerWidgetEditTriggerRef.current
+              ?.isConnected
+              ? controllerWidgetEditTriggerRef.current
+              : document.querySelector<HTMLElement>(
+                  `[data-widget="${widgetId}"] .overlay-widget__options-trigger, [data-widget="${widgetId}"] [data-widget-controller-edit="${editMode}"]`
+                );
             if (editButton) focusControllerElement(editButton, focusWidget);
           });
           return;
@@ -1146,9 +1153,9 @@ export default function Overlay() {
               )
             : null;
           trigger?.click();
-          window.requestAnimationFrame(() =>
-            trigger?.focus({ preventScroll: true })
-          );
+          // The trigger already exists. A delayed frame can arrive after the
+          // user opens another widget and steal focus from its menu.
+          trigger?.focus({ preventScroll: true });
           return;
         }
         if (playlistMenuTrackId) {
@@ -2395,7 +2402,7 @@ export default function Overlay() {
                 widgetId="performance"
                 className="overlay-card--perf"
                 title="Performance"
-                icon={<GraphIcon size={16} />}
+                icon={<ChartLine size={18} />}
                 widgetStyle={getWidgetStyle("performance")}
                 {...widgetFrameProps}
                 headerActions={
@@ -2457,7 +2464,7 @@ export default function Overlay() {
                 widgetId="achievements"
                 className="overlay-card--ach"
                 title="Achievements"
-                icon={<TrophyIcon size={16} />}
+                icon={<Trophy size={18} />}
                 meta={`${unlocked}/${achievements.length}`}
                 widgetStyle={getWidgetStyle("achievements")}
                 {...widgetFrameProps}
@@ -2648,7 +2655,7 @@ export default function Overlay() {
                       >
                         <span
                           style={{
-                            width: `${replayPresentation?.progressPercent ?? 0}%`,
+                            transform: `scaleX(${(replayPresentation?.progressPercent ?? 0) / 100})`,
                           }}
                         />
                       </div>
@@ -3125,9 +3132,29 @@ export default function Overlay() {
                             )}
                           </>
                         ) : (
-                          <p className="overlay-ach__empty">
-                            Nothing playing. Search for a track to get started.
-                          </p>
+                          <div className="overlay-music__empty">
+                            <Music2 size={30} aria-hidden="true" />
+                            <h3>Nothing playing</h3>
+                            <p>
+                              Search tracks and artists, or open a playlist.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMusicTab("search");
+                                window.requestAnimationFrame(() =>
+                                  document
+                                    .querySelector<HTMLInputElement>(
+                                      ".overlay-music__search-input"
+                                    )
+                                    ?.focus({ preventScroll: true })
+                                );
+                              }}
+                            >
+                              <SearchIcon size={16} aria-hidden="true" />
+                              Search music
+                            </button>
+                          </div>
                         )}
                       </div>
                     )}
@@ -3466,7 +3493,7 @@ export default function Overlay() {
                 widgetId="friends"
                 className="overlay-card--friends"
                 title="Friends"
-                icon={<PeopleIcon size={16} />}
+                icon={<Users size={18} />}
                 meta={
                   context?.user
                     ? `${friends.filter((friend) => friend.isOnline).length} online`
@@ -3624,7 +3651,7 @@ export default function Overlay() {
                 widgetId="quick-launch"
                 className="overlay-card--pins"
                 title="Quick launch"
-                icon={<AppsIcon size={16} />}
+                icon={<LayoutGrid size={18} />}
                 meta={pinnedApps.length}
                 widgetStyle={getWidgetStyle("quick-launch")}
                 {...widgetFrameProps}
@@ -3657,7 +3684,7 @@ export default function Overlay() {
                               draggable={false}
                             />
                           ) : (
-                            <AppsIcon size={17} />
+                            <LayoutGrid size={18} />
                           )}
                         </span>
                         <span className="overlay-pin-tile__label">
@@ -3697,7 +3724,7 @@ export default function Overlay() {
                 widgetId="notes"
                 className="overlay-card--notes"
                 title="Notes"
-                icon={<NoteIcon size={16} />}
+                icon={<StickyNote size={18} />}
                 meta={noteSaved ? "Saved" : "Saving…"}
                 widgetStyle={getWidgetStyle("notes")}
                 {...widgetFrameProps}

@@ -65,6 +65,34 @@ test("controller text entry has a scoped on-screen keyboard", () => {
   assert.doesNotMatch(controllerKeyboardSource, /aria-live=/);
 });
 
+test("widget editing lives in one labelled, dismissible options scope", () => {
+  assert.match(widgetFrameSource, /overlay-widget__options-trigger/);
+  assert.match(widgetFrameSource, /aria-controls=\{menuId\}/);
+  assert.match(widgetFrameSource, /data-controller-dismiss-on-back="true"/);
+  assert.match(widgetFrameSource, /createPortal/);
+  assert.match(widgetFrameSource, /closeOptions\(false\)/);
+  assert.match(
+    widgetFrameSource,
+    /window\.removeEventListener\("blur", onBlur\)/
+  );
+  assert.doesNotMatch(widgetFrameSource, /className="overlay-widget__tool"/);
+});
+
+test("overlay replay progress animates without relayout", () => {
+  assert.match(overlaySource, /transform: `scaleX\(/);
+  assert.doesNotMatch(overlayStyles, /transition: width/);
+  assert.match(overlayStyles, /transform-origin: left center/);
+});
+
+test("widget menu dismissal cannot queue a stale focus return", () => {
+  const dismissal = overlaySource.slice(
+    overlaySource.indexOf("const dismissibleScope"),
+    overlaySource.indexOf("if (playlistMenuTrackId)")
+  );
+  assert.match(dismissal, /trigger\?\.focus\(/);
+  assert.doesNotMatch(dismissal, /requestAnimationFrame/);
+});
+
 test("controller actions refuse a hidden, blurred, or detached overlay", () => {
   assert.match(overlaySource, /document\.visibilityState !== "visible"/);
   assert.match(overlaySource, /!document\.hasFocus\(\)/);

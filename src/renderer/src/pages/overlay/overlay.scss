@@ -37,6 +37,12 @@ body.overlay-widget-dragging * {
   --brd: var(--color-border);
   --accent: var(--overlay-highlight);
   --good: var(--color-success);
+  --overlay-widget-surface: color-mix(
+    in srgb,
+    var(--color-background) 97%,
+    transparent
+  );
+  --overlay-elevation: 0 12px 32px rgba(0, 0, 0, 0.24);
 
   position: fixed;
   inset: 0;
@@ -59,14 +65,11 @@ body.overlay-widget-dragging * {
 
   &--full {
     display: flex;
-    background:
-      radial-gradient(
-        circle at 50% 115%,
-        color-mix(in srgb, var(--overlay-highlight) 7%, transparent),
-        transparent 44%
-      ),
-      color-mix(in srgb, var(--color-dark-background) 58%, transparent);
-    backdrop-filter: blur(2px) saturate(0.9);
+    background: color-mix(
+      in srgb,
+      var(--color-dark-background) 52%,
+      transparent
+    );
   }
 
   &--pinned,
@@ -211,29 +214,19 @@ body.overlay-widget-dragging * {
 
 .overlay-card {
   position: absolute;
-  background: color-mix(in srgb, var(--color-background) 91%, transparent);
-  border: 1px solid var(--color-border);
+  background: var(--overlay-widget-surface);
+  border: none;
   border-radius: var(--radius-lg);
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   overflow: hidden;
-  box-shadow:
-    0 18px 48px rgba(0, 0, 0, 0.38),
-    inset 0 1px rgba(var(--fg-rgb), 0.035);
-  backdrop-filter: blur(22px) saturate(1.2);
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease;
+  box-shadow: var(--overlay-elevation);
 
-  &:focus-within,
-  &:hover {
-    border-color: color-mix(
-      in srgb,
-      var(--color-primary) 35%,
-      var(--color-border)
-    );
+  &:focus-within {
+    outline: 1px solid var(--color-border);
+    outline-offset: 0;
   }
 
   &--perf {
@@ -280,7 +273,7 @@ body.overlay-widget-dragging * {
       margin: 0;
       font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.04em;
+      letter-spacing: 0;
       color: var(--color-text-bright);
     }
   }
@@ -288,7 +281,9 @@ body.overlay-widget-dragging * {
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
+    flex: 1;
+    flex-wrap: wrap;
 
     h2 {
       white-space: nowrap;
@@ -297,19 +292,19 @@ body.overlay-widget-dragging * {
     }
   }
   &__icon {
-    width: 26px;
-    height: 26px;
+    width: 20px;
+    height: 24px;
     display: grid;
     place-items: center;
     flex: none;
-    border-radius: var(--radius-sm);
-    color: var(--color-primary);
-    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-text-muted);
   }
   &__count {
     font:
-      600 12px/1 ui-monospace,
-      monospace;
+      500 11px/1.3 "Noto Sans",
+      system-ui,
+      sans-serif;
+    font-variant-numeric: tabular-nums;
     color: var(--color-text-faint);
     white-space: nowrap;
   }
@@ -370,8 +365,6 @@ body.overlay-widget-dragging * {
       Menlo,
       monospace;
     color: var(--overlay-highlight);
-    text-shadow: 0 0 24px
-      color-mix(in srgb, var(--overlay-highlight) 24%, transparent);
     span {
       display: block;
       font: 600 11px/1 system-ui;
@@ -1260,9 +1253,9 @@ body.overlay-widget-dragging * {
   flex: 1;
   min-height: 0;
   resize: none;
-  border-radius: var(--radius-md);
-  border-color: var(--color-border);
-  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  border-color: transparent;
+  background: transparent;
   color: var(--color-text);
 
   &::placeholder {
@@ -1281,19 +1274,17 @@ body.overlay-widget-dragging * {
 
 .overlay-perf__fps {
   color: var(--color-primary);
-  text-shadow: 0 0 24px
-    color-mix(in srgb, var(--color-primary) 34%, transparent);
+  text-shadow: none;
 }
 
 .overlay-perf__status {
   display: flex;
   align-items: flex-start;
   gap: 7px;
-  padding: 8px 9px;
-  border-radius: var(--radius-sm);
+  padding: 5px 0;
   color: var(--color-text-muted);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: transparent;
+  border: none;
   font-size: 11px;
   line-height: 1.35;
 
@@ -1305,11 +1296,6 @@ body.overlay-widget-dragging * {
   &--permission-required,
   &--error {
     color: var(--color-warning);
-    background: color-mix(
-      in srgb,
-      var(--color-warning) 8%,
-      var(--color-surface)
-    );
   }
 }
 
@@ -1385,7 +1371,8 @@ body.overlay-widget-dragging * {
       height: 100%;
       border-radius: inherit;
       background: var(--color-text-bright);
-      transition: width 180ms ease;
+      transform-origin: left center;
+      transition: transform 180ms ease;
     }
   }
 
@@ -1539,13 +1526,14 @@ body.overlay-widget-dragging * {
 }
 
 .overlay-music__tabs {
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   gap: 3px;
-  padding: 3px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  padding: 0 0 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
 }
 
 .overlay-music__tab {
@@ -1564,13 +1552,64 @@ body.overlay-widget-dragging * {
 
   &.is-active {
     color: var(--color-text-bright);
-    background: var(--color-surface-hover);
+    background: transparent;
     box-shadow: inset 0 -2px var(--color-primary);
   }
 }
 
 .overlay-music__np-top {
   padding: 4px;
+}
+
+.overlay-music__empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px 8px;
+  color: var(--color-text-muted);
+
+  h3,
+  p {
+    margin: 0;
+  }
+  h3 {
+    color: var(--color-text-bright);
+    font-size: 17px;
+  }
+  p {
+    max-width: 42ch;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  button {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-dark-background);
+    background: var(--color-text-bright);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(
+        in srgb,
+        var(--color-text-bright) 86%,
+        var(--color-background)
+      );
+    }
+  }
 }
 
 .overlay-music__np-art {
@@ -2094,23 +2133,19 @@ body.overlay-widget-dragging * {
 
 .overlay-pin-tile {
   color: var(--color-text);
-  background: var(--color-surface);
-  border-color: var(--color-border);
+  background: transparent;
+  border-color: transparent;
 
   &:hover {
     color: var(--color-text-bright);
     background: var(--color-surface-hover);
-    border-color: color-mix(
-      in srgb,
-      var(--color-primary) 42%,
-      var(--color-border)
-    );
+    border-color: transparent;
   }
 }
 
 .overlay-pin-tile__glyph {
   color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 11%, transparent);
+  background: transparent;
 }
 
 .overlay-pin-tile--add .overlay-pin-tile__glyph {
@@ -2125,9 +2160,7 @@ body.overlay-controller-navigation
   :where(button, input, textarea, select, [tabindex]):focus {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
-  box-shadow:
-    0 0 0 5px color-mix(in srgb, var(--color-primary) 22%, transparent),
-    0 12px 28px rgba(0, 0, 0, 0.42);
+  box-shadow: none;
 }
 
 .overlay-mixer__mute:hover {
@@ -2420,7 +2453,9 @@ body.overlay-widget-resizing * {
   min-width: 0;
   max-width: none;
   max-height: none;
-  padding: 11px;
+  padding: 14px;
+  container-type: size;
+  container-name: overlay-widget;
 
   &--perf,
   &--ach,
@@ -2435,6 +2470,78 @@ body.overlay-widget-resizing * {
 
   &__head {
     flex: none;
+    min-height: 32px;
+    align-items: flex-start;
+  }
+}
+
+// Editing is secondary to the widget's content. One labelled options control
+// keeps narrow headers readable; the menu remains in the overlay focus scope.
+.overlay-card[data-layout-locked="false"] .overlay-card__title {
+  cursor: grab;
+  touch-action: none;
+}
+
+.overlay-widget__options-trigger {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded="true"] {
+    background: var(--color-surface-hover);
+    color: var(--color-text-bright);
+  }
+}
+
+.overlay-widget-options {
+  position: fixed;
+  z-index: 12000;
+  width: min(220px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: var(--color-background);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+
+  p {
+    margin: 4px 6px 8px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+  }
+
+  button {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      background: var(--color-surface-hover);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
   }
 }
 
@@ -2449,12 +2556,11 @@ body.overlay-widget-resizing * {
   right: 0;
   width: 270px;
   padding: 8px;
-  border: 1px solid var(--color-border);
+  border: none;
   border-radius: var(--radius-lg);
   color: var(--color-text);
   background: color-mix(in srgb, var(--color-dark-background) 97%, transparent);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
-  backdrop-filter: blur(24px);
 
   &__heading {
     display: flex;
@@ -2583,18 +2689,19 @@ body.overlay-widget-resizing * {
 
 .overlay-ach__filters {
   display: flex;
-  gap: 4px;
-  padding-bottom: 2px;
+  gap: 2px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   flex: none;
 
   button {
-    min-height: 26px;
+    min-height: 30px;
     padding: 0 8px;
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
+    border: none;
+    border-radius: var(--radius-sm);
     color: var(--color-text-faint);
-    background: var(--color-surface);
+    background: transparent;
     font: inherit;
     font-size: 10px;
     font-weight: 650;
@@ -2608,7 +2715,7 @@ body.overlay-widget-resizing * {
     }
 
     &.is-active {
-      border-color: var(--color-text-bright);
+      box-shadow: inset 0 -2px var(--color-text-bright);
     }
   }
 }
@@ -2638,11 +2745,10 @@ body.overlay-widget-resizing * {
     display: inline-flex;
     align-items: center;
     gap: 3px;
-    padding: 2px 5px;
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
+    padding: 0;
+    border: none;
     color: var(--color-text-faint);
-    background: var(--color-surface);
+    background: transparent;
     font-size: 9px;
     font-style: normal;
     font-weight: 650;
@@ -2889,6 +2995,10 @@ body.overlay-widget-resizing * {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .overlay-capture__buffer span {
+    transition: none;
+  }
+
   .overlay-toast {
     animation-duration: 1ms;
   }
@@ -2988,17 +3098,7 @@ body.overlay-widget-resizing * {
   }
 
   .overlay-card--perf .overlay-card__head {
-    align-content: flex-start;
-    flex-wrap: wrap;
-
-    .overlay-card__title {
-      flex-basis: 100%;
-    }
-
-    .overlay-card__tools {
-      width: 100%;
-      justify-content: flex-end;
-    }
+    flex-wrap: nowrap;
   }
 
   .overlay-ach__filters {
@@ -3191,14 +3291,12 @@ body.overlay-widget-resizing * {
 // While navigating with a controller, make the widget that owns focus obvious:
 // the focus ring alone is easy to lose across a screen-wide scatter of panels.
 body.overlay-controller-navigation .overlay-card:focus-within {
-  border-color: color-mix(
+  outline-color: color-mix(
     in srgb,
     var(--color-primary) 55%,
     var(--color-border)
   );
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent),
-    0 18px 48px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--overlay-elevation);
 }
 
 // ── Floating GameHub chrome ─────────────────────────────────────────────────
@@ -3224,14 +3322,14 @@ body.overlay-controller-navigation .overlay-card:focus-within {
     &__game,
     &__actions {
       pointer-events: auto;
-      border: 1px solid var(--color-border);
+      border: none;
       background: color-mix(
         in srgb,
         var(--color-dark-background) 94%,
         transparent
       );
-      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
-      backdrop-filter: blur(22px) saturate(1.05);
+      box-shadow: var(--overlay-elevation);
+      backdrop-filter: none;
     }
 
     &__game {
@@ -3538,7 +3636,7 @@ body.overlay-controller-navigation .overlay-card:focus-within {
   }
 
   &__tabs {
-    display: none;
+    display: contents;
   }
 }
 
@@ -3632,5 +3730,15 @@ body.overlay-controller-navigation .overlay-controller-hints {
 
   .overlay-controller-keyboard__caret {
     animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .overlay {
+    --overlay-widget-surface: var(--color-background);
+  }
+
+  .overlay--full {
+    background: var(--color-dark-background);
   }
 }
