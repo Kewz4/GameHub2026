@@ -1,0 +1,65 @@
+name: Linux parity verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "src/**"
+      - "native/**"
+      - "scripts/**"
+      - "web-setup-electron/**"
+      - ".github/workflows/linux-parity.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.21.0
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install Linux runtime and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev libudev-dev libx11-dev libxi-dev libxtst-dev libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libatk-bridge2.0-0 xvfb openbox dbus-x11 libsdl2-2.0-0 pulseaudio-utils pulseaudio ffmpeg desktop-file-utils
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/hydra-native/target
+          key: linux-parity-cargo-${{ hashFiles('native/hydra-native/Cargo.lock') }}
+          restore-keys: linux-parity-cargo-
+      - name: Install dependencies
+        run: |
+          yarn --frozen-lockfile
+          pip install -r requirements.txt
+      - name: Test native Linux backend
+        run: cargo test --manifest-path native/hydra-native/Cargo.toml --lib --bins
+      - name: Test complete shared suite on Linux
+        run: xvfb-run -a node scripts/run-parity-tests.cjs
+      - name: Build production renderers and backend
+        if: ${{ !cancelled() }}
+        run: yarn build
+      - name: Store test evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-parity-evidence
+          path: artifacts/linux-parity/**
+          retention-days: 5
