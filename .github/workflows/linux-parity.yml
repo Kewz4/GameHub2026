@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   linux:
+    if: github.event_name != 'pull_request' || github.head_ref != 'codex/cloud-saves-v2'
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -38,7 +39,7 @@ jobs:
       - name: Install Linux runtime and test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev libudev-dev libx11-dev libxi-dev libxtst-dev libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libatk-bridge2.0-0 xvfb openbox dbus-x11 libsdl2-2.0-0 pulseaudio-utils pulseaudio ffmpeg desktop-file-utils
+          sudo apt-get install -y pkg-config libssl-dev libudev-dev libx11-dev libxi-dev libxtst-dev libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libatk-bridge2.0-0 xvfb openbox xcompmgr dbus-x11 libsdl2-2.0-0 pulseaudio-utils pulseaudio ffmpeg desktop-file-utils
       - uses: actions/cache@v4
         with:
           path: |
@@ -54,6 +55,7 @@ jobs:
       - name: Test native Linux backend
         run: cargo test --manifest-path native/hydra-native/Cargo.toml --lib --bins
       - name: Test complete shared suite on Linux
+        if: ${{ !cancelled() }}
         run: xvfb-run -a node scripts/run-parity-tests.cjs
       - name: Build production renderers and backend
         if: ${{ !cancelled() }}

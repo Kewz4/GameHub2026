@@ -124,12 +124,12 @@ registerEvent(
 
 registerEvent(
   "setAudioSessionVolume",
-  (_event, pid: number, volume: number): boolean =>
+  async (_event, pid: number, volume: number): Promise<boolean> =>
     NativeAddon.setAudioSessionVolume(Number(pid), Number(volume))
 );
 
 registerEvent(
   "setAudioSessionMute",
-  (_event, pid: number, muted: boolean): boolean =>
+  async (_event, pid: number, muted: boolean): Promise<boolean> =>
     NativeAddon.setAudioSessionMute(Number(pid), Boolean(muted))
 );

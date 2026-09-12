@@ -5,6 +5,7 @@ import path from "node:path";
 import { findOverlayGameProcesses } from "./overlay-game-process";
 import { logger } from "./logger";
 import { NativeAddon } from "./native-addon";
+import { supportsGameProcessControl } from "./game-process-control-capability";
 
 const idleState = (): GameProcessControlState => ({
   status: "idle",
@@ -28,6 +29,7 @@ export class GameProcessControlManager {
   private static pausedGameKey: string | null = null;
   private static pausedGame: Game | null = null;
   private static pausedRootPid = 0;
+  private static pausedRootIdentity: string | null = null;
   private static operationQueue: Promise<void> = Promise.resolve();
 
   public static initialize() {
@@ -101,6 +103,13 @@ export class GameProcessControlManager {
 
       const validationError = await this.validateTarget(game, targetPid);
       if (validationError) return this.fail(game, targetPid, validationError);
+      const targetIdentity = NativeAddon.getProcessCreationTimeTicks(targetPid);
+      if (!targetIdentity)
+        return this.fail(
+          game,
+          targetPid,
+          "The game process identity is unavailable; pause was not attempted."
+        );
 
       const result = NativeAddon.controlProcessTree(targetPid, "suspend");
       if (result.unsupported) {
@@ -124,6 +133,7 @@ export class GameProcessControlManager {
             this.pausedGameKey = gameKey(game);
             this.pausedGame = game;
             this.pausedRootPid = targetPid;
+            this.pausedRootIdentity = targetIdentity;
             return this.setForGame(
               game,
               "paused",
@@ -143,6 +153,7 @@ export class GameProcessControlManager {
       this.pausedGameKey = gameKey(game);
       this.pausedGame = game;
       this.pausedRootPid = targetPid;
+      this.pausedRootIdentity = targetIdentity;
       logger.info("Active game process tree paused", {
         game: this.pausedGameKey,
         rootPid: targetPid,
@@ -177,6 +188,16 @@ export class GameProcessControlManager {
         );
       }
 
+      if (!this.hasPausedProcessIdentity()) {
+        this.clearPausedTarget();
+        return this.setForGame(
+          sessionGame,
+          "stopped",
+          0,
+          0,
+          "The paused game process ended. No other process was resumed."
+        );
+      }
       const result = NativeAddon.controlProcessTree(rootPid, "resume");
       const stillRunning = await this.isProcessRunning(rootPid);
       if (
@@ -240,6 +261,16 @@ export class GameProcessControlManager {
           sessionGame,
           0,
           "The active game process is no longer running."
+        );
+      }
+      if (this.pausedRootPid && !this.hasPausedProcessIdentity()) {
+        this.clearPausedTarget();
+        return this.setForGame(
+          sessionGame,
+          "stopped",
+          0,
+          0,
+          "The paused game process ended. No other process was closed."
         );
       }
       if (!this.pausedRootPid) {
@@ -325,7 +356,18 @@ export class GameProcessControlManager {
   }
 
   private static async isProcessRunning(pid: number) {
+    if (pid === this.pausedRootPid && !this.hasPausedProcessIdentity())
+      return false;
     return (await this.runningPids([pid])).length > 0;
+  }
+
+  private static hasPausedProcessIdentity() {
+    return Boolean(
+      this.pausedRootPid &&
+        this.pausedRootIdentity &&
+        NativeAddon.getProcessCreationTimeTicks(this.pausedRootPid) ===
+          this.pausedRootIdentity
+    );
   }
 
   private static async runningPids(pids: number[]) {
@@ -360,11 +402,15 @@ export class GameProcessControlManager {
       rootPid,
       processCount,
       canPause:
-        process.platform === "win32" && status === "running" && rootPid > 0,
+        supportsGameProcessControl(process.platform) &&
+        status === "running" &&
+        rootPid > 0,
       canResume:
-        process.platform === "win32" && status === "paused" && rootPid > 0,
+        supportsGameProcessControl(process.platform) &&
+        status === "paused" &&
+        rootPid > 0,
       canClose:
-        process.platform === "win32" &&
+        supportsGameProcessControl(process.platform) &&
         ["running", "paused"].includes(status) &&
         rootPid > 0,
       message,
@@ -386,10 +432,15 @@ export class GameProcessControlManager {
     this.pausedGameKey = null;
     this.pausedGame = null;
     this.pausedRootPid = 0;
+    this.pausedRootIdentity = null;
   }
 
   private static resumeBeforeExit() {
     if (!this.pausedRootPid) return;
+    if (!this.hasPausedProcessIdentity()) {
+      this.clearPausedTarget();
+      return;
+    }
     const rootPid = this.pausedRootPid;
     const result = NativeAddon.controlProcessTree(rootPid, "resume");
     if (result.failedPids.length) {

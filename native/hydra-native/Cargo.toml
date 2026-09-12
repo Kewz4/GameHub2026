@@ -53,8 +53,17 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graph
 # too error-prone for this, so the ergonomic `windows` crate is used here.
 windows = { version = "0.61", features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_Foundation"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+libloading = "0.8"
+x11rb = { version = "0.13", default-features = false }
+
 [dev-dependencies]
 tempfile = "3.27"
+# Standalone Rust test executables have no Node host exporting napi_* symbols.
+# Use napi-rs's dynamic resolver for tests only; production keeps its existing
+# Node-hosted linker model, and tests never call unavailable Node-API functions.
+napi = { version = "3.5.2", default-features = false, features = ["dyn-symbols"] }
 
 [build-dependencies]
 napi-build = "2.3.1"

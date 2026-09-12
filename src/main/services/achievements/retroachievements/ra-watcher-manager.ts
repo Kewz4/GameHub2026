@@ -19,6 +19,7 @@ import {
   type RaRecentAchievement,
 } from "./ra-api";
 import { AchievementSouvenirService } from "../achievement-souvenir-service";
+import { supportsDesktopGameCapture } from "../../desktop-capture-capability";
 
 /**
  * Maps a launchbox game's `platform` string back to its EmulatorSystem.
@@ -258,7 +259,7 @@ export class RaWatcherManager {
     let souvenirRecordKey: string | null = null;
     if (
       prefs?.enableAchievementSouvenirs === true &&
-      process.platform !== "linux"
+      supportsDesktopGameCapture(process.platform)
     ) {
       const definition = definitions.find(
         (candidate) => candidate.name === String(achievement.achievementId)
@@ -297,12 +298,11 @@ export class RaWatcherManager {
     // Prefer the in-app surface over the OS toast — on Windows/Linux that's
     // the custom always-on-top overlay, which (unlike the OS toast) shows over
     // a game running in (borderless) fullscreen, which is how RALibretro and
-    // most emulators run. Linux has no transparent-overlay support, so it
-    // mirrors the Steam/Exophase path and posts into the app's own focused
-    // window instead.
+    // most emulators run. Native Wayland posts into the focused application;
+    // X11 may use the external toast when a compositor is actually available.
     const shownInOverlay =
       customEnabled &&
-      (process.platform === "linux"
+      (process.platform === "linux" && !supportsDesktopGameCapture(process.platform)
         ? WindowManager.sendAchievementToFocusedWindow(
             position,
             achievementsInfo

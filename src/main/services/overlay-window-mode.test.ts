@@ -49,7 +49,7 @@ describe("overlay window-mode eligibility", () => {
     assert.equal(isExactDesktopWindowSource("screen:42:0", "42"), false);
   });
 
-  it("keeps the existing compositor path on non-Windows platforms", () => {
+  it("refuses Linux targets without actual compositor evidence", () => {
     assert.deepEqual(
       evaluateOverlayWindowMode({
         platform: "linux",
@@ -57,7 +57,7 @@ describe("overlay window-mode eligibility", () => {
         exactWindowSourceAvailable: false,
         displaySized: true,
       }),
-      { allowed: true, mode: "windowed-or-borderless" }
+      { allowed: false, reason: "window-compositor-unavailable" }
     );
   });
 });

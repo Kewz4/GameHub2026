@@ -1,5 +1,7 @@
 mod cloud_save;
 mod constants;
+#[cfg(any(target_os = "linux", test))]
+mod linux_native;
 
 pub use cloud_save::hashing::{build_snapshot_aggregate_hash, hash_local_save_file};
 pub use cloud_save::local_snapshot::build_local_game_snapshot;
@@ -607,8 +609,21 @@ pub fn get_foreground_process_id() -> u32 {
         pid
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    return linux_native::desktop::foreground_pid();
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     0
+}
+
+/// Whether transparent external overlay windows have a compositing manager.
+#[napi]
+pub fn is_desktop_composition_available() -> bool {
+    #[cfg(target_os = "windows")]
+    return true;
+    #[cfg(target_os = "linux")]
+    return linux_native::desktop::has_compositor();
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    false
 }
 
 #[napi]
@@ -633,7 +648,9 @@ pub fn is_current_process_elevated() -> bool {
         result != 0 && elevation.TokenIsElevated != 0
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    return linux_native::processes::is_elevated(std::process::id());
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     false
 }
 
@@ -656,7 +673,9 @@ pub fn is_process_elevated(pid: u32) -> bool {
         CloseHandle(token);
         result != 0 && elevation.TokenIsElevated != 0
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    return linux_native::processes::is_elevated(pid);
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     false
 }
 
@@ -993,12 +1012,14 @@ pub fn control_process_tree(root_pid: u32, action: String) -> NativeProcessContr
         }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    return linux_native::processes::control_tree(root_pid, &action);
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     NativeProcessControlResult {
         succeeded_pids: Vec::new(),
         failed_pids: vec![root_pid],
         unsupported: true,
-        error: Some("process pause and resume are only available on Windows".to_string()),
+        error: Some("process pause and resume are unavailable on this platform".to_string()),
     }
 }
 
@@ -1042,7 +1063,9 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
         return combined_buttons;
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    return linux_native::controllers::buttons();
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         0
     }
@@ -1050,6 +1073,8 @@ pub fn get_overlay_gamepad_buttons() -> u32 {
 
 #[napi]
 pub fn get_process_window_bounds(_pid: u32) -> Option<NativeWindowBounds> {
+    #[cfg(target_os = "linux")]
+    return linux_native::desktop::bounds(_pid);
     #[cfg(target_os = "windows")]
     if let Some((window, bounds)) = process_window(_pid) {
         return Some(NativeWindowBounds {
@@ -1060,11 +1085,18 @@ pub fn get_process_window_bounds(_pid: u32) -> Option<NativeWindowBounds> {
             window_id: (window as usize).to_string(),
         });
     }
+    #[cfg(not(target_os = "linux"))]
     None
 }
 
 #[napi]
 pub fn place_overlay_window(_window_handle: Buffer, _pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        if _window_handle.len() < 4 { return false; }
+        let window = u32::from_ne_bytes(_window_handle[..4].try_into().unwrap());
+        return linux_native::desktop::place_window(window, _pid);
+    }
     #[cfg(target_os = "windows")]
     if let Some((_, bounds)) = process_window(_pid) {
         if _window_handle.is_empty() {
@@ -1089,11 +1121,14 @@ pub fn place_overlay_window(_window_handle: Buffer, _pid: u32) -> bool {
             ) != 0
         };
     }
+    #[cfg(not(target_os = "linux"))]
     false
 }
 
 #[napi]
 pub fn focus_process_window(_pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    return linux_native::desktop::focus_process(_pid);
     #[cfg(target_os = "windows")]
     if let Some((window, _)) = find_best_process_window(_pid, true) {
         unsafe {
@@ -1103,6 +1138,7 @@ pub fn focus_process_window(_pid: u32) -> bool {
             return SetForegroundWindow(window) != 0;
         }
     }
+    #[cfg(not(target_os = "linux"))]
     false
 }
 
@@ -1123,6 +1159,9 @@ pub fn focus_process_window(_pid: u32) -> bool {
 #[napi]
 #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
 pub fn force_foreground_window(window_handle: f64) -> bool {
+    #[cfg(target_os = "linux")]
+    return window_handle.is_finite() && window_handle > 0.0 && window_handle <= f64::from(u32::MAX) &&
+        linux_native::desktop::focus_window(window_handle as u32);
     #[cfg(target_os = "windows")]
     unsafe {
         let window = window_handle as isize as HWND;
@@ -1159,7 +1198,7 @@ pub fn force_foreground_window(window_handle: f64) -> bool {
         return focused || GetForegroundWindow() == window;
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     false
 }
 
@@ -1375,7 +1414,9 @@ pub fn get_process_creation_time_ticks(pid: u32) -> Option<String> {
     {
         process_creation_time_ticks(pid).map(|ticks| ticks.to_string())
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
+    return linux_native::processes::creation_ticks(pid);
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         let _ = pid;
         None

@@ -46,6 +46,10 @@ import {
   type NativeRecorderCompletedSegment,
 } from "./game-recorder-native-session";
 import { captureWindowsGameWindowFrame } from "./windows-game-capture";
+import {
+  supportsDesktopGameCapture,
+  desktopCaptureUnavailableMessage,
+} from "./desktop-capture-capability";
 
 const TARGET_POLL_INTERVAL_MS = 750;
 const FOREGROUND_PRIVACY_POLL_INTERVAL_MS = 100;
@@ -292,7 +296,7 @@ export class GameRecorderManager {
   public static getState(): GameRecorderState {
     const defaultOutput = path.join(app.getPath("videos"), "GameHub");
     const bufferedSeconds = this.getBufferedSeconds();
-    const platformSupported = process.platform === "win32";
+    const platformSupported = supportsDesktopGameCapture(process.platform);
     const recentSegments = this.segments.slice(-3);
     const recentDurationMs = recentSegments.reduce(
       (total, segment) =>
@@ -330,6 +334,8 @@ export class GameRecorderManager {
 
     return {
       status,
+      desktopCaptureAvailable: platformSupported,
+      systemAudioCaptureAvailable: process.platform === "win32",
       configuration: { ...this.preferences },
       resolvedOutputDirectory:
         this.preferences.outputDirectory ?? defaultOutput,
@@ -380,7 +386,7 @@ export class GameRecorderManager {
       statusMessage:
         this.statusMessage ??
         (!platformSupported
-          ? "Gameplay capture is currently available on Windows."
+          ? desktopCaptureUnavailableMessage(process.platform)
           : !this.preferences.enabled
             ? "Enable gameplay capture in Settings."
             : !this.activeGame
@@ -393,7 +399,9 @@ export class GameRecorderManager {
                     ? "Instant replay pauses while the game is in the background."
                     : this.spotifySystemAudioBlocked
                       ? "System audio is disabled while Spotify Connect is selected, so Spotify music cannot enter gameplay recordings."
-                      : null),
+                      : process.platform === "linux"
+                        ? "X11 game-window capture is video-only; system audio is not captured."
+                        : null),
       errorMessage: this.errorMessage,
     };
   }
@@ -405,12 +413,15 @@ export class GameRecorderManager {
     this.spotifySystemAudioBlocked = Boolean(
       userPreferences?.musicProvider === "spotify" && resolved.captureGameAudio
     );
-    return this.spotifySystemAudioBlocked
+    return this.spotifySystemAudioBlocked || process.platform === "linux"
       ? { ...resolved, captureGameAudio: false }
       : resolved;
   }
 
   public static async startRecording() {
+    if (!supportsDesktopGameCapture(process.platform)) {
+      throw new Error(desktopCaptureUnavailableMessage(process.platform));
+    }
     if (!this.preferences.enabled) {
       throw new Error("Enable gameplay capture in Settings first.");
     }
@@ -486,12 +497,11 @@ export class GameRecorderManager {
     // Display capture can contain another app for the fraction of a polling
     // interval after Alt+Tab. Refuse the whole unfinished slice while the game
     // is not foreground; the prior committed slices remain valid and private.
-    const foregroundPid =
-      process.platform === "win32"
-        ? NativeAddon.getForegroundProcessId()
-        : this.targetPid;
+    const foregroundPid = ["win32", "linux"].includes(process.platform)
+      ? NativeAddon.getForegroundProcessId()
+      : this.targetPid;
     if (
-      process.platform === "win32" &&
+      ["win32", "linux"].includes(process.platform) &&
       (!this.activeGame || !this.targetPid || foregroundPid !== this.targetPid)
     ) {
       logger.info("Dropping recorder segment captured outside the game", {
@@ -1141,12 +1151,12 @@ export class GameRecorderManager {
       (this.preferences.instantReplayEnabled ||
         this.recordingStartedAt !== null);
     const gameIsForeground =
-      process.platform !== "win32" ||
+      !["win32", "linux"].includes(process.platform) ||
       (this.targetPid > 0 &&
         NativeAddon.getForegroundProcessId() === this.targetPid);
     return (
       wantsCapture &&
-      process.platform === "win32" &&
+      supportsDesktopGameCapture(process.platform) &&
       // A window id is no longer required: capture prefers the display the
       // game occupies, and an exclusive-fullscreen game often exposes no
       // per-window source at all.
@@ -1158,7 +1168,7 @@ export class GameRecorderManager {
 
   private static async reconcileCaptureOnce() {
     const gameIsForeground =
-      process.platform !== "win32" ||
+      !["win32", "linux"].includes(process.platform) ||
       (this.targetPid > 0 &&
         NativeAddon.getForegroundProcessId() === this.targetPid);
     const canCapture = this.canCaptureCurrentForegroundTarget();
@@ -1217,8 +1227,8 @@ export class GameRecorderManager {
 
   /** Capture a foreground game frame without ever falling back to the desktop. */
   public static async captureActiveGameFrame(game: Game): Promise<NativeImage> {
-    if (process.platform === "linux") {
-      throw new Error("achievement_souvenir_capture_linux_unavailable");
+    if (!supportsDesktopGameCapture(process.platform)) {
+      throw new Error(desktopCaptureUnavailableMessage(process.platform));
     }
 
     const candidates = await findOverlayGameProcesses(
@@ -1226,10 +1236,9 @@ export class GameRecorderManager {
       this.targetPid,
       Boolean(this.targetPid)
     );
-    const foregroundPid =
-      process.platform === "win32"
-        ? NativeAddon.getForegroundProcessId()
-        : (candidates[0]?.pid ?? 0);
+    const foregroundPid = ["win32", "linux"].includes(process.platform)
+      ? NativeAddon.getForegroundProcessId()
+      : (candidates[0]?.pid ?? 0);
     const target = candidates.find(
       (candidate) => candidate.pid === foregroundPid
     );
@@ -1265,6 +1274,29 @@ export class GameRecorderManager {
       }
 
       return captureWindowsGameWindowFrame(windowSource.id);
+    }
+
+    if (process.platform === "linux") {
+      const windows = await desktopCapturer.getSources({
+        types: ["window"],
+        thumbnailSize,
+        fetchWindowIcons: false,
+      });
+      const source = targetWindowId
+        ? windows.find((candidate) =>
+            sourceMatchesWindow(candidate, targetWindowId)
+          )
+        : null;
+      // Never photograph the user's desktop if an X11 window vanished, was
+      // minimized, or changed foreground during the asynchronous capture.
+      if (
+        !source ||
+        source.thumbnail.isEmpty() ||
+        NativeAddon.getForegroundProcessId() !== target.pid
+      ) {
+        throw new Error("achievement_souvenir_capture_unavailable");
+      }
+      return source.thumbnail;
     }
 
     const [screens, windows] = await Promise.all([
@@ -1400,6 +1432,22 @@ export class GameRecorderManager {
     const bounds = this.targetPid
       ? NativeAddon.getProcessWindowBounds(this.targetPid)
       : null;
+
+    if (process.platform === "linux") {
+      if (!supportsDesktopGameCapture(process.platform) || !windowId || !bounds)
+        return null;
+      const windows = await desktopCapturer
+        .getSources({
+          types: ["window"],
+          thumbnailSize: { width: 0, height: 0 },
+          fetchWindowIcons: false,
+        })
+        .catch(() => []);
+      return (
+        windows.find((candidate) => sourceMatchesWindow(candidate, windowId)) ??
+        null
+      );
+    }
 
     const [screens, windows] = await Promise.all([
       desktopCapturer

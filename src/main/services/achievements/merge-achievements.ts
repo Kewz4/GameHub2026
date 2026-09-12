@@ -19,6 +19,7 @@ import {
 } from "./achievement-sync-policy";
 import { syncAchievementsToHydraCloud } from "./achievement-cloud-sync";
 import { AchievementSouvenirService } from "./achievement-souvenir-service";
+import { supportsDesktopGameCapture } from "../desktop-capture-capability";
 
 const isRareAchievement = (points: number) => {
   const rawPercentage = (50 - Math.sqrt(points)) * 2;
@@ -120,7 +121,7 @@ export const mergeAchievements = async (
   if (
     newAchievements.length > 0 &&
     publishNotification &&
-    process.platform !== "linux" &&
+    supportsDesktopGameCapture(process.platform) &&
     userPreferences.enableAchievementSouvenirs === true
   ) {
     for (const unlocked of newAchievements) {
@@ -206,7 +207,7 @@ export const mergeAchievements = async (
         gameIcon: game.iconUrl,
       });
 
-    if (process.platform === "linux") {
+    if (process.platform === "linux" && !supportsDesktopGameCapture(process.platform)) {
       const shownInApp =
         customEnabled &&
         WindowManager.sendAchievementToFocusedWindow(

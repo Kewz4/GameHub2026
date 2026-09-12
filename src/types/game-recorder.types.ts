@@ -53,6 +53,10 @@ export interface GameRecorderCaptureDiagnostics {
 }
 
 export interface GameRecorderState {
+  /** Automatic exact-window capture support in the current desktop session. */
+  desktopCaptureAvailable?: boolean;
+  /** Whether the active capture backend can include system/game audio. */
+  systemAudioCaptureAvailable?: boolean;
   status: GameRecorderStatus;
   configuration: GameRecorderPreferences;
   resolvedOutputDirectory: string;

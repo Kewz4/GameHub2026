@@ -24,6 +24,7 @@ import type {
 } from "@types";
 
 import { logger } from "./logger";
+import { linuxAudioMixer } from "./linux-audio-mixer";
 
 type NativeProcessProfileImageResponse = {
   imagePath?: string;
@@ -85,12 +86,13 @@ type HydraNativeModule = {
     snapshotId: string,
     tempRoot: string
   ) => Promise<void>;
-  // In-game overlay natives (Windows-only; no-op fallbacks elsewhere).
+  // In-game overlay: Windows Raw Input/XInput and Linux SDL2/X11 adapters.
   startOverlayKeyboardWatcher: () => boolean;
   stopOverlayKeyboardWatcher: () => boolean;
   getOverlayKeyboardEventCount: () => number;
   getOverlayGamepadButtons: () => number;
   getForegroundProcessId: () => number;
+  isDesktopCompositionAvailable: () => boolean;
   getProcessCreationTimeTicks: (pid: number) => string | null;
   isCurrentProcessElevated: () => boolean;
   isProcessElevated: (pid: number) => boolean;
@@ -117,12 +119,12 @@ type HydraNativeModule = {
     unsupported: boolean;
     error?: string | null;
   };
-  // BrowserWindow overlay placement (Windows-only; no-op fallbacks elsewhere).
+  // BrowserWindow overlay placement: Win32 and EWMH/X11 (not native Wayland).
   getProcessWindowBounds: (pid: number) => NativeWindowBounds | null;
   placeOverlayWindow: (windowHandle: Buffer, pid: number) => boolean;
   focusProcessWindow: (pid: number) => boolean;
   forceForegroundWindow: (windowHandle: number) => boolean;
-  // Per-app volume mixer (Windows Core Audio; empty/no-op elsewhere).
+  // Native Core Audio; Linux uses the asynchronous pactl adapter below.
   getAudioSessions: () => NativeAudioSession[];
   setAudioSessionVolume: (pid: number, volume: number) => boolean;
   setAudioSessionMute: (pid: number, muted: boolean) => boolean;
@@ -436,7 +438,7 @@ export class NativeAddon {
   }
 
   public static getProcessCreationTimeTicks(pid: number) {
-    if (process.platform !== "win32" || pid <= 4) return null;
+    if (!Number.isSafeInteger(pid) || pid <= 4) return null;
     try {
       return this.load().getProcessCreationTimeTicks(pid) ?? null;
     } catch {
@@ -450,6 +452,11 @@ export class NativeAddon {
     } catch {
       return 0;
     }
+  }
+
+  public static isDesktopCompositionAvailable(): boolean {
+    if (process.platform === "win32") return true;
+    try { return this.load().isDesktopCompositionAvailable(); } catch { return false; }
   }
 
   public static isCurrentProcessElevated(): boolean {
@@ -535,15 +542,15 @@ export class NativeAddon {
       return {
         succeededPids: [],
         failedPids: rootPid > 0 ? [rootPid] : [],
-        unsupported: process.platform !== "win32",
+        unsupported: !["win32", "linux"].includes(process.platform),
         error: error instanceof Error ? error.message : String(error),
       };
     }
   }
 
-  // ── BrowserWindow overlay window placement (Windows only) ─────────────────
+  // ── BrowserWindow overlay window placement (Win32 / X11) ──────────────────
   // Find the game window for a given PID and get its client-area bounds, or
-  // place the overlay window over it. Non-Windows builds return safe defaults.
+  // place the overlay window over it. Native Wayland has no global EWMH view.
 
   public static getProcessWindowBounds(pid: number): NativeWindowBounds | null {
     try {
@@ -680,12 +687,15 @@ export class NativeAddon {
     return this.load().cleanupRestoreTempSnapshot(snapshotId, tempRoot);
   }
 
-  // ── Per-app volume mixer (Windows Core Audio) ─────────────────────────────
+  // ── Per-app volume mixer (Windows Core Audio / Linux Pulse server) ─────────
   // The overlay's "volume mixer" widget reads and writes each running app's
-  // audio session. Non-Windows builds (and older addons) return an empty list
-  // and treat writes as no-ops.
+  // audio session. Linux includes PipeWire's PulseAudio-compatible server.
+  // Missing servers fail explicitly on writes and never reuse stale stream IDs.
 
-  public static getAudioSessions(): NativeAudioSession[] {
+  public static getAudioSessions():
+    | NativeAudioSession[]
+    | Promise<NativeAudioSession[]> {
+    if (process.platform === "linux") return linuxAudioMixer.getSessions();
     try {
       const sessions = this.load().getAudioSessions();
       return Array.isArray(sessions) ? sessions : [];
@@ -694,7 +704,12 @@ export class NativeAddon {
     }
   }
 
-  public static setAudioSessionVolume(pid: number, volume: number): boolean {
+  public static setAudioSessionVolume(
+    pid: number,
+    volume: number
+  ): boolean | Promise<boolean> {
+    if (process.platform === "linux")
+      return linuxAudioMixer.setVolume(pid, volume);
     try {
       return this.load().setAudioSessionVolume(pid, volume);
     } catch {
@@ -702,7 +717,12 @@ export class NativeAddon {
     }
   }
 
-  public static setAudioSessionMute(pid: number, muted: boolean): boolean {
+  public static setAudioSessionMute(
+    pid: number,
+    muted: boolean
+  ): boolean | Promise<boolean> {
+    if (process.platform === "linux")
+      return linuxAudioMixer.setMute(pid, muted);
     try {
       return this.load().setAudioSessionMute(pid, muted);
     } catch {

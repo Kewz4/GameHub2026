@@ -695,7 +695,7 @@ export class OverlayManager {
    * and asks for Borderless or Windowed mode.
    */
   private static async claimForeground(overlayWindow: BrowserWindow) {
-    if (process.platform !== "win32") return true;
+    if (!["win32", "linux"].includes(process.platform)) return true;
     for (
       let attempt = 0;
       attempt <= OVERLAY_FOREGROUND_ATTEMPTS;
@@ -899,7 +899,9 @@ export class OverlayManager {
         ? NativeAddon.getProcessCreationTimeTicks(candidatePid)
         : null;
       const targetPid =
-        process.platform !== "win32" || targetCreationTicks ? candidatePid : 0;
+        !["win32", "linux"].includes(process.platform) || targetCreationTicks
+          ? candidatePid
+          : 0;
       const targetExecutable = targetPid ? (target?.exe ?? null) : null;
       const targetChanged =
         targetPid !== this.targetPid ||
@@ -943,7 +945,10 @@ export class OverlayManager {
         };
       }
     }
-    if (process.platform === "win32") return null;
+    // X11 must resolve the actual game's client window. A native Wayland game
+    // cannot be placed by EWMH: covering whichever monitor owns the mouse would
+    // falsely claim support and expose controls over unrelated applications.
+    if (["win32", "linux"].includes(process.platform)) return null;
     return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
   }
 
@@ -959,7 +964,7 @@ export class OverlayManager {
     const targetPid = this.targetPid;
     const targetCreationTicks = this.targetCreationTicks;
     const check = (async () => {
-      if (process.platform !== "win32") {
+      if (!["win32", "linux"].includes(process.platform)) {
         return evaluateOverlayWindowMode({
           platform: process.platform,
           targetWindowId: null,
@@ -1018,7 +1023,7 @@ export class OverlayManager {
   }
 
   private static isTargetForeground(includeOverlayWindow: boolean) {
-    if (process.platform !== "win32") return true;
+    if (!["win32", "linux"].includes(process.platform)) return true;
     return isOverlayInteractionForeground({
       targetPid: this.targetPid,
       foregroundPid: NativeAddon.getForegroundProcessId(),
@@ -1059,7 +1064,7 @@ export class OverlayManager {
     ) {
       return;
     }
-    if (process.platform === "win32" && this.targetPid) {
+    if (["win32", "linux"].includes(process.platform) && this.targetPid) {
       if (
         NativeAddon.placeOverlayWindow(
           window.getNativeWindowHandle(),
@@ -1120,7 +1125,7 @@ export class OverlayManager {
 
     if (this.overlayWindow?.isVisible()) {
       if (
-        process.platform === "win32" &&
+        ["win32", "linux"].includes(process.platform) &&
         (NativeAddon.getForegroundProcessId() !== process.pid ||
           !this.overlayWindow.isFocused())
       ) {
