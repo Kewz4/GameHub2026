@@ -2,6 +2,8 @@ name: Linux parity verification
 
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/cloud-saves-v2]
   pull_request:
     paths:
       - "src/**"
