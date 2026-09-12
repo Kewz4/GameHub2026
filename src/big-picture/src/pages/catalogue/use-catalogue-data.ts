@@ -5,8 +5,7 @@ import type {
   EmulatorSystem,
 } from "@types";
 import { levelDBService } from "@renderer/services/leveldb.service";
-import { resolveExternalResourcesUrl } from "@renderer/helpers/external-resources";
-import axios from "axios";
+import { getCatalogueMetadata } from "@renderer/services/catalogue-metadata";
 import {
   useCallback,
   useDeferredValue,
@@ -127,20 +126,6 @@ export interface SearchGamesResponseData {
   edges: CatalogueSearchResult[];
   count: number;
 }
-
-interface SteamGenresResponse {
-  en: string[];
-}
-
-interface SteamTagsResponse {
-  en: Record<string, number>;
-}
-
-const externalResourcesInstance = axios.create({
-  baseURL: resolveExternalResourcesUrl(
-    import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL
-  ),
-});
 
 function parseJsonParam(value: string | null): unknown {
   if (!value) return undefined;
@@ -326,14 +311,14 @@ export function useCatalogueData() {
         publishersResponse,
         rawDownloadSources,
       ] = await Promise.allSettled([
-        externalResourcesInstance.get<SteamGenresResponse>(
-          "/steam-genres.json"
-        ),
-        externalResourcesInstance.get<SteamTagsResponse>(
-          "/steam-user-tags.json"
-        ),
-        externalResourcesInstance.get<string[]>("/steam-developers.json"),
-        externalResourcesInstance.get<string[]>("/steam-publishers.json"),
+        getCatalogueMetadata<string[]>("genres").then((en) => ({
+          data: { en },
+        })),
+        getCatalogueMetadata<Record<string, number>>("tags").then((en) => ({
+          data: { en },
+        })),
+        getCatalogueMetadata<string[]>("developers").then((data) => ({ data })),
+        getCatalogueMetadata<string[]>("publishers").then((data) => ({ data })),
         levelDBService.values("downloadSources"),
       ]);
 

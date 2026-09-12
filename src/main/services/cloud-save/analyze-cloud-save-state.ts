@@ -25,6 +25,7 @@ import {
   resolveRestoreManifestTargets,
 } from "./resolve-remote-snapshot-targets";
 import { getCloudSaveSyncAnchor } from "./sync-anchor";
+import { selectCloudSaveSyncAnchor } from "./sync-anchor-head";
 import type { SyncDirection } from "./sync-game/policy";
 
 interface AnalyzeCloudSaveStateOptions {
@@ -68,12 +69,13 @@ export const analyzeCloudSaveState = async (
   ) {
     throw new Error("Active Cloud Save snapshot belongs to another game");
   }
-  const anchor = await getCloudSaveSyncAnchor(
+  const storedAnchor = await getCloudSaveSyncAnchor(
     shop,
     objectId,
     context.environmentId,
     { allowEnvironmentFallback: !activeRemoteSnapshot }
   );
+  const anchor = selectCloudSaveSyncAnchor(storedAnchor, activeRemoteSnapshot);
   const customPathContext = cloudSaveCustomPathContextFromPathContext(
     context.pathContext
   );

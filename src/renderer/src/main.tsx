@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
@@ -12,6 +12,7 @@ import "@fontsource/noto-sans/700.css";
 
 import "react-loading-skeleton/dist/skeleton.css";
 import "react-tooltip/dist/react-tooltip.css";
+import "./route-loading.scss";
 
 import { App } from "./app";
 import { ErrorBoundary } from "./components/error-boundary/error-boundary";
@@ -47,18 +48,41 @@ import GameRecorderCapture from "./pages/game-recorder-capture/game-recorder-cap
 import ConsolePage from "./pages/console/console";
 import FriendsWindow from "./pages/friends-window/friends-window";
 import AuthWindow from "./pages/auth-window/auth-window";
-import BigPictureApp from "../../big-picture/src/app";
-import BigPictureCatalogue from "../../big-picture/src/pages/catalogue/catalogue";
-import BigPictureCloudSaves from "../../big-picture/src/pages/cloud-saves/cloud-saves";
-import BigPictureComponentLab from "../../big-picture/src/pages/component-lab/component-lab";
-import BigPictureDownloads from "../../big-picture/src/pages/downloads/downloads";
-import BigPictureHome from "../../big-picture/src/pages/home/home";
-import BigPictureSettings from "../../big-picture/src/pages/settings/settings";
-import BigPictureLibrary from "../../big-picture/src/pages/library/page";
-import BigPictureGame from "../../big-picture/src/pages/game/game";
-import BigPictureGameAchievements from "../../big-picture/src/pages/game-achievements/game-achievements";
-import BigPictureProfile from "../../big-picture/src/pages/profile/profile";
-import BigPictureFriends from "../../big-picture/src/pages/friends/friends";
+const BigPictureApp = lazy(() => import("../../big-picture/src/app"));
+const BigPictureCatalogue = lazy(
+  () => import("../../big-picture/src/pages/catalogue/catalogue")
+);
+const BigPictureCloudSaves = lazy(
+  () => import("../../big-picture/src/pages/cloud-saves/cloud-saves")
+);
+const BigPictureComponentLab = lazy(
+  () => import("../../big-picture/src/pages/component-lab/component-lab")
+);
+const BigPictureDownloads = lazy(
+  () => import("../../big-picture/src/pages/downloads/downloads")
+);
+const BigPictureHome = lazy(
+  () => import("../../big-picture/src/pages/home/home")
+);
+const BigPictureSettings = lazy(
+  () => import("../../big-picture/src/pages/settings/settings")
+);
+const BigPictureLibrary = lazy(
+  () => import("../../big-picture/src/pages/library/page")
+);
+const BigPictureGame = lazy(
+  () => import("../../big-picture/src/pages/game/game")
+);
+const BigPictureGameAchievements = lazy(
+  () =>
+    import("../../big-picture/src/pages/game-achievements/game-achievements")
+);
+const BigPictureProfile = lazy(
+  () => import("../../big-picture/src/pages/profile/profile")
+);
+const BigPictureFriends = lazy(
+  () => import("../../big-picture/src/pages/friends/friends")
+);
 
 // Route every renderer console level through electron-log so the diagnostics
 // window receives warnings/errors from third-party and legacy code too. The old
@@ -175,61 +199,75 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <HashRouter>
         <ErrorBoundary>
           <AchievementNotificationOverlay />
-          <Routes>
-            <Route element={<App />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/catalogue" element={<Catalogue />} />
-              <Route path="/library" element={<Library />} />
-              <Route path="/downloads" element={<Downloads />} />
-              <Route path="/game/:shop/:objectId" element={<GameDetails />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/profile/:userId" element={<Profile />} />
-              <Route path="/achievements" element={<Achievements />} />
-              <Route path="/achievements-sync" element={<AchievementsSync />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/cloud-saves" element={<CloudSaves />} />
-            </Route>
+          <Suspense
+            fallback={
+              <div role="status" className="route-loading">
+                Loading GameHub…
+              </div>
+            }
+          >
+            <Routes>
+              <Route element={<App />}>
+                <Route path="/" element={<Home />} />
+                <Route path="/catalogue" element={<Catalogue />} />
+                <Route path="/library" element={<Library />} />
+                <Route path="/downloads" element={<Downloads />} />
+                <Route path="/game/:shop/:objectId" element={<GameDetails />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/profile/:userId" element={<Profile />} />
+                <Route path="/achievements" element={<Achievements />} />
+                <Route
+                  path="/achievements-sync"
+                  element={<AchievementsSync />}
+                />
+                <Route path="/notifications" element={<Notifications />} />
+                <Route path="/cloud-saves" element={<CloudSaves />} />
+              </Route>
 
-            <Route path="/theme-editor" element={<ThemeEditor />} />
-            <Route
-              path="/achievement-notification"
-              element={<AchievementNotification />}
-            />
-            <Route path="/game-launcher" element={<GameLauncher />} />
-            <Route path="/installer" element={<Installer />} />
-            <Route path="/update-checker" element={<UpdateChecker />} />
-            <Route path="/console" element={<ConsolePage />} />
-            <Route path="/friends-window" element={<FriendsWindow />} />
-            <Route path="/auth-window" element={<AuthWindow />} />
-            <Route path="/overlay" element={<Overlay />} />
-            <Route path="/overlay-fps" element={<Overlay />} />
-            <Route path="/overlay-toast" element={<Overlay />} />
-            <Route
-              path="/game-recorder-capture"
-              element={<GameRecorderCapture />}
-            />
+              <Route path="/theme-editor" element={<ThemeEditor />} />
+              <Route
+                path="/achievement-notification"
+                element={<AchievementNotification />}
+              />
+              <Route path="/game-launcher" element={<GameLauncher />} />
+              <Route path="/installer" element={<Installer />} />
+              <Route path="/update-checker" element={<UpdateChecker />} />
+              <Route path="/console" element={<ConsolePage />} />
+              <Route path="/friends-window" element={<FriendsWindow />} />
+              <Route path="/auth-window" element={<AuthWindow />} />
+              <Route path="/overlay" element={<Overlay />} />
+              <Route path="/overlay-fps" element={<Overlay />} />
+              <Route path="/overlay-toast" element={<Overlay />} />
+              <Route
+                path="/game-recorder-capture"
+                element={<GameRecorderCapture />}
+              />
 
-            <Route path="/big-picture" element={<BigPictureApp />}>
-              <Route index element={<BigPictureHome />} />
-              <Route path="catalogue" element={<BigPictureCatalogue />} />
-              <Route
-                path="component-lab"
-                element={<BigPictureComponentLab />}
-              />
-              <Route path="downloads" element={<BigPictureDownloads />} />
-              <Route path="settings" element={<BigPictureSettings />} />
-              <Route path="cloud-saves" element={<BigPictureCloudSaves />} />
-              <Route path="library" element={<BigPictureLibrary />} />
-              <Route path="profile" element={<BigPictureProfile />} />
-              <Route path="profile/:userId" element={<BigPictureProfile />} />
-              <Route path="friends" element={<BigPictureFriends />} />
-              <Route path="game/:shop/:objectId" element={<BigPictureGame />} />
-              <Route
-                path="game/:shop/:objectId/achievements"
-                element={<BigPictureGameAchievements />}
-              />
-            </Route>
-          </Routes>
+              <Route path="/big-picture" element={<BigPictureApp />}>
+                <Route index element={<BigPictureHome />} />
+                <Route path="catalogue" element={<BigPictureCatalogue />} />
+                <Route
+                  path="component-lab"
+                  element={<BigPictureComponentLab />}
+                />
+                <Route path="downloads" element={<BigPictureDownloads />} />
+                <Route path="settings" element={<BigPictureSettings />} />
+                <Route path="cloud-saves" element={<BigPictureCloudSaves />} />
+                <Route path="library" element={<BigPictureLibrary />} />
+                <Route path="profile" element={<BigPictureProfile />} />
+                <Route path="profile/:userId" element={<BigPictureProfile />} />
+                <Route path="friends" element={<BigPictureFriends />} />
+                <Route
+                  path="game/:shop/:objectId"
+                  element={<BigPictureGame />}
+                />
+                <Route
+                  path="game/:shop/:objectId/achievements"
+                  element={<BigPictureGameAchievements />}
+                />
+              </Route>
+            </Routes>
+          </Suspense>
         </ErrorBoundary>
       </HashRouter>
     </Provider>

@@ -14,6 +14,10 @@ import fs from "node:fs";
 import url from "node:url";
 import os from "node:os";
 import { formatConsoleLogData } from "../shared/console-log";
+import {
+  getLauncherIntent,
+  parseLauncherLink,
+} from "./services/launcher-intent";
 
 // ── Early startup log — written before any async work so crashes are visible ──
 function appendStartupLog(message: string): void {
@@ -451,6 +455,11 @@ app.whenReady().then(async () => {
     // instances. Expose them only in an explicitly read-only, unpackaged QA
     // process so Playwright never imports the entry bundle a second time.
     if (isReadOnlyVisualQa) {
+      const {
+        getR2ActiveCloudSaveSnapshot,
+        getR2CloudSaveSnapshot,
+        downloadR2CloudSaveBlob,
+      } = await import("./services/cloud-save/r2-snapshot-store");
       (globalThis as Record<string, unknown>).__gameHubRecorderQaControl = {
         levelKeys,
         database: db,
@@ -459,6 +468,11 @@ app.whenReady().then(async () => {
         GameRecorderManager,
         NativeAddon,
         getCloudSaveAutomaticSyncEnabled,
+        cloudSaveReadback: {
+          getR2ActiveCloudSaveSnapshot,
+          getR2CloudSaveSnapshot,
+          downloadR2CloudSaveBlob,
+        },
       };
     }
   }
@@ -543,10 +557,11 @@ app.whenReady().then(async () => {
 
   if (language) i18n.changeLanguage(language);
 
-  const deepLinkArg = process.argv.find((arg) =>
-    arg.startsWith("hydralauncher://")
-  );
-  const isRunDeepLink = deepLinkArg?.startsWith("hydralauncher://run");
+  const {
+    deepLink: deepLinkArg,
+    runGame: isRunDeepLink,
+    bigPicture,
+  } = getLauncherIntent(process.argv);
 
   const { needsSetup } = await import("./services/installer");
 
@@ -556,7 +571,7 @@ app.whenReady().then(async () => {
     if (needsSetup()) {
       WindowManager.createInstallerWindow();
     } else if (!process.argv.includes("--hidden") && !isRunDeepLink) {
-      WindowManager.createMainWindow();
+      void WindowManager.createMainWindow({ bigPicture });
     }
     WindowManager.createNotificationWindow();
     WindowManager.createSystemTray(language || "en");
@@ -617,7 +632,13 @@ const handleDeepLinkPath = (uri?: string) => {
   if (!uri) return;
 
   try {
-    const url = new URL(uri);
+    const url = parseLauncherLink(uri);
+    if (!url) return;
+
+    if (url.host === "bigpicture") {
+      void WindowManager.openBigPictureWindow();
+      return;
+    }
 
     if (url.host === "run") {
       const shop = url.searchParams.get("shop") as GameShop | null;
@@ -673,14 +694,11 @@ const handleDeepLinkPath = (uri?: string) => {
 };
 
 app.on("second-instance", (_event, commandLine) => {
-  const deepLink = commandLine.find((arg) =>
-    arg.startsWith("hydralauncher://")
-  );
+  const { deepLink, runGame, bigPicture } = getLauncherIntent(commandLine);
 
-  // Check if this is a "run" deep link - don't show main window in that case
-  const isRunDeepLink = deepLink?.startsWith("hydralauncher://run");
-
-  if (!isRunDeepLink) {
+  if (bigPicture) {
+    void WindowManager.openBigPictureWindow();
+  } else if (!runGame) {
     if (WindowManager.mainWindow) {
       if (WindowManager.mainWindow.isMinimized())
         WindowManager.mainWindow.restore();
@@ -691,7 +709,7 @@ app.on("second-instance", (_event, commandLine) => {
     }
   }
 
-  handleDeepLinkPath(deepLink);
+  if (!bigPicture) handleDeepLinkPath(deepLink);
 });
 
 app.on("open-url", (_event, url) => {

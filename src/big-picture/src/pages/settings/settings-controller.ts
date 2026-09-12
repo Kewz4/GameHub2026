@@ -44,8 +44,6 @@ export function resolveSettingsContentTopClearance(
   const SETTINGS_CONTENT_SAFETY_GAP_PX = 12;
 
   return (
-    Math.max(0, Math.ceil(railHeight)) +
-    Math.max(0, Math.ceil(stickyDisplacement)) +
-    SETTINGS_CONTENT_SAFETY_GAP_PX
+    Math.max(0, Math.ceil(stickyDisplacement)) + SETTINGS_CONTENT_SAFETY_GAP_PX
   );
 }

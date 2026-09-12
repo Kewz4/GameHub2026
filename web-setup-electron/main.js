@@ -5,8 +5,10 @@ const fs = require("fs");
 const os = require("os");
 const { exec, execFile, spawn } = require("child_process");
 const { promisify } = require("util");
+const { downloadReleaseAsset } = require("./download.js");
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const REPO = "Kewz4/GameHub2026";
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -14,11 +16,13 @@ const ASSET_API_PATH_PREFIX = `/repos/${REPO}/releases/assets/`;
 // The release repo is public, so the releases feed and asset downloads both
 // resolve anonymously. Earlier builds embedded a read-only PAT here; that
 // shipped a credential inside a publicly downloadable installer.
-const WINDOW_WIDTH = 560;
-const WINDOW_HEIGHT = 420;
+const WINDOW_WIDTH = 820;
+const WINDOW_HEIGHT = 540;
 const MAX_HTTPS_REDIRECTS = 5;
 
 let mainWindow = null;
+let verifiedRelease = null;
+let operationInProgress = false;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -28,8 +32,8 @@ function createWindow() {
     maximizable: false,
     frame: true,
     title: "GameHub Setup",
-    backgroundColor: "#0d0d0d",
-    icon: path.join(__dirname, "..", "build", "icon.png"),
+    backgroundColor: "#121212",
+    icon: path.join(__dirname, "assets", "icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -38,7 +42,7 @@ function createWindow() {
   });
 
   mainWindow.setMenuBarVisibility(false);
-  mainWindow.loadFile("index.html");
+  mainWindow.loadFile(path.join(__dirname, "index.html"));
 }
 
 function httpsGet(url, headers = {}, redirectCount = 0) {
@@ -49,9 +53,7 @@ function httpsGet(url, headers = {}, redirectCount = 0) {
       ...headers,
     };
 
-    // The repository is private. Authenticate only requests sent directly to
-    // GitHub's API; asset API requests redirect to a signed CDN URL, which must
-    // never carry an Authorization header across that cross-origin hop.
+    // Public downloads must not forward credentials to a redirect destination.
     delete requestHeaders.Authorization;
     delete requestHeaders.authorization;
     if (
@@ -88,6 +90,7 @@ function httpsGet(url, headers = {}, redirectCount = 0) {
           return;
         }
         if (res.statusCode !== 200) {
+          res.resume();
           reject(new Error(`HTTP ${res.statusCode}`));
           return;
         }
@@ -95,6 +98,9 @@ function httpsGet(url, headers = {}, redirectCount = 0) {
       }
     );
     req.on("error", reject);
+    req.setTimeout(30_000, () =>
+      req.destroy(new Error("The download connection timed out. Try again."))
+    );
   });
 }
 
@@ -117,42 +123,28 @@ async function downloadFile(url, destPath, onProgress) {
     throw new Error("GameHub refused an untrusted release asset URL.");
   }
 
-  const res = await httpsGet(url, {
-    Accept: "application/octet-stream",
-  });
-  const total = parseInt(res.headers["content-length"] || "0", 10);
-  let downloaded = 0;
-
-  const writeStream = fs.createWriteStream(destPath);
-
-  for await (const chunk of res) {
-    writeStream.write(chunk);
-    downloaded += chunk.length;
-    if (onProgress) {
-      onProgress({
-        downloaded,
-        total,
-        percent: total > 0 ? (downloaded / total) * 100 : 0,
-      });
-    }
-  }
-
-  await new Promise((resolve, reject) => {
-    writeStream.end(resolve);
-    writeStream.on("error", reject);
-  });
+  const asset = verifiedRelease?.assets.find((entry) => entry.url === url);
+  if (!asset) throw new Error("Refresh the release before downloading.");
+  return downloadReleaseAsset(
+    asset,
+    destPath,
+    (assetUrl) => httpsGet(assetUrl, { Accept: "application/octet-stream" }),
+    onProgress
+  );
 }
 
 async function getLatestRelease() {
   const release = await httpsGetJSON(API_URL);
-  return {
+  verifiedRelease = {
     tag: release.tag_name,
     assets: (release.assets || []).map((a) => ({
       name: a.name,
       url: a.url,
       size: a.size,
+      digest: a.digest,
     })),
   };
+  return verifiedRelease;
 }
 
 function findAsset(assets, pattern, exclude) {
@@ -186,29 +178,38 @@ function resolveLinuxPackageManager() {
 }
 
 async function extractZip(zipPath, destDir) {
-  const psScript = `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${destDir}' -Force`;
-  await execAsync(
-    `powershell -NoProfile -ExecutionPolicy Bypass -Command "${psScript.replace(/"/g, '\\"')}"`
+  const quote = (value) => `'${value.replace(/'/g, "''")}'`;
+  const script = `$ErrorActionPreference = 'Stop'; Expand-Archive -LiteralPath ${quote(zipPath)} -DestinationPath ${quote(destDir)}`;
+  await execFileAsync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      Buffer.from(script, "utf16le").toString("base64"),
+    ],
+    { windowsHide: true }
   );
 }
 
 async function createWindowsShortcut(targetPath, workingDir, shortcutName) {
-  const script = `(New-Object -ComObject WScript.Shell).CreateShortcut("${shortcutName}").TargetPath = "${targetPath.replace(/\\/g, "\\\\")}"`;
-  const desktop = await execAsync(
-    `powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`
-  );
-  const desktopPath = desktop.stdout.trim();
+  const desktopPath = app.getPath("desktop");
   const shortcutPath = path.join(desktopPath, "GameHub Portable.lnk");
-
-  const fullScript = `$s = (New-Object -ComObject WScript.Shell).CreateShortcut('${shortcutPath}'); $s.TargetPath = '${targetPath}'; $s.WorkingDirectory = '${workingDir}'; $s.Save()`;
-  await execAsync(
-    `powershell -NoProfile -ExecutionPolicy Bypass -Command "${fullScript.replace(/"/g, '\\"')}"`
-  );
+  if (
+    !shell.writeShortcutLink(shortcutPath, "create", {
+      target: targetPath,
+      cwd: workingDir,
+      description: "GameHub Portable",
+      icon: targetPath,
+      iconIndex: 0,
+    })
+  )
+    throw new Error("The desktop shortcut could not be created.");
   return shortcutPath;
 }
 
 async function performInstall(event, release) {
-  const tmpDir = os.tmpdir();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gamehub-setup-"));
   const platform = process.platform;
 
   if (platform === "win32") {
@@ -223,8 +224,9 @@ async function performInstall(event, release) {
     });
 
     event.reply("setup:status", "Launching installer...");
-    await shell.openPath(installerPath);
-    event.reply("setup:done", { mode: "install" });
+    const error = await shell.openPath(installerPath);
+    if (error) throw new Error(`The installer could not open: ${error}`);
+    event.reply("setup:done", { mode: "install", handedOff: true });
   } else if (platform === "linux") {
     const debAsset = findAsset(release.assets, "\\.deb$");
     const rpmAsset = findAsset(release.assets, "\\.rpm$");
@@ -307,7 +309,7 @@ MimeType=x-scheme-handler/hydralauncher;`;
 }
 
 async function performPortable(event, release, targetDir) {
-  const tmpDir = os.tmpdir();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "gamehub-setup-"));
   const platform = process.platform;
 
   if (platform === "win32") {
@@ -315,6 +317,11 @@ async function performPortable(event, release, targetDir) {
     if (!asset)
       throw new Error("No portable zip found in release " + release.tag);
 
+    if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
+      throw new Error(
+        "Choose an empty folder for GameHub Portable so existing files stay safe."
+      );
+    }
     const zipPath = path.join(tmpDir, asset.name);
     event.reply("setup:status", `Downloading ${asset.name}...`);
 
@@ -330,6 +337,8 @@ async function performPortable(event, release, targetDir) {
     fs.writeFileSync(markerPath, "");
 
     const exePath = path.join(targetDir, "GameHub.exe");
+    if (!fs.existsSync(exePath))
+      throw new Error("The portable download did not contain GameHub.exe.");
     if (fs.existsSync(exePath)) {
       try {
         await createWindowsShortcut(exePath, targetDir);
@@ -385,19 +394,31 @@ app.whenReady().then(() => {
     return await selectFolder();
   });
 
-  ipcMain.on("setup:install", async (event, release) => {
+  ipcMain.on("setup:install", async (event) => {
+    if (operationInProgress) return;
+    operationInProgress = true;
     try {
-      await performInstall(event, release);
+      if (!verifiedRelease)
+        throw new Error("Load a release before installing.");
+      await performInstall(event, verifiedRelease);
     } catch (error) {
       event.reply("setup:error", error.message);
+    } finally {
+      operationInProgress = false;
     }
   });
 
-  ipcMain.on("setup:portable", async (event, release, targetDir) => {
+  ipcMain.on("setup:portable", async (event, _release, targetDir) => {
+    if (operationInProgress) return;
+    operationInProgress = true;
     try {
-      await performPortable(event, release, targetDir);
+      if (!verifiedRelease)
+        throw new Error("Load a release before installing.");
+      await performPortable(event, verifiedRelease, targetDir);
     } catch (error) {
       event.reply("setup:error", error.message);
+    } finally {
+      operationInProgress = false;
     }
   });
 

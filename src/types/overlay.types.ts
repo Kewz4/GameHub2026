@@ -29,6 +29,7 @@ export interface HydraOverlayGame {
 }
 
 export interface HydraOverlayContext {
+  keyboardShortcutAvailable?: boolean;
   game: HydraOverlayGame;
   user: {
     displayName: string;

@@ -1,6 +1,6 @@
 {
   "name": "hydralauncher",
-  "version": "1.1.47",
+  "version": "1.1.48",
   "description": "GameHub",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
@@ -21,6 +21,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test:spotify": "node --test scripts/tests/spotify-helpers.test.ts",
+    "test:maintenance": "tsx --tsconfig tsconfig.web.json --test src/main/services/launcher-intent.test.ts src/main/services/overlay-shortcut.test.ts src/main/services/spotify-read-cache.test.ts src/main/services/achievements/metadata-export/metadata-export.test.ts src/big-picture/src/pages/catalogue/pagination-range.test.ts src/renderer/src/pages/settings/emulation/handheld-controller-diagram.test.tsx && node --test web-setup-electron/download.test.cjs",
     "test:overlay": "tsx --tsconfig tsconfig.web.json --test src/renderer/src/pages/overlay/overlay-controller.test.ts src/renderer/src/pages/overlay/overlay-contrast.test.ts src/renderer/src/pages/overlay/use-overlay-layout.test.ts src/renderer/src/pages/overlay/overlay-recorder-presentation.test.ts src/renderer/src/pages/overlay/overlay-unavailable.test.ts src/renderer/src/components/achievements/notification/achievement-notification-icon.test.ts src/renderer/src/components/sidebar/sidebar-visibility.test.ts scripts/tests/overlay-performance-metrics.test.ts scripts/tests/overlay-activation-policy.test.ts scripts/tests/overlay-controller-accessibility.test.ts && tsx --tsconfig tsconfig.node.json --test src/main/services/coalesced-window-creation.test.ts src/main/services/overlay-active-game.test.ts src/main/services/overlay-window-lifecycle.test.ts src/main/services/overlay-window-mode.test.ts src/main/services/overlay-runtime-policy.test.ts src/main/services/screenshot-size.test.ts src/main/services/screenshot-frame-validation.test.ts src/main/services/screenshot-encoding.test.ts && node --test scripts/tests/qa-live-overlay-acceptance.test.mjs scripts/tests/qa-live-overlay-policy.test.mjs",
     "test:hero-description": "tsx --tsconfig tsconfig.web.json --test src/big-picture/src/components/pages/game/hero/hero-description-state.test.ts",
     "test:home-recommendation-identity": "tsx --tsconfig tsconfig.web.json --test src/shared/recommendation-identity.test.ts",

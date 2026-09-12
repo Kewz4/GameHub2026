@@ -682,6 +682,13 @@ export class GameFilesManager {
 
   private async createDesktopShortcutForGame(gameTitle: string): Promise<void> {
     try {
+      if (process.platform === "linux") {
+        const preferences = await db.get<string, UserPreferences | null>(
+          levelKeys.userPreferences,
+          { valueEncoding: "json" }
+        );
+        if (preferences?.createStartMenuShortcut === false) return;
+      }
       const shortcutName =
         removeSymbolsFromName(gameTitle).trim() || this.objectId;
       const deepLink = this.buildRunDeepLink();

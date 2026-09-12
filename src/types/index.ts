@@ -402,6 +402,7 @@ export interface GameReviewAnswer {
     id: string;
     displayName: string;
     profileImageUrl: string | null;
+    backgroundImageUrl?: string | null;
   };
   translations: {
     [key: string]: string;
@@ -427,6 +428,7 @@ export interface GameReview {
     id: string;
     displayName: string;
     profileImageUrl: string | null;
+    backgroundImageUrl?: string | null;
   };
   translations: {
     [key: string]: string;

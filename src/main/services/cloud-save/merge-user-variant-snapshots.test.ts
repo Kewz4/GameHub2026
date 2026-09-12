@@ -12,6 +12,7 @@ import type {
 import { cloudSaveFileKey } from "./cloud-save-contract";
 // @ts-ignore The Node ESM test runner requires the source extension.
 import { mergeUserVariantSnapshots } from "./merge-user-variant-snapshots";
+import { selectCloudSaveSyncAnchor } from "./sync-anchor-head";
 
 const variantId = "1".repeat(64);
 const variant: SnapshotVariant = { variantId, kind: "default" };
@@ -65,6 +66,44 @@ const anchor = (files: SnapshotFile[]) => ({
 });
 
 describe("merge user variant snapshots", () => {
+  it("preserves unchanged Hades and emulator saves when the cloud head disappears", () => {
+    for (const rawPath of [
+      "<home>/Saved Games/Hades II",
+      "gamehub-emulator:cemu:title:00050000",
+    ]) {
+      const savedFiles = [
+        file("Profile1.sav", "a", rawPath),
+        file("Profile2.sav", "b", rawPath),
+      ];
+      const oldAnchor = anchor(savedFiles);
+      const result = mergeUserVariantSnapshots({
+        local: context(savedFiles),
+        remoteVariants: [],
+        remoteFiles: [],
+        base: selectCloudSaveSyncAnchor(oldAnchor, null),
+      });
+      assert.deepEqual(result.files, savedFiles);
+      assert.deepEqual(result.deleteLocalEntryIds, []);
+      assert.deepEqual(result.restoreEntryIds, []);
+      assert.deepEqual(result.conflicts, []);
+    }
+  });
+
+  it("does not use an anchor from another snapshot or a newer remote version", () => {
+    const oldAnchor = anchor([file("Profile1.sav", "a")]);
+    assert.equal(
+      selectCloudSaveSyncAnchor(oldAnchor, { id: "replacement", version: 2 }),
+      null
+    );
+    assert.equal(
+      selectCloudSaveSyncAnchor(oldAnchor, { id: "snapshot", version: 0 }),
+      null
+    );
+    assert.equal(
+      selectCloudSaveSyncAnchor(oldAnchor, { id: "snapshot", version: 2 }),
+      oldAnchor
+    );
+  });
   it("combines independent local and remote changes", () => {
     const base = [file("A.sav", "a"), file("B.sav", "b")];
     const result = mergeUserVariantSnapshots({

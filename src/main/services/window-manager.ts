@@ -46,6 +46,8 @@ export class WindowManager {
   private static friendsWindow: Electron.BrowserWindow | null = null;
   private static authWindow: Electron.BrowserWindow | null = null;
   private static deferredMainMaximize = false;
+  private static mainWindowCreation: Promise<void> | null = null;
+  private static startMainInBigPicture = false;
   private static readonly notificationWindowCreation =
     new CoalescedWindowCreation<Electron.BrowserWindow>();
 
@@ -86,6 +88,13 @@ export class WindowManager {
   // Public so the overlay-manager can load the `#/overlay` renderer route into
   // can load the `#/overlay` renderer route into their own BrowserWindows.
   public static async loadWindowURL(window: BrowserWindow, hash: string = "") {
+    if (!app.isPackaged && process.env.GAMEHUB_BACKGROUND_QA === "true") {
+      window.setOpacity(0);
+      window.setFocusable(false);
+      window.setIgnoreMouseEvents(true);
+      window.setSkipTaskbar(true);
+      window.webContents.setBackgroundThrottling(false);
+    }
     // HMR for renderer base on electron-vite cli.
     // Load the remote URL for development or the local html file for production.
     if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
@@ -204,9 +213,18 @@ export class WindowManager {
     };
   }
 
-  public static async createMainWindow() {
-    if (this.mainWindow) return;
+  public static async createMainWindow(options: { bigPicture?: boolean } = {}) {
+    if (options.bigPicture) this.startMainInBigPicture = true;
+    if (this.mainWindowCreation) return this.mainWindowCreation;
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) return;
+    const creation = this.createMainWindowInternal().finally(() => {
+      if (this.mainWindowCreation === creation) this.mainWindowCreation = null;
+    });
+    this.mainWindowCreation = creation;
+    return creation;
+  }
 
+  private static async createMainWindowInternal() {
     const userPreferences = await db
       .get<string, UserPreferences | null>(levelKeys.userPreferences, {
         valueEncoding: "json",
@@ -224,7 +242,7 @@ export class WindowManager {
 
     this.deferredMainMaximize = false;
 
-    if (userPreferences?.launchInBigPicture) {
+    if (this.startMainInBigPicture || userPreferences?.launchInBigPicture) {
       this.mainWindow.setOpacity(0);
       this.mainWindow.setSkipTaskbar(true);
       if (isMaximized) {
@@ -336,9 +354,13 @@ export class WindowManager {
     });
 
     this.mainWindow.on("ready-to-show", () => {
-      if (!app.isPackaged || isStaging)
+      if (
+        (!app.isPackaged || isStaging) &&
+        process.env.GAMEHUB_BACKGROUND_QA !== "true"
+      )
         WindowManager.mainWindow?.webContents.openDevTools();
-      if (userPreferences?.launchInBigPicture) {
+      if (this.startMainInBigPicture || userPreferences?.launchInBigPicture) {
+        this.startMainInBigPicture = false;
         void WindowManager.openBigPictureWindow();
       } else {
         WindowManager.mainWindow?.show();
@@ -386,7 +408,12 @@ export class WindowManager {
   }
 
   public static async openBigPictureWindow() {
-    if (this.bigPicture) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      await this.createMainWindow({ bigPicture: true });
+    }
+    if (this.bigPicture && !this.bigPicture.isDestroyed()) {
+      if (this.bigPicture.isMinimized()) this.bigPicture.restore();
+      this.bigPicture.show();
       this.bigPicture.focus();
       return;
     }
@@ -417,7 +444,10 @@ export class WindowManager {
 
     this.bigPicture.removeMenu();
 
-    if (!app.isPackaged || isStaging) {
+    if (
+      (!app.isPackaged || isStaging) &&
+      process.env.GAMEHUB_BACKGROUND_QA !== "true"
+    ) {
       this.bigPicture.webContents.openDevTools();
     }
 
@@ -1096,7 +1126,10 @@ export class WindowManager {
       this.gameLauncherWindow = null;
     });
 
-    if (!app.isPackaged || isStaging) {
+    if (
+      (!app.isPackaged || isStaging) &&
+      process.env.GAMEHUB_BACKGROUND_QA !== "true"
+    ) {
       this.gameLauncherWindow.webContents.openDevTools();
     }
   }
@@ -1313,7 +1346,10 @@ export class WindowManager {
 
     this.friendsWindow.once("ready-to-show", () => {
       this.friendsWindow?.show();
-      if (!app.isPackaged || isStaging) {
+      if (
+        (!app.isPackaged || isStaging) &&
+        process.env.GAMEHUB_BACKGROUND_QA !== "true"
+      ) {
         this.friendsWindow?.webContents.openDevTools();
       }
     });

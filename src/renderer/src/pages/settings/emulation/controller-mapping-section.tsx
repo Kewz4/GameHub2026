@@ -17,6 +17,7 @@ import { WiimoteDiagram } from "./wiimote-diagram";
 import { Ps1Diagram } from "./ps1-diagram";
 import { DualShockDiagram } from "./dualshock-diagram";
 import { JoyConDiagram } from "./joycon-diagram";
+import { HandheldControllerDiagram } from "./handheld-controller-diagram";
 import {
   AXIS_NAME,
   AXIS_THRESHOLD,
@@ -559,6 +560,18 @@ export function ControllerMappingSection({ binary }: Readonly<Props>) {
                 onClickControl: onDiagramClick,
               };
               switch (layout.diagram) {
+                case "wiiu-gamepad":
+                case "wiiu-pro":
+                case "classic":
+                case "3ds":
+                case "ds":
+                case "psp":
+                  return (
+                    <HandheldControllerDiagram
+                      kind={layout.diagram}
+                      {...diagramProps}
+                    />
+                  );
                 case "gamecube":
                   return <GameCubeDiagram {...diagramProps} />;
                 case "gba":

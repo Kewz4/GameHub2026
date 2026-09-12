@@ -1237,16 +1237,31 @@ export default function Overlay() {
       if (action === "previous-tab" || action === "next-tab") {
         const activeTabList =
           document.activeElement?.closest('[role="tablist"]');
-        const musicWidget = document.querySelector<HTMLElement>(
-          '[data-widget="music"]'
-        );
-        const tabRoot =
-          activeTabList ??
-          (document.activeElement instanceof Node &&
-          musicWidget?.contains(document.activeElement)
-            ? musicWidget
-            : null);
-        if (!tabRoot) return;
+        const tabRoot = activeTabList;
+        if (!tabRoot) {
+          if (getActiveControllerScope()) return;
+          const widgets = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-widget]")
+          ).filter((widget) => getControllerElements(widget).length > 0);
+          if (!widgets.length) return;
+          const currentWidget =
+            document.activeElement?.closest("[data-widget]");
+          const currentIndex = widgets.findIndex(
+            (widget) => widget === currentWidget
+          );
+          const offset = action === "next-tab" ? 1 : -1;
+          const index =
+            currentIndex < 0
+              ? offset > 0
+                ? 0
+                : widgets.length - 1
+              : (currentIndex + offset + widgets.length) % widgets.length;
+          focusControllerElement(
+            getControllerElements(widgets[index])[0],
+            focusWidget
+          );
+          return;
+        }
         const tabs = Array.from(
           tabRoot.querySelectorAll<HTMLButtonElement>('[role="tab"]')
         ).filter((tab) => getVisibleControllerRect(tab) !== null);
@@ -1948,6 +1963,11 @@ export default function Overlay() {
             </strong>
             {overlayUnavailable ? (
               <p>{overlayUnavailable}</p>
+            ) : context?.keyboardShortcutAvailable === false ? (
+              <p>
+                Press Guide. Run the game without administrator mode to use
+                Shift+F3.
+              </p>
             ) : (
               <p>
                 Press <kbd>{context?.shortcut ?? "Shift+F3"}</kbd> or press the
@@ -2356,13 +2376,13 @@ export default function Overlay() {
           ) : (
             <>
               <kbd>A</kbd>
-              <span>Select / engage</span>
+              <span>Select</span>
               <kbd>B</kbd>
               <span>Back</span>
               <span className="overlay-controller-hints__tabs">
                 <kbd>LB</kbd>
                 <kbd>RB</kbd>
-                <span>Tabs</span>
+                <span>Widgets / tabs</span>
               </span>
             </>
           )}

@@ -273,7 +273,7 @@ export function SettingsContextDownloads() {
           }
         />
 
-        {window.electron.platform === "win32" && (
+        {["win32", "linux"].includes(window.electron.platform) && (
           <CheckboxField
             id="settings-create-shortcuts"
             label={t("create_shortcuts_on_download")}

@@ -17,6 +17,7 @@ import { prepareCloudSaveAccountNamespace } from "./cloud-save-namespace-state";
 import { invalidateR2CredentialSession } from "./r2-credential-session";
 
 export interface HydraApiOptions {
+  signal?: AbortSignal;
   needsAuth?: boolean;
   needsSubscription?: boolean;
   ifModifiedSince?: Date;
@@ -431,7 +432,12 @@ export class HydraApi {
     };
 
     return this.instance
-      .get<T>(url, { params, ...this.getAxiosConfig(), headers })
+      .get<T>(url, {
+        params,
+        ...this.getAxiosConfig(),
+        headers,
+        signal: options?.signal,
+      })
       .then((response) => response.data)
       .catch(this.handleUnauthorizedError);
   }

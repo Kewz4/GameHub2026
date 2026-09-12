@@ -639,6 +639,29 @@ pub fn is_current_process_elevated() -> bool {
 
 #[napi]
 #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+pub fn is_process_elevated(pid: u32) -> bool {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() { return false; }
+        let mut token = null_mut();
+        let opened = OpenProcessToken(process, TOKEN_QUERY, &mut token);
+        CloseHandle(process);
+        if opened == 0 { return false; }
+        let mut elevation: TOKEN_ELEVATION = zeroed();
+        let mut size = 0;
+        let result = GetTokenInformation(token, TokenElevation,
+            &mut elevation as *mut TOKEN_ELEVATION as *mut _,
+            size_of::<TOKEN_ELEVATION>() as u32, &mut size);
+        CloseHandle(token);
+        result != 0 && elevation.TokenIsElevated != 0
+    }
+    #[cfg(not(target_os = "windows"))]
+    false
+}
+
+#[napi]
+#[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
 pub fn launch_elevated(executable: String, parameters: String, working_directory: String) -> bool {
     #[cfg(target_os = "windows")]
     unsafe {

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import http from "node:http";
-import { BrowserWindow, safeStorage } from "electron";
+import { safeStorage, shell } from "electron";
 import axios, { type AxiosRequestConfig } from "axios";
 
 import { db, levelKeys } from "@main/level";
@@ -41,6 +41,7 @@ import {
   SpotifyRateLimitGate,
 } from "./spotify-helpers";
 import { logger } from "./logger";
+import { SpotifyReadCache } from "./spotify-read-cache";
 
 /**
  * Spotify treats a loopback URI registered without a port as matching any
@@ -166,7 +167,8 @@ const resolveClientId = async (): Promise<string | null> => {
  * enters GameHub's player or yt-dlp queue.
  */
 export class SpotifyService {
-  private static authWindow: BrowserWindow | null = null;
+  private static readonly readCache = new SpotifyReadCache();
+  private static cancelAuth: (() => void) | null = null;
   private static authServer: http.Server | null = null;
   private static accountCache: SpotifyAccount | null = null;
   private static lastError: SpotifyProviderError | null = null;
@@ -964,6 +966,21 @@ export class SpotifyService {
   private static async apiRequest<T = unknown>(
     config: AxiosRequestConfig
   ): Promise<{ data: T; status: number }> {
+    if ((config.method ?? "GET").toUpperCase() === "GET") {
+      const key = `${this.credentialEpoch}:${config.url}:${JSON.stringify(config.params ?? {})}`;
+      return this.readCache.read(key, () => this.performApiRequest<T>(config));
+    }
+    this.readCache.clear();
+    try {
+      return await this.performApiRequest<T>(config);
+    } finally {
+      this.readCache.clear();
+    }
+  }
+
+  private static async performApiRequest<T = unknown>(
+    config: AxiosRequestConfig
+  ): Promise<{ data: T; status: number }> {
     this.assertApiRateLimitWindow();
     let accessToken = await this.getAccessToken();
     if (!accessToken) {
@@ -1564,22 +1581,6 @@ export class SpotifyService {
 
     return new Promise((resolve, reject) => {
       let settled = false;
-      const window = new BrowserWindow({
-        width: 500,
-        height: 760,
-        minWidth: 420,
-        minHeight: 640,
-        title: "Connect Spotify",
-        autoHideMenuBar: true,
-        backgroundColor: "#0b0b0b",
-        webPreferences: {
-          sandbox: true,
-          nodeIntegration: false,
-          contextIsolation: true,
-        },
-      });
-      this.authWindow = window;
-
       const timeout = setTimeout(() => {
         finish(
           new SpotifyServiceError({
@@ -1596,8 +1597,7 @@ export class SpotifyService {
         server.off("error", onServerError);
         if (server.listening) server.close();
         if (this.authServer === server) this.authServer = null;
-        if (this.authWindow === window) this.authWindow = null;
-        if (!window.isDestroyed()) window.destroy();
+        if (this.cancelAuth === cancel) this.cancelAuth = null;
         if (error) reject(error);
         else if (code) resolve({ code, redirectUri });
         else {
@@ -1610,13 +1610,21 @@ export class SpotifyService {
         }
       };
 
+      const cancel = () =>
+        finish(
+          new SpotifyServiceError({
+            code: "AUTH_REQUIRED",
+            message: "Spotify connection was cancelled.",
+          })
+        );
+      this.cancelAuth = cancel;
       const onServerError = (error: Error) => finish(error);
       server.on("error", onServerError);
       server.on("request", (request, response) => {
         if (
           settled ||
           this.authServer !== server ||
-          this.authWindow !== window
+          this.cancelAuth !== cancel
         ) {
           response.writeHead(410, {
             "Cache-Control": "no-store",
@@ -1686,51 +1694,18 @@ export class SpotifyService {
         }
       });
 
-      window.on("closed", () => {
-        finish(
-          new SpotifyServiceError({
-            code: "AUTH_REQUIRED",
-            message: "Spotify connection was cancelled.",
-          })
-        );
-      });
-      window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-      const guardNavigation = (
-        event: Electron.Event,
-        navigationUrl: string
-      ) => {
-        try {
-          const target = new URL(navigationUrl);
-          const isSpotifyAccounts =
-            target.protocol === "https:" &&
-            target.hostname === "accounts.spotify.com";
-          const isCurrentLoopbackCallback =
-            target.protocol === "http:" &&
-            target.hostname === "127.0.0.1" &&
-            target.port === String(address.port) &&
-            target.pathname === "/callback";
-          if (!isSpotifyAccounts && !isCurrentLoopbackCallback) {
-            event.preventDefault();
-          }
-        } catch {
-          event.preventDefault();
-        }
-      };
-      window.webContents.on("will-navigate", guardNavigation);
-      window.webContents.on("will-redirect", guardNavigation);
-      window.loadURL(authorizationUrl).catch((error) => finish(error));
+      // The system browser supports existing sessions, passkeys and social
+      // sign-in. Authorization returns to our state-checked PKCE listener.
+      void shell.openExternal(authorizationUrl).catch((error) => finish(error));
     });
   }
 
   private static closeAuthWindow() {
+    this.cancelAuth?.();
+    this.cancelAuth = null;
     const server = this.authServer;
     this.authServer = null;
     if (server?.listening) server.close();
-    const window = this.authWindow;
-    this.authWindow = null;
-    if (window && !window.isDestroyed()) {
-      window.destroy();
-    }
   }
 
   private static assertCredentialEpoch(expectedEpoch: number) {

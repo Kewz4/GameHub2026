@@ -116,7 +116,9 @@ export function DownloadsSourcesSection({
 
   const isBusy = isSyncing || isRemoving;
   const hasSources = downloadSources.length > 0;
-  const isWindows = globalThis.window.electron.platform === "win32";
+  const isWindows = ["win32", "linux"].includes(
+    globalThis.window.electron.platform
+  );
   const firstRemoveButtonFocusId = downloadSources[0]
     ? getDownloadsSourceRemoveButtonFocusId(downloadSources[0].id)
     : null;

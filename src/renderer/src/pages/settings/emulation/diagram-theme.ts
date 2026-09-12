@@ -33,5 +33,5 @@ export const DIAGRAM = {
   /** Active/bound highlight — the app's primary colour. */
   accent: "var(--color-text-bright, #fafafa)",
   /** Text on top of the accent (must contrast in both modes). */
-  accentText: "#0d0d0d",
+  accentText: "var(--color-background, #0d0d0d)",
 } as const;

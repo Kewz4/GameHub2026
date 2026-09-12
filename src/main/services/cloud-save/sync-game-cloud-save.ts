@@ -33,15 +33,8 @@ import { deleteLocalSaveTargets } from "./delete-local-save-targets";
 import { assertCloudSaveEnvironmentCurrent } from "./environment-guard";
 import { canDeleteInstallationOwnedCustomPathFiles } from "./installation-owned-custom-paths";
 import { resolveAnalyzedCloudSaveMerge } from "./resolve-analyzed-cloud-save-merge";
-import {
-  buildRemoteSnapshotDeletionPlan,
-  decideRemoteSnapshotDeletion,
-} from "./remote-snapshot-deletion";
 import { saveCloudSaveSyncAnchor } from "./sync-anchor";
-import {
-  shouldRetryCloudSaveConflict,
-  shouldRetryCloudSaveStateChange,
-} from "./snapshot-retry-policy";
+import { shouldRetryCloudSaveConflict } from "./snapshot-retry-policy";
 import {
   assertCloudSaveSyncAllowedDuringLaunch,
   cloudSaveOperationGate,
@@ -71,25 +64,10 @@ interface ActiveSyncProgress {
   latestProgress?: CloudSaveSyncProgressPayload;
 }
 
-class CloudSaveSyncStateChangedError extends Error {
-  constructor() {
-    super("cloud_save_sync_state_changed");
-  }
-}
-
 const activeSyncs = new Map<string, ActiveSync>();
 const gameKey = (objectId: string, shop: GameShop) =>
   JSON.stringify([getCloudSaveAccountScopeKey(), shop, objectId]);
 type CloudSaveAnalysis = Awaited<ReturnType<typeof analyzeCloudSaveState>>;
-
-type RemoteSnapshotDeletionOutcome =
-  | { kind: "retry" }
-  | { kind: "conflict" }
-  | {
-      kind: "accepted" | "uploaded";
-      processedFiles: number;
-      totalFiles: number;
-    };
 
 const samePaths = (left: string[], right: string[]) =>
   left.length === right.length &&
@@ -190,165 +168,6 @@ const analyzeAfterMutation = async (
   );
   await assertEnvironmentCurrent();
   return verified;
-};
-
-const selectAutomaticSnapshotContext = (
-  analysis: CloudSaveAnalysis,
-  automaticEntryIds: string[]
-) => {
-  const requestedIds = new Set(automaticEntryIds);
-  const files = analysis.localSnapshotContext.files.filter((file) =>
-    requestedIds.has(cloudSaveFileKey(file))
-  );
-  const sourceFiles = analysis.localSnapshotContext.sourceFiles.filter((file) =>
-    requestedIds.has(cloudSaveFileKey(file))
-  );
-  if (
-    files.length !== requestedIds.size ||
-    sourceFiles.length !== requestedIds.size
-  ) {
-    throw new Error("cloud_save_delete_local_target_missing");
-  }
-  const usedVariantIds = new Set(files.map((file) => file.variantId));
-  const variants = analysis.localSnapshotContext.variants.filter((variant) =>
-    usedVariantIds.has(variant.variantId)
-  );
-  const aggregateHash = NativeAddon.buildSnapshotAggregateHash({
-    variants,
-    files,
-  });
-
-  return {
-    ...analysis.localSnapshotContext,
-    variants,
-    files,
-    sourceFiles,
-    fileCount: files.length,
-    totalSizeBytes: files.reduce((total, file) => total + file.sizeBytes, 0),
-    aggregateHash,
-    customPathRawPaths: [],
-  };
-};
-
-const executeRemoteSnapshotDeletionSync = async ({
-  objectId,
-  shop,
-  trigger,
-  resolution,
-  suppliedContext,
-  emitProgress,
-  assertEnvironmentCurrent,
-}: {
-  objectId: string;
-  shop: GameShop;
-  trigger: CloudSaveSyncTrigger;
-  resolution: CloudSaveConflictResolution | undefined;
-  suppliedContext: Awaited<ReturnType<typeof getCloudSaveGameContext>>;
-  emitProgress: ProgressCallback;
-  assertEnvironmentCurrent: AssertEnvironmentCurrent;
-}): Promise<RemoteSnapshotDeletionOutcome> => {
-  const customPathContext = cloudSaveCustomPathContextFromPathContext(
-    suppliedContext.pathContext
-  );
-  let outcome: RemoteSnapshotDeletionOutcome | undefined;
-
-  await withCloudSaveCustomPathStoreMutation(
-    shop,
-    objectId,
-    customPathContext,
-    async (customPathStorageKey, bindings, mutations) => {
-      const analysis = await analyzeCloudSaveState(
-        objectId,
-        shop,
-        suppliedContext,
-        getSyncDirection(trigger),
-        {
-          customPathBindings: bindings,
-          allowInstallationOwnedCustomPathDeletion:
-            canDeleteInstallationOwnedCustomPathFiles(trigger),
-        }
-      );
-      await assertEnvironmentCurrent();
-      if (analysis.activeRemoteSnapshot || !analysis.anchor) {
-        outcome = { kind: "retry" };
-        return;
-      }
-
-      const deletionPlan = buildRemoteSnapshotDeletionPlan(
-        analysis.localSnapshotContext,
-        analysis.anchor,
-        bindings
-      );
-      const decision = decideRemoteSnapshotDeletion(deletionPlan, resolution);
-      if (decision.kind === "conflict") {
-        outcome = { kind: "conflict" };
-        return;
-      }
-
-      if (decision.kind === "upload") {
-        const automaticContext = selectAutomaticSnapshotContext(
-          analysis,
-          decision.uploadEntryIds
-        );
-        const committed = await uploadLocalState(
-          objectId,
-          shop,
-          automaticContext,
-          emitProgress,
-          {
-            baseVersion: 0,
-            expectedSnapshotId: null,
-            variants: automaticContext.variants,
-            files: automaticContext.files,
-            customPathRawPaths: [],
-            aggregateHash: automaticContext.aggregateHash,
-            unresolvedRemoteEntryIds: [],
-          },
-          assertEnvironmentCurrent
-        );
-        requireCommittedCloudSaveSnapshot(committed);
-        const customRawPaths = new Set(
-          [...bindings.ready, ...bindings.unresolved].map(
-            ({ rawPath }) => rawPath
-          )
-        );
-        for (const rawPath of customRawPaths) {
-          await mutations.remove(rawPath);
-        }
-        outcome = {
-          kind: "uploaded",
-          processedFiles: automaticContext.fileCount,
-          totalFiles: automaticContext.fileCount,
-        };
-        return;
-      }
-
-      const deleteLocalEntryIds = decision.deleteLocalEntryIds;
-      if (deleteLocalEntryIds.length > 0) {
-        emitProgress({
-          gameId: { objectId, shop },
-          stage: "restoring",
-          processedFiles: 0,
-          totalFiles: deleteLocalEntryIds.length,
-        });
-        await deleteLocalSaveTargets(
-          analysis.localSnapshotContext,
-          deleteLocalEntryIds,
-          assertEnvironmentCurrent
-        );
-      }
-      await clearCloudSaveLocalState(objectId, shop, customPathStorageKey);
-      outcome = {
-        kind: "accepted",
-        processedFiles: deleteLocalEntryIds.length,
-        totalFiles: deleteLocalEntryIds.length,
-      };
-    }
-  );
-  if (!outcome) {
-    throw new Error("cloud_save_remote_deletion_outcome_missing");
-  }
-  return outcome;
 };
 
 const createSyncFinisher = (
@@ -666,7 +485,6 @@ const executeGameCloudSaveSync = async ({
   emitProgress,
   resolution,
   suppliedContext,
-  attempt,
 }: {
   objectId: string;
   shop: GameShop;
@@ -674,7 +492,6 @@ const executeGameCloudSaveSync = async ({
   emitProgress: ProgressCallback;
   resolution: CloudSaveConflictResolution | undefined;
   suppliedContext: Awaited<ReturnType<typeof getCloudSaveGameContext>>;
-  attempt: number;
 }): Promise<SyncGameCloudSaveResult> => {
   const assertEnvironmentCurrent = async () => {
     assertCloudSaveAccountSessionCurrent();
@@ -761,49 +578,6 @@ const executeGameCloudSaveSync = async ({
     // A local resurrection is an upload against the R2 tombstone, not a
     // per-file conflict merge (the tombstone intentionally has no manifest).
     if (resolution === "keep-local") mergeResolution = undefined;
-  }
-  if (!analysis.activeRemoteSnapshot && analysis.anchor) {
-    const remoteDeletionOutcome = await executeRemoteSnapshotDeletionSync({
-      objectId,
-      shop,
-      trigger,
-      resolution,
-      suppliedContext,
-      emitProgress,
-      assertEnvironmentCurrent,
-    });
-    if (remoteDeletionOutcome.kind === "retry") {
-      if (!shouldRetryCloudSaveStateChange(attempt)) {
-        throw new Error("cloud_save_sync_state_changed_twice");
-      }
-      throw new CloudSaveSyncStateChangedError();
-    }
-    if (remoteDeletionOutcome.kind === "conflict") {
-      return finish("conflict", "conflict");
-    }
-    if (remoteDeletionOutcome.kind === "accepted") {
-      return finish(
-        remoteDeletionOutcome.processedFiles > 0 ? "restore" : "none",
-        "untracked",
-        remoteDeletionOutcome.processedFiles,
-        remoteDeletionOutcome.totalFiles,
-        null
-      );
-    }
-    const verified = await analyzeAfterMutation(
-      objectId,
-      shop,
-      trigger,
-      analysis,
-      assertEnvironmentCurrent
-    );
-    return finish(
-      "upload",
-      verified.state.state,
-      remoteDeletionOutcome.processedFiles,
-      remoteDeletionOutcome.totalFiles,
-      verified.activeRemoteSnapshot?.aggregateHash ?? null
-    );
   }
 
   const merge = resolveAnalyzedCloudSaveMerge(analysis, mergeResolution);
@@ -952,20 +726,8 @@ const runGameCloudSaveSync = async (
       emitProgress,
       resolution,
       suppliedContext,
-      attempt,
     });
   } catch (error) {
-    if (error instanceof CloudSaveSyncStateChangedError) {
-      return runGameCloudSaveSync(
-        objectId,
-        shop,
-        trigger,
-        emitProgress,
-        resolution,
-        suppliedContext,
-        attempt + 1
-      );
-    }
     if (shouldRetryCloudSaveConflict(error, attempt)) {
       return runGameCloudSaveSync(
         objectId,

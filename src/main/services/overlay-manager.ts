@@ -34,6 +34,7 @@ import { WindowManager } from "./window-manager";
 import { GameRecorderManager } from "./game-recorder-manager";
 import { isGameWindowDisplaySized } from "./game-recorder-capture-source";
 import { destroyOverlayWindow } from "./overlay-window-lifecycle";
+import { isOverlayShortcutInput } from "./overlay-shortcut";
 import {
   OVERLAY_ACTIVATION_GRACE_MS,
   calculateActivationToastBounds,
@@ -143,6 +144,14 @@ export class OverlayManager {
       this.updatePerformance(metrics)
     );
     app.once("will-quit", () => this.dispose());
+    app.on("browser-window-created", (_event, window) => {
+      window.webContents.on("before-input-event", (event, input) => {
+        if (this.servicesActive && isOverlayShortcutInput(input)) {
+          event.preventDefault();
+          this.handleShortcutTrigger("window-keyboard");
+        }
+      });
+    });
   }
 
   public static setActiveGame(game: Game) {
@@ -368,6 +377,10 @@ export class OverlayManager {
         : null,
       achievements,
       shortcut: this.registeredShortcut ?? PREFERRED_SHORTCUT,
+      keyboardShortcutAvailable:
+        !this.targetPid ||
+        !NativeAddon.isProcessElevated(this.targetPid) ||
+        NativeAddon.isCurrentProcessElevated(),
       controllerShortcut: CONTROLLER_SHORTCUT,
       performance: this.performance,
       performancePinned: this.performancePinned,
@@ -1438,9 +1451,9 @@ export class OverlayManager {
       this.handleShortcutTrigger("os-hotkey")
     );
 
-    // Shift+F3 is rarely taken on Windows; elsewhere it collides often enough
-    // to be worth a second choice.
-    if (!osHotkey && process.platform !== "win32") {
+    // Other overlays may reserve Shift+F3 on Windows too. Keep the native
+    // Shift+F3 watcher and advertise the working OS fallback when it is taken.
+    if (!osHotkey) {
       osHotkey = globalShortcut.register(FALLBACK_SHORTCUT, () =>
         this.handleShortcutTrigger("os-hotkey")
       );
@@ -1452,7 +1465,12 @@ export class OverlayManager {
   }
 
   private static handleShortcutTrigger(
-    source: "os-hotkey" | "raw-input" | "guide" | "controller-chord"
+    source:
+      | "os-hotkey"
+      | "raw-input"
+      | "guide"
+      | "controller-chord"
+      | "window-keyboard"
   ) {
     logger.info("Overlay shortcut triggered", { source });
     this.toggleOverlay();
@@ -1471,7 +1489,9 @@ export class OverlayManager {
     const rawInputActive =
       process.platform === "win32" && NativeAddon.startOverlayKeyboardWatcher();
     if (!rawInputActive && process.platform === "win32") {
-      logger.warn("Hydra Raw Input shortcut watcher could not be started");
+      logger.warn(
+        "GameHub native keyboard shortcut watcher could not be started"
+      );
     }
     this.keyboardEventCount = NativeAddon.getOverlayKeyboardEventCount();
     this.controllerPoll = setInterval(() => {

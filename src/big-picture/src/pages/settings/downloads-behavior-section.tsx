@@ -63,7 +63,9 @@ export function DownloadsBehaviorSection({
     });
   }, [userPreferences]);
 
-  const isWindows = globalThis.window.electron.platform === "win32";
+  const isWindows = ["win32", "linux"].includes(
+    globalThis.window.electron.platform
+  );
 
   const updateUserPreferences = async (
     values: Partial<DownloadsBehaviorForm>

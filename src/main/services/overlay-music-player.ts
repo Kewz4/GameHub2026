@@ -643,6 +643,29 @@ export class OverlayMusicPlayer {
     if (this.currentIndex < 0 || this.currentIndex >= this.queue.length) {
       return null;
     }
+    const track = this.queue[this.currentIndex];
+    const preview = getHttpsUrl(track.previewUrl);
+    if (this.audioSource === "youtube" && preview) {
+      // Resolving a URL does not prove Chromium can decode it. A rejected
+      // media stream uses the same clearly-labelled preview fallback as a
+      // resolver failure, instead of retrying an unusable URL repeatedly.
+      this.resolutionGeneration += 1;
+      this.invalidateCachedAudio(track);
+      this.clearResolvedPlayback();
+      this.progressMs = 0;
+      this.activateResolvedTrack(track, {
+        url: preview,
+        source: "deezer-preview",
+        durationMs: Math.min(
+          DEEZER_PREVIEW_DURATION_MS,
+          track.duration * 1000 || DEEZER_PREVIEW_DURATION_MS
+        ),
+        notice:
+          "Full playback is unavailable. Playing a 30-second Deezer preview.",
+      });
+      this.notify();
+      return track;
+    }
     return this.play(this.currentIndex, true);
   }
 

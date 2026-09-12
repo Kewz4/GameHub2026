@@ -1,10 +1,12 @@
-import type { MusicPlayerState } from "@types";
+import type { MusicPlayerState, MusicTrack } from "@types";
+import type Hls from "hls.js";
 import {
   ListMusic,
   LoaderCircle,
   Music2,
   Pause,
   Play,
+  Search,
   SkipBack,
   SkipForward,
   Volume2,
@@ -15,6 +17,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppSelector } from "@renderer/hooks";
 import type { SpotifyStatus } from "@types";
 import { SpotifyMiniPlayer } from "./spotify-mini-player";
+import SpotifyIcon from "@renderer/assets/icons/spotify.svg?react";
+import { useNavigate } from "react-router-dom";
 import "./music-mini-player.scss";
 
 type AudioSlot = "a" | "b";
@@ -27,6 +31,7 @@ const formatTime = (milliseconds: number) => {
 };
 
 export function MusicMiniPlayer() {
+  const navigate = useNavigate();
   const provider =
     useAppSelector((state) => state.userPreferences.value?.musicProvider) ??
     "gamehub";
@@ -34,7 +39,6 @@ export function MusicMiniPlayer() {
     null
   );
   const [spotifyStatusResolved, setSpotifyStatusResolved] = useState(false);
-  const spotifyFallbackRequestedRef = useRef(false);
 
   const refreshSpotifyStatus = useCallback(() => {
     if (provider !== "spotify" || document.hidden) return;
@@ -47,7 +51,6 @@ export function MusicMiniPlayer() {
 
   useEffect(() => {
     if (provider !== "spotify") {
-      spotifyFallbackRequestedRef.current = false;
       setSpotifyStatus(null);
       setSpotifyStatusResolved(false);
       return;
@@ -64,32 +67,34 @@ export function MusicMiniPlayer() {
     };
   }, [provider, refreshSpotifyStatus]);
 
-  useEffect(() => {
-    if (
-      provider !== "spotify" ||
-      !spotifyStatusResolved ||
-      !spotifyStatus ||
-      spotifyStatus.connected ||
-      spotifyFallbackRequestedRef.current
-    ) {
-      return;
-    }
-
-    // Use the normal preference IPC so Redux, the overlay, and recorder policy
-    // all switch back together after Spotify invalidates authorization.
-    spotifyFallbackRequestedRef.current = true;
-    void window.electron
-      .updateUserPreferences({ musicProvider: "gamehub" })
-      .catch(() => {
-        spotifyFallbackRequestedRef.current = false;
-      });
-  }, [provider, spotifyStatus, spotifyStatusResolved]);
-
   if (provider === "spotify") {
-    if (!spotifyStatusResolved) return null;
     if (spotifyStatus?.connected) {
       return <SpotifyMiniPlayer onConnectionLost={refreshSpotifyStatus} />;
     }
+    return (
+      <aside className="spotify-mini-player" aria-label="Spotify connection">
+        <button
+          type="button"
+          className="spotify-mini-player__tab"
+          aria-label={
+            spotifyStatusResolved
+              ? "Connect Spotify in settings"
+              : "Checking Spotify connection"
+          }
+          title={
+            spotifyStatus?.lastError?.message ?? "Connect Spotify in settings"
+          }
+          onClick={() => navigate("/settings?tab=integrations&section=spotify")}
+        >
+          {spotifyStatusResolved ? (
+            <SpotifyIcon aria-hidden="true" />
+          ) : (
+            <LoaderCircle size={18} aria-hidden="true" />
+          )}
+          <span>Spotify</span>
+        </button>
+      </aside>
+    );
   }
 
   return <GameHubMusicMiniPlayer />;
@@ -99,10 +104,75 @@ function GameHubMusicMiniPlayer() {
   const [musicState, setMusicState] = useState<MusicPlayerState | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<MusicTrack[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const searchGeneration = useRef(0);
   const [localError, setLocalError] = useState<string | null>(null);
   const audioARef = useRef<HTMLAudioElement | null>(null);
   const audioBRef = useRef<HTMLAudioElement | null>(null);
   const activeSlotRef = useRef<AudioSlot>("a");
+  const hlsPlayersRef = useRef(new Map<HTMLAudioElement, Hls>());
+
+  useEffect(() => {
+    const players = hlsPlayersRef.current;
+    return () => {
+      players.forEach((player) => player.destroy());
+      players.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    panelRef.current?.toggleAttribute("inert", !isOpen);
+  }, [isOpen, musicState]);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!isOpen || !panel) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen(false);
+      panel.parentElement
+        ?.querySelector<HTMLButtonElement>(".music-mini-player__tab")
+        ?.focus();
+    };
+    panel.addEventListener("keydown", closeOnEscape);
+    return () => panel.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen]);
+
+  const searchMusic = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!query.trim()) return;
+    const generation = ++searchGeneration.current;
+    setSearching(true);
+    setLocalError(null);
+    try {
+      const results = await window.electron.musicSearch(query.trim());
+      if (generation === searchGeneration.current) {
+        setSearchResults(results);
+        setSearched(true);
+      }
+    } catch {
+      if (generation === searchGeneration.current)
+        setLocalError("Music search is unavailable. Try again.");
+    } finally {
+      if (generation === searchGeneration.current) setSearching(false);
+    }
+  };
+
+  const playSearchResult = async (result: MusicTrack) => {
+    try {
+      setLocalError(null);
+      await window.electron.musicSetQueue([result], 0);
+      await window.electron.musicPlay(0);
+    } catch {
+      setLocalError("This track could not start. Try another result.");
+    }
+  };
   const musicStateRef = useRef<MusicPlayerState | null>(null);
   const lastStartedPlaybackIdRef = useRef(-1);
   const lastAppliedSeekIdRef = useRef(0);
@@ -125,13 +195,59 @@ function GameHubMusicMiniPlayer() {
     [getAudio]
   );
 
-  const setAudioSource = useCallback((audio: HTMLAudioElement, url: string) => {
-    if (audio.dataset.musicUrl === url) return;
-    audio.pause();
-    audio.src = url;
-    audio.dataset.musicUrl = url;
-    audio.load();
-  }, []);
+  const setAudioSource = useCallback(
+    (audio: HTMLAudioElement, url: string) => {
+      if (audio.dataset.musicUrl === url) return;
+      audio.pause();
+      hlsPlayersRef.current.get(audio)?.destroy();
+      hlsPlayersRef.current.delete(audio);
+      audio.dataset.musicUrl = url;
+      if (
+        url.includes(".m3u8") &&
+        !audio.canPlayType("application/vnd.apple.mpegurl")
+      ) {
+        audio.removeAttribute("src");
+        audio.load();
+        void import("hls.js")
+          .then(({ default: Hls }) => {
+            if (!audio.isConnected || audio.dataset.musicUrl !== url) return;
+            if (!Hls.isSupported()) {
+              audio.src = url;
+              audio.load();
+              return;
+            }
+            const player = new Hls({ enableWorker: true, maxBufferLength: 30 });
+            hlsPlayersRef.current.set(audio, player);
+            player.on(Hls.Events.MANIFEST_PARSED, () => {
+              if (
+                audio === getActiveAudio() &&
+                musicStateRef.current?.state === "playing"
+              ) {
+                void audio
+                  .play()
+                  .then(() => setLocalError(null))
+                  .catch(() =>
+                    setLocalError("Select Play to start this stream.")
+                  );
+              }
+            });
+            player.on(Hls.Events.ERROR, (_event, data) => {
+              if (!data.fatal) return;
+              player.destroy();
+              hlsPlayersRef.current.delete(audio);
+              audio.dispatchEvent(new Event("error"));
+            });
+            player.loadSource(url);
+            player.attachMedia(audio);
+          })
+          .catch(() => audio.dispatchEvent(new Event("error")));
+        return;
+      }
+      audio.src = url;
+      audio.load();
+    },
+    [getActiveAudio]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -431,7 +547,7 @@ function GameHubMusicMiniPlayer() {
       }`}
       aria-label="GameHub music player"
     >
-      {musicState && hasMusic && (
+      {musicState && (
         <>
           <button
             type="button"
@@ -451,7 +567,14 @@ function GameHubMusicMiniPlayer() {
             <span>Music</span>
           </button>
 
-          <section className="music-mini-player__panel" aria-hidden={!isOpen}>
+          <section
+            ref={panelRef}
+            role="dialog"
+            tabIndex={-1}
+            aria-label="Music controls"
+            className="music-mini-player__panel"
+            aria-hidden={!isOpen}
+          >
             <header className="music-mini-player__header">
               <span>GameHub Music</span>
               <button
@@ -467,6 +590,59 @@ function GameHubMusicMiniPlayer() {
               </button>
             </header>
 
+            <form
+              className="music-mini-player__search"
+              onSubmit={(event) => void searchMusic(event)}
+            >
+              <label className="sr-only" htmlFor="music-widget-search">
+                Search songs or artists
+              </label>
+              <input
+                id="music-widget-search"
+                type="search"
+                value={query}
+                placeholder="Songs or artists"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              <button
+                type="submit"
+                className="music-mini-player__icon-button"
+                aria-label="Search music"
+                disabled={searching || !query.trim()}
+              >
+                {searching ? (
+                  <LoaderCircle
+                    size={18}
+                    className="music-mini-player__spinner"
+                  />
+                ) : (
+                  <Search size={18} />
+                )}
+              </button>
+            </form>
+            {searched && searchResults.length === 0 && (
+              <p role="status">No songs found. Try another search.</p>
+            )}
+            {searchResults.length > 0 && (
+              <ol
+                className="music-mini-player__queue"
+                aria-label="Music search results"
+              >
+                {searchResults.slice(0, 10).map((result) => (
+                  <li key={result.id} className="music-mini-player__queue-item">
+                    <button
+                      type="button"
+                      onClick={() => void playSearchResult(result)}
+                      aria-label={`Play ${result.title}`}
+                    >
+                      <span>{result.title}</span>
+                      <small>{result.artist}</small>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+
             <div className="music-mini-player__track">
               {track?.coverArt ? (
                 <img src={track.coverArt} alt="" />
@@ -476,7 +652,7 @@ function GameHubMusicMiniPlayer() {
                 </span>
               )}
               <span className="music-mini-player__track-copy">
-                <strong>{track?.title ?? "Select a queued track"}</strong>
+                <strong>{track?.title ?? "Find something to play"}</strong>
                 <small>{track?.artist ?? "GameHub Music"}</small>
               </span>
             </div>
@@ -505,6 +681,7 @@ function GameHubMusicMiniPlayer() {
                 type="button"
                 className="music-mini-player__icon-button"
                 aria-label="Previous track"
+                disabled={!hasMusic || isResolving}
                 onClick={() => void window.electron.musicPrevious()}
               >
                 <SkipBack size={18} fill="currentColor" aria-hidden="true" />
@@ -513,7 +690,7 @@ function GameHubMusicMiniPlayer() {
                 type="button"
                 className="music-mini-player__play-button"
                 aria-label={isPlaying ? "Pause" : "Play"}
-                disabled={isResolving}
+                disabled={!hasMusic || isResolving}
                 onClick={handlePlayPause}
               >
                 {isResolving ? (
@@ -532,6 +709,7 @@ function GameHubMusicMiniPlayer() {
                 type="button"
                 className="music-mini-player__icon-button"
                 aria-label="Next track"
+                disabled={!hasMusic || isResolving}
                 onClick={() => void window.electron.musicNext()}
               >
                 <SkipForward size={18} fill="currentColor" aria-hidden="true" />
@@ -585,6 +763,11 @@ function GameHubMusicMiniPlayer() {
               </label>
             </div>
 
+            {musicState.playbackNotice && (
+              <p className="music-mini-player__notice" role="status">
+                {musicState.playbackNotice}
+              </p>
+            )}
             {(localError || musicState.playbackError) && (
               <p className="music-mini-player__error">
                 {localError ?? musicState.playbackError}

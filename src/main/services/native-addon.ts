@@ -93,6 +93,7 @@ type HydraNativeModule = {
   getForegroundProcessId: () => number;
   getProcessCreationTimeTicks: (pid: number) => string | null;
   isCurrentProcessElevated: () => boolean;
+  isProcessElevated: (pid: number) => boolean;
   launchElevated: (
     executable: string,
     parameters: string,
@@ -248,7 +249,15 @@ export class NativeAddon {
       );
     }
 
-    return path.join(app.getAppPath(), "hydra-native", "hydra-native.node");
+    const appRelative = path.join(
+      app.getAppPath(),
+      "hydra-native",
+      "hydra-native.node"
+    );
+    if (fs.existsSync(appRelative)) return appRelative;
+    // `electron out/main/index.js` reports out/main as appPath. The addon is
+    // built at the repository root, independent of the shell's working folder.
+    return path.resolve(__dirname, "../../hydra-native/hydra-native.node");
   }
 
   private static load() {
@@ -446,6 +455,14 @@ export class NativeAddon {
   public static isCurrentProcessElevated(): boolean {
     try {
       return this.load().isCurrentProcessElevated();
+    } catch {
+      return false;
+    }
+  }
+
+  public static isProcessElevated(pid: number): boolean {
+    try {
+      return this.load().isProcessElevated(pid);
     } catch {
       return false;
     }

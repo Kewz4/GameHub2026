@@ -21,7 +21,8 @@
     position: relative;
     z-index: 2;
     display: flex;
-    width: 38px;
+    flex-direction: column;
+    width: 44px;
     min-height: 106px;
     align-items: center;
     justify-content: center;
@@ -38,10 +39,9 @@
       writing-mode: vertical-rl;
       transform: rotate(180deg);
       color: var(--color-text-muted);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
     }
 
     &:hover,
@@ -55,8 +55,8 @@
   &__panel {
     position: absolute;
     top: 50%;
-    right: 38px;
-    width: 330px;
+    right: 44px;
+    width: min(360px, calc(100vw - 60px));
     max-height: min(620px, calc(100vh - 60px));
     overflow: auto;
     padding: 14px;
@@ -72,9 +72,7 @@
       transform 180ms ease;
   }
 
-  &--open &__panel,
-  &:hover &__panel,
-  &:focus-within &__panel {
+  &--open &__panel {
     opacity: 1;
     pointer-events: auto;
     transform: translate(0, -50%);
@@ -90,6 +88,31 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+  }
+
+  &__search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+
+    input {
+      width: 100%;
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: var(--color-background);
+      color: inherit;
+      font: inherit;
+    }
+  }
+
+  &__notice {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    margin-block: 12px;
   }
 
   &__track {

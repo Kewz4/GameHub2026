@@ -14,6 +14,7 @@ import {
   launchedGamePids,
 } from "@main/services";
 import { CommonRedistManager } from "@main/services/common-redist-manager";
+import { runAchievementMetadataExport } from "@main/services/achievements/metadata-export";
 import { parseExecutablePath } from "../events/helpers/parse-executable-path";
 import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
@@ -342,6 +343,7 @@ export const launchGame = async (
   if (game) {
     const updatedGame = { ...game, executablePath: parsedPath, launchOptions };
     await gamesSublevel.put(gameKey, updatedGame);
+    void runAchievementMetadataExport(gameKey, updatedGame);
 
     // Set up offline play (Steam emulator) for manually added games before
     // launch. Applies to custom games and repacks only — library-synced

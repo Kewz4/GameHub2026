@@ -136,6 +136,10 @@ export class GamepadService {
   }
 
   private setupListeners() {
+    globalThis.document?.addEventListener("visibilitychange", () => {
+      if (globalThis.document.hidden) this.stopPolling();
+      else if (this.gamepads.size > 0) this.startPolling();
+    });
     globalThis.window.addEventListener(
       "gamepadconnected",
       this.handleNewGamepadConnection
@@ -250,7 +254,7 @@ export class GamepadService {
   }
 
   private startPolling() {
-    if (this.isPolling) return;
+    if (this.isPolling || globalThis.document?.hidden) return;
 
     this.isPolling = true;
     this.pollGamepads();

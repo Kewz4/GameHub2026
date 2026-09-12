@@ -27,6 +27,15 @@ export interface AchievementProgress {
   max: number;
 }
 
+export interface AchievementMetadataEntry {
+  description: string;
+  displayName: string;
+  hidden: 0 | 1;
+  icon: string;
+  icongray: string;
+  name: string;
+}
+
 export interface SteamAchievement {
   name: string;
   displayName: string;

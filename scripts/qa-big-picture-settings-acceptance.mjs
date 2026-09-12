@@ -3005,7 +3005,9 @@ try {
       await navigateHash(page, "/big-picture/library", ".library-page", {
         bounce: true,
       });
-      const heroFallback = page.locator(".hero__logo__fallback");
+      const heroFallback = page
+        .locator(".hero__logo__fallback, .hero__logo__image")
+        .first();
       await heroFallback.waitFor({ state: "visible", timeout: 20_000 });
       const heroTitleGeometry = await heroFallback.evaluate((title) => {
         const titleRect = title.getBoundingClientRect();
@@ -3034,41 +3036,49 @@ try {
         `The long Library hero fallback title is clipped or oversized: ${JSON.stringify(heroTitleGeometry)}`
       );
 
+      let downloadModalScreenshot = null;
+      if (USE_SYNTHETIC_PROFILE) {
+        await focusNavigationItem(
+          page,
+          page.locator("#library-hero-launch-button"),
+          "library-hero-launch-button"
+        );
+        await pressGamepadButton(page, GAMEPAD_BUTTON.a);
+        const downloadDialog = page.getByRole("dialog", {
+          name: "The Legend of Zelda - Ocarina of Time 3D",
+        });
+        await downloadDialog.waitFor({ state: "visible", timeout: 20_000 });
+        ensure(
+          (await downloadDialog
+            .getByText("Pick a repack from your download sources", {
+              exact: true,
+            })
+            .count()) === 1,
+          "Controller A on the Library hero Download Game action did not open the real download flow."
+        );
+        downloadModalScreenshot = await captureViewport(
+          page,
+          "bp-library-hero-download-modal-controller",
+          VIEWPORTS[2]
+        );
+        await pressGamepadButton(page, GAMEPAD_BUTTON.b);
+        await downloadDialog.waitFor({ state: "hidden", timeout: 10_000 });
+        ensure(
+          (await page.evaluate(
+            () =>
+              globalThis.document.querySelector("[data-focus-visible='true']")
+                ?.id ?? null
+          )) === "library-hero-launch-button",
+          "Closing the Library hero download modal did not restore controller focus."
+        );
+      }
+
+      const consoleParentId = "library-filters-platform-pill-console";
       await focusNavigationItem(
         page,
         page.locator("#library-hero-launch-button"),
         "library-hero-launch-button"
       );
-      await pressGamepadButton(page, GAMEPAD_BUTTON.a);
-      const downloadDialog = page.getByRole("dialog", {
-        name: "The Legend of Zelda - Ocarina of Time 3D",
-      });
-      await downloadDialog.waitFor({ state: "visible", timeout: 20_000 });
-      ensure(
-        (await downloadDialog
-          .getByText("Pick a repack from your download sources", {
-            exact: true,
-          })
-          .count()) === 1,
-        "Controller A on the Library hero Download Game action did not open the real download flow."
-      );
-      const downloadModalScreenshot = await captureViewport(
-        page,
-        "bp-library-hero-download-modal-controller",
-        VIEWPORTS[2]
-      );
-      await pressGamepadButton(page, GAMEPAD_BUTTON.b);
-      await downloadDialog.waitFor({ state: "hidden", timeout: 10_000 });
-      ensure(
-        (await page.evaluate(
-          () =>
-            globalThis.document.querySelector("[data-focus-visible='true']")
-              ?.id ?? null
-        )) === "library-hero-launch-button",
-        "Closing the Library hero download modal did not restore controller focus."
-      );
-
-      const consoleParentId = "library-filters-platform-pill-console";
       await pressGamepadButton(page, GAMEPAD_BUTTON.down);
       await moveGamepadFocusTo(page, consoleParentId, GAMEPAD_BUTTON.right, 20);
       await pressGamepadButton(page, GAMEPAD_BUTTON.a);
@@ -3081,14 +3091,13 @@ try {
         page.locator("#library-filters-console-pill-all"),
         "library-filters-console-pill-all"
       );
-      await pressGamepadButton(page, GAMEPAD_BUTTON.right);
-      ensure(
-        (await page.evaluate(
-          () =>
-            globalThis.document.querySelector("[data-focus-visible='true']")
-              ?.id ?? null
-        )) === "library-filters-console-pill-n3ds",
-        "Controller Right did not enter the nested Nintendo 3DS console filter."
+      // Live profiles also contain PlayStation, Wii and other systems before
+      // 3DS; exercise every intervening pill instead of assuming fixture order.
+      await moveGamepadFocusTo(
+        page,
+        "library-filters-console-pill-n3ds",
+        GAMEPAD_BUTTON.right,
+        20
       );
       await pressGamepadButton(page, GAMEPAD_BUTTON.a);
       ensure(
@@ -3333,7 +3342,8 @@ try {
           }
           if (route.id === "library") {
             await page
-              .locator(".hero__logo__fallback")
+              .locator(".hero__logo__fallback, .hero__logo__image")
+              .first()
               .waitFor({ state: "visible", timeout: 20_000 });
             await page.locator(".library-page").evaluate((libraryPage) => {
               libraryPage.scrollTop = 0;

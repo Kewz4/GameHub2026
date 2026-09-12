@@ -51,11 +51,12 @@ describe("Big Picture settings controller isolation", () => {
     const measuredRailHeight = 55.1;
     const clearance = resolveSettingsContentTopClearance(measuredRailHeight);
 
-    assert.equal(clearance, 68);
-    assert.ok(clearance > Math.ceil(measuredRailHeight));
+    // The sticky rail is already in normal flow; never reserve its height twice.
+    assert.equal(clearance, 12);
+    assert.ok(clearance < Math.ceil(measuredRailHeight));
     assert.equal(resolveSettingsContentTopClearance(0), 12);
     assert.equal(resolveSettingsContentTopClearance(Number.NaN), 0);
-    assert.equal(resolveSettingsContentTopClearance(56, 44.2), 113);
-    assert.equal(resolveSettingsContentTopClearance(56, -12), 68);
+    assert.equal(resolveSettingsContentTopClearance(56, 44.2), 57);
+    assert.equal(resolveSettingsContentTopClearance(56, -12), 12);
   });
 });

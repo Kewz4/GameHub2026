@@ -34,13 +34,12 @@ const MAX_REVIEW_CHARS = 1000;
 export function GameReviews({
   shop,
   objectId,
-  game,
   userDetailsId,
   isGameInLibrary,
   hasUserReviewed,
   onUserReviewedChange,
 }: Readonly<GameReviewsProps>) {
-  const { t, i18n } = useTranslation("game_details");
+  const { t } = useTranslation("game_details");
   const { showSuccessToast, showErrorToast } = useToast();
 
   const [reviews, setReviews] = useState<GameReview[]>([]);
@@ -61,6 +60,11 @@ export function GameReviews({
   );
   const [votingReviews, setVotingReviews] = useState<Set<string>>(new Set());
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
+  const reviewCheckSequence = useRef(0);
+  const [checkedReviewIdentity, setCheckedReviewIdentity] = useState<
+    string | null
+  >(null);
+  const reviewIdentity = `${shop}:${objectId}:${userDetailsId ?? ""}`;
   const [openComposerReviewId, setOpenComposerReviewId] = useState<
     string | null
   >(null);
@@ -122,15 +126,22 @@ export function GameReviews({
   });
 
   const checkUserReview = useCallback(async () => {
+    const sequence = ++reviewCheckSequence.current;
+    setCheckedReviewIdentity(null);
+    setShowReviewForm(false);
     if (!objectId || !userDetailsId || shop === "custom") return;
 
     try {
       const response = await window.electron.hydraApi.get<{
         hasReviewed: boolean;
+        canReview?: boolean;
       }>(`/games/${shop}/${objectId}/reviews/check`, {
         needsAuth: true,
       });
+      if (sequence !== reviewCheckSequence.current) return;
       const hasReviewed = response?.hasReviewed || false;
+      if (response?.canReview === false) return;
+      setCheckedReviewIdentity(`${shop}:${objectId}:${userDetailsId}`);
       onUserReviewedChange(hasReviewed);
 
       if (
@@ -143,7 +154,7 @@ export function GameReviews({
     } catch (error) {
       console.error("Failed to check user review:", error);
     }
-  }, [objectId, userDetailsId, shop, game, onUserReviewedChange]);
+  }, [objectId, userDetailsId, shop, isGameInLibrary, onUserReviewedChange]);
 
   const loadReviews = useCallback(
     async (reset = false) => {
@@ -199,7 +210,7 @@ export function GameReviews({
         }
       }
     },
-    [objectId, shop, reviewsPage, reviewsSortBy, i18n.language]
+    [objectId, shop, reviewsPage, reviewsSortBy]
   );
 
   const handleVoteReview = async (
@@ -440,7 +451,8 @@ export function GameReviews({
 
   return (
     <div className="game-details__reviews-section">
-      {showReviewPrompt &&
+      {checkedReviewIdentity === reviewIdentity &&
+        showReviewPrompt &&
         userDetailsId &&
         !hasUserReviewed &&
         isGameInLibrary && (
@@ -450,7 +462,7 @@ export function GameReviews({
           />
         )}
 
-      {showReviewForm && (
+      {checkedReviewIdentity === reviewIdentity && showReviewForm && (
         <>
           <ReviewForm
             editor={editor}

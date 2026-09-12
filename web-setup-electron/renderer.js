@@ -10,8 +10,13 @@ const screens = {
 };
 
 function showScreen(name) {
-  Object.values(screens).forEach((s) => s.classList.remove("active"));
+  Object.values(screens).forEach((s) => {
+    s.classList.remove("active");
+    s.hidden = true;
+  });
+  screens[name].hidden = false;
   screens[name].classList.add("active");
+  screens[name].querySelector("h1")?.focus();
 }
 
 function formatBytes(bytes) {
@@ -29,12 +34,20 @@ async function init() {
     if (result.error) {
       versionEl.textContent = "Could not reach GitHub";
       release = null;
+      showError(
+        "The latest release could not be loaded. Check your connection and try again."
+      );
       return;
     }
     release = result;
     versionEl.textContent = "Latest release: " + release.tag;
+    document.getElementById("mode-install").disabled = false;
+    document.getElementById("mode-portable").disabled = false;
   } catch {
     versionEl.textContent = "Could not reach GitHub";
+    showError(
+      "The latest release could not be loaded. Check your connection and try again."
+    );
   }
 }
 
@@ -68,7 +81,11 @@ document.getElementById("btn-close").addEventListener("click", () => {
 });
 
 document.getElementById("btn-retry").addEventListener("click", () => {
+  document.getElementById("progress-fill").style.width = "0%";
+  document.getElementById("progress-percent").textContent = "0%";
+  document.getElementById("progress-size").textContent = "";
   showScreen("select");
+  if (!release) void init();
 });
 
 window.setup.onProgress((data) => {
@@ -77,6 +94,9 @@ window.setup.onProgress((data) => {
   const sizeEl = document.getElementById("progress-size");
 
   if (data.total > 0) {
+    document
+      .getElementById("download-progress")
+      .setAttribute("aria-valuenow", String(Math.round(data.percent)));
     fill.style.width = data.percent + "%";
     percentEl.textContent = Math.round(data.percent) + "%";
     sizeEl.textContent =
@@ -97,12 +117,15 @@ window.setup.onDone((data) => {
   const doneMessage = document.getElementById("done-message");
 
   if (data.mode === "install") {
-    doneTitle.textContent = "Installer Launched!";
-    doneMessage.textContent =
-      "The GameHub installer has been launched. Follow its steps to complete installation.";
+    doneTitle.textContent = data.handedOff
+      ? "Continue in the installer."
+      : "GameHub is installed.";
+    doneMessage.textContent = data.handedOff
+      ? "Your download is ready. Follow the GameHub installer's steps to finish setup."
+      : "GameHub is ready. You can open it from your applications menu.";
     document.getElementById("btn-launch").style.display = "none";
   } else if (data.mode === "portable") {
-    doneTitle.textContent = "Portable Setup Complete!";
+    doneTitle.textContent = "Ready to play.";
     doneMessage.textContent = "GameHub is ready in: " + data.path;
     if (window.setup.platform === "win32") {
       launchPath = data.path + "\\GameHub.exe";

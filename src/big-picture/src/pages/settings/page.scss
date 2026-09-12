@@ -1,21 +1,20 @@
 .settings-page {
   --settings-page-inline-padding: calc(var(--spacing-unit) * 16);
   --settings-page-tab-rail-height: 56px;
-  --settings-page-content-top-clearance: calc(
-    var(--settings-page-tab-rail-height) + var(--spacing-unit) * 3
-  );
-  --settings-page-tab-rail-top: calc(
-    var(--big-picture-header-footprint, var(--big-picture-header-height)) +
-      var(--spacing-unit) * 4
-  );
+  --settings-page-content-top-clearance: calc(var(--spacing-unit) * 3);
+  // The scrolling page already reserves the header in its top padding.
+  // Sticky insets are relative to that padding edge, so adding it again
+  // pushes the tabs down and over the first section.
+  --settings-page-tab-rail-top: 0px;
   --settings-page-focus-scroll-clearance: calc(
-    var(--settings-page-tab-rail-top) + var(--settings-page-tab-rail-height) +
-      var(--spacing-unit) * 5
+    var(--big-picture-header-footprint, var(--big-picture-header-height)) +
+      var(--settings-page-tab-rail-height) + var(--spacing-unit) * 9
   );
   margin-top: calc(
     -1 * var(--big-picture-header-footprint, var(--big-picture-header-height))
   );
   display: flex;
+  position: relative;
   align-items: flex-start;
   justify-content: center;
   width: 100%;
@@ -37,7 +36,7 @@
   scroll-padding-bottom: calc(var(--spacing-unit) * 16);
   padding: calc(
       var(--big-picture-header-footprint, var(--big-picture-header-height)) +
-        var(--spacing-unit) * 10
+        var(--spacing-unit) * 4
     )
     var(--settings-page-inline-padding) calc(var(--spacing-unit) * 12);
 
@@ -50,7 +49,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: calc(var(--spacing-unit) * 8);
+  gap: calc(var(--spacing-unit) * 6);
   min-height: 100%;
   width: 100%;
   min-width: 0;
@@ -75,9 +74,6 @@
     calc(var(--spacing-unit) * 2);
   border-radius: calc(var(--spacing-unit) * 2);
   background: var(--background);
-  box-shadow: 0 calc(var(--spacing-unit) * 3) calc(var(--spacing-unit) * 7)
-    rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(14px);
 }
 
 .settings-page__bumper {
@@ -100,9 +96,8 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  // The sticky rail is offset below its normal flex position. Reserve its
-  // measured footprint in real layout so the first section cannot sit behind
-  // it when controller focus resets or auto-scrolls the page.
+  // The rail already occupies normal flow. Only compensate for displacement
+  // caused by its sticky position, never its full height a second time.
   padding-top: var(--settings-page-content-top-clearance);
   padding-inline: calc(var(--spacing-unit) * 18);
   box-sizing: border-box;
