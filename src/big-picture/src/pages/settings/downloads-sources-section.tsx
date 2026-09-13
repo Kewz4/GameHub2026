@@ -116,7 +116,9 @@ export function DownloadsSourcesSection({
 
   const isBusy = isSyncing || isRemoving;
   const hasSources = downloadSources.length > 0;
-  const isWindows = globalThis.window.electron.platform === "win32";
+  const isWindows = ["win32", "linux"].includes(
+    globalThis.window.electron.platform
+  );
   const firstRemoveButtonFocusId = downloadSources[0]
     ? getDownloadsSourceRemoveButtonFocusId(downloadSources[0].id)
     : null;
@@ -346,7 +348,7 @@ export function DownloadsSourcesSection({
     <>
       <SettingsSection
         title="Sources"
-        description="Hydra will fetch the download links from these sources. The source URL must be a direct link to a .json file containing the download the links."
+        description="GameHub will fetch download links from these sources. Each source URL must link directly to a .json file containing the download links."
         className={className}
       >
         <VerticalFocusGroup
@@ -436,7 +438,7 @@ export function DownloadsSourcesSection({
       <ConfirmationModal
         visible={showDeleteAllConfirmation}
         title="Delete All Sources"
-        description="This will remove every configured download source from Hydra."
+        description="This will remove every configured download source from GameHub."
         confirmLabel="Delete All"
         danger
         loading={isRemoving}

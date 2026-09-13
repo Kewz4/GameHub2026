@@ -34,6 +34,7 @@ const binariesDir = path.join(repoRoot, "binaries");
 
 const platform = process.argv[2] || process.platform;
 const isWin = platform === "win32" || platform === "win";
+const required = process.argv.includes("--required");
 const outName = isWin ? "ukmm.exe" : "ukmm";
 const outPath = path.join(binariesDir, outName);
 
@@ -53,10 +54,13 @@ function haveCargo() {
 
 function main() {
   if (fs.existsSync(outPath) && !process.env.FORCE_BUILD_UKMM) {
+    if (!isWin) fs.chmodSync(outPath, 0o755);
     console.log(`[build-ukmm] ${outPath} already exists — skipping.`);
     return;
   }
   if (!haveCargo()) {
+    if (required)
+      throw new Error("Rust is required to build the Linux BOTW mod helper.");
     // Don't hard-fail local `yarn build` on machines without Rust; the mod
     // feature simply won't have its binary. CI has the Rust toolchain.
     console.warn(
@@ -101,6 +105,7 @@ function main() {
     if (!isWin) fs.chmodSync(outPath, 0o755);
     console.log(`[build-ukmm] wrote ${outPath}`);
   } catch (err) {
+    if (required) throw err;
     // NON-FATAL: a UKMM build failure must not sink the whole app release. The
     // binary is bundled via a tolerant glob, so packaging still succeeds; the
     // app simply reports BOTW mod support as unavailable until the next build.

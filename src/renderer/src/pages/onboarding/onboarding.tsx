@@ -815,31 +815,30 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
       let imported = 0;
       let failed = 0;
+      let needsReview = 0;
       for (const entry of entries) {
-        setLudusaviResult(
-          `Uploading ${imported + failed + 1}/${entries.length}: ${entry.gameName}…`
-        );
+        setLudusaviResult(`Verifying ${entry.gameName}…`);
+        if (!entry.suggestedGame) {
+          needsReview++;
+          continue;
+        }
         try {
-          // Match the backup to a library game so the save lands on the right page
-          const match = await window.electron
-            .findLibraryGameByTitle(entry.gameName)
-            .catch(() => null);
-          await window.electron.importLudusaviBackup(
+          const result = await window.electron.importLudusaviBackup(
             entry.folderPath,
-            entry.gameName,
-            match?.objectId ?? entry.gameName,
-            match?.shop ?? "steam"
+            entry.suggestedGame.objectId,
+            entry.suggestedGame.shop
           );
-          imported++;
+          if (result.ok) imported++;
+          else needsReview++;
         } catch {
           failed++;
         }
       }
 
       setLudusaviResult(
-        failed === 0
+        failed === 0 && needsReview === 0
           ? `Imported ${imported} save backup${imported !== 1 ? "s" : ""} to GameHub Cloud.`
-          : `Imported ${imported} of ${entries.length} backups (${failed} failed).`
+          : `Imported ${imported} of ${entries.length}. ${needsReview} need a game selection or cloud replacement confirmation${failed ? `; ${failed} failed verification` : ""}. Finish them later in Settings → Integrations.`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

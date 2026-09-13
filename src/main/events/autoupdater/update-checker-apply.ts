@@ -3,9 +3,9 @@ import { UpdateCheckerManager } from "@main/services/update-checker-manager";
 
 const updateCheckerApply = async (_event: Electron.IpcMainInvokeEvent) => {
   if (UpdateCheckerManager.isPortable && process.platform === "win32") {
-    UpdateCheckerManager.applyPortableUpdate();
+    await UpdateCheckerManager.applyPortableUpdate();
   } else {
-    UpdateCheckerManager.applyNsisUpdate();
+    await UpdateCheckerManager.applyNsisUpdate();
   }
 };
 

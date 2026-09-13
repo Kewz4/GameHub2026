@@ -120,7 +120,7 @@ export function RetroAchievementsSection() {
             background: "none",
             border: "none",
             padding: 0,
-            color: "var(--color-accent)",
+            color: "var(--color-text-bright)",
             cursor: "pointer",
             fontSize: "inherit",
             textDecoration: "underline",
@@ -196,6 +196,15 @@ export function RetroAchievementsSection() {
         )}
       </div>
 
+      {window.electron.platform === "linux" && (
+        <p className="setup-modal__body-intro">
+          Use Emulator sign-in below to sign RetroArch in on its next GameHub
+          launch, or sign in directly inside RetroArch under Settings →
+          Achievements. The Web API key above retrieves achievements; it is
+          separate from the emulator login token.
+        </p>
+      )}
+
       <div
         style={{
           borderTop: "1px solid rgba(255,255,255,0.1)",
@@ -208,8 +217,8 @@ export function RetroAchievementsSection() {
         </h4>
         <p style={{ margin: "0 0 12px", opacity: 0.65, fontSize: "0.875em" }}>
           {emulatorSignedIn
-            ? "The emulator is signed in — RALibretro logs into RetroAchievements automatically, no prompt. Re-enter your password to refresh it."
-            : "Enter your password once so the emulator (RALibretro) signs in to RetroAchievements automatically and never prompts you. Your password is exchanged for a login token and is not stored."}
+            ? "The emulator sign-in token is saved. Supported emulators use it to connect to RetroAchievements. Re-enter your password to refresh it."
+            : "Enter your password once so supported emulators can sign in to RetroAchievements automatically. Your password is exchanged for a login token and is not stored."}
         </p>
         <div style={{ display: "flex", gap: 8 }}>
           <input

@@ -12,6 +12,8 @@ export enum Downloader {
   Rootz = 11,
   Premiumize = 12,
   AllDebrid = 13,
+  ArchiveOrg = 14,
+  Bzzhr = 15,
   Legendary = "legendary",
   Gogdl = "gogdl",
 }
@@ -86,6 +88,8 @@ export enum DownloadError {
   TorrentInvalidFileSelection = "download_error_torrent_invalid_file_selection",
   TorrentTooManyFiles = "download_error_torrent_too_many_files",
   TorrentFilesUnavailable = "download_error_torrent_files_unavailable",
+  TorrentInvalidTrackers = "download_error_torrent_invalid_trackers",
+  ArchiveOrgInvalidFileUrl = "download_error_archive_org_invalid_file_url",
 }
 
 export const FILE_EXTENSIONS_TO_EXTRACT = [".rar", ".zip", ".7z"];
@@ -131,3 +135,12 @@ export const getGameExecutableFilters = (
 
 export const GAMEMODE_SITE_URL = "https://github.com/FeralInteractive/gamemode";
 export const MANGOHUD_SITE_URL = "https://github.com/flightlessmango/MangoHud";
+
+/**
+ * Headroom kept free on the download drive.
+ *
+ * A download is refused (or halted) unless the drive can hold the bytes still
+ * outstanding *plus* this much, so filling a disk to the last byte cannot take
+ * the rest of the system down with it.
+ */
+export const MINIMUM_FREE_DISK_SPACE_BYTES = 512 * 1024 * 1024;

@@ -27,7 +27,11 @@ import { logger } from "../logger";
 //     `${system}:${title}:` … `${system}:${title}:\xFF` range matches them
 //     (was: base games were keyed without the suffix and fell outside the
 //     range, so download options came back empty for every game).
-const DUMP_VERSION = 5;
+// v6: the merged `gb_gba_gbc` folder (which forced every Game Boy title to
+//     system "gba" — wrong console badge/achievements/launch) is split into
+//     separate `gb` / `gbc` / `gba` folders, so each entry now carries its
+//     true system and objectId (minerva:gb|gbc|gba:…).
+const DUMP_VERSION = 6;
 const DUMP_VERSION_KEY = "gamehubDumpVersion";
 
 /** Bundled Dump dir (extraResource in packaged builds; repo root in dev). */
@@ -35,13 +39,17 @@ const DUMP_DIR = app.isPackaged
   ? path.join(process.resourcesPath, "dump")
   : path.join(__dirname, "..", "..", "Dump");
 
-/** Dump folder → EmulatorSystem. `gb_gba_gbc` is a merged Game Boy catalogue
- *  (RALibretro auto-detects GB/GBC/GBA by file extension at launch). */
+/** Dump folder → EmulatorSystem. GB/GBC/GBA are separate folders so each Game
+ *  Boy title carries its true console (badge/achievements/launch all depend on
+ *  it); they were previously merged into one `gb_gba_gbc` folder stamped
+ *  "gba". */
 const CONSOLE_MAP: Record<string, EmulatorSystem> = {
   "3ds": "n3ds",
   ds: "nds",
   gamecube: "gc",
-  gb_gba_gbc: "gba",
+  gb: "gb",
+  gbc: "gbc",
+  gba: "gba",
   n64: "n64",
   ps1: "ps1",
   ps2: "ps2",
@@ -79,12 +87,14 @@ interface DumpSupplemental {
   fileSize?: string | null;
 }
 
+const ANSI_ESCAPE = String.fromCharCode(27);
+
 function readJson<T>(folder: string, file: string): T | null {
   try {
     const p = path.join(DUMP_DIR, folder, file);
     if (!fs.existsSync(p)) return null;
     let raw = fs.readFileSync(p, "utf-8");
-    raw = raw.replace(/\x1b\[.*$/m, "").trimEnd();
+    raw = raw.replace(new RegExp(`${ANSI_ESCAPE}\\[.*$`, "m"), "").trimEnd();
     return JSON.parse(raw) as T;
   } catch (err) {
     logger.warn(`[dump] failed to read ${folder}/${file}:`, err);

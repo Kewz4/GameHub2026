@@ -145,10 +145,9 @@ export function useGameActions(game: LibraryGame) {
     try {
       setCreatingShortcut(true);
 
-      const locations =
-        window.electron.platform === "win32"
-          ? (["desktop", "start_menu"] as const)
-          : (["desktop"] as const);
+      const locations = ["win32", "linux"].includes(window.electron.platform)
+        ? (["desktop", "start_menu"] as const)
+        : (["desktop"] as const);
 
       for (const location of locations) {
         const success = await window.electron.createGameShortcut(
@@ -246,6 +245,22 @@ export function useGameActions(game: LibraryGame) {
     }
   };
 
+  const handleApplySteamEmulator = async () => {
+    try {
+      const result = await window.electron.applySteamEmulator(
+        game.shop,
+        game.objectId
+      );
+      if (!result.success) {
+        throw new Error(result.output || "Steam emulator setup failed");
+      }
+      showSuccessToast(t("steam_emulator_success"));
+    } catch (error) {
+      showErrorToast(t("steam_emulator_failed"));
+      logger.error("Failed to set up offline play", error);
+    }
+  };
+
   const handleRemoveFromLibrary = async () => {
     try {
       if (isGameDownloading) {
@@ -309,5 +324,6 @@ export function useGameActions(game: LibraryGame) {
     handleRemoveFromLibrary,
     handleRemoveFiles,
     handleOpenGameOptions,
+    handleApplySteamEmulator,
   };
 }

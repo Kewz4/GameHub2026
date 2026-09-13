@@ -1173,7 +1173,7 @@ export function RepacksModal({
                     theme="primary"
                     onClick={() => {
                       onClose();
-                      navigate("/settings?tab=2");
+                      navigate("/settings?tab=download_sources");
                     }}
                   >
                     <PlusCircleIcon />

@@ -2,9 +2,10 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import fs from "node:fs";
-import axios from "axios";
+import { findExecutableOnPath, installLauncherBinary } from "./launcher-binary";
 import { SystemPath } from "./system-path";
 import { logger } from "./logger";
+import { getLauncherInvocation } from "./launcher-invocation";
 
 const execFileAsync = promisify(execFile);
 
@@ -37,6 +38,7 @@ const getPlatformSearchPaths = (): string[] => {
   if (process.platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA ?? "";
     return [
+      path.join(__dirname, "..", "..", "binaries", "bin", "legendary.exe"),
       path.join(resourcesBin, "legendary.exe"),
       path.join(execAdjacentBin, "legendary.exe"),
       path.join(binDir, "legendary.exe"),
@@ -46,6 +48,7 @@ const getPlatformSearchPaths = (): string[] => {
   }
   if (process.platform === "darwin") {
     return [
+      path.join(__dirname, "..", "..", "binaries", "bin", "legendary"),
       path.join(resourcesBin, "legendary"),
       path.join(execAdjacentBin, "legendary"),
       path.join(binDir, "legendary"),
@@ -55,6 +58,7 @@ const getPlatformSearchPaths = (): string[] => {
     ];
   }
   return [
+    path.join(__dirname, "..", "..", "binaries", "bin", "legendary"),
     path.join(resourcesBin, "legendary"),
     path.join(execAdjacentBin, "legendary"),
     path.join(binDir, "legendary"),
@@ -84,29 +88,17 @@ export const findLegendaryBinary = (
     }
   }
 
-  // Try PATH via which/where
-  try {
-    const whichCmd = process.platform === "win32" ? "where" : "which";
-    const { stdout } = require("node:child_process").execSync(
-      `${whichCmd} legendary`,
-      { encoding: "utf8", timeout: 3000 }
-    );
-    const bin = stdout.trim().split("\n")[0].trim();
-    if (bin && fs.existsSync(bin)) return bin;
-  } catch {
-    // intentional
-  }
-
-  return null;
+  return findExecutableOnPath("legendary");
 };
 
 const runLegendary = async (
   binary: string,
   args: string[]
 ): Promise<string> => {
-  const { stdout } = await execFileAsync(binary, args, {
+  const invocation = getLauncherInvocation(binary, args, legendaryEnv());
+  const { stdout } = await execFileAsync(invocation.command, invocation.args, {
     timeout: 60_000,
-    env: legendaryEnv(),
+    env: invocation.env,
   });
   return stdout;
 };
@@ -167,7 +159,8 @@ export const getLegendaryConfigPath = (): string => {
     SystemPath.getPath("userData"),
     "legendary-config"
   );
-  fs.mkdirSync(configPath, { recursive: true });
+  fs.mkdirSync(configPath, { recursive: true, mode: 0o700 });
+  if (process.platform !== "win32") fs.chmodSync(configPath, 0o700);
   return configPath;
 };
 
@@ -201,11 +194,15 @@ export const authenticateLegendary = async (
   const binary = findLegendaryBinary(binaryPath);
   if (!binary) throw new Error("legendary binary not found");
 
-  await execFileAsync(
+  const invocation = getLauncherInvocation(
     binary,
     [...legendaryBaseArgs(), "auth", "--code", code.trim()],
-    { timeout: 30_000, env: legendaryEnv() }
+    legendaryEnv()
   );
+  await execFileAsync(invocation.command, invocation.args, {
+    timeout: 30_000,
+    env: invocation.env,
+  });
 };
 
 export const getLegendaryGameCoverUrl = (
@@ -259,22 +256,29 @@ export function spawnLegendaryInstall(
     return () => {};
   }
 
-  const child = spawn(
-    binary,
-    [
-      ...legendaryBaseArgs(),
-      "install",
-      appName,
-      "--base-path",
-      downloadPath,
-      "--yes",
-      "--skip-sdl",
-    ],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: legendaryEnv(),
-    }
-  );
+  let invocation: ReturnType<typeof getLauncherInvocation>;
+  try {
+    invocation = getLauncherInvocation(
+      binary,
+      [
+        ...legendaryBaseArgs(),
+        "install",
+        appName,
+        "--base-path",
+        downloadPath,
+        "--yes",
+        "--skip-sdl",
+      ],
+      legendaryEnv()
+    );
+  } catch (error) {
+    onError(error instanceof Error ? error.message : String(error));
+    return () => {};
+  }
+  const child = spawn(invocation.command, invocation.args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: invocation.env,
+  });
 
   // Legendary actual output format (from DLManager):
   //   [DLManager] INFO: = Progress: 4.52% (55/1218), Running for 00:00:13, ETA: 00:04:38
@@ -375,57 +379,14 @@ export function spawnLegendaryInstall(
   };
 }
 
-interface GitHubRelease {
-  assets: { name: string; browser_download_url: string }[];
-}
-
 export const downloadLegendary = async (
   onProgress?: (pct: number) => void
 ): Promise<string> => {
-  const response = await axios.get<GitHubRelease>(
-    "https://api.github.com/repos/legendary-gl/legendary/releases/latest",
-    { headers: { Accept: "application/vnd.github+json" } }
+  const destination = await installLauncherBinary(
+    "legendary",
+    getLegendaryInstallPath(),
+    onProgress
   );
-
-  const assets = response.data.assets;
-  let assetName: string;
-
-  if (process.platform === "win32") {
-    assetName = "legendary.exe";
-  } else if (process.platform === "darwin") {
-    assetName = "legendary_macos";
-  } else {
-    assetName = "legendary_linux_x86_64";
-  }
-
-  const asset =
-    assets.find((a) => a.name === assetName) ??
-    assets.find(
-      (a) => a.name.includes("legendary") && !a.name.endsWith(".tar.gz")
-    );
-
-  if (!asset)
-    throw new Error(`No legendary binary found for ${process.platform}`);
-
-  const destPath = getLegendaryInstallPath();
-
-  const downloadResponse = await axios.get<ArrayBuffer>(
-    asset.browser_download_url,
-    {
-      responseType: "arraybuffer",
-      onDownloadProgress: (evt) => {
-        if (evt.total && onProgress)
-          onProgress(Math.round((evt.loaded / evt.total) * 100));
-      },
-    }
-  );
-
-  fs.writeFileSync(destPath, Buffer.from(downloadResponse.data));
-
-  if (process.platform !== "win32") {
-    fs.chmodSync(destPath, 0o755);
-  }
-
-  logger.log(`legendary downloaded to ${destPath}`);
-  return destPath;
+  logger.log(`legendary downloaded to ${destination}`);
+  return destination;
 };

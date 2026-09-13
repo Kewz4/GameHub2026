@@ -1,0 +1,23 @@
+name = "gamehub-r2-credentials"
+main = "src/index.ts"
+compatibility_date = "2026-07-31"
+preview_urls = false
+
+[vars]
+HYDRA_API_URL = "https://hydra-api-us-east-1.losbroxas.org"
+CLOUDFLARE_ACCOUNT_ID = "replace-with-your-account-id"
+R2_BUCKET = "gamehub"
+CREDENTIAL_TTL_SECONDS = "900"
+ALLOWED_HYDRA_PROFILE_IDS = "replace-with-your-profile-id,replace-with-friend-profile-id"
+
+[[ratelimits]]
+name = "CREDENTIAL_RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 6
+  period = 60
+
+[[r2_buckets]]
+binding = "GAMEHUB_BUCKET"
+bucket_name = "gamehub"

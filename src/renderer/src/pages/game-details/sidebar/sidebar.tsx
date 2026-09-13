@@ -1,5 +1,7 @@
 import { lazy, Suspense, useContext, useEffect, useState } from "react";
+import { selectGameRequirements } from "@renderer/helpers/game-requirements";
 import type {
+  EmulatorSystem,
   HowLongToBeatCategory,
   ProtonDBData,
   SteamAppDetails,
@@ -13,7 +15,6 @@ import { StarRating } from "@renderer/components/star-rating/star-rating";
 import { gameDetailsContext } from "@renderer/context";
 import { useDate, useFormat, useUserDetails } from "@renderer/hooks";
 import {
-  CloudOfflineIcon,
   DownloadIcon,
   LockIcon,
   PeopleIcon,
@@ -22,11 +23,11 @@ import {
 import { HowLongToBeatSection } from "./how-long-to-beat-section";
 import { SidebarSection } from "../sidebar-section/sidebar-section";
 import { buildGameAchievementPath } from "@renderer/helpers";
-import { useSubscription } from "@renderer/hooks/use-subscription";
 import "./sidebar.scss";
 import { GameLanguageSection } from "./game-language-section";
 import { ControllerSupportSection } from "./controller-support-section";
 import { ConsoleMetadataSection } from "./console-metadata-section";
+import { hasRenderableRequirements } from "./sidebar-presentation";
 
 const ProtonDBSection = lazy(async () => {
   const mod = await import("./protondb-section");
@@ -121,7 +122,7 @@ export function Sidebar({
     data: ProtonDBData | null;
   }>({ isLoading: shouldShowProtonFeatures, data: null });
 
-  const { userDetails, hasActiveSubscription } = useUserDetails();
+  const { userDetails } = useUserDetails();
   const [activeRequirement, setActiveRequirement] =
     useState<keyof SteamAppDetails["pc_requirements"]>("minimum");
 
@@ -132,10 +133,22 @@ export function Sidebar({
   const effectiveShop = (canonicalShop ?? shop) as string;
   const effectiveObjectId = canonicalObjectId ?? objectId ?? "";
 
-  const { showHydraCloudModal } = useSubscription();
   const { t } = useTranslation("game_details");
   const { formatDateTime } = useDate();
   const { numberFormatter } = useFormat();
+  const { requirements, source: requirementsSource } = selectGameRequirements(
+    shopDetails,
+    window.electron.platform
+  );
+  const hasRequirements = hasRenderableRequirements(requirements);
+  const requirementsTitle =
+    window.electron.platform === "linux"
+      ? requirementsSource === "linux"
+        ? t("linux_requirements", { defaultValue: "Linux requirements" })
+        : t("windows_requirements_proton", {
+            defaultValue: "Windows requirements (Proton)",
+          })
+      : t("requirements");
 
   useEffect(() => {
     // Console/emulated games aren't in the Hydra backend, so resolve HLTB live
@@ -149,8 +162,14 @@ export function Sidebar({
         return;
       }
       setHowLongToBeat({ isLoading: true, data: null });
+      // Scope the dataset-first lookup to this game's console when the objectId
+      // carries it (`minerva:<system>:<title>`); an opaque id passes "" and the
+      // service scans every system's dataset by title instead.
+      const consoleSystem = objectId?.startsWith("minerva:")
+        ? (objectId.split(":")[1] as EmulatorSystem)
+        : "";
       window.electron
-        .getConsoleHowLongToBeat(gameTitle)
+        .getConsoleHowLongToBeat(gameTitle, consoleSystem)
         .then((data) => setHowLongToBeat({ isLoading: false, data }))
         .catch(() => setHowLongToBeat({ isLoading: false, data: null }));
       return;
@@ -173,7 +192,7 @@ export function Sidebar({
           setHowLongToBeat({ isLoading: false, data: null });
         });
     }
-  }, [effectiveObjectId, effectiveShop, shop, gameTitle]);
+  }, [effectiveObjectId, effectiveShop, shop, gameTitle, objectId]);
 
   useEffect(() => {
     if (!shouldShowProtonFeatures || !effectiveObjectId) {
@@ -243,16 +262,6 @@ export function Sidebar({
           })}
         >
           <ul className="list">
-            {!hasActiveSubscription && (
-              <button
-                className="subscription-required-button"
-                onClick={() => showHydraCloudModal("achievements")}
-              >
-                <CloudOfflineIcon size={16} />
-                <span>{t("achievements_not_sync")}</span>
-              </button>
-            )}
-
             {achievements.slice(0, 4).map((achievement) => (
               <li key={achievement.displayName}>
                 <Link
@@ -339,8 +348,8 @@ export function Sidebar({
 
       {/* PC system requirements are meaningless for emulated/console games —
           the requirement is the emulator's, not the game's. */}
-      {shop !== "launchbox" && (
-        <SidebarSection title={t("requirements")}>
+      {shop !== "launchbox" && hasRequirements && (
+        <SidebarSection title={requirementsTitle}>
           <div className="requirement__button-container">
             <Button
               className="requirement__button"
@@ -365,7 +374,7 @@ export function Sidebar({
             className="requirement__details"
             dangerouslySetInnerHTML={{
               __html:
-                shopDetails?.pc_requirements?.[activeRequirement] ??
+                requirements[activeRequirement] ??
                 t(`no_${activeRequirement}_requirements`, {
                   gameTitle,
                 }),

@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
+import { app } from "electron";
 import { WindowManager } from "./window-manager";
 import url from "url";
 import { uploadGamesBatch } from "./library-sync";
@@ -12,8 +13,11 @@ import { db } from "@main/level";
 import { levelKeys } from "@main/level/sublevels";
 import type { Auth, User } from "@types";
 import { WSClient } from "./ws";
+import { prepareCloudSaveAccountNamespace } from "./cloud-save-namespace-state";
+import { invalidateR2CredentialSession } from "./r2-credential-session";
 
 export interface HydraApiOptions {
+  signal?: AbortSignal;
   needsAuth?: boolean;
   needsSubscription?: boolean;
   ifModifiedSince?: Date;
@@ -47,6 +51,15 @@ export class HydraApi {
     return this.userAuth.authToken !== "";
   }
 
+  /**
+   * Return a current bearer for trusted main-process service calls. The token
+   * is never exposed to a renderer and is refreshed before it is returned.
+   */
+  public static async getAccessToken() {
+    await this.validateOptions({ needsAuth: true });
+    return this.userAuth.authToken;
+  }
+
   public static hasActiveSubscription() {
     // Cloud saves and achievements are free for all logged-in users
     return this.isLoggedIn();
@@ -67,6 +80,7 @@ export class HydraApi {
       this.secondsToMilliseconds(expiresIn) -
       this.EXPIRATION_OFFSET_IN_MS;
 
+    invalidateR2CredentialSession();
     this.userAuth = {
       authToken: accessToken,
       refreshToken: refreshToken,
@@ -90,6 +104,10 @@ export class HydraApi {
       { valueEncoding: "json" }
     );
 
+    const previouslyPersistedUser = await db
+      .get<string, User>(levelKeys.user, { valueEncoding: "json" })
+      .catch(() => null);
+
     await getUserData().then(async (userDetails) => {
       if (userDetails?.subscription) {
         this.userAuth.subscription = {
@@ -98,25 +116,23 @@ export class HydraApi {
             : null,
         };
       }
-      // Anchor the cloud-storage namespace to the stable Hydra account id so
-      // R2 save/image folders survive reinstalls (a fresh random id would
-      // orphan every existing backup under a new folder).
       if (userDetails?.id) {
-        const prefs = await db
-          .get<
-            string,
-            Record<string, unknown> | null
-          >(levelKeys.userPreferences, { valueEncoding: "json" })
-          .catch(() => null);
-        if (prefs?.cloudSyncUserId !== userDetails.id) {
-          await db
-            .put(
-              levelKeys.userPreferences,
-              { ...(prefs ?? {}), cloudSyncUserId: userDetails.id },
-              { valueEncoding: "json" }
-            )
-            .catch(() => {});
-        }
+        const [{ AchievementWatcherManager }, achievementCloudSync] =
+          await Promise.all([
+            import("./achievements/achievement-watcher-manager"),
+            import("./achievements/achievement-cloud-sync"),
+          ]);
+        AchievementWatcherManager.resetSyncSession();
+        achievementCloudSync.resetAchievementCloudSyncSession();
+
+        await prepareCloudSaveAccountNamespace(
+          userDetails.id,
+          previouslyPersistedUser?.id ?? null
+        );
+        const { migratePendingCloudSaveAccountNamespace } = await import(
+          "./cloud-save-namespace-migration"
+        );
+        await migratePendingCloudSaveAccountNamespace();
       }
     });
 
@@ -139,6 +155,14 @@ export class HydraApi {
   }
 
   static handleSignOut() {
+    invalidateR2CredentialSession();
+    void Promise.all([
+      import("./achievements/achievement-watcher-manager"),
+      import("./achievements/achievement-cloud-sync"),
+    ]).then(([watcher, cloudSync]) => {
+      watcher.AchievementWatcherManager.resetSyncSession();
+      cloudSync.resetAchievementCloudSyncSession();
+    });
     this.userAuth = {
       authToken: "",
       refreshToken: "",
@@ -150,8 +174,12 @@ export class HydraApi {
   }
 
   static async setupApi() {
+    const visualQaApiUrl =
+      !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true"
+        ? process.env.GAMEHUB_API_URL?.trim()
+        : undefined;
     this.instance = axios.create({
-      baseURL: import.meta.env.MAIN_VITE_API_URL,
+      baseURL: visualQaApiUrl || import.meta.env.MAIN_VITE_API_URL,
       headers: { "User-Agent": `GameHub Launcher v${appVersion}` },
     });
 
@@ -187,21 +215,33 @@ export class HydraApi {
         (error) => {
           logger.error(" ---- RESPONSE ERROR -----");
           const { config } = error;
-
-          const data = JSON.parse(config.data ?? null);
+          let data: unknown = null;
+          try {
+            data =
+              typeof config?.data === "string"
+                ? JSON.parse(config.data)
+                : (config?.data ?? null);
+          } catch {
+            data = "[unparseable request body]";
+          }
+          const sanitizedData =
+            data !== null && typeof data === "object" && !Array.isArray(data)
+              ? omit(data as Record<string, unknown>, [
+                  "accessToken",
+                  "refreshToken",
+                ])
+              : data;
 
           logger.error(
-            config.method,
-            config.baseURL,
-            config.url,
-            omit(config.headers, [
+            config?.method,
+            config?.baseURL,
+            config?.url,
+            omit(config?.headers ?? {}, [
               "accessToken",
               "refreshToken",
               "Authorization",
             ]),
-            Array.isArray(data)
-              ? data
-              : omit(data, ["accessToken", "refreshToken"])
+            sanitizedData
           );
           if (error.response) {
             logger.error(
@@ -246,6 +286,20 @@ export class HydraApi {
     };
 
     const updatedUserData = await getUserData();
+
+    const isReadOnlyVisualQa =
+      !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true";
+
+    if (updatedUserData?.id && this.isLoggedIn() && !isReadOnlyVisualQa) {
+      await prepareCloudSaveAccountNamespace(
+        updatedUserData.id,
+        user?.id ?? null
+      );
+      const { migratePendingCloudSaveAccountNamespace } = await import(
+        "./cloud-save-namespace-migration"
+      );
+      await migratePendingCloudSaveAccountNamespace();
+    }
 
     this.userAuth.subscription = updatedUserData?.subscription
       ? {
@@ -317,12 +371,16 @@ export class HydraApi {
 
   private static readonly handleUnauthorizedError = (err) => {
     if (err instanceof AxiosError && err.response?.status === 401) {
-      logger.error(
-        "401 - Current credentials:",
-        this.userAuth,
-        err.response?.data
-      );
+      logger.error("401 - Clearing expired user credentials");
 
+      invalidateR2CredentialSession();
+      void Promise.all([
+        import("./achievements/achievement-watcher-manager"),
+        import("./achievements/achievement-cloud-sync"),
+      ]).then(([watcher, cloudSync]) => {
+        watcher.AchievementWatcherManager.resetSyncSession();
+        cloudSync.resetAchievementCloudSyncSession();
+      });
       this.userAuth = {
         authToken: "",
         expirationTimestamp: 0,
@@ -374,7 +432,12 @@ export class HydraApi {
     };
 
     return this.instance
-      .get<T>(url, { params, ...this.getAxiosConfig(), headers })
+      .get<T>(url, {
+        params,
+        ...this.getAxiosConfig(),
+        headers,
+        signal: options?.signal,
+      })
       .then((response) => response.data)
       .catch(this.handleUnauthorizedError);
   }

@@ -7,6 +7,7 @@ import type {
   UserPreferences,
 } from "@types";
 import { db, gameAchievementsSublevel, levelKeys } from "@main/level";
+import { resolveEffectiveSystem } from "@main/helpers";
 import { achievementsLogger } from "../../logger";
 import { systemHasRetroAchievements } from "../../emulators/known-binaries";
 import { publishNewAchievementNotification } from "../../notifications";
@@ -17,6 +18,8 @@ import {
   raBadgeUrl,
   type RaRecentAchievement,
 } from "./ra-api";
+import { AchievementSouvenirService } from "../achievement-souvenir-service";
+import { supportsDesktopGameCapture } from "../../desktop-capture-capability";
 
 /**
  * Maps a launchbox game's `platform` string back to its EmulatorSystem.
@@ -53,7 +56,13 @@ const PLATFORM_TO_SYSTEM: Record<string, EmulatorSystem> = {
 const systemForGame = (game: Game): EmulatorSystem | null => {
   if (!game.platform) return null;
   const normalized = game.platform.trim().toLowerCase().replace(/\s+/g, " ");
-  return PLATFORM_TO_SYSTEM[normalized] ?? null;
+  const stored = PLATFORM_TO_SYSTEM[normalized] ?? null;
+  // GB/GBC/GBA are stamped "gba" by the merged catalogue; the bound ROM's
+  // extension is the real console, so RA polls under the correct system id.
+  return resolveEffectiveSystem(
+    stored,
+    game.selectedDiscPath ?? game.discs?.[0]?.path
+  );
 };
 
 interface RaPollState {
@@ -247,6 +256,33 @@ export class RaWatcherManager {
       (prefs?.achievementCustomNotificationsEnabled ?? true) &&
       process.platform !== "darwin";
     const position = prefs?.achievementCustomNotificationPosition ?? "top-left";
+    let souvenirRecordKey: string | null = null;
+    if (
+      prefs?.enableAchievementSouvenirs === true &&
+      supportsDesktopGameCapture(process.platform)
+    ) {
+      const definition = definitions.find(
+        (candidate) => candidate.name === String(achievement.achievementId)
+      );
+      const earned = unlocked.find(
+        (candidate) => candidate.name === String(achievement.achievementId)
+      );
+      if (definition && earned) {
+        souvenirRecordKey = await AchievementSouvenirService.capture(
+          game,
+          definition,
+          earned.unlockTime
+        ).catch((error) => {
+          achievementsLogger.warn(
+            "Failed to capture RetroAchievements souvenir",
+            game.objectId,
+            achievement.achievementId,
+            error
+          );
+          return null;
+        });
+      }
+    }
     const achievementsInfo = [
       {
         title: achievement.title,
@@ -262,12 +298,12 @@ export class RaWatcherManager {
     // Prefer the in-app surface over the OS toast — on Windows/Linux that's
     // the custom always-on-top overlay, which (unlike the OS toast) shows over
     // a game running in (borderless) fullscreen, which is how RALibretro and
-    // most emulators run. Linux has no transparent-overlay support, so it
-    // mirrors the Steam/Exophase path and posts into the app's own focused
-    // window instead.
+    // most emulators run. Native Wayland posts into the focused application;
+    // X11 may use the external toast when a compositor is actually available.
     const shownInOverlay =
       customEnabled &&
-      (process.platform === "linux"
+      (process.platform === "linux" &&
+      !supportsDesktopGameCapture(process.platform)
         ? WindowManager.sendAchievementToFocusedWindow(
             position,
             achievementsInfo
@@ -290,6 +326,10 @@ export class RaWatcherManager {
         gameTitle: achievement.gameTitle || game.title,
         gameIcon: game.iconUrl ?? null,
       });
+    }
+
+    if (souvenirRecordKey) {
+      void AchievementSouvenirService.sync(souvenirRecordKey);
     }
 
     WindowManager.sendToAppWindows("on-achievement-unlocked");

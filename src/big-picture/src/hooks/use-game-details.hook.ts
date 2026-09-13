@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IS_DESKTOP } from "../constants";
 import type {
   GameShop,
@@ -15,6 +15,50 @@ import {
   getSteamLanguage,
 } from "../helpers";
 import { useBigPictureToast } from "./use-big-picture-toast.hook";
+import {
+  isCurrentGameDetailsRequest,
+  type GameDetailsRequestToken,
+} from "./game-details-request";
+
+function buildFallbackShopDetails(
+  objectId: string,
+  shop: GameShop,
+  assets: ShopDetailsWithAssets["assets"],
+  currentGame: LibraryGame | null
+): ShopDetailsWithAssets {
+  const fallbackTitle = assets?.title ?? currentGame?.title ?? objectId;
+
+  return {
+    objectId,
+    name: fallbackTitle,
+    steam_appid: 0,
+    detailed_description: "",
+    about_the_game: "",
+    short_description: "",
+    developers: [],
+    publishers: [],
+    genres: [],
+    supported_languages: "",
+    pc_requirements: { minimum: "", recommended: "" },
+    mac_requirements: { minimum: "", recommended: "" },
+    linux_requirements: { minimum: "", recommended: "" },
+    release_date: { coming_soon: false, date: "" },
+    content_descriptors: { ids: [] },
+    assets: assets ?? {
+      objectId,
+      shop,
+      title: fallbackTitle,
+      iconUrl: currentGame?.iconUrl ?? null,
+      libraryHeroImageUrl: currentGame?.libraryHeroImageUrl ?? null,
+      libraryImageUrl: currentGame?.libraryImageUrl ?? null,
+      logoImageUrl: currentGame?.logoImageUrl ?? null,
+      logoPosition: currentGame?.logoPosition ?? null,
+      coverImageUrl: currentGame?.coverImageUrl ?? null,
+      downloadSources: [],
+      updatedAt: Date.now(),
+    },
+  } as ShopDetailsWithAssets;
+}
 
 export function useGameDetails(objectId: string, shop: GameShop) {
   const { showSuccessToast, showErrorToast } = useBigPictureToast();
@@ -30,20 +74,63 @@ export function useGameDetails(objectId: string, shop: GameShop) {
   const [protonDBData, setProtonDBData] = useState<ProtonDBData | null>(null);
   const [achievements, setAchievements] = useState<UserAchievement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasDetailsFetchError, setHasDetailsFetchError] = useState(false);
+  const [resolvedIdentity, setResolvedIdentity] = useState<string | null>(null);
+  const requestIdentity = `${shop}:${objectId}`;
+  const currentIdentityRef = useRef(requestIdentity);
+  const latestDetailsRequestIdRef = useRef(0);
+  const latestGameRequestIdRef = useRef(0);
+
+  // Update during render so an old promise cannot commit in the interval
+  // between a route change rendering and its replacement effect starting.
+  currentIdentityRef.current = requestIdentity;
+
+  const canCommitDetailsRequest = useCallback(
+    (request: GameDetailsRequestToken) =>
+      isCurrentGameDetailsRequest(
+        latestDetailsRequestIdRef.current,
+        currentIdentityRef.current,
+        request
+      ),
+    []
+  );
 
   const updateGame = useCallback(async () => {
     if (!IS_DESKTOP) return;
+    const requestId = ++latestGameRequestIdRef.current;
+    const identity = requestIdentity;
     const result = await globalThis.window.electron.getGameByObjectId(
       shop,
       objectId
     );
+
+    if (
+      requestId !== latestGameRequestIdRef.current ||
+      currentIdentityRef.current !== identity
+    ) {
+      return;
+    }
+
     setGame(result);
-  }, [objectId, shop]);
+  }, [objectId, requestIdentity, shop]);
 
   const fetchGameDetails = useCallback(async () => {
-    if (!IS_DESKTOP) return;
+    const request: GameDetailsRequestToken = {
+      id: ++latestDetailsRequestIdRef.current,
+      identity: requestIdentity,
+    };
+
+    if (!IS_DESKTOP) {
+      if (canCommitDetailsRequest(request)) {
+        setHasDetailsFetchError(true);
+        setResolvedIdentity(requestIdentity);
+        setIsLoading(false);
+      }
+      return;
+    }
 
     setIsLoading(true);
+    setHasDetailsFetchError(false);
 
     try {
       // getUserPreferences is a fast local read; await it first so we know the
@@ -57,140 +144,123 @@ export function useGameDetails(objectId: string, shop: GameShop) {
 
       const language = getSteamLanguage(userPreferences?.language ?? "en");
 
-      const [statsResult, assets, currentGame, shopDetailsResult] =
-        await Promise.all([
+      const [statsResult, assetsResult, currentGameResult, detailsResult] =
+        await Promise.allSettled([
           shop === "custom"
             ? Promise.resolve(null)
-            : globalThis.window.electron
-                .getGameStats(objectId, shop)
-                .catch(() => null),
-          globalThis.window.electron
-            .getGameAssets(objectId, shop)
-            .catch(() => null),
-          globalThis.window.electron
-            .getGameByObjectId(shop, objectId)
-            .catch(() => null),
+            : globalThis.window.electron.getGameStats(objectId, shop),
+          globalThis.window.electron.getGameAssets(objectId, shop),
+          globalThis.window.electron.getGameByObjectId(shop, objectId),
           shop === "custom"
             ? Promise.resolve(null)
-            : globalThis.window.electron
-                .getGameShopDetails(objectId, shop, language)
-                .catch(() => null),
+            : globalThis.window.electron.getGameShopDetails(
+                objectId,
+                shop,
+                language
+              ),
         ]);
 
-      // Always build a usable minimal ShopDetailsWithAssets so the game page
-      // can render. Priority: full shopDetails > cached assets > game record.
-      const fallbackTitle = assets?.title ?? currentGame?.title ?? objectId;
+      if (!canCommitDetailsRequest(request)) return;
 
-      if (shopDetailsResult) {
-        shopDetailsResult.assets = assets ?? shopDetailsResult.assets;
-        setShopDetails(shopDetailsResult);
-      } else {
-        // Custom games, integration stores whose API details failed, etc.
-        setShopDetails({
-          objectId,
-          name: fallbackTitle,
-          steam_appid: 0,
-          detailed_description: "",
-          about_the_game: "",
-          short_description: "",
-          developers: [],
-          publishers: [],
-          genres: [],
-          supported_languages: "",
-          pc_requirements: { minimum: "", recommended: "" },
-          mac_requirements: { minimum: "", recommended: "" },
-          linux_requirements: { minimum: "", recommended: "" },
-          release_date: { coming_soon: false, date: "" },
-          content_descriptors: { ids: [] },
-          assets: assets ?? {
-            objectId,
-            shop,
-            title: fallbackTitle,
-            iconUrl: currentGame?.iconUrl ?? null,
-            libraryHeroImageUrl: currentGame?.libraryHeroImageUrl ?? null,
-            libraryImageUrl: currentGame?.libraryImageUrl ?? null,
-            logoImageUrl: currentGame?.logoImageUrl ?? null,
-            logoPosition: currentGame?.logoPosition ?? null,
-            coverImageUrl: currentGame?.coverImageUrl ?? null,
-            downloadSources: [],
-            updatedAt: Date.now(),
-          },
-        } as ShopDetailsWithAssets);
-      }
-      setStats(statsResult);
+      const statsValue =
+        statsResult.status === "fulfilled" ? statsResult.value : null;
+      const assets =
+        assetsResult.status === "fulfilled" ? assetsResult.value : null;
+      const currentGame =
+        currentGameResult.status === "fulfilled"
+          ? currentGameResult.value
+          : null;
+      const details =
+        detailsResult.status === "fulfilled" ? detailsResult.value : null;
+      const detailsFailed =
+        shop !== "custom" &&
+        (detailsResult.status === "rejected" || details === null);
+      const fallbackAvailable =
+        shop === "custom" || currentGame !== null || assets !== null;
+      const nextShopDetails = details
+        ? { ...details, assets: assets ?? details.assets }
+        : fallbackAvailable
+          ? buildFallbackShopDetails(objectId, shop, assets, currentGame)
+          : null;
+
+      setShopDetails(nextShopDetails);
+      setStats(statsValue);
+      setGame(currentGame);
+      setHasDetailsFetchError(detailsFailed);
     } catch {
-      // Last-resort fallback so the page never gets stuck on "Loading…".
-      setShopDetails({
-        objectId,
-        name: objectId,
-        steam_appid: 0,
-        detailed_description: "",
-        about_the_game: "",
-        short_description: "",
-        developers: [],
-        publishers: [],
-        genres: [],
-        supported_languages: "",
-        pc_requirements: { minimum: "", recommended: "" },
-        mac_requirements: { minimum: "", recommended: "" },
-        linux_requirements: { minimum: "", recommended: "" },
-        release_date: { coming_soon: false, date: "" },
-        content_descriptors: { ids: [] },
-        assets: {
-          objectId,
-          shop,
-          title: objectId,
-          iconUrl: null,
-          libraryHeroImageUrl: null,
-          libraryImageUrl: null,
-          logoImageUrl: null,
-          logoPosition: null,
-          coverImageUrl: null,
-          downloadSources: [],
-          updatedAt: Date.now(),
-        },
-      } as ShopDetailsWithAssets);
+      if (!canCommitDetailsRequest(request)) return;
+
+      setShopDetails(null);
+      setStats(null);
+      setGame(null);
+      setHasDetailsFetchError(true);
     } finally {
-      setIsLoading(false);
+      if (canCommitDetailsRequest(request)) {
+        setResolvedIdentity(requestIdentity);
+        setIsLoading(false);
+      }
     }
-  }, [objectId, shop]);
+  }, [canCommitDetailsRequest, objectId, requestIdentity, shop]);
 
   useEffect(() => {
-    fetchGameDetails();
-    updateGame();
+    void fetchGameDetails();
 
-    if (IS_DESKTOP && shop !== "custom") {
-      if (shop !== "launchbox") {
-        globalThis.window.electron.hydraApi
-          .get<HowLongToBeatCategory[] | null>(
-            `/games/${shop}/${objectId}/how-long-to-beat`,
-            { needsAuth: false }
-          )
-          .then(setHowLongToBeat)
-          .catch(() => setHowLongToBeat(null));
-      }
+    return () => {
+      latestDetailsRequestIdRef.current += 1;
+      latestGameRequestIdRef.current += 1;
+    };
+  }, [fetchGameDetails]);
 
-      globalThis.window.electron.hydraApi
-        .get<ProtonDBData | null>(`/games/${shop}/${objectId}/protondb`, {
-          needsAuth: false,
-        })
-        .then(setProtonDBData)
-        .catch(() => setProtonDBData(null));
+  useEffect(() => {
+    let active = true;
+    setHowLongToBeat(null);
+    setProtonDBData(null);
+    setAchievements([]);
 
-      globalThis.window.electron
-        .getUnlockedAchievements(objectId, shop)
-        .then((result) => {
-          if (result) {
-            setAchievements(result);
-          }
-        })
-        .catch(() => setAchievements([]));
-    } else {
-      setHowLongToBeat(null);
-      setProtonDBData(null);
-      setAchievements([]);
+    if (!IS_DESKTOP || shop === "custom") {
+      return () => {
+        active = false;
+      };
     }
-  }, [fetchGameDetails, updateGame, objectId, shop]);
+
+    if (shop !== "launchbox") {
+      globalThis.window.electron.hydraApi
+        .get<HowLongToBeatCategory[] | null>(
+          `/games/${shop}/${objectId}/how-long-to-beat`,
+          { needsAuth: false }
+        )
+        .then((result) => {
+          if (active) setHowLongToBeat(result);
+        })
+        .catch(() => {
+          if (active) setHowLongToBeat(null);
+        });
+    }
+
+    globalThis.window.electron.hydraApi
+      .get<ProtonDBData | null>(`/games/${shop}/${objectId}/protondb`, {
+        needsAuth: false,
+      })
+      .then((result) => {
+        if (active) setProtonDBData(result);
+      })
+      .catch(() => {
+        if (active) setProtonDBData(null);
+      });
+
+    globalThis.window.electron
+      .getUnlockedAchievements(objectId, shop)
+      .then((result) => {
+        if (active) setAchievements(result ?? []);
+      })
+      .catch(() => {
+        if (active) setAchievements([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [objectId, shop]);
 
   // HLTB for console/emulated games — separate effect because the title
   // arrives asynchronously (from game record or shop details) and the main
@@ -199,14 +269,24 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     if (!IS_DESKTOP || shop !== "launchbox") return;
     const title = game?.title ?? shopDetails?.name ?? "";
     if (!title) return;
+    let active = true;
     setHowLongToBeat(null);
     globalThis.window.electron
       .getConsoleHowLongToBeat(title)
-      .then(setHowLongToBeat)
-      .catch(() => setHowLongToBeat(null));
-  }, [shop, game?.title, shopDetails?.name]);
+      .then((result) => {
+        if (active) setHowLongToBeat(result);
+      })
+      .catch(() => {
+        if (active) setHowLongToBeat(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [objectId, shop, game?.title, shopDetails?.name]);
 
   useEffect(() => {
+    setIsGameRunning(false);
     if (!IS_DESKTOP || !game?.id) return;
 
     const gameId = game.id;
@@ -304,17 +384,27 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     await fetchGameDetails();
   }, [fetchGameDetails]);
 
-  const iconUrl = game?.iconUrl ?? shopDetails?.assets?.iconUrl ?? null;
+  const hasResolvedCurrentIdentity = resolvedIdentity === requestIdentity;
+  const currentGame = hasResolvedCurrentIdentity ? game : null;
+  const currentShopDetails = hasResolvedCurrentIdentity ? shopDetails : null;
+  const iconUrl =
+    currentGame?.iconUrl ?? currentShopDetails?.assets?.iconUrl ?? null;
   const heroSrc =
-    game?.libraryHeroImageUrl ??
-    shopDetails?.assets?.libraryHeroImageUrl ??
+    currentGame?.libraryHeroImageUrl ??
+    currentShopDetails?.assets?.libraryHeroImageUrl ??
     null;
   const logoSrc =
-    game?.logoImageUrl ?? shopDetails?.assets?.logoImageUrl ?? null;
+    currentGame?.logoImageUrl ??
+    currentShopDetails?.assets?.logoImageUrl ??
+    null;
   const libraryImageUrl =
-    game?.libraryHeroImageUrl ?? shopDetails?.assets?.libraryImageUrl ?? null;
+    currentGame?.libraryHeroImageUrl ??
+    currentShopDetails?.assets?.libraryImageUrl ??
+    null;
   const coverImageUrl =
-    game?.libraryHeroImageUrl ?? shopDetails?.assets?.coverImageUrl ?? null;
+    currentGame?.libraryHeroImageUrl ??
+    currentShopDetails?.assets?.coverImageUrl ??
+    null;
   const preferredAssets = {
     iconUrl,
     iconSrc: iconUrl,
@@ -323,8 +413,8 @@ export function useGameDetails(objectId: string, shop: GameShop) {
     libraryHeroImageUrl: heroSrc,
     logoSrc,
     logoImageUrl: logoSrc,
-    title: game?.title ?? "",
-    downloadSources: shopDetails?.assets?.downloadSources ?? [],
+    title: currentGame?.title ?? currentShopDetails?.name ?? "",
+    downloadSources: currentShopDetails?.assets?.downloadSources ?? [],
     coverImageUrl,
     coverSrc: coverImageUrl,
     landscapeSrc: heroSrc,
@@ -333,15 +423,16 @@ export function useGameDetails(objectId: string, shop: GameShop) {
   };
 
   return {
-    shopDetails,
-    stats,
-    game,
-    isGameRunning,
+    shopDetails: currentShopDetails,
+    stats: hasResolvedCurrentIdentity ? stats : null,
+    game: currentGame,
+    isGameRunning: hasResolvedCurrentIdentity ? isGameRunning : false,
     runningSessionDurationInMillis: 0,
-    isLoading,
-    howLongToBeat,
-    protonDBData,
-    achievements,
+    isLoading: isLoading || !hasResolvedCurrentIdentity,
+    hasDetailsFetchError: hasResolvedCurrentIdentity && hasDetailsFetchError,
+    howLongToBeat: hasResolvedCurrentIdentity ? howLongToBeat : null,
+    protonDBData: hasResolvedCurrentIdentity ? protonDBData : null,
+    achievements: hasResolvedCurrentIdentity ? achievements : [],
     preferredAssets,
     openGame,
     closeGame,

@@ -26,7 +26,7 @@ import {
 } from "@primer/octicons-react";
 import { useTranslation } from "react-i18next";
 import { Tooltip } from "react-tooltip";
-import { AuthPage } from "@shared";
+import { AuthPage, removeDiacritics } from "@shared";
 import { GameCollection, LibraryGame } from "@types";
 import {
   Button,
@@ -172,6 +172,19 @@ export default function Library() {
 
       void Promise.all([updateLibrary(), collectionsPromise]);
     });
+
+    // Audit the whole library's installation state on each page visit. Heals
+    // stale "installed" flags (files deleted outside GameHub) and re-marks
+    // games whose files came back. Emulated games are checked via their bound
+    // ROM disc instead of a game executable.
+    void window.electron
+      .checkLibraryInstallation(true)
+      .then((report) => {
+        if (report.stale.length > 0 || report.found.length > 0) {
+          updateLibrary();
+        }
+      })
+      .catch(() => {});
 
     return () => {
       unsubscribe();
@@ -487,10 +500,10 @@ export default function Library() {
 
     if (!deferredSearchQuery.trim()) return filtered;
 
-    const queryLower = deferredSearchQuery.toLowerCase();
+    const queryLower = removeDiacritics(deferredSearchQuery).toLowerCase();
     return filtered.filter((game) => {
       if (!game.title) return false;
-      const titleLower = game.title.toLowerCase();
+      const titleLower = removeDiacritics(game.title).toLowerCase();
       let queryIndex = 0;
 
       for (
@@ -545,9 +558,13 @@ export default function Library() {
         (g) => getGameOrigin(g) === "catalog" && g.shop !== "launchbox"
       );
 
-    // Custom = manually added games.
+    // Custom = manually added games. Exclude console/emulated games (shop
+    // "launchbox") the same way Retigga does — a pre-fix scan stamped scanned
+    // ROMs with libraryOrigin "custom", so guard against those leaking here too.
     if (storeFilter === "custom")
-      return filteredLibrary.filter((g) => getGameOrigin(g) === "custom");
+      return filteredLibrary.filter(
+        (g) => getGameOrigin(g) === "custom" && g.shop !== "launchbox"
+      );
 
     return filteredLibrary.filter((g) => g.shop === storeFilter);
   }, [filteredLibrary, storeFilter, consoleMode]);

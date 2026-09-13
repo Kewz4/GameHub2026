@@ -1,0 +1,66 @@
+@use "../../scss/globals.scss";
+
+.settings-global-trackers {
+  display: flex;
+  flex-direction: column;
+  gap: calc(globals.$spacing-unit * 1.25);
+
+  &__description,
+  &__status,
+  &__count {
+    margin: 0;
+    font-size: globals.$hint-font-size;
+    line-height: 1.5;
+  }
+
+  &__description,
+  &__count {
+    color: var(--color-text-faint);
+  }
+
+  &__label {
+    color: var(--color-text-bright);
+    font-size: globals.$body-font-size;
+    font-weight: 500;
+  }
+
+  &__textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 132px;
+    resize: vertical;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-bright);
+    padding: calc(globals.$spacing-unit * 1.5);
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    font-size: 0.8rem;
+    line-height: 1.55;
+
+    &::placeholder {
+      color: var(--color-text-faint);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-text-bright);
+      outline-offset: 2px;
+    }
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(globals.$spacing-unit * 1.5);
+  }
+
+  &__count--error,
+  &__status--error {
+    color: var(--color-danger);
+  }
+
+  &__status--success {
+    color: var(--color-success);
+  }
+}

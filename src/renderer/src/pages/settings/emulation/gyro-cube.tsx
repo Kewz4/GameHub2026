@@ -174,8 +174,9 @@ function drawCube(
   ctx.lineWidth = 2;
   // Follow the app theme (matches the diagrams' accent).
   ctx.strokeStyle =
-    getComputedStyle(ctx.canvas).getPropertyValue("--color-primary").trim() ||
-    "#7aa2ff";
+    getComputedStyle(ctx.canvas)
+      .getPropertyValue("--color-text-bright")
+      .trim() || "#fafafa";
 
   // Front face
   ctx.beginPath();

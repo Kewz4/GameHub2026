@@ -11,8 +11,10 @@ import { useNavigationStore } from "../../stores";
 import {
   CATALOGUE_CLEAR_FILTERS_ID,
   CATALOGUE_CONSOLE_SELECT_ID,
+  CATALOGUE_DECK_SELECT_ID,
   CATALOGUE_HEADER_CONTROLS_REGION_ID,
   CATALOGUE_PLATFORM_SELECT_ID,
+  CATALOGUE_PROTON_SELECT_ID,
   CATALOGUE_SORT_SELECT_ID,
   getCatalogueActiveFilterChipFocusId,
   getCatalogueFilterHeaderFocusId,
@@ -30,6 +32,12 @@ import {
   type SearchGamesFormValues,
 } from "./use-catalogue-data";
 import { useCatalogueHeaderNavigation } from "./use-catalogue-header-navigation";
+import {
+  DECK_FILTER_OPTIONS,
+  PROTON_FILTER_OPTIONS,
+  hasCatalogueCompatibilityFilters,
+  matchingCompatibilityOption,
+} from "./compatibility-filters";
 
 interface HeaderProps {
   values: SearchGamesFormValues;
@@ -71,6 +79,25 @@ export function CatalogueHeader({
       (option) =>
         option.sortBy === values.sortBy && option.sortOrder === values.sortOrder
     ) ?? CATALOGUE_SORT_OPTIONS[0];
+  const hasCompatibilityFilters = hasCatalogueCompatibilityFilters(values);
+  const showCompatibilityFilters =
+    platform !== "console" &&
+    (globalThis.window.electron.platform === "linux" ||
+      hasCompatibilityFilters);
+  const protonValue = matchingCompatibilityOption(
+    values.protondbSupportBadges ?? [],
+    PROTON_FILTER_OPTIONS.map((option) => ({
+      value: option.value,
+      values: option.badges,
+    }))
+  );
+  const deckValue = matchingCompatibilityOption(
+    values.deckCompatibility ?? [],
+    DECK_FILTER_OPTIONS.map((option) => ({
+      value: option.value,
+      values: option.ratings,
+    }))
+  );
 
   const activeFilters: FilterItem[] = [
     ...(genres?.map((value) => ({
@@ -118,14 +145,20 @@ export function CatalogueHeader({
   );
   const headerFocusIds = [
     ...chipFocusIds,
-    ...(activeFilters.length > 0 ? [CATALOGUE_CLEAR_FILTERS_ID] : []),
+    ...(activeFilters.length > 0 || hasCompatibilityFilters
+      ? [CATALOGUE_CLEAR_FILTERS_ID]
+      : []),
     CATALOGUE_PLATFORM_SELECT_ID,
     ...(platform === "console" ? [CATALOGUE_CONSOLE_SELECT_ID] : []),
+    ...(showCompatibilityFilters
+      ? [CATALOGUE_PROTON_SELECT_ID, CATALOGUE_DECK_SELECT_ID]
+      : []),
     CATALOGUE_SORT_SELECT_ID,
   ];
   const navigationOverridesById = useCatalogueHeaderNavigation(headerFocusIds);
 
-  const hasActiveFilters = Boolean(title) || activeFilters.length > 0;
+  const hasActiveFilters =
+    Boolean(title) || activeFilters.length > 0 || hasCompatibilityFilters;
 
   const restoreHeaderFocus = (sourceId: string, targetId: string) => {
     if (currentFocusId !== sourceId) return;
@@ -162,6 +195,8 @@ export function CatalogueHeader({
       publishers: [],
       developers: [],
       downloadSourceFingerprints: [],
+      protondbSupportBadges: [],
+      deckCompatibility: [],
     });
     restoreHeaderFocus(CATALOGUE_CLEAR_FILTERS_ID, CATALOGUE_SORT_SELECT_ID);
   };
@@ -180,7 +215,7 @@ export function CatalogueHeader({
   return (
     <GridFocusGroup
       regionId={CATALOGUE_HEADER_CONTROLS_REGION_ID}
-      className="catalogue-header"
+      className={`catalogue-header${showCompatibilityFilters ? " catalogue-header--compatibility" : ""}`}
     >
       <div className="catalogue-header__summary">
         <div className="catalogue-header__search-term">
@@ -202,7 +237,7 @@ export function CatalogueHeader({
         </div>
 
         <div className="catalogue-header__filters">
-          {activeFilters.length > 0 ? (
+          {activeFilters.length > 0 || hasCompatibilityFilters ? (
             <div className="catalogue-header__filters-container">
               {activeFilters.map((filter, index) => {
                 const focusId = getCatalogueActiveFilterChipFocusId(
@@ -291,6 +326,69 @@ export function CatalogueHeader({
               setConsoleSystem(value === "all" ? "" : (value as EmulatorSystem))
             }
           />
+        )}
+
+        {showCompatibilityFilters && (
+          <>
+            <DropdownSelect
+              className="catalogue-header__sort-select"
+              label="Proton compatibility"
+              hideLabel
+              ariaLabel="Filter by Proton compatibility"
+              focusId={CATALOGUE_PROTON_SELECT_ID}
+              focusNavigationOverrides={
+                navigationOverridesById[CATALOGUE_PROTON_SELECT_ID]
+              }
+              value={protonValue}
+              options={[
+                ...PROTON_FILTER_OPTIONS.map(({ value, label }) => ({
+                  value,
+                  label,
+                })),
+                ...(protonValue === "custom"
+                  ? [{ value: "custom", label: "Custom Proton ratings" }]
+                  : []),
+              ]}
+              onValueChange={(value) => {
+                const option = PROTON_FILTER_OPTIONS.find(
+                  (item) => item.value === value
+                );
+                if (option)
+                  updateSearchParams({
+                    protondbSupportBadges: [...option.badges],
+                  });
+              }}
+            />
+            <DropdownSelect
+              className="catalogue-header__sort-select"
+              label="Steam Deck compatibility"
+              hideLabel
+              ariaLabel="Filter by Steam Deck compatibility"
+              focusId={CATALOGUE_DECK_SELECT_ID}
+              focusNavigationOverrides={
+                navigationOverridesById[CATALOGUE_DECK_SELECT_ID]
+              }
+              value={deckValue}
+              options={[
+                ...DECK_FILTER_OPTIONS.map(({ value, label }) => ({
+                  value,
+                  label,
+                })),
+                ...(deckValue === "custom"
+                  ? [{ value: "custom", label: "Custom Deck ratings" }]
+                  : []),
+              ]}
+              onValueChange={(value) => {
+                const option = DECK_FILTER_OPTIONS.find(
+                  (item) => item.value === value
+                );
+                if (option)
+                  updateSearchParams({
+                    deckCompatibility: [...option.ratings],
+                  });
+              }}
+            />
+          </>
         )}
 
         <DropdownSelect

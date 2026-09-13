@@ -25,6 +25,7 @@ export function SettingsContextNotifications() {
   );
 
   const volumeUpdateTimeoutRef = useRef<NodeJS.Timeout>();
+  const pendingVolumeRef = useRef<number | null>(null);
 
   const [form, setForm] = useState({
     downloadNotificationsEnabled: false,
@@ -63,32 +64,41 @@ export function SettingsContextNotifications() {
     }));
   }, [userPreferences]);
 
-  useEffect(() => {
-    return () => {
-      if (volumeUpdateTimeoutRef.current) {
-        clearTimeout(volumeUpdateTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const handleChange = async (values: Partial<typeof form>) => {
     setForm((prev) => ({ ...prev, ...values }));
     await updateUserPreferences(values);
   };
 
+  const flushVolumeUpdate = useCallback(() => {
+    if (volumeUpdateTimeoutRef.current) {
+      clearTimeout(volumeUpdateTimeoutRef.current);
+      volumeUpdateTimeoutRef.current = undefined;
+    }
+
+    const pendingVolume = pendingVolumeRef.current;
+    if (pendingVolume === null) return;
+    pendingVolumeRef.current = null;
+    void updateUserPreferences({
+      achievementSoundVolume: pendingVolume / 100,
+    });
+  }, [updateUserPreferences]);
+
+  useEffect(() => {
+    return () => flushVolumeUpdate();
+  }, [flushVolumeUpdate]);
+
   const handleVolumeChange = useCallback(
     (newVolume: number) => {
       setForm((prev) => ({ ...prev, achievementSoundVolume: newVolume }));
+      pendingVolumeRef.current = newVolume;
 
       if (volumeUpdateTimeoutRef.current) {
         clearTimeout(volumeUpdateTimeoutRef.current);
       }
 
-      volumeUpdateTimeoutRef.current = setTimeout(() => {
-        updateUserPreferences({ achievementSoundVolume: newVolume / 100 });
-      }, 300);
+      volumeUpdateTimeoutRef.current = setTimeout(flushVolumeUpdate, 300);
     },
-    [updateUserPreferences]
+    [flushVolumeUpdate]
   );
 
   const achievementCustomNotificationPositionOptions = useMemo(() => {
@@ -121,6 +131,7 @@ export function SettingsContextNotifications() {
         <h3>{t("library_notifications")}</h3>
 
         <CheckboxField
+          id="settings-download-notifications"
           label={t("enable_download_notifications")}
           checked={form.downloadNotificationsEnabled}
           onChange={() =>
@@ -131,6 +142,7 @@ export function SettingsContextNotifications() {
         />
 
         <CheckboxField
+          id="settings-repack-notifications"
           label={t("enable_repack_list_notifications")}
           checked={form.repackUpdatesNotificationsEnabled}
           onChange={() =>
@@ -142,6 +154,7 @@ export function SettingsContextNotifications() {
         />
 
         <CheckboxField
+          id="settings-friend-request-notifications"
           label={t("enable_friend_request_notifications")}
           checked={form.friendRequestNotificationsEnabled}
           onChange={() =>
@@ -153,6 +166,7 @@ export function SettingsContextNotifications() {
         />
 
         <CheckboxField
+          id="settings-friend-game-notifications"
           label={t("enable_friend_start_game_notifications")}
           checked={form.friendStartGameNotificationsEnabled}
           onChange={() =>
@@ -168,6 +182,7 @@ export function SettingsContextNotifications() {
         <h3>{t("achievement_notifications")}</h3>
 
         <CheckboxField
+          id="settings-achievement-notifications"
           label={t("enable_achievement_notifications")}
           checked={form.achievementNotificationsEnabled}
           onChange={async () => {
@@ -181,6 +196,7 @@ export function SettingsContextNotifications() {
         />
 
         <CheckboxField
+          id="settings-custom-achievement-notifications"
           label={t("enable_achievement_custom_notifications")}
           checked={form.achievementCustomNotificationsEnabled}
           disabled={!form.achievementNotificationsEnabled}
@@ -198,6 +214,7 @@ export function SettingsContextNotifications() {
           form.achievementCustomNotificationsEnabled && (
             <>
               <SelectField
+                id="settings-achievement-notification-position"
                 className="settings-general__achievement-custom-notification-position__select-variation"
                 label={t("achievement_custom_notification_position")}
                 value={form.achievementCustomNotificationPosition}
@@ -222,9 +239,14 @@ export function SettingsContextNotifications() {
               {t("achievement_sound_volume")}
             </label>
             <div className="settings-general__volume-slider-wrapper">
-              <UnmuteIcon size={16} className="settings-general__volume-icon" />
+              <UnmuteIcon
+                size={16}
+                className="settings-general__volume-icon"
+                aria-hidden="true"
+              />
               <input
                 id="achievement-volume"
+                data-setting-key="achievementSoundVolume"
                 type="range"
                 min="0"
                 max="100"
@@ -235,6 +257,20 @@ export function SettingsContextNotifications() {
                     handleVolumeChange(volumePercent);
                   }
                 }}
+                onBlur={flushVolumeUpdate}
+                onPointerUp={flushVolumeUpdate}
+                onKeyUp={(event) => {
+                  if (
+                    event.key.startsWith("Arrow") ||
+                    event.key === "Home" ||
+                    event.key === "End" ||
+                    event.key === "PageUp" ||
+                    event.key === "PageDown"
+                  ) {
+                    flushVolumeUpdate();
+                  }
+                }}
+                aria-valuetext={`${form.achievementSoundVolume}%`}
                 className="settings-general__volume-slider"
                 style={
                   {

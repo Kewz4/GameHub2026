@@ -66,31 +66,36 @@ export function LocalNotificationItem({
   };
 
   return (
-    <button
-      type="button"
+    <article
       className={cn("notification-item", {
         "notification-item--unread": !notification.isRead,
       })}
-      onClick={handleClick}
     >
-      <div className="notification-item__picture">
-        {notification.pictureUrl ? (
-          <img src={notification.pictureUrl} alt="" />
-        ) : (
-          getIcon()
-        )}
-      </div>
+      <button
+        type="button"
+        className="notification-item__main"
+        onClick={handleClick}
+      >
+        <span className="notification-item__unread-dot" aria-hidden="true" />
+        <div className="notification-item__picture">
+          {notification.pictureUrl ? (
+            <img src={notification.pictureUrl} alt="" />
+          ) : (
+            getIcon()
+          )}
+        </div>
 
-      <div className="notification-item__content">
-        <span className="notification-item__title">{notification.title}</span>
-        <span className="notification-item__description">
-          {notification.description}
-        </span>
-        <span className="notification-item__time">
-          <ClockIcon size={12} />
-          {formatDistance(new Date(notification.createdAt), new Date())}
-        </span>
-      </div>
+        <div className="notification-item__content">
+          <span className="notification-item__title">{notification.title}</span>
+          <span className="notification-item__description">
+            {notification.description}
+          </span>
+          <span className="notification-item__time">
+            <ClockIcon size={12} />
+            {formatDistance(new Date(notification.createdAt), new Date())}
+          </span>
+        </div>
+      </button>
 
       <button
         type="button"
@@ -100,6 +105,6 @@ export function LocalNotificationItem({
       >
         <XIcon size={16} />
       </button>
-    </button>
+    </article>
   );
 }

@@ -1,97 +1,117 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
+import { shell } from "electron";
+
 import { registerEvent } from "../register-event";
 import { emulators, logger } from "@main/services";
-import type { MemcardRestoreResult } from "@types";
+import type { EmulationSavePlatform, MemcardRestoreResult } from "@types";
 
-// Restore a PS2 save (PSU buffer) into a PCSX2 memory card
-const restorePs2Save = async (
-  saveBuffer: Buffer,
-  cardFilePath: string
-): Promise<void> => {
-  // PSU buffer layout:
-  //   512 bytes: directory entry (contains folderName at offset 36)
-  //   For each file: 512 bytes entry + padded data
-  if (saveBuffer.length < 512) throw new Error("Invalid PSU buffer");
-
-  const nameBuf = saveBuffer.subarray(36, 64);
-  const nul = nameBuf.indexOf(0);
-  const folderName = nameBuf
-    .subarray(0, nul === -1 ? nameBuf.length : nul)
-    .toString("ascii")
-    .trim();
-
-  if (!folderName) throw new Error("Could not extract folder name from PSU");
-
-  // Read current card state and find/create the save slot
-  // For now, append to the card using PCSX2's API-compatible write
-  // In practice this requires full MCF write support — we write to a sidecar file
-  // that the user can import manually via the emulator's save manager
-  const outPath = path.join(
-    path.dirname(cardFilePath),
-    `${folderName}_restored.psu`
-  );
-  await fs.writeFile(outPath, saveBuffer);
-  // NOTE: avoid ending this string with the word "import" — electron-vite's
-  // CJS-shim regex mistakes a trailing ` import"` for an ESM import statement
-  // and injects its shim banner mid-string, corrupting the whole chunk.
-  logger.log("[restore] Wrote PSU sidecar for the manual import flow", {
-    outPath,
-  });
+const writeUniqueSidecar = async (
+  cardFilePath: string,
+  stem: string,
+  extension: "psu" | "mcs",
+  saveBuffer: Buffer
+) => {
+  const directory = path.dirname(cardFilePath);
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const suffix = attempt === 0 ? "" : `-${attempt}`;
+    const outPath = path.join(
+      directory,
+      `${emulators.sanitizeEmulationSaveExportStem(stem)}_restored${suffix}.${extension}`
+    );
+    try {
+      await fs.writeFile(outPath, saveBuffer, { flag: "wx" });
+      return outPath;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  throw new Error("Could not allocate a unique restore export path");
 };
 
-// Restore a PS1 save (MCS buffer) into a DuckStation memory card
-const restorePs1Save = async (
-  saveBuffer: Buffer,
-  cardFilePath: string
-): Promise<void> => {
-  // MCS: 128-byte dir frame + N×8192-byte blocks
-  if (saveBuffer.length < 128) throw new Error("Invalid MCS buffer");
+const exportPs2Save = async (saveBuffer: Buffer, cardFilePath: string) => {
+  // PSU: a 512-byte directory entry followed by file entries and data.
+  if (saveBuffer.length < 512) throw new Error("Invalid PSU buffer");
+  const nameBuffer = saveBuffer.subarray(36, 64);
+  const nul = nameBuffer.indexOf(0);
+  const folderName = nameBuffer
+    .subarray(0, nul === -1 ? nameBuffer.length : nul)
+    .toString("ascii")
+    .trim();
+  if (!folderName) throw new Error("Could not extract folder name from PSU");
+  return writeUniqueSidecar(cardFilePath, folderName, "psu", saveBuffer);
+};
 
+const exportPs1Save = async (saveBuffer: Buffer, cardFilePath: string) => {
+  // MCS: one 128-byte directory frame followed by one or more 8 KiB blocks.
+  if (
+    saveBuffer.length < 128 + 8_192 ||
+    (saveBuffer.length - 128) % 8_192 !== 0
+  ) {
+    throw new Error("Invalid MCS buffer");
+  }
   const identifier = saveBuffer
     .subarray(10, 30)
     .toString("ascii")
     .replace(/\0.*/, "")
     .trim();
-
-  const outPath = path.join(
-    path.dirname(cardFilePath),
-    `${identifier || "save"}_restored.mcs`
+  return writeUniqueSidecar(
+    cardFilePath,
+    identifier || "save",
+    "mcs",
+    saveBuffer
   );
-  await fs.writeFile(outPath, saveBuffer);
-  // See the PSU note above: never end a bundled string with ` import"`.
-  logger.log("[restore] Wrote MCS sidecar for the manual import flow", {
-    outPath,
-  });
 };
 
 const restoreEmulationSave = async (
   _event: Electron.IpcMainInvokeEvent,
+  platform: EmulationSavePlatform,
   saveId: string,
   cardFilePath: string
 ): Promise<MemcardRestoreResult> => {
   try {
-    const saveBuffer = await emulators.downloadEmulationSave(saveId);
-
-    // Determine platform from card file extension
-    const ext = path.extname(cardFilePath).toLowerCase();
-    if (ext === ".ps2" || ext === ".mc2") {
-      await restorePs2Save(saveBuffer, cardFilePath);
-    } else if (ext === ".mcd" || ext === ".mcr") {
-      await restorePs1Save(saveBuffer, cardFilePath);
-    } else {
-      return { ok: false, error: "Unknown memory card format" };
+    emulators.assertEmulationSavePlatform(platform);
+    if (
+      typeof cardFilePath !== "string" ||
+      !path.isAbsolute(cardFilePath) ||
+      !emulators.isMemoryCardPathForPlatform(platform, cardFilePath)
+    ) {
+      throw new Error("Memory card does not match the requested platform");
     }
+    if (
+      typeof saveId !== "string" ||
+      !emulators.isEmulationSaveKeyForPlatform(saveId, platform)
+    ) {
+      throw new Error("Cloud save does not match the requested platform");
+    }
+    const card = await fs.stat(cardFilePath);
+    if (!card.isFile()) throw new Error("Memory card file does not exist");
 
-    return { ok: true };
-  } catch (err) {
-    logger.error("Failed to restore emulation save", {
+    const saveBuffer = await emulators.downloadEmulationSave(saveId);
+    const exportedPath =
+      platform === "ps2"
+        ? await exportPs2Save(saveBuffer, cardFilePath)
+        : await exportPs1Save(saveBuffer, cardFilePath);
+
+    // We deliberately do not mutate a card without a format-complete writer.
+    // Reveal the standards-based PSU/MCS export so the user can import it with
+    // PCSX2 or DuckStation's memory-card manager.
+    shell.showItemInFolder(exportedPath);
+    logger.log("[restore] Exported emulation save for card-manager restore", {
+      platform,
+      saveId,
+      exportedPath,
+    });
+    return { ok: true, requiresManualImport: true, exportedPath };
+  } catch (error) {
+    logger.error("Failed to prepare emulation save restore", {
+      platform,
       saveId,
       cardFilePath,
-      err,
+      error,
     });
-    return { ok: false, error: String(err) };
+    return { ok: false, error: String(error) };
   }
 };
 

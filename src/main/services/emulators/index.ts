@@ -24,5 +24,6 @@ export * from "./ps2-memory-card";
 export * from "./ps1-memcard-dirs";
 export * from "./ps1-memory-card";
 export * from "./emulation-cloud-saves";
+export * from "./emulation-save-policy";
 export * from "./cemu-graphic-packs";
 export * from "./ukmm";

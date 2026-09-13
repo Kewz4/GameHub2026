@@ -9,6 +9,8 @@ import { logger } from "../logger";
 import { getEmulatorConfig } from "./emulators-repository";
 import { resolvePs1BiosDirs, resolvePs2BiosDirs } from "./bios-detection";
 import type { EmulatorSystem } from "@types";
+import { emulatorUserPaths } from "./emulator-user-paths";
+import { retroArchSystemDirectory } from "./retroarch-linux";
 
 // Direct BIOS / firmware sources. PS1 + PS2 are the standard USA dumps; PS3 is
 // Sony's official signed firmware PUP, installed through RPCS3 itself.
@@ -80,8 +82,19 @@ async function resolveTargetBiosDir(
       ? await resolvePs1BiosDirs(executablePath)
       : await resolvePs2BiosDirs(executablePath);
   if (existing.length > 0) return existing[0];
+  if (process.platform === "linux" && system === "ps1") {
+    const target = retroArchSystemDirectory(path.dirname(executablePath));
+    await fs.promises.mkdir(target, { recursive: true });
+    return target;
+  }
 
-  const fallback = path.join(path.dirname(executablePath), "bios");
+  const fallback = path.join(
+    emulatorUserPaths(
+      system === "ps2" ? "pcsx2" : "duckstation",
+      path.dirname(executablePath)
+    ).data,
+    "bios"
+  );
   await fs.promises.mkdir(fallback, { recursive: true });
   return fallback;
 }

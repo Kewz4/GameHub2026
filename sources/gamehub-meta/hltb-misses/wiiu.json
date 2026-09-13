@@ -1,0 +1,1402 @@
+[
+  {
+    "title": "360 Breakout",
+    "key": "360breakout",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "99Moves",
+    "key": "99moves",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "99Seconds",
+    "key": "99seconds",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Absolutely Unstoppable MineRun",
+    "key": "absolutelyunstoppableminerun",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Aenigma Os",
+    "key": "aenigmaos",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Animal Crossing Plaza",
+    "key": "animalcrossingplaza",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Another World: 20th Anniversary Edition",
+    "key": "anotherworld20thanniversaryedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Aqua TV",
+    "key": "aquatv",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Armored ACORNs: Action Squirrel Squad",
+    "key": "armoredacornsactionsquirrelsquad",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Art Academy: SketchPad",
+    "key": "artacademysketchpad",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Azure Snake",
+    "key": "azuresnake",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "BIT.TRIP Presents... Runner2: Future Legend of Rhythm Alien",
+    "key": "bittrippresentsrunner2futurelegendofrhythmalien",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Batman: Arkham City: Armored Edition",
+    "key": "batmanarkhamcityarmorededition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bike Rider UltraDX - World Tour",
+    "key": "bikeriderultradxworldtour",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bird Mania Party",
+    "key": "birdmaniaparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Bloc",
+    "key": "bloc",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Block Zombies!",
+    "key": "blockzombies",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Blok Drop X: Twisted Fusion",
+    "key": "blokdropxtwistedfusion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Box Up",
+    "key": "boxup",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Brick Race",
+    "key": "brickrace",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Buddy & Me: Dream Edition",
+    "key": "buddymedreamedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cake Ninja 3: The Legend Continues",
+    "key": "cakeninja3thelegendcontinues",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Candy Hoarder",
+    "key": "candyhoarder",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Chimpuzzle Pro",
+    "key": "chimpuzzlepro",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Chompy Chomp Chomp Party",
+    "key": "chompychompchompparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Citadale: The Legends Trilogy",
+    "key": "citadalethelegendstrilogy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Coaster Crazy Deluxe",
+    "key": "coastercrazydeluxe",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Collateral Thinking",
+    "key": "collateralthinking",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Color Cubes",
+    "key": "colorcubes",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cube Life: Island Survival",
+    "key": "cubelifeislandsurvival",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cube Life: Pixel Action Heroes",
+    "key": "cubelifepixelactionheroes",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cup Critters",
+    "key": "cupcritters",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Darts Up",
+    "key": "dartsup",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Defense Dome",
+    "key": "defensedome",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dinox",
+    "key": "dinox",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Double Breakout",
+    "key": "doublebreakout",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Double Breakout II",
+    "key": "doublebreakoutii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dragon Skills",
+    "key": "dragonskills",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Dying is Dangerous",
+    "key": "dyingisdangerous",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Earthlock: Festival of Magic",
+    "key": "earthlockfestivalofmagic",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Eba & Egg: A Hatch Trip",
+    "key": "ebaeggahatchtrip",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "El Silla: Arcade Edition",
+    "key": "elsillaarcadeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Evofish",
+    "key": "evofish",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "F1 Race Stars: Powered Up Edition",
+    "key": "f1racestarspoweredupedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Family Tennis SP",
+    "key": "familytennissp",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Fifteen",
+    "key": "fifteen",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Flight of Light",
+    "key": "flightoflight",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Flowerworks HD: Follie's Adventure",
+    "key": "flowerworkshdfolliesadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Forest Escape",
+    "key": "forestescape",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Frag doch mal...die Maus!",
+    "key": "fragdochmaldiemaus",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Frenchy Bird",
+    "key": "frenchybird",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Gaiabreaker",
+    "key": "gaiabreaker",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Galaxy Blaster",
+    "key": "galaxyblaster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Gear Gauntlet",
+    "key": "geargauntlet",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Gravity+",
+    "key": "gravity",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Grumpy Reaper",
+    "key": "grumpyreaper",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Guac' a Mole",
+    "key": "guacamole",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "HurryUp! Bird Hunter",
+    "key": "hurryupbirdhunter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Island Flight Simulator",
+    "key": "islandflightsimulator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jackpot 777",
+    "key": "jackpot777",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Jolt Family Robot Racer",
+    "key": "joltfamilyrobotracer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Just Dance: Disney Party 2",
+    "key": "justdancedisneyparty2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "KickBeat: Special Edition",
+    "key": "kickbeatspecialedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Kirby's Adventure Wii",
+    "key": "kirbysadventurewii",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Kirby: Mouse Attack",
+    "key": "kirbymouseattack",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Laser Blaster",
+    "key": "laserblaster",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Level 22",
+    "key": "level22",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Lone Survivor: The Director's Cut",
+    "key": "lonesurvivorthedirectorscut",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Lost In Shadow",
+    "key": "lostinshadow",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Maze Break",
+    "key": "mazebreak",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Midtown Crazy Race",
+    "key": "midtowncrazyrace",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MikroGame: Rotator",
+    "key": "mikrogamerotator",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Minecraft Wii U Edition",
+    "key": "minecraftwiiuedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Minecraft: Story Mode - The Complete Adventure \u2020",
+    "key": "minecraftstorymodethecompleteadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mon Premier Karaok\u00e9",
+    "key": "monpremierkaraoke",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mortar Melon",
+    "key": "mortarmelon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mountain Peak Battle Mess",
+    "key": "mountainpeakbattlemess",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mutant Alien Moles of the Dead",
+    "key": "mutantalienmolesofthedead",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "My First Songs",
+    "key": "myfirstsongs",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "My Style Studio: Hair Salon",
+    "key": "mystylestudiohairsalon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "My Style Studio: Notebook",
+    "key": "mystylestudionotebook",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ninja Strike: Dangerous Dash",
+    "key": "ninjastrikedangerousdash",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Octocopter: Super Sub Squid Escape",
+    "key": "octocoptersupersubsquidescape",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ohayou! Beginner's Japanese",
+    "key": "ohayoubeginnersjapanese",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Orbit",
+    "key": "orbit",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pad of Time",
+    "key": "padoftime",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Penguins of Madagascar",
+    "key": "penguinsofmadagascar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pentapuzzle",
+    "key": "pentapuzzle",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "PictoParty",
+    "key": "pictoparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pikmin Short Movies HD",
+    "key": "pikminshortmovieshd",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pinball Breakout",
+    "key": "pinballbreakout",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Ping 1.5+",
+    "key": "ping15",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pixel Slime U",
+    "key": "pixelslimeu",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "PixelMaker",
+    "key": "pixelmaker",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "PixelMaker Studio",
+    "key": "pixelmakerstudio",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Plenty of Fishies",
+    "key": "plentyoffishies",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pok\u00e9mon Mystery Dungeon: Blue Rescue Team",
+    "key": "pokemonmysterydungeonbluerescueteam",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Pok\u00e9mon Mystery Dungeon: Red Rescue Team",
+    "key": "pokemonmysterydungeonredrescueteam",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Psibo",
+    "key": "psibo",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Puzzle Monkeys",
+    "key": "puzzlemonkeys",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Queens Garden",
+    "key": "queensgarden",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rakoo & Friends",
+    "key": "rakoofriends",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Regina & Mac",
+    "key": "reginamac",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Reptilian Rebellion",
+    "key": "reptilianrebellion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Reversi 32",
+    "key": "reversi32",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rock 'N Racing Off Road",
+    "key": "rocknracingoffroad",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rock 'N Racing Off Road DX",
+    "key": "rocknracingoffroaddx",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rorrim",
+    "key": "rorrim",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Roving Rogue",
+    "key": "rovingrogue",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Rubik's Cube",
+    "key": "rubikscube",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Run Run and Die",
+    "key": "runrunanddie",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SDK Paint",
+    "key": "sdkpaint",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SDK Spriter",
+    "key": "sdkspriter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sanatory Hallways",
+    "key": "sanatoryhallways",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Schlag den Star: Das Spiel",
+    "key": "schlagdenstardasspiel",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Seasonal Assistant",
+    "key": "seasonalassistant",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shadow Archer Special",
+    "key": "shadowarcherspecial",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shadow Archery",
+    "key": "shadowarchery",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shoot the Ball",
+    "key": "shoottheball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shooty Space",
+    "key": "shootyspace",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sinister Assistant",
+    "key": "sinisterassistant",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sonic & All-Stars Racing Transformed: Bonus Edition",
+    "key": "sonicallstarsracingtransformedbonusedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Space Hunted: The Lost Levels",
+    "key": "spacehuntedthelostlevels",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Spellcaster's Assistant",
+    "key": "spellcastersassistant",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sphere Slice",
+    "key": "sphereslice",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Splashy Duck",
+    "key": "splashyduck",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Spot the Differences! Party",
+    "key": "spotthedifferencesparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Spy Chameleon",
+    "key": "spychameleon",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Star Fox Zero The Battle Begins + Training",
+    "key": "starfoxzerothebattlebeginstraining",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Star Ghost",
+    "key": "starghost",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Star Splash: Shattered Star",
+    "key": "starsplashshatteredstar",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Steel Lords",
+    "key": "steellords",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Stone Shire",
+    "key": "stoneshire",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Street Fighter II: The World Warrior",
+    "key": "streetfighteriitheworldwarrior",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sudoku Party",
+    "key": "sudokuparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sudoku and Permudoku",
+    "key": "sudokuandpermudoku",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Destronaut 2: Go Duck Yourself",
+    "key": "superdestronaut2goduckyourself",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Food Frenzy",
+    "key": "superfoodfrenzy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Robo Mouse",
+    "key": "superrobomouse",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Super Ultra Star Shooter",
+    "key": "superultrastarshooter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Swap Blocks",
+    "key": "swapblocks",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sweetest Thing",
+    "key": "sweetestthing",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tabletop Gallery",
+    "key": "tabletopgallery",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tank! Tank! Tank! \u2020",
+    "key": "tanktanktank",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tap Tap Arcade",
+    "key": "taptaparcade",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tap Tap Arcade 2",
+    "key": "taptaparcade2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Temple of Yog",
+    "key": "templeofyog",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Test Your Mind",
+    "key": "testyourmind",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tested with Robots!",
+    "key": "testedwithrobots",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Gem Collector",
+    "key": "gemcollector",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Legend of Zelda Hyrule Historia",
+    "key": "legendofzeldahyrulehistoria",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Quiet Collection",
+    "key": "quietcollection",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Rivers of Alice: Extended Version",
+    "key": "riversofaliceextendedversion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Titans Tower",
+    "key": "titanstower",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Toon Tanks",
+    "key": "toontanks",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Totem Topple",
+    "key": "totemtopple",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Toto Temple Deluxe",
+    "key": "tototempledeluxe",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Touch Selections",
+    "key": "touchselections",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Trine 2: Director\u2019s Cut",
+    "key": "trine2directorscut",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Triple Breakout",
+    "key": "triplebreakout",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Twisted Fusion",
+    "key": "twistedfusion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "VRog",
+    "key": "vrog",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Vaccine",
+    "key": "vaccine",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Vektor Wars",
+    "key": "vektorwars",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "VoxelMaker",
+    "key": "voxelmaker",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wall Ball",
+    "key": "wallball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "WarioWare Inc Minigame Mania",
+    "key": "wariowareincminigamemania",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Wicked Monsters Blast! HD Plus",
+    "key": "wickedmonstersblasthdplus",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Word Logic by Powgi",
+    "key": "wordlogicbypowgi",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Word Party",
+    "key": "wordparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Word Puzzles by Powgi",
+    "key": "wordpuzzlesbypowgi",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "WordsUp! Academy",
+    "key": "wordsupacademy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Your Shape: Fitness Evolved 2013",
+    "key": "yourshapefitnessevolved2013",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "ZEN Pinball 2",
+    "key": "zenpinball2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Zombie Brigade: No Brain No Gain",
+    "key": "zombiebrigadenobrainnogain",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  }
+]

@@ -2,34 +2,50 @@ import { registerEvent } from "../register-event";
 
 import type { UserPreferences } from "@types";
 import i18next from "i18next";
+import { app, BrowserWindow } from "electron";
 import { defaultDownloadsPath } from "@main/constants";
 import { db, levelKeys } from "@main/level";
 import { patchUserProfile } from "../profile/update-profile";
 import { DownloadManager } from "@main/services";
-import { WindowManager } from "@main/services/window-manager";
+import { OverlayManager } from "@main/services/overlay-manager";
 import { getDownloadDirectoryPreferences } from "@shared";
+import { enqueueUserPreferencesMutation } from "./user-preferences-mutation-queue";
+import { normalizeGlobalTrackerPreferencePatch } from "./global-tracker-preferences";
 
 const updateUserPreferences = async (
   _event: Electron.IpcMainInvokeEvent,
   preferences: Partial<UserPreferences>
 ) => {
+  const validatedPreferences =
+    normalizeGlobalTrackerPreferencePatch(preferences);
+
   const userPreferences = await db.get<string, UserPreferences | null>(
     levelKeys.userPreferences,
     { valueEncoding: "json" }
   );
 
-  if (preferences.language) {
-    await db.put<string, string>(levelKeys.language, preferences.language, {
-      valueEncoding: "utf8",
-    });
+  if (validatedPreferences.language) {
+    await db.put<string, string>(
+      levelKeys.language,
+      validatedPreferences.language,
+      {
+        valueEncoding: "utf8",
+      }
+    );
 
-    i18next.changeLanguage(preferences.language);
-    patchUserProfile({ language: preferences.language }).catch(() => {});
+    i18next.changeLanguage(validatedPreferences.language);
+    const isReadOnlyVisualQa =
+      !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true";
+    if (!isReadOnlyVisualQa) {
+      patchUserProfile({ language: validatedPreferences.language }).catch(
+        () => {}
+      );
+    }
   }
 
   const mergedPreferences = {
     ...userPreferences,
-    ...preferences,
+    ...validatedPreferences,
   };
   const normalizedDownloadDirectoryPreferences =
     getDownloadDirectoryPreferences(mergedPreferences, defaultDownloadsPath);
@@ -57,20 +73,28 @@ const updateUserPreferences = async (
     }
   );
 
-  WindowManager.sendToAppWindows(
-    "on-user-preferences-updated",
-    updatedPreferences
-  );
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send(
+        "on-user-preferences-updated",
+        updatedPreferences
+      );
+    }
+  }
 
-  if (Object.hasOwn(preferences, "maxDownloadSpeedBytesPerSecond")) {
+  // Apply overlay-preference changes to the active game session immediately
+  // (toggle the overlay / performance HUD without needing a relaunch).
+  OverlayManager.applyUserPreferences(updatedPreferences);
+
+  if (Object.hasOwn(validatedPreferences, "maxDownloadSpeedBytesPerSecond")) {
     await DownloadManager.applyDownloadSpeedLimit(
-      preferences.maxDownloadSpeedBytesPerSecond ?? null
+      validatedPreferences.maxDownloadSpeedBytesPerSecond ?? null
     );
   }
 
-  if (Object.hasOwn(preferences, "torrentNetworkInterface")) {
+  if (Object.hasOwn(validatedPreferences, "torrentNetworkInterface")) {
     await DownloadManager.applyNetworkInterface(
-      preferences.torrentNetworkInterface ?? null
+      validatedPreferences.torrentNetworkInterface ?? null
     );
   }
 
@@ -80,4 +104,8 @@ const updateUserPreferences = async (
     .catch(() => {});
 };
 
-registerEvent("updateUserPreferences", updateUserPreferences);
+registerEvent("updateUserPreferences", (event, preferences) =>
+  enqueueUserPreferencesMutation(() =>
+    updateUserPreferences(event, preferences as Partial<UserPreferences>)
+  )
+);

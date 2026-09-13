@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Modal } from "@renderer/components";
+import { useNavigate } from "react-router-dom";
+import { Button, Modal } from "@renderer/components";
 import {
   formatBytes,
   GAMEMODE_SITE_URL,
@@ -25,6 +26,10 @@ import {
   useToast,
   useUserDetails,
 } from "@renderer/hooks";
+import {
+  useSteamMatchSearch,
+  type SteamMatchSuggestion,
+} from "@renderer/hooks/use-steam-match-search";
 import { RemoveGameFromLibraryModal } from "./remove-from-library-modal";
 import { ResetAchievementsModal } from "./reset-achievements-modal";
 import { ChangeGamePlaytimeModal } from "./change-game-playtime-modal";
@@ -35,12 +40,13 @@ import {
   FileDirectoryIcon,
   GearIcon,
   ImageIcon,
+  SearchIcon,
 } from "@primer/octicons-react";
 import { Wrench } from "lucide-react";
 import { GameAssetsSettings } from "./game-assets-settings";
 import { debounce } from "lodash-es";
 import { levelDBService } from "@renderer/services/leveldb.service";
-import { getGameKey } from "@renderer/helpers";
+import { buildGameDetailsPath, getGameKey } from "@renderer/helpers";
 import "./game-options-modal.scss";
 import { logger } from "@renderer/logger";
 import { GameOptionsSidebar } from "./game-options-modal/sidebar";
@@ -71,6 +77,7 @@ export function GameOptionsModal({
   initialCategory,
 }: Readonly<GameOptionsModalProps>) {
   const { t } = useTranslation("game_details");
+  const navigate = useNavigate();
 
   const { showSuccessToast, showErrorToast } = useToast();
   const { updateLibrary } = useLibrary();
@@ -96,14 +103,19 @@ export function GameOptionsModal({
   const [showRemoveGameModal, setShowRemoveGameModal] = useState(false);
   const [gameTitle, setGameTitle] = useState(game.title ?? "");
   const [updatingGameTitle, setUpdatingGameTitle] = useState(false);
+  const {
+    suggestions: steamMatchSuggestions,
+    isSearching: isSearchingSteamMatch,
+    clearSuggestions: clearSteamMatchSuggestions,
+  } = useSteamMatchSearch(
+    gameTitle,
+    visible && game.shop === "custom" && !updatingGameTitle
+  );
   const [launchOptions, setLaunchOptions] = useState(game.launchOptions ?? "");
   const [showResetAchievementsModal, setShowResetAchievementsModal] =
     useState(false);
   const [showChangePlaytimeModal, setShowChangePlaytimeModal] = useState(false);
   const [isDeletingAchievements, setIsDeletingAchievements] = useState(false);
-  const [automaticCloudSync, setAutomaticCloudSync] = useState(
-    game.automaticCloudSync ?? true
-  );
   const [creatingSteamShortcut, setCreatingSteamShortcut] = useState(false);
   const [saveFolderPath, setSaveFolderPath] = useState<string | null>(null);
   const [loadingSaveFolder, setLoadingSaveFolder] = useState(false);
@@ -194,19 +206,18 @@ export function GameOptionsModal({
   }, [visible]);
 
   useEffect(() => {
-    if (
-      visible &&
-      game.shop !== "custom" &&
-      window.electron.platform === "win32"
-    ) {
-      setLoadingSaveFolder(true);
-      setSaveFolderPath(null);
-      window.electron
-        .getGameSaveFolder(game.shop, game.objectId)
-        .then(setSaveFolderPath)
-        .catch(() => setSaveFolderPath(null))
-        .finally(() => setLoadingSaveFolder(false));
-    }
+    let active = true;
+    if (!visible) return;
+    setLoadingSaveFolder(true);
+    setSaveFolderPath(null);
+    window.electron
+      .getGameSaveFolder(game.shop, game.objectId)
+      .then((folder) => active && setSaveFolderPath(folder))
+      .catch(() => active && setSaveFolderPath(null))
+      .finally(() => active && setLoadingSaveFolder(false));
+    return () => {
+      active = false;
+    };
   }, [visible, game.shop, game.objectId]);
 
   useEffect(() => {
@@ -629,6 +640,49 @@ export function GameOptionsModal({
   const handleChangeGameTitle = (event: React.ChangeEvent<HTMLInputElement>) =>
     setGameTitle(event.target.value);
 
+  const handleSelectSteamMatch = async (suggestion: SteamMatchSuggestion) => {
+    if (game.shop !== "custom" || updatingGameTitle) return;
+
+    setUpdatingGameTitle(true);
+    setGameTitle(suggestion.title);
+    clearSteamMatchSuggestions();
+
+    try {
+      const assets = await window.electron
+        .getGameAssets(suggestion.objectId, "steam", suggestion.title)
+        .catch(() => null);
+      const matchedGame = await window.electron.updateCustomGame({
+        shop: game.shop,
+        objectId: game.objectId,
+        title: suggestion.title,
+        iconUrl: assets?.iconUrl || suggestion.iconUrl || undefined,
+        logoImageUrl: assets?.logoImageUrl || game.logoImageUrl || undefined,
+        libraryHeroImageUrl:
+          assets?.libraryHeroImageUrl || game.libraryHeroImageUrl || undefined,
+        coverImageUrl: assets?.coverImageUrl || undefined,
+        libraryImageUrl: assets?.libraryImageUrl || undefined,
+        matchedSteamObjectId: suggestion.objectId,
+      });
+
+      await updateLibrary();
+      showSuccessToast(
+        t("custom_game_modal_match_selected", {
+          ns: "sidebar",
+          title: suggestion.title,
+        })
+      );
+      onClose();
+      navigate(buildGameDetailsPath(matchedGame));
+    } catch (error) {
+      setGameTitle(game.title ?? "");
+      showErrorToast(
+        error instanceof Error ? error.message : t("edit_game_modal_failed")
+      );
+    } finally {
+      setUpdatingGameTitle(false);
+    }
+  };
+
   const handleBlurGameTitle = async () => {
     if (updatingGameTitle) return;
     const trimmed = gameTitle.trim();
@@ -745,25 +799,38 @@ export function GameOptionsModal({
             },
           ]
         : []),
-      {
-        id: "downloads" as const,
-        label: t("settings_category_downloads"),
-        icon: <DownloadIcon size={16} />,
-      },
+      ...(game.shop !== "custom" &&
+      (repacks.length > 0 || Boolean(game.download?.downloadPath))
+        ? [
+            {
+              id: "downloads" as const,
+              label: t("settings_category_downloads"),
+              icon: <DownloadIcon size={16} />,
+            },
+          ]
+        : []),
       {
         id: "danger_zone" as const,
         label: t("settings_category_danger_zone"),
         icon: <AlertIcon size={16} />,
       },
     ],
-    [shouldShowWinePrefixConfiguration, isWiiUGame, t]
+    [
+      shouldShowWinePrefixConfiguration,
+      isWiiUGame,
+      game.shop,
+      game.download?.downloadPath,
+      repacks.length,
+      t,
+    ]
   );
 
   useEffect(() => {
     if (visible) setSelectedCategory(initialCategory ?? "general");
   }, [initialCategory, visible]);
-  const shouldShowCreateStartMenuShortcut =
-    window.electron.platform === "win32";
+  const shouldShowCreateStartMenuShortcut = ["win32", "linux"].includes(
+    window.electron.platform
+  );
 
   const handleResetAchievements = async () => {
     setIsDeletingAchievements(true);
@@ -786,24 +853,6 @@ export function GameOptionsModal({
     } catch {
       showErrorToast(t("update_playtime_error"));
     }
-  };
-
-  const handleToggleAutomaticCloudSync = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setAutomaticCloudSync(event.target.checked);
-    const gameKey = getGameKey(game.shop, game.objectId);
-    const gameData = (await levelDBService.get(
-      gameKey,
-      "games"
-    )) as Game | null;
-    if (gameData)
-      await levelDBService.put(
-        gameKey,
-        { ...gameData, automaticCloudSync: event.target.checked },
-        "games"
-      );
-    updateGame();
   };
 
   return (
@@ -877,13 +926,15 @@ export function GameOptionsModal({
                 onDeleteSteamShortcut={handleDeleteSteamShortcut}
                 onChangeGameTitle={handleChangeGameTitle}
                 onBlurGameTitle={handleBlurGameTitle}
+                steamMatchSuggestions={steamMatchSuggestions}
+                isSearchingSteamMatch={isSearchingSteamMatch}
+                onSelectSteamMatch={handleSelectSteamMatch}
                 onChangeLaunchOptions={handleChangeLaunchOptions}
                 onClearLaunchOptions={handleClearLaunchOptions}
                 isTransferring={isTransferring}
                 transferProgress={transferProgress}
                 drives={drives}
                 onStartTransfer={handleStartTransfer}
-                onCancelDriveSelection={() => {}}
                 transferSpeed={transferSpeed}
                 transferETA={transferETA}
                 showCancelConfirm={showCancelConfirm}
@@ -895,24 +946,37 @@ export function GameOptionsModal({
               />
             )}
             {selectedCategory === "general" && (
-              <div className="game-options-modal__lookup">
-                <h3>Achievements</h3>
-                <p>
-                  Search Exophase for this game and load its achievement
-                  definitions and your unlocks.
-                </p>
-                <button
-                  type="button"
-                  className="game-options-modal__lookup-button"
+              <div className="game-options-modal__section">
+                <div className="game-options-modal__header">
+                  <h2>{t("achievements", { defaultValue: "Achievements" })}</h2>
+                  <h4 className="game-options-modal__header-description">
+                    {t("lookup_achievements_exophase_description", {
+                      defaultValue:
+                        "Search Exophase for this game and load its achievement definitions and your unlocks.",
+                    })}
+                  </h4>
+                </div>
+                <Button
+                  theme="outline"
                   disabled={lookupLoading}
+                  aria-busy={lookupLoading}
                   onClick={handleLookupAchievements}
                 >
+                  <SearchIcon size={16} />
                   {lookupLoading
-                    ? "Looking up…"
-                    : "Look up achievements on Exophase"}
-                </button>
+                    ? t("looking_up_achievements", {
+                        defaultValue: "Looking up achievements…",
+                      })
+                    : t("lookup_achievements_exophase", {
+                        defaultValue: "Look up achievements on Exophase",
+                      })}
+                </Button>
                 {lookupStatus && (
-                  <p className="game-options-modal__lookup-status">
+                  <p
+                    className="game-options-modal__lookup-status"
+                    role="status"
+                    aria-live="polite"
+                  >
                     {lookupStatus}
                   </p>
                 )}
@@ -943,13 +1007,15 @@ export function GameOptionsModal({
                 onDeleteSteamShortcut={handleDeleteSteamShortcut}
                 onChangeGameTitle={handleChangeGameTitle}
                 onBlurGameTitle={handleBlurGameTitle}
+                steamMatchSuggestions={steamMatchSuggestions}
+                isSearchingSteamMatch={isSearchingSteamMatch}
+                onSelectSteamMatch={handleSelectSteamMatch}
                 onChangeLaunchOptions={handleChangeLaunchOptions}
                 onClearLaunchOptions={handleClearLaunchOptions}
                 isTransferring={isTransferring}
                 transferProgress={transferProgress}
                 drives={drives}
                 onStartTransfer={handleStartTransfer}
-                onCancelDriveSelection={() => {}}
                 transferSpeed={transferSpeed}
                 transferETA={transferETA}
                 showCancelConfirm={showCancelConfirm}
@@ -971,11 +1037,7 @@ export function GameOptionsModal({
               />
             )}
             {selectedCategory === "hydra_cloud" && (
-              <HydraCloudSettingsSection
-                game={game}
-                automaticCloudSync={automaticCloudSync}
-                onToggleAutomaticCloudSync={handleToggleAutomaticCloudSync}
-              />
+              <HydraCloudSettingsSection />
             )}
             {selectedCategory === "compatibility" &&
               shouldShowWinePrefixConfiguration && (

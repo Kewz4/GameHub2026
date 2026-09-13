@@ -40,6 +40,12 @@
     flex-direction: column;
     gap: 12px;
     align-items: center;
+
+    > svg {
+      width: 100%;
+      height: auto;
+      max-height: min(420px, 50vh);
+    }
   }
 
   &__diagram-hint {

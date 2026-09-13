@@ -26,7 +26,11 @@ const getExophaseAuthState = async (
   }
 
   const username = prefs?.exophaseUserId ?? null;
-  return { authenticated: Boolean(username), username };
+  return {
+    authenticated: Boolean(username),
+    username,
+    verification: username ? "cached" : "signed-out",
+  };
 };
 
 registerEvent("getExophaseAuthState", getExophaseAuthState);

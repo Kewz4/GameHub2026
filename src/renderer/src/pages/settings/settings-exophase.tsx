@@ -27,6 +27,12 @@ const MANAGED_PLATFORMS: Array<{ shop: GameShop; label: string }> = [
 
 const DEFAULT_MANAGED: GameShop[] = MANAGED_PLATFORMS.map((p) => p.shop);
 
+type ExophaseAuthPresentationState =
+  | "validating"
+  | "verified"
+  | "cached"
+  | "signed-out";
+
 export function SettingsExophase() {
   const { updateUserPreferences } = useContext(settingsContext);
   const { showSuccessToast, showErrorToast } = useToast();
@@ -36,6 +42,8 @@ export function SettingsExophase() {
 
   const navigate = useNavigate();
   const [username, setUsername] = useState<string | null>(null);
+  const [authPresentationState, setAuthPresentationState] =
+    useState<ExophaseAuthPresentationState>("signed-out");
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isImportingPsn, setIsImportingPsn] = useState(false);
@@ -51,17 +59,55 @@ export function SettingsExophase() {
   const managed = userPreferences?.exophaseManagedPlatforms ?? DEFAULT_MANAGED;
   const extraProfiles = userPreferences?.exophaseExtraProfiles ?? [];
 
+  // Present the saved account immediately, then validate it in the background.
+  // A transient/offline probe must never replace a valid local identity with a
+  // signed-out card. Only the main process' explicit signed-out classification
+  // is allowed to do that.
   useEffect(() => {
-    setUsername(userPreferences?.exophaseUserId ?? null);
-  }, [userPreferences?.exophaseUserId]);
+    const cachedUsername = userPreferences?.exophaseUserId ?? null;
+    let active = true;
 
-  // Confirm the persisted session is still alive on mount.
-  useEffect(() => {
-    if (!userPreferences?.exophaseUserId) return;
+    setUsername(cachedUsername);
+
+    if (!cachedUsername) {
+      setAuthPresentationState("signed-out");
+      return () => {
+        active = false;
+      };
+    }
+
+    setAuthPresentationState("validating");
     window.electron
       .getExophaseAuthState(true)
-      .then((state) => setUsername(state.username))
-      .catch(() => {});
+      .then((state) => {
+        if (!active) return;
+
+        if (state.username) {
+          setUsername(state.username);
+          setAuthPresentationState(
+            state.verification === "verified" ? "verified" : "cached"
+          );
+          return;
+        }
+
+        if (state.verification === "signed-out") {
+          setUsername(null);
+          setAuthPresentationState("signed-out");
+          return;
+        }
+
+        setUsername(cachedUsername);
+        setAuthPresentationState("cached");
+      })
+      .catch(() => {
+        if (!active) return;
+        setUsername(cachedUsername);
+        setAuthPresentationState("cached");
+      });
+
+    return () => {
+      active = false;
+    };
   }, [userPreferences?.exophaseUserId]);
 
   const handleLogin = async () => {
@@ -70,6 +116,7 @@ export function SettingsExophase() {
       const state = await window.electron.openExophaseAuthWindow();
       if (state.authenticated) {
         setUsername(state.username);
+        setAuthPresentationState("verified");
         await updateUserPreferences({
           exophaseUserId: state.username,
           exophaseEnabled: true,
@@ -93,6 +140,7 @@ export function SettingsExophase() {
   const handleClear = async () => {
     await window.electron.clearExophaseSession().catch(() => {});
     setUsername(null);
+    setAuthPresentationState("signed-out");
     await updateUserPreferences({ exophaseUserId: null });
     showSuccessToast("Exophase disconnected.");
   };
@@ -217,6 +265,9 @@ export function SettingsExophase() {
       </p>
 
       <div
+        data-exophase-auth-state={authPresentationState}
+        data-exophase-auth-username={username ?? undefined}
+        aria-busy={authPresentationState === "validating"}
         style={{
           border: `1px solid ${isAuthenticated ? "rgba(63, 185, 80, 0.5)" : "var(--color-danger, #e05c5c)"}`,
           borderRadius: 8,
@@ -425,7 +476,7 @@ export function SettingsExophase() {
             background: "none",
             border: "none",
             padding: 0,
-            color: "var(--color-accent)",
+            color: "var(--color-text-bright)",
             cursor: "pointer",
             fontSize: "inherit",
             textDecoration: "underline",

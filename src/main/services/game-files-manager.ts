@@ -23,6 +23,7 @@ import { deleteArchiveFile } from "@main/events/library/delete-archive";
 import { publishExtractionCompleteNotification } from "./notifications";
 import { SystemPath } from "./system-path";
 import { WindowManager } from "./window-manager";
+import { selectCustomGameExecutable } from "./download/custom-game-executable";
 
 const PROGRESS_THROTTLE_MS = 1000;
 
@@ -132,7 +133,9 @@ export class GameFilesManager {
   }
 
   private readonly handleProgress = (progress: ExtractionProgress) => {
-    console.log(`handleProgress: ${progress.percent}% - ${progress.file}`);
+    logger.debug(
+      `[game-files] extraction ${progress.percent}% - ${progress.file}`
+    );
     this.updateExtractionProgress(progress.percent / 100);
   };
 
@@ -363,14 +366,6 @@ export class GameFilesManager {
         return;
       }
 
-      const executableNames = GameExecutables.getExecutablesForGame(
-        this.objectId
-      );
-
-      if (!executableNames || executableNames.length === 0) {
-        return;
-      }
-
       if (!download.folderName) {
         return;
       }
@@ -384,24 +379,99 @@ export class GameFilesManager {
         return;
       }
 
-      const foundExePath = await this.findExecutableInFolder(
-        gameFolderPath,
-        executableNames
+      const executableNames = GameExecutables.getExecutablesForGame(
+        this.objectId
       );
+      let foundExePath: string | null = null;
+
+      if (executableNames?.length) {
+        foundExePath = await this.findExecutableInFolder(
+          gameFolderPath,
+          executableNames
+        );
+      } else if (download.customDownload) {
+        const gameFolderStats = await fs.promises.stat(gameFolderPath);
+        if (gameFolderStats.isFile()) {
+          foundExePath = selectCustomGameExecutable(game.title, [
+            { path: gameFolderPath, size: gameFolderStats.size },
+          ]);
+        } else if (gameFolderStats.isDirectory()) {
+          const relativeFiles = await collectFilesRecursive(gameFolderPath);
+          const candidates = await Promise.all(
+            relativeFiles
+              .filter(
+                (filePath) => path.extname(filePath).toLowerCase() === ".exe"
+              )
+              .map(async (relativePath) => {
+                const absolutePath = path.join(gameFolderPath, relativePath);
+                const stats = await fs.promises.stat(absolutePath);
+                return { path: absolutePath, size: stats.size };
+              })
+          );
+          foundExePath = selectCustomGameExecutable(game.title, candidates);
+        }
+      }
 
       if (foundExePath) {
         logger.info(
           `[GameFilesManager] Auto-detected executable for ${this.objectId}: ${foundExePath}`
         );
 
-        await gamesSublevel.put(this.gameKey, {
+        const updatedGame = {
           ...game,
           executablePath: foundExePath,
-        });
+          nativeExecutablePath: foundExePath,
+          isInstalledLocally: true,
+        };
+        await gamesSublevel.put(this.gameKey, updatedGame);
 
         WindowManager.sendToAppWindows("on-library-batch-complete");
 
         await this.createDesktopShortcutForGame(game.title);
+
+        // Set up offline play (Steam emulator) right after install for
+        // manually added games only (custom games and repacks — never
+        // library-synced installs). Fire-and-forget; the pre-launch check
+        // re-runs it if needed.
+        if (process.platform === "win32" && game.shop === "steam") {
+          void (async () => {
+            try {
+              const { ensureSteamEmulatorReady } = await import(
+                "./steam-emulator/steam-emulator"
+              );
+              const { resolveSafeSteamEmulatorTarget } = await import(
+                "./steam-emulator/steam-emulator-target"
+              );
+              const target = await resolveSafeSteamEmulatorTarget(
+                updatedGame,
+                foundExePath,
+                [
+                  process.resourcesPath,
+                  app.getAppPath(),
+                  app.getPath("userData"),
+                ]
+              );
+              if (!target.ok || !target.gameDir) {
+                logger.info(
+                  `[GameFilesManager] Post-install offline-play setup skipped for ${this.objectId}: ${target.reason}`
+                );
+                return;
+              }
+              const detection = await ensureSteamEmulatorReady(
+                target.gameDir,
+                this.objectId
+              );
+              logger.info(
+                `[GameFilesManager] Post-install offline-play setup check for ${this.objectId}: ${detection.status}`
+              );
+            } catch (error) {
+              logger.error(
+                `[GameFilesManager] Post-install offline-play setup failed for ${this.objectId}`,
+                error
+              );
+            }
+          })();
+        }
       }
     } catch (err) {
       logger.error(
@@ -612,6 +682,13 @@ export class GameFilesManager {
 
   private async createDesktopShortcutForGame(gameTitle: string): Promise<void> {
     try {
+      if (process.platform === "linux") {
+        const preferences = await db.get<string, UserPreferences | null>(
+          levelKeys.userPreferences,
+          { valueEncoding: "json" }
+        );
+        if (preferences?.createStartMenuShortcut === false) return;
+      }
       const shortcutName =
         removeSymbolsFromName(gameTitle).trim() || this.objectId;
       const deepLink = this.buildRunDeepLink();

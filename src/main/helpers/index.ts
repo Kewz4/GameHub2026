@@ -95,8 +95,11 @@ export const getThemeSoundPath = (
 
 export * from "./reg-parser";
 export * from "./launch-game";
+export * from "./game-executable-path";
+export * from "./open-native-game-executable";
 export * from "./download-error-handler";
 export * from "./download-game-helper";
+export * from "./global-trackers";
 export * from "./launch-classics-game";
 
 import type { EmulatorSystem } from "@types";
@@ -151,6 +154,50 @@ export const platformToSystem = (
   if (p.includes("gamecube") || p.includes("gc")) return "gc";
   if (p.includes("wii")) return "wii";
   return null;
+};
+
+/**
+ * GB / GBC / GBA share ONE merged catalogue (Dump/gb_gba_gbc) and ONE emulator
+ * (RALibretro's mGBA core, keyed per-system). The catalogue can't tell the
+ * three apart before download, so every entry is stamped "gba" — which then
+ * bakes into the objectId (minerva:gba:…). Once a ROM exists, its EXTENSION is
+ * the ground truth (.gb → gb, .gbc/.cgb/.sgb → gbc, .gba/.agb → gba), so the
+ * real subtype is resolved from the bound disc wherever it matters (launch
+ * systemId, console badge, achievements, metadata).
+ */
+export const GB_FAMILY_SYSTEMS: ReadonlySet<EmulatorSystem> = new Set([
+  "gb",
+  "gbc",
+  "gba",
+]);
+
+/** The real GB-family system from a ROM/disc path's extension, or null when the
+ *  path isn't a GB-family ROM. */
+export const gbFamilySystemFromPath = (
+  romPath: string | null | undefined
+): EmulatorSystem | null => {
+  if (!romPath) return null;
+  const ext = path.extname(romPath).toLowerCase();
+  if (ext === ".gb") return "gb";
+  if (ext === ".gbc" || ext === ".cgb" || ext === ".sgb") return "gbc";
+  if (ext === ".gba" || ext === ".agb") return "gba";
+  return null;
+};
+
+/**
+ * The system to actually use for a launchbox game. For a GB-family game with a
+ * bound ROM, the file extension wins over `stored` (the objectId/platform
+ * system, which is the merged catalogue's "gba" guess and is unreliable for
+ * this family). Everything else passes through unchanged.
+ */
+export const resolveEffectiveSystem = (
+  stored: EmulatorSystem | null | undefined,
+  romPath: string | null | undefined
+): EmulatorSystem | null => {
+  if (stored && GB_FAMILY_SYSTEMS.has(stored)) {
+    return gbFamilySystemFromPath(romPath) ?? stored;
+  }
+  return stored ?? null;
 };
 
 /** Human folder name for each console, used to group emulator downloads under

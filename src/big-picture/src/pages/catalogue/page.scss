@@ -32,6 +32,28 @@
   justify-content: space-between;
   gap: calc(var(--spacing-unit) * 8);
 
+  &--compatibility {
+    flex-wrap: wrap;
+    gap: calc(var(--spacing-unit) * 3);
+
+    .catalogue-header__summary {
+      flex-basis: 100%;
+    }
+
+    .catalogue-header__sort {
+      display: flex;
+      flex-wrap: wrap;
+      gap: calc(var(--spacing-unit) * 2);
+      width: 100%;
+    }
+
+    .catalogue-header__sort-select {
+      flex: 1 1 220px;
+      width: auto;
+      min-width: 0;
+    }
+  }
+
   &__summary {
     display: flex;
     flex: 1;
@@ -393,7 +415,6 @@
       flex-direction: column;
       gap: calc(var(--spacing-unit) * 2);
       padding: 0 0 calc(var(--spacing-unit) * 2);
-      transition: padding 0.2s ease-in-out;
     }
 
     &__image-placeholder {

@@ -130,7 +130,18 @@ export function ReviewItem({
 
   return (
     <div className="game-details__review-item">
-      <div className="game-details__review-header">
+      <div
+        className={`game-details__review-header${review.user.backgroundImageUrl ? " game-details__review-header--has-bg" : ""}`}
+      >
+        {review.user.backgroundImageUrl && (
+          <img
+            src={review.user.backgroundImageUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="game-details__review-banner"
+          />
+        )}
         <div className="game-details__review-header-top">
           <div className="game-details__review-user">
             <button

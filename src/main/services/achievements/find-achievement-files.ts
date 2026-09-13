@@ -6,10 +6,11 @@ import { achievementsLogger } from "../logger";
 import { SystemPath } from "../system-path";
 import { getSteamLocation, getSteamUsersIds } from "../steam";
 import { Wine } from "../wine";
+import { getWindowsRoamingAppData } from "../windows-roaming-app-data";
 
 const getAppDataPath = () => {
   if (process.platform === "win32") {
-    return SystemPath.getPath("appData");
+    return getWindowsRoamingAppData();
   }
 
   const user = SystemPath.getPath("home").split("/").pop();

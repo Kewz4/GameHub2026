@@ -13,6 +13,7 @@ import { HydraApi } from "@main/services";
 import { getSteamGridDbArtwork } from "@main/services/steamgriddb";
 import { logger } from "@main/services";
 import { normalizeGameTitle } from "./normalize-game-title";
+import { selectReachableArtworkUrl } from "@main/services/artwork-url-probe";
 
 export interface BestAssets {
   iconUrl: string | null;
@@ -39,9 +40,9 @@ function shopAssetsToResult(assets: ShopAssets): BestAssets {
 const STEAM_CDN = "https://cdn.akamai.steamstatic.com/steam/apps";
 
 /**
- * Builds Steam CDN artwork URLs from an appId. These URLs are deterministic
- * and always serve full-resolution assets (600×900 portrait grid, hero banner,
- * transparent logo) — no API call needed, never stale.
+ * Builds deterministic Steam CDN candidates from an appId. Most apps expose
+ * the full-resolution assets, but every candidate is still probed because a
+ * small number of valid app IDs do not publish the portrait grid.
  */
 function buildSteamCdnAssets(objectId: string): BestAssets {
   const base = `${STEAM_CDN}/${objectId}`;
@@ -158,20 +159,54 @@ export async function fetchBestAssets(
     const cdnAssets = buildSteamCdnAssets(objectId);
     // The Hydra API may carry extras like downloadSources; merge those in.
     const hydraAssets = await tryHydraAssets(shop, objectId).catch(() => null);
+    const initialPortrait =
+      initialFallback.coverImageUrl &&
+      !/steamcommunity\/public\/images\/apps/i.test(
+        initialFallback.coverImageUrl
+      )
+        ? initialFallback.coverImageUrl
+        : null;
+    const coverImageUrl = await selectReachableArtworkUrl([
+      hydraAssets?.coverImageUrl,
+      initialPortrait,
+      cdnAssets.coverImageUrl,
+    ]);
+
+    // A handful of Steam apps have a broken store/Hydra portrait and no legacy
+    // library_600x900 asset (Real Pool 3D is a live example). SGDB is the final
+    // verified portrait fallback instead of persisting another known 404.
+    let sgdb: Awaited<ReturnType<typeof getSteamGridDbArtwork>> = null;
+    if (!coverImageUrl) {
+      sgdb = await getSteamGridDbArtwork(title).catch((error) => {
+        logger.warn(
+          `fetchBestAssets: SGDB fallback failed for "${title}"`,
+          error
+        );
+        return null;
+      });
+    }
     return {
-      iconUrl: cdnAssets.iconUrl,
-      coverImageUrl: cdnAssets.coverImageUrl,
+      iconUrl:
+        hydraAssets?.iconUrl ??
+        initialFallback.iconUrl ??
+        sgdb?.gridUrl ??
+        cdnAssets.iconUrl,
+      coverImageUrl: coverImageUrl ?? sgdb?.gridUrl ?? initialPortrait ?? null,
       libraryImageUrl:
-        cdnAssets.libraryImageUrl ??
         hydraAssets?.libraryImageUrl ??
         initialFallback.libraryImageUrl ??
-        null,
-      libraryHeroImageUrl: cdnAssets.libraryHeroImageUrl,
+        sgdb?.wideGridUrl ??
+        cdnAssets.libraryImageUrl,
+      libraryHeroImageUrl:
+        hydraAssets?.libraryHeroImageUrl ??
+        initialFallback.libraryHeroImageUrl ??
+        sgdb?.heroUrl ??
+        cdnAssets.libraryHeroImageUrl,
       logoImageUrl:
-        cdnAssets.logoImageUrl ??
         hydraAssets?.logoImageUrl ??
         initialFallback.logoImageUrl ??
-        null,
+        sgdb?.logoUrl ??
+        cdnAssets.logoImageUrl,
       logoPosition:
         hydraAssets?.logoPosition ?? initialFallback.logoPosition ?? null,
       downloadSources: hydraAssets?.downloadSources?.length

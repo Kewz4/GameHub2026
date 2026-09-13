@@ -8,8 +8,9 @@ import type {
 } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { getEmulatorConfig } from "./emulators-repository";
-import { cemuDataDir, edenDataDir } from "./emulator-portable";
+import { emulatorConfigFile, emulatorUserPaths } from "./emulator-user-paths";
 import { logger } from "../logger";
+import { writeRetroArchController } from "./retroarch-linux";
 import {
   writeRalibretro,
   pcsx2PadSection,
@@ -61,12 +62,15 @@ function writeForBinary(
   try {
     switch (binary) {
       case "ralibretro":
-        return writeRalibretro(installDir, profile);
+        return process.platform === "linux"
+          ? writeRetroArchController(installDir, profile)
+          : writeRalibretro(installDir, profile);
 
       case "pcsx2": {
         // Portable: <exe>/portable.ini triggers <exe>/inis/PCSX2.ini.
-        write(path.join(installDir, "portable.ini"), "");
-        const iniFile = path.join(installDir, "inis", "PCSX2.ini");
+        if (process.platform !== "linux")
+          write(path.join(installDir, "portable.ini"), "");
+        const iniFile = emulatorConfigFile("pcsx2", installDir, "PCSX2.ini");
         const existing = fs.existsSync(iniFile)
           ? fs.readFileSync(iniFile, "utf-8")
           : "";
@@ -80,8 +84,8 @@ function writeForBinary(
       case "rpcs3": {
         write(
           path.join(
-            installDir,
-            "config",
+            emulatorUserPaths("rpcs3", installDir).config,
+            ...(process.platform === "linux" ? [] : ["config"]),
             "input_configs",
             "global",
             "Default.yml"
@@ -93,8 +97,9 @@ function writeForBinary(
 
       case "dolphin": {
         // Portable: <exe>/portable.txt → <exe>/User.
-        write(path.join(installDir, "portable.txt"), "");
-        const cfgDir = path.join(installDir, "User", "Config");
+        if (process.platform !== "linux")
+          write(path.join(installDir, "portable.txt"), "");
+        const cfgDir = emulatorUserPaths("dolphin", installDir).config;
         const gc = path.join(cfgDir, "GCPadNew.ini");
         const gcExisting = fs.existsSync(gc)
           ? fs.readFileSync(gc, "utf-8")
@@ -123,7 +128,7 @@ function writeForBinary(
           type && type.startsWith("wiiu") ? type : ("wiiu_gamepad" as const);
         write(
           path.join(
-            cemuDataDir(installDir),
+            emulatorUserPaths("cemu", installDir).config,
             "controllerProfiles",
             "controller0.xml"
           ),
@@ -137,10 +142,9 @@ function writeForBinary(
 
       case "azahar": {
         // Portable Citra/Azahar: a `user/` folder next to the exe.
-        const iniFile = path.join(
+        const iniFile = emulatorConfigFile(
+          "azahar",
           installDir,
-          "user",
-          "config",
           "qt-config.ini"
         );
         const existing = fs.existsSync(iniFile)
@@ -155,11 +159,7 @@ function writeForBinary(
 
       case "eden": {
         // Eden (Yuzu/Sudachi derivative): config lives in <install>/user/config/
-        const iniFile = path.join(
-          edenDataDir(installDir),
-          "config",
-          "qt-config.ini"
-        );
+        const iniFile = emulatorConfigFile("eden", installDir, "qt-config.ini");
         const existing = fs.existsSync(iniFile)
           ? fs.readFileSync(iniFile, "utf-8")
           : "";

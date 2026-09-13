@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import { registerEvent } from "../register-event";
 import { emulators } from "@main/services";
 import {
@@ -15,6 +18,7 @@ const listEmulationSaves = async (
   platform: EmulationSavePlatform,
   objectId?: string | null
 ): Promise<EmulationCloudSave[]> => {
+  emulators.assertEmulationSavePlatform(platform);
   return emulators.listEmulationSaves(platform, objectId ?? undefined);
 };
 
@@ -22,6 +26,7 @@ const getMemcardRestoreTargets = async (
   _event: Electron.IpcMainInvokeEvent,
   platform: EmulationSavePlatform
 ): Promise<MemcardRestoreTarget[]> => {
+  emulators.assertEmulationSavePlatform(platform);
   const sublevel =
     platform === "ps2"
       ? ps2MemoryCardSavesSublevel
@@ -32,16 +37,25 @@ const getMemcardRestoreTargets = async (
   const targets: MemcardRestoreTarget[] = [];
 
   for (const record of records) {
-    if (!seen.has(record.cardFilePath)) {
-      seen.add(record.cardFilePath);
+    const cardFilePath = path.resolve(record.cardFilePath);
+    const identity =
+      process.platform === "win32" ? cardFilePath.toLowerCase() : cardFilePath;
+    if (
+      !seen.has(identity) &&
+      existsSync(cardFilePath) &&
+      emulators.isMemoryCardPathForPlatform(platform, cardFilePath)
+    ) {
+      seen.add(identity);
       targets.push({
-        cardFilePath: record.cardFilePath,
+        cardFilePath,
         cardLabel: record.cardLabel,
       });
     }
   }
 
-  return targets;
+  return targets.sort((left, right) =>
+    left.cardFilePath.localeCompare(right.cardFilePath)
+  );
 };
 
 const deleteEmulationSave = async (

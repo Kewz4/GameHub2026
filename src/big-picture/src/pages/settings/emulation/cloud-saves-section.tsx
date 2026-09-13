@@ -80,16 +80,29 @@ function RestoreModal({
   onClose,
   onRestored,
 }: Readonly<RestoreModalProps>) {
-  const { showErrorToast, showSuccessToast } = useBigPictureToast();
+  const { t } = useTranslation("settings");
+  const { showErrorToast, showSuccessToast, showWarningToast } =
+    useBigPictureToast();
   return (
     <EmulationCloudRestoreModal
       save={save}
       platform={platform}
       onClose={onClose}
       onRestored={onRestored}
-      onRestoreSuccess={() =>
-        showSuccessToast("Cloud save restored", SETTINGS_TOAST_OPTIONS)
-      }
+      onRestoreSuccess={(result) => {
+        if (result.requiresManualImport) {
+          showWarningToast(t("cloud_restore_exported_title"), {
+            ...SETTINGS_TOAST_OPTIONS,
+            duration: 12_000,
+            message: t("cloud_restore_exported_description", {
+              path: result.exportedPath ?? "",
+            }),
+          });
+          return;
+        }
+
+        showSuccessToast("Cloud save restored", SETTINGS_TOAST_OPTIONS);
+      }}
       onRestoreError={() =>
         showErrorToast("Failed to restore cloud save", SETTINGS_TOAST_OPTIONS)
       }
@@ -197,6 +210,7 @@ export function CloudSavesSection({
   const platform = config.system as EmulationSavePlatform;
   const [saves, setSaves] = useState<EmulationCloudSave[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<EmulationCloudSave | null>(
     null
   );
@@ -215,9 +229,12 @@ export function CloudSavesSection({
 
   const loadSaves = useCallback(async () => {
     setIsRefreshing(true);
+    setLoadError(false);
 
     try {
       setSaves(await globalThis.window.electron.listEmulationSaves(platform));
+    } catch {
+      setLoadError(true);
     } finally {
       setIsRefreshing(false);
     }
@@ -236,11 +253,9 @@ export function CloudSavesSection({
     await loadSaves();
   }, [deleteTarget, loadSaves, showSuccessToast]);
 
-  if (saves.length === 0) {
-    return null;
-  }
-
-  const firstSaveMenuId = getEmulationCloudMenuFocusId(saves[0]!.id);
+  const firstSaveMenuId = saves[0]
+    ? getEmulationCloudMenuFocusId(saves[0].id)
+    : null;
 
   return (
     <>
@@ -260,7 +275,9 @@ export function CloudSavesSection({
                 left: { type: "block" },
                 right: { type: "block" },
                 up: { type: "item", itemId: upTargetId },
-                down: { type: "item", itemId: firstSaveMenuId },
+                down: firstSaveMenuId
+                  ? { type: "item", itemId: firstSaveMenuId }
+                  : { type: "block" },
               }}
               variant="secondary"
               disabled={isRefreshing}
@@ -283,150 +300,176 @@ export function CloudSavesSection({
           </HorizontalFocusGroup>
         </header>
 
-        <div className="emulator-detail__cloud-stage" ref={stageRef}>
-          <div className="emulator-detail__cloud-console" ref={consoleRef}>
-            <ConsoleBackside />
-          </div>
+        {isRefreshing && saves.length === 0 ? (
+          <p className="emulator-detail__empty" role="status">
+            Loading memory-card cloud backups…
+          </p>
+        ) : null}
 
-          <svg
-            className="emulator-detail__cloud-connector"
-            width={connector.width}
-            height={connector.height}
-            viewBox={`0 0 ${connector.width} ${connector.height}`}
-            fill="none"
-            aria-hidden="true"
-            focusable="false"
+        {loadError ? (
+          <p
+            className="emulator-detail__empty emulator-detail__empty--error"
+            role="alert"
           >
-            {connector.path ? (
-              <path
-                d={connector.path}
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ) : null}
-          </svg>
+            Cloud backups could not be loaded. Use Refresh to try again.
+          </p>
+        ) : null}
 
-          <div className="emulator-detail__cloud-grid" ref={gridRef}>
-            {saves.map((save, index) => {
-              const saveName = save.label ?? save.fileName;
-              const menuId = getEmulationCloudMenuFocusId(save.id);
-              const previousSave = saves[index - 1];
-              const nextSave = saves[index + 1];
+        {!isRefreshing && !loadError && saves.length === 0 ? (
+          <p className="emulator-detail__empty" role="status">
+            No cloud backups yet. Scan a memory card, then create a backup from
+            one of its saves.
+          </p>
+        ) : null}
 
-              return (
-                <div key={save.id} className="emulator-detail__cloud-card">
-                  <div className="emulator-detail__cloud-card-top">
-                    <img
-                      className="emulator-detail__cloud-card-art"
-                      src={hydraSaveCard}
-                      alt=""
-                    />
+        {saves.length > 0 ? (
+          <div className="emulator-detail__cloud-stage" ref={stageRef}>
+            <div className="emulator-detail__cloud-console" ref={consoleRef}>
+              <ConsoleBackside />
+            </div>
 
-                    <FocusItem
-                      id={menuId}
-                      navigationOverrides={{
-                        left: previousSave
-                          ? {
-                              type: "item",
-                              itemId: getEmulationCloudMenuFocusId(
-                                previousSave.id
-                              ),
-                            }
-                          : {
-                              type: "block",
-                            },
-                        right: nextSave
-                          ? {
-                              type: "item",
-                              itemId: getEmulationCloudMenuFocusId(nextSave.id),
-                            }
-                          : {
-                              type: "block",
-                            },
-                        up: {
-                          type: "item",
-                          itemId: EMULATION_DETAIL_CLOUD_REFRESH_BUTTON_ID,
-                        },
-                      }}
-                      asChild
-                    >
-                      <button
-                        type="button"
-                        className="emulator-detail__cloud-menu"
-                        aria-label={saveName}
-                        onClick={(event) => {
-                          const rect =
-                            event.currentTarget.getBoundingClientRect();
-                          setOpenMenu({
-                            key: save.id,
-                            position: {
-                              x: rect.right - 8,
-                              y: rect.bottom + 8,
-                            },
-                          });
+            <svg
+              className="emulator-detail__cloud-connector"
+              width={connector.width}
+              height={connector.height}
+              viewBox={`0 0 ${connector.width} ${connector.height}`}
+              fill="none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              {connector.path ? (
+                <path
+                  d={connector.path}
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : null}
+            </svg>
+
+            <div className="emulator-detail__cloud-grid" ref={gridRef}>
+              {saves.map((save, index) => {
+                const saveName = save.label ?? save.fileName;
+                const menuId = getEmulationCloudMenuFocusId(save.id);
+                const previousSave = saves[index - 1];
+                const nextSave = saves[index + 1];
+
+                return (
+                  <div key={save.id} className="emulator-detail__cloud-card">
+                    <div className="emulator-detail__cloud-card-top">
+                      <img
+                        className="emulator-detail__cloud-card-art"
+                        src={hydraSaveCard}
+                        alt=""
+                      />
+
+                      <FocusItem
+                        id={menuId}
+                        navigationOverrides={{
+                          left: previousSave
+                            ? {
+                                type: "item",
+                                itemId: getEmulationCloudMenuFocusId(
+                                  previousSave.id
+                                ),
+                              }
+                            : {
+                                type: "block",
+                              },
+                          right: nextSave
+                            ? {
+                                type: "item",
+                                itemId: getEmulationCloudMenuFocusId(
+                                  nextSave.id
+                                ),
+                              }
+                            : {
+                                type: "block",
+                              },
+                          up: {
+                            type: "item",
+                            itemId: EMULATION_DETAIL_CLOUD_REFRESH_BUTTON_ID,
+                          },
                         }}
+                        asChild
                       >
-                        <KebabHorizontalIcon
-                          size={16}
-                          className="emulator-detail__cloud-menu-icon"
-                        />
-                      </button>
-                    </FocusItem>
+                        <button
+                          type="button"
+                          className="emulator-detail__cloud-menu"
+                          aria-label={saveName}
+                          onClick={(event) => {
+                            const rect =
+                              event.currentTarget.getBoundingClientRect();
+                            setOpenMenu({
+                              key: save.id,
+                              position: {
+                                x: rect.right - 8,
+                                y: rect.bottom + 8,
+                              },
+                            });
+                          }}
+                        >
+                          <KebabHorizontalIcon
+                            size={16}
+                            className="emulator-detail__cloud-menu-icon"
+                          />
+                        </button>
+                      </FocusItem>
 
-                    <ContextMenu
-                      visible={openMenu?.key === save.id}
-                      position={openMenu?.position ?? { x: 0, y: 0 }}
-                      restoreFocusId={menuId}
-                      onClose={() => setOpenMenu(null)}
-                      ariaLabel={saveName}
-                      items={[
-                        {
-                          id: "restore",
-                          icon: <HistoryIcon size={16} />,
-                          label: t("cloud_restore"),
-                          onSelect: () => setRestoreTarget(save),
-                        },
-                        {
-                          id: "rename",
-                          icon: <PencilIcon size={16} />,
-                          label: t("cloud_rename_title"),
-                          onSelect: () => setRenameTarget(save),
-                        },
-                        {
-                          id: "delete",
-                          icon: <TrashIcon size={16} />,
-                          label: t("cloud_delete"),
-                          danger: true,
-                          onSelect: () => setDeleteTarget(save),
-                        },
-                      ]}
-                    />
-                  </div>
+                      <ContextMenu
+                        visible={openMenu?.key === save.id}
+                        position={openMenu?.position ?? { x: 0, y: 0 }}
+                        restoreFocusId={menuId}
+                        onClose={() => setOpenMenu(null)}
+                        ariaLabel={saveName}
+                        items={[
+                          {
+                            id: "restore",
+                            icon: <HistoryIcon size={16} />,
+                            label: t("cloud_restore"),
+                            onSelect: () => setRestoreTarget(save),
+                          },
+                          {
+                            id: "rename",
+                            icon: <PencilIcon size={16} />,
+                            label: t("cloud_rename_title"),
+                            onSelect: () => setRenameTarget(save),
+                          },
+                          {
+                            id: "delete",
+                            icon: <TrashIcon size={16} />,
+                            label: t("cloud_delete"),
+                            danger: true,
+                            onSelect: () => setDeleteTarget(save),
+                          },
+                        ]}
+                      />
+                    </div>
 
-                  <span
-                    className="emulator-detail__cloud-card-title"
-                    title={saveName}
-                  >
-                    {saveName}
-                  </span>
-
-                  <div className="emulator-detail__cloud-card-info">
-                    <span title={save.hostname ?? undefined}>
-                      <DeviceDesktopIcon size={16} />
-                      {save.hostname ?? "—"}
+                    <span
+                      className="emulator-detail__cloud-card-title"
+                      title={saveName}
+                    >
+                      {saveName}
                     </span>
-                    <span>
-                      <ClockIcon size={16} />
-                      {formatDate(save.localLastModifiedAt)}
-                    </span>
+
+                    <div className="emulator-detail__cloud-card-info">
+                      <span title={save.hostname ?? undefined}>
+                        <DeviceDesktopIcon size={16} />
+                        {save.hostname ?? "—"}
+                      </span>
+                      <span>
+                        <ClockIcon size={16} />
+                        {formatDate(save.localLastModifiedAt)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ) : null}
       </VerticalFocusGroup>
 
       <RestoreModal

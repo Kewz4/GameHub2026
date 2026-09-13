@@ -10,7 +10,7 @@ import {
 } from "./classics-import-state";
 import { isWithin } from "./rom-path-utils";
 import { HydraApi, WindowManager, emulators, logger } from "@main/services";
-import { platformToSystem } from "@main/helpers";
+import { clearFinishedDownload, platformToSystem } from "@main/helpers";
 import {
   fetchShopDetailsForSkus,
   importSgdbRoms,
@@ -18,7 +18,6 @@ import {
   type LaunchboxShopDetailsEntry,
 } from "@main/services/emulators";
 import {
-  downloadsSublevel,
   gamesShopAssetsSublevel,
   gamesShopCacheSublevel,
   gamesSublevel,
@@ -219,7 +218,7 @@ const persistEntryLocally = async (
 
   const existing = await gamesSublevel.get(gameKey);
   if (existing) {
-    await downloadsSublevel.del(gameKey).catch(() => {});
+    await clearFinishedDownload(shop, objectId);
     existing.isDeleted = false;
     existing.addedToLibraryAt ??= new Date();
     if (platform && !existing.platform) {

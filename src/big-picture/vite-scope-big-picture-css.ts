@@ -2,13 +2,18 @@ import type { Plugin, Rule } from "postcss";
 
 const BIG_PICTURE_ROOT_SELECTOR = "#big-picture";
 const BIG_PICTURE_PATH_FRAGMENT = "/src/big-picture/";
+const BIG_PICTURE_HOST_DOCUMENT_FRAGMENT = "/src/big-picture/index.html";
 const RENDERER_PATH_FRAGMENT = "/src/renderer/";
 const ROOT_SELECTOR_ALIASES = new Set([":root", "html", "body", "#root"]);
 
 const isBigPictureStyle = (filePath?: string): boolean => {
   if (!filePath) return false;
 
-  return filePath.replaceAll("\\", "/").includes(BIG_PICTURE_PATH_FRAGMENT);
+  const normalizedPath = filePath.replaceAll("\\", "/");
+  return (
+    normalizedPath.includes(BIG_PICTURE_PATH_FRAGMENT) &&
+    !normalizedPath.includes(BIG_PICTURE_HOST_DOCUMENT_FRAGMENT)
+  );
 };
 
 const isRendererStyle = (filePath?: string): boolean => {

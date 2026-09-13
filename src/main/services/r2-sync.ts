@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   S3Client,
   PutObjectCommand,
@@ -10,18 +11,64 @@ import {
   ListObjectsV2Command,
   HeadObjectCommand,
   CopyObjectCommand,
+  DeleteObjectsCommand,
   type HeadObjectCommandOutput,
 } from "@aws-sdk/client-s3";
 import { app } from "electron";
-import type { GameArtifact, GameArtifactWithGame, GameShop } from "@types";
+import type {
+  AchievementSouvenirRecord,
+  CloudSaveV2LibraryEntry,
+  GameArtifact,
+  GameArtifactWithGame,
+  GameShop,
+} from "@types";
 import { logger } from "./logger";
+import { NativeAddon } from "./native-addon";
+import { getR2Credentials, R2_BUCKET, R2_ENDPOINT } from "./r2-credentials";
+import { registerR2CredentialSessionInvalidator } from "./r2-credential-session";
+import {
+  assertR2CloudSaveV2HeadConsistency,
+  serializeCanonicalR2CloudSaveJson,
+  validateR2CloudSaveV2ControlDocument,
+  validateR2CloudSaveV2SnapshotDocument,
+  type R2CloudSaveV2ControlDocument,
+  type R2CloudSaveV2Head,
+  type R2CloudSaveV2SnapshotDocument,
+} from "./cloud-save/r2-snapshot-contract";
+import {
+  createCloudSaveRemoteHeadConflictError,
+  publishCloudSaveSnapshotProposal,
+} from "./cloud-save/r2-snapshot-publication";
+import { listCloudSaveV2LibraryIndex } from "./cloud-save/cloud-save-v2-library-index";
+import { listEmulationSaveR2Index } from "./cloud-save/emulation-save-r2-index";
+import {
+  getProfileImageCacheFileName,
+  sanitizeProfileImageCacheComponent,
+  selectLatestProfileImageObject,
+} from "./profile-image-helpers";
+import { achievementSouvenirsPath } from "@main/constants";
+import {
+  achievementSouvenirR2Key,
+  achievementSouvenirScreenshotPath,
+  isAchievementSouvenirRecord,
+} from "./achievements/achievement-souvenir-policy";
+import { AchievementSouvenirLocalStorage } from "./achievements/achievement-souvenir-local-storage";
+import {
+  achievementSouvenirMetadataFromRecord,
+  achievementSouvenirRecordFromMetadata,
+} from "./achievements/achievement-souvenir-r2-metadata";
+
+export type {
+  R2CloudSaveV2ControlDocument,
+  R2CloudSaveV2Head,
+  R2CloudSaveV2SnapshotDocument,
+} from "./cloud-save/r2-snapshot-contract";
 
 /**
  * Cloudflare R2 (S3-compatible) backing store for cloud saves and profile
- * images, replacing Uploadcare. Credentials are baked in deliberately: this is
- * a private build shared between friends, the same way the Uploadcare keys were
- * embedded before. R2 gives us real folders, so everything is namespaced under
- * a per-user prefix:
+ * images, replacing Uploadcare. Production builds obtain short-lived,
+ * user-scoped credentials from the configured broker. R2 gives us real
+ * folders, so everything is namespaced under a per-user prefix:
  *
  *   users/{userId}/saves/{shop}/{objectId}/{timestamp}.tar
  *   users/{userId}/images/{kind}.{ext}
@@ -30,15 +77,9 @@ import { logger } from "./logger";
  * The class keeps the exact method surface the old UploadcareSync exposed so
  * callers are unchanged; an artifact "id" is simply the R2 object key, and
  * images are served to the renderer through the local: protocol after being
- * cached on disk (no public bucket or presigner needed — every client holds
- * the same credentials and reads objects directly).
+ * cached on disk; the bucket remains private and the parent R2 credential
+ * never enters the desktop app.
  */
-const R2_ENDPOINT =
-  "https://f27692e18d99d566ad3a04766f3142ef.r2.cloudflarestorage.com";
-const R2_BUCKET = "gamehub";
-const R2_ACCESS_KEY_ID = "d1b400e239d7d9832c70635fa56087f2";
-const R2_SECRET_ACCESS_KEY =
-  "97b5b7909b038b5e86387dd065b5f58e3fd5920b5cb23af659ef2b8ab58392dc";
 
 export interface EmulationSaveMetadata {
   userId: string;
@@ -69,6 +110,18 @@ export interface EmulationArtifact {
   updatedAt: string;
 }
 
+export interface SaveArtifactRestoreMetadata {
+  homeDir: string | null;
+  winePrefixPath: string | null;
+  platform: string | null;
+}
+
+export interface R2NamespaceMigrationResult {
+  copied: number;
+  alreadyCopied: number;
+  conflicts: number;
+}
+
 const enc = (v: string | undefined | null): string =>
   encodeURIComponent(v ?? "");
 const dec = (v: string | undefined | null): string => {
@@ -79,18 +132,24 @@ const dec = (v: string | undefined | null): string => {
   }
 };
 
+const achievementSouvenirLocalStorage = new AchievementSouvenirLocalStorage(
+  achievementSouvenirsPath
+);
+
 export class R2Sync {
   private static _client: S3Client | null = null;
+  private static profileImageDownloads = new Map<
+    string,
+    Promise<string | null>
+  >();
+  private static profileImageGenerations = new Map<string, number>();
 
   private static get client(): S3Client {
     if (!this._client) {
       this._client = new S3Client({
         region: "auto",
         endpoint: R2_ENDPOINT,
-        credentials: {
-          accessKeyId: R2_ACCESS_KEY_ID,
-          secretAccessKey: R2_SECRET_ACCESS_KEY,
-        },
+        credentials: getR2Credentials,
         forcePathStyle: true,
         // aws-sdk v3 >= ~3.729 enables flexible checksums (CRC32 trailers) by
         // default, which Cloudflare R2's S3 API rejects — uploads fail with a
@@ -104,10 +163,37 @@ export class R2Sync {
     return this._client;
   }
 
+  static invalidateCredentialSession() {
+    this._client?.destroy();
+    this._client = null;
+    this.headCache.clear();
+    for (const lookupKey of this.profileImageDownloads.keys()) {
+      const nextGeneration =
+        (this.profileImageGenerations.get(lookupKey) ?? 0) + 1;
+      this.profileImageGenerations.set(lookupKey, nextGeneration);
+    }
+    this.profileImageDownloads.clear();
+  }
+
   private static imageCacheDir(): string {
     const dir = path.join(app.getPath("userData"), "r2-image-cache");
     fs.mkdirSync(dir, { recursive: true });
     return dir;
+  }
+
+  private static profileImageLookupKey(hydraUserId: string, kind: string) {
+    return JSON.stringify([hydraUserId, kind]);
+  }
+
+  private static invalidateProfileImageLookup(
+    hydraUserId: string,
+    kind: string
+  ) {
+    const lookupKey = this.profileImageLookupKey(hydraUserId, kind);
+    const nextGeneration =
+      (this.profileImageGenerations.get(lookupKey) ?? 0) + 1;
+    this.profileImageGenerations.set(lookupKey, nextGeneration);
+    this.profileImageDownloads.delete(lookupKey);
   }
 
   // ── Saves ──────────────────────────────────────────────────────────────
@@ -145,6 +231,8 @@ export class R2Sync {
           downloadoptiontitle: enc(metadata.downloadOptionTitle),
           hostname: enc(metadata.hostname),
           platform: metadata.platform ?? "",
+          homedir: enc(metadata.homeDir),
+          wineprefixpath: enc(metadata.winePrefixPath),
         },
       })
     );
@@ -208,6 +296,19 @@ export class R2Sync {
     } catch {
       return null;
     }
+  }
+
+  /** Source-machine paths needed to remap an artifact during restore. */
+  static async getSaveArtifactRestoreMetadata(
+    key: string
+  ): Promise<SaveArtifactRestoreMetadata> {
+    const head = await this.headArtifact(key);
+    const metadata = head?.Metadata ?? {};
+    return {
+      homeDir: dec(metadata.homedir) || null,
+      winePrefixPath: dec(metadata.wineprefixpath) || null,
+      platform: metadata.platform || null,
+    };
   }
 
   /** List save artifacts for a single game, newest first. */
@@ -306,6 +407,588 @@ export class R2Sync {
     return artifacts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  // ── Cloud Saves V2 snapshots ───────────────────────────────────────────
+
+  private static cloudSaveV2GamePrefix(
+    userId: string,
+    shop: GameShop,
+    objectId: string
+  ) {
+    return `users/${enc(userId)}/cloud-saves-v2/${enc(shop)}/${enc(objectId)}`;
+  }
+
+  private static cloudSaveV2HeadKey(
+    userId: string,
+    shop: GameShop,
+    objectId: string
+  ) {
+    return `${this.cloudSaveV2GamePrefix(userId, shop, objectId)}/control.json`;
+  }
+
+  private static cloudSaveV2SnapshotKey(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    snapshotId: string,
+    version: number
+  ) {
+    return `${this.cloudSaveV2GamePrefix(userId, shop, objectId)}/snapshots/${version}-${enc(snapshotId)}.json`;
+  }
+
+  private static cloudSaveV2BlobKey(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    hash: string
+  ) {
+    return `${this.cloudSaveV2GamePrefix(userId, shop, objectId)}/blobs/${hash}`;
+  }
+
+  private static isPreconditionFailure(error: unknown) {
+    if (!error || typeof error !== "object") return false;
+    const record = error as {
+      name?: string;
+      $metadata?: { httpStatusCode?: number };
+    };
+    return (
+      record.$metadata?.httpStatusCode === 409 ||
+      record.$metadata?.httpStatusCode === 412 ||
+      record.name === "PreconditionFailed" ||
+      record.name === "ConditionalRequestConflict"
+    );
+  }
+
+  private static async readCloudSaveV2Json(
+    key: string
+  ): Promise<{ value: unknown; etag: string | null } | null> {
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
+      );
+      const raw = await response.Body?.transformToString();
+      if (!raw) throw new Error(`R2 Cloud Save document is empty: ${key}`);
+      return {
+        value: JSON.parse(raw) as unknown,
+        etag: response.ETag ?? null,
+      };
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } })
+        ?.$metadata?.httpStatusCode;
+      if (
+        status === 404 ||
+        (error as { name?: string })?.name === "NoSuchKey"
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  static async getCloudSaveV2Head(
+    userId: string,
+    shop: GameShop,
+    objectId: string
+  ): Promise<R2CloudSaveV2Head | null> {
+    const result = await this.readCloudSaveV2Json(
+      this.cloudSaveV2HeadKey(userId, shop, objectId)
+    );
+    if (!result) return null;
+    const control = validateR2CloudSaveV2ControlDocument(result.value, {
+      shop,
+      objectId,
+    });
+    const pointer = control.snapshot;
+    const document = pointer
+      ? await this.getCloudSaveV2Snapshot(
+          userId,
+          shop,
+          objectId,
+          pointer.id,
+          pointer.version
+        )
+      : null;
+    assertR2CloudSaveV2HeadConsistency(control, document);
+    return {
+      control,
+      document,
+      etag: result.etag,
+    };
+  }
+
+  static async listCloudSaveV2Snapshots(
+    userId: string
+  ): Promise<CloudSaveV2LibraryEntry[]> {
+    const prefix = `users/${enc(userId)}/cloud-saves-v2/`;
+    return listCloudSaveV2LibraryIndex({
+      prefix,
+      listPage: async (continuationToken) => {
+        const page = await this.client.send(
+          new ListObjectsV2Command({
+            Bucket: R2_BUCKET,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+            MaxKeys: 1_000,
+          })
+        );
+        return {
+          keys: (page.Contents ?? []).map((object) => object.Key),
+          isTruncated: page.IsTruncated === true,
+          nextContinuationToken: page.NextContinuationToken,
+        };
+      },
+      loadHead: ({ shop, objectId }) =>
+        this.getCloudSaveV2Head(userId, shop, objectId),
+      onInvalidEntry: (identity, error) => {
+        logger.warn("R2: skipped invalid Cloud Save V2 library entry", {
+          key: identity.controlKey,
+          error,
+        });
+      },
+    });
+  }
+
+  static async getCloudSaveV2Snapshot(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    snapshotId: string,
+    version: number
+  ): Promise<R2CloudSaveV2SnapshotDocument | null> {
+    const result = await this.readCloudSaveV2Json(
+      this.cloudSaveV2SnapshotKey(userId, shop, objectId, snapshotId, version)
+    );
+    if (!result) return null;
+    return validateR2CloudSaveV2SnapshotDocument(
+      result.value,
+      { shop, objectId, snapshotId, version },
+      (input) => NativeAddon.buildSnapshotAggregateHash(input)
+    );
+  }
+
+  private static async hashLocalFile(filePath: string) {
+    const sha256 = crypto.createHash("sha256");
+    const md5 = crypto.createHash("md5");
+    await new Promise<void>((resolve, reject) => {
+      const input = fs.createReadStream(filePath);
+      input.on("data", (chunk) => {
+        sha256.update(chunk);
+        md5.update(chunk);
+      });
+      input.on("error", reject);
+      input.on("end", resolve);
+    });
+    return {
+      sha256: sha256.digest("hex"),
+      contentMd5: md5.digest("base64"),
+    };
+  }
+
+  /** Upload one content-addressed save blob, skipping an already verified blob. */
+  static async uploadCloudSaveV2Blob(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    filePath: string,
+    expectedHash: string,
+    expectedSizeBytes: number,
+    expectedEpoch: number
+  ): Promise<"uploaded" | "skipped"> {
+    if (!/^[a-f0-9]{64}$/.test(expectedHash)) {
+      throw new Error("cloud_save_invalid_blob_hash");
+    }
+    const key = this.cloudSaveV2BlobKey(userId, shop, objectId, expectedHash);
+    const assertEpochCurrent = async () => {
+      const head = await this.getCloudSaveV2Head(userId, shop, objectId);
+      if (
+        head?.control.status === "deleting" ||
+        (head?.control.epoch ?? 0) !== expectedEpoch
+      ) {
+        throw new Error("cloud_save_deletion_pending");
+      }
+    };
+    await assertEpochCurrent();
+    const existing = await this.client
+      .send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }))
+      .catch((error) => {
+        const status = (error as { $metadata?: { httpStatusCode?: number } })
+          ?.$metadata?.httpStatusCode;
+        if (
+          status === 404 ||
+          (error as { name?: string })?.name === "NotFound"
+        ) {
+          return null;
+        }
+        throw error;
+      });
+    if (existing) {
+      if (
+        existing.ContentLength !== expectedSizeBytes ||
+        existing.Metadata?.sha256 !== expectedHash
+      ) {
+        throw new Error("cloud_save_remote_blob_collision");
+      }
+      await assertEpochCurrent();
+      return "skipped";
+    }
+
+    const statBeforeHash = await fs.promises.stat(filePath);
+    if (!statBeforeHash.isFile() || statBeforeHash.size !== expectedSizeBytes) {
+      throw new Error("cloud_save_local_blob_changed");
+    }
+    const hashed = await this.hashLocalFile(filePath);
+    const statBeforeUpload = await fs.promises.stat(filePath);
+    if (
+      hashed.sha256 !== expectedHash ||
+      statBeforeHash.size !== statBeforeUpload.size ||
+      statBeforeHash.mtimeMs !== statBeforeUpload.mtimeMs
+    ) {
+      throw new Error("cloud_save_local_blob_changed");
+    }
+
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: key,
+          Body: fs.createReadStream(filePath),
+          ContentLength: expectedSizeBytes,
+          ContentType: "application/octet-stream",
+          ContentMD5: hashed.contentMd5,
+          Metadata: { sha256: expectedHash },
+          IfNoneMatch: "*",
+        })
+      );
+    } catch (error) {
+      if (!this.isPreconditionFailure(error)) throw error;
+      const raced = await this.client.send(
+        new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key })
+      );
+      if (
+        raced.ContentLength !== expectedSizeBytes ||
+        raced.Metadata?.sha256 !== expectedHash
+      ) {
+        throw new Error("cloud_save_remote_blob_collision");
+      }
+      return "skipped";
+    }
+    const statAfterUpload = await fs.promises.stat(filePath);
+    const hashAfterUpload = await this.hashLocalFile(filePath);
+    if (
+      statAfterUpload.size !== statBeforeUpload.size ||
+      statAfterUpload.mtimeMs !== statBeforeUpload.mtimeMs ||
+      hashAfterUpload.sha256 !== expectedHash
+    ) {
+      // Content-addressed blobs are shared by every proposal for this game.
+      // Once PUT succeeds another client can commit a manifest referencing the
+      // blob immediately, so deleting it here would corrupt that snapshot.
+      // Leave an unreferenced blob for a future garbage-collection pass.
+      throw new Error("cloud_save_local_blob_changed");
+    }
+    // The same no-delete rule applies if a deletion fence advanced while the
+    // upload was in flight. The fenced delete/GC path owns remote cleanup.
+    await assertEpochCurrent();
+    return "uploaded";
+  }
+
+  /**
+   * Publish an immutable manifest and atomically advance the active head.
+   * Conditional R2 writes provide the optimistic-version behavior used by the
+   * V2 three-way merge when two GameHub machines sync concurrently.
+   */
+  static async commitCloudSaveV2Snapshot(
+    userId: string,
+    document: R2CloudSaveV2SnapshotDocument,
+    expectedControl: R2CloudSaveV2ControlDocument | null,
+    expectedHeadEtag: string | null
+  ): Promise<void> {
+    const validatedDocument = validateR2CloudSaveV2SnapshotDocument(
+      document,
+      {
+        shop: document.snapshot.shop,
+        objectId: document.snapshot.objectId,
+        snapshotId: document.snapshot.id,
+        version: document.snapshot.version,
+      },
+      (input) => NativeAddon.buildSnapshotAggregateHash(input)
+    );
+    const { snapshot } = validatedDocument;
+    if (
+      expectedControl?.status === "deleting" ||
+      snapshot.epoch !== (expectedControl?.epoch ?? 0)
+    ) {
+      throw new Error("cloud_save_deletion_pending");
+    }
+    const body = Buffer.from(
+      serializeCanonicalR2CloudSaveJson(validatedDocument),
+      "utf8"
+    );
+    const snapshotKey = this.cloudSaveV2SnapshotKey(
+      userId,
+      snapshot.shop,
+      snapshot.objectId,
+      snapshot.id,
+      snapshot.version
+    );
+    const control: R2CloudSaveV2ControlDocument = {
+      schemaVersion: 1,
+      revision: (expectedControl?.revision ?? 0) + 1,
+      epoch: snapshot.epoch,
+      status: "active",
+      deleteOperationId: null,
+      snapshot,
+      updatedAt: snapshot.updatedAt,
+    };
+    const validatedControl = validateR2CloudSaveV2ControlDocument(control, {
+      shop: snapshot.shop,
+      objectId: snapshot.objectId,
+    });
+    const controlBody = Buffer.from(
+      serializeCanonicalR2CloudSaveJson(validatedControl),
+      "utf8"
+    );
+
+    await publishCloudSaveSnapshotProposal({
+      publishImmutableSnapshot: async () => {
+        try {
+          await this.client.send(
+            new PutObjectCommand({
+              Bucket: R2_BUCKET,
+              Key: snapshotKey,
+              Body: body,
+              ContentLength: body.length,
+              ContentType: "application/json",
+              IfNoneMatch: "*",
+            })
+          );
+          return "created";
+        } catch (error) {
+          if (!this.isPreconditionFailure(error)) throw error;
+          const existing = await this.readCloudSaveV2Json(snapshotKey);
+          return serializeCanonicalR2CloudSaveJson(existing?.value) ===
+            serializeCanonicalR2CloudSaveJson(validatedDocument)
+            ? "already-present"
+            : "collision";
+        }
+      },
+      advanceControl: async () => {
+        try {
+          await this.client.send(
+            new PutObjectCommand({
+              Bucket: R2_BUCKET,
+              Key: this.cloudSaveV2HeadKey(
+                userId,
+                snapshot.shop,
+                snapshot.objectId
+              ),
+              Body: controlBody,
+              ContentLength: controlBody.length,
+              ContentType: "application/json",
+              ...(expectedHeadEtag
+                ? { IfMatch: expectedHeadEtag }
+                : { IfNoneMatch: "*" }),
+            })
+          );
+        } catch (error) {
+          if (this.isPreconditionFailure(error)) {
+            throw createCloudSaveRemoteHeadConflictError();
+          }
+          throw error;
+        }
+      },
+    });
+  }
+
+  static async downloadCloudSaveV2Blob(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    hash: string,
+    destinationPath: string
+  ): Promise<void> {
+    const key = this.cloudSaveV2BlobKey(userId, shop, objectId, hash);
+    await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
+    const partialPath = `${destinationPath}.part`;
+    await fs.promises.rm(partialPath, { force: true });
+    try {
+      await this.downloadFile(key, partialPath);
+      await fs.promises.rm(destinationPath, { force: true });
+      await fs.promises.rename(partialPath, destinationPath);
+    } catch (error) {
+      await fs.promises.rm(partialPath, { force: true }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private static async listAllKeys(prefix: string) {
+    const keys: string[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: R2_BUCKET,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        })
+      );
+      keys.push(
+        ...(page.Contents ?? []).flatMap((item) => (item.Key ? [item.Key] : []))
+      );
+      continuationToken = page.IsTruncated
+        ? page.NextContinuationToken
+        : undefined;
+    } while (continuationToken);
+    return keys;
+  }
+
+  private static async putCloudSaveV2Control(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    control: R2CloudSaveV2ControlDocument,
+    expectedEtag: string | null
+  ): Promise<void> {
+    const validatedControl = validateR2CloudSaveV2ControlDocument(control, {
+      shop,
+      objectId,
+    });
+    const body = Buffer.from(
+      serializeCanonicalR2CloudSaveJson(validatedControl),
+      "utf8"
+    );
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: this.cloudSaveV2HeadKey(userId, shop, objectId),
+          Body: body,
+          ContentLength: body.length,
+          ContentType: "application/json",
+          ...(expectedEtag ? { IfMatch: expectedEtag } : { IfNoneMatch: "*" }),
+        })
+      );
+    } catch (error) {
+      if (this.isPreconditionFailure(error)) {
+        throw new Error("cloud_save_remote_head_conflict");
+      }
+      throw error;
+    }
+  }
+
+  static async beginCloudSaveV2Deletion(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    operationId: string
+  ): Promise<R2CloudSaveV2Head> {
+    const current = await this.getCloudSaveV2Head(userId, shop, objectId);
+    if (current?.control.status === "deleting") {
+      if (current.control.deleteOperationId === operationId) return current;
+      throw new Error("cloud_save_deletion_pending");
+    }
+    const now = new Date().toISOString();
+    const deleting: R2CloudSaveV2ControlDocument = {
+      schemaVersion: 1,
+      revision: (current?.control.revision ?? 0) + 1,
+      epoch: (current?.control.epoch ?? 0) + 1,
+      status: "deleting",
+      deleteOperationId: operationId,
+      snapshot: null,
+      updatedAt: now,
+    };
+    await this.putCloudSaveV2Control(
+      userId,
+      shop,
+      objectId,
+      deleting,
+      current?.etag ?? null
+    );
+    const fenced = await this.getCloudSaveV2Head(userId, shop, objectId);
+    if (
+      !fenced ||
+      fenced.control.status !== "deleting" ||
+      fenced.control.deleteOperationId !== operationId
+    ) {
+      throw new Error("cloud_save_deletion_fence_failed");
+    }
+    return fenced;
+  }
+
+  static async deleteCloudSaveV2GameObjects(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    operationId: string
+  ): Promise<void> {
+    const fenced = await this.getCloudSaveV2Head(userId, shop, objectId);
+    if (
+      fenced?.control.status !== "deleting" ||
+      fenced.control.deleteOperationId !== operationId
+    ) {
+      throw new Error("cloud_save_deletion_fence_missing");
+    }
+    const prefixes = [
+      `${this.cloudSaveV2GamePrefix(userId, shop, objectId)}/snapshots/`,
+      `${this.cloudSaveV2GamePrefix(userId, shop, objectId)}/blobs/`,
+      `users/${userId}/saves/${shop}/${objectId}/`,
+    ];
+    const keys = (
+      await Promise.all(prefixes.map((prefix) => this.listAllKeys(prefix)))
+    ).flat();
+    for (let index = 0; index < keys.length; index += 1000) {
+      const batch = keys.slice(index, index + 1000);
+      if (batch.length === 0) continue;
+      const response = await this.client.send(
+        new DeleteObjectsCommand({
+          Bucket: R2_BUCKET,
+          Delete: {
+            Objects: batch.map((Key) => ({ Key })),
+            Quiet: true,
+          },
+        })
+      );
+      if (response.Errors?.length) {
+        throw new Error(
+          `cloud_save_remote_delete_failed:${response.Errors.map((item) => item.Key).join(",")}`
+        );
+      }
+      for (const key of batch) this.headCache.delete(key);
+    }
+    logger.log(
+      `R2: deleted fenced Cloud Saves V2 data for ${shop}:${objectId}`
+    );
+  }
+
+  static async finishCloudSaveV2Deletion(
+    userId: string,
+    shop: GameShop,
+    objectId: string,
+    operationId: string
+  ): Promise<void> {
+    const current = await this.getCloudSaveV2Head(userId, shop, objectId);
+    if (
+      !current ||
+      current.control.status !== "deleting" ||
+      current.control.deleteOperationId !== operationId
+    ) {
+      throw new Error("cloud_save_deletion_fence_missing");
+    }
+    const active: R2CloudSaveV2ControlDocument = {
+      ...current.control,
+      revision: current.control.revision + 1,
+      status: "active",
+      deleteOperationId: null,
+      snapshot: null,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.putCloudSaveV2Control(
+      userId,
+      shop,
+      objectId,
+      active,
+      current.etag
+    );
+  }
+
   // ── Profile images ─────────────────────────────────────────────────────
 
   /**
@@ -336,52 +1019,393 @@ export class R2Sync {
       })
     );
 
+    this.invalidateProfileImageLookup(hydraUserId, kind);
+    await this.deleteProfileImagesByKind(kind, hydraUserId, key).catch(
+      (error) => {
+        logger.warn(`R2: failed to remove stale ${kind} variants`, error);
+      }
+    );
+
     logger.log(`R2: uploaded image ${key}`);
     return key;
   }
 
+  /** Remove a user's image kind, optionally retaining a freshly uploaded key. */
+  static async deleteProfileImagesByKind(
+    kind: string,
+    hydraUserId: string,
+    keepKey?: string
+  ): Promise<void> {
+    this.invalidateProfileImageLookup(hydraUserId, kind);
+    const prefix = `users/${hydraUserId}/images/`;
+    const list = await this.client.send(
+      new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix })
+    );
+    const exactKindPrefix = `${kind}.`;
+    const keys = (list.Contents ?? [])
+      .map((object) => object.Key)
+      .filter((key): key is string => {
+        if (!key || key === keepKey || !key.startsWith(prefix)) return false;
+        const name = key.slice(prefix.length);
+        return (
+          name.startsWith(exactKindPrefix) &&
+          name.length > exactKindPrefix.length
+        );
+      });
+
+    if (keys.length > 0) {
+      await this.client.send(
+        new DeleteObjectsCommand({
+          Bucket: R2_BUCKET,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        })
+      );
+    }
+
+    if (!keepKey) {
+      const cacheDir = this.imageCacheDir();
+      const cachePrefix = `${sanitizeProfileImageCacheComponent(
+        hydraUserId
+      )}-${sanitizeProfileImageCacheComponent(kind)}-`;
+      const cachedFiles = await fs.promises.readdir(cacheDir).catch(() => []);
+      await Promise.allSettled(
+        cachedFiles
+          .filter((name) => name.startsWith(cachePrefix))
+          .map((name) =>
+            fs.promises.rm(path.join(cacheDir, name), { force: true })
+          )
+      );
+    }
+  }
+
   /**
    * Locate a user's profile image by kind, download it to the local cache and
-   * return a local: URL the renderer can display. Tries the common extensions
-   * since the stored key includes the original file extension.
+   * return a local: URL the renderer can display. The cache filename includes
+   * the R2 object version so a replaced image never reuses a failed renderer URL.
    */
   static async findLatestImageByKind(
     kind: string,
     hydraUserId: string
   ): Promise<string | null> {
-    // One list call instead of probing each extension with 404-ing GETs: the
-    // image is stored as images/{kind}.{ext}, so match by basename === kind.
+    const lookupKey = this.profileImageLookupKey(hydraUserId, kind);
+    const existing = this.profileImageDownloads.get(lookupKey);
+    if (existing) return existing;
+
+    const generation = this.profileImageGenerations.get(lookupKey) ?? 0;
+    const lookup = this.downloadLatestImageByKind(
+      kind,
+      hydraUserId,
+      lookupKey,
+      generation
+    ).finally(() => {
+      if (this.profileImageDownloads.get(lookupKey) === lookup) {
+        this.profileImageDownloads.delete(lookupKey);
+      }
+    });
+    this.profileImageDownloads.set(lookupKey, lookup);
+    return lookup;
+  }
+
+  // ── Achievement souvenirs ─────────────────────────────────────────────
+
+  static async uploadAchievementSouvenir(
+    record: AchievementSouvenirRecord,
+    filePath: string
+  ): Promise<string> {
+    if (
+      !isAchievementSouvenirRecord(record) ||
+      record.status === "pending-delete"
+    ) {
+      throw new Error("achievement_souvenir_record_invalid");
+    }
+    const key = achievementSouvenirR2Key(
+      record.ownerId,
+      record.shop,
+      record.objectId,
+      record.achievementName
+    );
+    const stat = await fs.promises.stat(filePath);
+    if (!stat.isFile() || stat.size <= 0 || stat.size > 25 * 1024 * 1024) {
+      throw new Error("achievement_souvenir_file_invalid");
+    }
+
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: fs.createReadStream(filePath),
+        ContentLength: stat.size,
+        ContentType: "image/jpeg",
+        Metadata: achievementSouvenirMetadataFromRecord(record),
+      })
+    );
+    this.headCache.delete(key);
+    logger.log("R2: uploaded achievement souvenir", {
+      shop: record.shop,
+      objectId: record.objectId,
+      achievementName: record.achievementName,
+    });
+    return key;
+  }
+
+  static async listAchievementSouvenirs(
+    ownerId: string,
+    game?: { shop: GameShop; objectId: string }
+  ): Promise<AchievementSouvenirRecord[]> {
+    const root = `users/${enc(ownerId)}/achievement-souvenirs/`;
+    const prefix = game
+      ? `${root}${enc(game.shop)}/${enc(game.objectId)}/`
+      : root;
+    const objects: Array<{ Key: string; LastModified?: Date }> = [];
+    let continuationToken: string | undefined;
+
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: R2_BUCKET,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+          MaxKeys: 1_000,
+        })
+      );
+      for (const object of page.Contents ?? []) {
+        if (object.Key?.startsWith(prefix)) {
+          objects.push({ Key: object.Key, LastModified: object.LastModified });
+        }
+      }
+      if (objects.length > 10_000) {
+        throw new Error("achievement_souvenir_remote_limit_exceeded");
+      }
+      continuationToken = page.IsTruncated
+        ? page.NextContinuationToken
+        : undefined;
+      if (page.IsTruncated && !continuationToken) {
+        throw new Error("achievement_souvenir_remote_page_invalid");
+      }
+    } while (continuationToken);
+
+    const records = await Promise.all(
+      objects.map(async (object) => {
+        const head = await this.headArtifact(object.Key);
+        const metadata = head?.Metadata;
+        if (!metadata || metadata.schema !== "1") return null;
+        const record = achievementSouvenirRecordFromMetadata(
+          metadata,
+          object.Key,
+          object.LastModified?.getTime() ?? Date.now()
+        );
+        if (
+          record.ownerId !== ownerId ||
+          !isAchievementSouvenirRecord(record) ||
+          achievementSouvenirR2Key(
+            record.ownerId,
+            record.shop,
+            record.objectId,
+            record.achievementName
+          ) !== object.Key
+        ) {
+          return null;
+        }
+        return record;
+      })
+    );
+    return records.filter(
+      (record): record is AchievementSouvenirRecord => record !== null
+    );
+  }
+
+  static async cacheAchievementSouvenir(
+    record: AchievementSouvenirRecord
+  ): Promise<string> {
+    if (!record.r2Key || record.status === "pending-delete") {
+      throw new Error("achievement_souvenir_remote_key_missing");
+    }
+    const expectedKey = achievementSouvenirR2Key(
+      record.ownerId,
+      record.shop,
+      record.objectId,
+      record.achievementName
+    );
+    if (record.r2Key !== expectedKey) {
+      throw new Error("achievement_souvenir_remote_key_invalid");
+    }
+    const destinationPath = achievementSouvenirScreenshotPath(
+      achievementSouvenirsPath,
+      {
+        ownerId: record.ownerId,
+        shop: record.shop,
+        objectId: record.objectId,
+        gameTitle: record.gameTitle,
+        achievementName: record.achievementName,
+        achievementDisplayName: record.achievementDisplayName,
+      }
+    );
+    const head = await this.headArtifact(record.r2Key);
+    const reconciledCachedPath =
+      await achievementSouvenirLocalStorage.reconcilePersistedPath(
+        record.ownerId,
+        destinationPath
+      );
+    const cached = reconciledCachedPath
+      ? await fs.promises.stat(reconciledCachedPath).catch(() => null)
+      : null;
+    if (
+      reconciledCachedPath &&
+      cached?.isFile() &&
+      cached.size > 0 &&
+      (head?.ContentLength == null || cached.size === head.ContentLength)
+    ) {
+      return reconciledCachedPath;
+    }
+
+    await achievementSouvenirLocalStorage.prepareOwnedFilePath(
+      record.ownerId,
+      destinationPath
+    );
+    const partialPath = `${destinationPath}.${process.pid}-${crypto.randomUUID()}.part`;
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: R2_BUCKET, Key: record.r2Key })
+      );
+      await pipeline(
+        response.Body as Readable,
+        fs.createWriteStream(partialPath, { flags: "wx" })
+      );
+      const downloaded = await fs.promises.stat(partialPath);
+      if (
+        downloaded.size <= 0 ||
+        (response.ContentLength != null &&
+          downloaded.size !== response.ContentLength)
+      ) {
+        throw new Error("achievement_souvenir_download_invalid");
+      }
+      await fs.promises.rm(destinationPath, { force: true });
+      await fs.promises.rename(partialPath, destinationPath);
+      return destinationPath;
+    } finally {
+      await fs.promises.rm(partialPath, { force: true }).catch(() => null);
+    }
+  }
+
+  static async deleteAchievementSouvenir(
+    ownerId: string,
+    key: string
+  ): Promise<void> {
+    const prefix = `users/${enc(ownerId)}/achievement-souvenirs/`;
+    if (!key.startsWith(prefix) || key.includes("\\")) {
+      throw new Error("achievement_souvenir_remote_key_invalid");
+    }
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key })
+    );
+    this.headCache.delete(key);
+  }
+
+  private static async downloadLatestImageByKind(
+    kind: string,
+    hydraUserId: string,
+    lookupKey: string,
+    generation: number
+  ): Promise<string | null> {
     const prefix = `users/${hydraUserId}/images/`;
     const list = await this.client
       .send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix }))
-      .catch(() => null);
+      .catch((error) => {
+        logger.warn(`R2: failed to list ${kind} for ${hydraUserId}`, error);
+        return null;
+      });
 
-    const match = (list?.Contents ?? []).find((o) => {
-      const name = o.Key?.slice(prefix.length) ?? "";
-      return name.slice(0, name.lastIndexOf(".")) === kind;
-    });
+    const match = selectLatestProfileImageObject(
+      list?.Contents ?? [],
+      prefix,
+      kind
+    );
     if (!match?.Key) return null;
+    if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+      return null;
+    }
 
+    const ext = match.Key.slice(match.Key.lastIndexOf(".") + 1) || "img";
+    const cacheDir = this.imageCacheDir();
+    const cacheName = getProfileImageCacheFileName(
+      hydraUserId,
+      kind,
+      match,
+      ext
+    );
+    const destinationPath = path.join(cacheDir, cacheName);
+    const cachedStat = await fs.promises
+      .stat(destinationPath)
+      .catch(() => null);
+    if (
+      cachedStat?.isFile() &&
+      (match.Size == null
+        ? cachedStat.size > 0
+        : cachedStat.size === match.Size)
+    ) {
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+      return `local:${destinationPath.replace(/\\/g, "/")}`;
+    }
+
+    const partialPath = `${destinationPath}.${process.pid}-${crypto.randomUUID()}.part`;
     try {
       const res = await this.client.send(
         new GetObjectCommand({ Bucket: R2_BUCKET, Key: match.Key })
       );
-      const ext = match.Key.slice(match.Key.lastIndexOf(".") + 1) || "img";
-      const dest = path.join(
-        this.imageCacheDir(),
-        `${hydraUserId}-${kind}.${ext}`
-      );
       const body = res.Body as Readable;
-      await new Promise<void>((resolve, reject) => {
-        const out = fs.createWriteStream(dest);
-        body.pipe(out);
-        body.on("error", reject);
-        out.on("finish", resolve);
-        out.on("error", reject);
-      });
-      return `local:${dest.replace(/\\/g, "/")}`;
-    } catch {
+      await pipeline(body, fs.createWriteStream(partialPath, { flags: "wx" }));
+
+      const downloadedStat = await fs.promises.stat(partialPath);
+      const expectedSize = res.ContentLength ?? match.Size;
+      if (expectedSize != null && downloadedStat.size !== expectedSize) {
+        throw new Error(
+          `R2 profile image was truncated: expected ${expectedSize} bytes, got ${downloadedStat.size}`
+        );
+      }
+      if (downloadedStat.size === 0) {
+        throw new Error("R2 profile image was empty");
+      }
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+
+      // A prior crash can leave a corrupt file at this exact versioned target.
+      // Replace only that validated destination after the complete temp file is
+      // safely on disk; never expose the in-progress stream to the renderer.
+      await fs.promises.rm(destinationPath, { force: true });
+      await fs.promises.rename(partialPath, destinationPath);
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+
+      const cachePrefix = `${sanitizeProfileImageCacheComponent(
+        hydraUserId
+      )}-${sanitizeProfileImageCacheComponent(kind)}-`;
+      const staleFiles = await fs.promises.readdir(cacheDir).catch(() => []);
+      await Promise.allSettled(
+        staleFiles
+          .filter(
+            (name) =>
+              name.startsWith(cachePrefix) &&
+              name !== cacheName &&
+              !name.endsWith(".part")
+          )
+          .map((name) =>
+            fs.promises.rm(path.join(cacheDir, name), { force: true })
+          )
+      );
+
+      if ((this.profileImageGenerations.get(lookupKey) ?? 0) !== generation) {
+        return null;
+      }
+      return `local:${destinationPath.replace(/\\/g, "/")}`;
+    } catch (error) {
+      logger.warn(`R2: failed to cache ${kind} for ${hydraUserId}`, error);
       return null;
+    } finally {
+      await fs.promises.rm(partialPath, { force: true }).catch(() => undefined);
     }
   }
 
@@ -455,6 +1479,142 @@ export class R2Sync {
     return crypto.randomUUID();
   }
 
+  /**
+   * Copy a proven legacy install namespace into the authenticated account
+   * namespace. Source objects are retained as a rollback copy. Destination
+   * writes use R2's conditional CopyObject extension so a concurrent upload is
+   * never overwritten by migration data.
+   */
+  static async migrateUserNamespace(
+    legacyUserId: string,
+    accountUserId: string
+  ): Promise<R2NamespaceMigrationResult> {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        legacyUserId
+      ) ||
+      !/^[a-zA-Z0-9._~-]{1,512}$/.test(accountUserId) ||
+      legacyUserId === accountUserId
+    ) {
+      throw new Error("cloud_save_namespace_migration_invalid");
+    }
+
+    const sourcePrefix = `users/${legacyUserId}/`;
+    const destinationPrefix = `users/${accountUserId}/`;
+    const result: R2NamespaceMigrationResult = {
+      copied: 0,
+      alreadyCopied: 0,
+      conflicts: 0,
+    };
+    let continuationToken: string | undefined;
+    let objectCount = 0;
+
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: R2_BUCKET,
+          Prefix: sourcePrefix,
+          ContinuationToken: continuationToken,
+          MaxKeys: 1_000,
+        })
+      );
+      const objects = (page.Contents ?? []).filter(
+        (object): object is typeof object & { Key: string } =>
+          typeof object.Key === "string" && object.Key.startsWith(sourcePrefix)
+      );
+      objectCount += objects.length;
+      if (objectCount > 100_000) {
+        throw new Error("cloud_save_namespace_migration_too_many_objects");
+      }
+
+      for (let index = 0; index < objects.length; index += 8) {
+        const batch = objects.slice(index, index + 8);
+        const outcomes = await Promise.all(
+          batch.map(async (source) => {
+            const sourceKey = source.Key;
+            const destinationKey =
+              destinationPrefix + sourceKey.slice(sourcePrefix.length);
+            const sourceEtag = source.ETag?.replaceAll('"', "") ?? null;
+            const sourceSize = source.Size ?? null;
+            const existing = await this.client
+              .send(
+                new HeadObjectCommand({
+                  Bucket: R2_BUCKET,
+                  Key: destinationKey,
+                })
+              )
+              .catch(() => null);
+
+            if (existing) {
+              const existingEtag = existing.ETag?.replaceAll('"', "") ?? null;
+              return existingEtag === sourceEtag &&
+                existing.ContentLength === sourceSize
+                ? "alreadyCopied"
+                : "conflicts";
+            }
+
+            const command = new CopyObjectCommand({
+              Bucket: R2_BUCKET,
+              Key: destinationKey,
+              CopySource: `${R2_BUCKET}/${sourceKey
+                .split("/")
+                .map(encodeURIComponent)
+                .join("/")}`,
+              MetadataDirective: "COPY",
+            });
+            command.middlewareStack.add(
+              (next) => async (args) => {
+                const request = args.request as {
+                  headers?: Record<string, string>;
+                };
+                if (request.headers) {
+                  request.headers["cf-copy-destination-if-none-match"] = "*";
+                }
+                return next(args);
+              },
+              {
+                step: "build",
+                name: "gameHubNamespaceMigrationDestinationGuard",
+              }
+            );
+
+            try {
+              await this.client.send(command);
+            } catch (error) {
+              const status = (
+                error as { $metadata?: { httpStatusCode?: number } }
+              ).$metadata?.httpStatusCode;
+              if (status !== 412) throw error;
+            }
+
+            const copied = await this.client.send(
+              new HeadObjectCommand({
+                Bucket: R2_BUCKET,
+                Key: destinationKey,
+              })
+            );
+            const copiedEtag = copied.ETag?.replaceAll('"', "") ?? null;
+            return copiedEtag === sourceEtag &&
+              copied.ContentLength === sourceSize
+              ? "copied"
+              : "conflicts";
+          })
+        );
+        for (const outcome of outcomes) result[outcome] += 1;
+      }
+
+      continuationToken = page.IsTruncated
+        ? page.NextContinuationToken
+        : undefined;
+      if (page.IsTruncated && !continuationToken) {
+        throw new Error("cloud_save_namespace_migration_invalid_page");
+      }
+    } while (continuationToken);
+
+    logger.info("R2 account namespace migration pass completed", result);
+    return result;
+  }
+
   // ── Emulation saves ────────────────────────────────────────────────────
 
   /**
@@ -508,33 +1668,50 @@ export class R2Sync {
       ? `users/${userId}/emulation-saves/${platform}/`
       : `users/${userId}/emulation-saves/`;
 
-    const list = await this.client
-      .send(new ListObjectsV2Command({ Bucket: R2_BUCKET, Prefix: prefix }))
-      .catch(() => null);
-
-    const objects = (list?.Contents ?? []).filter((o) => o.Key);
-
-    const artifacts = await Promise.all(
-      objects.map(async (o) => {
-        const head = await this.headArtifact(o.Key!);
-        const m = head?.Metadata ?? {};
+    const objects = await listEmulationSaveR2Index({
+      prefix,
+      relativeSegmentCount: platform ? 2 : 3,
+      listPage: async (continuationToken) => {
+        const page = await this.client.send(
+          new ListObjectsV2Command({
+            Bucket: R2_BUCKET,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+            MaxKeys: 1_000,
+          })
+        );
         return {
-          id: o.Key!,
-          platform: m.platform ?? "",
-          emulator: m.emulator ?? ("" as EmulationArtifact["emulator"]),
-          saveIdentity: dec(m.saveidentity),
-          fileName: dec(m.filename),
-          label: dec(m.label) || null,
-          shop: m.shop || null,
-          objectId: m.objectid || null,
-          artifactLengthInBytes: o.Size ?? 0,
-          hostname: dec(m.hostname),
-          localLastModifiedAt: m.locallastmodifiedat || null,
-          createdAt: (o.LastModified ?? new Date()).toISOString(),
-          updatedAt: (o.LastModified ?? new Date()).toISOString(),
-        } as EmulationArtifact;
-      })
-    );
+          objects: (page.Contents ?? []).map((object) => ({
+            key: object.Key,
+            size: object.Size,
+            lastModified: object.LastModified,
+          })),
+          isTruncated: page.IsTruncated === true,
+          nextContinuationToken: page.NextContinuationToken,
+        };
+      },
+      loadMetadata: async (key) =>
+        (await this.headArtifact(key))?.Metadata ?? null,
+    });
+
+    const artifacts = objects.map((object) => {
+      const m = object.metadata;
+      return {
+        id: object.key,
+        platform: m.platform ?? "",
+        emulator: m.emulator ?? ("" as EmulationArtifact["emulator"]),
+        saveIdentity: dec(m.saveidentity),
+        fileName: dec(m.filename),
+        label: dec(m.label) || null,
+        shop: m.shop || null,
+        objectId: m.objectid || null,
+        artifactLengthInBytes: object.size,
+        hostname: dec(m.hostname),
+        localLastModifiedAt: m.locallastmodifiedat || null,
+        createdAt: object.lastModified.toISOString(),
+        updatedAt: object.lastModified.toISOString(),
+      } as EmulationArtifact;
+    });
 
     return artifacts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -544,6 +1721,7 @@ export class R2Sync {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key })
     );
+    this.headCache.delete(key);
     logger.log(`R2: deleted emulation save ${key}`);
   }
 
@@ -581,6 +1759,11 @@ export class R2Sync {
         MetadataDirective: "REPLACE",
       })
     );
+    this.headCache.delete(key);
     logger.log(`R2: updated label for emulation save ${key}`);
   }
 }
+
+registerR2CredentialSessionInvalidator(() =>
+  R2Sync.invalidateCredentialSession()
+);

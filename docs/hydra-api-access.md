@@ -210,8 +210,8 @@ await page.goto("https://auth.hydralauncher.gg/", {
   waitUntil: "networkidle",
   timeout: 30000,
 });
-await page.fill('input[name="login"]', "Kewz");
-await page.fill('input[name="password"]', "Jackals12$");
+await page.fill('input[name="login"]', "YOUR_USERNAME");
+await page.fill('input[name="password"]', "YOUR_PASSWORD");
 await page.click('button[type="submit"]');
 await page.waitForTimeout(2000);
 

@@ -1,13 +1,37 @@
 import axios, { AxiosInstance } from "axios";
 import parseTorrent from "parse-torrent";
+import fs from "node:fs";
+import path from "node:path";
 import type {
   TorBoxUserRequest,
   TorBoxTorrentInfoRequest,
   TorBoxAddTorrentRequest,
   TorBoxRequestLinkRequest,
+  TorBoxFile,
 } from "@types";
 import { appVersion } from "@main/constants";
 import { logger } from "../logger";
+import {
+  findMatchingTorBoxWebDownload,
+  isLegacyTorBoxGeneratedZip,
+  isTorBoxItemReady,
+  normalizeTorBoxProgress,
+  redactTorBoxSensitiveText,
+  selectTorBoxDownloadFile,
+  type TorBoxWebDownloadIdentity,
+} from "./torbox-helpers";
+
+interface TorBoxWebDownloadInfo extends TorBoxWebDownloadIdentity {
+  cached?: boolean;
+  download_present?: boolean;
+  download_finished?: boolean;
+  download_state?: string;
+  progress?: number;
+  download_speed?: number;
+  eta?: number;
+  size?: number;
+  files?: TorBoxFile[];
+}
 
 /** Caching-phase progress TorBox reports while preparing a download. */
 export interface TorBoxPrepareProgress {
@@ -17,6 +41,8 @@ export interface TorBoxPrepareProgress {
   downloadSpeed: number;
   /** Seconds remaining per TorBox, or -1 if unknown. */
   eta: number;
+  /** User-facing server-side resolution phase. */
+  phase: "checking-cache" | "cached" | "preparing" | "direct-fallback";
 }
 
 /**
@@ -29,26 +55,81 @@ export interface TorBoxPrepareProgress {
 export class TorBoxClient {
   private static instance: AxiosInstance;
   private static readonly baseURL = "https://api.torbox.app/v1/api";
-  private static apiToken: string;
+  private static apiToken = "";
 
-  // How long we'll wait for TorBox to finish caching non-cached content before
-  // giving up (the download can be retried, which resumes the same TorBox job).
-  private static readonly READY_TIMEOUT_MS = 5 * 60 * 1000;
+  // Keep large uncached games in the visible Preparing phase for a practical
+  // window. Cancel/pause stops polling immediately through shouldContinue.
+  private static readonly READY_TIMEOUT_MS = 6 * 60 * 60 * 1000;
   private static readonly POLL_INTERVAL_MS = 4000;
 
   static authorize(apiToken: string) {
-    this.apiToken = apiToken;
+    const normalizedToken = apiToken.trim();
+    if (!normalizedToken) {
+      throw new Error(
+        "Connect TorBox in Settings > Integrations before starting this download"
+      );
+    }
+
+    this.apiToken = normalizedToken;
     this.instance = axios.create({
       baseURL: this.baseURL,
       headers: {
-        Authorization: `Bearer ${apiToken}`,
+        Authorization: `Bearer ${normalizedToken}`,
         "User-Agent": `Hydra/${appVersion}`,
       },
     });
+    // Axios errors retain the full request config, including the Authorization
+    // header and requestdl token query. Replace them at the boundary so no
+    // caller/logger can accidentally serialize credentials or signed links.
+    this.instance.interceptors.response.use(
+      (response) => response,
+      (error: unknown) => Promise.reject(this.toSafeApiError(error))
+    );
+  }
+
+  private static toSafeApiError(error: unknown) {
+    const status = axios.isAxiosError(error)
+      ? error.response?.status
+      : undefined;
+    const detail = axios.isAxiosError(error)
+      ? (error.response?.data as { detail?: unknown } | undefined)?.detail
+      : undefined;
+    const message = redactTorBoxSensitiveText(
+      typeof detail === "string"
+        ? detail
+        : error instanceof Error
+          ? error.message
+          : "TorBox request failed",
+      [this.apiToken]
+    );
+    const safeError = new Error(message) as Error & {
+      response?: { status?: number };
+      code?: string;
+    };
+    safeError.name = "TorBoxApiError";
+    if (status != null) safeError.response = { status };
+    if (axios.isAxiosError(error) && error.code) safeError.code = error.code;
+    return safeError;
+  }
+
+  private static apiFailure(detail: unknown, fallback: string) {
+    return new Error(
+      redactTorBoxSensitiveText(
+        typeof detail === "string" ? detail : fallback,
+        [this.apiToken]
+      )
+    );
   }
 
   private static sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private static assertPreparationContinues(shouldContinue?: () => boolean) {
+    if (!shouldContinue || shouldContinue()) return;
+    const error = new Error("TorBox preparation was cancelled");
+    error.name = "TorBoxPreparationCancelledError";
+    throw error;
   }
 
   // ── Torrents / magnets ─────────────────────────────────────────────────────
@@ -63,15 +144,47 @@ export class TorBoxClient {
     );
 
     if (!response.data.success) {
-      throw new Error(response.data.detail);
+      throw this.apiFailure(response.data.detail, "TorBox rejected the magnet");
+    }
+
+    return response.data.data;
+  }
+
+  private static async addTorrentFile(filePath: string) {
+    const buffer = await fs.promises.readFile(filePath);
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([new Uint8Array(buffer)], { type: "application/x-bittorrent" }),
+      path.basename(filePath)
+    );
+
+    const response = await this.instance.post<TorBoxAddTorrentRequest>(
+      "/torrents/createtorrent",
+      form
+    );
+
+    if (!response.data.success) {
+      throw this.apiFailure(
+        response.data.detail,
+        "TorBox rejected the torrent file"
+      );
     }
 
     return response.data.data;
   }
 
   static async getTorrentInfo(id: number) {
-    const response =
-      await this.instance.get<TorBoxTorrentInfoRequest>("/torrents/mylist");
+    const response = await this.instance.get<TorBoxTorrentInfoRequest>(
+      "/torrents/mylist",
+      { params: { bypass_cache: true } }
+    );
+    if (!response.data.success || !Array.isArray(response.data.data)) {
+      throw this.apiFailure(
+        response.data.detail,
+        "TorBox could not return the torrent list"
+      );
+    }
     const data = response.data.data;
 
     const info = data.find((item) => item.id === id);
@@ -85,6 +198,12 @@ export class TorBoxClient {
 
   static async getUser() {
     const response = await this.instance.get<TorBoxUserRequest>(`/user/me`);
+    if (!response.data.success || !response.data.data) {
+      throw this.apiFailure(
+        response.data.detail,
+        "TorBox could not authenticate this account"
+      );
+    }
     return response.data.data;
   }
 
@@ -103,31 +222,110 @@ export class TorBoxClient {
     const response = await this.instance.get<TorBoxRequestLinkRequest>(
       "/torrents/requestdl?" + searchParams.toString()
     );
-
+    if (!response.data.success || typeof response.data.data !== "string") {
+      throw this.apiFailure(
+        response.data.detail,
+        "TorBox could not create the torrent download link"
+      );
+    }
     return response.data.data;
   }
 
   private static async getAllTorrentsFromUser() {
-    const response =
-      await this.instance.get<TorBoxTorrentInfoRequest>("/torrents/mylist");
-
+    const response = await this.instance.get<TorBoxTorrentInfoRequest>(
+      "/torrents/mylist",
+      { params: { bypass_cache: true } }
+    );
+    if (!response.data.success || !Array.isArray(response.data.data)) {
+      throw this.apiFailure(
+        response.data.detail,
+        "TorBox could not return the torrent list"
+      );
+    }
     return response.data.data;
   }
 
-  private static async getTorrentIdAndName(magnetUri: string) {
-    const userTorrents = await this.getAllTorrentsFromUser();
+  private static async getSourceHashes(torrentSource: string) {
+    const isLocalTorrent =
+      path.isAbsolute(torrentSource) &&
+      path.extname(torrentSource).toLowerCase() === ".torrent";
+    const parsedSource = isLocalTorrent
+      ? await fs.promises.readFile(torrentSource)
+      : torrentSource;
 
-    const { infoHash } = await parseTorrent(magnetUri);
-    const lowerHash = (infoHash ?? "").toLowerCase();
-    // Case-insensitive hash comparison — TorBox may report the hash in
-    // uppercase or as a BitTorrent v2 hybrid hash.
-    const userTorrent = userTorrents.find(
-      (userTorrent) => userTorrent.hash?.toLowerCase() === lowerHash
+    const hashes = new Set<string>();
+    try {
+      const { infoHash } = await parseTorrent(parsedSource);
+      if (infoHash) hashes.add(infoHash.toLowerCase());
+    } catch {
+      // parse-torrent 11 cannot parse every BitTorrent v2-only magnet. The
+      // TorBox API can, so derive its btmh identifier below and still submit it.
+    }
+
+    if (!isLocalTorrent) {
+      const queryIndex = torrentSource.indexOf("?");
+      const params = new URLSearchParams(
+        queryIndex >= 0 ? torrentSource.slice(queryIndex + 1) : ""
+      );
+      for (const exactTopic of params.getAll("xt")) {
+        const normalized = exactTopic.toLowerCase();
+        if (normalized.startsWith("urn:btih:")) {
+          hashes.add(normalized.slice("urn:btih:".length));
+        } else if (normalized.startsWith("urn:btmh:")) {
+          const multihash = normalized.slice("urn:btmh:".length);
+          hashes.add(multihash);
+          if (/^1220[a-f0-9]{64}$/.test(multihash)) {
+            hashes.add(multihash.slice(4));
+          }
+        }
+      }
+    }
+
+    return { hashes, isLocalTorrent };
+  }
+
+  private static findTorrentByHashes(
+    torrents: TorBoxTorrentInfoRequest["data"],
+    hashes: Set<string>
+  ) {
+    if (hashes.size === 0) return null;
+    return (
+      torrents.find((torrent) => {
+        const reportedHashes = [
+          torrent.hash,
+          ...(torrent.alternative_hashes ?? []),
+        ]
+          .filter(Boolean)
+          .map((hash) => hash.toLowerCase());
+        return reportedHashes.some((hash) => hashes.has(hash));
+      }) ?? null
     );
+  }
+
+  private static async getTorrentIdAndName(torrentSource: string) {
+    const { hashes, isLocalTorrent } =
+      await this.getSourceHashes(torrentSource);
+    const userTorrents = await this.getAllTorrentsFromUser();
+    const userTorrent = this.findTorrentByHashes(userTorrents, hashes);
 
     if (userTorrent) return { id: userTorrent.id, name: userTorrent.name };
 
-    const torrent = await this.addMagnet(magnetUri);
+    let torrent: TorBoxAddTorrentRequest["data"];
+    try {
+      torrent = isLocalTorrent
+        ? await this.addTorrentFile(torrentSource)
+        : await this.addMagnet(torrentSource);
+    } catch (error) {
+      // The create endpoint can report DUPLICATE_ITEM if the list cache raced
+      // us. Re-read the live list so pause/resume reuses the persisted job.
+      const refreshed = await this.getAllTorrentsFromUser().catch(() => []);
+      const existing = this.findTorrentByHashes(refreshed, hashes);
+      if (existing) return { id: existing.id, name: existing.name };
+      throw error;
+    }
+    if (!Number.isSafeInteger(torrent?.torrent_id)) {
+      throw new Error("TorBox returned an invalid torrent job identifier");
+    }
     return { id: torrent.torrent_id, name: torrent.name };
   }
 
@@ -138,38 +336,36 @@ export class TorBoxClient {
    */
   private static async waitForTorrentReady(
     id: number,
-    onProgress?: (p: TorBoxPrepareProgress) => void
+    onProgress?: (p: TorBoxPrepareProgress) => void,
+    shouldContinue?: () => boolean
   ) {
     const deadline = Date.now() + this.READY_TIMEOUT_MS;
     for (;;) {
+      this.assertPreparationContinues(shouldContinue);
       const info = await this.getTorrentInfo(id);
-      const progress = info?.progress ?? 0;
-      const ready =
-        info != null &&
-        (progress >= 1 ||
-          info.cached === true ||
-          info.download_state === "completed" ||
-          info.download_state === "cached" ||
-          info.download_state === "uploading");
+      const progress = normalizeTorBoxProgress(info?.progress);
+      const ready = isTorBoxItemReady(info);
       if (info) {
         logger.log(
           `[torbox] torrent ${id} state=${info.download_state} ` +
-            `progress=${(progress * 100).toFixed(1)}% cached=${info.cached} ` +
+            `progress=${(progress * 100).toFixed(1)}% ` +
+            `finished=${info.download_finished} present=${info.download_present} ` +
             `speed=${info.download_speed} eta=${info.eta} files=${info.files?.length ?? 0}`
         );
         onProgress?.({
           progress,
           downloadSpeed: info.download_speed ?? 0,
           eta: info.eta ?? -1,
+          phase: ready ? "cached" : "preparing",
         });
       }
       if (ready) return info;
       if (Date.now() > deadline) {
-        logger.warn(
-          `[torbox] torrent ${id} not ready after ${this.READY_TIMEOUT_MS / 1000}s ` +
-            `(state=${info?.download_state}, progress=${progress})`
+        throw new Error(
+          `TorBox did not finish preparing this torrent after ${Math.round(
+            this.READY_TIMEOUT_MS / 3_600_000
+          )} hours (state=${info?.download_state ?? "unknown"})`
         );
-        return info;
       }
       await this.sleep(this.POLL_INTERVAL_MS);
     }
@@ -177,11 +373,34 @@ export class TorBoxClient {
 
   // ── Web downloads (any hoster link) ─────────────────────────────────────────
 
+  private static async getAllWebDownloadsFromUser() {
+    const response = await this.instance.get<{
+      success: boolean;
+      detail: string;
+      data: TorBoxWebDownloadInfo[];
+    }>("/webdl/mylist", { params: { bypass_cache: true } });
+    if (!response.data.success || !Array.isArray(response.data.data)) {
+      throw this.apiFailure(
+        response.data.detail,
+        "TorBox could not return the web download list"
+      );
+    }
+    return response.data.data;
+  }
+
+  private static async findExistingWebDownload(link: string) {
+    const downloads = await this.getAllWebDownloadsFromUser();
+    return findMatchingTorBoxWebDownload(downloads, link);
+  }
+
   private static async addWebDownload(link: string) {
     // TorBox's /webdl/createwebdownload can fail with 500 when their scanner
     // can't reach the hoster (common with vik1ngfile.site — the API server's
     // scanner can't access it even though the web client can). Retry up to 3
     // times with increasing delays — sometimes the scanner succeeds on retry.
+    const existing = await this.findExistingWebDownload(link).catch(() => null);
+    if (existing) return existing;
+
     let lastErr: unknown;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -198,16 +417,33 @@ export class TorBoxClient {
           };
         }>("/webdl/createwebdownload", form);
         if (!response.data.success) {
-          throw new Error(response.data.detail || "TorBox rejected the link");
+          throw this.apiFailure(
+            response.data.detail,
+            "TorBox rejected the link"
+          );
         }
         const data = response.data.data ?? {};
+        const id = data.webdownload_id ?? data.id;
+        if (!Number.isSafeInteger(id)) {
+          const created = await this.findExistingWebDownload(link).catch(
+            () => null
+          );
+          if (created) return created;
+          throw new Error("TorBox returned an invalid web download identifier");
+        }
         return {
-          id: (data.webdownload_id ?? data.id) as number,
+          id: id as number,
           name: data.name,
           hash: data.hash,
         };
       } catch (err) {
         lastErr = err;
+        // DUPLICATE_ITEM and create/list cache races are normal on resume.
+        const duplicate = await this.findExistingWebDownload(link).catch(
+          () => null
+        );
+        if (duplicate) return duplicate;
+
         const status = (err as { response?: { status?: number } })?.response
           ?.status;
         if (status === 500 && attempt < 2) {
@@ -226,61 +462,61 @@ export class TorBoxClient {
   }
 
   private static async getWebDownloadInfo(id: number) {
-    const response = await this.instance.get<{
-      data: Array<{
-        id: number;
-        name: string;
-        cached?: boolean;
-        download_present?: boolean;
-        download_finished?: boolean;
-        download_state?: string;
-        progress?: number;
-        download_speed?: number;
-        eta?: number;
-      }>;
-    }>("/webdl/mylist");
-    return response.data.data?.find((item) => item.id === id) ?? null;
+    const downloads = await this.getAllWebDownloadsFromUser();
+    return downloads.find((item) => item.id === id) ?? null;
   }
 
   private static async waitForWebReady(
     id: number,
-    onProgress?: (p: TorBoxPrepareProgress) => void
+    onProgress?: (p: TorBoxPrepareProgress) => void,
+    shouldContinue?: () => boolean
   ) {
     const deadline = Date.now() + this.READY_TIMEOUT_MS;
     for (;;) {
+      this.assertPreparationContinues(shouldContinue);
       const info = await this.getWebDownloadInfo(id);
-      const progress = info?.progress ?? 0;
-      const ready =
-        info != null &&
-        (info.download_finished ||
-          info.download_state === "completed" ||
-          progress >= 1 ||
-          (info.download_present && progress >= 1));
+      const progress = normalizeTorBoxProgress(info?.progress);
+      const ready = isTorBoxItemReady(info);
       if (info) {
         onProgress?.({
           progress,
           downloadSpeed: info.download_speed ?? 0,
           eta: info.eta ?? -1,
+          phase: ready ? "cached" : "preparing",
         });
       }
       if (ready) return info;
       if (Date.now() > deadline) {
-        logger.warn(`[torbox] web download ${id} not fully ready after wait`);
-        return info;
+        throw new Error(
+          `TorBox did not finish preparing this link after ${Math.round(
+            this.READY_TIMEOUT_MS / 3_600_000
+          )} hours`
+        );
       }
       await this.sleep(this.POLL_INTERVAL_MS);
     }
   }
 
-  private static async requestWebLink(id: number) {
-    const searchParams = new URLSearchParams({
+  private static async requestWebLink(id: number, fileId?: number) {
+    const params: Record<string, string> = {
       token: this.apiToken,
       web_id: id.toString(),
-      zip_link: "true",
-    });
+    };
+    if (fileId != null) {
+      params.file_id = fileId.toString();
+    } else {
+      params.zip_link = "true";
+    }
+    const searchParams = new URLSearchParams(params);
     const response = await this.instance.get<TorBoxRequestLinkRequest>(
       "/webdl/requestdl?" + searchParams.toString()
     );
+    if (!response.data.success || typeof response.data.data !== "string") {
+      throw this.apiFailure(
+        response.data.detail,
+        "TorBox could not create the web download link"
+      );
+    }
     return response.data.data;
   }
 
@@ -296,13 +532,35 @@ export class TorBoxClient {
     uri: string,
     fileIndices?: number[],
     onProgress?: (p: TorBoxPrepareProgress) => void,
-    targetFileName?: string | null
+    targetFileName?: string | null,
+    shouldContinue?: () => boolean,
+    allowDirectFallback = true,
+    resumingFilename?: string
   ) {
-    const isMagnet = uri.startsWith("magnet:");
+    if (!this.instance || !this.apiToken) {
+      throw new Error(
+        "Connect TorBox in Settings > Integrations before starting this download"
+      );
+    }
 
-    if (isMagnet) {
+    const isTorrent =
+      uri.startsWith("magnet:") ||
+      (path.isAbsolute(uri) && path.extname(uri).toLowerCase() === ".torrent");
+
+    onProgress?.({
+      progress: 0,
+      downloadSpeed: 0,
+      eta: -1,
+      phase: "checking-cache",
+    });
+
+    if (isTorrent) {
       const torrentData = await this.getTorrentIdAndName(uri);
-      const info = await this.waitForTorrentReady(torrentData.id, onProgress);
+      const info = await this.waitForTorrentReady(
+        torrentData.id,
+        onProgress,
+        shouldContinue
+      );
       const files = info?.files ?? [];
 
       if (files.length) {
@@ -369,7 +627,11 @@ export class TorBoxClient {
         `[torbox] no specific file match — requesting whole-torrent zip for "${torrentData.name}"`
       );
       const url = await this.requestLink(torrentData.id);
-      return { url, name: torrentData.name };
+      const torrentName = torrentData.name || "TorBox download";
+      const name = /\.zip$/i.test(torrentName)
+        ? torrentName
+        : `${torrentName}.zip`;
+      return { url, name };
     }
 
     // Any other http(s) hoster link → TorBox web download.
@@ -379,20 +641,66 @@ export class TorBoxClient {
     // The user still gets their file — just not through TorBox's CDN.
     try {
       const web = await this.addWebDownload(uri);
-      const info = await this.waitForWebReady(web.id, onProgress);
-      const url = await this.requestWebLink(web.id);
-      const name = info?.name ?? web.name ?? undefined;
+      const info = await this.waitForWebReady(
+        web.id,
+        onProgress,
+        shouldContinue
+      );
+      const files = info?.files ?? [];
+      const target = selectTorBoxDownloadFile(
+        files,
+        targetFileName,
+        fileIndices
+      );
+
+      // Builds before 1.1.39 always requested an on-the-fly ZIP for web
+      // downloads. Keep that exact byte stream only for an already-existing
+      // legacy .zip partial; new and matching resumes use TorBox's raw file
+      // endpoint, which supports Range and refreshed links.
+      const legacyGeneratedZip = isLegacyTorBoxGeneratedZip(
+        resumingFilename,
+        target
+      );
+
+      const url = await this.requestWebLink(
+        web.id,
+        target && !legacyGeneratedZip ? target.id : undefined
+      );
+      const name = legacyGeneratedZip
+        ? resumingFilename
+        : target
+          ? target.short_name || target.name
+          : (info?.name ?? web.name ?? undefined);
+      logger.log(
+        target && !legacyGeneratedZip
+          ? `[torbox] resolved resumable web file url (fileId=${target.id})`
+          : legacyGeneratedZip
+            ? "[torbox] preserving legacy generated-zip identity for an existing partial"
+            : "[torbox] web download has multiple files; resolved whole-download zip"
+      );
+      onProgress?.({
+        progress: 1,
+        downloadSpeed: 0,
+        eta: 0,
+        phase: "cached",
+      });
       return { url, name };
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response
         ?.status;
-      if (status === 500) {
+      if (status === 500 && allowDirectFallback) {
         logger.log(
-          `[torbox] TorBox API couldn't scan this hoster after 3 retries — downloading directly from source: ${uri}`
+          `[torbox] TorBox API couldn't scan this hoster after 3 retries — downloading directly from source: ${redactTorBoxSensitiveText(uri)}`
         );
         // Return the original URL for the JS HTTP downloader to fetch
         // directly. The download still works — just at the hoster's native
         // speed instead of TorBox's accelerated CDN.
+        onProgress?.({
+          progress: 1,
+          downloadSpeed: 0,
+          eta: 0,
+          phase: "direct-fallback",
+        });
         return { url: uri, name: undefined };
       }
       throw err;
@@ -428,14 +736,16 @@ export class TorBoxClient {
         const info = await this.getWebDownloadInfo(web.id);
         const speed = info?.download_speed ?? 0;
         if (speed > best) best = speed;
-        if (info?.download_finished || (info?.progress ?? 0) >= 1) {
+        if (isTorBoxItemReady(info)) {
           return { id: web.id, speed: Number.MAX_SAFE_INTEGER };
         }
         await this.sleep(1500);
       }
       return { id: web.id, speed: best };
     } catch {
-      logger.log(`[torbox] mirror not usable, skipping: ${uri}`);
+      logger.log(
+        `[torbox] mirror not usable, skipping: ${redactTorBoxSensitiveText(uri)}`
+      );
       return { id: null, speed: 0 };
     }
   }

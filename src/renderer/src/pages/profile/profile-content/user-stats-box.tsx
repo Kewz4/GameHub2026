@@ -6,10 +6,16 @@ import { MAX_MINUTES_TO_SHOW_IN_PLAYTIME } from "@renderer/constants";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
 import { ClockIcon, TrophyIcon } from "@primer/octicons-react";
 import { Award } from "lucide-react";
-import { AchievementsBreakdownModal } from "./achievements-breakdown-modal";
+import { totalProfilePlayTimeInSeconds } from "./profile-library-data";
 import "./user-stats-box.scss";
 
-export function UserStatsBox() {
+interface UserStatsBoxProps {
+  onSelectAchievements: () => void;
+}
+
+export function UserStatsBox({
+  onSelectAchievements,
+}: Readonly<UserStatsBoxProps>) {
   const {
     userStats,
     isMe,
@@ -21,8 +27,6 @@ export function UserStatsBox() {
   const { userDetails } = useUserDetails();
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
-  const [showAchievementsBreakdown, setShowAchievementsBreakdown] =
-    useState(false);
   // Total unlocked achievements across ALL games that have them — including
   // games not in the local library (Exophase/PSN catalogue imports).
   const [allAchievementsSum, setAllAchievementsSum] = useState(0);
@@ -56,8 +60,8 @@ export function UserStatsBox() {
     [numberFormatter, t]
   );
 
-  // When the server withholds subscription-gated fields, compute them locally
-  // from the library games we already fetched (available to all GameHub users).
+  // When the social API omits aggregate fields, compute them locally from the
+  // library games we already fetched (available to every signed-in user).
   const allGames = useMemo(
     () => [...libraryGames, ...pinnedGames],
     [libraryGames, pinnedGames]
@@ -75,6 +79,11 @@ export function UserStatsBox() {
         (acc, g) => acc + (g.achievementsPointsEarnedSum ?? 0),
         0
       ),
+    [allGames]
+  );
+
+  const localPlayTimeInSeconds = useMemo(
+    () => totalProfilePlayTimeInSeconds(allGames),
     [allGames]
   );
 
@@ -101,8 +110,16 @@ export function UserStatsBox() {
     userStats.achievementsPointsEarnedSum !== undefined
       ? userStats.achievementsPointsEarnedSum
       : isMe && localPointsSum > 0
-        ? ({ value: localPointsSum, topPercentile: null } as any)
+        ? { value: localPointsSum, topPercentile: null }
         : undefined;
+  const serverPlayTimeInSeconds = userStats.totalPlayTimeInSeconds.value;
+  const totalPlayTimeInSeconds = isMe
+    ? Math.max(serverPlayTimeInSeconds, localPlayTimeInSeconds)
+    : serverPlayTimeInSeconds;
+  const playTimeTopPercentile =
+    isMe && localPlayTimeInSeconds > serverPlayTimeInSeconds
+      ? null
+      : userStats.totalPlayTimeInSeconds.topPercentile;
 
   return (
     <div className="user-stats__box">
@@ -117,9 +134,9 @@ export function UserStatsBox() {
                 <button
                   type="button"
                   className="user-stats__list-description user-stats__list-description--clickable"
-                  onClick={() => setShowAchievementsBreakdown(true)}
-                  title={t("view_achievements_per_game", {
-                    defaultValue: "View achievements per game",
+                  onClick={onSelectAchievements}
+                  title={t("open_achievements_tab", {
+                    defaultValue: "Open achievements tab",
                   })}
                 >
                   <TrophyIcon /> {achievementSum ?? 0} {t("achievements")}
@@ -152,18 +169,23 @@ export function UserStatsBox() {
           </li>
         )}
 
-        <li className="user-stats__list-item">
+        <li
+          className="user-stats__list-item"
+          data-profile-total-playtime-seconds={totalPlayTimeInSeconds}
+        >
           <h3 className="user-stats__list-title">{t("total_play_time")}</h3>
           <div className="user-stats__stats-row">
             <p className="user-stats__list-description">
               <ClockIcon />
-              {formatPlayTime(userStats.totalPlayTimeInSeconds.value)}
+              {formatPlayTime(totalPlayTimeInSeconds)}
             </p>
-            <p title={t("ranking_updated_weekly")}>
-              {t("top_percentile", {
-                percentile: userStats.totalPlayTimeInSeconds.topPercentile,
-              })}
-            </p>
+            {playTimeTopPercentile !== null && (
+              <p title={t("ranking_updated_weekly")}>
+                {t("top_percentile", {
+                  percentile: playTimeTopPercentile,
+                })}
+              </p>
+            )}
           </div>
         </li>
 
@@ -179,13 +201,6 @@ export function UserStatsBox() {
           </li>
         )}
       </ul>
-
-      {isMe && (
-        <AchievementsBreakdownModal
-          visible={showAchievementsBreakdown}
-          onClose={() => setShowAchievementsBreakdown(false)}
-        />
-      )}
     </div>
   );
 }

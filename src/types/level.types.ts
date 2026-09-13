@@ -52,6 +52,10 @@ export interface Game {
   customOriginalLibraryPath?: string | null;
   playTimeInMilliseconds: number;
   unsyncedDeltaPlayTimeInMilliseconds?: number;
+  /** Absolute playtime replacement awaiting Hydra acknowledgement (for
+   * imports/manual corrections, which cannot safely use the additive delta
+   * endpoint). */
+  pendingAbsolutePlayTimeInMilliseconds?: number | null;
   lastTimePlayed: Date | null;
   addedToLibraryAt?: Date | null;
   objectId: string;
@@ -140,6 +144,12 @@ export interface Download {
   /** Console system for minerva/emulator downloads — drives the post-download
    *  ROM bind so the library entry becomes launchable. */
   emulatorSystem?: string | null;
+  /** Metadata for a link/magnet/.torrent submitted from Download Manager. */
+  customDownload?: {
+    sourceType: "link" | "magnet" | "torrent";
+  };
+  /** Validated, user-configured trackers captured when this torrent was added. */
+  customTrackers?: string[];
 }
 
 export interface DownloadLayoutState {
@@ -205,6 +215,8 @@ export interface UserPreferences {
   startMinimized?: boolean;
   launchToLibraryPage?: boolean;
   launchInBigPicture?: boolean;
+  /** Persist the compact desktop shell without affecting Big Picture. */
+  hideSidebar?: boolean;
   hideClassicsBookmark?: boolean;
   classicsUseHeroLayout?: boolean;
   bigPictureSoundsEnabled?: boolean;
@@ -212,10 +224,42 @@ export interface UserPreferences {
   bigPictureDiagnosticsEnabled?: boolean;
   bigPictureDiagnosticsPosition?: BigPictureDiagnosticsPosition;
   disableNsfwAlert?: boolean;
+  /** Hide mature-rated games (ESRB M/AO, PEGI/USK 18, 17+ gate) from the home
+   *  rows. Emulated games use the local dataset rating; Steam games are
+   *  classified from Steam's appdetails and cached. */
+  hideMatureGames?: boolean;
+  /** In-game overlay (Shift+F3 / Guide press) — master switch + performance HUD
+   *  rows. Mirrors HydraOverlayPreferences; resolved via
+   *  resolveHydraOverlayPreferences with all-on defaults. */
+  overlayEnabled?: boolean;
+  overlayPerformanceEnabled?: boolean;
+  overlayPerformanceShowFps?: boolean;
+  overlayPerformanceShowAverageFps?: boolean;
+  overlayPerformanceShowFrameTime?: boolean;
+  overlayPerformanceShowOnePercentLow?: boolean;
+  /** Opt-in gameplay capture. Instant replay remains separately disabled until
+   *  the user explicitly enables its rolling buffer. */
+  gameRecorderEnabled?: boolean;
+  gameRecorderResolution?: import("./game-recorder.types").GameRecorderResolution;
+  gameRecorderFps?: import("./game-recorder.types").GameRecorderFps;
+  gameRecorderQualityPreset?: import("./game-recorder.types").GameRecorderQualityPreset;
+  gameRecorderInstantReplayEnabled?: boolean;
+  gameRecorderReplayDurationSeconds?: import("./game-recorder.types").GameRecorderReplayDuration;
+  gameRecorderCaptureAudio?: boolean;
+  /** Machine-local path; intentionally excluded from cloud preference backup. */
+  gameRecorderOutputDirectory?: string | null;
+  /** Spotify app client ID (public, PKCE) for the overlay's Now-playing widget.
+   *  The user registers their own Spotify app and pastes its client ID here. */
+  spotifyClientId?: string | null;
+  /** Music remains on GameHub's built-in provider unless the user explicitly
+   *  opts into the experimental Spotify Connect controller. */
+  musicProvider?: import("./spotify.types").MusicProvider;
+  /** Apps pinned to the overlay's quick launcher (launch Discord/OBS/etc.
+   *  without leaving the game). */
+  pinnedApps?: import("./overlay.types").PinnedApp[];
   enableAutoInstall?: boolean;
   seedAfterDownloadComplete?: boolean;
   showHiddenAchievementsDescription?: boolean;
-  showDownloadSpeedInMegabits?: boolean;
   downloadNotificationsEnabled?: boolean;
   repackUpdatesNotificationsEnabled?: boolean;
   achievementNotificationsEnabled?: boolean;
@@ -228,6 +272,8 @@ export interface UserPreferences {
   extractFilesByDefault?: boolean;
   deleteArchiveFilesAfterExtractionByDefault?: boolean;
   enableSteamAchievements?: boolean;
+  /** Capture an achievement souvenir locally and mirror it to account R2. */
+  enableAchievementSouvenirs?: boolean;
   retroAchievementsUsername?: string;
   retroAchievementsApiKey?: string;
   /**
@@ -242,6 +288,9 @@ export interface UserPreferences {
   createStartMenuShortcut?: boolean;
   maxDownloadSpeedBytesPerSecond?: number | null;
   torrentNetworkInterface?: string | null;
+  /** Local-only tracker URLs appended to newly created torrents when enabled. */
+  globalTrackers?: string[];
+  appendGlobalTrackers?: boolean;
   defaultProtonPath?: string | null;
   defaultWinePrefixPath?: string | null;
   autoRunMangohud?: boolean;
@@ -266,9 +315,32 @@ export interface UserPreferences {
   uploadcareSecretKey?: string | null;
   xboxXuid?: string | null;
   cloudSyncUserId?: string | null;
+  /** Authenticated account namespace that this installation is converging on. */
+  cloudSyncAccountUserId?: string | null;
+  /**
+   * High-entropy, pre-account cloud namespaces that still need a one-time R2
+   * copy. They are sent only to the authenticated credential broker and are
+   * removed after a verified migration.
+   */
+  cloudSyncLegacyUserIds?: string[] | null;
+  cloudSyncNamespaceMigrationPending?: boolean;
+  /** Deferred legacy R2 namespace claims, isolated by authenticated account. */
+  cloudSyncNamespaceMigrationClaims?: Record<
+    string,
+    { activeUserId: string; legacyUserIds: string[] }
+  > | null;
   onboardingComplete?: boolean;
   localProfileImageUrl?: string | null;
   localBackgroundImageUrl?: string | null;
+  /** Account ownership for the machine-local avatar path and tombstone. */
+  localProfileImageUserId?: string | null;
+  /** Account ownership for the machine-local banner path and tombstone. */
+  localBackgroundImageUserId?: string | null;
+  /** One-time guard preventing unknown legacy paths from being claimed after an account switch. */
+  profileImageOwnershipMigrationVersion?: number;
+  /** Prevent a failed best-effort R2 delete from restoring an image the user removed. */
+  profileAvatarRemoved?: boolean;
+  profileBannerRemoved?: boolean;
   excludedGames?: ExcludedGame[];
   ubisoftTicket?: string | null;
   ubisoftUserId?: string | null;
@@ -283,6 +355,8 @@ export interface UserPreferences {
   // logged-in username (the auth cookies live in the persist:exophase session).
   exophaseEnabled?: boolean;
   exophaseUserId?: string | null;
+  /** Hydra account that owns the configured Exophase profiles/cache. */
+  exophaseHydraAccountId?: string | null;
   exophaseManagedPlatforms?: GameShop[] | null;
   // Additional PUBLIC Exophase profiles to sync alongside the logged-in account.
   // These need no login — only a public profile URL/username — and are read the

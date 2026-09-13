@@ -13,6 +13,7 @@ from typing import Any, Optional
 import libtorrent as lt
 
 from torrent_downloader import TorrentDownloader
+from tracker_validation import normalize_trackers
 
 for _stream in (sys.stdin, sys.stdout, sys.stderr):
     reconfigure = getattr(_stream, "reconfigure", None)
@@ -132,6 +133,13 @@ def parse_file_indices(file_indices):
     return parsed
 
 
+def validate_trackers(trackers):
+    try:
+        return normalize_trackers(trackers)
+    except ValueError as error:
+        raise RpcError("invalid_trackers") from error
+
+
 def validate_magnet_uri(magnet: str):
     if not isinstance(magnet, str):
         raise ValueError("invalid_magnet")
@@ -209,6 +217,7 @@ def map_downloader_error_code(error: Exception):
         "empty_selection",
         "invalid_url",
         "invalid_save_path",
+        "invalid_trackers",
     }:
         return code
 
@@ -303,12 +312,14 @@ def start_torrent_download(
     url,
     save_path,
     file_indices=None,
+    trackers=None,
     flags=None,
     metadata_timeout_ms=None,
 ):
     normalized_metadata_timeout_ms = normalize_metadata_timeout_ms(metadata_timeout_ms)
     start_kwargs = {
         "file_indices": file_indices,
+        "trackers": trackers,
     }
     if normalized_metadata_timeout_ms is not None:
         start_kwargs["wait_timeout_seconds"] = normalized_metadata_timeout_ms / 1000
@@ -357,6 +368,7 @@ def bootstrap_downloads():
                     initial_download["url"],
                     initial_download["save_path"],
                     file_indices=file_indices,
+                    trackers=validate_trackers(initial_download.get("trackers")),
                     metadata_timeout_ms=initial_download.get("metadata_timeout_ms"),
                 )
             else:
@@ -374,6 +386,7 @@ def bootstrap_downloads():
                     seed["url"],
                     seed["save_path"],
                     flags=lt.torrent_flags.upload_mode,
+                    trackers=validate_trackers(seed.get("trackers")),
                 )
             except Exception as error:
                 logger.error("Error starting initial seeding: %s", error, exc_info=True)
@@ -425,6 +438,7 @@ def torrent_files(data: Optional[dict] = None):
     except Exception as error:
         raise RpcError(map_downloader_error_code(error)) from error
 
+    trackers = validate_trackers(data.get("trackers"))
     cached_payload = get_cached_torrent_files(info_hash)
     if cached_payload is not None:
         return cached_payload
@@ -450,7 +464,9 @@ def torrent_files(data: Optional[dict] = None):
     started_at = time.time()
 
     try:
-        temp_downloader.start_download(magnet, tempfile.gettempdir())
+        temp_downloader.start_download(
+            magnet, tempfile.gettempdir(), trackers=trackers
+        )
         files_payload = temp_downloader.get_torrent_files(timeout_seconds=timeout_seconds)
         response = {
             "infoHash": info_hash,
@@ -507,6 +523,7 @@ def action(data: Optional[dict] = None):
                     url,
                     save_path,
                     file_indices=file_indices,
+                    trackers=validate_trackers(data.get("trackers")),
                     metadata_timeout_ms=data.get("metadata_timeout_ms"),
                 )
             else:
@@ -540,6 +557,7 @@ def action(data: Optional[dict] = None):
                 data["url"],
                 data["save_path"],
                 flags=lt.torrent_flags.upload_mode,
+                trackers=validate_trackers(data.get("trackers")),
             )
         elif action_name == "pause_seeding":
             with downloads_lock:

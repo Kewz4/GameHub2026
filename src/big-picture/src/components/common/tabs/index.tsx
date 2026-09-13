@@ -17,6 +17,8 @@ import { FocusItem } from "../focus-item";
 import { HorizontalFocusGroup } from "../horizontal-focus-group";
 import type { FocusOverrides } from "../../../services";
 import { useNavigationIsFocused } from "../../../stores";
+import { getTabRevealScrollLeft } from "./tab-scroll";
+import { SettingsTabRailLayout } from "./settings-tab-rail-layout";
 
 export interface TabsItem<TValue extends string = string> {
   id?: string;
@@ -126,6 +128,7 @@ function FocusableTabsButton<TValue extends string = string>({
 
 interface SettingsTabsButtonProps<TValue extends string = string> {
   item: TabsItem<TValue>;
+  resolvedId: string;
   isSelected: boolean;
   indicatorLayoutId: string;
   onSelect: (value: TValue) => void;
@@ -133,12 +136,14 @@ interface SettingsTabsButtonProps<TValue extends string = string> {
 
 function SettingsTabsButton<TValue extends string = string>({
   item,
+  resolvedId,
   isSelected,
   indicatorLayoutId,
   onSelect,
 }: Readonly<SettingsTabsButtonProps<TValue>>) {
   return (
     <button
+      id={resolvedId}
       type="button"
       role="tab"
       tabIndex={-1}
@@ -190,6 +195,7 @@ export function Tabs<TValue extends string = string>({
 }: Readonly<TabsProps<TValue>>) {
   const generatedId = useId();
   const tabListRef = useRef<HTMLDivElement | null>(null);
+  const tabScrollViewportRef = useRef<HTMLDivElement | null>(null);
   const [internalValue, setInternalValue] = useState<TValue | undefined>(
     defaultValue ?? items[0]?.value
   );
@@ -274,6 +280,69 @@ export function Tabs<TValue extends string = string>({
     };
   }, [selectedItem, updateSegmentedIndicator, variant]);
 
+  const revealSelectedSettingsTab = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      if (variant !== "settings" || !selectedItem) return;
+
+      const viewport = tabScrollViewportRef.current;
+      const activeTab = document.getElementById(selectedItem.resolvedId);
+
+      if (
+        !viewport ||
+        viewport.clientWidth <= 0 ||
+        !(activeTab instanceof HTMLElement) ||
+        !viewport.contains(activeTab)
+      ) {
+        return;
+      }
+
+      const nextScrollLeft = getTabRevealScrollLeft({
+        currentScrollLeft: viewport.scrollLeft,
+        viewportWidth: viewport.clientWidth,
+        scrollWidth: viewport.scrollWidth,
+        itemOffsetLeft: activeTab.offsetLeft,
+        itemWidth: activeTab.offsetWidth,
+      });
+
+      if (Math.abs(nextScrollLeft - viewport.scrollLeft) < 1) return;
+
+      viewport.scrollTo({
+        left: nextScrollLeft,
+        top: 0,
+        behavior,
+      });
+    },
+    [selectedItem, variant]
+  );
+
+  useLayoutEffect(() => {
+    revealSelectedSettingsTab();
+  }, [revealSelectedSettingsTab]);
+
+  useEffect(() => {
+    if (variant !== "settings" || !selectedItem) return;
+
+    const viewport = tabScrollViewportRef.current;
+    const activeTab = document.getElementById(selectedItem.resolvedId);
+
+    if (!viewport || !(activeTab instanceof HTMLElement)) return;
+
+    const revealAfterResize = () => revealSelectedSettingsTab("auto");
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(revealAfterResize);
+
+    resizeObserver?.observe(viewport);
+    resizeObserver?.observe(activeTab);
+    globalThis.window.addEventListener("resize", revealAfterResize);
+
+    return () => {
+      resizeObserver?.disconnect();
+      globalThis.window.removeEventListener("resize", revealAfterResize);
+    };
+  }, [revealSelectedSettingsTab, selectedItem, variant]);
+
   if (items.length === 0) {
     return null;
   }
@@ -287,45 +356,44 @@ export function Tabs<TValue extends string = string>({
     >
       <div className="tabs__content">
         {variant === "settings" ? (
-          <div
-            className={cn("tabs__list", {
-              "tabs__list--segmented": false,
-            })}
-            style={
-              {
-                gap: "calc(var(--spacing-unit) * 12)",
-                alignItems: "flex-start",
-                flexWrap: "nowrap",
-              } as CSSProperties
-            }
-          >
+          <SettingsTabRailLayout beforeTabs={beforeTabs} afterTabs={afterTabs}>
             <div
-              ref={tabListRef}
-              role="tablist"
-              aria-label={ariaLabel}
-              className="tabs__tablist"
-            >
-              {beforeTabs && (
-                <div className="tabs__before-tabs">{beforeTabs}</div>
-              )}
-
-              {resolvedItems.map((item) => {
-                const isSelected = selectedItem?.value === item.value;
-
-                return (
-                  <SettingsTabsButton
-                    key={item.value}
-                    item={item}
-                    isSelected={isSelected}
-                    indicatorLayoutId={indicatorLayoutId}
-                    onSelect={handleSelect}
-                  />
-                );
+              ref={tabScrollViewportRef}
+              className={cn("tabs__list", {
+                "tabs__list--segmented": false,
               })}
+              data-tabs-scroll-viewport
+              style={
+                {
+                  gap: "calc(var(--spacing-unit) * 12)",
+                  alignItems: "flex-start",
+                  flexWrap: "nowrap",
+                } as CSSProperties
+              }
+            >
+              <div
+                ref={tabListRef}
+                role="tablist"
+                aria-label={ariaLabel}
+                className="tabs__tablist"
+              >
+                {resolvedItems.map((item) => {
+                  const isSelected = selectedItem?.value === item.value;
 
-              {afterTabs && <div className="tabs__after-tabs">{afterTabs}</div>}
+                  return (
+                    <SettingsTabsButton
+                      key={item.value}
+                      item={item}
+                      resolvedId={item.resolvedId}
+                      isSelected={isSelected}
+                      indicatorLayoutId={indicatorLayoutId}
+                      onSelect={handleSelect}
+                    />
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </SettingsTabRailLayout>
         ) : (
           <HorizontalFocusGroup
             regionId={regionId}

@@ -172,34 +172,39 @@ export function NotificationItem({
   };
 
   return (
-    <button
-      type="button"
+    <article
       className={cn("notification-item", {
         "notification-item--unread":
           !notification.isRead ||
           notification.type === "FRIEND_REQUEST_RECEIVED",
       })}
-      onClick={handleClick}
     >
-      <div
-        className={cn("notification-item__picture", {
-          "notification-item__badge-picture": isBadge,
-          "notification-item__review-picture": isReview,
-        })}
+      <button
+        type="button"
+        className="notification-item__main"
+        onClick={handleClick}
       >
-        {getIcon()}
-      </div>
+        <span className="notification-item__unread-dot" aria-hidden="true" />
+        <div
+          className={cn("notification-item__picture", {
+            "notification-item__badge-picture": isBadge,
+            "notification-item__review-picture": isReview,
+          })}
+        >
+          {getIcon()}
+        </div>
 
-      <div className="notification-item__content">
-        <span className="notification-item__title">{content.title}</span>
-        <span className="notification-item__description">
-          {content.description}
-        </span>
-        <span className="notification-item__time">
-          <ClockIcon size={12} />
-          {formatDistance(new Date(notification.createdAt), new Date())}
-        </span>
-      </div>
+        <div className="notification-item__content">
+          <span className="notification-item__title">{content.title}</span>
+          <span className="notification-item__description">
+            {content.description}
+          </span>
+          <span className="notification-item__time">
+            <ClockIcon size={12} />
+            {formatDistance(new Date(notification.createdAt), new Date())}
+          </span>
+        </div>
+      </button>
 
       {content.showActions &&
         notification.type === "FRIEND_REQUEST_RECEIVED" && (
@@ -223,6 +228,6 @@ export function NotificationItem({
           <XIcon size={16} />
         </button>
       )}
-    </button>
+    </article>
   );
 }

@@ -1,0 +1,8 @@
+.route-loading {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 32px;
+  background: var(--color-background, #121212);
+  color: var(--color-text-bright, #f0f1f7);
+}

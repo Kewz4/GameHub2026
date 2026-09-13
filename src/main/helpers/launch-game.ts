@@ -1,4 +1,4 @@
-import { shell } from "electron";
+import { app, shell } from "electron";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -14,10 +14,12 @@ import {
   launchedGamePids,
 } from "@main/services";
 import { CommonRedistManager } from "@main/services/common-redist-manager";
+import { runAchievementMetadataExport } from "@main/services/achievements/metadata-export";
 import { parseExecutablePath } from "../events/helpers/parse-executable-path";
 import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
 import { resolveLaunchCommand } from "./resolve-launch-command";
+import { wineLaunchEnvironment } from "./wine-launch-environment";
 import {
   buildWindowsBatchCommand,
   isWindowsBatchFile,
@@ -26,6 +28,10 @@ import {
   findAchievementFiles,
   hasAchievementEmulatorSignature,
 } from "@main/services/achievements/find-achievement-files";
+import {
+  NativeGameLaunchError,
+  openNativeGameExecutable,
+} from "./open-native-game-executable";
 
 export interface LaunchGameOptions {
   shop: GameShop;
@@ -58,7 +64,7 @@ const launchNatively = (
   launchOptions?: string | null,
   useMangohud = false,
   useGamemode = false
-): number | null => {
+): Promise<number | null> => {
   const workingDirectory = path.dirname(executablePath);
   const resolvedLaunchCommand = resolveLaunchCommand({
     baseCommand: executablePath,
@@ -76,21 +82,53 @@ const launchNatively = (
     resolvedLaunchCommand.args.length === 0 &&
     Object.keys(resolvedLaunchCommand.env).length === 0
   ) {
-    shell.openPath(executablePath);
-    return null;
+    return openNativeGameExecutable(executablePath, (target) =>
+      shell.openPath(target)
+    ).then(() => null);
   }
 
   if (
     process.platform === "win32" &&
     isWindowsBatchFile(resolvedLaunchCommand.command)
   ) {
+    return new Promise<number | null>((resolve, reject) => {
+      const processRef = spawn(
+        buildWindowsBatchCommand(
+          resolvedLaunchCommand.command,
+          resolvedLaunchCommand.args
+        ),
+        {
+          shell: true,
+          detached: true,
+          stdio: "ignore",
+          cwd: workingDirectory,
+          env: {
+            ...process.env,
+            ...resolvedLaunchCommand.env,
+          },
+        }
+      );
+
+      processRef.once("spawn", () => {
+        processRef.unref();
+        resolve(processRef.pid ?? null);
+      });
+      processRef.once("error", (error) => {
+        reject(
+          new NativeGameLaunchError(executablePath, error.message, {
+            cause: error,
+          })
+        );
+      });
+    });
+  }
+
+  return new Promise<number | null>((resolve, reject) => {
     const processRef = spawn(
-      buildWindowsBatchCommand(
-        resolvedLaunchCommand.command,
-        resolvedLaunchCommand.args
-      ),
+      resolvedLaunchCommand.command,
+      resolvedLaunchCommand.args,
       {
-        shell: true,
+        shell: false,
         detached: true,
         stdio: "ignore",
         cwd: workingDirectory,
@@ -101,44 +139,26 @@ const launchNatively = (
       }
     );
 
-    processRef.on("error", (error) => {
-      logger.error("Failed to launch game", error);
+    processRef.once("spawn", () => {
+      processRef.unref();
+      resolve(processRef.pid ?? null);
     });
-
-    processRef.unref();
-
-    return processRef.pid ?? null;
-  }
-
-  const processRef = spawn(
-    resolvedLaunchCommand.command,
-    resolvedLaunchCommand.args,
-    {
-      shell: false,
-      detached: true,
-      stdio: "ignore",
-      cwd: workingDirectory,
-      env: {
-        ...process.env,
-        ...resolvedLaunchCommand.env,
-      },
-    }
-  );
-
-  processRef.on("error", (error) => {
-    logger.error("Failed to launch game", error);
+    processRef.once("error", (error) => {
+      reject(
+        new NativeGameLaunchError(executablePath, error.message, {
+          cause: error,
+        })
+      );
+    });
   });
-
-  processRef.unref();
-
-  return processRef.pid ?? null;
 };
 
 const launchWithWine = async (
   executablePath: string,
   launchOptions?: string | null,
   useMangohud = false,
-  useGamemode = false
+  useGamemode = false,
+  winePrefixPath: string | null = null
 ): Promise<boolean> => {
   const workingDirectory = path.dirname(executablePath);
   const resolvedLaunchCommand = resolveLaunchCommand({
@@ -160,10 +180,11 @@ const launchWithWine = async (
         detached: true,
         stdio: "ignore",
         cwd: workingDirectory,
-        env: {
-          ...process.env,
-          ...resolvedLaunchCommand.env,
-        },
+        env: wineLaunchEnvironment(
+          process.env,
+          resolvedLaunchCommand.env,
+          winePrefixPath
+        ),
       }
     );
 
@@ -281,7 +302,8 @@ const launchWindowsBinaryOnLinux = async (
     parsedPath,
     launchOptions,
     useMangohud,
-    useGamemode
+    useGamemode,
+    winePrefixPath
   );
 
   if (launchedWithWine) {
@@ -325,6 +347,51 @@ export const launchGame = async (
   if (game) {
     const updatedGame = { ...game, executablePath: parsedPath, launchOptions };
     await gamesSublevel.put(gameKey, updatedGame);
+    void runAchievementMetadataExport(gameKey, updatedGame);
+
+    // Set up offline play (Steam emulator) for manually added games before
+    // launch. Applies to custom games and repacks only — library-synced
+    // games are owned platform installs and are never modified. Skipped for
+    // non-Steam shops and for games that already carry an emulator.
+    let offlinePlaySetupAttempted = false;
+    if (
+      process.platform === "win32" &&
+      updatedGame.shop === "steam" &&
+      updatedGame.libraryOrigin !== "sync"
+    ) {
+      try {
+        const { ensureSteamEmulatorReady } = await import(
+          "@main/services/steam-emulator/steam-emulator"
+        );
+        const { resolveSafeSteamEmulatorTarget } = await import(
+          "@main/services/steam-emulator/steam-emulator-target"
+        );
+        const target = await resolveSafeSteamEmulatorTarget(
+          updatedGame,
+          parsedPath,
+          [process.resourcesPath, app.getAppPath(), app.getPath("userData")]
+        );
+        if (!target.ok || !target.gameDir) {
+          logger.log("Pre-launch offline-play setup skipped", {
+            objectId,
+            reason: target.reason,
+          });
+        } else {
+          offlinePlaySetupAttempted = true;
+          const detection = await ensureSteamEmulatorReady(
+            target.gameDir,
+            objectId
+          );
+          logger.log("Pre-launch offline-play setup check", {
+            objectId,
+            status: detection.status,
+          });
+        }
+      } catch (error) {
+        logger.error("Pre-launch offline-play setup failed", error);
+        if (offlinePlaySetupAttempted) throw error;
+      }
+    }
 
     // Option A: First-launch achievement emulator detection for REPACK games only.
     // A repack is a game that was downloaded through Hydra (so it has a download
@@ -394,9 +461,13 @@ export const launchGame = async (
       );
 
       if (launched) return null;
+      throw new NativeGameLaunchError(
+        parsedPath,
+        "Neither Proton nor Wine could launch this Windows game. Install a compatible runner and verify the selected prefix."
+      );
     }
 
-    const pid = launchNatively(
+    const pid = await launchNatively(
       parsedPath,
       launchOptions,
       useMangohud,

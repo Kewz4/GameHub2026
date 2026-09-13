@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  AchievementCustomNotificationPosition,
-  AchievementNotificationInfo,
-} from "@types";
-import {
   injectCustomCss,
   removeCustomCss,
   getAchievementSoundUrl,
@@ -16,6 +12,11 @@ import app from "../../../app.scss?inline";
 import styles from "../../../components/achievements/notification/achievement-notification.scss?inline";
 import root from "react-shadow";
 import gameHubIconUrl from "@renderer/assets/icons/gamehub-white.svg?url";
+import {
+  createAchievementNotificationIconQueue,
+  positionAchievementNotifications,
+  type PositionedAchievementNotification,
+} from "@renderer/components/achievements/notification/achievement-notification-icon";
 
 const NOTIFICATION_TIMEOUT = 4000;
 
@@ -24,14 +25,11 @@ export function AchievementNotification() {
 
   const [isClosing, setIsClosing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [position, setPosition] =
-    useState<AchievementCustomNotificationPosition>("top-left");
-
   const [achievements, setAchievements] = useState<
-    AchievementNotificationInfo[]
+    PositionedAchievementNotification[]
   >([]);
   const [currentAchievement, setCurrentAchievement] =
-    useState<AchievementNotificationInfo | null>(null);
+    useState<PositionedAchievementNotification | null>(null);
 
   const achievementAnimation = useRef(-1);
   const closingAnimation = useRef(-1);
@@ -68,52 +66,70 @@ export function AchievementNotification() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = window.electron.onCombinedAchievementsUnlocked(
+    const iconQueue = createAchievementNotificationIconQueue(gameHubIconUrl);
+    const unsubscribeCombined = window.electron.onCombinedAchievementsUnlocked(
       (gameCount, achievementCount, position) => {
         if (gameCount === 0 || achievementCount === 0) return;
 
-        setPosition(position);
+        void iconQueue
+          .enqueue([
+            {
+              title: t("new_achievements_unlocked", {
+                gameCount,
+                achievementCount,
+              }),
+              isHidden: false,
+              isRare: false,
+              isPlatinum: false,
+              iconUrl: gameHubIconUrl,
+            },
+          ])
+          .then((preparedAchievements) => {
+            if (!preparedAchievements) return;
+            setAchievements((current) =>
+              current.concat(
+                positionAchievementNotifications(
+                  preparedAchievements,
+                  position ?? "top-left"
+                )
+              )
+            );
+            void playAudio();
+          });
+      }
+    );
 
-        setAchievements([
-          {
-            title: t("new_achievements_unlocked", {
-              gameCount,
-              achievementCount,
-            }),
-            isHidden: false,
-            isRare: false,
-            isPlatinum: false,
-            iconUrl: gameHubIconUrl,
-          },
-        ]);
-
-        playAudio();
+    const unsubscribeAchievement = window.electron.onAchievementUnlocked(
+      (position, achievements) => {
+        if (!achievements?.length) return;
+        void iconQueue.enqueue(achievements).then((preparedAchievements) => {
+          if (!preparedAchievements) return;
+          setAchievements((current) =>
+            current.concat(
+              positionAchievementNotifications(
+                preparedAchievements,
+                position ?? "top-left"
+              )
+            )
+          );
+          void playAudio();
+        });
       }
     );
 
     return () => {
-      unsubscribe();
+      iconQueue.dispose();
+      unsubscribeCombined();
+      unsubscribeAchievement();
     };
   }, [t, playAudio]);
 
+  // Main waits for this explicit handshake before showing the host window or
+  // sending the first unlock. This effect is declared after both IPC listener
+  // subscriptions, so the first badge cannot race React mounting.
   useEffect(() => {
-    const unsubscribe = window.electron.onAchievementUnlocked(
-      (position, achievements) => {
-        if (!achievements?.length) return;
-        if (position) {
-          setPosition(position);
-        }
-
-        setAchievements((ach) => ach.concat(achievements));
-
-        playAudio();
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
-  }, [playAudio]);
+    window.electron.achievementNotificationRendererReady();
+  }, []);
 
   const hasAchievementsPending = achievements.length > 0;
 
@@ -210,9 +226,9 @@ export function AchievementNotification() {
       <section ref={setShadowRootRef}>
         {isVisible && currentAchievement && (
           <AchievementNotificationItem
-            achievement={currentAchievement}
+            achievement={currentAchievement.achievement}
             isClosing={isClosing}
-            position={position}
+            position={currentAchievement.position}
           />
         )}
       </section>

@@ -60,7 +60,6 @@ const uploadOne = async (
   cardFilePath: string,
   folderName: string
 ): Promise<EmulationCloudSave> => {
-  const config = await emulators.getEmulatorConfig(platform);
   const record = await getRecord(platform, cardFilePath, folderName);
   const artifact = await buildArtifact(platform, cardFilePath, folderName);
   if (!artifact) throw new Error(`Could not read save "${folderName}"`);
@@ -70,7 +69,7 @@ const uploadOne = async (
 
   return emulators.uploadEmulationSave({
     platform,
-    emulator: emulators.toEmulationSaveEmulator(config.binary),
+    emulator: emulators.toEmulationSaveEmulator(platform),
     shop: record?.objectId ? "launchbox" : null,
     objectId: record?.objectId ?? null,
     saveIdentity: folderName,
@@ -87,6 +86,7 @@ const uploadEmulationSave = async (
   cardFilePath: string,
   folderName: string
 ): Promise<EmulationCloudSave> => {
+  emulators.assertEmulationSavePlatform(platform);
   return uploadOne(platform, cardFilePath, folderName);
 };
 
@@ -97,6 +97,7 @@ const uploadEmulationSavesForCard = async (
   platform: EmulationSavePlatform,
   cardFilePath: string
 ): Promise<{ uploaded: number; total: number }> => {
+  emulators.assertEmulationSavePlatform(platform);
   const sublevel =
     platform === "ps2"
       ? ps2MemoryCardSavesSublevel

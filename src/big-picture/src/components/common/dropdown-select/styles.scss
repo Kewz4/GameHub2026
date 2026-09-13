@@ -88,6 +88,11 @@
     );
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 25%, transparent);
   }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
 }
 
 .dropdown-select__trigger-main {

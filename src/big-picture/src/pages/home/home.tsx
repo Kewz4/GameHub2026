@@ -33,9 +33,9 @@ import {
   buildLibraryToastOptions,
   getBigPictureGameAchievementsPath,
   getBigPictureGameDetailsPath,
-  getGameLandscapeImageSource,
   getItemFocusTarget,
 } from "../../helpers";
+import { getCarouselArtworkSources } from "../../components/common/focus-carousel/artwork";
 import {
   BIG_PICTURE_HEADER_REGION_ID,
   BIG_PICTURE_SIDEBAR_ITEM_IDS,
@@ -357,8 +357,13 @@ export default function Home() {
   const hardPlatinums = useHardPlatinums();
   const hotGames = useHotGames();
   const weeklyGames = useWeeklyGames();
+  const recommendationLanguage = (
+    i18n.resolvedLanguage ??
+    i18n.language ??
+    "en"
+  ).split("-")[0];
   const { recommended, becauseYouPlayed, recommendedClassics } =
-    useRecommendedRows(i18n.language.split("-")[0]);
+    useRecommendedRows(recommendationLanguage);
 
   useEffect(() => {
     void updateLibrary();
@@ -452,7 +457,9 @@ export default function Home() {
   );
 
   const getPreviousRegionAbove = useCallback(
-    (sectionId: Exclude<HomeSectionId, "hero">): {
+    (
+      sectionId: Exclude<HomeSectionId, "hero">
+    ): {
       type: "region";
       regionId: string;
       entryDirection: "right";
@@ -492,7 +499,11 @@ export default function Home() {
   );
 
   const getRecommendedGameNavigationOverrides = useCallback(
-    (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => ({
+    (
+      _game: ShopAssets,
+      index: number,
+      games: ShopAssets[]
+    ): FocusOverrides => ({
       ...(index === 0
         ? {
             left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
@@ -518,7 +529,11 @@ export default function Home() {
   );
 
   const getClassicsGameNavigationOverrides = useCallback(
-    (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => ({
+    (
+      _game: ShopAssets,
+      index: number,
+      games: ShopAssets[]
+    ): FocusOverrides => ({
       ...(index === 0
         ? {
             left: getItemFocusTarget(BIG_PICTURE_SIDEBAR_ITEM_IDS.home),
@@ -546,7 +561,11 @@ export default function Home() {
   const becauseCount = becauseYouPlayed.length;
   const getBecauseGameNavigationOverrides = useCallback(
     (shelfIndex: number) =>
-      (_game: ShopAssets, index: number, games: ShopAssets[]): FocusOverrides => {
+      (
+        _game: ShopAssets,
+        index: number,
+        games: ShopAssets[]
+      ): FocusOverrides => {
         const isFirstShelf = shelfIndex === 0;
         const isLastShelf = shelfIndex === becauseCount - 1;
 
@@ -664,7 +683,7 @@ export default function Home() {
         />
         <FocusCarousel
           title="Recommended for you"
-          cardVariant="vertical"
+          cardVariant="horizontal"
           games={recommended}
           regionId={HOME_RECOMMENDED_GAMES_CAROUSEL_REGION_ID}
           getItemId={getHomeRecommendedGameItemId}
@@ -679,7 +698,7 @@ export default function Home() {
           <FocusCarousel
             key={`because-${row.anchorTitle}`}
             title={`Because you played ${row.anchorTitle}`}
-            cardVariant="vertical"
+            cardVariant="horizontal"
             games={row.games}
             regionId={getHomeBecauseCarouselRegionId(shelfIndex)}
             getItemId={(game) => getHomeBecauseGameItemId(shelfIndex, game)}
@@ -695,7 +714,7 @@ export default function Home() {
         ))}
         <FocusCarousel
           title="Recommended classics"
-          cardVariant="vertical"
+          cardVariant="horizontal"
           games={recommendedClassics}
           regionId={HOME_CLASSICS_GAMES_CAROUSEL_REGION_ID}
           getItemId={getHomeClassicsGameItemId}
@@ -707,7 +726,7 @@ export default function Home() {
           showRightFade
         />
         <FocusCarousel
-          title="Popular on Hydra"
+          title="Popular on GameHub"
           cardVariant="vertical"
           games={weeklyGames}
           regionId={HOME_WEEKLY_GAMES_CAROUSEL_REGION_ID}
@@ -792,7 +811,10 @@ export default function Home() {
                     id={itemId}
                   >
                     <ChallengeGameCard
-                      coverImageUrl={getGameLandscapeImageSource(game)}
+                      coverImageUrls={getCarouselArtworkSources(
+                        game,
+                        "landscape"
+                      )}
                       downloadSources={game.downloadSources}
                       gameTitle={game.title}
                       genres={game.genres}

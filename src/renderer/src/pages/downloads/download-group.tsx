@@ -318,6 +318,14 @@ function HeroDownloadView({
     isGameDownloading &&
     !isGameExtracting &&
     Boolean(lastPacket?.isDownloadingMetadata);
+  const preparationLabel =
+    lastPacket?.preparationPhase === "checking-cache"
+      ? t("checking_torbox_cache")
+      : lastPacket?.preparationPhase === "cached"
+        ? t("cached_on_torbox")
+        : lastPacket?.preparationPhase === "direct-fallback"
+          ? t("torbox_direct_fallback")
+          : t("preparing_download");
   const hasEta =
     isGameDownloading &&
     !isGameExtracting &&
@@ -413,7 +421,7 @@ function HeroDownloadView({
                   )}
                 {isPreparing && !isReconnecting && !isRecovering && (
                   <span className="download-group__progress-status">
-                    {t("preparing_download")}
+                    {preparationLabel}
                   </span>
                 )}
                 {!isGameExtracting &&

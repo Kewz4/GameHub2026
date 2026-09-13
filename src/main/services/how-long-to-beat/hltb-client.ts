@@ -91,8 +91,8 @@ async function resolveSearchEndpoint(): Promise<string | null> {
       ? src
       : `${BASE}${src.startsWith("/") ? "" : "/"}${src}`;
     try {
-      const js = await hltbFetch(url, { headers: browserHeaders() }).then((r) =>
-        r.ok ? r.text() : ""
+      const js = await hltbFetch(url, { headers: browserHeaders() }).then(
+        (r) => (r.ok ? r.text() : "")
       );
       const m = js.match(postFetch);
       if (m) return `/api/${m[1].split("/")[0]}`; // just the base word

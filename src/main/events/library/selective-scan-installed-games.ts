@@ -70,6 +70,9 @@ const selectiveScanInstalledGames = async (
 
   const foundGames: FoundGame[] = [];
 
+  // ── Phase 1: resolve executables for existing (non-custom) library games ──
+  // that don't have one yet, by looking for their known executable names in the
+  // selected folders.
   let scanned = 0;
   for (const { key, game } of games) {
     scanned++;
@@ -91,67 +94,6 @@ const selectiveScanInstalledGames = async (
     for (const scanPath of scanPaths) {
       const foundPath = await findExecutableInFolder(scanPath, normalizedNames);
       if (foundPath) {
-        // ── ROM discovery: scan selected folders for emulator/console ROM files ──
-        const allGames = await gamesSublevel.iterator().all();
-        const knownRomPaths = new Set(
-          allGames
-            .filter(([, g]) => g.shop === "launchbox")
-            .map(([, g]) => g.executablePath?.toLowerCase())
-            .filter((p): p is string => Boolean(p))
-        );
-
-        const discoveredRoms = await discoverRomFiles(
-          scanPaths,
-          (current, total, title) =>
-            WindowManager.sendToAppWindows("on-scan-progress", {
-              scanned: current,
-              total,
-              foundCount: foundGames.length,
-              currentTitle: `ROM: ${title}`,
-            })
-        );
-
-        for (const rom of discoveredRoms) {
-          const romLower = rom.romPath.toLowerCase();
-          if (knownRomPaths.has(romLower)) continue;
-
-          const romNorm = normalizeGameTitle(rom.title);
-          const existingRom = allGames.find(
-            ([, g]) =>
-              g.shop === "launchbox" && normalizeGameTitle(g.title) === romNorm
-          );
-
-          if (existingRom) {
-            const [existingKey, existingGame] = existingRom;
-            if (!dryRun) {
-              await gamesSublevel.put(existingKey, {
-                ...existingGame,
-                isDeleted: false,
-                executablePath: rom.romPath,
-                isInstalledLocally: true,
-              });
-            }
-            foundGames.push({
-              title: existingGame.title,
-              executablePath: rom.romPath,
-              key: existingKey,
-            });
-            logger.info(
-              `[SelectiveScan] Resolved ROM: ${existingGame.title} → ${rom.romPath}`
-            );
-            continue;
-          }
-
-          // New ROM not in the library — surface for confirmation.
-          foundGames.push({
-            title: rom.title,
-            executablePath: rom.romPath,
-            key: `rom:${romLower}`,
-            isNew: true,
-            emulatorSystem: rom.system,
-          });
-        }
-
         if (!dryRun) {
           await gamesSublevel.put(key, {
             ...game,
@@ -165,6 +107,85 @@ const selectiveScanInstalledGames = async (
         break;
       }
     }
+  }
+
+  // ── Phase 2: discover emulator/console ROM files in the selected folders ──
+  // Runs unconditionally (previously it was nested inside the per-game loop and
+  // only fired when a PC game's executable happened to be found in the same
+  // folder — so selecting a folder of pure ROMs surfaced nothing).
+  const allGames = await gamesSublevel.iterator().all();
+  // A launchbox ROM counts as "known" only when bound as a DISC
+  // (selectedDiscPath / discs) — the correct emulator binding. A launchbox game
+  // with only a raw executablePath is the broken state (it shell-opens the
+  // ROM), so it's re-surfaced and repaired into a disc binding on confirm
+  // rather than skipped forever.
+  // A soft-DELETED launchbox game must NOT count as known — otherwise deleting
+  // a game and re-scanning (the way to force a fresh, corrected import) silently
+  // skips its ROM and finds nothing.
+  const knownRomPaths = new Set<string>();
+  for (const [, g] of allGames) {
+    if (g.shop !== "launchbox" || g.isDeleted) continue;
+    for (const p of [
+      g.selectedDiscPath,
+      ...(g.discs?.map((d) => d.path) ?? []),
+    ]) {
+      if (p) knownRomPaths.add(p.toLowerCase());
+    }
+  }
+
+  const discoveredRoms = await discoverRomFiles(
+    scanPaths,
+    (current, total, title) =>
+      WindowManager.sendToAppWindows("on-scan-progress", {
+        scanned: current,
+        total,
+        foundCount: foundGames.length,
+        currentTitle: `ROM: ${title}`,
+      }),
+    // Selective scan: restrict ROM discovery to the chosen folders only, so it
+    // doesn't fan out into a full drive-wide deep scan.
+    true
+  );
+
+  for (const rom of discoveredRoms) {
+    const romLower = rom.romPath.toLowerCase();
+    if (knownRomPaths.has(romLower)) continue;
+
+    const romNorm = normalizeGameTitle(rom.title);
+    const existingRom = allGames.find(
+      ([, g]) =>
+        g.shop === "launchbox" && normalizeGameTitle(g.title) === romNorm
+    );
+
+    if (existingRom) {
+      // Already in the library (e.g. a broken pre-fix entry) — surface it so
+      // confirmScanGames can (re)bind the ROM as an emulator disc. The write is
+      // deliberately left to the confirm step (which binds a disc, not a raw
+      // executablePath).
+      const [existingKey, existingGame] = existingRom;
+      foundGames.push({
+        title: existingGame.title,
+        executablePath: rom.romPath,
+        key: existingKey,
+        // Forward the freshly-detected system so confirmScanGames can correct
+        // a mis-detected platform on an already-library entry (e.g. a Game
+        // Boy/Color ROM a pre-fix scan stamped as Game Boy Advance).
+        emulatorSystem: rom.system,
+      });
+      logger.info(
+        `[SelectiveScan] Matched existing ROM: ${existingGame.title} → ${rom.romPath}`
+      );
+      continue;
+    }
+
+    // New ROM not in the library — surface for confirmation.
+    foundGames.push({
+      title: rom.title,
+      executablePath: rom.romPath,
+      key: `rom:${romLower}`,
+      isNew: true,
+      emulatorSystem: rom.system,
+    });
   }
 
   if (!dryRun) {

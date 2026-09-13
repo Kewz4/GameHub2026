@@ -1,0 +1,121 @@
+.bp-custom-download-modal {
+  width: min(760px, calc(100vw - 96px));
+
+  .modal__header-title {
+    color: var(--text);
+    font-size: 1.15rem;
+    opacity: 1;
+  }
+
+  .modal__header-description {
+    color: color-mix(in srgb, var(--text) 78%, var(--text-secondary));
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  .input {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+
+  .input-label {
+    color: color-mix(in srgb, var(--text) 78%, var(--text-secondary));
+    font-size: 0.9rem;
+  }
+
+  .checkbox__label-primary {
+    font-size: 1rem;
+  }
+
+  .checkbox__label-secondary {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 1;
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing-unit) * 3);
+  }
+
+  &__directory {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: calc(var(--spacing-unit) * 3);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--spacing-unit) * 2);
+    background: var(--surface);
+    padding: calc(var(--spacing-unit) * 2.5);
+  }
+
+  &__path {
+    max-width: 520px;
+    margin-top: calc(var(--spacing-unit) * 0.75);
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__hint,
+  &__error {
+    margin: 0;
+    border-radius: calc(var(--spacing-unit) * 1.5);
+    padding: calc(var(--spacing-unit) * 2);
+  }
+
+  &__credential-warning {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: calc(var(--spacing-unit) * 2.5);
+    border: 1px solid color-mix(in srgb, #f0ad4e 45%, transparent);
+    border-radius: calc(var(--spacing-unit) * 1.5);
+    background: color-mix(in srgb, #f0ad4e 10%, var(--surface));
+    padding: calc(var(--spacing-unit) * 2.5);
+
+    > svg {
+      color: #f0ad4e;
+    }
+
+    > div {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: var(--spacing-unit);
+    }
+
+    p {
+      color: color-mix(in srgb, var(--text) 76%, var(--text-secondary));
+      font-size: 0.95rem;
+      line-height: 1.45;
+    }
+
+    .typography--label {
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 700;
+    }
+  }
+
+  &__hint {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  &__error {
+    border: 1px solid color-mix(in srgb, #ff5d73 45%, transparent);
+    background: color-mix(in srgb, #ff5d73 12%, transparent);
+    color: #ff8a99;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+}

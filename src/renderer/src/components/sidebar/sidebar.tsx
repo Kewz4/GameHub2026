@@ -20,7 +20,7 @@ import {
   useToast,
   useUserDetails,
 } from "@renderer/hooks";
-import { AuthPage } from "@shared";
+import { AuthPage, removeDiacritics } from "@shared";
 
 import { routes } from "./routes";
 
@@ -250,11 +250,11 @@ export function Sidebar() {
   };
 
   const handleFilter: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+    const normalizedQuery = removeDiacritics(event.target.value).toLowerCase();
+
     setFilteredLibrary(
       sortedLibrary.filter((game) =>
-        game.title
-          .toLowerCase()
-          .includes(event.target.value.toLocaleLowerCase())
+        removeDiacritics(game.title).toLowerCase().includes(normalizedQuery)
       )
     );
   };
@@ -336,7 +336,16 @@ export function Sidebar() {
     }
 
     if (event.detail === 2) {
-      if (game.executablePath) {
+      // Emulated/console (launchbox) games have no executablePath — they launch
+      // through their emulator once a ROM is bound as a disc. Route them to
+      // openClassicsGame (spawns the emulator + core), exactly like the game
+      // page's Play button; using openGame here would error "no executable".
+      const isClassics =
+        game.shop === "launchbox" &&
+        Boolean(game.selectedDiscPath || (game.discs && game.discs.length > 0));
+      if (isClassics) {
+        window.electron.openClassicsGame(game.shop, game.objectId);
+      } else if (game.executablePath) {
         window.electron.openGame(
           game.shop,
           game.objectId,
@@ -554,6 +563,7 @@ export function Sidebar() {
 
   return (
     <aside
+      id="desktop-sidebar"
       ref={sidebarRef}
       className={cn("sidebar", {
         "sidebar--resizing": isResizing,

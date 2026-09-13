@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  crashReporter,
   globalShortcut,
   net,
   powerMonitor,
@@ -12,19 +13,28 @@ import path from "node:path";
 import fs from "node:fs";
 import url from "node:url";
 import os from "node:os";
+import { formatConsoleLogData } from "../shared/console-log";
+import {
+  getLauncherIntent,
+  parseLauncherLink,
+} from "./services/launcher-intent";
 
 // ── Early startup log — written before any async work so crashes are visible ──
 function appendStartupLog(message: string): void {
   try {
-    const logDir = path.join(
-      process.env.APPDATA ??
-        path.join(os.homedir(), app.isPackaged ? "AppData/Roaming" : "."),
-      "GameHub"
-    );
+    const stateRoot =
+      process.platform === "linux"
+        ? process.env.XDG_STATE_HOME &&
+          path.posix.isAbsolute(process.env.XDG_STATE_HOME)
+          ? process.env.XDG_STATE_HOME
+          : path.join(os.homedir(), ".local", "state")
+        : (process.env.APPDATA ??
+          path.join(os.homedir(), app.isPackaged ? "AppData/Roaming" : "."));
+    const logDir = path.join(stateRoot, "GameHub");
     fs.mkdirSync(logDir, { recursive: true });
     fs.appendFileSync(
       path.join(logDir, "startup.log"),
-      `[${new Date().toISOString()}] ${message}\n`,
+      `[${new Date().toISOString()}] ${formatConsoleLogData([message])}\n`,
       "utf8"
     );
   } catch {
@@ -36,45 +46,40 @@ appendStartupLog(`startup pid=${process.pid} packaged=${app.isPackaged}`);
 
 // Catch main-process crashes before the logger is ready.
 process.on("uncaughtException", (err) => {
-  try {
-    const logPath = path.join(
-      process.env.APPDATA ?? path.join(os.homedir(), "AppData/Roaming"),
-      "GameHub",
-      "startup.log"
-    );
-    fs.appendFileSync(
-      logPath,
-      `[${new Date().toISOString()}] UNCAUGHT ${err?.stack ?? err}\n`,
-      "utf8"
-    );
-  } catch {
-    // ignore
-  }
+  // This handler outlives logger initialisation, so it must apply the same
+  // recursive redaction as electron-log. Axios Error instances can carry
+  // Authorization/cookie/R2 credentials below `config` and `request`.
+  appendStartupLog(`UNCAUGHT ${formatConsoleLogData([err])}`);
+  // Continuing after an uncaught exception leaves process-wide invariants
+  // unknowable (including overlay window ownership). The write above is
+  // synchronous; terminate so external owner-death watchdogs can recover.
+  process.exit(1);
 });
 process.on("unhandledRejection", (reason) => {
-  try {
-    const logPath = path.join(
-      process.env.APPDATA ?? path.join(os.homedir(), "AppData/Roaming"),
-      "GameHub",
-      "startup.log"
-    );
-    const msg =
-      reason instanceof Error
-        ? (reason.stack ?? String(reason))
-        : String(reason);
-    fs.appendFileSync(
-      logPath,
-      `[${new Date().toISOString()}] UNHANDLED_REJECTION ${msg}\n`,
-      "utf8"
-    );
-  } catch {
-    // ignore
-  }
+  appendStartupLog(`UNHANDLED_REJECTION ${formatConsoleLogData([reason])}`);
 });
 
 // Ensure app name matches productName so electron-updater uses
 // "GameHub-updater" instead of "hydralauncher-updater" for its temp dir.
 app.setName("GameHub");
+if (process.platform === "linux") {
+  // Electron 40 reads package.desktopName into CHROME_DESKTOP internally.
+  // Set it for direct development entrypoints as well; app.setDesktopName is
+  // not part of this pinned Electron version's public API.
+  process.env.CHROME_DESKTOP = "io.gamehub.launcher.desktop";
+  const features = new Set(
+    app.commandLine.getSwitchValue("enable-features").split(",").filter(Boolean)
+  );
+  features.add("GlobalShortcutsPortal");
+  app.commandLine.appendSwitch("enable-features", [...features].join(","));
+}
+
+// Screenshot acceptance can launch the development build against a cloned
+// portable profile. Keep that explicitly opted-in process read-only: IPC and
+// LevelDB still work, while background account/library/achievement jobs that
+// could mutate external state stay disabled. Packaged builds cannot enable it.
+const isReadOnlyVisualQa =
+  !app.isPackaged && process.env.GAMEHUB_READ_ONLY_VISUAL_QA === "true";
 
 // Auth backup dir: outside the install directory so NSIS updates never wipe it.
 const AUTH_BACKUP_DIR = path.join(
@@ -197,6 +202,10 @@ if (_portableExeDir) {
   }
 }
 
+// Keep native crash dumps local. Starting only after portable paths are set
+// ensures ZIP/portable installs write beneath their own data directory.
+crashReporter.start({ uploadToServer: false });
+
 // Let Chromium's HTTP/image disk cache grow to 2 GB (default is ~a few hundred
 // MB with LRU eviction). Game art (covers/heroes/screenshots) dominates load
 // time on every navigation, so a bigger cache means far fewer refetches. The
@@ -217,6 +226,7 @@ import {
   Lock,
   PowerSaveBlockerManager,
   DownloadOrchestrator,
+  OverlayManager,
 } from "@main/services";
 import { WSClient } from "@main/services/ws";
 import resources from "@locales";
@@ -224,16 +234,26 @@ import { PythonRPC } from "./services/python-rpc";
 import { controllerTestersPath } from "./constants";
 import { db, gamesSublevel, levelKeys } from "./level";
 import { GameShop, UserPreferences } from "@types";
-import { launchGame } from "./helpers";
+import { openGame } from "./events/library/open-game";
 import { loadState } from "./main";
 import { UpdateCheckerManager } from "./services/update-checker-manager";
+import { GameRecorderManager } from "./services/game-recorder-manager";
+import { NativeAddon } from "./services/native-addon";
+import { getCloudSaveAutomaticSyncEnabled } from "./services/cloud-save/automatic-sync-settings";
+import {
+  CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+  drainCloudSavePostExitOperations,
+} from "./services/cloud-save/pending-post-exit";
+import { AppQuitCleanupCoordinator } from "./services/app-quit-cleanup";
 
 const { autoUpdater } = updater;
 
 autoUpdater.setFeedURL({
   provider: "github",
   owner: "Kewz4",
-  repo: "hydra",
+  repo: "GameHub2026",
+  // The release repo is public: the releases feed and asset downloads both
+  // resolve anonymously, so no token is embedded in the binary.
 });
 
 autoUpdater.logger = logger;
@@ -314,6 +334,11 @@ app.whenReady().then(async () => {
   refreshShortcuts();
 
   electronApp.setAppUserModelId("io.gamehub.launcher");
+  logger.info("Crash dumps directory", app.getPath("crashDumps"));
+
+  // Wire the compositor-backed Borderless/Windowed overlay (perf HUD via
+  // PresentMon, Shift+F3 / Guide toggle). Idempotent; safe on all OSes.
+  OverlayManager.initialize();
 
   protocol.handle("local", (request) => {
     const filePath = request.url.slice("local:".length);
@@ -418,6 +443,7 @@ app.whenReady().then(async () => {
   if (!app.isPackaged) {
     const {
       gamesSublevel: gs,
+      gameAchievementsSublevel,
       gamesShopAssetsSublevel,
       gamehubMetaSublevel,
       minervaCatalogueSublevel,
@@ -426,6 +452,7 @@ app.whenReady().then(async () => {
     } = await import("./level");
     (globalThis as Record<string, unknown>).__levelSublevels = {
       gamesSublevel: gs,
+      gameAchievementsSublevel,
       gamesShopAssetsSublevel,
       gamehubMetaSublevel,
       minervaCatalogueSublevel,
@@ -438,6 +465,31 @@ app.whenReady().then(async () => {
     (globalThis as Record<string, unknown>).__raWatcherManager =
       RaWatcherManager;
     (globalThis as Record<string, unknown>).__windowManager = WindowManager;
+
+    // The live recorder acceptance harness needs the already-loaded singleton
+    // instances. Expose them only in an explicitly read-only, unpackaged QA
+    // process so Playwright never imports the entry bundle a second time.
+    if (isReadOnlyVisualQa) {
+      const {
+        getR2ActiveCloudSaveSnapshot,
+        getR2CloudSaveSnapshot,
+        downloadR2CloudSaveBlob,
+      } = await import("./services/cloud-save/r2-snapshot-store");
+      (globalThis as Record<string, unknown>).__gameHubRecorderQaControl = {
+        levelKeys,
+        database: db,
+        gamesSublevel,
+        OverlayManager,
+        GameRecorderManager,
+        NativeAddon,
+        getCloudSaveAutomaticSyncEnabled,
+        cloudSaveReadback: {
+          getR2ActiveCloudSaveSnapshot,
+          getR2CloudSaveSnapshot,
+          downloadR2CloudSaveBlob,
+        },
+      };
+    }
   }
 
   await import("./events")
@@ -465,40 +517,52 @@ app.whenReady().then(async () => {
   // Run the rest of startup (Lock, library sync, HydraApi, Python RPC, …) in
   // the background. A failure here must not blank the window — the UI is
   // already up and the update checker drives the flow forward.
-  loadState().catch((err) => {
-    logger.error("loadState failed:", err);
-  });
-
-  // Populate the console/emulated ROM catalogue on first run so those games are
-  // searchable out of the box. GameHub Vault (community USA dumps) replaces the
-  // Minerva archive. No-ops once cached; never blocks startup.
-  import("./services/rom-sources/gamehub-dump-sources")
-    .then(({ ensureGameHubDumpCatalogue }) => ensureGameHubDumpCatalogue())
-    .catch((err) => logger.error("dump catalogue bootstrap failed:", err));
-
-  // Populate the hosted console metadata (art/genres) so emulated games render
-  // rich cards in search and the catalogue. No-ops once cached.
-  import("./services/rom-sources/gamehub-meta-sources")
-    .then(({ ensureGameHubMeta }) => ensureGameHubMeta())
-    .catch((err) => logger.error("gamehub-meta bootstrap failed:", err));
-
-  // Re-stamp saved controller mappings into each emulator's native config, so a
-  // controller set up in a past session survives a restart or an emulator
-  // reinstall. No-op for emulators the user never configured here.
-  import("./events/emulators/emulator-settings-events")
-    .then(({ reapplyControllerProfilesOnStartup }) =>
-      reapplyControllerProfilesOnStartup()
-    )
-    .catch((err) => logger.error("controller re-apply failed:", err));
-
-  // Suspend can outlive the 60s stall watchdog; reconnect right away instead
-  powerMonitor.on("resume", () => {
-    WSClient.reconnectNow();
-    DownloadOrchestrator.onNetworkStatusChanged({
-      online: true,
-      switched: true,
+  if (!isReadOnlyVisualQa) {
+    loadState().catch((err) => {
+      logger.error("loadState failed:", err);
     });
-  });
+
+    // Populate the console/emulated ROM catalogue on first run so those games are
+    // searchable out of the box. GameHub Vault (community USA dumps) replaces the
+    // Minerva archive. No-ops once cached; never blocks startup.
+    import("./services/rom-sources/gamehub-dump-sources")
+      .then(({ ensureGameHubDumpCatalogue }) => ensureGameHubDumpCatalogue())
+      .catch((err) => logger.error("dump catalogue bootstrap failed:", err));
+
+    // Populate the hosted console metadata (art/genres) so emulated games render
+    // rich cards in search and the catalogue. No-ops once cached.
+    import("./services/rom-sources/gamehub-meta-sources")
+      .then(({ ensureGameHubMeta }) => ensureGameHubMeta())
+      .catch((err) => logger.error("gamehub-meta bootstrap failed:", err));
+
+    // Re-stamp saved controller mappings into each emulator's native config, so a
+    // controller set up in a past session survives a restart or an emulator
+    // reinstall. No-op for emulators the user never configured here.
+    import("./events/emulators/emulator-settings-events")
+      .then(({ reapplyControllerProfilesOnStartup }) =>
+        reapplyControllerProfilesOnStartup()
+      )
+      .catch((err) => logger.error("controller re-apply failed:", err));
+
+    // Suspend can outlive the 60s stall watchdog; reconnect right away instead
+    powerMonitor.on("resume", () => {
+      WSClient.reconnectNow();
+      DownloadOrchestrator.onNetworkStatusChanged({
+        online: true,
+        switched: true,
+        forceReconnect: true,
+      });
+    });
+  } else {
+    // Load only the persisted account bearer/client. getUserData() has its own
+    // read-only branch and HydraApi skips namespace migration in this mode, so
+    // QA can list the account's R2 snapshots without starting sync/background
+    // jobs or mutating either the cloned database or remote storage.
+    const { HydraApi } = await import("./services/hydra-api");
+    await HydraApi.setupApi().catch((err) => {
+      logger.error("Read-only visual QA account bootstrap failed:", err);
+    });
+  }
 
   const language = await db
     .get<string, string>(levelKeys.language, {
@@ -508,10 +572,11 @@ app.whenReady().then(async () => {
 
   if (language) i18n.changeLanguage(language);
 
-  const deepLinkArg = process.argv.find((arg) =>
-    arg.startsWith("hydralauncher://")
-  );
-  const isRunDeepLink = deepLinkArg?.startsWith("hydralauncher://run");
+  const {
+    deepLink: deepLinkArg,
+    runGame: isRunDeepLink,
+    bigPicture,
+  } = getLauncherIntent(process.argv);
 
   const { needsSetup } = await import("./services/installer");
 
@@ -521,7 +586,7 @@ app.whenReady().then(async () => {
     if (needsSetup()) {
       WindowManager.createInstallerWindow();
     } else if (!process.argv.includes("--hidden") && !isRunDeepLink) {
-      WindowManager.createMainWindow();
+      void WindowManager.createMainWindow({ bigPicture });
     }
     WindowManager.createNotificationWindow();
     WindowManager.createSystemTray(language || "en");
@@ -537,6 +602,23 @@ app.whenReady().then(async () => {
 
 app.on("browser-window-created", (_, window) => {
   optimizer.watchWindowShortcuts(window);
+});
+
+app.on("child-process-gone", (_event, details) => {
+  logger.error("Child process gone", {
+    type: details.type,
+    reason: details.reason,
+    exitCode: details.exitCode,
+    serviceName: details.serviceName,
+    name: details.name,
+  });
+});
+
+app.on("render-process-gone", (_event, _webContents, details) => {
+  logger.error("Render process gone", {
+    reason: details.reason,
+    exitCode: details.exitCode,
+  });
 });
 
 const handleRunGame = async (shop: GameShop, objectId: string) => {
@@ -558,19 +640,20 @@ const handleRunGame = async (shop: GameShop, objectId: string) => {
     WindowManager.createMainWindow();
   }
 
-  await launchGame({
-    shop,
-    objectId,
-    executablePath: game.executablePath,
-    launchOptions: game.launchOptions,
-  });
+  await openGame(null, shop, objectId, game.executablePath, game.launchOptions);
 };
 
 const handleDeepLinkPath = (uri?: string) => {
   if (!uri) return;
 
   try {
-    const url = new URL(uri);
+    const url = parseLauncherLink(uri);
+    if (!url) return;
+
+    if (url.host === "bigpicture") {
+      void WindowManager.openBigPictureWindow();
+      return;
+    }
 
     if (url.host === "run") {
       const shop = url.searchParams.get("shop") as GameShop | null;
@@ -626,14 +709,11 @@ const handleDeepLinkPath = (uri?: string) => {
 };
 
 app.on("second-instance", (_event, commandLine) => {
-  const deepLink = commandLine.find((arg) =>
-    arg.startsWith("hydralauncher://")
-  );
+  const { deepLink, runGame, bigPicture } = getLauncherIntent(commandLine);
 
-  // Check if this is a "run" deep link - don't show main window in that case
-  const isRunDeepLink = deepLink?.startsWith("hydralauncher://run");
-
-  if (!isRunDeepLink) {
+  if (bigPicture) {
+    void WindowManager.openBigPictureWindow();
+  } else if (!runGame) {
     if (WindowManager.mainWindow) {
       if (WindowManager.mainWindow.isMinimized())
         WindowManager.mainWindow.restore();
@@ -644,7 +724,7 @@ app.on("second-instance", (_event, commandLine) => {
     }
   }
 
-  handleDeepLinkPath(deepLink);
+  if (!bigPicture) handleDeepLinkPath(deepLink);
 });
 
 app.on("open-url", (_event, url) => {
@@ -658,32 +738,52 @@ app.on("window-all-closed", () => {
   WindowManager.mainWindow = null;
 });
 
-let canAppBeClosed = false;
-
-app.on("before-quit", async (e) => {
-  await Lock.releaseLock();
-
-  // Update install in progress — quit immediately so the NSIS installer (or
-  // portable batch file) can overwrite the exe without "file in use" errors.
-  // Still back up auth so NSIS doesn't wipe Epic/GOG sessions, but skip the
-  // async cleanup (PythonRPC kill, playtime flush) that would race the
-  // installer and leave the old process alive.
-  if (UpdateCheckerManager.isApplyingUpdate) {
-    backupAuth();
-    return;
-  }
-
-  if (!canAppBeClosed) {
-    e.preventDefault();
+const quitCleanup = new AppQuitCleanupCoordinator(
+  async () => {
+    await Lock.releaseLock().catch((error: unknown) => {
+      logger.error("Error releasing the app lock during quit", error);
+    });
     PowerSaveBlockerManager.reset();
     /* Disconnects Python RPC */
     PythonRPC.kill();
-    await clearGamesPlaytime();
+    await clearGamesPlaytime().catch((error: unknown) => {
+      logger.error("Failed to flush game state during quit", error);
+    });
+    const cloudSaveDrain = await drainCloudSavePostExitOperations(
+      CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS
+    );
+    if (!cloudSaveDrain.drained) {
+      logger.warn("[Cloud Save] Quit drain reached its deadline", {
+        pending: cloudSaveDrain.pending,
+        timeoutMs: CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+      });
+    }
     // Backup Epic/GOG auth so NSIS updates don't wipe sessions permanently.
     backupAuth();
-    canAppBeClosed = true;
-    app.quit();
+  },
+  () => app.quit(),
+  (error: unknown) => {
+    logger.error("Unexpected app quit cleanup failure", error);
+    backupAuth();
   }
+);
+
+app.on("before-quit", (e) => {
+  // Update install in progress — the update path already performed its
+  // bounded cloud-save drain. Do not delay the installer here.
+  if (UpdateCheckerManager.isApplyingUpdate) {
+    backupAuth();
+    void Lock.releaseLock().catch((error: unknown) => {
+      logger.error("Error releasing the app lock for update", error);
+    });
+    return;
+  }
+
+  quitCleanup.handleBeforeQuit(e);
+});
+
+app.on("will-quit", () => {
+  logger.info("Application will quit");
 });
 
 app.on("activate", () => {

@@ -1,0 +1,13 @@
+LIBRARY "dinput8"
+EXPORTS
+    DirectInput8Create @1
+    c_dfDIJoystick @2 DATA
+    c_dfDIJoystick2 @3 DATA
+    c_dfDIKeyboard @4 DATA
+    c_dfDIMouse @5 DATA
+    c_dfDIMouse2 @6 DATA
+    GameHubSyntheticDiGetProviderSnapshot @1001
+    GameHubSyntheticDiSetPhysical @1002
+    GameHubSyntheticDiSetActionMapResult @1003
+    GameHubSyntheticDiSetRange @1004
+    GameHubSyntheticDiGetFormat @1005

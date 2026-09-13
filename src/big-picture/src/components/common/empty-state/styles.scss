@@ -1,0 +1,63 @@
+.empty-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 14rem;
+  padding: calc(var(--spacing-unit) * 6);
+  color: #fff;
+  text-align: center;
+}
+
+.empty-state__visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: calc(var(--spacing-unit) * 4);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.empty-state__illustration {
+  position: absolute;
+  max-width: min(16rem, 80vw);
+  opacity: 0.24;
+}
+
+.empty-state__icon {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+
+.empty-state__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--spacing-unit) * 2);
+  max-width: 28rem;
+}
+
+.empty-state__title,
+.empty-state__description {
+  margin: 0;
+}
+
+.empty-state__description {
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.5;
+}
+
+.empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(var(--spacing-unit) * 3);
+  margin-top: calc(var(--spacing-unit) * 5);
+}

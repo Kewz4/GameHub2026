@@ -70,9 +70,24 @@
       color: #dadbe1;
     }
 
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: globals.$disabled-opacity;
+    }
+
     &--scanning svg {
       animation: spin 2s linear infinite;
     }
+  }
+
+  &__sidebar-toggle {
+    flex: 0 0 auto;
+    border-radius: 6px;
   }
 
   @keyframes spin {

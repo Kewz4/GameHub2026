@@ -261,9 +261,13 @@ export interface EmulationCloudSave {
   updatedAt: string;
 }
 
-/** Result of writing a downloaded cloud save back into a local card. */
+/** Result of preparing a downloaded save for restoration into a local card. */
 export interface MemcardRestoreResult {
   ok: boolean;
+  /** True until the app has a format-complete, crash-safe card writer. */
+  requiresManualImport?: boolean;
+  /** Standards-based PSU/MCS file revealed for the user to import. */
+  exportedPath?: string;
   error?: string;
 }
 
@@ -278,6 +282,7 @@ export interface MemcardRestoreTarget {
 export type EmulatorInstallKind =
   | "windows-installer"
   | "linux-appimage"
+  | "linux-flatpak"
   | "windows-archive"
   | "link";
 

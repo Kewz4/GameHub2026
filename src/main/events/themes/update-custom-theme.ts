@@ -1,6 +1,6 @@
 import { themesSublevel } from "@main/level";
 import { registerEvent } from "../register-event";
-import { WindowManager } from "@main/services";
+import { BrowserWindow } from "electron";
 
 const updateCustomTheme = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -20,10 +20,11 @@ const updateCustomTheme = async (
   });
 
   if (theme.isActive) {
-    WindowManager.mainWindow?.webContents.send("on-custom-theme-updated");
-    WindowManager.notificationWindow?.webContents.send(
-      "on-custom-theme-updated"
-    );
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send("on-custom-theme-updated");
+      }
+    }
   }
 };
 

@@ -28,6 +28,9 @@ jobs:
       - name: Typecheck
         run: yarn typecheck
 
+      - name: Download safety tests
+        run: yarn test:downloads
+
       - name: Lint
         run: yarn lint
 

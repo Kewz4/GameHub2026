@@ -118,8 +118,10 @@ export function SettingsEpicAccount() {
           isNew: true,
         })),
       });
-    } catch (err: any) {
-      showErrorToast(err?.message ?? t("epic_sync_failed"));
+    } catch (error: unknown) {
+      showErrorToast(
+        error instanceof Error ? error.message : t("epic_sync_failed")
+      );
     } finally {
       setStep("idle");
     }

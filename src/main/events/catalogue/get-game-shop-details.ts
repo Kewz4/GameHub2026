@@ -29,6 +29,8 @@ import {
   buildRiotShopDetails,
 } from "@main/helpers/riot-metadata";
 import type { EmulatorSystem } from "@types";
+import { getBundledGameHubMeta } from "@main/services/rom-sources/gamehub-meta-sources";
+import { mergeMetadataCredits } from "@shared";
 
 /**
  * Convert a console game's display title into the form IGDB indexes: drop a
@@ -134,8 +136,11 @@ const getGameShopDetails = async (
       gameAssets?.title ?? gameEntry?.title ?? objectIdTitle ?? null;
 
     const metaTitle = title ?? objectIdTitle;
-    const meta =
+    const storedMeta =
       metaTitle && system ? await getGameHubMeta(system, metaTitle) : null;
+    const bundledMeta =
+      metaTitle && system ? getBundledGameHubMeta(system, metaTitle) : null;
+    const meta = storedMeta ?? bundledMeta;
 
     if (!title && !meta) return null;
 
@@ -182,7 +187,15 @@ const getGameShopDetails = async (
     };
 
     // Map meta screenshots into the SteamScreenshot shape the gallery expects.
-    const screenshots = (meta?.screenshots ?? []).map((url, i) => ({
+    // Lead with the LaunchBox 3-D box render (when present and not already the
+    // cover) so emulated games "feature" it, then the gameplay screenshots.
+    const galleryUrls = [
+      ...(meta?.boxImageUrl && meta.boxImageUrl !== assets.coverImageUrl
+        ? [meta.boxImageUrl]
+        : []),
+      ...(meta?.screenshots ?? []),
+    ];
+    const screenshots = galleryUrls.map((url, i) => ({
       id: i,
       path_thumbnail: url,
       path_full: url,
@@ -195,8 +208,17 @@ const getGameShopDetails = async (
       detailed_description: description,
       about_the_game: description,
       short_description: description,
-      developers: meta?.developers ?? [],
-      publishers: meta?.publishers ?? [],
+      // A persisted entry can predate newer bundled credits. Merge both lists
+      // so a partial cache (for example Grezzo only) never hides a co-developer
+      // shipped in the current dataset (Nintendo EAD for Ocarina 3D).
+      developers: mergeMetadataCredits(
+        bundledMeta?.developers,
+        storedMeta?.developers
+      ),
+      publishers: mergeMetadataCredits(
+        bundledMeta?.publishers,
+        storedMeta?.publishers
+      ),
       genres: genres.map((g, i) => ({
         id: String(i + 1),
         name: g,
@@ -213,6 +235,10 @@ const getGameShopDetails = async (
       },
       content_descriptors: { ids: [] },
       assets,
+      // The Steam-shaped response otherwise loses console identity. Prefer the
+      // imported library label ("Nintendo 3DS"), with the canonical system key
+      // as a renderer-resolvable fallback for catalogue-only games.
+      platform: gameEntry?.platform ?? system ?? null,
     } as ShopDetailsWithAssets;
   }
 

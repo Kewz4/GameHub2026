@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import {
   Button,
   ContextMenu,
+  FileExplorerModal,
   FocusItem,
   GridFocusGroup,
   HorizontalFocusGroup,
@@ -368,6 +369,7 @@ export function MemoryCardsSection({
 
   const [saves, setSaves] = useState<MemoryCardSaveRecord[]>([]);
   const [scanInput, setScanInput] = useState<MemcardScanInput | null>(null);
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [backingUpKey, setBackingUpKey] = useState<string | null>(null);
   const { backupProgressByCard, backupCard } =
@@ -433,15 +435,9 @@ export function MemoryCardsSection({
     });
   }, []);
 
-  const handlePickFile = useCallback(async () => {
-    const result = await globalThis.window.electron.showOpenDialog({
-      properties: ["openFile", "multiSelections"],
-      filters: [isPs1 ? PICK_FILTERS.ps1 : PICK_FILTERS.ps2],
-    });
-
-    if (result.canceled || result.filePaths.length === 0) return;
-    setScanInput({ autoDetect: false, manualPaths: result.filePaths });
-  }, [isPs1]);
+  const handlePickFile = useCallback(() => {
+    setFilePickerOpen(true);
+  }, []);
 
   const handleExport = useCallback(
     async (save: MemoryCardSaveRecord) => {
@@ -534,7 +530,7 @@ export function MemoryCardsSection({
               variant="secondary"
               icon={<FileDirectoryIcon size={14} />}
               onClick={() => {
-                void handlePickFile();
+                handlePickFile();
               }}
             >
               {t(isPs1 ? "pick_memory_card_file_ps1" : "pick_memory_card_file")}
@@ -981,6 +977,27 @@ export function MemoryCardsSection({
           onClose={() => setScanInput(null)}
         />
       ) : null}
+
+      <FileExplorerModal
+        visible={filePickerOpen}
+        title={t(isPs1 ? "pick_memory_card_file_ps1" : "pick_memory_card_file")}
+        initialPath={groups[0]?.cardFilePath}
+        filters={[
+          {
+            ...(isPs1 ? PICK_FILTERS.ps1 : PICK_FILTERS.ps2),
+            extensions: [
+              ...(isPs1
+                ? PICK_FILTERS.ps1.extensions
+                : PICK_FILTERS.ps2.extensions),
+            ],
+          },
+        ]}
+        onClose={() => setFilePickerOpen(false)}
+        onSelect={(path) => {
+          setFilePickerOpen(false);
+          setScanInput({ autoDetect: false, manualPaths: [path] });
+        }}
+      />
 
       <ConfirmationModal
         visible={forgetCardTarget !== null}

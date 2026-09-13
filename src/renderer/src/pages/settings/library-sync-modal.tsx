@@ -1,4 +1,5 @@
 import { Modal, Button } from "@renderer/components";
+import { Gamepad2 } from "lucide-react";
 
 export interface LibrarySyncResult {
   title: string;
@@ -60,7 +61,8 @@ export function LibrarySyncModal({
             {r.coverUrl ? (
               <img
                 src={r.coverUrl}
-                alt={r.title}
+                alt=""
+                className="library-sync-modal__placeholder"
                 style={{
                   width: 50,
                   height: 50,
@@ -76,14 +78,12 @@ export function LibrarySyncModal({
                   height: 50,
                   borderRadius: 4,
                   flexShrink: 0,
-                  background: "rgba(255,255,255,0.08)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "1.2rem",
                 }}
               >
-                🎮
+                <Gamepad2 size={20} aria-hidden="true" />
               </div>
             )}
             <div style={{ flex: 1, overflow: "hidden" }}>
@@ -106,11 +106,11 @@ export function LibrarySyncModal({
             </div>
             {r.isNew && (
               <span
+                className="library-sync-modal__new-badge"
                 style={{
                   fontSize: "0.7rem",
                   padding: "2px 7px",
                   borderRadius: 999,
-                  background: "#fff",
                   whiteSpace: "nowrap",
                   flexShrink: 0,
                 }}

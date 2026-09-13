@@ -147,6 +147,13 @@ export class ExophaseFetcher {
     }
   }
 
+  getCurrentUrl(): string | null {
+    const win = this.win;
+    if (!win || win.isDestroyed()) return null;
+
+    return win.webContents.getURL() || null;
+  }
+
   close(): void {
     if (this.win && !this.win.isDestroyed()) this.win.destroy();
     this.win = null;

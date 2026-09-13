@@ -46,6 +46,10 @@
   gap: 40px;
 
   &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
     color: #8e919b;
     font-size: 13px;
   }
@@ -53,8 +57,63 @@
   &__cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 44px 16px;
-    padding-top: 40px;
+    gap: 16px;
+    padding-top: 8px;
+
+    .console-card {
+      min-height: 246px;
+      padding-top: 24px;
+    }
+  }
+}
+
+.emulation-settings {
+  &__header,
+  &__retroachievements,
+  &__controllers {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__title {
+    margin: 0;
+    color: #fafafa;
+    font-size: 24px;
+    font-weight: 650;
+    letter-spacing: -0.4px;
+  }
+
+  &__description {
+    max-width: 760px;
+    margin: 0;
+    color: #8e919b;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  &__retroachievements,
+  &__controllers {
+    padding: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    background: #0d0d0d;
+  }
+
+  &__retroachievements {
+    .input-container {
+      max-width: 560px;
+    }
+
+    .button {
+      align-self: flex-start;
+    }
+  }
+
+  &__controllers > [data-focus-region] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 
@@ -594,6 +653,10 @@
   &__empty {
     color: #8e919b;
     font-size: 13px;
+
+    &--error {
+      color: #f0a29b;
+    }
   }
 
   &__folder-info {
@@ -701,6 +764,11 @@
     font-weight: 700;
     color: #fafafa;
     letter-spacing: -0.36px;
+
+    &--date {
+      font-size: clamp(15px, 1.7vw, 22px);
+      line-height: 1.2;
+    }
   }
 
   &__stat-caption {
@@ -1095,6 +1163,92 @@
   }
 }
 
+.emulator-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  &__notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    background: #0d0d0d;
+    color: #8e919b;
+    font-size: 13px;
+    line-height: 1.45;
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+  }
+
+  &__group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__group-title {
+    margin: 0;
+    color: #c0c1c7;
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-height: 72px;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    background: #0d0d0d;
+
+    .dropdown-select {
+      width: min(280px, 42vw);
+      margin-left: auto;
+    }
+
+    > .checkbox {
+      margin-left: auto;
+    }
+  }
+
+  &__label {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  &__label-text {
+    color: #fafafa;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  &__hint {
+    color: #8e919b;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+}
+
 .emu-save-modal {
   &__restore {
     display: flex;
@@ -1256,9 +1410,102 @@
   flex-wrap: wrap;
 }
 
+.emulator-detail__rom-error,
+.emulator-detail__pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.emulator-detail__rom-error {
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.emulator-detail__roms {
+  display: flex;
+  flex-direction: column;
+}
+
+.emulator-detail__rom {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.emulator-detail__rom-cover {
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: #050505;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.emulator-detail__rom-title {
+  overflow: hidden;
+  color: #fafafa;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emulator-detail__rom-size {
+  color: #8e919b;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.emulator-detail__rom-regions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  img {
+    width: 20px;
+    height: auto;
+    border-radius: 2px;
+  }
+}
+
+.emulator-detail__pagination {
+  justify-content: flex-end;
+  color: #8e919b;
+  font-size: 13px;
+}
+
 @media (max-width: 1100px) {
   .emulator-detail__stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  // The Big Picture sidebar and Settings padding leave less usable width than
+  // the window breakpoint suggests. Stack the hero before its three actions
+  // can push "Setup assistant" beyond a 1024px viewport.
+  .emulator-detail__hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .emulator-detail__hero-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
 }
 
@@ -1295,6 +1542,17 @@
   .emu-save-modal__restore,
   .emu-save-modal__rename {
     min-width: 0;
+  }
+
+  .emulator-settings__row {
+    align-items: stretch;
+    flex-direction: column;
+
+    .dropdown-select,
+    > .checkbox {
+      width: 100%;
+      margin-left: 0;
+    }
   }
 }
 

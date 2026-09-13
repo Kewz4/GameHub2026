@@ -244,12 +244,25 @@ const scanInstalledGames = async (
   // The deep scan also looks for ROM files (.iso, .3ds, .gba, etc.) in the
   // "Emulator Games" folders and generic ROM directories. Found ROMs that
   // aren't already in the library are surfaced for the user to confirm.
-  const knownRomPaths = new Set(
-    games
-      .filter((g) => g.game.shop === "launchbox")
-      .map((g) => g.game.executablePath?.toLowerCase())
-      .filter((p): p is string => Boolean(p))
-  );
+  // A launchbox ROM counts as "known" only when it's bound as a DISC
+  // (selectedDiscPath / discs) — the correct emulator binding. We deliberately
+  // do NOT treat a raw `executablePath` binding as known: a launchbox game with
+  // only executablePath is the broken state (it shell-opens the ROM), so it
+  // should be re-surfaced and repaired into a disc binding on confirm rather
+  // than skipped forever.
+  // A soft-DELETED launchbox game must NOT count as known — otherwise deleting
+  // a game and re-scanning (the user's way to force a fresh, corrected import)
+  // silently skips its ROM and finds nothing.
+  const knownRomPaths = new Set<string>();
+  for (const g of games) {
+    if (g.game.shop !== "launchbox" || g.game.isDeleted) continue;
+    for (const p of [
+      g.game.selectedDiscPath,
+      ...(g.game.discs?.map((d) => d.path) ?? []),
+    ]) {
+      if (p) knownRomPaths.add(p.toLowerCase());
+    }
+  }
 
   const discoveredRoms = await discoverRomFiles([], (current, total, title) =>
     WindowManager.sendToAppWindows("on-scan-progress", {
@@ -266,8 +279,11 @@ const scanInstalledGames = async (
 
     const romNorm = normalizeGameTitle(rom.title);
 
-    // Check if this ROM matches an existing (possibly deleted) launchbox entry
-    // by title — if so, resolve its executable path instead of creating new.
+    // Check if this ROM matches an existing (possibly deleted / broken pre-fix)
+    // launchbox entry by title — if so, surface it so confirmScanGames can
+    // (re)bind the ROM as an emulator disc. The write is deliberately left to
+    // the confirm step, which binds a disc (executablePath null), not a raw
+    // executablePath — the latter makes the Play button shell-open the ROM.
     const existingRom = games.find(
       (g) =>
         g.game.shop === "launchbox" &&
@@ -276,21 +292,17 @@ const scanInstalledGames = async (
     if (existingRom) {
       if (!seenKeys.has(existingRom.key)) {
         seenKeys.add(existingRom.key);
-        if (!dryRun) {
-          await gamesSublevel.put(existingRom.key, {
-            ...existingRom.game,
-            isDeleted: false,
-            executablePath: rom.romPath,
-            isInstalledLocally: true,
-          });
-        }
         foundGames.push({
           title: existingRom.game.title,
           executablePath: rom.romPath,
           key: existingRom.key,
+          // Forward the freshly-detected system so confirmScanGames can
+          // correct a mis-detected platform on an already-library entry (e.g.
+          // a Game Boy/Color ROM a pre-fix scan stamped as Game Boy Advance).
+          emulatorSystem: rom.system,
         });
         logger.info(
-          `[ScanInstalledGames] Resolved ROM: ${existingRom.game.title} → ${rom.romPath}`
+          `[ScanInstalledGames] Matched existing ROM: ${existingRom.game.title} → ${rom.romPath}`
         );
       }
       continue;

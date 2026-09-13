@@ -1,21 +1,16 @@
 import { registerEvent } from "../register-event";
 import { launchedGamePids, logger, Wine, emulators } from "@main/services";
-import sudo from "sudo-prompt";
-import { app } from "electron";
 import { gamesSublevel, levelKeys } from "@main/level";
 import { GameShop } from "@types";
 import path from "node:path";
 import { NativeAddon } from "@main/services/native-addon";
 import { processReferencesExecutable } from "@main/services/linux-process-match";
 import { isWindowsBatchFile } from "@main/helpers/windows-batch-command";
+import { requestGameProcessTermination } from "./close-game-process";
 
-const getKillCommand = (pid: number) => {
-  if (process.platform == "win32") {
-    return `taskkill /PID ${pid}`;
-  }
-
-  return `kill -9 ${pid}`;
-};
+const systemRoot = process.env.SystemRoot ?? String.raw`C:\Windows`;
+const taskkillDirectory = path.join(systemRoot, "System32");
+const taskkillExecutable = path.join(taskkillDirectory, "taskkill.exe");
 
 const closeGame = async (
   _event: Electron.IpcMainInvokeEvent,
@@ -23,22 +18,29 @@ const closeGame = async (
   objectId: string
 ) => {
   // Emulator games run in a child process we track directly — kill that first.
-  if (emulators.closeEmulatorSession(shop, objectId)) return;
+  if (emulators.closeEmulatorSession(shop, objectId)) return true;
 
   const processes = await NativeAddon.listProcesses();
 
   const game = await gamesSublevel.get(levelKeys.game(shop, objectId));
 
-  if (!game) return;
+  if (!game) return false;
 
   const launchedPid = launchedGamePids.get(levelKeys.game(shop, objectId));
   const trackingPaths = game.trackingExecutablePaths?.filter(Boolean) ?? [];
-  const targetPaths =
-    game.executablePath && !isWindowsBatchFile(game.executablePath)
-      ? [game.executablePath, ...trackingPaths]
-      : trackingPaths;
+  const targetPaths = [
+    game.nativeExecutablePath,
+    ...(game.executablePath &&
+    !isWindowsBatchFile(game.executablePath) &&
+    !/^[a-z][a-z\d+.-]*:\/\//i.test(game.executablePath)
+      ? [game.executablePath]
+      : []),
+    ...trackingPaths,
+  ].filter((targetPath): targetPath is string => Boolean(targetPath));
 
   const gameProcesses = processes.filter((runningProcess) => {
+    if (runningProcess.pid === launchedPid) return true;
+
     const matchesTargetPath = targetPaths.some((targetPath) => {
       if (process.platform === "linux") {
         return processReferencesExecutable(
@@ -51,23 +53,16 @@ const closeGame = async (
         );
       }
 
-      return runningProcess.exe === targetPath;
+      return (
+        !!runningProcess.exe &&
+        path.normalize(runningProcess.exe).toLowerCase() ===
+          path.normalize(targetPath).toLowerCase()
+      );
     });
 
     if (matchesTargetPath) return true;
 
-    return (
-      process.platform === "linux" &&
-      runningProcess.pid === launchedPid &&
-      processReferencesExecutable(
-        {
-          cwd: runningProcess.cwd,
-          exe: runningProcess.exe,
-          appImagePath: runningProcess.environ?.APPIMAGE,
-        },
-        game.executablePath ?? ""
-      )
-    );
+    return false;
   });
 
   const linuxFallbackProcess =
@@ -108,19 +103,24 @@ const closeGame = async (
     ? gameProcesses
     : fallbackProcesses;
 
-  for (const processToClose of processesToClose) {
-    try {
-      process.kill(processToClose.pid);
-    } catch {
-      sudo.exec(
-        getKillCommand(processToClose.pid),
-        { name: app.getName() },
-        (error, _stdout, _stderr) => {
-          logger.error(error);
-        }
-      );
+  const requests = processesToClose.map((processToClose) => {
+    const result = requestGameProcessTermination(processToClose.pid, {
+      platform: process.platform,
+      taskkillExecutable,
+      taskkillWorkingDirectory: taskkillDirectory,
+      kill: (pid) => process.kill(pid),
+      launchElevated: (executable, parameters, workingDirectory) =>
+        NativeAddon.launchElevated(executable, parameters, workingDirectory),
+    });
+    if (!result.requested) {
+      logger.error("Could not request game process termination", {
+        pid: processToClose.pid,
+      });
     }
-  }
+    return result.requested;
+  });
+
+  return requests.length > 0 && requests.every(Boolean);
 };
 
 registerEvent("closeGame", closeGame);

@@ -4,6 +4,10 @@ import type { EmulatorSystem } from "@types";
 import { KNOWN_BINARIES } from "./known-binaries";
 import { getEmulatorConfig } from "./emulators-repository";
 import { logger } from "../logger";
+import {
+  readRetroArchCoreOptions,
+  writeRetroArchCoreOptions,
+} from "./retroarch-linux";
 import type { SettingDef, SettingValue, SettingType } from "./setting-types";
 import { STANDALONE_SETTINGS_BY_SYSTEM } from "./standalone-settings-defs";
 import {
@@ -389,6 +393,19 @@ export async function readEmulatorSettings(
   if (isStandaloneSettingsSystem(system)) {
     return readStandaloneSettings(system, defs);
   }
+  if (
+    process.platform === "linux" &&
+    KNOWN_BINARIES[system]?.binary === "ralibretro"
+  ) {
+    const config = await getEmulatorConfig(system);
+    const values = config.executablePath
+      ? readRetroArchCoreOptions(path.dirname(config.executablePath), system)
+      : {};
+    return defs.map((def) => ({
+      key: def.key,
+      value: values[def.key] ?? def.options?.[0]?.value ?? "",
+    }));
+  }
 
   const file = await coreFilePath(system);
   let core: Record<string, string> = {};
@@ -413,6 +430,23 @@ export async function writeEmulatorSettings(
 ): Promise<boolean> {
   if (isStandaloneSettingsSystem(system)) {
     return writeStandaloneSettings(system, values);
+  }
+  if (
+    process.platform === "linux" &&
+    KNOWN_BINARIES[system]?.binary === "ralibretro"
+  ) {
+    const config = await getEmulatorConfig(system);
+    if (!config.executablePath) return false;
+    try {
+      return writeRetroArchCoreOptions(
+        path.dirname(config.executablePath),
+        system,
+        Object.fromEntries(values.map(({ key, value }) => [key, value]))
+      );
+    } catch (error) {
+      logger.error("Failed to write RetroArch core options", error);
+      return false;
+    }
   }
 
   const file = await coreFilePath(system);

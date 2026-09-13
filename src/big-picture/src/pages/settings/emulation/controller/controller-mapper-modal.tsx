@@ -19,6 +19,7 @@ import { WiimoteDiagram } from "@renderer/pages/settings/emulation/wiimote-diagr
 import { Ps1Diagram } from "@renderer/pages/settings/emulation/ps1-diagram";
 import { DualShockDiagram } from "@renderer/pages/settings/emulation/dualshock-diagram";
 import { JoyConDiagram } from "@renderer/pages/settings/emulation/joycon-diagram";
+import { HandheldControllerDiagram } from "@renderer/pages/settings/emulation/handheld-controller-diagram";
 import {
   AXIS_NAME,
   AXIS_THRESHOLD,
@@ -441,6 +442,15 @@ export function ControllerMapperModal({
 
   const renderDiagram = () => {
     switch (layout.diagram) {
+      case "wiiu-gamepad":
+      case "wiiu-pro":
+      case "classic":
+      case "3ds":
+      case "ds":
+      case "psp":
+        return (
+          <HandheldControllerDiagram kind={layout.diagram} {...diagramProps} />
+        );
       case "gamecube":
         return <GameCubeDiagram {...diagramProps} />;
       case "gba":

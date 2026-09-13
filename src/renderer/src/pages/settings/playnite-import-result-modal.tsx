@@ -5,9 +5,25 @@ import { Button } from "@renderer/components";
 interface PlayniteImportResult {
   matched: number;
   total: number;
-  games: Array<{ title: string; addedHours: number }>;
+  cloudSynced: number;
+  cloudSyncPending: number;
+  games: Array<{
+    title: string;
+    previousHours: number;
+    playniteHours: number;
+    changeHours: number;
+  }>;
+  preserved: Array<{
+    title: string;
+    existingHours: number;
+    playniteHours: number;
+  }>;
   unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
-  cached: Array<{ title: string; playtimeHours: number }>;
+  cached: Array<{
+    title: string;
+    playtimeHours: number;
+    catalogueMatched: boolean;
+  }>;
 }
 
 interface Props {
@@ -18,6 +34,7 @@ interface Props {
 
 export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const [showPreserved, setShowPreserved] = useState(false);
 
   if (!result) return null;
 
@@ -40,7 +57,13 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
             >
               {result.matched}
             </div>
-            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>matched</div>
+            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>updated</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "2rem", fontWeight: 700, opacity: 0.7 }}>
+              {result.preserved.length}
+            </div>
+            <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>protected</div>
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "2rem", fontWeight: 700, opacity: 0.5 }}>
@@ -57,6 +80,20 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
             <div style={{ fontSize: "0.8rem", opacity: 0.7 }}>unmatched</div>
           </div>
         </div>
+
+        {result.matched > 0 && (
+          <p
+            role="status"
+            style={{ margin: 0, fontSize: "0.82rem", opacity: 0.72 }}
+          >
+            {result.cloudSynced} absolute playtime correction
+            {result.cloudSynced === 1 ? "" : "s"} confirmed by the Hydra API
+            profile service.
+            {result.cloudSyncPending > 0
+              ? ` ${result.cloudSyncPending} will retry automatically when the cloud connection is available.`
+              : ""}
+          </p>
+        )}
 
         {result.games.length > 0 && (
           <div>
@@ -85,10 +122,70 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
                   }}
                 >
                   <span>{g.title}</span>
-                  <span style={{ opacity: 0.7 }}>+{g.addedHours}h</span>
+                  <span style={{ opacity: 0.7 }}>
+                    {g.previousHours}h → {g.playniteHours}h
+                    {g.changeHours !== 0
+                      ? ` (${g.changeHours > 0 ? "+" : ""}${g.changeHours}h)`
+                      : ""}
+                  </span>
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {result.preserved.length > 0 && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowPreserved((value) => !value)}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "inherit",
+                opacity: 0.7,
+                fontSize: "0.85rem",
+                padding: 0,
+                textDecoration: "underline",
+              }}
+            >
+              {showPreserved ? "Hide" : "Show"} {result.preserved.length}{" "}
+              protected or already-current game
+              {result.preserved.length !== 1 ? "s" : ""}
+            </button>
+            {showPreserved && (
+              <div
+                style={{
+                  maxHeight: "180px",
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "4px",
+                  marginTop: "8px",
+                }}
+              >
+                {result.preserved.map((game) => (
+                  <div
+                    key={`${game.title}:${game.existingHours}`}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: "0.82rem",
+                      padding: "4px 8px",
+                      background: "rgba(255,255,255,0.04)",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <span>{game.title}</span>
+                    <span style={{ opacity: 0.7 }}>
+                      kept {game.existingHours}h · Playnite {game.playniteHours}
+                      h
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -124,7 +221,10 @@ export function PlayniteImportResultModal({ visible, result, onClose }: Props) {
                   }}
                 >
                   <span>{g.title}</span>
-                  <span style={{ opacity: 0.7 }}>{g.playtimeHours}h</span>
+                  <span style={{ opacity: 0.7 }}>
+                    {g.playtimeHours}h ·{" "}
+                    {g.catalogueMatched ? "catalogue" : "local match pending"}
+                  </span>
                 </div>
               ))}
             </div>

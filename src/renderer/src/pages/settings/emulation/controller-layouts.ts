@@ -24,6 +24,12 @@ export type DiagramKind =
   | "ps1"
   | "dualshock"
   | "joycon"
+  | "wiiu-gamepad"
+  | "wiiu-pro"
+  | "classic"
+  | "3ds"
+  | "ds"
+  | "psp"
   | null;
 
 export interface ControlDef {
@@ -255,6 +261,18 @@ export const RETRO_DIAGRAM_CHOICES: DiagramChoice[] = [
   { value: "n64", label: "Nintendo 64", layout: N64 },
   { value: "gba", label: "Game Boy Advance", layout: GBA },
   { value: "gb", label: "Game Boy / Color", layout: GBGBC },
+  {
+    value: "ds",
+    label: "Nintendo DS",
+    layout: {
+      diagram: "ds",
+      controls: FULL.controls.filter(
+        ({ control }) =>
+          !control.includes("stick") &&
+          !["l2", "r2", "l3", "r3"].includes(control)
+      ),
+    },
+  },
 ];
 
 /** Resolve the layout for an emulator + selected emulated controller type. */
@@ -262,9 +280,43 @@ export function layoutFor(
   binary: EmulatorBinary,
   type: EmulatedControllerType | null
 ): ControllerLayout {
+  if (binary === "duckstation") return DUALSHOCK;
+  if (binary === "raproject64") return N64;
+  if (binary === "ravba") return GBA;
+  if (binary === "ppsspp")
+    return {
+      diagram: "psp",
+      controls: DUALSHOCK.controls.filter(
+        ({ control }) =>
+          !["l2", "r2", "l3", "r3"].includes(control) &&
+          !control.startsWith("rstick_")
+      ),
+    };
+  if (binary === "azahar")
+    return {
+      diagram: "3ds",
+      controls: FULL.controls.filter(
+        ({ control }) => !["l3", "r3"].includes(control)
+      ),
+    };
+  if (binary === "cemu")
+    return {
+      diagram:
+        type === "wiiu_pro"
+          ? "wiiu-pro"
+          : type === "wiiu_classic"
+            ? "classic"
+            : "wiiu-gamepad",
+      controls:
+        type === "wiiu_classic"
+          ? FULL.controls.filter(
+              ({ control }) => !["l3", "r3"].includes(control)
+            )
+          : FULL.controls,
+    };
   if (binary === "dolphin") {
     if (type === "wiimote") return WIIMOTE;
-    if (type === "gamecube") return GAMECUBE;
+    return GAMECUBE;
   }
   // PS2/PS3 use the DualShock art and PS labels.
   if (binary === "pcsx2" || binary === "rpcs3") return DUALSHOCK;

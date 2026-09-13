@@ -2,12 +2,14 @@ import type {
   EmulationCloudSave,
   EmulationSavePlatform,
   MemcardRestoreTarget,
+  MemcardRestoreResult,
 } from "@types";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
   Button,
+  FileExplorerModal,
   FocusItem,
   HorizontalFocusGroup,
   Modal,
@@ -37,7 +39,7 @@ interface EmulationCloudRestoreModalProps {
   platform: EmulationSavePlatform;
   onClose: () => void;
   onRestored: () => void;
-  onRestoreSuccess: () => void;
+  onRestoreSuccess: (result: MemcardRestoreResult) => void;
   onRestoreError: () => void;
   regionId: string;
   actionsRegionId: string;
@@ -66,6 +68,7 @@ export function EmulationCloudRestoreModal({
   const [targets, setTargets] = useState<MemcardRestoreTarget[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
 
   useEffect(() => {
     if (!save) return;
@@ -100,28 +103,24 @@ export function EmulationCloudRestoreModal({
     };
   }, [pickButtonId, save, selectedTarget, setFocus]);
 
-  const handlePickFile = useCallback(async () => {
-    const result = await globalThis.window.electron.showOpenDialog({
-      properties: ["openFile"],
-      filters: [PICK_FILTERS[platform]],
-    });
-
-    if (result.canceled || result.filePaths.length === 0) return;
-
-    const chosenPath = result.filePaths[0];
-    setTargets((current) =>
-      current.some((target) => target.cardFilePath === chosenPath)
-        ? current
-        : [
-            ...current,
-            {
-              cardFilePath: chosenPath,
-              cardLabel: formatPickedPathLabel(chosenPath),
-            },
-          ]
-    );
-    setSelectedTarget(chosenPath);
-  }, [formatPickedPathLabel, platform]);
+  const handlePickedFile = useCallback(
+    (chosenPath: string) => {
+      setFilePickerOpen(false);
+      setTargets((current) =>
+        current.some((target) => target.cardFilePath === chosenPath)
+          ? current
+          : [
+              ...current,
+              {
+                cardFilePath: chosenPath,
+                cardLabel: formatPickedPathLabel(chosenPath),
+              },
+            ]
+      );
+      setSelectedTarget(chosenPath);
+    },
+    [formatPickedPathLabel]
+  );
 
   const handleRestore = useCallback(async () => {
     if (!save || !selectedTarget) return;
@@ -136,8 +135,8 @@ export function EmulationCloudRestoreModal({
       );
 
       if (result.ok) {
-        onRestoreSuccess();
-        onRestored();
+        onRestoreSuccess(result);
+        if (!result.requiresManualImport) onRestored();
         onClose();
       } else {
         onRestoreError();
@@ -156,91 +155,102 @@ export function EmulationCloudRestoreModal({
   ]);
 
   return (
-    <Modal
-      visible={save !== null}
-      title={t("cloud_restore_title")}
-      description={t("cloud_restore_description")}
-      onClose={onClose}
-      className={modalClassName}
-    >
-      <VerticalFocusGroup
-        regionId={regionId}
-        className="emu-save-modal__restore"
+    <>
+      <Modal
+        visible={save !== null}
+        title={t("cloud_restore_title")}
+        description={t("cloud_restore_description")}
+        onClose={onClose}
+        className={modalClassName}
       >
-        <div className="emu-save-modal__targets">
-          {targets.length === 0 ? (
-            <div className="emu-save-modal__empty">
-              {t("cloud_restore_no_cards")}
-            </div>
-          ) : (
-            targets.map((target) => {
-              const targetId = getEmulationCloudRestoreTargetFocusId(
-                target.cardFilePath
-              );
-              const isSelected = selectedTarget === target.cardFilePath;
-
-              return (
-                <FocusItem
-                  key={target.cardFilePath}
-                  id={targetId}
-                  navigationOverrides={getEmulationCloudRestoreTargetNavigationOverrides(
-                    {
-                      cardFilePath: target.cardFilePath,
-                      firstCardFilePath: targets[0]?.cardFilePath,
-                      lastCardFilePath: targets.at(-1)?.cardFilePath,
-                      pickButtonId,
-                    }
-                  )}
-                  asChild
-                >
-                  <button
-                    type="button"
-                    className={`emu-save-modal__target${
-                      isSelected ? " emu-save-modal__target--selected" : ""
-                    }`}
-                    onClick={() => setSelectedTarget(target.cardFilePath)}
-                  >
-                    <span className="emu-save-modal__target-name">
-                      {target.cardLabel}
-                    </span>
-                    <span className="emu-save-modal__target-path">
-                      {target.cardFilePath}
-                    </span>
-                  </button>
-                </FocusItem>
-              );
-            })
-          )}
-        </div>
-
-        <HorizontalFocusGroup
-          regionId={actionsRegionId}
-          className="emu-save-modal__actions"
+        <VerticalFocusGroup
+          regionId={regionId}
+          className="emu-save-modal__restore"
         >
-          <Button
-            focusId={pickButtonId}
-            focusNavigationOverrides={getEmulationCloudRestoreButtonNavigationOverrides(
-              selectedTarget
+          <div className="emu-save-modal__targets">
+            {targets.length === 0 ? (
+              <div className="emu-save-modal__empty">
+                {t("cloud_restore_no_cards")}
+              </div>
+            ) : (
+              targets.map((target) => {
+                const targetId = getEmulationCloudRestoreTargetFocusId(
+                  target.cardFilePath
+                );
+                const isSelected = selectedTarget === target.cardFilePath;
+
+                return (
+                  <FocusItem
+                    key={target.cardFilePath}
+                    id={targetId}
+                    navigationOverrides={getEmulationCloudRestoreTargetNavigationOverrides(
+                      {
+                        cardFilePath: target.cardFilePath,
+                        firstCardFilePath: targets[0]?.cardFilePath,
+                        lastCardFilePath: targets.at(-1)?.cardFilePath,
+                        pickButtonId,
+                      }
+                    )}
+                    asChild
+                  >
+                    <button
+                      type="button"
+                      className={`emu-save-modal__target${
+                        isSelected ? " emu-save-modal__target--selected" : ""
+                      }`}
+                      onClick={() => setSelectedTarget(target.cardFilePath)}
+                    >
+                      <span className="emu-save-modal__target-name">
+                        {target.cardLabel}
+                      </span>
+                      <span className="emu-save-modal__target-path">
+                        {target.cardFilePath}
+                      </span>
+                    </button>
+                  </FocusItem>
+                );
+              })
             )}
-            variant="secondary"
-            disabled={isBusy}
-            onClick={handlePickFile}
+          </div>
+
+          <HorizontalFocusGroup
+            regionId={actionsRegionId}
+            className="emu-save-modal__actions"
           >
-            {t("cloud_restore_pick_file")}
-          </Button>
-          <Button
-            focusId={confirmButtonId}
-            focusNavigationOverrides={getEmulationCloudRestoreButtonNavigationOverrides(
-              selectedTarget
-            )}
-            loading={isBusy}
-            disabled={!selectedTarget}
-            onClick={handleRestore}
-          >
-            {t("cloud_restore_confirm")}
-          </Button>
-        </HorizontalFocusGroup>
-      </VerticalFocusGroup>
-    </Modal>
+            <Button
+              focusId={pickButtonId}
+              focusNavigationOverrides={getEmulationCloudRestoreButtonNavigationOverrides(
+                selectedTarget
+              )}
+              variant="secondary"
+              disabled={isBusy}
+              onClick={() => setFilePickerOpen(true)}
+            >
+              {t("cloud_restore_pick_file")}
+            </Button>
+            <Button
+              focusId={confirmButtonId}
+              focusNavigationOverrides={getEmulationCloudRestoreButtonNavigationOverrides(
+                selectedTarget
+              )}
+              loading={isBusy}
+              disabled={!selectedTarget}
+              onClick={handleRestore}
+            >
+              {t("cloud_restore_confirm")}
+            </Button>
+          </HorizontalFocusGroup>
+        </VerticalFocusGroup>
+      </Modal>
+
+      <FileExplorerModal
+        visible={filePickerOpen}
+        title={t("cloud_restore_pick_file")}
+        initialPath={selectedTarget ?? targets[0]?.cardFilePath}
+        filters={[PICK_FILTERS[platform]]}
+        onClose={() => setFilePickerOpen(false)}
+        onSelect={handlePickedFile}
+      />
+    </>
   );
 }

@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import {
-  AchievementCustomNotificationPosition,
-  AchievementNotificationInfo,
-} from "@types";
+import { AchievementCustomNotificationPosition } from "@types";
 import {
   getAchievementSoundUrl,
   getAchievementSoundVolume,
 } from "@renderer/helpers";
 import { AchievementNotificationItem } from "./achievement-notification";
+import {
+  createAchievementNotificationIconQueue,
+  positionAchievementNotifications,
+  type PositionedAchievementNotification,
+} from "./achievement-notification-icon";
+import gameHubIconUrl from "@renderer/assets/icons/gamehub-white.svg?url";
 
 const NOTIFICATION_TIMEOUT = 4000;
 
@@ -27,13 +30,11 @@ const anchorByPosition: Record<
 export function AchievementNotificationOverlay() {
   const [isClosing, setIsClosing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [position, setPosition] =
-    useState<AchievementCustomNotificationPosition>("top-left");
   const [achievements, setAchievements] = useState<
-    AchievementNotificationInfo[]
+    PositionedAchievementNotification[]
   >([]);
   const [currentAchievement, setCurrentAchievement] =
-    useState<AchievementNotificationInfo | null>(null);
+    useState<PositionedAchievementNotification | null>(null);
 
   const achievementAnimation = useRef(-1);
   const closingAnimation = useRef(-1);
@@ -47,16 +48,31 @@ export function AchievementNotificationOverlay() {
   }, []);
 
   useEffect(() => {
+    const iconQueue = createAchievementNotificationIconQueue(gameHubIconUrl);
     const unsubscribe = window.electron.onInAppAchievementUnlocked(
       (nextPosition, nextAchievements) => {
         if (!nextAchievements?.length) return;
-        if (nextPosition) setPosition(nextPosition);
-        setAchievements((current) => current.concat(nextAchievements));
-        playAudio();
+        void iconQueue
+          .enqueue(nextAchievements)
+          .then((preparedAchievements) => {
+            if (!preparedAchievements) return;
+            setAchievements((current) =>
+              current.concat(
+                positionAchievementNotifications(
+                  preparedAchievements,
+                  nextPosition ?? "top-left"
+                )
+              )
+            );
+            void playAudio();
+          });
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      iconQueue.dispose();
+      unsubscribe();
+    };
   }, [playAudio]);
 
   const hasAchievementsPending = achievements.length > 0;
@@ -116,13 +132,13 @@ export function AchievementNotificationOverlay() {
         display: "flex",
         pointerEvents: "none",
         zIndex: 999999,
-        ...anchorByPosition[position],
+        ...anchorByPosition[currentAchievement.position],
       }}
     >
       <AchievementNotificationItem
-        achievement={currentAchievement}
+        achievement={currentAchievement.achievement}
         isClosing={isClosing}
-        position={position}
+        position={currentAchievement.position}
       />
     </div>
   );

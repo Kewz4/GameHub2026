@@ -10,7 +10,6 @@ import {
   isRetryableDownloadError,
   isRetryableHttpStatus,
   MAX_BUDGET_RESETS,
-  MAX_RESTARTS_FROM_ZERO,
   parseRetryAfterMs,
   PROGRESS_RESET_THRESHOLD_BYTES,
   resolveResumeAction,
@@ -37,6 +36,8 @@ export interface JsHttpDownloaderOptions {
   savePath: string;
   filename?: string;
   headers?: Record<string, string>;
+  /** Resolve a fresh signed/mirrored URL without changing the local target. */
+  refreshUrl?: () => Promise<string>;
 }
 
 const MAX_RETRY_ATTEMPTS = 10;
@@ -47,6 +48,8 @@ const MAX_RETRY_DELAY_MS = 15000;
 const STALL_TIMEOUT_MS = 30000;
 const STALL_CHECK_INTERVAL_MS = 2000;
 const RECONNECT_RETRY_DELAY_MS = 500;
+const MAX_CONSECUTIVE_SOURCE_REFRESHES = 3;
+const RESUME_PROBE_BYTES = 64 * 1024;
 export const DEFAULT_DOWNLOAD_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0";
 
@@ -58,6 +61,13 @@ class HttpDownloadStatusError extends Error {
   ) {
     super(`The download link is not available (HTTP ${statusCode}).`);
     this.name = "HttpDownloadStatusError";
+  }
+}
+
+class ResumeSafetyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ResumeSafetyError";
   }
 }
 
@@ -79,8 +89,8 @@ export class JsHttpDownloader {
   private retryCount = 0;
   private statusRetryCount = 0;
   private budgetResets = 0;
-  private attemptBytesReceived = 0;
-  private restartCount = 0;
+  private attemptBytesWritten = 0;
+  private consecutiveSourceRefreshes = 0;
   private pendingReadSince: number | null = null;
   private stallCheckInterval: NodeJS.Timeout | null = null;
   private isPaused = false;
@@ -119,8 +129,8 @@ export class JsHttpDownloader {
     this.retryCount = 0;
     this.statusRetryCount = 0;
     this.budgetResets = 0;
-    this.attemptBytesReceived = 0;
-    this.restartCount = 0;
+    this.attemptBytesWritten = 0;
+    this.consecutiveSourceRefreshes = 0;
     this.isStallRetry = false;
     this.isReconnecting = false;
     this.isReconnectRetry = false;
@@ -144,7 +154,7 @@ export class JsHttpDownloader {
         this.isDownloading = true;
         this.isStallRetry = false;
         this.pendingReadSince = null;
-        this.attemptBytesReceived = 0;
+        this.attemptBytesWritten = 0;
 
         const { url, savePath, filename, headers = {} } = this.currentOptions;
         const { filePath, startByte, usedFallback } = this.prepareDownloadPath(
@@ -234,6 +244,14 @@ export class JsHttpDownloader {
 
     this.maybeResetRetryBudget();
 
+    if (
+      err instanceof ResumeSafetyError ||
+      (err instanceof HttpDownloadStatusError && !err.retryable)
+    ) {
+      const refreshed = await this.refreshSourceUrl(err.message);
+      if (refreshed) return !this.isPaused;
+    }
+
     if (transientStatus) {
       return this.handleTransientStatusError(err as HttpDownloadStatusError);
     }
@@ -284,10 +302,44 @@ export class JsHttpDownloader {
     return false;
   }
 
+  private async refreshSourceUrl(reason: string): Promise<boolean> {
+    const refreshUrl = this.currentOptions?.refreshUrl;
+    if (!refreshUrl || this.isPaused) return false;
+
+    if (this.consecutiveSourceRefreshes >= MAX_CONSECUTIVE_SOURCE_REFRESHES) {
+      logger.warn(
+        `[JsHttpDownloader] Source refresh limit reached; preserving the partial (${reason})`
+      );
+      return false;
+    }
+
+    this.consecutiveSourceRefreshes += 1;
+    this.isReconnecting = true;
+    this.downloadSpeed = 0;
+    logger.log(
+      `[JsHttpDownloader] Refreshing the temporary source URL (${this.consecutiveSourceRefreshes}/${MAX_CONSECUTIVE_SOURCE_REFRESHES})`
+    );
+
+    try {
+      const nextUrl = (await refreshUrl()).trim();
+      if (!nextUrl)
+        throw new Error("The source returned an empty download URL");
+      if (!this.currentOptions) return false;
+      this.currentOptions = { ...this.currentOptions, url: nextUrl };
+      return true;
+    } catch (refreshError) {
+      logger.warn(
+        "[JsHttpDownloader] Could not refresh the temporary source URL",
+        refreshError
+      );
+      return false;
+    }
+  }
+
   private maybeResetRetryBudget(): void {
     if (
       shouldResetRetryBudget(
-        this.attemptBytesReceived,
+        this.attemptBytesWritten,
         this.budgetResets,
         PROGRESS_RESET_THRESHOLD_BYTES,
         MAX_BUDGET_RESETS
@@ -469,6 +521,146 @@ export class JsHttpDownloader {
     return Number.isFinite(start) ? start : null;
   }
 
+  private parseContentRange(response: Response): {
+    start: number;
+    end: number;
+    total: number;
+  } | null {
+    const contentRange = response.headers.get("content-range");
+    if (!contentRange) return null;
+
+    const match = /bytes\s+(\d+)-(\d+)\/(\d+)/i.exec(contentRange);
+    if (!match) return null;
+
+    const start = Number.parseInt(match[1], 10);
+    const end = Number.parseInt(match[2], 10);
+    const total = Number.parseInt(match[3], 10);
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      !Number.isSafeInteger(total)
+    ) {
+      return null;
+    }
+
+    return { start, end, total };
+  }
+
+  /**
+   * Verify a small byte window immediately before the append point. A 206 by
+   * itself only proves that a server supports Range; it does not prove that a
+   * refreshed signed URL still points at the same object as the local partial.
+   */
+  private async verifyResumeContinuity(
+    url: string,
+    requestHeaders: Record<string, string>,
+    filePath: string,
+    startByte: number,
+    downloadResponse: Response
+  ): Promise<void> {
+    const probeLength = Math.min(RESUME_PROBE_BYTES, startByte);
+    const probeStart = startByte - probeLength;
+    const probeEnd = startByte - 1;
+    const expectedRange = this.parseContentRange(downloadResponse);
+
+    if (
+      downloadResponse.status !== 206 ||
+      !expectedRange ||
+      expectedRange.start > startByte ||
+      expectedRange.total < startByte
+    ) {
+      throw new ResumeSafetyError(
+        "The download server did not provide a trustworthy Content-Range for the append request."
+      );
+    }
+
+    const probeResponse = await fetch(url, {
+      headers: {
+        ...requestHeaders,
+        Range: `bytes=${probeStart}-${probeEnd}`,
+      },
+      signal: this.abortController?.signal,
+    });
+
+    try {
+      if (probeResponse.status >= 400) {
+        throw new HttpDownloadStatusError(
+          probeResponse.status,
+          isRetryableHttpStatus(probeResponse.status),
+          parseRetryAfterMs(
+            probeResponse.headers.get("retry-after"),
+            Date.now()
+          )
+        );
+      }
+
+      const probeRange = this.parseContentRange(probeResponse);
+      const encoding = (probeResponse.headers.get("content-encoding") ?? "")
+        .toLowerCase()
+        .trim();
+      if (
+        probeResponse.status !== 206 ||
+        !probeRange ||
+        probeRange.start !== probeStart ||
+        probeRange.end !== probeEnd ||
+        probeRange.total !== expectedRange.total ||
+        (encoding && encoding !== "identity")
+      ) {
+        throw new ResumeSafetyError(
+          "The download server did not honor the resume verification range exactly."
+        );
+      }
+
+      if (!probeResponse.body) {
+        throw new ResumeSafetyError(
+          "The download server returned an empty resume verification body."
+        );
+      }
+
+      const remote = Buffer.alloc(probeLength);
+      const reader = probeResponse.body.getReader();
+      let received = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (received + value.length > probeLength) {
+          await reader.cancel().catch(() => undefined);
+          throw new ResumeSafetyError(
+            "The download server returned more resume verification data than requested."
+          );
+        }
+        remote.set(value, received);
+        received += value.length;
+      }
+
+      if (received !== probeLength) {
+        throw new ResumeSafetyError(
+          "The download server returned an incomplete resume verification window."
+        );
+      }
+
+      const local = Buffer.alloc(probeLength);
+      const localFile = await fs.promises.open(filePath, "r");
+      try {
+        const { bytesRead } = await localFile.read(
+          local,
+          0,
+          probeLength,
+          probeStart
+        );
+        if (bytesRead !== probeLength || !local.equals(remote)) {
+          throw new ResumeSafetyError(
+            "The refreshed source does not match the existing partial at the resume boundary."
+          );
+        }
+      } finally {
+        await localFile.close();
+      }
+    } finally {
+      await probeResponse.body?.cancel().catch(() => undefined);
+    }
+  }
+
   private async executeDownload(
     url: string,
     requestHeaders: Record<string, string>,
@@ -531,50 +723,77 @@ export class JsHttpDownloader {
       );
     }
 
+    if (startByte > 0 && response.status === 200) {
+      const remoteSize = Number.parseInt(contentLength, 10);
+      await response.body?.cancel().catch(() => undefined);
+
+      if (Number.isSafeInteger(remoteSize) && remoteSize === startByte) {
+        this.fileSize = remoteSize;
+        this.bytesDownloaded = remoteSize;
+        this.status = "complete";
+        this.retryCount = 0;
+        this.statusRetryCount = 0;
+        this.consecutiveSourceRefreshes = 0;
+        this.downloadSpeed = 0;
+        logger.log(
+          "[JsHttpDownloader] Local file size already matches the remote object; no transfer needed"
+        );
+        return;
+      }
+
+      throw new ResumeSafetyError(
+        `The server ignored the byte-range request for a ${startByte}-byte partial. The existing file was kept unchanged; refusing to re-download and discard that prefix.`
+      );
+    }
+
+    if (startByte > 0) {
+      try {
+        await this.verifyResumeContinuity(
+          url,
+          requestHeaders,
+          filePath,
+          startByte,
+          response
+        );
+      } catch (error) {
+        await response.body?.cancel().catch(() => undefined);
+        throw error;
+      }
+    }
+
     const action = resolveResumeAction({
       startByte,
       status: response.status,
       partialStart: this.parseContentRangeStart(response),
     });
 
-    let { flags, skipBytes, restart } = action;
+    const { flags, skipBytes } = action;
+
+    if (action.rejectReason) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new ResumeSafetyError(
+        `The server returned an unsafe resume response (${action.rejectReason}). The ${startByte}-byte partial was kept unchanged.`
+      );
+    }
 
     const contentEncoding = (response.headers.get("content-encoding") ?? "")
       .toLowerCase()
       .trim();
     if (contentEncoding && contentEncoding !== "identity" && startByte > 0) {
-      logger.log(
-        `[JsHttpDownloader] Response is "${contentEncoding}"-encoded; byte-offset resume is unreliable, restarting from byte 0`
+      await response.body?.cancel().catch(() => undefined);
+      throw new ResumeSafetyError(
+        `The resumed response was ${contentEncoding}-encoded, so its byte offsets cannot be trusted. The ${startByte}-byte partial was kept unchanged.`
       );
-      flags = "w";
-      skipBytes = 0;
-      restart = true;
     }
 
-    if (restart) {
-      this.restartCount += 1;
-      if (this.restartCount > MAX_RESTARTS_FROM_ZERO) {
-        throw new Error(
-          "The server keeps refusing to resume and the download cannot make progress; aborting to avoid endless re-downloads."
-        );
-      }
-      this.bytesDownloaded = 0;
-      this.resetSpeedTracking();
-      logger.log(
-        `[JsHttpDownloader] Restarting the file from byte 0 (restart ${this.restartCount}/${MAX_RESTARTS_FROM_ZERO}).`
-      );
-    } else if (action.rangeIgnored) {
-      this.beginRecovery(skipBytes);
-      logger.log(
-        `[JsHttpDownloader] Server ignored the Range header (HTTP 200). Re-downloading ${skipBytes} bytes to preserve the existing partial.`
-      );
-    } else if (skipBytes > 0) {
+    if (skipBytes > 0) {
       logger.log(
         `[JsHttpDownloader] Partial response started before the resume offset; discarding ${skipBytes} overlapping body bytes.`
       );
     }
 
     this.parseFileSize(response, startByte);
+    this.consecutiveSourceRefreshes = 0;
 
     // Resolve the on-disk filename once and pin it for the download's
     // lifetime so a later restart cannot orphan the existing partial.
@@ -625,7 +844,6 @@ export class JsHttpDownloader {
     this.retryCount = 0;
     this.statusRetryCount = 0;
     this.budgetResets = 0;
-    this.restartCount = 0;
     this.isReconnecting = false;
     this.resetRecoveryState();
     this.downloadSpeed = 0;
@@ -688,16 +906,6 @@ export class JsHttpDownloader {
     this.recoverBytesAtLastUpdate = 0;
   }
 
-  private beginRecovery(totalBytes: number): void {
-    this.isRecovering = true;
-    this.isReconnecting = false;
-    this.recoverBytesTotal = totalBytes;
-    this.recoverBytesDone = 0;
-    this.recoverBytesAtLastUpdate = 0;
-    this.recoverSpeedLastUpdate = Date.now();
-    this.downloadSpeed = 0;
-  }
-
   private trackRecoveredBytes(skipped: number): void {
     if (!this.isRecovering || skipped <= 0) return;
 
@@ -733,9 +941,6 @@ export class JsHttpDownloader {
     const clearReadPending = () => {
       this.pendingReadSince = null;
     };
-    const countReceived = (length: number) => {
-      this.attemptBytesReceived += length;
-    };
     const applyRecoveryTracking = (
       plan: ReturnType<typeof applySkip>,
       length: number
@@ -748,6 +953,7 @@ export class JsHttpDownloader {
       if (this.isReconnecting) {
         this.isReconnecting = false;
       }
+      this.attemptBytesWritten += length;
       this.bytesDownloaded += length;
       this.updateSpeed();
     };
@@ -774,8 +980,6 @@ export class JsHttpDownloader {
                 this.push(null);
                 return;
               }
-
-              countReceived(value.length);
 
               const plan = applySkip(remainingToSkip, value.length);
               remainingToSkip = plan.newRemainingToSkip;
@@ -831,8 +1035,8 @@ export class JsHttpDownloader {
     this.retryCount = 0;
     this.statusRetryCount = 0;
     this.budgetResets = 0;
-    this.attemptBytesReceived = 0;
-    this.restartCount = 0;
+    this.attemptBytesWritten = 0;
+    this.consecutiveSourceRefreshes = 0;
     this.isStallRetry = false;
     this.isReconnecting = false;
     this.isReconnectRetry = false;
@@ -991,8 +1195,8 @@ export class JsHttpDownloader {
     this.retryCount = 0;
     this.statusRetryCount = 0;
     this.budgetResets = 0;
-    this.attemptBytesReceived = 0;
-    this.restartCount = 0;
+    this.attemptBytesWritten = 0;
+    this.consecutiveSourceRefreshes = 0;
     this.pendingReadSince = null;
     this.isStallRetry = false;
     this.isReconnecting = false;

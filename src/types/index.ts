@@ -10,6 +10,8 @@ import type { EmulatorSystem } from "./emulator.types";
 
 export type FriendRequestAction = "ACCEPTED" | "REFUSED" | "CANCEL";
 export * from "./download-contract";
+export * from "./steam-emulator.types";
+export * from "./library-installation.types";
 
 export type HydraCloudFeature =
   | "achievements"
@@ -179,6 +181,37 @@ export interface StartGameDownloadPayload {
   /** Set for minerva/console downloads so main routes them into
    *  "Emulator Games/<platform>" and binds them to the right emulator. */
   emulatorSystem?: string | null;
+  /** Marks a user-supplied TorBox job created from Download Manager. */
+  customDownload?: {
+    sourceType: "link" | "magnet" | "torrent";
+  };
+  /** Overrides how the entry is stamped when created. Linked catalogue
+   *  downloads omit "custom" so the game stays classified as a catalogue
+   *  entry (metadata + assets already known). */
+  libraryOrigin?: "sync" | "catalog" | "custom" | undefined;
+}
+
+export interface StartCustomDownloadPayload {
+  title: string;
+  /** A direct http(s) URL or magnet. Empty when localTorrentPath is used. */
+  source: string;
+  /** Path returned by Electron's trusted open-file dialog. */
+  localTorrentPath?: string | null;
+  downloadPath: string;
+  automaticallyExtract: boolean;
+  automaticallyDeleteArchiveFiles: boolean;
+  /** When set, the download is linked to this catalogue game's entry instead
+   *  of creating a generic custom entry (metadata + assets already known). */
+  linkedShop?: GameShop;
+  linkedObjectId?: string;
+}
+
+export interface StartCustomDownloadResult {
+  ok: boolean;
+  error?: string;
+  objectId?: string;
+  shop?: GameShop;
+  queued?: boolean;
 }
 
 export interface UserFriend {
@@ -292,6 +325,46 @@ export interface UserProfile {
   hasCompletedWrapped2025: boolean;
 }
 
+export interface ProfileAchievementSouvenir {
+  ownerId: string;
+  shop: GameShop;
+  objectId: string;
+  achievementName: string;
+  achievementDisplayName: string;
+  achievementDescription?: string | null;
+  achievementIconUrl?: string | null;
+  gameTitle: string;
+  gameIconUrl: string | null;
+  imageUrl: string;
+  unlockTime: number;
+}
+
+export interface AchievementSouvenirRecord {
+  schemaVersion: 1;
+  ownerId: string;
+  shop: GameShop;
+  objectId: string;
+  achievementName: string;
+  achievementDisplayName: string;
+  /** Optional for schema-v1 records created before souvenir presentation metadata was added. */
+  achievementDescription?: string | null;
+  /** Optional for schema-v1 records created before souvenir presentation metadata was added. */
+  achievementIconUrl?: string | null;
+  gameTitle: string;
+  gameIconUrl: string | null;
+  unlockTime: number;
+  localPath: string | null;
+  r2Key: string | null;
+  status: "local" | "synced" | "pending-delete";
+  updatedAt: number;
+}
+
+export interface DeleteAchievementSouvenirRequest {
+  shop: GameShop;
+  objectId: string;
+  achievementName: string;
+}
+
 export interface UpdateProfileRequest {
   displayName?: string;
   profileVisibility?: ProfileVisibility;
@@ -329,6 +402,7 @@ export interface GameReviewAnswer {
     id: string;
     displayName: string;
     profileImageUrl: string | null;
+    backgroundImageUrl?: string | null;
   };
   translations: {
     [key: string]: string;
@@ -354,6 +428,7 @@ export interface GameReview {
     id: string;
     displayName: string;
     profileImageUrl: string | null;
+    backgroundImageUrl?: string | null;
   };
   translations: {
     [key: string]: string;
@@ -389,6 +464,20 @@ export interface ConsoleGameMetadata {
   series: { name: string; titles: string[] } | null;
   /** Box-art / additional-artwork image URLs. */
   boxArtUrls: string[];
+  /** HowLongToBeat playtimes in hours (from the hosted dataset), when known:
+   *  main story / main + extras / completionist. */
+  hltb?: {
+    main: number | null;
+    mainExtra: number | null;
+    completionist: number | null;
+  } | null;
+  /** Content/age rating from the hosted dataset (IGN/LaunchBox), e.g.
+   *  { name: "M", system: "ESRB" }. */
+  ageRating?: { name: string; system: string | null } | null;
+  /** LaunchBox 3-D box render (from the hosted dataset). The authentic box art
+   *  for the game, featured in the details "Box art" panel ahead of any generic
+   *  IGDB artwork. */
+  boxImageUrl?: string | null;
 }
 
 export interface UserStatsPercentile {
@@ -458,6 +547,7 @@ export type NotificationType =
 export type LocalNotificationType =
   | "EXTRACTION_COMPLETE"
   | "DOWNLOAD_COMPLETE"
+  | "DOWNLOAD_HALTED"
   | "UPDATE_AVAILABLE"
   | "ACHIEVEMENT_UNLOCKED"
   | "SCAN_GAMES_COMPLETE"
@@ -691,6 +781,12 @@ export type CatalogueSearchResult = {
   deckCompatibilities?: string[];
 } & Pick<ShopAssets, "libraryImageUrl" | "downloadSources">;
 
+/** Unified catalogue suggestion for the custom-download linker dropdown:
+ *  merges the hosted PC catalogue and the local console/emulated catalogue. */
+export type CatalogueSearchSuggestion = CatalogueSearchResult & {
+  source: "catalogue" | "classics";
+};
+
 export type LibraryGame = Game &
   Partial<ShopAssets> & {
     id: string;
@@ -742,6 +838,8 @@ export interface CloudDebugReport {
   fixedCount: number;
   unfixedCount: number;
   notLoggedIn?: boolean;
+  mode?: "audit" | "repair";
+  error?: string;
 }
 
 /** One game's achievement progress for the profile breakdown. Sourced from the
@@ -763,6 +861,12 @@ export * from "./download.types";
 export * from "./ludusavi.types";
 export * from "./how-long-to-beat.types";
 export * from "./level.types";
+export * from "./cloud-save.types";
 export * from "./theme.types";
 export * from "./emulator.types";
 export * from "./mods.types";
+export * from "./overlay.types";
+export * from "./game-recorder.types";
+export * from "./game-process-control.types";
+export * from "./music-player.types";
+export * from "./spotify.types";

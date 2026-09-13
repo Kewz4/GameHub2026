@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
-import axios from "axios";
+import { findExecutableOnPath, installLauncherBinary } from "./launcher-binary";
 import { SystemPath } from "./system-path";
 import { logger } from "./logger";
+import { getLauncherInvocation } from "./launcher-invocation";
 
 // This is GOG's public OAuth2 client ID — hardcoded in heroic-gogdl
 const GOG_CLIENT_ID = "46899977096215655";
@@ -24,78 +25,29 @@ export const findGogdlBinary = (customPath?: string | null): string | null => {
     "resources",
     "bin"
   );
-  for (const dir of [resourcesBin, execAdjacentBin]) {
+  for (const dir of [
+    resourcesBin,
+    execAdjacentBin,
+    path.join(__dirname, "..", "..", "binaries", "bin"),
+  ]) {
     const candidate = path.join(dir, `gogdl${ext}`);
     if (fs.existsSync(candidate)) return candidate;
   }
   const installPath = getGogdlInstallPath();
   if (fs.existsSync(installPath)) return installPath;
-  try {
-    const whichCmd = process.platform === "win32" ? "where" : "which";
-    const { stdout } = require("node:child_process").execSync(
-      `${whichCmd} gogdl`,
-      { encoding: "utf8", timeout: 3000 }
-    );
-    const bin = stdout.trim().split("\n")[0].trim();
-    if (bin && fs.existsSync(bin)) return bin;
-  } catch {
-    // intentional
-  }
-  return null;
+  return findExecutableOnPath("gogdl");
 };
-
-interface GitHubRelease {
-  assets: { name: string; browser_download_url: string }[];
-}
 
 export const downloadGogdl = async (
   onProgress?: (pct: number) => void
 ): Promise<string> => {
-  const response = await axios.get<GitHubRelease>(
-    "https://api.github.com/repos/Heroic-Games-Launcher/heroic-gogdl/releases/latest",
-    { headers: { Accept: "application/vnd.github+json" } }
+  const destination = await installLauncherBinary(
+    "gogdl",
+    getGogdlInstallPath(),
+    onProgress
   );
-
-  const assets = response.data.assets;
-  const arch = process.arch === "arm64" ? "arm64" : "x86_64";
-  let assetName: string;
-  if (process.platform === "win32") {
-    assetName = `gogdl_windows_${arch}.exe`;
-  } else if (process.platform === "darwin") {
-    assetName = `gogdl_macos_${arch}`;
-  } else {
-    assetName = `gogdl_linux_${arch}`;
-  }
-
-  const asset =
-    assets.find((a) => a.name === assetName) ??
-    assets.find(
-      (a) => a.name.startsWith("gogdl_windows") && a.name.endsWith(".exe")
-    ) ??
-    assets.find(
-      (a) =>
-        a.name.startsWith("gogdl") &&
-        !a.name.endsWith(".tar.gz") &&
-        !a.name.endsWith(".zip")
-    );
-  if (!asset) throw new Error(`No gogdl binary found for ${process.platform}`);
-
-  const destPath = getGogdlInstallPath();
-  const downloadResponse = await axios.get<ArrayBuffer>(
-    asset.browser_download_url,
-    {
-      responseType: "arraybuffer",
-      onDownloadProgress: (evt) => {
-        if (evt.total && onProgress)
-          onProgress(Math.round((evt.loaded / evt.total) * 100));
-      },
-    }
-  );
-
-  fs.writeFileSync(destPath, Buffer.from(downloadResponse.data));
-  if (process.platform !== "win32") fs.chmodSync(destPath, 0o755);
-  logger.log(`gogdl downloaded to ${destPath}`);
-  return destPath;
+  logger.log(`gogdl downloaded to ${destination}`);
+  return destination;
 };
 
 /**
@@ -112,7 +64,8 @@ export const writeGogdlAuthConfig = (
   refreshToken: string
 ): string => {
   const configDir = path.join(SystemPath.getPath("userData"), "gogdl-config");
-  fs.mkdirSync(configDir, { recursive: true });
+  fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  if (process.platform !== "win32") fs.chmodSync(configDir, 0o700);
   const authPath = path.join(configDir, "auth.json");
 
   const config = {
@@ -124,7 +77,8 @@ export const writeGogdlAuthConfig = (
     },
   };
 
-  fs.writeFileSync(authPath, JSON.stringify(config, null, 2));
+  fs.writeFileSync(authPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+  if (process.platform !== "win32") fs.chmodSync(authPath, 0o600);
   return authPath;
 };
 
@@ -164,28 +118,34 @@ export function spawnGogdlInstall(
     return () => {};
   }
 
-  const authConfigPath = writeGogdlAuthConfig(accessToken, refreshToken);
-
-  const child = spawn(
-    binary,
-    [
-      "--auth-config-path",
-      authConfigPath,
-      "download",
-      gameId,
-      "--platform",
-      "windows",
-      "--path",
-      downloadPath,
-      "--skip-dlcs",
-      "--max-workers",
-      "4",
-    ],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, PYTHONUNBUFFERED: "1" },
-    }
-  );
+  let invocation: ReturnType<typeof getLauncherInvocation>;
+  try {
+    const authConfigPath = writeGogdlAuthConfig(accessToken, refreshToken);
+    invocation = getLauncherInvocation(
+      binary,
+      [
+        "--auth-config-path",
+        authConfigPath,
+        "download",
+        gameId,
+        "--platform",
+        "windows",
+        "--path",
+        downloadPath,
+        "--skip-dlcs",
+        "--max-workers",
+        "4",
+      ],
+      { ...process.env, PYTHONUNBUFFERED: "1" }
+    );
+  } catch (error) {
+    onError(error instanceof Error ? error.message : String(error));
+    return () => {};
+  }
+  const child = spawn(invocation.command, invocation.args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: invocation.env,
+  });
 
   // heroic-gogdl emits human-readable progress lines, for example:
   //   [PROGRESS] INFO: = Progress: 0.61 52428800/8550960053, Running for: 00:00:13, ETA: 00:36:14

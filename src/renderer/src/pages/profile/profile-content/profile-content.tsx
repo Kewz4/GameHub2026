@@ -19,11 +19,10 @@ import { ProfileTabs, type ProfileTabType } from "./profile-tabs";
 import { LibraryTab } from "./library-tab";
 import { ReviewsTab } from "./reviews-tab";
 import { AnimatePresence } from "framer-motion";
-import { HydraCloudModal } from "@renderer/pages/shared-modals/hydra-cloud/hydra-cloud-modal";
-import { useSubscription } from "@renderer/hooks/use-subscription";
 import "./profile-content.scss";
-
-type SortOption = "playtime" | "achievementCount" | "playedRecently";
+import type { ProfileGameSort } from "./profile-library-data";
+import { ProfileAchievementsTab } from "./profile-achievements-tab";
+import { ProfileSouvenirsTab } from "./profile-souvenirs-tab";
 
 interface UserReview {
   id: string;
@@ -85,10 +84,12 @@ export function ProfileContent() {
     hasMoreLibraryGames,
     isLoadingLibraryGames,
     localLibraryCount,
+    souvenirs,
+    refreshSouvenirs,
   } = useContext(userProfileContext);
   const { userDetails } = useUserDetails();
   const [statsIndex, setStatsIndex] = useState(0);
-  const [sortBy, setSortBy] = useState<SortOption>("playedRecently");
+  const [sortBy, setSortBy] = useState<ProfileGameSort>("playedRecently");
 
   const [activeTab, setActiveTab] = useState<ProfileTabType>("library");
 
@@ -101,9 +102,6 @@ export function ProfileContent() {
   const [reviewToDelete, setReviewToDelete] = useState<string | null>(null);
 
   const dispatch = useAppDispatch();
-
-  const { isHydraCloudModalVisible, hydraCloudFeature, hideHydraCloudModal } =
-    useSubscription();
 
   const { t } = useTranslation("user_profile");
   const { numberFormatter } = useFormat();
@@ -159,13 +157,7 @@ export function ProfileContent() {
     setActiveTab("library");
   }, [userProfile?.id]);
 
-  useEffect(() => {
-    if (userProfile?.id) {
-      fetchUserReviews();
-    }
-  }, [userProfile?.id]);
-
-  const fetchUserReviews = async () => {
+  const fetchUserReviews = useCallback(async () => {
     if (!userProfile?.id) return;
 
     setIsLoadingReviews(true);
@@ -176,10 +168,17 @@ export function ProfileContent() {
       );
       setReviews(response.reviews);
       setReviewsTotalCount(response.totalCount);
+    } catch {
+      setReviews([]);
+      setReviewsTotalCount(0);
     } finally {
       setIsLoadingReviews(false);
     }
-  };
+  }, [userProfile?.id]);
+
+  useEffect(() => {
+    void fetchUserReviews();
+  }, [fetchUserReviews]);
 
   const handleDeleteReview = async (reviewId: string) => {
     try {
@@ -331,7 +330,7 @@ export function ProfileContent() {
     return userProfile?.relation?.status === "ACCEPTED";
   }, [userProfile]);
 
-  const content = useMemo(() => {
+  const content = (() => {
     if (!userProfile) return null;
 
     const shouldLockProfile =
@@ -355,6 +354,9 @@ export function ProfileContent() {
           <ProfileTabs
             activeTab={activeTab}
             reviewsTotalCount={reviewsTotalCount}
+            showAchievements={isMe}
+            souvenirsTotalCount={souvenirs.length}
+            showSouvenirs={isMe}
             onTabChange={setActiveTab}
           />
 
@@ -387,6 +389,17 @@ export function ProfileContent() {
                   onDelete={handleDeleteClick}
                 />
               )}
+
+              {activeTab === "achievements" && isMe && (
+                <ProfileAchievementsTab />
+              )}
+
+              {activeTab === "souvenirs" && isMe && (
+                <ProfileSouvenirsTab
+                  souvenirs={souvenirs}
+                  onRefresh={refreshSouvenirs}
+                />
+              )}
             </AnimatePresence>
           </div>
         </div>
@@ -395,7 +408,9 @@ export function ProfileContent() {
           <div className="profile-content__right-content">
             {userStats && (
               <ProfileSection title={t("stats")} defaultOpen={true}>
-                <UserStatsBox />
+                <UserStatsBox
+                  onSelectAchievements={() => setActiveTab("achievements")}
+                />
               </ProfileSection>
             )}
             {userProfile?.badges.length > 0 && (
@@ -433,39 +448,13 @@ export function ProfileContent() {
         />
       </section>
     );
-  }, [
-    userProfile,
-    isMe,
-    usersAreFriends,
-    userStats,
-    numberFormatter,
-    t,
-    statsIndex,
-    libraryGames,
-    pinnedGames,
-
-    sortBy,
-    localLibraryCount,
-    activeTab,
-    // ensure reviews UI updates correctly
-    reviews,
-    reviewsTotalCount,
-    isLoadingReviews,
-    votingReviews,
-    deleteModalVisible,
-  ]);
+  })();
 
   return (
     <div>
       <ProfileHero />
 
       {content}
-
-      <HydraCloudModal
-        visible={isHydraCloudModalVisible}
-        feature={hydraCloudFeature ?? "achievements"}
-        onClose={hideHydraCloudModal}
-      />
     </div>
   );
 }

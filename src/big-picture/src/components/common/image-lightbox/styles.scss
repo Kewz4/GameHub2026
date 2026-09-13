@@ -1,6 +1,41 @@
 .image-lightbox {
-  object-fit: cover;
+  object-fit: contain;
   user-select: none;
-  width: 60%;
-  max-width: 1000px;
+  width: min(86vw, 1440px);
+  max-height: 82vh;
+  border-radius: 12px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.55);
+
+  &__surface {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(var(--spacing-unit) * 8);
+  }
+
+  &__close {
+    position: absolute;
+    top: calc(var(--spacing-unit) * 5);
+    right: calc(var(--spacing-unit) * 5);
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 50%;
+    background: rgba(8, 8, 8, 0.82);
+    color: var(--text);
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 3px;
+      background: rgba(24, 24, 24, 0.94);
+    }
+  }
 }

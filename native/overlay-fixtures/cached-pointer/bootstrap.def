@@ -1,0 +1,4 @@
+LIBRARY "gamehub-overlay-qa-cached-pointer-bootstrap64"
+EXPORTS
+    GameHubCachedPointerQaGetSnapshot
+    GameHubCachedPointerQaDetach

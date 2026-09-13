@@ -1,15 +1,18 @@
 import "./filters.scss";
 
-import type { GameCollection, LibraryGame } from "@types";
+import type { EmulatorSystem, GameCollection, LibraryGame } from "@types";
 import { useMemo } from "react";
-import { logger } from "@renderer/logger";
+import {
+  CONSOLE_FILTER_SYSTEMS,
+  CONSOLE_LABELS,
+  systemForGame,
+} from "@renderer/pages/library/console-filter";
 
 import {
   Button,
   Divider,
   DropdownSelect,
   type DropdownSelectOption,
-  FocusItem,
   HorizontalFocusGroup,
   Input,
   Tabs,
@@ -20,19 +23,20 @@ import {
   ListDashesIcon,
   MagnifyingGlassIcon,
   MagnifyingGlassPlusIcon,
-  PlusIcon,
   SortAscendingIcon,
   SquaresFourIcon,
 } from "@phosphor-icons/react";
 import type { FocusOverrides } from "../../../../services";
 import { BIG_PICTURE_SIDEBAR_ITEM_IDS } from "../../../../layout";
 import {
+  getLibraryFiltersConsolePillId,
   getLibraryFiltersPlatformPillId,
   getLibraryFiltersTabFocusId,
+  LIBRARY_FILTERS_CONSOLE_ALL_PILL_ID,
+  LIBRARY_FILTERS_CONSOLE_REGION_ID,
   LIBRARY_FILTERS_FILTER_SELECT_ID,
   LIBRARY_FILTERS_GRID_VIEW_BUTTON_ID,
   LIBRARY_FILTERS_LIST_VIEW_BUTTON_ID,
-  LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID,
   LIBRARY_FILTERS_SCAN_BUTTON_ID,
   LIBRARY_FILTERS_SEARCH_INPUT_ID,
   LIBRARY_FILTERS_SORT_SELECT_ID,
@@ -42,12 +46,20 @@ import {
 } from "../navigation";
 import {
   countGamesInCollection,
+  getLibraryConsoleFilter,
+  getLibraryConsoleSystem,
+  isLibraryConsoleFilter,
   type LibraryFilterCounts,
   type LibraryFilterTab,
   type LibrarySecondaryFilter,
   type LibrarySortOption,
   type LibraryViewMode,
 } from "../library-data";
+import {
+  getLibraryConsoleDirectionalTargets,
+  getLibraryConsoleFocusOrder,
+  getSelectedLibraryConsoleFocusId,
+} from "../filter-controller";
 
 const SORT_OPTIONS = [
   { value: "last_played", label: "Last Played" },
@@ -92,12 +104,6 @@ const SIDEBAR_LIBRARY_OVERRIDE = {
   itemId: BIG_PICTURE_SIDEBAR_ITEM_IDS.library,
 };
 
-const TAB_UP_FROM_TOOLBAR_OVERRIDE = {
-  type: "region" as const,
-  regionId: LIBRARY_FILTERS_TOOLBAR_REGION_ID,
-  entryDirection: "up" as const,
-};
-
 export interface LibraryFiltersProps {
   selectedTab: LibraryFilterTab;
   onSelectedTabChange: (tab: LibraryFilterTab) => void;
@@ -133,6 +139,34 @@ export function LibraryFilters({
   firstContentItemId = null,
   onScanGames,
 }: Readonly<LibraryFiltersProps>) {
+  const availableConsoleSystems = useMemo(() => {
+    const systems = new Set<EmulatorSystem>();
+
+    for (const game of library) {
+      const system = systemForGame(game);
+      if (system) systems.add(system);
+    }
+
+    return CONSOLE_FILTER_SYSTEMS.filter((system) => systems.has(system));
+  }, [library]);
+  const selectedConsoleSystem = getLibraryConsoleSystem(filterBy);
+  const isConsoleFilterActive =
+    filterBy === "console" || selectedConsoleSystem !== null;
+  const selectedConsolePillId = getSelectedLibraryConsoleFocusId(
+    selectedConsoleSystem,
+    availableConsoleSystems
+  );
+  const tabUpOverride = useMemo(
+    () =>
+      isConsoleFilterActive
+        ? ({ type: "item", itemId: selectedConsolePillId } as const)
+        : ({
+            type: "region",
+            regionId: LIBRARY_FILTERS_TOOLBAR_REGION_ID,
+            entryDirection: "up",
+          } as const),
+    [isConsoleFilterActive, selectedConsolePillId]
+  );
   const tabDownOverride = useMemo(
     () =>
       firstContentItemId
@@ -146,7 +180,7 @@ export function LibraryFilters({
     [firstContentItemId]
   );
 
-  const { tabItems, lastTabFocusId } = useMemo(() => {
+  const tabItems = useMemo(() => {
     const sortedCollections = [...collections].sort((a, b) =>
       a.name.localeCompare(b.name, undefined, TITLE_COMPARE_COLLECTIONS)
     );
@@ -180,7 +214,6 @@ export function LibraryFilters({
     }));
 
     const row = [...builtins, ...collectionSpecs];
-    const lastTabFocusId = row[row.length - 1]!.id;
 
     const tabItemsLocal = row.map((spec, index) => ({
       ...spec,
@@ -194,34 +227,18 @@ export function LibraryFilters({
               },
         right:
           index === row.length - 1
-            ? {
-                type: "item" as const,
-                itemId: LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID,
-              }
+            ? { type: "block" as const }
             : {
                 type: "item" as const,
                 itemId: row[index + 1]!.id,
               },
-        up: TAB_UP_FROM_TOOLBAR_OVERRIDE,
+        up: tabUpOverride,
         down: tabDownOverride,
       },
     })) satisfies Array<TabsItem<LibraryFilterTab>>;
 
-    return { tabItems: tabItemsLocal, lastTabFocusId };
-  }, [collections, counts, library, tabDownOverride]);
-
-  const newFolderNavigationOverrides = useMemo(
-    (): FocusOverrides => ({
-      left: {
-        type: "item",
-        itemId: lastTabFocusId,
-      },
-      right: { type: "block" },
-      up: TAB_UP_FROM_TOOLBAR_OVERRIDE,
-      down: tabDownOverride,
-    }),
-    [lastTabFocusId, tabDownOverride]
-  );
+    return tabItemsLocal;
+  }, [collections, counts, library, tabDownOverride, tabUpOverride]);
 
   const selectedTabFocusId = useMemo(() => {
     return getLibraryFiltersTabFocusId(String(selectedTab));
@@ -258,6 +275,60 @@ export function LibraryFilters({
       }) as const,
     [selectedTabFocusId]
   );
+  const consoleParentPillId = getLibraryFiltersPlatformPillId("console");
+  const consoleRowDownOverride = useMemo(
+    () => ({ type: "item", itemId: selectedTabFocusId }) as const,
+    [selectedTabFocusId]
+  );
+  const consolePillSpecs = useMemo(
+    () => [
+      {
+        value: "console" as const,
+        label: "All consoles",
+        focusId: LIBRARY_FILTERS_CONSOLE_ALL_PILL_ID,
+      },
+      ...availableConsoleSystems.map((system) => ({
+        value: getLibraryConsoleFilter(system),
+        label: CONSOLE_LABELS[system] ?? system.toUpperCase(),
+        focusId: getLibraryFiltersConsolePillId(system),
+      })),
+    ],
+    [availableConsoleSystems]
+  );
+  const consoleFocusOrder = useMemo(
+    () => getLibraryConsoleFocusOrder(availableConsoleSystems),
+    [availableConsoleSystems]
+  );
+  const consolePillOverrides = useMemo(
+    () =>
+      consolePillSpecs.map((pill, index) => {
+        const targets = getLibraryConsoleDirectionalTargets(
+          consoleFocusOrder,
+          index,
+          consoleParentPillId,
+          selectedTabFocusId
+        );
+
+        return {
+          ...pill,
+          navigationOverrides: {
+            left: { type: "item", itemId: targets.left } as const,
+            right: targets.right
+              ? ({ type: "item", itemId: targets.right } as const)
+              : ({ type: "block" } as const),
+            up: { type: "item", itemId: targets.up } as const,
+            down: consoleRowDownOverride,
+          } satisfies FocusOverrides,
+        };
+      }),
+    [
+      consoleFocusOrder,
+      consoleParentPillId,
+      consolePillSpecs,
+      consoleRowDownOverride,
+      selectedTabFocusId,
+    ]
+  );
   const searchNavigationOverrides: FocusOverrides = {
     left: SIDEBAR_LIBRARY_OVERRIDE,
     right: {
@@ -287,11 +358,10 @@ export function LibraryFilters({
   );
   // The dropdown only tracks install-state filters; when a platform pill is the
   // active filter the dropdown falls back to showing "All Games".
-  const statusFilterValue: LibrarySecondaryFilter = PLATFORM_FILTER_VALUES.has(
-    filterBy
-  )
-    ? "all_games"
-    : filterBy;
+  const statusFilterValue: LibrarySecondaryFilter =
+    PLATFORM_FILTER_VALUES.has(filterBy) || isLibraryConsoleFilter(filterBy)
+      ? "all_games"
+      : filterBy;
 
   const platformPillOverrides = useMemo(
     () =>
@@ -326,10 +396,13 @@ export function LibraryFilters({
                   ),
                 },
           up: toolbarUpOverride,
-          down: toolbarDownOverride,
+          down:
+            pill.value === "console"
+              ? ({ type: "item", itemId: selectedConsolePillId } as const)
+              : toolbarDownOverride,
         } satisfies FocusOverrides,
       })),
-    [onScanGames, toolbarUpOverride, toolbarDownOverride]
+    [onScanGames, selectedConsolePillId, toolbarUpOverride, toolbarDownOverride]
   );
 
   const filterNavigationOverrides: FocusOverrides = {
@@ -359,7 +432,9 @@ export function LibraryFilters({
 
   const handlePlatformPillClick = (value: LibrarySecondaryFilter) => {
     // Toggle: clicking the active platform clears back to "All Games".
-    onFilterByChange(filterBy === value ? "all_games" : value);
+    const isActive =
+      value === "console" ? isConsoleFilterActive : filterBy === value;
+    onFilterByChange(isActive ? "all_games" : value);
   };
   const gridViewNavigationOverrides: FocusOverrides = {
     left: {
@@ -373,7 +448,7 @@ export function LibraryFilters({
     down: toolbarDownOverride,
   };
   const tabsNavigationOverrides: FocusOverrides = {
-    up: TAB_UP_FROM_TOOLBAR_OVERRIDE,
+    up: tabUpOverride,
     down: tabDownOverride,
   };
 
@@ -431,7 +506,10 @@ export function LibraryFilters({
 
           <div className="library-filters__platform-pills">
             {platformPillOverrides.map((pill) => {
-              const active = filterBy === pill.value;
+              const active =
+                pill.value === "console"
+                  ? isConsoleFilterActive
+                  : filterBy === pill.value;
               return (
                 <Button
                   key={pill.value}
@@ -509,6 +587,34 @@ export function LibraryFilters({
         </div>
       </HorizontalFocusGroup>
 
+      {isConsoleFilterActive ? (
+        <HorizontalFocusGroup
+          className="library-filters__console-row"
+          regionId={LIBRARY_FILTERS_CONSOLE_REGION_ID}
+          aria-label="Console systems"
+        >
+          <span className="library-filters__console-label" aria-hidden="true">
+            System
+          </span>
+          <div className="library-filters__console-pills">
+            {consolePillOverrides.map((pill) => (
+              <Button
+                key={pill.value}
+                focusId={pill.focusId}
+                focusNavigationOverrides={pill.navigationOverrides}
+                className="library-filters__platform-pill"
+                variant={filterBy === pill.value ? "primary" : "secondary"}
+                size="small"
+                aria-pressed={filterBy === pill.value}
+                onClick={() => onFilterByChange(pill.value)}
+              >
+                {pill.label}
+              </Button>
+            ))}
+          </div>
+        </HorizontalFocusGroup>
+      ) : null}
+
       <div className="library-filters__tabs">
         <Tabs
           className="library-filters-tabs"
@@ -518,31 +624,6 @@ export function LibraryFilters({
           regionId={LIBRARY_FILTERS_TABS_REGION_ID}
           navigationOverrides={tabsNavigationOverrides}
           ariaLabel="Library filters"
-          afterTabs={
-            <FocusItem
-              id={LIBRARY_FILTERS_NEW_FOLDER_BUTTON_ID}
-              asChild
-              navigationOverrides={newFolderNavigationOverrides}
-            >
-              <button
-                type="button"
-                className="tabs__tab"
-                aria-label="New Folder"
-                onClick={() => {
-                  logger.log("library new folder clicked");
-                }}
-              >
-                <span className="tabs__tab-label tabs__tab-label--with-icon">
-                  <PlusIcon
-                    className="tabs__tab-icon"
-                    size={16}
-                    aria-hidden="true"
-                  />
-                  <span>New Folder</span>
-                </span>
-              </button>
-            </FocusItem>
-          }
         />
       </div>
     </div>

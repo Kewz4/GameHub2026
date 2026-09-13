@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { EmulatorSystem } from "@types";
 import { db } from "@main/level";
+import { logger } from "@main/services/logger";
 import {
   gamehubMetaSublevel,
   gamehubMetaKey,
@@ -12,12 +13,21 @@ import {
 } from "@main/level/sublevels/gamehub-meta";
 
 /**
- * Metadata store schema version. Bump when the key normalization changes so
- * existing installs purge and re-seed instead of keeping unreachable keys.
+ * Metadata store schema version. Bump when the key normalization OR the dataset
+ * content changes so existing installs purge and re-seed instead of serving
+ * stale entries.
  * v2: article-insensitive keys (re-derived from each entry's raw title —
  *     the JSON's own keys were generated with the old normalization).
+ * v6: dataset regenerated off IGN + LaunchBox + HowLongToBeat (age ratings,
+ *     3-D box art, gameplay screenshots, playtimes); forces a re-seed so
+ *     existing installs pick up the new fields instead of serving stale entries.
+ *
+ * IMPORTANT: bump this ONLY in the same release that ships the regenerated
+ * dataset. Re-seed clears the store, then per-system sync is skipped for any
+ * system that still has entries — so a version bump that ships BEFORE the new
+ * JSON would re-seed the OLD data and then never pick up the new data.
  */
-const META_VERSION = 5;
+const META_VERSION = 6;
 const META_VERSION_KEY = "gamehubMetaVersion";
 
 /**
@@ -34,7 +44,9 @@ function readLocalMeta(system: EmulatorSystem): HostedMetaFile | null {
     const file = path.join(LOCAL_META_DIR, `${system}.json`);
     if (!fs.existsSync(file)) return null;
     let raw = fs.readFileSync(file, "utf-8");
-    raw = raw.replace(/\x1b\[.*$/m, "").trimEnd();
+    const escapeCharacter = String.fromCharCode(27);
+    const escapeSequence = new RegExp(`${escapeCharacter}\\[.*$`, "m");
+    raw = raw.replace(escapeSequence, "").trimEnd();
     return JSON.parse(raw) as HostedMetaFile;
   } catch {
     return null;
@@ -49,7 +61,7 @@ function readLocalMeta(system: EmulatorSystem): HostedMetaFile | null {
  */
 const GAMEHUB_META_BASE_URL =
   process.env.GAMEHUB_META_BASE_URL ??
-  "https://raw.githubusercontent.com/Kewz4/hydra/dev/sources/gamehub-meta";
+  "https://raw.githubusercontent.com/Kewz4/GameHub2026/dev/sources/gamehub-meta";
 
 const META_SYSTEMS: EmulatorSystem[] = [
   "ps1",
@@ -73,6 +85,39 @@ interface HostedMetaFile {
   system: EmulatorSystem;
   generatedAt: number;
   games: Record<string, GameHubMetaEntry>;
+}
+
+const localMetaCache = new Map<EmulatorSystem, HostedMetaFile | null>();
+
+/**
+ * Read one entry straight from the bundled metadata file. This is the
+ * read-only fallback used by game details while the background LevelDB seed is
+ * still running (and by visual-QA sessions, which intentionally disable all
+ * database writes). Keeping this lookup in memory makes repeat details visits
+ * effectively free.
+ */
+export function getBundledGameHubMeta(
+  system: EmulatorSystem,
+  title: string
+): GameHubMetaEntry | null {
+  let data = localMetaCache.get(system);
+  if (data === undefined) {
+    data = readLocalMeta(system);
+    localMetaCache.set(system, data);
+  }
+
+  if (!data?.games || !title) return null;
+  const normalizedTitle = normalizeMetaTitle(title);
+  const direct = data.games[normalizedTitle];
+  if (direct) return direct;
+
+  // Older generated files used a slightly different JSON key scheme. Match
+  // the raw entry title as a compatibility fallback without trusting that key.
+  return (
+    Object.values(data.games).find(
+      (entry) => normalizeMetaTitle(entry.title) === normalizedTitle
+    ) ?? null
+  );
 }
 
 /**
@@ -158,7 +203,7 @@ export async function ensureGameHubMeta(): Promise<void> {
       await db.put(META_VERSION_KEY, META_VERSION, { valueEncoding: "json" });
     }
   } catch (err) {
-    console.warn("[gamehub-meta] version check failed:", err);
+    logger.warn("[gamehub-meta] version check failed:", err);
   }
 
   for (const system of META_SYSTEMS) {
@@ -166,7 +211,7 @@ export async function ensureGameHubMeta(): Promise<void> {
       if (await systemHasEntries(system)) continue;
       await syncGameHubMeta(system);
     } catch (err) {
-      console.warn(`[gamehub-meta] bootstrap failed for ${system}:`, err);
+      logger.warn(`[gamehub-meta] bootstrap failed for ${system}:`, err);
     }
   }
 }

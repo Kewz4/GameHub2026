@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { emulatorUserPaths } from "./emulator-user-paths";
 
 import {
   duckstationConfigCandidates,
@@ -27,6 +28,11 @@ const DEFAULT_DIRS = (): string[] => {
     ];
   }
   return [
+    path.join(emulatorUserPaths("duckstation", "/usr/bin").data, "memcards"),
+    path.join(
+      emulatorUserPaths("duckstation", "/var/lib/flatpak/exports/bin").data,
+      "memcards"
+    ),
     path.join(os.homedir(), ".local", "share", "duckstation", "memcards"),
     path.join(os.homedir(), ".config", "duckstation", "memcards"),
   ];
@@ -38,7 +44,8 @@ const memcardDirFromIni = (): string | null => {
   try {
     const content = readFileSync(iniPath, "utf-8");
     const m = /^\s*MemcardDirectory\s*=\s*(.+)$/im.exec(content);
-    return m ? m[1].trim() || null : null;
+    const configured = m?.[1].trim();
+    return configured ? path.resolve(path.dirname(iniPath), configured) : null;
   } catch {
     return null;
   }

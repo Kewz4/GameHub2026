@@ -125,7 +125,12 @@ const finalizeModInstall = async (
   stagingId: string,
   selectedFolders: string[]
 ): Promise<{ ok: boolean; reason?: string }> =>
-  emulators.finalizeBnpInstall(shop, objectId, stagingId, selectedFolders ?? []);
+  emulators.finalizeBnpInstall(
+    shop,
+    objectId,
+    stagingId,
+    selectedFolders ?? []
+  );
 
 /** Discard a staged install the user backed out of (frees temp files). */
 const cancelModInstall = async (

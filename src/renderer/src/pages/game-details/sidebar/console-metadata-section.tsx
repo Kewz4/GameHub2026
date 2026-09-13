@@ -180,7 +180,21 @@ export function ConsoleMetadataSection() {
   const modes = meta?.gameModes ?? [];
   const languages = meta?.languages ?? [];
   const series = meta?.series;
-  const boxArt = meta?.boxArtUrls ?? [];
+  // Feature the LaunchBox 3-D box render first — it's the authentic box art for
+  // the game — then any generic IGDB artwork, de-duplicated. Without this the
+  // dedicated "Box art" slot filled up with the IGDB fallback art instead of the
+  // real box.
+  const launchboxBox = meta?.boxImageUrl ?? null;
+  const boxArt = [
+    ...(launchboxBox ? [launchboxBox] : []),
+    ...(meta?.boxArtUrls ?? []).filter((url) => url !== launchboxBox),
+  ];
+  const ageRating = meta?.ageRating ?? null;
+  const ageRatingLabel = ageRating
+    ? ageRating.system
+      ? `${ageRating.system} ${ageRating.name}`
+      : ageRating.name
+    : null;
 
   const nothingToShow =
     basics.length === 0 &&
@@ -189,7 +203,8 @@ export function ConsoleMetadataSection() {
     modes.length === 0 &&
     languages.length === 0 &&
     !series?.titles.length &&
-    boxArt.length === 0;
+    boxArt.length === 0 &&
+    !ageRatingLabel;
 
   if (nothingToShow) return null;
 
@@ -208,7 +223,7 @@ export function ConsoleMetadataSection() {
         </SidebarSection>
       )}
 
-      {(hasScores || players || modes.length > 0) && (
+      {(hasScores || players || modes.length > 0 || ageRatingLabel) && (
         <SidebarSection title="Ratings & players">
           {hasScores && (
             <div className="console-meta__scores">
@@ -242,8 +257,14 @@ export function ConsoleMetadataSection() {
             </div>
           )}
 
-          {(players || modes.length > 0) && (
+          {(players || modes.length > 0 || ageRatingLabel) && (
             <ul className="console-meta__rows">
+              {ageRatingLabel ? (
+                <li className="console-meta__row">
+                  <span className="console-meta__key">Age rating</span>
+                  <span className="console-meta__value">{ageRatingLabel}</span>
+                </li>
+              ) : null}
               {players ? (
                 <li className="console-meta__row">
                   <span className="console-meta__key">Local players</span>
@@ -264,6 +285,10 @@ export function ConsoleMetadataSection() {
           )}
         </SidebarSection>
       )}
+
+      {/* HowLongToBeat is rendered by the shared <HowLongToBeatSection> in the
+          sidebar (dataset-backed for emulated games) so it matches the PC-game
+          look exactly — it is intentionally NOT duplicated here. */}
 
       {languages.length > 0 && (
         <SidebarSection title="Languages">

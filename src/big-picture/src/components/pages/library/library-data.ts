@@ -1,5 +1,9 @@
-import type { LibraryGame } from "@types";
+import type { EmulatorSystem, LibraryGame } from "@types";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
+import {
+  CONSOLE_FILTER_SYSTEMS,
+  systemForGame,
+} from "@renderer/pages/library/console-filter";
 
 export const BUILTIN_LIBRARY_TABS = ["all", "favorites", "completed"] as const;
 export type BuiltinLibraryTab = (typeof BUILTIN_LIBRARY_TABS)[number];
@@ -18,6 +22,7 @@ export type LibrarySortOption =
   | "title_desc"
   | "added_desc"
   | "added_asc";
+export type LibraryConsoleFilter = `console:${EmulatorSystem}`;
 export type LibrarySecondaryFilter =
   | "all_games"
   | "installed"
@@ -33,7 +38,31 @@ export type LibrarySecondaryFilter =
   | "ea"
   | "retigga"
   | "custom"
-  | "console";
+  | "console"
+  | LibraryConsoleFilter;
+
+export function getLibraryConsoleFilter(
+  system: EmulatorSystem
+): LibraryConsoleFilter {
+  return `console:${system}`;
+}
+
+export function getLibraryConsoleSystem(
+  filter: string | null | undefined
+): EmulatorSystem | null {
+  if (!filter?.startsWith("console:")) return null;
+
+  const system = filter.slice("console:".length);
+  return (CONSOLE_FILTER_SYSTEMS as string[]).includes(system)
+    ? (system as EmulatorSystem)
+    : null;
+}
+
+export function isLibraryConsoleFilter(
+  filter: string | null | undefined
+): filter is LibraryConsoleFilter {
+  return getLibraryConsoleSystem(filter) !== null;
+}
 
 /** Platform shops that map 1:1 to a `GameShop` value (owned-on-platform). */
 export const PLATFORM_FILTER_SHOPS = [
@@ -209,12 +238,19 @@ export function filterLibraryBySecondaryFilter(
 
   // Custom = manually added games.
   if (selectedFilter === "custom") {
-    return library.filter((game) => getGameOrigin(game) === "custom");
+    return library.filter(
+      (game) => getGameOrigin(game) === "custom" && game.shop !== "launchbox"
+    );
   }
 
   // Console = emulated/ROM games (shop "launchbox").
   if (selectedFilter === "console") {
-    return library.filter((game) => game.shop === "launchbox");
+    return library.filter((game) => systemForGame(game) !== null);
+  }
+
+  const consoleSystem = getLibraryConsoleSystem(selectedFilter);
+  if (consoleSystem) {
+    return library.filter((game) => systemForGame(game) === consoleSystem);
   }
 
   return library;
@@ -314,7 +350,9 @@ export function isLibrarySecondaryFilter(
     value === "ubisoft" ||
     value === "ea" ||
     value === "retigga" ||
-    value === "custom"
+    value === "custom" ||
+    value === "console" ||
+    isLibraryConsoleFilter(value)
   );
 }
 

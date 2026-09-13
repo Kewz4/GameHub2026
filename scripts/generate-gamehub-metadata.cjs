@@ -4,8 +4,12 @@
  *
  * Walks the GameHub Vault dump (Dump/<console>/games.json — the brothers' USA
  * game dumps) and, for every base game, resolves:
- *   - SteamGridDB artwork (cover / wide grid / hero / logo)
+ *   - SteamGridDB artwork (cover / wide grid / hero / logo / icon)
  *   - IGDB metadata (description, genres, release year)
+ *   - IGN metadata (screenshots, devs/pubs, age rating, review score, series)
+ *   - LaunchBox Games DB (curated description/Overview, 3-D box render, true
+ *     gameplay screenshots, ESRB rating; romhacks excluded via <ReleaseType>)
+ *   - HowLongToBeat (main / main+extras / completionist playtimes)
  * and writes a flat, GitHub-hostable dataset to
  * sources/gamehub-meta/<system>.json keyed by the SAME normalized title the
  * app uses at runtime. The app fetches these files raw from GitHub — no live
@@ -17,9 +21,9 @@
  *   Dump/3ds/games.json        → n3ds
  *   Dump/ds/games.json         → nds
  *   Dump/gamecube/games.json   → gc
- *   Dump/gb_gba_gbc/games.json → gb, gbc AND gba (merged; RALibretro auto-
- *                                 detects at launch, so one set of titles is
- *                                 mirrored to all three meta files)
+ *   Dump/gb/games.json         → gb   (GB/GBC/GBA are now separate folders,
+ *   Dump/gbc/games.json        → gbc   each carrying its true console, rather
+ *   Dump/gba/games.json        → gba   than one merged gb_gba_gbc folder)
  *   Dump/n64/games.json        → n64
  *   Dump/ps1/games.json       → ps1
  *   Dump/ps2/games.json       → ps2
@@ -35,15 +39,37 @@
  *   node scripts/generate-gamehub-metadata.cjs [systems...] [--force] [--limit N]
  *
  *   systems   one or more of ps1 ps2 ps3 psp n3ds nds n64 gb gbc gba
- *             wiiu wii gc   (default: all)
+ *             wiiu wii gc switch   (default: all)
  *   --force   re-resolve titles already present in the output (default: skip)
  *   --limit N only process the first N titles per system (smoke testing)
+ *
+ * Backfill modes (update cached entries in place, cheaper than --force):
+ *   --igdb-backfill / --igdb-revalidate   re-run IGDB only
+ *   --ign-backfill                        overwrite IGN-sourced fields
+ *   --launchbox-backfill                  fill/upgrade from the LaunchBox index
+ *   --launchbox-refresh                   force re-download of Metadata.zip
+ *   --hltb-backfill                       fill/overwrite HowLongToBeat playtimes
+ *   --hltb-probe                          diagnose the live HLTB endpoint, exit
+ *
+ * HLTB has no stable API (it rotates its endpoint word and, since the 2026 Ziff
+ * revamp, serves its frontend from a cross-origin "pogo" bundle). The generator
+ * auto-discovers a working /api search endpoint from the site's scripts and
+ * probes candidates until one returns data. If HLTB changes again: run
+ * `--hltb-probe` to see what's live, then pin it with env HLTB_SEARCH_URL=<url>.
+ *
+ * The LaunchBox index is built once from the daily Metadata.zip and cached in
+ * LAUNCHBOX_CACHE_DIR (default: <tmp>/gamehub-launchbox); it needs the system
+ * `unzip`. Fresh/full runs and --launchbox-backfill both build it on demand.
  *
  * Resumable: existing output entries are preserved and skipped unless --force.
  * Rate-limited and retrying so a long full run survives transient 429s.
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
+const { execFileSync } = require("node:child_process");
+const { Readable } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 
 // ---- credentials (same embedded keys the app ships with) -------------------
 const SGDB_KEY = process.env.SGDB_API_KEY || "a41b22e5f9b93f698ff15cf05892aed6";
@@ -51,21 +77,30 @@ const IGDB_CLIENT_ID =
   process.env.IGDB_CLIENT_ID || "lbccfxg1ie3739dubo4bvlj7bw0sue";
 const IGDB_CLIENT_SECRET =
   process.env.IGDB_CLIENT_SECRET || "e88mbm5snb40ax0n37jpyhearwfikp";
-const RAWG_KEYS = [
-  process.env.RAWG_API_KEY,
-  "995d69ec8d474d268f33cf41e6e37f2e",
-  "08e01f201d03418eb70f4fcf541df17d",
-  "5d73ba65ac4f42bbbd67bc8e75913c42",
-].filter(Boolean);
-let _rawgKeyIdx = 0;
-function nextRawgKey() {
-  const key = RAWG_KEYS[_rawgKeyIdx % RAWG_KEYS.length];
-  _rawgKeyIdx++;
-  return key;
-}
-
 const SGDB_BASE = "https://www.steamgriddb.com/api/v2";
-const RAWG_BASE = "https://api.rawg.io/api";
+
+// IGN's public GraphQL (mollusk) — Apollo Automatic Persisted Queries, the same
+// endpoint the IGN web client (kraken) uses. Replaces RAWG as the source of
+// screenshots, developers/publishers, description, genres, AGE RATING and the
+// review score — RAWG's console data was sparse and often mismatched. The
+// hashes are the operation ids IGN's client ships; they only change when IGN
+// publishes a new query (re-capture from the site's network tab if a call
+// starts returning PersistedQueryNotFound).
+const IGN_GQL = "https://mollusk.apis.ign.com/graphql";
+const IGN_HEADERS = {
+  "apollographql-client-name": "kraken",
+  "apollographql-client-version": "v0.67.0",
+  Referer: "https://www.ign.com/reviews/games",
+  "Content-Type": "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+};
+const IGN_HASH = {
+  search: "e1c2e012a21b4a98aaa618ef1b43eb0cafe9136303274a34f5d9ea4f2446e884",
+  get: "b9c48f45a7390ecd157229419dc9a2acb48de90c0f255b667076befb38338de6",
+  images: "06204b0f0871f8382e3adab7d1c59399e6c17ac94bff575c20a12ebf9d880b86",
+};
 
 const DUMP_DIR = path.join(__dirname, "..", "Dump");
 const OUT_DIR = path.join(__dirname, "..", "sources", "gamehub-meta");
@@ -75,17 +110,17 @@ const CHECKPOINT_FILE = path.join(OUT_DIR, ".checkpoint.json");
 
 /**
  * EmulatorSystem → Dump folder. Reverse of CONSOLE_MAP in
- * src/main/services/rom-sources/gamehub-dump-sources.ts. gb/gbc/gba all read
- * from the merged gb_gba_gbc folder (the dump stores them together because
- * RALibretro auto-detects the console from the file extension at launch).
+ * src/main/services/rom-sources/gamehub-dump-sources.ts. GB/GBC/GBA are now
+ * separate folders (each carries its true console) rather than one merged
+ * gb_gba_gbc folder.
  */
 const SYSTEM_TO_DUMP_FOLDER = {
   n3ds: "3ds",
   nds: "ds",
   gc: "gamecube",
-  gb: "gb_gba_gbc",
-  gbc: "gb_gba_gbc",
-  gba: "gb_gba_gbc",
+  gb: "gb",
+  gbc: "gbc",
+  gba: "gba",
   n64: "n64",
   ps1: "ps1",
   ps2: "ps2",
@@ -117,25 +152,6 @@ const IGDB_PLATFORM_IDS = {
   switch: 130,
 };
 
-/** RAWG platform IDs — from https://api.rawg.io/docs/#operation/games_list.
- *  Used to filter search results by console for better matching. */
-const RAWG_PLATFORM_IDS = {
-  ps1: 27,
-  ps2: 15,
-  ps3: 16,
-  psp: 17,
-  n3ds: 8,
-  nds: 9,
-  n64: 83,
-  gb: 26,
-  gbc: 43,
-  gba: 24,
-  wii: 11,
-  wiiu: 10,
-  gc: 105,
-  switch: 7,
-};
-
 // ---- helpers ---------------------------------------------------------------
 
 /**
@@ -161,7 +177,7 @@ let _shuttingDown = false;
 let _currentOutPath = null;
 let _currentData = null;
 
-function setupGracefulShutdown() {
+function _setupGracefulShutdown() {
   const saveAndExit = (signal) => {
     if (_shuttingDown) return;
     _shuttingDown = true;
@@ -185,13 +201,13 @@ let _progressStart = Date.now();
 let _progressTotal = 0;
 let _progressDone = 0;
 
-function progressInit(total) {
+function _progressInit(total) {
   _progressTotal = total;
   _progressDone = 0;
   _progressStart = Date.now();
 }
 
-function progressTick() {
+function _progressTick() {
   _progressDone++;
   if (_progressDone % 50 === 0 || _progressDone === _progressTotal) {
     const elapsed = (Date.now() - _progressStart) / 1000;
@@ -199,7 +215,7 @@ function progressTick() {
     const remaining = (_progressTotal - _progressDone) / rate;
     const eta = Math.ceil(remaining / 60);
     process.stdout.write(
-      `  ⏱  ${_progressDone}/${_progressTotal} (${Math.round(100*_progressDone/_progressTotal)}%) — ~${eta}m remaining\n`
+      `  ⏱  ${_progressDone}/${_progressTotal} (${Math.round((100 * _progressDone) / _progressTotal)}%) — ~${eta}m remaining\n`
     );
   }
 }
@@ -236,7 +252,7 @@ async function waitForRamIfNeeded() {
   process.stdout.write(
     `⏸  low RAM (${avail} MB available < ${MIN_AVAILABLE_RAM_MB} MB threshold) — pausing until memory frees up…\n`
   );
-  while (true) {
+  for (;;) {
     await sleep(RAM_POLL_INTERVAL_MS);
     const now = availableRamMB();
     if (now >= MIN_AVAILABLE_RAM_MB) {
@@ -459,84 +475,862 @@ function platformPref(x, platformId) {
     : 1;
 }
 
-// ---- RAWG.io (screenshots, developers, publishers) -------------------------
+// ---- IGN (screenshots, devs/pubs, description, age rating, review score) ----
+
+/** Build an IGN mollusk Automatic-Persisted-Query GET URL. */
+function ignUrl(operationName, variables, hash) {
+  const params = new URLSearchParams({
+    operationName,
+    variables: JSON.stringify(variables),
+    extensions: JSON.stringify({
+      persistedQuery: { version: 1, sha256Hash: hash },
+    }),
+  });
+  return `${IGN_GQL}?${params.toString()}`;
+}
+
+async function ignGql(operationName, variables, hash) {
+  const data = await fetchJson(ignUrl(operationName, variables, hash), {
+    headers: IGN_HEADERS,
+  });
+  return data?.data ?? null;
+}
+
+/** Resolve a title to its IGN game slug via the search operation. Returns null
+ *  when nothing plausibly matches (guards against wrong-game screenshots). */
+async function ignSearch(title) {
+  const data = await ignGql(
+    "SearchObjectsByName",
+    { term: title, count: 20, objectType: "Game" },
+    IGN_HASH.search
+  );
+  const objects = data?.searchObjectsByName?.objects ?? [];
+  if (objects.length === 0) return null;
+
+  const target = normalizeTitle(title);
+  const tTokens = tokenize(title);
+  let best = null;
+  let bestScore = Infinity;
+  for (const o of objects) {
+    const name = o?.metadata?.names?.name || o?.metadata?.names?.short || "";
+    if (!o?.slug || !name) continue;
+    const score =
+      normalizeTitle(name) === target
+        ? 0
+        : tokenSymDiff(tokenize(name), tTokens);
+    if (score < bestScore) {
+      bestScore = score;
+      best = o;
+    }
+  }
+  // Require a close match — a large token symmetric-difference means IGN
+  // returned a different game, and a wrong screenshot set is worse than none.
+  if (!best || bestScore > 2) return null;
+  return { slug: best.slug, id: best.id ?? null };
+}
+
+/** Full game object (devs/pubs/genres/description/age rating/review/release). */
+async function ignGet(slug) {
+  const data = await ignGql(
+    "ObjectSelectByTypeAndSlug",
+    { slug, objectType: "Game", region: "us", state: "Published" },
+    IGN_HASH.get
+  );
+  return data?.objectSelectByTypeAndSlug ?? null;
+}
+
+/** Screenshot gallery URLs for a slug. */
+async function ignImages(slug) {
+  const data = await ignGql(
+    "ObjectImageGallery",
+    { slug, objectType: "Game", count: 10 },
+    IGN_HASH.images
+  );
+  const images = data?.objectSelectByTypeAndSlug?.imageGallery?.images ?? [];
+  return images.map((i) => i?.url).filter(Boolean);
+}
 
 /**
- * Search RAWG for a game by title, optionally filtered by platform. Returns
- * the first result's screenshots + developer/publisher info, or null.
- *
- * RAWG's search returns `short_screenshots` inline (no extra request needed).
- * Developer/publisher info requires a follow-up details call.
+ * Fetch IGN metadata for a title: resolve the slug, then pull the game object +
+ * image gallery. Returns the fields we store (undefined when absent), or null
+ * when the game isn't on IGN / doesn't match.
  */
-async function rawgSearch(title, system) {
-  const platformId = RAWG_PLATFORM_IDS[system];
-  const searchKey = nextRawgKey();
-  const params = new URLSearchParams({
-    key: searchKey,
-    search: title,
-    page_size: "5",
+async function ignFetch(title) {
+  const match = await ignSearch(title);
+  if (!match?.slug) return null;
+
+  const [game, gallery] = await Promise.all([
+    ignGet(match.slug).catch(() => null),
+    ignImages(match.slug).catch(() => []),
+  ]);
+  if (!game && gallery.length === 0) return null;
+
+  const names = (arr) => (arr ?? []).map((a) => a?.name).filter(Boolean);
+  const region = (game?.objectRegions ?? [])[0] ?? null;
+  const ageRating = region?.ageRating?.name
+    ? {
+        name: region.ageRating.name,
+        system: region.ageRating.ageRatingType ?? null,
+      }
+    : undefined;
+  const releaseDate = region?.releases?.[0]?.date ?? null;
+  const primaryImage = game?.primaryImage?.url ?? null;
+  const screenshots = (
+    gallery.length ? gallery : primaryImage ? [primaryImage] : []
+  ).slice(0, 10);
+  const developers = names(game?.producers);
+  const publishers = names(game?.publishers);
+  const genres = names(game?.genres);
+  const series = names(game?.franchises)[0];
+  const description =
+    game?.metadata?.descriptions?.long ||
+    game?.metadata?.descriptions?.short ||
+    undefined;
+  const score = game?.primaryReview?.score;
+
+  return {
+    screenshots: screenshots.length ? screenshots : undefined,
+    developers: developers.length ? developers : undefined,
+    publishers: publishers.length ? publishers : undefined,
+    description: description || undefined,
+    genres: genres.length ? genres : undefined,
+    series: series || undefined,
+    ageRating,
+    ratingScore: typeof score === "number" ? Math.round(score * 10) : undefined,
+    releaseYear: releaseDate
+      ? Number(String(releaseDate).slice(0, 4)) || undefined
+      : undefined,
+  };
+}
+
+// ---- LaunchBox Games Database (descriptions, 3-D boxes, gameplay shots) -----
+//
+// LaunchBox publishes a single daily Metadata.zip (≈300 MB) whose Metadata.xml
+// (≈1.5 GB uncompressed) is a flat list of <Game>, <GameAlternateName> and
+// <GameImage> records. It's the best free source of curated game *descriptions*
+// (Overview), 3-D box renders and true *gameplay* screenshots, and it tags
+// fan-made romhacks via <ReleaseType> so we can exclude them. Keyless.
+//
+// We parse it once (streaming, memory-bounded) into a compact per-system index
+// cached OUTSIDE the repo, then look games up by the same normalized title the
+// rest of the generator uses.
+
+const LAUNCHBOX_META_ZIP_URL =
+  process.env.LAUNCHBOX_META_ZIP_URL ||
+  "https://gamesdb.launchbox-app.com/Metadata.zip";
+/** Every Games-DB image resolves as `${base}/${GameImage.FileName}`, where
+ *  FileName is a bare GUID (e.g. "340d97ea-….png"). Confirmed against the live
+ *  database (images.launchbox-app.com serves the full-size art at the root). */
+const LAUNCHBOX_IMG_BASE = "https://images.launchbox-app.com";
+/** Where the (large) Metadata.zip/.xml and the compact per-system indexes live.
+ *  Kept out of the repo tree by default so 1.5 GB never gets committed. */
+const LAUNCHBOX_CACHE_DIR =
+  process.env.LAUNCHBOX_CACHE_DIR ||
+  path.join(os.tmpdir(), "gamehub-launchbox");
+
+/** EmulatorSystem → the LaunchBox <Platform> name(s). Compared normalized, so
+ *  case/punctuation ("Sony Playstation" vs "Sony PlayStation") don't matter. */
+const LAUNCHBOX_PLATFORMS = {
+  gb: ["Nintendo Game Boy"],
+  gbc: ["Nintendo Game Boy Color"],
+  gba: ["Nintendo Game Boy Advance"],
+  n64: ["Nintendo 64"],
+  nds: ["Nintendo DS"],
+  n3ds: ["Nintendo 3DS"],
+  gc: ["Nintendo GameCube"],
+  wii: ["Nintendo Wii"],
+  wiiu: ["Nintendo Wii U"],
+  switch: ["Nintendo Switch"],
+  ps1: ["Sony Playstation"],
+  ps2: ["Sony Playstation 2"],
+  ps3: ["Sony Playstation 3"],
+  psp: ["Sony PSP"],
+};
+
+/** Normalized LaunchBox platform name → systems that want it (reverse map, for
+ *  the single-pass platform filter). */
+const LAUNCHBOX_PLATFORM_TO_SYSTEMS = (() => {
+  const map = new Map();
+  for (const [system, names] of Object.entries(LAUNCHBOX_PLATFORMS)) {
+    for (const n of names) {
+      const key = normalizeTitle(n);
+      const list = map.get(key) ?? [];
+      list.push(system);
+      map.set(key, list);
+    }
+  }
+  return map;
+})();
+
+/** <ReleaseType> values we treat as "the real, retail release". Everything else
+ *  (Hack, Homebrew, Prototype, Beta, Bootleg, Pirate, Unlicensed, …) is skipped
+ *  so we never attach a romhack's art/overview to a legit game. Blank is the
+ *  common case for retail titles, so it's allowed. */
+function isAllowedReleaseType(rt) {
+  if (!rt) return true;
+  return /^(released|retail)$/i.test(rt.trim());
+}
+
+/** Decode the handful of XML entities LaunchBox uses and unwrap CDATA. */
+function decodeXml(s) {
+  if (!s) return "";
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) =>
+      String.fromCodePoint(parseInt(h, 16))
+    )
+    .replace(/&amp;/g, "&"); // must be last
+}
+
+// Compiled per-tag field regexes reused across the (millions of) records so the
+// streaming parse doesn't recompile a RegExp per field per record.
+const _fieldRe = new Map();
+function fieldRe(tag) {
+  let re = _fieldRe.get(tag);
+  if (!re) {
+    re = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
+    _fieldRe.set(tag, re);
+  }
+  return re;
+}
+/** Pull one child element's text from a record's inner XML. */
+function xmlField(inner, tag) {
+  const m = inner.match(fieldRe(tag));
+  return m ? decodeXml(m[1]).trim() : "";
+}
+
+/** LaunchBox stores multi-values as ";"-separated strings. */
+function splitList(s) {
+  return (s || "")
+    .split(";")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+/** Prefer USA/World art, then Japan, then Europe, then anything. Lower = better. */
+function regionRank(region) {
+  const r = (region || "").toLowerCase();
+  if (
+    !r ||
+    r.includes("north america") ||
+    r.includes("united states") ||
+    r === "usa" ||
+    r.includes("world")
+  ) {
+    return 0;
+  }
+  if (r.includes("japan") || r.includes("asia")) return 1;
+  if (r.includes("europe")) return 2;
+  return 3;
+}
+
+/** Build a full Games-DB image URL from a GameImage FileName (bare GUID). */
+function launchboxImageUrl(fileName) {
+  const f = (fileName || "").trim();
+  return f ? `${LAUNCHBOX_IMG_BASE}/${f}` : null;
+}
+
+/** Map a LaunchBox ESRB string ("M - Mature") to our {name, system} shape. */
+function parseEsrb(esrb) {
+  const v = (esrb || "").trim();
+  if (!v || /not\s*rated|rating\s*pending|^rp\b/i.test(v)) return undefined;
+  const code = v.split(/\s*-\s*/)[0].trim();
+  return code ? { name: code, system: "ESRB" } : undefined;
+}
+
+/** Reduce a game's raw image list to the art we keep, region-ranked. */
+function pickLaunchboxImages(images) {
+  const best = (types) => {
+    const cands = images
+      .filter((i) => types.includes(i.type))
+      .sort(
+        (a, b) =>
+          types.indexOf(a.type) - types.indexOf(b.type) ||
+          regionRank(a.region) - regionRank(b.region)
+      );
+    return cands.length ? cands[0].url : null;
+  };
+  const screenshots = images
+    .filter(
+      (i) =>
+        i.type === "Screenshot - Gameplay" ||
+        i.type === "Screenshot - Game Title"
+    )
+    .sort(
+      (a, b) =>
+        (a.type === "Screenshot - Gameplay" ? 0 : 1) -
+          (b.type === "Screenshot - Gameplay" ? 0 : 1) ||
+        regionRank(a.region) - regionRank(b.region)
+    )
+    .map((i) => i.url);
+  return {
+    box3d: best(["Box - 3D"]),
+    boxFront: best([
+      "Box - Front",
+      "Box - Front - Reconstructed",
+      "Fanart - Box - Front",
+    ]),
+    clearLogo: best(["Clear Logo"]),
+    fanart: best(["Fanart - Background"]),
+    screenshots: [...new Set(screenshots)].slice(0, 6),
+  };
+}
+
+/**
+ * Stream a (multi-GB) XML file and invoke `onElement(tag, inner)` for every
+ * top-level record whose tag is in `wantedTags`, holding only a small sliding
+ * buffer in memory. LaunchBox's records don't nest, so an open-tag → close-tag
+ * scan is exact.
+ */
+async function streamLaunchboxXml(xmlPath, wantedTags, onElement) {
+  const stream = fs.createReadStream(xmlPath, {
+    encoding: "utf8",
+    highWaterMark: 1 << 20,
   });
-  if (platformId) params.set("platforms", String(platformId));
+  let buf = "";
+  for await (const chunk of stream) {
+    buf += chunk;
+    for (;;) {
+      // Earliest opening tag of any wanted element.
+      let bestIdx = -1;
+      let bestTag = null;
+      for (const tag of wantedTags) {
+        const i = buf.indexOf(`<${tag}>`);
+        if (i !== -1 && (bestIdx === -1 || i < bestIdx)) {
+          bestIdx = i;
+          bestTag = tag;
+        }
+      }
+      if (bestIdx === -1) {
+        // No wanted opening tag yet. Keep a short tail in case one is split
+        // across the chunk boundary; drop the rest to bound memory.
+        if (buf.length > 64) buf = buf.slice(-64);
+        break;
+      }
+      const close = `</${bestTag}>`;
+      const closeIdx = buf.indexOf(close, bestIdx);
+      if (closeIdx === -1) {
+        // Record continues in the next chunk; discard everything before it.
+        if (bestIdx > 0) buf = buf.slice(bestIdx);
+        break;
+      }
+      const inner = buf.slice(bestIdx + bestTag.length + 2, closeIdx);
+      onElement(bestTag, inner);
+      buf = buf.slice(closeIdx + close.length);
+    }
+  }
+}
 
-  const data = await fetchJson(`${RAWG_BASE}/games?${params.toString()}`);
-  const results = data?.results ?? [];
-  if (results.length === 0) return null;
+/** Download Metadata.zip (streamed to disk) and extract Metadata.xml, caching
+ *  both. Returns the Metadata.xml path, or null on failure. */
+async function ensureLaunchboxXml(opts) {
+  fs.mkdirSync(LAUNCHBOX_CACHE_DIR, { recursive: true });
+  const zipPath = path.join(LAUNCHBOX_CACHE_DIR, "Metadata.zip");
+  const xmlPath = path.join(LAUNCHBOX_CACHE_DIR, "Metadata.xml");
+  if (
+    !opts.refresh &&
+    fs.existsSync(xmlPath) &&
+    fs.statSync(xmlPath).size > 0
+  ) {
+    return xmlPath;
+  }
+  if (
+    opts.refresh ||
+    !fs.existsSync(zipPath) ||
+    fs.statSync(zipPath).size === 0
+  ) {
+    process.stdout.write(
+      `  launchbox: downloading ${LAUNCHBOX_META_ZIP_URL} …\n`
+    );
+    const res = await fetch(LAUNCHBOX_META_ZIP_URL).catch(() => null);
+    if (!res?.ok || !res.body) {
+      process.stderr.write(
+        `  launchbox: download failed (HTTP ${res ? res.status : "network"})\n`
+      );
+      return null;
+    }
+    await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(zipPath));
+  }
+  // Extract just Metadata.xml with the system `unzip` (avoids a zip dependency;
+  // install with `apt-get install -y unzip` if it's missing on the host).
+  process.stdout.write(`  launchbox: extracting Metadata.xml …\n`);
+  try {
+    execFileSync(
+      "unzip",
+      ["-o", zipPath, "Metadata.xml", "-d", LAUNCHBOX_CACHE_DIR],
+      { stdio: "ignore" }
+    );
+  } catch (err) {
+    process.stderr.write(
+      `  launchbox: unzip failed (${err.message}). Install unzip (apt-get install -y unzip).\n`
+    );
+    return null;
+  }
+  return fs.existsSync(xmlPath) ? xmlPath : null;
+}
 
-  // Pick the best match: exact name match, then closest by token similarity.
-  const clean = title
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\[[^\]]*\]/g, "")
-    .trim()
-    .toLowerCase();
-  let best = results[0];
+/** Build the per-system LaunchBox index from Metadata.xml (two streaming passes:
+ *  games+alt-names, then images for matched games) and write compact caches. */
+async function buildLaunchboxCaches(systems, xmlPath) {
+  const gamesById = new Map(); // dbid -> record
+  const nameToId = new Map(); // system -> Map(normname -> dbid)
+  for (const s of systems) nameToId.set(s, new Map());
+
+  const addName = (system, normname, dbid, isPrimary) => {
+    const m = nameToId.get(system);
+    if (m && (isPrimary || !m.has(normname))) m.set(normname, dbid);
+  };
+
+  // Pass A — wanted games (right platform + retail release type) + alt names.
+  await streamLaunchboxXml(
+    xmlPath,
+    ["Game", "GameAlternateName"],
+    (tag, inner) => {
+      if (tag === "Game") {
+        const platform = xmlField(inner, "Platform");
+        const forSystems = LAUNCHBOX_PLATFORM_TO_SYSTEMS.get(
+          normalizeTitle(platform)
+        );
+        if (!forSystems) return;
+        if (!isAllowedReleaseType(xmlField(inner, "ReleaseType"))) return;
+        const dbid = xmlField(inner, "DatabaseID");
+        const name = xmlField(inner, "Name");
+        if (!dbid || !name) return;
+        const yearRaw = xmlField(inner, "ReleaseYear");
+        gamesById.set(dbid, {
+          system: forSystems,
+          name,
+          overview: xmlField(inner, "Overview") || null,
+          developers: splitList(xmlField(inner, "Developer")),
+          publishers: splitList(xmlField(inner, "Publisher")),
+          genres: splitList(xmlField(inner, "Genres")),
+          releaseYear: yearRaw ? Number(yearRaw) || null : null,
+          esrb: parseEsrb(xmlField(inner, "ESRB")),
+          images: null,
+        });
+        const nn = normalizeTitle(name);
+        for (const sys of forSystems) addName(sys, nn, dbid, true);
+      } else {
+        // GameAlternateName — extra normnames pointing at the same game (a
+        // primary name always wins, so this only fills gaps).
+        const dbid = xmlField(inner, "DatabaseID");
+        const alt = xmlField(inner, "AlternateName");
+        if (!dbid || !alt) return;
+        const rec = gamesById.get(dbid);
+        if (!rec) return;
+        const nn = normalizeTitle(alt);
+        for (const sys of rec.system) addName(sys, nn, dbid, false);
+      }
+    }
+  );
+
+  // Pass B — images, but only for games we matched in pass A.
+  const imagesById = new Map();
+  await streamLaunchboxXml(xmlPath, ["GameImage"], (_tag, inner) => {
+    const dbid = xmlField(inner, "DatabaseID");
+    if (!dbid || !gamesById.has(dbid)) return;
+    const url = launchboxImageUrl(xmlField(inner, "FileName"));
+    if (!url) return;
+    const list = imagesById.get(dbid) ?? [];
+    list.push({
+      type: xmlField(inner, "Type"),
+      region: xmlField(inner, "Region"),
+      url,
+    });
+    imagesById.set(dbid, list);
+  });
+
+  for (const [dbid, rec] of gamesById) {
+    rec.images = pickLaunchboxImages(imagesById.get(dbid) ?? []);
+  }
+
+  // One compact cache file per system (small — just the matched games).
+  fs.mkdirSync(LAUNCHBOX_CACHE_DIR, { recursive: true });
+  for (const system of systems) {
+    const games = {};
+    for (const [normname, dbid] of nameToId.get(system)) {
+      const rec = gamesById.get(dbid);
+      if (!rec) continue;
+      games[normname] = {
+        name: rec.name,
+        overview: rec.overview,
+        developers: rec.developers,
+        publishers: rec.publishers,
+        genres: rec.genres,
+        releaseYear: rec.releaseYear,
+        esrb: rec.esrb,
+        ...rec.images, // box3d, boxFront, clearLogo, fanart, screenshots
+      };
+    }
+    fs.writeFileSync(
+      path.join(LAUNCHBOX_CACHE_DIR, `${system}.json`),
+      JSON.stringify({ system, generatedAt: Date.now(), games })
+    );
+    process.stdout.write(
+      `  launchbox: cached ${Object.keys(games).length} ${system} games\n`
+    );
+  }
+}
+
+/** Ensure every requested system has a LaunchBox cache; (re)build from
+ *  Metadata.xml if any is missing. Returns false when LaunchBox is unavailable
+ *  (the run then simply proceeds without LaunchBox enrichment). */
+async function ensureLaunchboxCaches(systems, opts) {
+  const supported = systems.filter((s) => LAUNCHBOX_PLATFORMS[s]);
+  if (supported.length === 0) return false;
+  const missing = opts.refresh
+    ? supported
+    : supported.filter(
+        (s) => !fs.existsSync(path.join(LAUNCHBOX_CACHE_DIR, `${s}.json`))
+      );
+  if (missing.length === 0) return true;
+  const xmlPath = await ensureLaunchboxXml(opts);
+  if (!xmlPath) return false;
+  process.stdout.write(
+    `  launchbox: parsing Metadata.xml for ${supported.join(", ")} (one-time) …\n`
+  );
+  await buildLaunchboxCaches(supported, xmlPath);
+  return true;
+}
+
+const _launchboxIndexCache = new Map();
+/** Load a system's LaunchBox index (normname → art/text), memoized. Returns
+ *  null when the cache is absent (LaunchBox disabled / unavailable). */
+function loadLaunchboxIndex(system) {
+  if (_launchboxIndexCache.has(system)) return _launchboxIndexCache.get(system);
+  let idx = null;
+  try {
+    const data = JSON.parse(
+      fs.readFileSync(path.join(LAUNCHBOX_CACHE_DIR, `${system}.json`), "utf8")
+    );
+    idx = data.games ?? null;
+  } catch {
+    idx = null;
+  }
+  _launchboxIndexCache.set(system, idx);
+  return idx;
+}
+
+/** Look a Dump title up in the system's LaunchBox index (region tags stripped
+ *  first so "Game (USA)" matches LaunchBox's "Game"). */
+function launchboxLookup(system, title) {
+  const idx = loadLaunchboxIndex(system);
+  if (!idx) return null;
+  return (
+    idx[normalizeTitle(cleanTitle(title) || title)] ??
+    idx[normalizeTitle(title)] ??
+    null
+  );
+}
+
+/** Merge screenshot sources, LaunchBox first (curated gameplay), deduped, ≤10. */
+function mergeScreens(a, b) {
+  return [...new Set([...(a ?? []), ...(b ?? [])])].slice(0, 10);
+}
+
+/**
+ * Union the genre lists from every provider, in priority order, de-duplicated
+ * case-insensitively (first spelling wins) and capped. A single provider often
+ * under-describes a game — IGDB alone tags e.g. "Breath of the Wild" merely
+ * "Puzzle, Adventure" — so combining IGN (the primary source), IGDB and
+ * LaunchBox yields the fuller, more accurate genre set the game actually is.
+ */
+function mergeGenres(...lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    for (const raw of list ?? []) {
+      const name = String(raw ?? "").trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+    }
+  }
+  return out.slice(0, 5);
+}
+
+// ---- HowLongToBeat (main / main+extra / completionist playtimes) ------------
+//
+// Mirrors the Playnite HowLongToBeat plugin's access path. HLTB has no public
+// API and actively fights scrapers: the POST search endpoint word rotates
+// (/api/search → /api/seek → /api/bleed …) and recent builds gate it behind a
+// per-session auth handshake. So we (1) discover the current endpoint from the
+// site's _app-*.js bundle, (2) best-effort fetch its /init auth token + key/val,
+// then (3) POST the search with those headers — the same dance the plugin (and
+// the maintained howlongtobeat libraries) do. Everything is best-effort: any
+// failure just yields no HLTB data for the run, it never blocks it. The
+// comp_main/comp_plus/comp_100 response fields are in seconds.
+
+const HLTB_BASE = "https://howlongtobeat.com";
+const HLTB_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept: "*/*",
+  Referer: `${HLTB_BASE}/`,
+  Origin: HLTB_BASE,
+};
+
+// Discovered once per run and reused for every title. undefined = not tried yet.
+let _hltbSession = undefined;
+
+/** GET text (not JSON) with the browser-like HLTB headers. */
+async function hltbText(url) {
+  try {
+    const res = await fetch(url, { headers: HLTB_HEADERS });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+// Historical/known search paths, tried after anything found in the JS bundles.
+// HLTB rotates this word (search → s → seek → find → ouch → bleed …) and, since
+// the 2026 Ziff Davis revamp, moved its frontend to a cross-origin "pogo" bundle
+// on cdn.ziffstatic.com — so the endpoint now lives in that bundle, not an
+// _app-*.js file. We therefore DISCOVER candidates from every script the page
+// loads and TRY each until one returns data, rather than guessing one path.
+const HLTB_DEFAULT_ENDPOINTS = [
+  "/api/search",
+  "/api/s/",
+  "/api/seek",
+  "/api/find",
+  "/api/ouch",
+  "/api/bleed",
+  "/api/lookup",
+  "/api/games",
+];
+
+/** Every <script src> the homepage loads, app/pogo/ziffstatic bundles first. */
+async function hltbScriptUrls() {
+  const html = await hltbText(`${HLTB_BASE}/`);
+  if (!html) return [];
+  const urls = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(
+    (m) => m[1]
+  );
+  const abs = urls.map((u) =>
+    u.startsWith("http") ? u : `${HLTB_BASE}${u.startsWith("/") ? "" : "/"}${u}`
+  );
+  const rank = (u) =>
+    /pogo|ziffstatic/i.test(u)
+      ? 0
+      : /_app-|app[.-]|main|chunk|index/i.test(u)
+        ? 1
+        : 2;
+  return [...new Set(abs)].sort((a, b) => rank(a) - rank(b));
+}
+
+/** Scan the JS bundles for candidate /api/<word> search paths (and any absolute
+ *  howlongtobeat.com/api URLs, in case it moved off the apex host). */
+async function hltbBundleEndpoints() {
+  const found = [];
+  const push = (p) => {
+    if (p && !found.includes(p)) found.push(p);
+  };
+  for (const src of (await hltbScriptUrls()).slice(0, 10)) {
+    const js = await hltbText(src);
+    if (!js) continue;
+    for (const m of js.matchAll(
+      /["'`]\/api\/([a-zA-Z][a-zA-Z0-9_]*(?:\/[a-zA-Z0-9_]+)*)["'`]/g
+    )) {
+      push(`/api/${m[1]}`);
+    }
+    for (const m of js.matchAll(
+      /https?:\/\/[a-z0-9.-]*howlongtobeat\.com\/api\/[a-zA-Z0-9_/]+/g
+    )) {
+      push(m[0]);
+    }
+    if (found.length) break; // first bundle carrying /api refs is enough
+  }
+  return found;
+}
+
+/** Best-effort auth handshake: GET <searchUrl>/init for { token, *key*, *val* }
+ *  (recent HLTB builds require x-auth-token + x-hp-key/x-hp-val on the search). */
+async function hltbGetAuth(searchUrl) {
+  const data = await fetchJson(`${searchUrl.replace(/\/$/, "")}/init`, {
+    headers: HLTB_HEADERS,
+  }).catch(() => null);
+  if (!data || typeof data !== "object") return null;
+  // The init response carries a token plus a key/val pair whose VALUES become
+  // both the x-hp-key/x-hp-val headers and a body field: payload[key] = val
+  // (mirrors the maintained howlongtobeat clients / the Playnite plugin).
+  let token = null;
+  let key = null;
+  let val = null;
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v !== "string") continue;
+    if (/token/i.test(k) && !token) token = v;
+    else if (/key/i.test(k) && key == null) key = v;
+    else if (/val/i.test(k) && val == null) val = v;
+  }
+  if (!token && !key) return null;
+  return { token, key, val };
+}
+
+/**
+ * Resolve a working HLTB search session once per run: gather candidate endpoints
+ * (JS bundles first, then the known words), and probe each with a throwaway
+ * search until one returns data — that URL + its auth is cached. A hard override
+ * (env HLTB_SEARCH_URL) skips discovery entirely. `null` = none worked.
+ */
+async function ensureHltbSession() {
+  if (_hltbSession !== undefined) return _hltbSession;
+  const override = process.env.HLTB_SEARCH_URL;
+  const candidates = override
+    ? [override]
+    : [...(await hltbBundleEndpoints()), ...HLTB_DEFAULT_ENDPOINTS];
+  const tried = [];
+  for (const ep of [...new Set(candidates)]) {
+    const url = ep.startsWith("http") ? ep : `${HLTB_BASE}${ep}`;
+    const auth = await hltbGetAuth(url).catch(() => null);
+    const session = { url, auth };
+    const rows = await hltbPost("Mario", session); // throwaway probe
+    tried.push(`${ep}${auth ? "+auth" : ""}${rows?.length ? "=OK" : ""}`);
+    if (rows && rows.length) {
+      _hltbSession = session;
+      process.stdout.write(`  hltb: using ${url}${auth ? " (+auth)" : ""}\n`);
+      return _hltbSession;
+    }
+  }
+  _hltbSession = null;
+  process.stdout.write(
+    `  hltb: no working endpoint (tried ${tried.join(", ") || "none"}). ` +
+      `Set HLTB_SEARCH_URL to override, or run --hltb-probe to inspect.\n`
+  );
+  return _hltbSession;
+}
+
+/** Build the search request body for a title (the plugin's payload shape). */
+function hltbBody(name, auth) {
+  const body = {
+    searchType: "games",
+    searchTerms: name.split(/\s+/).filter(Boolean),
+    searchPage: 1,
+    size: 20,
+    searchOptions: {
+      games: {
+        userId: 0,
+        platform: "",
+        sortCategory: "popular",
+        rangeCategory: "main",
+        rangeTime: { min: 0, max: 0 },
+        gameplay: { perspective: "", flow: "", genre: "", difficulty: "" },
+        rangeYear: { max: "", min: "" },
+        modifier: "",
+      },
+      users: { sortCategory: "postcount" },
+      lists: { sortCategory: "follows" },
+      filter: "",
+      sort: 0,
+      randomizer: 0,
+    },
+    useCache: true,
+  };
+  if (auth?.key && auth?.val != null) body[auth.key] = auth.val;
+  return body;
+}
+
+/** POST one search with a session; returns the data array or null. */
+async function hltbPost(name, session) {
+  const headers = { ...HLTB_HEADERS, "Content-Type": "application/json" };
+  if (session.auth?.token) headers["x-auth-token"] = session.auth.token;
+  if (session.auth?.key) headers["x-hp-key"] = session.auth.key;
+  if (session.auth?.val) headers["x-hp-val"] = session.auth.val;
+  const data = await fetchJson(session.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(hltbBody(name, session.auth)),
+  }).catch(() => null);
+  return Array.isArray(data?.data) ? data.data : null;
+}
+
+/** Search HLTB and return the best-matching game row, or null. */
+async function hltbSearch(title) {
+  const session = await ensureHltbSession();
+  if (!session) return null;
+  const name = cleanTitle(title) || title;
+  let rows = await hltbPost(name, session);
+  // Nothing back? The token may have rotated mid-run — re-resolve once and retry.
+  if (!rows || rows.length === 0) {
+    _hltbSession = undefined;
+    const fresh = await ensureHltbSession();
+    rows = fresh ? await hltbPost(name, fresh) : null;
+  }
+  if (!rows || rows.length === 0) return null;
+
+  const target = normalizeTitle(name);
+  const tTokens = tokenize(name);
+  let best = null;
   let bestScore = Infinity;
-  for (const r of results) {
-    const name = (r.name || "").toLowerCase();
+  for (const r of rows) {
+    const rn = r?.game_name || "";
+    if (!rn) continue;
     const score =
-      name === clean
-        ? 0
-        : name.includes(clean) || clean.includes(name)
-          ? 1
-          : tokenSymDiff(tokenize(name), tokenize(clean));
-    const pref = platformId
-      ? (r.parent_platforms ?? []).some((p) => p.platform?.id === platformId)
-        ? 0
-        : 1
-      : 0;
-    if (score + pref * 0.5 < bestScore) {
-      bestScore = score + pref * 0.5;
+      normalizeTitle(rn) === target ? 0 : tokenSymDiff(tokenize(rn), tTokens);
+    if (score < bestScore) {
+      bestScore = score;
       best = r;
     }
   }
+  // Require a close match — a wrong game's playtime is worse than none.
+  return best && bestScore <= 2 ? best : null;
+}
 
-  // Screenshots are inline in the search response.
-  const screenshots = (best.short_screenshots ?? [])
-    .map((s) => s.image)
-    .filter(Boolean)
-    .slice(0, 10);
+/** Seconds → hours rounded to the nearest half hour (HLTB's display grain). */
+function hltbHours(sec) {
+  return typeof sec === "number" && sec > 0
+    ? Math.round((sec / 3600) * 2) / 2
+    : null;
+}
 
-  // Fetch game details for developer/publisher info (rotate key).
-  let developers = [];
-  let publishers = [];
-  let description = null;
-  try {
-    const detailsKey = nextRawgKey();
-    const details = await fetchJson(
-      `${RAWG_BASE}/games/${best.id}?key=${detailsKey}`
-    );
-    developers = (details?.developers ?? []).map((d) => d.name).filter(Boolean);
-    publishers = (details?.publishers ?? []).map((p) => p.name).filter(Boolean);
-    description = details?.description_raw ?? null;
-  } catch {
-    // Best-effort — screenshots are still useful without dev/pub info.
+/** Resolve HLTB playtimes: { main, mainExtra, completionist } in hours. */
+async function hltbFetch(title) {
+  const g = await hltbSearch(title).catch(() => null);
+  if (!g) return null;
+  const main = hltbHours(g.comp_main);
+  const mainExtra = hltbHours(g.comp_plus);
+  const completionist = hltbHours(g.comp_100);
+  if (main == null && mainExtra == null && completionist == null) return null;
+  return { main, mainExtra, completionist };
+}
+
+/** Diagnostic (`--hltb-probe`): dump the site's scripts, the /api candidates
+ *  found in the bundles, whether a working search endpoint was resolved, and a
+ *  sample result. Run this whenever HLTB changes its site again — it shows what
+ *  is actually live so the endpoint/shape can be re-mapped (or pinned via
+ *  HLTB_SEARCH_URL) without guessing. */
+async function hltbProbeReport() {
+  process.stdout.write("HLTB probe:\n");
+  const scripts = await hltbScriptUrls();
+  process.stdout.write(`  homepage scripts (${scripts.length}):\n`);
+  for (const s of scripts.slice(0, 25)) process.stdout.write(`    ${s}\n`);
+  const eps = await hltbBundleEndpoints();
+  process.stdout.write(
+    `  /api candidates in bundles: ${eps.length ? eps.join(", ") : "(none found)"}\n`
+  );
+  const session = await ensureHltbSession();
+  if (!session) {
+    process.stdout.write("  result: NO working endpoint.\n");
+    return;
   }
-
-  return {
-    screenshots: screenshots.length > 0 ? screenshots : undefined,
-    developers: developers.length > 0 ? developers : undefined,
-    publishers: publishers.length > 0 ? publishers : undefined,
-    description: description ?? undefined,
-  };
+  process.stdout.write(`  result: WORKING → ${session.url}\n`);
+  const rows = await hltbPost("The Legend of Zelda Ocarina of Time", session);
+  process.stdout.write(`  sample search rows: ${rows?.length ?? 0}\n`);
+  if (rows?.[0]) {
+    const r = rows[0];
+    process.stdout.write(
+      `    top: "${r.game_name}" main=${r.comp_main}s plus=${r.comp_plus}s 100=${r.comp_100}s\n`
+    );
+  }
 }
 
 // ---- SteamGridDB -----------------------------------------------------------
@@ -626,11 +1420,8 @@ async function processSystem(system, opts) {
     : { system, generatedAt: 0, games: {} };
   const games = existing.games ?? {};
 
-  // Distinct base-game titles (dedup by normalized key so the merged
-  // gb_gba_gbc folder doesn't triple-emit a game that ships under all three
-  // consoles — the meta file is per-EmulatorSystem, so gb.json/gbc.json/gba.json
-  // each get their own copy of the same entry, which is correct since the
-  // runtime lookups are per-system too).
+  // Distinct base-game titles (dedup by normalized key within the folder so a
+  // console's meta file has one entry per title).
   const titles = [];
   const seen = new Set();
   for (const row of gamesRows) {
@@ -693,41 +1484,88 @@ async function processSystem(system, opts) {
         didWork = true;
       }
 
-      // RAWG backfill: only re-fetch RAWG for entries missing
-      // screenshots/developers/publishers. Skips SGDB + IGDB entirely
-      // (art and description are already resolved). Used to fill gaps
-      // when the previous RAWG API key was rate-limited mid-run.
-      if (opts.rawgBackfill) {
-        const hasRawg =
-          (existing.screenshots && existing.screenshots.length > 0) ||
-          (existing.developers && existing.developers.length > 0) ||
-          (existing.publishers && existing.publishers.length > 0);
-        if (!hasRawg) {
-          await waitForRamIfNeeded();
-          const rawg = await rawgSearch(
-            cleanTitle(title) || title,
-            system
-          ).catch(() => null);
-          if (rawg) {
-            if (rawg.screenshots?.length)
-              existing.screenshots = rawg.screenshots;
-            if (rawg.developers?.length)
-              existing.developers = rawg.developers;
-            if (rawg.publishers?.length)
-              existing.publishers = rawg.publishers;
-            // Don't overwrite description if IGDB already provided one
-            if (!existing.description && rawg.description)
-              existing.description = rawg.description;
-          }
-          backfills.push(
-            rawg
-              ? `rawg(${
-                  rawg.screenshots?.length ?? 0
-                }ss,${rawg.developers?.length ?? 0}dev,pub)`
-              : "rawg-miss"
-          );
-          didWork = true;
+      // IGN backfill: re-fetch IGN for EVERY entry and OVERWRITE the
+      // IGN-sourced fields (screenshots/devs/pubs/ageRating/ratingScore/series).
+      // This is the migration path off RAWG — cached entries already carry RAWG
+      // screenshots/devs/pubs, so a fill-only pass would skip them all and
+      // replace nothing. Art (SGDB) + description/genres (IGDB) are left intact,
+      // so this is far cheaper than a full --force re-resolve. On an IGN miss
+      // the existing values are kept (some data beats none for games not on
+      // IGN) — use --force for a hard purge.
+      if (opts.ignBackfill) {
+        await waitForRamIfNeeded();
+        const ign = await ignFetch(cleanTitle(title) || title).catch(
+          () => null
+        );
+        if (ign) {
+          if (ign.screenshots?.length) existing.screenshots = ign.screenshots;
+          if (ign.developers?.length) existing.developers = ign.developers;
+          if (ign.publishers?.length) existing.publishers = ign.publishers;
+          if (ign.ageRating) existing.ageRating = ign.ageRating;
+          if (typeof ign.ratingScore === "number")
+            existing.ratingScore = ign.ratingScore;
+          if (ign.series) existing.series = ign.series;
+          // Only fill a description when IGDB never provided one.
+          if (!existing.description && ign.description)
+            existing.description = ign.description;
         }
+        backfills.push(
+          ign
+            ? `ign(${ign.screenshots?.length ?? 0}ss,${
+                ign.developers?.length ?? 0
+              }dev,${ign.ageRating ? ign.ageRating.name : "-"})`
+            : "ign-miss"
+        );
+        didWork = true;
+      }
+
+      // LaunchBox backfill: fill/upgrade the description (LaunchBox Overviews
+      // preferred), the 3-D box, gameplay screenshots, clear logo, hero fanart
+      // and the ESRB age rating from the cached Games-DB index. Purely local —
+      // no network — so it's cheap to run over every cached entry.
+      if (opts.launchboxBackfill) {
+        const lb = launchboxLookup(system, title);
+        if (lb) {
+          if (lb.overview) existing.description = lb.overview;
+          if (lb.box3d || lb.boxFront)
+            existing.boxImageUrl = lb.box3d ?? lb.boxFront;
+          if (!existing.coverImageUrl && (lb.box3d || lb.boxFront))
+            existing.coverImageUrl = lb.box3d ?? lb.boxFront;
+          if (!existing.logoImageUrl && lb.clearLogo)
+            existing.logoImageUrl = lb.clearLogo;
+          if (!existing.libraryHeroImageUrl && lb.fanart)
+            existing.libraryHeroImageUrl = lb.fanart;
+          if (lb.screenshots?.length)
+            existing.screenshots = mergeScreens(
+              lb.screenshots,
+              existing.screenshots
+            );
+          if (!existing.ageRating && lb.esrb) existing.ageRating = lb.esrb;
+          if (!existing.developers?.length && lb.developers?.length)
+            existing.developers = lb.developers;
+          if (!existing.publishers?.length && lb.publishers?.length)
+            existing.publishers = lb.publishers;
+        }
+        backfills.push(
+          lb
+            ? `lbox(${lb.box3d ? "3d" : lb.boxFront ? "box" : "-"},${
+                lb.screenshots?.length ?? 0
+              }ss${lb.overview ? ",desc" : ""})`
+            : "lbox-miss"
+        );
+        didWork = true;
+      }
+
+      // HowLongToBeat backfill: fill/overwrite the playtimes on a cached entry.
+      // One network search per title (endpoint/auth discovered once per run).
+      if (opts.hltbBackfill) {
+        await waitForRamIfNeeded();
+        const hltb = await hltbFetch(cleanTitle(title) || title).catch(
+          () => null
+        );
+        if (hltb) existing.hltb = hltb;
+        backfills.push(hltb ? `hltb(${hltb.main ?? "-"}h)` : "hltb-miss");
+        didWork = true;
       }
 
       if (didWork) {
@@ -743,7 +1581,17 @@ async function processSystem(system, opts) {
       processed++;
       // In backfill mode, flush after EVERY entry so zero data is lost on crash.
       flush(outPath, { system, generatedAt: Date.now(), games });
-      await sleep(opts.rawgBackfill ? 30 : opts.igdbBackfill ? 280 : 120);
+      await sleep(
+        opts.ignBackfill
+          ? 400
+          : opts.hltbBackfill
+            ? 350
+            : opts.igdbBackfill
+              ? 280
+              : opts.launchboxBackfill
+                ? 0
+                : 120
+      );
       continue;
     }
 
@@ -754,28 +1602,56 @@ async function processSystem(system, opts) {
     // memory pressure (other scrapers, Playwright/Chrome), pause until it
     // recovers so we don't get OOM-killed mid-run.
     await waitForRamIfNeeded();
-    const [art, igdb, rawg] = await Promise.all([
+    const [art, igdb, ign, hltb] = await Promise.all([
       sgdbArtwork(cleanTitle(title) || title).catch(() => null),
       igdbSearch(igdbTitle(title), platformId).catch(() => null),
-      rawgSearch(cleanTitle(title) || title, system).catch(() => null),
+      ignFetch(cleanTitle(title) || title).catch(() => null),
+      hltbFetch(cleanTitle(title) || title).catch(() => null),
     ]);
+    // LaunchBox is a local index lookup (no network) — cheap, so no await.
+    const lb = launchboxLookup(system, title);
 
-    if (art || igdb || rawg) {
+    if (art || igdb || ign || lb || hltb) {
+      const igdbGenres = (igdb?.genres ?? []).map((g) => g.name);
+      const mergedScreens = mergeScreens(lb?.screenshots, ign?.screenshots);
       games[key] = {
         title,
-        description: igdb?.summary ?? rawg?.description ?? null,
-        genres: (igdb?.genres ?? []).map((g) => g.name),
+        // Description preference: LaunchBox Overviews read best for emulated
+        // games (user preference), then IGDB, then IGN.
+        description: lb?.overview ?? igdb?.summary ?? ign?.description ?? null,
+        // Merge genres across providers (IGN first — the primary source — then
+        // IGDB, then LaunchBox), de-duplicated and capped, so a game gets its
+        // full genre set instead of whatever a single source happened to return
+        // (IGDB alone under-tags e.g. Breath of the Wild as "Puzzle, Adventure").
+        genres: mergeGenres(ign?.genres, igdbGenres, lb?.genres),
         releaseYear: igdb?.first_release_date
           ? new Date(igdb.first_release_date * 1000).getUTCFullYear()
-          : null,
-        coverImageUrl: art?.coverImageUrl ?? null,
+          : (ign?.releaseYear ?? lb?.releaseYear ?? null),
+        // SGDB art is dimensioned for the app's card layout, so it stays
+        // primary; LaunchBox 3-D/front box fills a missing cover.
+        coverImageUrl: art?.coverImageUrl ?? lb?.box3d ?? lb?.boxFront ?? null,
         libraryImageUrl: art?.libraryImageUrl ?? null,
-        libraryHeroImageUrl: art?.libraryHeroImageUrl ?? null,
-        logoImageUrl: art?.logoImageUrl ?? null,
+        libraryHeroImageUrl: art?.libraryHeroImageUrl ?? lb?.fanart ?? null,
+        logoImageUrl: art?.logoImageUrl ?? lb?.clearLogo ?? null,
         iconUrl: art?.iconUrl ?? null,
-        screenshots: rawg?.screenshots ?? undefined,
-        developers: rawg?.developers ?? undefined,
-        publishers: rawg?.publishers ?? undefined,
+        // LaunchBox 3-D box render for the details "feature" art; falls back to
+        // a flat front box so the field is still populated.
+        boxImageUrl: lb?.box3d ?? lb?.boxFront ?? undefined,
+        // LaunchBox gameplay screenshots first (curated), topped up with IGN's.
+        screenshots: mergedScreens.length ? mergedScreens : undefined,
+        developers:
+          ign?.developers ??
+          (lb?.developers?.length ? lb.developers : undefined),
+        publishers:
+          ign?.publishers ??
+          (lb?.publishers?.length ? lb.publishers : undefined),
+        // Age rating (drives the settings "hide M-rated" filter): IGN's ESRB/PEGI
+        // first, LaunchBox's ESRB as a broad-coverage fallback.
+        ageRating: ign?.ageRating ?? lb?.esrb ?? undefined,
+        ratingScore: ign?.ratingScore ?? undefined,
+        series: ign?.series ?? undefined,
+        // HowLongToBeat playtimes (hours): main / main+extras / completionist.
+        hltb: hltb ?? undefined,
       };
       resolved++;
       const artParts = [];
@@ -790,16 +1666,32 @@ async function processSystem(system, opts) {
         igdbParts.push(
           new Date(igdb.first_release_date * 1000).getUTCFullYear()
         );
-      const rawgParts = [];
-      if (rawg?.screenshots?.length)
-        rawgParts.push(`${rawg.screenshots.length}ss`);
-      if (rawg?.developers?.length) rawgParts.push("dev");
-      if (rawg?.publishers?.length) rawgParts.push("pub");
+      const ignParts = [];
+      if (ign?.screenshots?.length)
+        ignParts.push(`${ign.screenshots.length}ss`);
+      if (ign?.developers?.length) ignParts.push("dev");
+      if (ign?.publishers?.length) ignParts.push("pub");
+      if (ign?.ageRating) ignParts.push(ign.ageRating.name);
+      if (typeof ign?.ratingScore === "number")
+        ignParts.push(`${ign.ratingScore}`);
+      const lbParts = [];
+      if (lb?.overview) lbParts.push("desc");
+      if (lb?.box3d) lbParts.push("3d");
+      else if (lb?.boxFront) lbParts.push("box");
+      if (lb?.screenshots?.length) lbParts.push(`${lb.screenshots.length}ss`);
+      if (lb?.esrb) lbParts.push(lb.esrb.name);
+      const hltbParts = [];
+      if (hltb?.main != null) hltbParts.push(`${hltb.main}h`);
+      else if (hltb?.mainExtra != null) hltbParts.push(`${hltb.mainExtra}h+`);
+      else if (hltb?.completionist != null)
+        hltbParts.push(`${hltb.completionist}h*`);
       const tag =
         [
           artParts.length ? `art(${artParts.join(",")})` : null,
           igdbParts.length ? `igdb(${igdbParts.join(",")})` : null,
-          rawgParts.length ? `rawg(${rawgParts.join(",")})` : null,
+          ignParts.length ? `ign(${ignParts.join(",")})` : null,
+          lbParts.length ? `lbox(${lbParts.join(",")})` : null,
+          hltbParts.length ? `hltb(${hltbParts.join(",")})` : null,
         ]
           .filter(Boolean)
           .join(" + ") || "partial";
@@ -808,7 +1700,7 @@ async function processSystem(system, opts) {
       );
     } else {
       process.stdout.write(
-        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB, no RAWG)\n`
+        `  ${system} ${processed + 1}/${todo.length}  "${title}" → MISS (no art, no IGDB, no IGN, no LaunchBox, no HLTB)\n`
       );
     }
 
@@ -837,7 +1729,11 @@ async function main() {
   const force = args.includes("--force");
   const revalidate = args.includes("--igdb-revalidate");
   const igdbBackfill = args.includes("--igdb-backfill") || revalidate;
-  const rawgBackfill = args.includes("--rawg-backfill");
+  const ignBackfill = args.includes("--ign-backfill");
+  const launchboxBackfill = args.includes("--launchbox-backfill");
+  const launchboxRefresh = args.includes("--launchbox-refresh");
+  const hltbBackfill = args.includes("--hltb-backfill");
+  const hltbProbe = args.includes("--hltb-probe");
   const limitIdx = args.indexOf("--limit");
   const limit = limitIdx >= 0 ? parseInt(args[limitIdx + 1], 10) : 0;
   const systems = args.filter(
@@ -845,9 +1741,41 @@ async function main() {
   );
   const targets = systems.length ? systems : ALL_SYSTEMS;
 
+  // Diagnostic-only: inspect what HLTB is serving right now, then exit.
+  if (hltbProbe) {
+    await hltbProbeReport();
+    return;
+  }
+
   process.stdout.write(
     `Generating metadata for: ${targets.join(", ")}${limit ? ` (limit ${limit}/system)` : ""}\n`
   );
+
+  // Build the LaunchBox index once up-front when this run will consume it —
+  // i.e. a --launchbox-backfill, or any fresh/full run (the fresh-fetch path
+  // calls launchboxLookup). A pure --ign/--igdb backfill skips it (those only
+  // touch already-cached entries), so a quick smoke test doesn't pull ~300 MB.
+  const usesLaunchbox = launchboxBackfill || (!ignBackfill && !igdbBackfill);
+  if (usesLaunchbox) {
+    const ok = await ensureLaunchboxCaches(targets, {
+      refresh: launchboxRefresh,
+    }).catch((err) => {
+      process.stderr.write(`launchbox: cache build failed: ${err.message}\n`);
+      return false;
+    });
+    if (!ok) {
+      process.stdout.write(
+        "launchbox: proceeding without LaunchBox enrichment (cache unavailable)\n"
+      );
+    }
+  }
+
+  // Warm the HLTB session (discover endpoint + auth once) up-front when this run
+  // will consume it — a --hltb-backfill, or any fresh/full run (the fresh path
+  // calls hltbFetch). Pure ign/igdb/launchbox backfills skip it.
+  const usesHltb =
+    hltbBackfill || (!ignBackfill && !igdbBackfill && !launchboxBackfill);
+  if (usesHltb) await ensureHltbSession().catch(() => null);
 
   // Load the checkpoint so a crash/resume skips already-completed systems
   // entirely (instead of re-reading games.json + re-checking every cached entry).
@@ -859,13 +1787,27 @@ async function main() {
   }
 
   for (const system of targets) {
-    // Skip systems already completed in a prior run (checkpoint). --force
-    // ignores the checkpoint so a full re-resolve is still possible.
-    if (!force && !rawgBackfill && completed.has(system)) {
+    // Skip systems already completed in a prior run (checkpoint). --force and
+    // the backfill modes ignore the checkpoint so a re-resolve is still possible.
+    if (
+      !force &&
+      !ignBackfill &&
+      !launchboxBackfill &&
+      !hltbBackfill &&
+      completed.has(system)
+    ) {
       process.stdout.write(`skip ${system}: already completed (checkpoint)\n`);
       continue;
     }
-    await processSystem(system, { force, limit, igdbBackfill, revalidate, rawgBackfill });
+    await processSystem(system, {
+      force,
+      limit,
+      igdbBackfill,
+      revalidate,
+      ignBackfill,
+      launchboxBackfill,
+      hltbBackfill,
+    });
     // Per-platform checkpoint save — even if the process crashes later,
     // we know this system's output file is complete and can be skipped.
     completed.add(system);

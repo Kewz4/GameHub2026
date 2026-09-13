@@ -90,7 +90,7 @@
   &__list {
     display: flex;
     flex-direction: column;
-    gap: globals.$spacing-unit;
+    border-top: 1px solid rgba(var(--fg-rgb), 0.12);
     padding-bottom: calc(globals.$spacing-unit * 3);
   }
 

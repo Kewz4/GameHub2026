@@ -1,0 +1,4 @@
+LIBRARY "gamehub-overlay-qa-marker64"
+EXPORTS
+    DetourFinishHelperProcess @1 NONAME
+    GameHubOverlayQaMarkerMagic @2

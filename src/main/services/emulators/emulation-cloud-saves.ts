@@ -1,14 +1,21 @@
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { emulatorConfigFile } from "./emulator-user-paths";
 
 import type {
   EmulationCloudSave,
   EmulationSaveEmulator,
   EmulationSavePlatform,
-  UserPreferences,
 } from "@types";
 import { R2Sync } from "@main/services/r2-sync";
-import { db, levelKeys } from "@main/level";
+import { assertEmulationSaveKeyForUser } from "../cloud-save/game-artifact-key-policy";
+import {
+  assertCloudSaveAccountSessionCurrent,
+  getCloudSaveAccountUserId,
+  runWithCloudSaveAccountSession,
+} from "../cloud-save/account-session";
+import { assertCloudSaveSubscription } from "../cloud-save/cloud-save-access";
 import {
   readSaveContents as readPs2SaveContents,
   buildPsuBuffer as buildPs2PsuBuffer,
@@ -17,6 +24,11 @@ import {
   readPs1SaveContents as readPs1SaveContentsFromCard,
   buildMcsBuffer as buildPs1McsBuffer,
 } from "./ps1-memory-card";
+import {
+  assertEmulationSavePlatform,
+  emulatorForEmulationSavePlatform,
+  isEmulationSavePlatform,
+} from "./emulation-save-policy";
 
 export interface UploadEmulationSaveOptions {
   platform: EmulationSavePlatform;
@@ -30,24 +42,17 @@ export interface UploadEmulationSaveOptions {
   buffer: Buffer;
 }
 
-const getOrCreateUserId = async (): Promise<string> => {
-  const prefs = await db
-    .get<string, UserPreferences>(levelKeys.userPreferences, {
-      valueEncoding: "json",
-    })
-    .catch(() => ({}) as UserPreferences);
-
-  let userId = prefs?.cloudSyncUserId;
-  if (!userId) {
-    userId = R2Sync.generateUserId();
-    await db.put(
-      levelKeys.userPreferences,
-      { ...prefs, cloudSyncUserId: userId },
-      { valueEncoding: "json" }
-    );
-  }
-  return userId;
-};
+const withEmulationSaveAccount = <T>(
+  operation: (userId: string) => Promise<T>
+) =>
+  runWithCloudSaveAccountSession(async () => {
+    assertCloudSaveSubscription();
+    const userId = await getCloudSaveAccountUserId();
+    assertCloudSaveAccountSessionCurrent();
+    const result = await operation(userId);
+    assertCloudSaveAccountSessionCurrent();
+    return result;
+  });
 
 const artifactToCloudSave = (artifact: {
   id: string;
@@ -63,69 +68,81 @@ const artifactToCloudSave = (artifact: {
   localLastModifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
-}): EmulationCloudSave => ({
-  id: artifact.id,
-  platform: artifact.platform as EmulationSavePlatform,
-  emulator: artifact.emulator as EmulationSaveEmulator,
-  saveKind: "game_save",
-  saveIdentity: artifact.saveIdentity,
-  artifactLengthInBytes: artifact.artifactLengthInBytes,
-  fileName: artifact.fileName,
-  hostname: artifact.hostname || null,
-  localLastModifiedAt: artifact.localLastModifiedAt,
-  label: artifact.label,
-  metadata: null,
-  shop: artifact.shop as EmulationCloudSave["shop"],
-  objectId: artifact.objectId,
-  lastUploadedAt: artifact.updatedAt,
-  createdAt: artifact.createdAt,
-  updatedAt: artifact.updatedAt,
-});
-
-export const uploadEmulationSave = async (
-  options: UploadEmulationSaveOptions
-): Promise<EmulationCloudSave> => {
-  const userId = await getOrCreateUserId();
-  const key = await R2Sync.uploadEmulationSave(options.buffer, {
-    userId,
-    platform: options.platform,
-    emulator: options.emulator,
-    saveIdentity: options.saveIdentity,
-    fileName: options.fileName,
-    label: options.label,
-    shop: options.shop,
-    objectId: options.objectId,
-    localLastModifiedAt: options.localLastModifiedAt,
-  });
+}): EmulationCloudSave | null => {
+  if (!isEmulationSavePlatform(artifact.platform)) return null;
+  const emulator = emulatorForEmulationSavePlatform(artifact.platform);
 
   return {
-    id: key,
-    platform: options.platform,
-    emulator: options.emulator,
+    id: artifact.id,
+    platform: artifact.platform,
+    // Older PS1 uploads incorrectly persisted the configured RALibretro binary
+    // even though this screen manages DuckStation-format memory-card exports.
+    // Normalize those records instead of dropping a user's existing backup.
+    emulator,
     saveKind: "game_save",
-    saveIdentity: options.saveIdentity,
-    artifactLengthInBytes: options.buffer.length,
-    fileName: options.fileName,
-    hostname: null,
-    localLastModifiedAt: options.localLastModifiedAt,
-    label: options.label,
+    saveIdentity: artifact.saveIdentity,
+    artifactLengthInBytes: artifact.artifactLengthInBytes,
+    fileName: artifact.fileName,
+    hostname: artifact.hostname || null,
+    localLastModifiedAt: artifact.localLastModifiedAt,
+    label: artifact.label,
     metadata: null,
-    shop: options.shop as EmulationCloudSave["shop"],
-    objectId: options.objectId,
-    lastUploadedAt: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    shop: artifact.shop as EmulationCloudSave["shop"],
+    objectId: artifact.objectId,
+    lastUploadedAt: artifact.updatedAt,
+    createdAt: artifact.createdAt,
+    updatedAt: artifact.updatedAt,
   };
 };
 
+export const uploadEmulationSave = async (
+  options: UploadEmulationSaveOptions
+): Promise<EmulationCloudSave> =>
+  withEmulationSaveAccount(async (userId) => {
+    assertEmulationSavePlatform(options.platform);
+    const emulator = emulatorForEmulationSavePlatform(options.platform);
+    if (options.emulator !== emulator) {
+      throw new Error("Emulation save emulator does not match platform");
+    }
+    const hostname = os.hostname();
+    const key = await R2Sync.uploadEmulationSave(options.buffer, {
+      userId,
+      platform: options.platform,
+      emulator,
+      saveIdentity: options.saveIdentity,
+      fileName: options.fileName,
+      label: options.label,
+      shop: options.shop,
+      objectId: options.objectId,
+      localLastModifiedAt: options.localLastModifiedAt,
+      hostname,
+    });
+    assertCloudSaveAccountSessionCurrent();
+
+    const now = new Date().toISOString();
+    return {
+      id: key,
+      platform: options.platform,
+      emulator,
+      saveKind: "game_save",
+      saveIdentity: options.saveIdentity,
+      artifactLengthInBytes: options.buffer.length,
+      fileName: options.fileName,
+      hostname,
+      localLastModifiedAt: options.localLastModifiedAt,
+      label: options.label,
+      metadata: null,
+      shop: options.shop as EmulationCloudSave["shop"],
+      objectId: options.objectId,
+      lastUploadedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
+
 export const toEmulationSaveEmulator = (
-  binary: string
-): EmulationSaveEmulator => {
-  if (binary === "pcsx2") return "pcsx2";
-  if (binary === "duckstation") return "duckstation";
-  // Fallback: treat as pcsx2 for ps2, duckstation for ps1
-  return binary as EmulationSaveEmulator;
-};
+  platform: EmulationSavePlatform
+): EmulationSaveEmulator => emulatorForEmulationSavePlatform(platform);
 
 // Delegated to ps2-memory-card.ts
 export const readPs2SaveForUpload = async (
@@ -155,7 +172,7 @@ export const assembleMcsBuffer = (contents: Buffer): Buffer => contents;
 const getGamesYmlPath = (executablePath: string | null): string | null => {
   if (!executablePath) return null;
   const dir = path.dirname(executablePath);
-  return path.join(dir, "games.yml");
+  return emulatorConfigFile("rpcs3", dir, "games.yml");
 };
 
 export const readGamesYml = async (
@@ -210,54 +227,43 @@ export const buildPathToTitleIdIndex = (
 export const listEmulationSaves = async (
   platform: EmulationSavePlatform,
   objectId?: string | null
-): Promise<EmulationCloudSave[]> => {
-  const userId = await getOrCreateUserId();
-  const artifacts = await R2Sync.listEmulationSaves(userId, platform);
-  const filtered = objectId
-    ? artifacts.filter((a) => a.objectId === objectId)
-    : artifacts;
-  return filtered.map(artifactToCloudSave);
-};
+): Promise<EmulationCloudSave[]> =>
+  withEmulationSaveAccount(async (userId) => {
+    assertEmulationSavePlatform(platform);
+    const artifacts = await R2Sync.listEmulationSaves(userId, platform);
+    const filtered = objectId
+      ? artifacts.filter((artifact) => artifact.objectId === objectId)
+      : artifacts;
+    return filtered
+      .map(artifactToCloudSave)
+      .filter((artifact): artifact is EmulationCloudSave => artifact !== null);
+  });
 
-export const deleteEmulationSave = async (saveId: string): Promise<void> => {
-  await R2Sync.deleteEmulationSave(saveId);
-};
+export const deleteEmulationSave = async (saveId: string): Promise<void> =>
+  withEmulationSaveAccount(async (userId) => {
+    assertEmulationSaveKeyForUser(saveId, userId);
+    await R2Sync.deleteEmulationSave(saveId);
+  });
 
 export const updateEmulationSaveLabel = async (
   saveId: string,
   label: string
-): Promise<EmulationCloudSave> => {
-  await R2Sync.updateEmulationSaveLabel(saveId, label);
-  // Return a minimal updated record; callers only need the id/label shape.
-  const userId = await getOrCreateUserId();
-  const artifacts = await R2Sync.listEmulationSaves(userId);
-  const updated = artifacts.find((a) => a.id === saveId);
-  if (updated) return artifactToCloudSave(updated);
-  // Fallback: construct a minimal shell so callers don't crash.
-  return {
-    id: saveId,
-    platform: "ps2",
-    emulator: "pcsx2",
-    saveKind: "game_save",
-    saveIdentity: "",
-    artifactLengthInBytes: 0,
-    fileName: "",
-    hostname: null,
-    localLastModifiedAt: null,
-    label,
-    metadata: null,
-    shop: null,
-    objectId: null,
-    lastUploadedAt: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-};
+): Promise<EmulationCloudSave> =>
+  withEmulationSaveAccount(async (userId) => {
+    assertEmulationSaveKeyForUser(saveId, userId);
+    await R2Sync.updateEmulationSaveLabel(saveId, label);
+    assertCloudSaveAccountSessionCurrent();
+    const artifacts = await R2Sync.listEmulationSaves(userId);
+    const updated = artifacts.find((artifact) => artifact.id === saveId);
+    const cloudSave = updated ? artifactToCloudSave(updated) : null;
+    if (!cloudSave) throw new Error("Updated emulation save could not be read");
+    return cloudSave;
+  });
 
-export const downloadEmulationSave = async (
-  saveId: string
-): Promise<Buffer> => {
-  return R2Sync.downloadEmulationSave(saveId);
-};
+export const downloadEmulationSave = async (saveId: string): Promise<Buffer> =>
+  withEmulationSaveAccount(async (userId) => {
+    assertEmulationSaveKeyForUser(saveId, userId);
+    return R2Sync.downloadEmulationSave(saveId);
+  });
 
 // Aliases for upload-emulation-save.ts compatibility

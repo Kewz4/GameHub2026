@@ -4,13 +4,22 @@ import { useEffect, useRef } from "react";
 
 const navigationScreenActions = NavigationScreenActionsService.getInstance();
 
-export function useNavigationScreenActions(actions: ScreenActions) {
+interface NavigationScreenActionsOptions {
+  priority?: number;
+}
+
+export function useNavigationScreenActions(
+  actions: ScreenActions,
+  options: NavigationScreenActionsOptions = {}
+) {
   const registrationIdRef = useRef<number | null>(null);
   const initialActionsRef = useRef(actions);
+  const initialPriorityRef = useRef(options.priority);
 
   useEffect(() => {
     const registration = navigationScreenActions.createRegistration(
-      initialActionsRef.current
+      initialActionsRef.current,
+      { priority: initialPriorityRef.current }
     );
     registrationIdRef.current = registration.id;
 
@@ -22,6 +31,8 @@ export function useNavigationScreenActions(actions: ScreenActions) {
       return;
     }
 
-    navigationScreenActions.updateActions(registrationIdRef.current, actions);
-  }, [actions]);
+    navigationScreenActions.updateActions(registrationIdRef.current, actions, {
+      priority: options.priority,
+    });
+  }, [actions, options.priority]);
 }

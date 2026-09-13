@@ -5,13 +5,25 @@ import {
   monitorForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import type { LibraryGame } from "@types";
+import {
+  CUSTOM_DOWNLOAD_ENTRY_OPTIONS,
+  type CustomDownloadEntryIntent,
+} from "@shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { type FocusItemActions } from "../../types";
-import type { FocusOverrides } from "../../services";
-import { useNavigation, useNavigationScreenActions } from "../../hooks";
+import {
+  NAVIGATION_SCREEN_ACTION_PRIORITY,
+  type FocusOverrides,
+} from "../../services";
+import {
+  useNavigation,
+  useNavigationScreenActions,
+  useUserPreferences,
+} from "../../hooks";
 import { BIG_PICTURE_HEADER_REGION_ID } from "../../layout";
 import {
+  Button,
   ContextMenu,
   type ContextMenuItem,
   DownloadsGameCard,
@@ -21,6 +33,13 @@ import {
   Typography,
   VerticalFocusGroup,
 } from "../../components";
+import {
+  CheckCircleIcon,
+  DownloadSimpleIcon,
+  FileArrowUpIcon,
+  LinkSimpleIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react";
 import {
   DOWNLOADS_PAGE_REGION_ID,
   DOWNLOADS_HERO_PAUSE_RESUME_BUTTON_ID,
@@ -38,8 +57,12 @@ import {
   type BigPictureDownloadListItem,
 } from "./use-big-picture-downloads-page-data";
 import { useNavigationSnapshot } from "../../stores";
+import { BigPictureCustomDownloadModal } from "./custom-download-modal";
 
 import "./downloads.scss";
+
+const DOWNLOADS_TAB_FOCUS_ID = "downloads-tab-transfers";
+const CUSTOM_DOWNLOAD_TAB_FOCUS_ID = "downloads-tab-custom";
 
 type DragPlacement = "hero" | "queue" | "paused";
 
@@ -354,10 +377,11 @@ function getHeroPrimaryFocusId() {
 }
 
 const DOWNLOADS_REGION_NAVIGATION_ORDER = {
-  hero: 0,
-  queue: 1,
-  paused: 2,
-  completed: 3,
+  toolbar: 0,
+  hero: 1,
+  queue: 2,
+  paused: 3,
+  completed: 4,
 } as const;
 
 function getRepresentativeFocusIdForPlacement(
@@ -922,6 +946,8 @@ function Section({
 export default function Downloads() {
   const navigate = useNavigate();
   const { setFocus } = useNavigation();
+  const userPreferences = useUserPreferences();
+  const hasTorBoxToken = Boolean(userPreferences?.torBoxApiToken?.trim());
   const { currentFocusId, nodes } = useNavigationSnapshot();
   const {
     activeDownload,
@@ -962,6 +988,11 @@ export default function Downloads() {
   const [optimisticCommitState, setOptimisticCommitState] =
     useState<OptimisticCommitState | null>(null);
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"downloads" | "custom">(
+    "downloads"
+  );
+  const [customDownloadIntent, setCustomDownloadIntent] =
+    useState<CustomDownloadEntryIntent | null>(null);
   const [menuState, setMenuState] = useState<DownloadMenuState>({
     item: null,
     section: null,
@@ -2071,7 +2102,8 @@ export default function Downloads() {
             right: () => {},
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.activeShell }
   );
 
   const handleOpen = (href: string) => {
@@ -2498,16 +2530,154 @@ export default function Downloads() {
 
   const grabbedGameId = moveMode?.sourceGameId ?? null;
 
+  const customDownloadModal = (
+    <BigPictureCustomDownloadModal
+      visible={customDownloadIntent !== null}
+      initialIntent={customDownloadIntent ?? "link"}
+      onClose={() => setCustomDownloadIntent(null)}
+      onSubmitted={() => {
+        setActiveTab("downloads");
+        globalThis.window.requestAnimationFrame(() => {
+          setFocus(DOWNLOADS_TAB_FOCUS_ID);
+        });
+      }}
+    />
+  );
+
+  const managerHeader = (
+    <VerticalFocusGroup
+      className="downloads-page__manager-header"
+      navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.toolbar}
+    >
+      <div>
+        <Typography variant="h3">Download manager</Typography>
+        <Typography className="downloads-page__toolbar-copy">
+          Manage transfers or submit your own TorBox source.
+        </Typography>
+      </div>
+      <div
+        className="downloads-page__tabs"
+        role="tablist"
+        aria-label="Download manager views"
+      >
+        <Button
+          id="downloads-manager-tab-downloads-bp"
+          focusId={DOWNLOADS_TAB_FOCUS_ID}
+          role="tab"
+          aria-selected={activeTab === "downloads"}
+          aria-controls="downloads-manager-panel-downloads-bp"
+          variant={activeTab === "downloads" ? "primary" : "secondary"}
+          icon={<DownloadSimpleIcon size={20} />}
+          onClick={() => setActiveTab("downloads")}
+        >
+          Downloads
+        </Button>
+        <Button
+          id="downloads-manager-tab-custom-bp"
+          focusId={CUSTOM_DOWNLOAD_TAB_FOCUS_ID}
+          role="tab"
+          aria-selected={activeTab === "custom"}
+          aria-controls="downloads-manager-panel-custom-bp"
+          disabled={interactionsLocked}
+          variant={activeTab === "custom" ? "primary" : "secondary"}
+          icon={<LinkSimpleIcon size={20} />}
+          onClick={() => setActiveTab("custom")}
+        >
+          Add custom
+        </Button>
+      </div>
+    </VerticalFocusGroup>
+  );
+
+  if (activeTab === "custom") {
+    return (
+      <VerticalFocusGroup regionId={DOWNLOADS_PAGE_REGION_ID} asChild>
+        <div ref={pageRef} className="downloads-page">
+          {customDownloadModal}
+          {managerHeader}
+          <section
+            id="downloads-manager-panel-custom-bp"
+            className="downloads-page__custom-panel"
+            role="tabpanel"
+            aria-labelledby="downloads-manager-tab-custom-bp"
+          >
+            <div className="downloads-page__custom-heading">
+              <div>
+                <Typography variant="h2">Add a game download</Typography>
+                <Typography className="downloads-page__custom-copy">
+                  Choose a direct link, magnet, or local .torrent. GameHub sends
+                  it through TorBox and adds the completed game to your library.
+                </Typography>
+              </div>
+              <div
+                className={`downloads-page__torbox-status downloads-page__torbox-status--${
+                  hasTorBoxToken ? "connected" : "setup"
+                }`}
+                role="status"
+              >
+                {hasTorBoxToken ? (
+                  <CheckCircleIcon size={20} weight="fill" aria-hidden="true" />
+                ) : (
+                  <WarningCircleIcon
+                    size={20}
+                    weight="fill"
+                    aria-hidden="true"
+                  />
+                )}
+                {hasTorBoxToken ? "TorBox connected" : "TorBox setup needed"}
+              </div>
+            </div>
+            <VerticalFocusGroup
+              className="downloads-page__custom-options"
+              navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.hero}
+            >
+              {CUSTOM_DOWNLOAD_ENTRY_OPTIONS.map((option) => (
+                <Button
+                  key={option.intent}
+                  focusId={`downloads-custom-${option.intent}`}
+                  variant="secondary"
+                  className="downloads-page__custom-option"
+                  icon={
+                    option.intent === "torrent" ? (
+                      <FileArrowUpIcon size={24} />
+                    ) : (
+                      <LinkSimpleIcon size={24} />
+                    )
+                  }
+                  onClick={() => setCustomDownloadIntent(option.intent)}
+                >
+                  <span className="downloads-page__custom-option-copy">
+                    <strong>{option.title}</strong>
+                    <small>{option.description}</small>
+                  </span>
+                </Button>
+              ))}
+            </VerticalFocusGroup>
+          </section>
+        </div>
+      </VerticalFocusGroup>
+    );
+  }
+
   if (!hasDownloads) {
     return (
-      <div className="downloads-page downloads-page--empty">
-        <div className="downloads-page__empty-state">
-          <Typography variant="h2">No downloads yet</Typography>
-          <Typography className="downloads-page__empty-copy">
-            Start a download to see it here.
-          </Typography>
+      <VerticalFocusGroup regionId={DOWNLOADS_PAGE_REGION_ID} asChild>
+        <div className="downloads-page downloads-page--empty">
+          {customDownloadModal}
+          {managerHeader}
+          <div
+            id="downloads-manager-panel-downloads-bp"
+            className="downloads-page__empty-state"
+            role="tabpanel"
+            aria-labelledby="downloads-manager-tab-downloads-bp"
+          >
+            <Typography variant="h2">No downloads yet</Typography>
+            <Typography className="downloads-page__empty-copy">
+              Start a download or add your own link to see it here.
+            </Typography>
+          </div>
         </div>
-      </div>
+      </VerticalFocusGroup>
     );
   }
 
@@ -2520,264 +2690,148 @@ export default function Downloads() {
           isCrossSectionMoveModePreview ? "true" : undefined
         }
       >
-        <>
-          <DownloadsHero
-            snapshot={displayedHeroSnapshot}
-            backgroundLayers={heroBackgroundLayers}
-            getLayerEventHandlers={getHeroLayerEventHandlers}
-            navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.hero}
-            isInteractive={!heroInteractionDisabled}
-            onPauseOrResume={() => {
-              if (!heroPauseTargetDownload) return;
-              if (heroPauseTargetDownload.pauseOrResumeAction === "resume") {
-                void resumeDownload(heroPauseTargetDownload.game);
-                return;
-              }
+        {customDownloadModal}
+        {managerHeader}
+        <div
+          id="downloads-manager-panel-downloads-bp"
+          className="downloads-page__tabpanel"
+          role="tabpanel"
+          aria-labelledby="downloads-manager-tab-downloads-bp"
+        >
+          <>
+            <DownloadsHero
+              snapshot={displayedHeroSnapshot}
+              backgroundLayers={heroBackgroundLayers}
+              getLayerEventHandlers={getHeroLayerEventHandlers}
+              navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.hero}
+              isInteractive={!heroInteractionDisabled}
+              onPauseOrResume={() => {
+                if (!heroPauseTargetDownload) return;
+                if (heroPauseTargetDownload.pauseOrResumeAction === "resume") {
+                  void resumeDownload(heroPauseTargetDownload.game);
+                  return;
+                }
 
-              void pauseDownload(heroPauseTargetDownload.game);
-            }}
-            onCancel={() => {
-              void handleHeroCancel();
-            }}
-            onOpenDetails={() => {
-              if (!displayedHeroSnapshot) return;
-              handleOpen(displayedHeroSnapshot.href);
-            }}
-            isMoveGrabbed={
-              Boolean(displayedHeroSnapshot) &&
-              grabbedGameId === displayedHeroSnapshot?.id
-            }
-            isDragSource={
-              Boolean(displayedHeroSnapshot) && !heroInteractionDisabled
-            }
-            isDragging={dragSource?.gameId === displayedHeroSnapshot?.id}
-            isDropActive={areTargetsEqual(dragTarget, { kind: "hero" })}
-            isDropDisabled={Boolean(displayedHeroSnapshot && !canPromoteToHero)}
-            isMoveModeActive={Boolean(moveMode)}
-            nextListFocusId={firstVisibleListFocusId}
-          />
-
-          <div className="downloads-page__hero-stats-stack">
-            <DownloadsProgressStats
-              title={heroPanelState?.progressPanel.title ?? "Waiting Download"}
-              progress={heroPanelState?.progressPanel.progress ?? 0}
-              progressLabel={
-                heroPanelState?.progressPanel.progressLabel ?? "0%"
+                void pauseDownload(heroPauseTargetDownload.game);
+              }}
+              onCancel={() => {
+                void handleHeroCancel();
+              }}
+              onOpenDetails={() => {
+                if (!displayedHeroSnapshot) return;
+                handleOpen(displayedHeroSnapshot.href);
+              }}
+              isMoveGrabbed={
+                Boolean(displayedHeroSnapshot) &&
+                grabbedGameId === displayedHeroSnapshot?.id
               }
-              transferLabel={
-                heroPanelState?.progressPanel.transferLabel ?? "-- / --"
+              isDragSource={
+                Boolean(displayedHeroSnapshot) && !heroInteractionDisabled
               }
-              etaLabel={heroPanelState?.progressPanel.etaLabel ?? "--"}
-              accentColor={displayedHeroSnapshot?.accentColor ?? undefined}
+              isDragging={dragSource?.gameId === displayedHeroSnapshot?.id}
+              isDropActive={areTargetsEqual(dragTarget, { kind: "hero" })}
+              isDropDisabled={Boolean(
+                displayedHeroSnapshot && !canPromoteToHero
+              )}
+              isMoveModeActive={Boolean(moveMode)}
+              nextListFocusId={firstVisibleListFocusId}
             />
 
-            <DownloadsNetworkStats
-              speedLabel={heroPanelState?.networkPanel.speedLabel ?? "0 B/s"}
-              peakSpeedLabel={
-                heroPanelState?.networkPanel.peakSpeedLabel ?? "0 B/s"
-              }
-              speedHistory={
-                heroPanelState?.networkPanel.speedHistory ??
-                neutralNetworkStats.speedHistory
-              }
-              speedHistoryLabels={
-                heroPanelState?.networkPanel.speedHistoryLabels ??
-                neutralNetworkStats.speedHistoryLabels
-              }
-              downloaderLabel={
-                heroPanelState?.networkPanel.downloaderLabel ?? null
-              }
-              seeds={heroPanelState?.networkPanel.seeds ?? null}
-              peers={heroPanelState?.networkPanel.peers ?? null}
-              showSeedsAndPeers={
-                heroPanelState?.networkPanel.showSeedsAndPeers ?? false
-              }
-              accentColor={displayedHeroSnapshot?.accentColor ?? undefined}
-            />
-          </div>
-        </>
-
-        <Section title="Queued" count={renderedQueuedDownloads.length}>
-          <VerticalFocusGroup
-            className="downloads-page__list"
-            navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.queue}
-            data-download-drop-role="container"
-            data-download-drop-target="queue"
-            data-drop-placement="queue"
-            data-drop-index={renderedQueuedDownloads.length}
-          >
-            {renderedQueuedDownloads.length === 0 ? (
-              <div
-                className={cx(
-                  "downloads-page__drop-target-shell downloads-page__queue-empty-shell",
-                  areTargetsEqual(dragTarget, { kind: "queue", index: 0 }) &&
-                    "downloads-page__drop-target--active"
-                )}
-              >
-                <Typography className="downloads-page__empty-copy">
-                  Drag downloads here to line them up for automatic start.
-                </Typography>
-              </div>
-            ) : null}
-
-            {renderedQueuedDownloads.map((item, index) => (
-              <DownloadsGameCard
-                key={item.id}
-                gameId={item.id}
-                variant="queue"
-                title={item.title}
-                coverImageUrl={item.coverImageUrl}
-                logoImageUrl={getDownloadLogoImageUrl(item.game)}
-                metaLabel={item.metaLabel}
-                secondaryLabel={item.secondaryLabel}
-                progress={item.progress}
-                progressLabel={item.progressLabel}
-                onOpen={() => handleOpen(item.href)}
-                onPrimaryAction={() => moveToPaused(item.game)}
-                primaryActionLabel="Pause"
-                primaryActionDisabled={interactionsLocked}
-                onOpenOptions={(event) => {
-                  openDownloadMenu(
-                    item,
-                    "queue",
-                    getDownloadMenuPosition(event.currentTarget),
-                    getDownloadOptionsActionFocusId(item.id)
-                  );
-                }}
-                optionsDisabled={interactionsLocked}
-                dragPlacement={!moveMode ? "queue" : undefined}
-                dropPlacement="queue"
-                dropIndex={index}
-                navigationOrder={index}
-                isDragging={dragSource?.gameId === item.id}
-                focusId={getDownloadMainFocusId(item.id)}
-                navigationOverrides={
-                  mainNavigationOverridesByFocusId[
-                    getDownloadMainFocusId(item.id)
-                  ]
+            <div className="downloads-page__hero-stats-stack">
+              <DownloadsProgressStats
+                title={
+                  heroPanelState?.progressPanel.title ?? "Waiting Download"
                 }
-                focusActions={getDownloadCardFocusActions(
-                  item.id,
-                  true,
-                  item,
-                  "queue",
-                  interactionsLocked
-                )}
-                isMoveGrabbed={grabbedGameId === item.id}
-                primaryActionFocusId={getDownloadPrimaryActionFocusId(item.id)}
-                optionsFocusId={getDownloadOptionsActionFocusId(item.id)}
-              />
-            ))}
-          </VerticalFocusGroup>
-        </Section>
-
-        <Section title="Paused" count={renderedPausedDownloads.length}>
-          <VerticalFocusGroup
-            className="downloads-page__list"
-            navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.paused}
-            data-download-drop-role="container"
-            data-download-drop-target="paused"
-            data-drop-placement="paused"
-            data-drop-index={renderedPausedDownloads.length}
-          >
-            {renderedPausedDownloads.length === 0 ? (
-              <div
-                className={cx(
-                  "downloads-page__drop-target-shell",
-                  "downloads-page__paused-drop-shell",
-                  areTargetsEqual(dragTarget, { kind: "paused", index: 0 }) &&
-                    "downloads-page__drop-target--active"
-                )}
-              >
-                <Typography className="downloads-page__empty-copy">
-                  Downloads you pause manually will stay here until you move
-                  them.
-                </Typography>
-              </div>
-            ) : null}
-
-            {renderedPausedDownloads.map((item, index) => (
-              <DownloadsGameCard
-                key={item.id}
-                gameId={item.id}
-                variant="paused"
-                title={item.title}
-                coverImageUrl={item.coverImageUrl}
-                logoImageUrl={getDownloadLogoImageUrl(item.game)}
-                metaLabel={item.metaLabel}
-                secondaryLabel={item.secondaryLabel}
-                progress={item.progress}
-                progressLabel={item.progressLabel}
-                onOpen={() => handleOpen(item.href)}
-                onPrimaryAction={() => sendToQueue(item.game)}
-                primaryActionLabel="Resume"
-                primaryActionDisabled={interactionsLocked}
-                onOpenOptions={(event) => {
-                  openDownloadMenu(
-                    item,
-                    "paused",
-                    getDownloadMenuPosition(event.currentTarget),
-                    getDownloadOptionsActionFocusId(item.id)
-                  );
-                }}
-                optionsDisabled={interactionsLocked}
-                dragPlacement={!moveMode ? "paused" : undefined}
-                dropPlacement="paused"
-                dropIndex={index}
-                navigationOrder={index}
-                isDragging={dragSource?.gameId === item.id}
-                focusId={getDownloadMainFocusId(item.id)}
-                navigationOverrides={
-                  mainNavigationOverridesByFocusId[
-                    getDownloadMainFocusId(item.id)
-                  ]
+                progress={heroPanelState?.progressPanel.progress ?? 0}
+                progressLabel={
+                  heroPanelState?.progressPanel.progressLabel ?? "0%"
                 }
-                focusActions={getDownloadCardFocusActions(
-                  item.id,
-                  true,
-                  item,
-                  "paused",
-                  interactionsLocked
-                )}
-                isMoveGrabbed={grabbedGameId === item.id}
-                primaryActionFocusId={getDownloadPrimaryActionFocusId(item.id)}
-                optionsFocusId={getDownloadOptionsActionFocusId(item.id)}
+                transferLabel={
+                  heroPanelState?.progressPanel.transferLabel ?? "-- / --"
+                }
+                etaLabel={heroPanelState?.progressPanel.etaLabel ?? "--"}
+                accentColor={displayedHeroSnapshot?.accentColor ?? undefined}
               />
-            ))}
-          </VerticalFocusGroup>
-        </Section>
 
-        {completedDownloads.length > 0 ? (
-          <Section
-            title="Downloads Completed"
-            count={completedDownloads.length}
-          >
+              <DownloadsNetworkStats
+                speedLabel={heroPanelState?.networkPanel.speedLabel ?? "0 B/s"}
+                peakSpeedLabel={
+                  heroPanelState?.networkPanel.peakSpeedLabel ?? "0 B/s"
+                }
+                speedHistory={
+                  heroPanelState?.networkPanel.speedHistory ??
+                  neutralNetworkStats.speedHistory
+                }
+                speedHistoryLabels={
+                  heroPanelState?.networkPanel.speedHistoryLabels ??
+                  neutralNetworkStats.speedHistoryLabels
+                }
+                downloaderLabel={
+                  heroPanelState?.networkPanel.downloaderLabel ?? null
+                }
+                seeds={heroPanelState?.networkPanel.seeds ?? null}
+                peers={heroPanelState?.networkPanel.peers ?? null}
+                showSeedsAndPeers={
+                  heroPanelState?.networkPanel.showSeedsAndPeers ?? false
+                }
+                accentColor={displayedHeroSnapshot?.accentColor ?? undefined}
+              />
+            </div>
+          </>
+
+          <Section title="Queued" count={renderedQueuedDownloads.length}>
             <VerticalFocusGroup
               className="downloads-page__list"
-              navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.completed}
+              navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.queue}
+              data-download-drop-role="container"
+              data-download-drop-target="queue"
+              data-drop-placement="queue"
+              data-drop-index={renderedQueuedDownloads.length}
             >
-              {completedDownloads.map((item, index) => (
+              {renderedQueuedDownloads.length === 0 ? (
+                <div
+                  className={cx(
+                    "downloads-page__drop-target-shell downloads-page__queue-empty-shell",
+                    areTargetsEqual(dragTarget, { kind: "queue", index: 0 }) &&
+                      "downloads-page__drop-target--active"
+                  )}
+                >
+                  <Typography className="downloads-page__empty-copy">
+                    Drag downloads here to line them up for automatic start.
+                  </Typography>
+                </div>
+              ) : null}
+
+              {renderedQueuedDownloads.map((item, index) => (
                 <DownloadsGameCard
                   key={item.id}
                   gameId={item.id}
-                  variant="completed"
+                  variant="queue"
                   title={item.title}
                   coverImageUrl={item.coverImageUrl}
                   logoImageUrl={getDownloadLogoImageUrl(item.game)}
                   metaLabel={item.metaLabel}
                   secondaryLabel={item.secondaryLabel}
-                  rightStatusLabel={item.rightStatusLabel}
+                  progress={item.progress}
+                  progressLabel={item.progressLabel}
                   onOpen={() => handleOpen(item.href)}
+                  onPrimaryAction={() => moveToPaused(item.game)}
+                  primaryActionLabel="Pause"
+                  primaryActionDisabled={interactionsLocked}
                   onOpenOptions={(event) => {
                     openDownloadMenu(
                       item,
-                      "completed",
+                      "queue",
                       getDownloadMenuPosition(event.currentTarget),
                       getDownloadOptionsActionFocusId(item.id)
                     );
                   }}
                   optionsDisabled={interactionsLocked}
+                  dragPlacement={!moveMode ? "queue" : undefined}
+                  dropPlacement="queue"
+                  dropIndex={index}
                   navigationOrder={index}
+                  isDragging={dragSource?.gameId === item.id}
                   focusId={getDownloadMainFocusId(item.id)}
                   navigationOverrides={
                     mainNavigationOverridesByFocusId[
@@ -2786,26 +2840,159 @@ export default function Downloads() {
                   }
                   focusActions={getDownloadCardFocusActions(
                     item.id,
-                    false,
+                    true,
                     item,
-                    "completed",
+                    "queue",
                     interactionsLocked
+                  )}
+                  isMoveGrabbed={grabbedGameId === item.id}
+                  primaryActionFocusId={getDownloadPrimaryActionFocusId(
+                    item.id
                   )}
                   optionsFocusId={getDownloadOptionsActionFocusId(item.id)}
                 />
               ))}
             </VerticalFocusGroup>
           </Section>
-        ) : null}
 
-        <ContextMenu
-          ariaLabel="Download options"
-          items={downloadMenuItems}
-          position={menuState.position}
-          restoreFocusId={menuState.restoreFocusId}
-          visible={menuState.visible && downloadMenuItems.length > 0}
-          onClose={closeDownloadMenu}
-        />
+          <Section title="Paused" count={renderedPausedDownloads.length}>
+            <VerticalFocusGroup
+              className="downloads-page__list"
+              navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.paused}
+              data-download-drop-role="container"
+              data-download-drop-target="paused"
+              data-drop-placement="paused"
+              data-drop-index={renderedPausedDownloads.length}
+            >
+              {renderedPausedDownloads.length === 0 ? (
+                <div
+                  className={cx(
+                    "downloads-page__drop-target-shell",
+                    "downloads-page__paused-drop-shell",
+                    areTargetsEqual(dragTarget, { kind: "paused", index: 0 }) &&
+                      "downloads-page__drop-target--active"
+                  )}
+                >
+                  <Typography className="downloads-page__empty-copy">
+                    Downloads you pause manually will stay here until you move
+                    them.
+                  </Typography>
+                </div>
+              ) : null}
+
+              {renderedPausedDownloads.map((item, index) => (
+                <DownloadsGameCard
+                  key={item.id}
+                  gameId={item.id}
+                  variant="paused"
+                  title={item.title}
+                  coverImageUrl={item.coverImageUrl}
+                  logoImageUrl={getDownloadLogoImageUrl(item.game)}
+                  metaLabel={item.metaLabel}
+                  secondaryLabel={item.secondaryLabel}
+                  progress={item.progress}
+                  progressLabel={item.progressLabel}
+                  onOpen={() => handleOpen(item.href)}
+                  onPrimaryAction={() => sendToQueue(item.game)}
+                  primaryActionLabel="Resume"
+                  primaryActionDisabled={interactionsLocked}
+                  onOpenOptions={(event) => {
+                    openDownloadMenu(
+                      item,
+                      "paused",
+                      getDownloadMenuPosition(event.currentTarget),
+                      getDownloadOptionsActionFocusId(item.id)
+                    );
+                  }}
+                  optionsDisabled={interactionsLocked}
+                  dragPlacement={!moveMode ? "paused" : undefined}
+                  dropPlacement="paused"
+                  dropIndex={index}
+                  navigationOrder={index}
+                  isDragging={dragSource?.gameId === item.id}
+                  focusId={getDownloadMainFocusId(item.id)}
+                  navigationOverrides={
+                    mainNavigationOverridesByFocusId[
+                      getDownloadMainFocusId(item.id)
+                    ]
+                  }
+                  focusActions={getDownloadCardFocusActions(
+                    item.id,
+                    true,
+                    item,
+                    "paused",
+                    interactionsLocked
+                  )}
+                  isMoveGrabbed={grabbedGameId === item.id}
+                  primaryActionFocusId={getDownloadPrimaryActionFocusId(
+                    item.id
+                  )}
+                  optionsFocusId={getDownloadOptionsActionFocusId(item.id)}
+                />
+              ))}
+            </VerticalFocusGroup>
+          </Section>
+
+          {completedDownloads.length > 0 ? (
+            <Section
+              title="Downloads Completed"
+              count={completedDownloads.length}
+            >
+              <VerticalFocusGroup
+                className="downloads-page__list"
+                navigationOrder={DOWNLOADS_REGION_NAVIGATION_ORDER.completed}
+              >
+                {completedDownloads.map((item, index) => (
+                  <DownloadsGameCard
+                    key={item.id}
+                    gameId={item.id}
+                    variant="completed"
+                    title={item.title}
+                    coverImageUrl={item.coverImageUrl}
+                    logoImageUrl={getDownloadLogoImageUrl(item.game)}
+                    metaLabel={item.metaLabel}
+                    secondaryLabel={item.secondaryLabel}
+                    rightStatusLabel={item.rightStatusLabel}
+                    onOpen={() => handleOpen(item.href)}
+                    onOpenOptions={(event) => {
+                      openDownloadMenu(
+                        item,
+                        "completed",
+                        getDownloadMenuPosition(event.currentTarget),
+                        getDownloadOptionsActionFocusId(item.id)
+                      );
+                    }}
+                    optionsDisabled={interactionsLocked}
+                    navigationOrder={index}
+                    focusId={getDownloadMainFocusId(item.id)}
+                    navigationOverrides={
+                      mainNavigationOverridesByFocusId[
+                        getDownloadMainFocusId(item.id)
+                      ]
+                    }
+                    focusActions={getDownloadCardFocusActions(
+                      item.id,
+                      false,
+                      item,
+                      "completed",
+                      interactionsLocked
+                    )}
+                    optionsFocusId={getDownloadOptionsActionFocusId(item.id)}
+                  />
+                ))}
+              </VerticalFocusGroup>
+            </Section>
+          ) : null}
+
+          <ContextMenu
+            ariaLabel="Download options"
+            items={downloadMenuItems}
+            position={menuState.position}
+            restoreFocusId={menuState.restoreFocusId}
+            visible={menuState.visible && downloadMenuItems.length > 0}
+            onClose={closeDownloadMenu}
+          />
+        </div>
       </div>
     </VerticalFocusGroup>
   );

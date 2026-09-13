@@ -138,6 +138,7 @@
   .wiimote-diagram-svg,
   .ps1-diagram-svg,
   .ds-diagram-svg,
+  .handheld-controller-diagram,
   .joycon-diagram-svg {
     width: 100%;
     height: auto;
@@ -181,16 +182,16 @@
       border-color 0.12s ease;
 
     &--hovered {
-      border-color: var(--color-primary, #7aa2ff);
+      border-color: var(--color-text-bright, #fafafa);
       background: color-mix(
         in srgb,
-        var(--color-primary, #7aa2ff) 12%,
+        var(--color-text-bright, #fafafa) 12%,
         transparent
       );
     }
 
     &--capturing {
-      border-color: var(--color-primary, #7aa2ff);
+      border-color: var(--color-text-bright, #fafafa);
     }
   }
 
@@ -264,7 +265,7 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: var(--color-primary, #7aa2ff);
+    background: var(--color-text-bright, #fafafa);
     transition: transform 0.02s linear;
   }
 
@@ -294,9 +295,9 @@
     border: 1px solid rgba(var(--fg-rgb), 0.08);
 
     &--on {
-      color: #0d0d0d;
-      background: var(--color-primary, #7aa2ff);
-      border-color: var(--color-primary, #7aa2ff);
+      color: var(--color-dark-background, #0d0d0d);
+      background: var(--color-text-bright, #fafafa);
+      border-color: var(--color-text-bright, #fafafa);
     }
   }
 

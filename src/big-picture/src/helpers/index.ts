@@ -13,42 +13,33 @@ export * from "./language";
 export * from "./navigation";
 export * from "./strings";
 
+interface PreferredGameAssetSource {
+  iconUrl?: string | null;
+  libraryHeroImageUrl?: string | null;
+  logoImageUrl?: string | null;
+  libraryImageUrl?: string | null;
+  coverImageUrl?: string | null;
+  title?: string;
+  downloadSources?: string[];
+  logoPosition?: string | null;
+}
+
 export function resolvePreferredGameAssets(
-  game:
-    | {
-        iconUrl?: string | null;
-        libraryHeroImageUrl?: string | null;
-        logoImageUrl?: string | null;
-        libraryImageUrl?: string | null;
-        coverImageUrl?: string | null;
-        title?: string;
-        downloadSources?: string[];
-        logoPosition?: string | null;
-      }
-    | null
-    | undefined,
-  _shopDetails?: unknown
+  game: PreferredGameAssetSource | null | undefined,
+  shopAssets?: PreferredGameAssetSource | null
 ) {
-  if (!game) {
-    return {
-      iconUrl: null,
-      iconSrc: null,
-      heroImageUrl: null,
-      heroSrc: null,
-      logoImageUrl: null,
-      logoSrc: null,
-      title: "",
-      downloadSources: [],
-      coverSrc: null,
-      coverImageUrl: null,
-      landscapeSrc: null,
-      libraryImageUrl: null,
-      logoPosition: null,
-    };
-  }
-  const iconSrc = game.iconUrl ?? null;
-  const heroSrc = game.libraryHeroImageUrl ?? null;
-  const logoSrc = game.logoImageUrl ?? null;
+  // A populated library row is authoritative, but it can predate artwork
+  // enrichment. Fall back field-by-field to the freshly resolved shop assets
+  // so local/emulator games do not keep a black hero simply because the
+  // original import stored null artwork.
+  const iconSrc = game?.iconUrl ?? shopAssets?.iconUrl ?? null;
+  const heroSrc =
+    game?.libraryHeroImageUrl ?? shopAssets?.libraryHeroImageUrl ?? null;
+  const logoSrc = game?.logoImageUrl ?? shopAssets?.logoImageUrl ?? null;
+  const coverImageUrl =
+    game?.coverImageUrl ?? shopAssets?.coverImageUrl ?? null;
+  const libraryImageUrl =
+    game?.libraryImageUrl ?? shopAssets?.libraryImageUrl ?? null;
   return {
     iconUrl: iconSrc,
     iconSrc,
@@ -56,12 +47,12 @@ export function resolvePreferredGameAssets(
     heroSrc,
     logoImageUrl: logoSrc,
     logoSrc,
-    title: game.title ?? "",
-    downloadSources: game.downloadSources ?? [],
-    coverSrc: game.coverImageUrl ?? heroSrc,
-    coverImageUrl: game.coverImageUrl ?? null,
-    landscapeSrc: game.libraryHeroImageUrl ?? null,
-    libraryImageUrl: game.libraryImageUrl ?? null,
-    logoPosition: game.logoPosition ?? null,
+    title: game?.title ?? shopAssets?.title ?? "",
+    downloadSources: game?.downloadSources ?? shopAssets?.downloadSources ?? [],
+    coverSrc: coverImageUrl ?? heroSrc,
+    coverImageUrl,
+    landscapeSrc: heroSrc ?? libraryImageUrl,
+    libraryImageUrl,
+    logoPosition: game?.logoPosition ?? shopAssets?.logoPosition ?? null,
   };
 }

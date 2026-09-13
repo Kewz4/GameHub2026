@@ -2,6 +2,7 @@ import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { useTranslation } from "react-i18next";
 import type { HowLongToBeatCategory } from "@types";
 import { SidebarSection } from "../sidebar-section/sidebar-section";
+import { shouldRenderHowLongToBeat } from "./sidebar-presentation";
 import "./sidebar.scss";
 
 const durationTranslation: Record<string, string> = {
@@ -25,7 +26,7 @@ export function HowLongToBeatSection({
     return `${value} ${t(durationTranslation[unit])}`;
   };
 
-  if (!howLongToBeatData && !isLoading) return null;
+  if (!shouldRenderHowLongToBeat(howLongToBeatData, isLoading)) return null;
 
   return (
     <SkeletonTheme baseColor="#1c1c1c" highlightColor="#444">

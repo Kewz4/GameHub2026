@@ -1,5 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { Tabs, type TabsItem, VerticalFocusGroup } from "../../components";
@@ -7,8 +14,10 @@ import {
   useGamepad,
   useNavigation,
   useNavigationScreenActions,
+  useUserDetails,
+  useUserPreferences,
 } from "../../hooks";
-import { type FocusOverrideTarget } from "../../services";
+import { NavigationService, type FocusOverrideTarget } from "../../services";
 import { GamepadButtonType } from "../../types";
 import { useVirtualKeyboardStore } from "../../stores";
 import { AccountPrivacySettingsSection } from "./account-privacy";
@@ -21,7 +30,12 @@ import { GeneralSettingsSection } from "./general";
 import { IntegrationsSettingsSection } from "./integrations";
 import { SETTINGS_PAGE_REGION_ID } from "./navigation";
 import { NotificationsSettingsSection } from "./notifications";
-import { useUserDetails } from "../../hooks";
+import {
+  canHandleSettingsBumperInput,
+  getIntegrationsInitialFocusId,
+  getSettingsSearchForTab,
+  resolveSettingsContentTopClearance,
+} from "./settings-controller";
 import {
   ACCOUNT_PRIVACY_PRIVACY_SELECT_ID,
   COMPATIBILITY_COMMON_REDIST_BUTTON_ID,
@@ -32,7 +46,6 @@ import {
   DOWNLOADS_SOURCES_SECTION_REGION_ID,
   DOWNLOAD_DIRECTORIES_DEFAULT_SELECT_ID,
   EMULATION_OVERVIEW_CARD_FOCUS_IDS,
-  getIntegrationProviderCheckboxFocusId,
   NOTIFICATIONS_LIBRARY_ITEM_FOCUS_IDS,
 } from "./settings-navigation";
 
@@ -153,14 +166,26 @@ function SettingsTabPanel({
 
 export default function Settings() {
   const { userDetails } = useUserDetails();
+  const userPreferences = useUserPreferences();
   const { search } = useLocation();
   const navigate = useNavigate();
   const [selectedTab, setSelectedTab] = useState<SettingsTabId>(
     getSettingsTabFromSearch(search) ?? ALL_SETTINGS_TABS[0].id
   );
+  const pageRef = useRef<HTMLElement | null>(null);
+  const tabRailRef = useRef<HTMLDivElement | null>(null);
   const { onButtonPressed, isActiveGamepadEvent } = useGamepad();
-  const virtualKeyboardTarget = useVirtualKeyboardStore(
-    (state) => state.target
+  // Raw bumper callbacks live outside React's event cycle. Read the current
+  // navigation layer at press time so the first LB/RB after a dropdown closes
+  // cannot be rejected by a render-time snapshot that still names the old
+  // floating layer.
+  const canHandleBumperInput = useCallback(
+    () =>
+      canHandleSettingsBumperInput(
+        NavigationService.getInstance().getDebugSnapshot().activeLayerId,
+        Boolean(useVirtualKeyboardStore.getState().target)
+      ),
+    []
   );
   const requestedSection = useMemo(
     () => getSettingsSectionFromSearch(search),
@@ -181,18 +206,78 @@ export default function Settings() {
   const SelectedTabContent =
     SETTINGS_TAB_CONTENT[selectedTab] ?? GeneralSettingsSection;
 
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    const rail = tabRailRef.current;
+    if (!page || !rail) return;
+
+    const updateRailHeight = () => {
+      const pageRect = page.getBoundingClientRect();
+      const railRect = rail.getBoundingClientRect();
+      const railHeight = Math.max(0, Math.ceil(railRect.height));
+      const normalRailTop = pageRect.top + rail.offsetTop - page.scrollTop;
+      const stickyDisplacement = Math.max(0, railRect.top - normalRailTop);
+      const contentTopClearance = resolveSettingsContentTopClearance(
+        railHeight,
+        stickyDisplacement
+      );
+      page.style.setProperty(
+        "--settings-page-tab-rail-height",
+        `${railHeight}px`
+      );
+      page.style.setProperty(
+        "--settings-page-content-top-clearance",
+        `${contentTopClearance}px`
+      );
+    };
+
+    updateRailHeight();
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateRailHeight);
+    resizeObserver?.observe(rail);
+
+    return () => {
+      resizeObserver?.disconnect();
+      page.style.removeProperty("--settings-page-tab-rail-height");
+      page.style.removeProperty("--settings-page-content-top-clearance");
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    // A Settings category owns one shared scroll surface. Always reset both
+    // axes before its initial controller focus runs so a wide/late category
+    // cannot carry hidden horizontal displacement into the app shell.
+    pageRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [selectedTab]);
+
   useEffect(() => {
     const requestedTab = getSettingsTabFromSearch(search);
-    if (requestedTab && visibleTabs.some((tab) => tab.id === requestedTab)) {
-      setSelectedTab(requestedTab);
-      return;
-    }
+    setSelectedTab((currentTab) => {
+      if (requestedTab && visibleTabs.some((tab) => tab.id === requestedTab)) {
+        return requestedTab;
+      }
 
-    if (visibleTabs.some((tab) => tab.id === selectedTab)) return;
+      if (visibleTabs.some((tab) => tab.id === currentTab)) return currentTab;
 
-    const fallbackTab = visibleTabs[0]?.id ?? ALL_SETTINGS_TABS[0].id;
-    setSelectedTab(fallbackTab);
-  }, [search, selectedTab, visibleTabs]);
+      return visibleTabs[0]?.id ?? ALL_SETTINGS_TABS[0].id;
+    });
+  }, [search, visibleTabs]);
+
+  const selectTab = useCallback(
+    (nextTab: SettingsTabId) => {
+      if (nextTab === selectedTab) return false;
+
+      setSelectedTab(nextTab);
+      navigate(
+        { search: getSettingsSearchForTab(search, nextTab) },
+        { replace: true }
+      );
+      return true;
+    },
+    [navigate, search, selectedTab]
+  );
 
   const selectTabByIndex = useCallback(
     (nextIndex: number) => {
@@ -202,12 +287,11 @@ export default function Settings() {
       );
       const nextTab = visibleTabs[clampedIndex];
 
-      if (!nextTab || nextTab.id === selectedTab) return false;
+      if (!nextTab) return false;
 
-      setSelectedTab(nextTab.id);
-      return true;
+      return selectTab(nextTab.id);
     },
-    [selectedTab, visibleTabs]
+    [selectTab, visibleTabs]
   );
 
   useEffect(() => {
@@ -215,7 +299,7 @@ export default function Settings() {
       GamepadButtonType.LEFT_BUMPER,
       (event) => {
         if (
-          virtualKeyboardTarget ||
+          !canHandleBumperInput() ||
           !isActiveGamepadEvent(event) ||
           selectedTabIndex <= 0
         ) {
@@ -230,7 +314,7 @@ export default function Settings() {
       GamepadButtonType.RIGHT_BUMPER,
       (event) => {
         if (
-          virtualKeyboardTarget ||
+          !canHandleBumperInput() ||
           !isActiveGamepadEvent(event) ||
           selectedTabIndex >= visibleTabs.length - 1
         ) {
@@ -248,9 +332,9 @@ export default function Settings() {
   }, [
     isActiveGamepadEvent,
     onButtonPressed,
+    canHandleBumperInput,
     selectTabByIndex,
     selectedTabIndex,
-    virtualKeyboardTarget,
     visibleTabs.length,
   ]);
 
@@ -315,10 +399,12 @@ export default function Settings() {
           itemId: EMULATION_OVERVIEW_CARD_FOCUS_IDS.ps1,
         };
       case "integrations":
-        return {
-          type: "item",
-          itemId: getIntegrationProviderCheckboxFocusId("real-debrid"),
-        };
+        return userPreferences
+          ? {
+              type: "item",
+              itemId: getIntegrationsInitialFocusId(userPreferences.steamId),
+            }
+          : null;
       case "compatibility":
         return {
           type: "item",
@@ -337,23 +423,28 @@ export default function Settings() {
       default:
         return null;
     }
-  }, [requestedSection, selectedTab, userDetails]);
+  }, [requestedSection, selectedTab, userDetails, userPreferences]);
 
   return (
     <VerticalFocusGroup regionId={SETTINGS_PAGE_REGION_ID} asChild>
       <motion.section
+        ref={pageRef}
         className="settings-page"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={SETTINGS_PAGE_FADE_TRANSITION}
       >
         <div className="settings-page__stack">
-          <div className="settings-page__tabs-wrap">
+          <div
+            ref={tabRailRef}
+            className="settings-page__tabs-wrap"
+            data-settings-tab-rail
+          >
             <Tabs
               className="settings-page__tabs"
               items={tabItems}
               value={selectedTab}
-              onValueChange={setSelectedTab}
+              onValueChange={selectTab}
               variant="settings"
               ariaLabel="Settings categories"
               beforeTabs={<SettingsBumper label="LB" />}

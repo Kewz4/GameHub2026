@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { XIcon } from "@primer/octicons-react";
 import { Button } from "@renderer/components";
 import type { DebugIssue, CloudDebugReport } from "@types";
 import styles from "./cloud-debugger-modal.module.scss";
@@ -55,11 +56,13 @@ export function CloudDebuggerModal({ report, onClose }: Readonly<Props>) {
             </p>
           </div>
           <button className={styles.close} onClick={onClose} aria-label="Close">
-            ✕
+            <XIcon size={16} />
           </button>
         </div>
 
-        {report.notLoggedIn ? (
+        {report.error ? (
+          <div className={styles.notice}>{report.error}</div>
+        ) : report.notLoggedIn ? (
           <div className={styles.notice}>
             You must be logged in to GameHub to run the debugger.
           </div>

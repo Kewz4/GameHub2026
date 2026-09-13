@@ -30,9 +30,11 @@ import { seedDefaultSources } from "./helpers/seed-default-sources";
 import { getDirSize } from "./services/download/helpers";
 import { GofileApi } from "./services/hosters";
 
-// TorBox API token shipped with the app so TorBox (the recommended default
-// downloader) works out of the box. Overridden by any token the user enters.
-const BAKED_TORBOX_API_TOKEN = "70d847f9-46e3-410b-bc0e-9f8fceb9fe8c";
+// Optional runtime-only bootstrap for private/development installs. Never bake
+// a TorBox bearer token into a distributed build; normal users configure their
+// own token in Settings and it is persisted in their local preferences.
+const RUNTIME_TORBOX_API_TOKEN =
+  process.env.GAMEHUB_TORBOX_API_TOKEN?.trim() ?? "";
 
 const hasMissingSeedFiles = async (download: Download): Promise<boolean> => {
   if (!download.folderName) return false;
@@ -99,23 +101,21 @@ export const loadState = async () => {
       .catch(() => {});
   }
 
-  // Ship with a TorBox API token baked in so TorBox works out of the box (it's
-  // the recommended default downloader). If the user hasn't set their own
-  // token, seed ours and persist it so the settings UI shows TorBox as
-  // configured. A user-entered token always takes precedence.
-  if (!userPreferences?.torBoxApiToken && BAKED_TORBOX_API_TOKEN) {
+  // A runtime bootstrap token is useful for a private/dev launch, but is never
+  // compiled into the app. A token entered in Settings always takes precedence.
+  if (!userPreferences?.torBoxApiToken && RUNTIME_TORBOX_API_TOKEN) {
     const seeded = {
       ...(userPreferences ?? {}),
-      torBoxApiToken: BAKED_TORBOX_API_TOKEN,
+      torBoxApiToken: RUNTIME_TORBOX_API_TOKEN,
     } as UserPreferences;
     await db
       .put(levelKeys.userPreferences, seeded, { valueEncoding: "json" })
       .catch(() => {});
     if (userPreferences) {
       (userPreferences as UserPreferences).torBoxApiToken =
-        BAKED_TORBOX_API_TOKEN;
+        RUNTIME_TORBOX_API_TOKEN;
     }
-    TorBoxClient.authorize(BAKED_TORBOX_API_TOKEN);
+    TorBoxClient.authorize(RUNTIME_TORBOX_API_TOKEN);
   }
 
   if (userPreferences?.realDebridApiToken) {
@@ -139,7 +139,7 @@ export const loadState = async () => {
   Ludusavi.copyConfigFileToUserData();
   Ludusavi.copyBinaryToUserData();
   // Download/refresh ludusavi game database in background (non-blocking)
-  Ludusavi.updateManifest().catch(() => {});
+  Ludusavi.prepareManifest().catch(() => {});
 
   if (process.platform === "linux") {
     DeckyPlugin.checkAndUpdateIfOutdated();
@@ -164,6 +164,14 @@ export const loadState = async () => {
     })();
     WSClient.connect();
   });
+
+  // Resume V2 post-exit uploads only after authentication and account
+  // namespace preparation have settled. Records for other accounts remain
+  // fenced in LevelDB and are never replayed under the active credentials.
+  const { replayPendingCloudSavePostExit } = await import(
+    "./services/cloud-save/pending-post-exit"
+  );
+  void replayPendingCloudSavePostExit();
 
   const downloadToResume =
     await DownloadOrchestrator.bootstrapDownloadsOnStartup();
@@ -219,21 +227,38 @@ export const loadState = async () => {
     );
   }
 
-  // For torrents use Python RPC; HTTP downloads use JS downloader.
+  // Torrent support is optional at runtime. A missing or broken Python RPC
+  // helper must not prevent process tracking, overlay shortcuts, cloud saves,
+  // or the rest of the application from starting.
   const isTorrent = downloadToResume?.downloader === Downloader.Torrent;
   if (downloadToResume && !isTorrent) {
-    // Start Python RPC for seeding only, then resume HTTP download with JS
-    await DownloadManager.startRPC(undefined, downloadsToSeed);
+    // Start Python RPC for seeding only. An HTTP resume uses the JavaScript
+    // downloader and must still proceed if the optional RPC helper is absent.
+    try {
+      await DownloadManager.startRPC(undefined, downloadsToSeed);
+    } catch (err) {
+      logger.error(
+        "Download RPC failed to start; continuing without torrent support",
+        err
+      );
+    }
     await DownloadManager.startDownload(downloadToResume).catch((err) => {
-      // If resume fails, just log it - user can manually retry
+      // If resume fails, just log it - user can manually retry.
       logger.error("Failed to auto-resume download:", err);
     });
   } else {
-    // Use Python RPC for everything (torrent or fallback)
-    await DownloadManager.startRPC(
-      downloadToResume ?? undefined,
-      downloadsToSeed
-    );
+    // Use Python RPC for everything (torrent or fallback).
+    try {
+      await DownloadManager.startRPC(
+        downloadToResume ?? undefined,
+        downloadsToSeed
+      );
+    } catch (err) {
+      logger.error(
+        "Download RPC failed to start; continuing without torrent support",
+        err
+      );
+    }
   }
 
   WindowManager.sendDownloadsUpdated();
@@ -242,7 +267,18 @@ export const loadState = async () => {
 
   // Sync all connected libraries on launch (non-blocking)
   import("@main/services/main-loop").then(({ syncAllLibraries }) => {
-    syncAllLibraries().catch(() => {});
+    syncAllLibraries()
+      .catch(() => {})
+      .finally(() => {
+        // Also audits persisted URLs for already-synced libraries. This is what
+        // repairs a dead CDN URL such as ARK's without requiring the user to
+        // press "Generate missing artwork" manually.
+        import("./events/library/generate-missing-metadata")
+          .then(({ generateMissingMetadataInternal }) =>
+            generateMissingMetadataInternal()
+          )
+          .catch(() => undefined);
+      });
   });
 
   CommonRedistManager.downloadCommonRedist();

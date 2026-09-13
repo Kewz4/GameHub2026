@@ -17,7 +17,10 @@ import {
   useNavigation,
   useNavigationScreenActions,
 } from "../../../hooks";
-import type { FocusOverrides } from "../../../services";
+import {
+  NAVIGATION_SCREEN_ACTION_PRIORITY,
+  type FocusOverrides,
+} from "../../../services";
 import { FocusRegionContext } from "../../context";
 import { FocusItem } from "../focus-item";
 import { MODAL_OWNED_OVERLAY_ATTRIBUTE } from "../modal";
@@ -46,6 +49,7 @@ export interface DropdownSelectProps<TValue extends string = string> {
   className?: string;
   menuRegionId?: string;
   ariaLabel?: string;
+  disabled?: boolean;
 }
 
 function getOptionKeySuffix(value: string) {
@@ -64,6 +68,7 @@ export function DropdownSelect<TValue extends string = string>({
   className = "",
   menuRegionId,
   ariaLabel,
+  disabled = false,
 }: Readonly<DropdownSelectProps<TValue>>) {
   const generatedId = useId();
   const { setFocus } = useNavigation();
@@ -172,12 +177,20 @@ export function DropdownSelect<TValue extends string = string>({
   }, [closeMenu, floatingRef, isOpen]);
 
   const handleTriggerClick = useCallback(() => {
+    if (disabled) return;
+
     if (!isOpen) {
       setFocus(resolvedBaseId);
     }
 
     setIsOpen((currentOpen) => !currentOpen);
-  }, [isOpen, resolvedBaseId, setFocus]);
+  }, [disabled, isOpen, resolvedBaseId, setFocus]);
+
+  useEffect(() => {
+    if (disabled && isOpen) {
+      closeMenu(false);
+    }
+  }, [closeMenu, disabled, isOpen]);
 
   useNavigationScreenActions(
     isOpen
@@ -187,7 +200,8 @@ export function DropdownSelect<TValue extends string = string>({
             select: () => closeMenu(true),
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.floating }
   );
 
   /** Must mount inside `#big-picture`: PostCSS scopes all BP component CSS to `#big-picture ...`. */
@@ -218,6 +232,7 @@ export function DropdownSelect<TValue extends string = string>({
         <FocusItem
           id={resolvedBaseId}
           asChild
+          navigationState={disabled ? "disabled" : "active"}
           navigationOverrides={focusNavigationOverrides}
         >
           <button
@@ -226,6 +241,7 @@ export function DropdownSelect<TValue extends string = string>({
             aria-label={resolvedAriaLabel}
             aria-haspopup="listbox"
             aria-expanded={isOpen}
+            disabled={disabled}
             data-open={isOpen || undefined}
             onClick={handleTriggerClick}
           >

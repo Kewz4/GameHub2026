@@ -237,7 +237,8 @@ function rpcs3SdlDevice(name: string | null | undefined): string {
 export function rpcs3Yaml(p: ControllerProfile): string {
   // Route non-Xbox controllers through the universal SDL handler so DualShock/
   // DualSense/DirectInput pads work too — not just XInput.
-  const xinput = isXInputDevice(p.controllerName);
+  const xinput =
+    process.platform === "win32" && isXInputDevice(p.controllerName);
   const map = xinput ? RPCS3_XINPUT : RPCS3_SDL;
   const t = (c: PadControl) => map[bind(p, c)] ?? "";
   return [

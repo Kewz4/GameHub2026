@@ -1,0 +1,418 @@
+[
+  {
+    "title": "007: Agent Under Fire",
+    "key": "007agentunderfire",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "007: Everything or Nothing",
+    "key": "007everythingornothing",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "007: From Russia with Love",
+    "key": "007fromrussiawithlove",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "007: Nightfire",
+    "key": "007nightfire",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Army Men: Air Combat: The Elite Missions",
+    "key": "armymenaircombattheelitemissions",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Army Men: RTS: Real Time Strategy",
+    "key": "armymenrtsrealtimestrategy",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Backyard Sports: Baseball 2007",
+    "key": "backyardsportsbaseball2007",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Beach Spikers: Virtua Beach Volleyball",
+    "key": "beachspikersvirtuabeachvolleyball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Beyblade VForce: Super Tournament Battleer",
+    "key": "beybladevforcesupertournamentbattleer",
+    "hasLbox": false,
+    "hasIgdb": false,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Chibi-Robo! Plug into Adventure",
+    "key": "chibiroboplugintoadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Cocoto Funfair",
+    "key": "cocotofunfair",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Conflict: Desert Storm II: Back to Baghdad",
+    "key": "conflictdesertstormiibacktobaghdad",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disney's Donald Duck PK",
+    "key": "disneysdonaldduckpk",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Disney-Pixar The Incredibles - Rise of the Underminer",
+    "key": "disneypixartheincrediblesriseoftheunderminer",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "FIFA World Cup: Germany 2006",
+    "key": "fifaworldcupgermany2006",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Harry Potter and the Sorcerer's Stone",
+    "key": "harrypotterandthesorcerersstone",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "I-Ninja",
+    "key": "ininja",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Karaoke Revolution Party",
+    "key": "karaokerevolutionparty",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mario Smash Football",
+    "key": "mariosmashfootball",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Mark Davis Pro Bass Challenge",
+    "key": "markdavisprobasschallenge",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MC Groovz Dance Craze",
+    "key": "mcgroovzdancecraze",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "MLB Slugfest 2003",
+    "key": "mlbslugfest2003",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Muppets Party Cruise",
+    "key": "muppetspartycruise",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Naruto - Clash of Ninja - European Version",
+    "key": "narutoclashofninjaeuropeanversion",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NBA 2K3",
+    "key": "nba2k3",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NCAA College Basketball 2K3",
+    "key": "ncaacollegebasketball2k3",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NCAA College Football 2K3",
+    "key": "ncaacollegefootball2k3",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NCAA Football 2005",
+    "key": "ncaafootball2005",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NFL Blitz Pro",
+    "key": "nflblitzpro",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NFL QB Club 2002",
+    "key": "nflqbclub2002",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NHL 06",
+    "key": "nhl06",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "NHL 2K3",
+    "key": "nhl2k3",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Nickelodeon Avatar - The Last Airbender",
+    "key": "nickelodeonavatarthelastairbender",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Peter Jackson's King Kong: The Official Game of the Movie",
+    "key": "peterjacksonskingkongtheofficialgameofthemovie",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "RedCard 2003",
+    "key": "redcard2003",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Road Trip: The Arcade Edition",
+    "key": "roadtripthearcadeedition",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shonen Jump's One Piece: Grand Adventure",
+    "key": "shonenjumpsonepiecegrandadventure",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shonen Jump's One Piece: Grand Battle",
+    "key": "shonenjumpsonepiecegrandbattle",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Shonen Jump's One Piece: Pirates' Carnival",
+    "key": "shonenjumpsonepiecepiratescarnival",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Sonic Adventure DX Director's Cut",
+    "key": "sonicadventuredxdirectorscut",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Speed Challenge: Jacques Villeneuve's Racing Vision",
+    "key": "speedchallengejacquesvilleneuvesracingvision",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "SpyHunter",
+    "key": "spyhunter",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Summoner: A Goddess Reborn",
+    "key": "summoneragoddessreborn",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Hobbit: The Prelude to the Lord of the Rings",
+    "key": "hobbitthepreludetothelordoftherings",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "The Legacy of Kain Series: Blood Omen 2",
+    "key": "legacyofkainseriesbloodomen2",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tiger Woods PGA Tour 06",
+    "key": "tigerwoodspgatour06",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "TMNT: Mutant Melee",
+    "key": "tmntmutantmelee",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tom Clancy's The Sum of All Fears",
+    "key": "tomclancysthesumofallfears",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "TransWorld Surf: Next Wave",
+    "key": "transworldsurfnextwave",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Tube Slider: The Championship of Future Formula",
+    "key": "tubesliderthechampionshipoffutureformula",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "Virtua Striker 2002",
+    "key": "virtuastriker2002",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  },
+  {
+    "title": "X-Men 2 - Wolverine's Revenge",
+    "key": "xmen2wolverinesrevenge",
+    "hasLbox": false,
+    "hasIgdb": true,
+    "hasIgn": false,
+    "hasSgdb": false
+  }
+]

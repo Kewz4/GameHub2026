@@ -7,6 +7,8 @@ import type {
   SeedingStatus,
   UserPreferences,
   StartGameDownloadPayload,
+  StartCustomDownloadPayload,
+  StartCustomDownloadResult,
   RealDebridUser,
   PremiumizeUser,
   AllDebridUser,
@@ -17,9 +19,6 @@ import type {
   UserDetails,
   FriendRequestSync,
   NotificationSync,
-  GameArtifact,
-  GameArtifactWithGame,
-  LudusaviBackup,
   UserAchievement,
   ComparedAchievements,
   LibraryGame,
@@ -34,7 +33,6 @@ import type {
   AchievementNotificationInfo,
   Game,
   DiskUsage,
-  NetworkInterface,
   DownloadSource,
   LocalNotification,
   ProtonVersion,
@@ -60,6 +58,8 @@ import type {
   Ps2MemoryCardSaveRecord,
   Ps2ExportResult,
   EmulationBackupProgress,
+  SteamEmulatorDetection,
+  SteamEmulatorResult,
   EmulatorBinary,
   EmulatorInstallProgress,
   EmulatorInstallResult,
@@ -69,8 +69,26 @@ import type {
   MemcardFormatState,
   MemcardRestoreResult,
   MemcardRestoreTarget,
+  CloudSaveAutomaticSyncModeChangedEvent,
+  CloudSaveAutomaticSyncEvent,
+  CloudSaveConflictResolution,
+  CloudSaveOverview,
+  CloudSaveV2FileDetails,
+  CloudSaveV2LibraryEntry,
+  CloudSaveSyncProgressPayload,
+  SyncCloudSaveOnGamePageResult,
+  SyncGameCloudSaveResult,
+  SelectCloudSaveCustomPathResult,
+  CloudSaveCustomPathApproval,
+  CloudSaveModalSyncResult,
+  SelectCloudSaveCustomPathApprovalResult,
+  ConfirmCloudSaveCustomPathApprovalResult,
+  ConfirmCloudSaveCustomPathRebindApprovalResult,
+  LudusaviBackupScanEntry,
+  LudusaviImportResult,
+  DeleteAchievementSouvenirRequest,
+  ProfileAchievementSouvenir,
 } from "@types";
-import type { AxiosProgressEvent } from "axios";
 
 export interface DriveInfo {
   root: string;
@@ -100,11 +118,113 @@ declare global {
     | { type: "applying" }
     | { type: "error"; message: string };
 
+  interface FileExplorerEntry {
+    name: string;
+    path: string;
+    isDirectory: boolean;
+    isFile: boolean;
+    extension: string;
+    size: number;
+  }
+
+  interface FileExplorerPathInfo {
+    exists: boolean;
+    isDirectory: boolean;
+    isFile: boolean;
+  }
+
   interface Electron {
+    onCloudSaveAutomaticSyncModeChanged: (
+      callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
+    ) => () => void;
+    onCloudSaveAutomaticSync: (
+      callback: (event: CloudSaveAutomaticSyncEvent) => void
+    ) => () => void;
+    getCloudSaveOverview: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<CloudSaveOverview>;
+    getCloudSaveV2FileDetails: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<CloudSaveV2FileDetails>;
+    getCloudSaveV2Library: () => Promise<CloudSaveV2LibraryEntry[]>;
+    deleteGameCloudSaveData: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<void>;
+    selectCloudSaveCustomPath: (
+      objectId: string,
+      shop: GameShop,
+      selectedPath?: string
+    ) => Promise<SelectCloudSaveCustomPathResult>;
+    createCloudSaveCustomPathRebindApproval: (
+      objectId: string,
+      shop: GameShop,
+      rawPath: string
+    ) => Promise<CloudSaveCustomPathApproval>;
+    confirmCloudSaveCustomPathRebindApproval: (
+      approvalId: string,
+      objectId: string,
+      shop: GameShop
+    ) => Promise<ConfirmCloudSaveCustomPathRebindApprovalResult>;
+    getPendingCloudSaveCustomPathApproval: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<CloudSaveCustomPathApproval | null>;
+    selectCloudSaveCustomPathApproval: (
+      approvalId: string,
+      selectedPath?: string
+    ) => Promise<SelectCloudSaveCustomPathApprovalResult>;
+    confirmCloudSaveCustomPathApproval: (
+      approvalId: string
+    ) => Promise<ConfirmCloudSaveCustomPathApprovalResult>;
+    dismissCloudSaveCustomPathApproval: (approvalId: string) => Promise<void>;
+    removeCloudSaveCustomPath: (
+      objectId: string,
+      shop: GameShop,
+      rawPath: string,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
+    setCloudSaveAutomaticSyncEnabled: (
+      objectId: string,
+      shop: GameShop,
+      enabled: boolean
+    ) => Promise<boolean>;
+    syncCloudSaveOnGamePage: (
+      objectId: string,
+      shop: GameShop
+    ) => Promise<SyncCloudSaveOnGamePageResult>;
+    syncGameCloudSave: (
+      objectId: string,
+      shop: GameShop,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
+    syncGameCloudSaveFromModal: (
+      objectId: string,
+      shop: GameShop,
+      approvalId: string | null,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<CloudSaveModalSyncResult>;
+    syncCloudSaveAfterCustomPathRebind: (
+      objectId: string,
+      shop: GameShop,
+      rawPath: string,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
+    resolveCloudSaveConflict: (
+      objectId: string,
+      shop: GameShop,
+      resolution: CloudSaveConflictResolution,
+      onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+    ) => Promise<SyncGameCloudSaveResult>;
     /* Torrenting */
     startGameDownload: (
       payload: StartGameDownloadPayload
     ) => Promise<{ ok: boolean; error?: string }>;
+    startCustomDownload: (
+      payload: StartCustomDownloadPayload
+    ) => Promise<StartCustomDownloadResult>;
     addGameToQueue: (
       payload: StartGameDownloadPayload
     ) => Promise<{ ok: boolean; error?: string }>;
@@ -142,6 +262,9 @@ declare global {
     onDownloadProgress: (
       cb: (value: DownloadProgress | null) => void
     ) => () => Electron.IpcRenderer;
+    onDownloadHalted: (
+      cb: (gameTitle: string) => void
+    ) => () => Electron.IpcRenderer;
     onSeedingStatus: (
       cb: (value: SeedingStatus[]) => void
     ) => () => Electron.IpcRenderer;
@@ -161,6 +284,10 @@ declare global {
       shop: GameShop,
       language: string
     ) => Promise<ShopDetailsWithAssets | null>;
+    getGamesMaturity: (
+      games: { shop: GameShop; objectId: string; title: string }[],
+      resolve: boolean
+    ) => Promise<string[]>;
     getRandomGame: () => Promise<Steam250Game>;
     getGameStats: (objectId: string, shop: GameShop) => Promise<GameStats>;
     getGameAssets: (
@@ -378,10 +505,13 @@ declare global {
     openExophaseAuthWindow: () => Promise<{
       authenticated: boolean;
       username: string | null;
+      verification: "verified" | "cached" | "signed-out";
     }>;
-    getExophaseAuthState: (
-      revalidate?: boolean
-    ) => Promise<{ authenticated: boolean; username: string | null }>;
+    getExophaseAuthState: (revalidate?: boolean) => Promise<{
+      authenticated: boolean;
+      username: string | null;
+      verification: "verified" | "cached" | "signed-out";
+    }>;
     validateExophaseProfile: (input: string) => Promise<{
       ok: boolean;
       username?: string;
@@ -459,7 +589,8 @@ declare global {
       logoImageUrl?: string,
       libraryHeroImageUrl?: string,
       coverImageUrl?: string,
-      libraryImageUrl?: string
+      libraryImageUrl?: string,
+      matchedSteamObjectId?: string | null
     ) => Promise<Game>;
     updateCustomGame: (params: {
       shop: GameShop;
@@ -468,9 +599,12 @@ declare global {
       iconUrl?: string;
       logoImageUrl?: string;
       libraryHeroImageUrl?: string;
+      coverImageUrl?: string;
+      libraryImageUrl?: string;
       originalIconPath?: string;
       originalLogoPath?: string;
       originalHeroPath?: string;
+      matchedSteamObjectId?: string | null;
     }) => Promise<Game>;
     copyCustomGameAsset: (
       sourcePath: string,
@@ -572,13 +706,21 @@ declare global {
     generateMissingMetadata: () => Promise<{
       updated: number;
       skipped: number;
-      results: Array<{ title: string; coverUrl: string | null; what: string }>;
+      failed: number;
+      results: Array<{
+        title: string;
+        coverUrl: string | null;
+        what: string;
+        status: "updated" | "failed";
+      }>;
     }>;
     mergeDuplicateGames: () => Promise<{
       merged: number;
       mergedTitles: string[];
     }>;
-    runCloudDebugger: () => Promise<
+    runCloudDebugger: (options?: {
+      repair?: boolean;
+    }) => Promise<
       import("@main/events/library/run-cloud-debugger").CloudDebugReport
     >;
     clearLibrary: () => Promise<{ cleared: number }>;
@@ -618,6 +760,15 @@ declare global {
       launchOptions?: string | null
     ) => Promise<void>;
     closeGame: (shop: GameShop, objectId: string) => Promise<boolean>;
+    getSteamEmulatorStatus: (
+      shop: GameShop,
+      objectId: string
+    ) => Promise<SteamEmulatorDetection | null>;
+    applySteamEmulator: (
+      shop: GameShop,
+      objectId: string
+    ) => Promise<SteamEmulatorResult>;
+    checkSteamEmulatorToolAvailability: () => Promise<boolean>;
     removeGameFromLibrary: (shop: GameShop, objectId: string) => Promise<void>;
     removeGame: (shop: GameShop, objectId: string) => Promise<void>;
     deleteGameFolder: (shop: GameShop, objectId: string) => Promise<unknown>;
@@ -631,9 +782,6 @@ declare global {
       ) => void
     ) => () => Electron.IpcRenderer;
     onLibraryBatchComplete: (cb: () => void) => () => Electron.IpcRenderer;
-    onCloudArtifactsUpdated: (
-      cb: (artifacts: GameArtifactWithGame[]) => void
-    ) => () => Electron.IpcRenderer;
     onDownloadsUpdated: (cb: () => void) => () => Electron.IpcRenderer;
     resetGameAchievements: (shop: GameShop, objectId: string) => Promise<void>;
     changeGamePlayTime: (
@@ -669,14 +817,24 @@ declare global {
         executablePath: string;
         key: string;
         isNew?: boolean;
+        emulatorSystem?: EmulatorSystem;
       }[];
       total: number;
     }>;
+    checkLibraryInstallation: (
+      writeThrough?: boolean
+    ) => Promise<import("@types").LibraryInstallationReport>;
     selectiveScanInstalledGames: (
       scanPaths: string[],
       dryRun?: boolean
     ) => Promise<{
-      foundGames: { title: string; executablePath: string; key: string }[];
+      foundGames: {
+        title: string;
+        executablePath: string;
+        key: string;
+        isNew?: boolean;
+        emulatorSystem?: EmulatorSystem;
+      }[];
       total: number;
     }>;
     confirmScanGames: (
@@ -685,6 +843,7 @@ declare global {
         executablePath: string;
         title?: string;
         isNew?: boolean;
+        emulatorSystem?: EmulatorSystem;
       }>
     ) => Promise<void>;
     onScanProgress: (
@@ -695,12 +854,31 @@ declare global {
         currentTitle: string;
       }) => void
     ) => () => void;
-    importPlaynitePlaytime: (dbPath?: string) => Promise<{
+    importPlaynitePlaytime: (
+      dbPath?: string,
+      options?: { syncCloud?: boolean }
+    ) => Promise<{
       matched: number;
       total: number;
-      games: Array<{ title: string; addedHours: number }>;
+      cloudSynced: number;
+      cloudSyncPending: number;
+      games: Array<{
+        title: string;
+        previousHours: number;
+        playniteHours: number;
+        changeHours: number;
+      }>;
+      preserved: Array<{
+        title: string;
+        existingHours: number;
+        playniteHours: number;
+      }>;
       unmatched: Array<{ name: string; gameId: string; playtimeHours: number }>;
-      cached: Array<{ title: string; playtimeHours: number }>;
+      cached: Array<{
+        title: string;
+        playtimeHours: number;
+        catalogueMatched: boolean;
+      }>;
       detectedPath: string | null;
     }>;
     getExclusionList: () => Promise<ExcludedGame[]>;
@@ -758,61 +936,23 @@ declare global {
     getDownloadSourcesSinceValue: () => Promise<string | null>;
 
     /* Hardware */
-    getDiskFreeSpace: (path: string) => Promise<DiskUsage>;
+    getDiskFreeSpace: (path: string) => Promise<DiskUsage | null>;
     checkFolderWritePermission: (path: string) => Promise<boolean>;
 
     /* Cloud save */
-    uploadSaveGame: (
-      objectId: string,
-      shop: GameShop,
-      downloadOptionTitle: string | null
-    ) => Promise<void>;
-    downloadGameArtifact: (
-      objectId: string,
-      shop: GameShop,
-      gameArtifactId: string
-    ) => Promise<void>;
-    getGameArtifacts: (
-      objectId: string,
-      shop: GameShop
-    ) => Promise<GameArtifact[]>;
-    getAllArtifacts: () => Promise<GameArtifactWithGame[]>;
-    deleteGameArtifact: (artifactId: string) => Promise<{ ok: boolean }>;
     scanLudusaviBackupFolder: (
       folderPath: string
-    ) => Promise<
-      { gameName: string; folderPath: string; hasMappingYaml: boolean }[]
-    >;
+    ) => Promise<LudusaviBackupScanEntry[]>;
     importLudusaviBackup: (
       backupFolderPath: string,
-      gameName: string,
-      objectId: string,
-      shop: GameShop
-    ) => Promise<{ ok: boolean; artifactId?: string }>;
-    getGameBackupPreview: (
-      objectId: string,
-      shop: GameShop
-    ) => Promise<LudusaviBackup | null>;
-    selectGameBackupPath: (
-      shop: GameShop,
-      objectId: string,
-      backupPath: string | null
-    ) => Promise<void>;
-    onBackupDownloadComplete: (
       objectId: string,
       shop: GameShop,
-      cb: (success: boolean) => void
-    ) => () => Electron.IpcRenderer;
-    onUploadComplete: (
-      objectId: string,
-      shop: GameShop,
-      cb: () => void
-    ) => () => Electron.IpcRenderer;
-    onBackupDownloadProgress: (
-      objectId: string,
-      shop: GameShop,
-      cb: (progress: AxiosProgressEvent) => void
-    ) => () => Electron.IpcRenderer;
+      options?: {
+        dryRun?: boolean;
+        replaceExisting?: boolean;
+        expectedSnapshotId?: string;
+      }
+    ) => Promise<LudusaviImportResult>;
 
     /* Clipboard */
     clipboard: {
@@ -1190,12 +1330,119 @@ declare global {
       system?: EmulatorSystem
     ) => Promise<import("@types").GameRepack[]>;
     getConsoleHowLongToBeat: (
-      title: string
+      title: string,
+      system?: import("@types").EmulatorSystem | ""
     ) => Promise<import("@types").HowLongToBeatCategory[] | null>;
     getConsoleGameMetadata: (
       title: string,
       objectId: string
     ) => Promise<import("@types").ConsoleGameMetadata | null>;
+    getOverlayContext: () => Promise<
+      import("@types").HydraOverlayContext | null
+    >;
+    overlayRendererReady: () => Promise<void>;
+    closeHydraOverlay: () => Promise<void>;
+    setOverlayPerformancePinned: (pinned: boolean) => Promise<void>;
+    getOverlayNote: () => Promise<string>;
+    saveOverlayNote: (note: string) => Promise<void>;
+    onOverlayPerformance: (
+      cb: (value: import("@types").HydraOverlayPerformance) => void
+    ) => () => void;
+    onOverlayMode: (cb: (mode: string) => void) => () => void;
+    onOverlayShown: (cb: () => void) => () => void;
+    onOverlayPerformancePin: (cb: (pinned: boolean) => void) => () => void;
+    onOverlayGamepadAction: (
+      cb: (action: import("@types").HydraOverlayGamepadAction) => void
+    ) => () => void;
+    getActiveGameProcessState: () => Promise<
+      import("@types").GameProcessControlState
+    >;
+    pauseActiveGame: () => Promise<import("@types").GameProcessControlState>;
+    resumeActiveGame: () => Promise<import("@types").GameProcessControlState>;
+    closeActiveGame: () => Promise<import("@types").GameProcessControlState>;
+    onGameProcessControlState: (
+      cb: (state: import("@types").GameProcessControlState) => void
+    ) => () => void;
+    gameRecorderGetPreferences: () => Promise<
+      import("@types").GameRecorderState
+    >;
+    gameRecorderGetState: () => Promise<import("@types").GameRecorderState>;
+    gameRecorderStart: () => Promise<import("@types").GameRecorderState>;
+    gameRecorderStop: () => Promise<import("@types").GameRecorderSaveResult>;
+    gameRecorderSaveReplay: () => Promise<
+      import("@types").GameRecorderSaveResult
+    >;
+    gameRecorderOpenOutputDirectory: () => Promise<void>;
+    onGameRecorderState: (
+      cb: (state: import("@types").GameRecorderState) => void
+    ) => () => void;
+    onGameRecorderCaptureCommand: (
+      cb: (command: import("@types").GameRecorderCaptureCommand) => void
+    ) => () => void;
+    gameRecorderCommitSegment: (
+      metadata: import("@types").GameRecorderSegmentMetadata,
+      payload: ArrayBuffer
+    ) => Promise<void>;
+    gameRecorderCommitPcmChunk: (
+      metadata: import("@types").GameRecorderPcmChunkMetadata,
+      payload: ArrayBuffer
+    ) => Promise<void>;
+    gameRecorderCaptureError: (message: string) => Promise<void>;
+    gameRecorderCaptureReady: () => Promise<void>;
+    spotifyGetStatus: () => Promise<import("@types").SpotifyStatus>;
+    spotifyLogin: () => Promise<import("@types").SpotifyStatus>;
+    spotifyLogout: () => Promise<import("@types").SpotifyStatus>;
+    spotifyGetNowPlaying: () => Promise<
+      import("@types").SpotifyNowPlaying | null
+    >;
+    spotifyGetPlayback: () => Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPlaybackState | null
+      >
+    >;
+    spotifyGetDevices: () => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyDevice[]>
+    >;
+    spotifyGetQueue: () => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyQueue>
+    >;
+    spotifyGetHome: () => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyHome>
+    >;
+    spotifySearch: (
+      query: string
+    ) => Promise<
+      import("@types").SpotifyResult<import("@types").SpotifySearchResults>
+    >;
+    spotifyGetPlaylistItems: (
+      playlistId: string,
+      offset?: number
+    ) => Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPage<import("@types").SpotifyContentItem>
+      >
+    >;
+    spotifyPlaybackCommand: (
+      command: import("@types").SpotifyPlaybackCommand
+    ) => Promise<import("@types").SpotifyResult<true>>;
+    spotifySetSaved: (
+      uri: string,
+      saved: boolean
+    ) => Promise<import("@types").SpotifyResult<true>>;
+    spotifyLibraryContains: (
+      uris: string[]
+    ) => Promise<import("@types").SpotifyResult<Record<string, boolean>>>;
+    spotifyOpenSettings: () => Promise<void>;
+    spotifyControl: (
+      action: import("@types").SpotifyControlAction
+    ) => Promise<boolean>;
+    getPinnedApps: () => Promise<import("@types").PinnedApp[]>;
+    pickPinnedApp: () => Promise<import("@types").PinnedApp[]>;
+    removePinnedApp: (appPath: string) => Promise<import("@types").PinnedApp[]>;
+    launchPinnedApp: (appPath: string) => Promise<string>;
+    getAudioSessions: () => Promise<import("@types").AudioSession[]>;
+    setAudioSessionVolume: (pid: number, volume: number) => Promise<boolean>;
+    setAudioSessionMute: (pid: number, muted: boolean) => Promise<boolean>;
     downloadSwitchKeys: () => Promise<{
       keys: boolean;
       firmware: boolean;
@@ -1217,6 +1464,10 @@ declare global {
       limit?: number,
       system?: import("@types").EmulatorSystem
     ) => Promise<import("@types").CatalogueSearchResult[]>;
+    searchCatalogueGames: (
+      query: string,
+      limit?: number
+    ) => Promise<import("@types").CatalogueSearchSuggestion[]>;
     getRandomClassics: (
       limit?: number
     ) => Promise<import("@types").CatalogueSearchResult[]>;
@@ -1327,6 +1578,7 @@ declare global {
     checkForUpdates: () => Promise<boolean>;
     restartAndInstallUpdate: () => Promise<void>;
     updateCheckerProceed: () => Promise<void>;
+    updateCheckerReady: () => Promise<void>;
     updateCheckerApply: () => Promise<void>;
     toggleConsoleWindow: () => Promise<void>;
     onUpdateCheckerEvent: (
@@ -1363,6 +1615,13 @@ declare global {
       password: string
     ) => Promise<{ success: boolean; token?: string; error?: string }>;
     syncRalibretroLogin: () => Promise<boolean>;
+    getAchievementSouvenirs: (
+      ownerId: string
+    ) => Promise<ProfileAchievementSouvenir[]>;
+    deleteAchievementSouvenir: (
+      request: DeleteAchievementSouvenirRequest
+    ) => Promise<void>;
+    openAchievementSouvenirsFolder: () => Promise<void>;
 
     /* Profile */
     getMe: () => Promise<UserDetails | null>;
@@ -1433,6 +1692,7 @@ declare global {
         position: AchievementCustomNotificationPosition
       ) => void
     ) => () => Electron.IpcRenderer;
+    achievementNotificationRendererReady: () => void;
     updateAchievementCustomNotificationWindow: () => Promise<void>;
     hideAchievementCustomNotificationWindow: () => Promise<void>;
     showAchievementTestNotification: () => Promise<void>;
@@ -1562,13 +1822,16 @@ declare global {
       cb: (pct: number, file: string) => void
     ) => () => void;
     openConsoleWindow: () => Promise<void>;
-    onConsoleLog: (
-      cb: (entry: {
-        ts: number;
-        level: string;
-        scope: string;
-        text: string;
-      }) => void
+    getConsoleLogSnapshot: (
+      afterId?: number
+    ) => Promise<import("@shared").ConsoleLogSnapshot>;
+    clearConsoleLogs: () => Promise<import("@shared").ConsoleLogSnapshot>;
+    exportConsoleLogs: () => Promise<{
+      canceled: boolean;
+      path: string | null;
+    }>;
+    onConsoleLogs: (
+      cb: (entries: import("@shared").ConsoleLogEntry[]) => void
     ) => () => void;
     /* Main window controls (Linux) */
     minimizeMainWindow: () => Promise<void>;
@@ -1597,6 +1860,53 @@ declare global {
       imageUrl: string | null,
       options: { width: number; height: number; preserveAnimation?: boolean }
     ) => Promise<string | null>;
+
+    /* Shared music player (launcher + overlay, Deezer + yt-dlp) */
+    musicSearch: (query: string) => Promise<import("@types").MusicTrack[]>;
+    musicGetState: () => Promise<import("@types").MusicPlayerState>;
+    onMusicState: (
+      cb: (state: import("@types").MusicPlayerState) => void
+    ) => () => void;
+    musicSetQueue: (
+      tracks: import("@types").MusicTrack[],
+      startIndex?: number
+    ) => Promise<void>;
+    musicAddToQueue: (track: import("@types").MusicTrack) => Promise<void>;
+    musicRemoveFromQueue: (index: number) => Promise<void>;
+    musicClearQueue: () => Promise<void>;
+    musicPlay: (index?: number) => Promise<import("@types").MusicTrack | null>;
+    musicPause: () => Promise<void>;
+    musicResume: () => Promise<import("@types").MusicTrack | null>;
+    musicRefreshCurrent: () => Promise<import("@types").MusicTrack | null>;
+    musicStop: () => Promise<void>;
+    musicNext: () => Promise<import("@types").MusicTrack | null>;
+    musicPrevious: () => Promise<import("@types").MusicTrack | null>;
+    musicSetShuffle: (enabled: boolean) => Promise<void>;
+    musicSetRepeat: (mode: import("@types").RepeatMode) => Promise<void>;
+    musicSetVolume: (volume: number, muted?: boolean) => Promise<void>;
+    musicSeek: (progressMs: number) => Promise<void>;
+    musicReportPlaybackProgress: (
+      progressMs: number,
+      durationMs: number
+    ) => Promise<void>;
+    musicGetPlaylists: () => Promise<import("@types").MusicPlaylist[]>;
+    musicCreatePlaylist: (
+      name: string
+    ) => Promise<import("@types").MusicPlaylist>;
+    musicDeletePlaylist: (id: string) => Promise<void>;
+    musicRenamePlaylist: (id: string, name: string) => Promise<void>;
+    musicAddToPlaylist: (
+      playlistId: string,
+      track: import("@types").MusicTrack
+    ) => Promise<void>;
+    musicRemoveFromPlaylist: (
+      playlistId: string,
+      trackIndex: number
+    ) => Promise<void>;
+    musicPlayPlaylist: (
+      playlistId: string,
+      startIndex?: number
+    ) => Promise<import("@types").MusicTrack | null>;
   }
 
   interface Window {

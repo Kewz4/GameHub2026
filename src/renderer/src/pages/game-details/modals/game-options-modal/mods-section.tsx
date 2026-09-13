@@ -81,8 +81,8 @@ export function ModsSection({ game }: Readonly<Props>) {
         <div>
           <h3 className="mods-section__title">Mods</h3>
           <p className="mods-section__subtitle">
-            Install and manage {game.title} mods from GameBanana. Enable mods and
-            press Play to launch the game modded — everything runs in the
+            Install and manage {game.title} mods from GameBanana. Enable mods
+            and press Play to launch the game modded — everything runs in the
             background through Cemu.
           </p>
         </div>

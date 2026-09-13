@@ -34,7 +34,7 @@ import { useClassicsScan, useToast } from "@renderer/hooks";
 import { formatBytes } from "@shared";
 import type { EmulatorConfig, RomFolder } from "@types";
 
-import { KNOWN_BINARY_LABELS } from "./known-binary-labels";
+import { getKnownBinaryLabel } from "./known-binary-labels";
 import { EMULATOR_ICONS } from "./emulator-icons";
 import { MemoryCardsSection } from "./memory-cards-section";
 import { CloudSavesSection } from "./cloud-saves-section";
@@ -148,7 +148,7 @@ export function EmulatorDetail({
     }
   }, [config.system, onChange, onBack]);
 
-  const binaryName = KNOWN_BINARY_LABELS[config.binary];
+  const binaryName = getKnownBinaryLabel(config.binary);
   const binaryIcon = EMULATOR_ICONS[config.binary];
 
   const handleDownloadBios = useCallback(async () => {

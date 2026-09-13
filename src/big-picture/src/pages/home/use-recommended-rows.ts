@@ -15,15 +15,15 @@ import { buildTasteProfile, rankRecommendations } from "./recommender";
 import { isMechanicTag, parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
 import { getRecommendedClassics } from "./recommender-classics";
+import { buildExternalResourceUrl } from "@renderer/helpers/external-resources";
+import {
+  type CatalogueRecommendationEdge,
+  selectCatalogueRecommendationEdge,
+  selectPcRecommendationGames,
+} from "@shared";
 
 /** A thumbs-up recommendation counts like a well-liked, moderately-played game. */
 const LIKE_SYNTHETIC_HOURS = 8;
-
-/**
- * A catalogue edge as the backend actually returns it — `searchVector` carries
- * the game's Steam tags as numeric ids and isn't in the shared type.
- */
-type CatalogueEdge = CatalogueSearchResult & { searchVector?: string | null };
 
 /** A "Because you played {anchor}" shelf for one of the user's taste clusters. */
 export interface BecauseYouPlayedRow {
@@ -79,7 +79,10 @@ async function getTagDictionary(language: string): Promise<TagDictionary> {
   if (tagDictCache) return tagDictCache;
   try {
     const response = await fetch(
-      `${import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL}/steam-user-tags.json`
+      buildExternalResourceUrl(
+        "/steam-user-tags.json",
+        import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL
+      )
     );
     const data = (await response.json()) as Record<
       string,
@@ -103,7 +106,7 @@ async function getTagDictionary(language: string): Promise<TagDictionary> {
 
 /** Decode a catalogue edge's real Steam tag NAMES from its searchVector. */
 function edgeTags(
-  edge: CatalogueEdge,
+  edge: CatalogueRecommendationEdge,
   idToName: Map<number, string>
 ): string[] {
   const names: string[] = [];
@@ -134,24 +137,18 @@ const baseSearchBody = (downloadSourceIds: string[]) => ({
 /** One `/catalogue/search` call, returning raw edges (incl. searchVector). */
 async function searchCatalogueEdges(
   data: Record<string, unknown>
-): Promise<CatalogueEdge[]> {
+): Promise<CatalogueRecommendationEdge[]> {
   return globalThis.window.electron.hydraApi
-    .post<{ edges: CatalogueEdge[]; count: number }>("/catalogue/search", {
-      data,
-      needsAuth: false,
-    })
+    .post<{ edges: CatalogueRecommendationEdge[]; count: number }>(
+      "/catalogue/search",
+      { data, needsAuth: false }
+    )
     .then((r) => r.edges ?? [])
-    .catch(() => [] as CatalogueEdge[]);
+    .catch(() => [] as CatalogueRecommendationEdge[]);
 }
 
 /** Per-session cache of a game's real facets, keyed `${shop}:${objectId}`. */
 const facetsCache = new Map<string, { genres: string[]; tags: string[] }>();
-
-const normalizeTitle = (title: string) =>
-  title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
 
 /**
  * Look up a game's real genres + tags by matching it to a catalogue edge (whose
@@ -176,11 +173,8 @@ async function fetchGameFacets(
   });
   if (!edges.length) return null;
 
-  const wantTitle = normalizeTitle(game.title);
-  const match =
-    edges.find((e) => e.objectId === game.objectId && e.shop === game.shop) ??
-    edges.find((e) => normalizeTitle(e.title) === wantTitle) ??
-    edges[0];
+  const match = selectCatalogueRecommendationEdge(game, edges);
+  if (!match) return null;
 
   const facets = {
     genres: match.genres ?? [],
@@ -292,9 +286,10 @@ async function getRecommended(
   downloadSourceIds: string[],
   language: string
 ): Promise<RecommendationResult> {
-  const library = (await globalThis.window.electron
+  const completeLibrary = (await globalThis.window.electron
     .getLibrary()
     .catch(() => [])) as LibraryGame[];
+  const library = selectPcRecommendationGames(completeLibrary);
   if (!library.length) return EMPTY_RECOMMENDATIONS;
 
   const { nameToId, idToName } = await getTagDictionary(language);
@@ -334,7 +329,7 @@ async function getRecommended(
   // Fold in thumbs up/down feedback: a "like" (not already owned) is enriched
   // with its real facets and added as a synthetic favorite; a "dislike" is
   // excluded from candidates.
-  const feedback = await getAllFeedback();
+  const feedback = selectPcRecommendationGames(await getAllFeedback());
   const libraryKeys = new Set(library.map((g) => `${g.shop}:${g.objectId}`));
   const dislikedIds = new Set(
     feedback
@@ -489,6 +484,11 @@ export function useRecommendedRows(language: string): RecommendedRows {
   );
 
   useEffect(() => {
+    if (!globalThis.window.electron) {
+      setRows(EMPTY_ROWS);
+      return;
+    }
+
     const cached = sessionCache.get(language);
     if (cached) {
       setRows(cached);
@@ -498,9 +498,9 @@ export function useRecommendedRows(language: string): RecommendedRows {
     let isMounted = true;
 
     async function load() {
-      const sources = (await globalThis.window.electron.leveldb.values(
-        "downloadSources"
-      )) as DownloadSource[];
+      const sources = (await globalThis.window.electron.leveldb
+        .values("downloadSources")
+        .catch(() => [])) as DownloadSource[];
       const downloadSourceIds = [...sources]
         .sort(
           (a, b) =>

@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { ConsoleGameMetadata } from "@types";
+import { logger } from "./logger";
 
 // Embedded default IGDB (Twitch) app credentials so metadata works out of the
 // box without per-user setup. Users may override these in settings if they want
@@ -266,7 +267,7 @@ limit 5;`;
 
       return best;
     } catch (err) {
-      console.warn("[igdb] searchGame failed:", err);
+      logger.warn("[igdb] searchGame failed:", err);
       return null;
     }
   }
@@ -346,7 +347,7 @@ limit 5;`;
         thumbnailUrl: img(a.image_id, "t_screenshot_med"),
       }));
     } catch (err) {
-      console.warn("[igdb] getArtworkOptions failed:", err);
+      logger.warn("[igdb] getArtworkOptions failed:", err);
       return [];
     }
   }
@@ -378,7 +379,7 @@ limit 1;`;
 
       return resp.data?.[0] ?? null;
     } catch (err) {
-      console.warn("[igdb] getGameById failed:", err);
+      logger.warn("[igdb] getGameById failed:", err);
       return null;
     }
   }

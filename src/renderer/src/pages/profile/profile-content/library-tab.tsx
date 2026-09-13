@@ -5,13 +5,12 @@ import { useFormat } from "@renderer/hooks";
 import type { UserGame } from "@types";
 import { SortOptions } from "./sort-options";
 import { UserLibraryGameCard } from "./user-library-game-card";
+import type { ProfileGameSort } from "./profile-library-data";
 import "./profile-content.scss";
 
-type SortOption = "playtime" | "achievementCount" | "playedRecently";
-
 interface LibraryTabProps {
-  sortBy: SortOption;
-  onSortChange: (sortBy: SortOption) => void;
+  sortBy: ProfileGameSort;
+  onSortChange: (sortBy: ProfileGameSort) => void;
   pinnedGames: UserGame[];
   libraryGames: UserGame[];
   hasMoreLibraryGames: boolean;
@@ -76,13 +75,12 @@ export function LibraryTab({
 
               <ul className="profile-content__games-grid">
                 {pinnedGames?.map((game) => (
-                  <li key={game.objectId} style={{ listStyle: "none" }}>
-                    <UserLibraryGameCard
-                      game={game}
-                      statIndex={statsIndex}
-                      sortBy={sortBy}
-                    />
-                  </li>
+                  <UserLibraryGameCard
+                    key={`${game.shop}:${game.objectId}`}
+                    game={game}
+                    statIndex={statsIndex}
+                    sortBy={sortBy}
+                  />
                 ))}
               </ul>
             </div>
@@ -115,16 +113,12 @@ export function LibraryTab({
                 <ul className="profile-content__games-grid">
                   {libraryGames?.map((game) => {
                     return (
-                      <li
-                        key={`${sortBy}-${game.objectId}`}
-                        style={{ listStyle: "none" }}
-                      >
-                        <UserLibraryGameCard
-                          game={game}
-                          statIndex={statsIndex}
-                          sortBy={sortBy}
-                        />
-                      </li>
+                      <UserLibraryGameCard
+                        key={`${sortBy}-${game.shop}:${game.objectId}`}
+                        game={game}
+                        statIndex={statsIndex}
+                        sortBy={sortBy}
+                      />
                     );
                   })}
                 </ul>

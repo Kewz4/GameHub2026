@@ -6,19 +6,19 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  FocusItem,
-  HorizontalFocusGroup,
-  Typography,
-  UserProfile,
-} from "../../components";
+import { useTranslation } from "react-i18next";
+import { FocusItem, HorizontalFocusGroup, Typography } from "../../components";
 import { IS_DESKTOP } from "../../constants";
 import { useNavigationScreenActions } from "../../hooks";
-import type { FocusOverrides } from "../../services";
+import {
+  NAVIGATION_SCREEN_ACTION_PRIORITY,
+  type FocusOverrides,
+} from "../../services";
 import {
   useNavigationHistoryStore,
   useNavigationStore,
@@ -26,8 +26,10 @@ import {
 } from "../../stores";
 import {
   BIG_PICTURE_HEADER_REGION_ID,
+  getBigPictureCurrentPageTitle,
   normalizeBigPicturePathname,
 } from "../navigation";
+import { resolveBigPictureHeaderFootprint } from "./header-layout";
 import "./styles.scss";
 
 const HEADER_BACK_BUTTON_ID = "header-back-button";
@@ -37,17 +39,21 @@ const VIRTUAL_KEYBOARD_DISMISS_EVENT = "big-picture-virtual-keyboard-dismiss";
 const VIRTUAL_KEYBOARD_KEY_FOCUS_ID_PREFIX =
   "big-picture-virtual-keyboard-key-";
 
-const useCurrentPageTitle = () => {
+const useCurrentPageTitle = (pathname: string) => {
   const stack = useNavigationHistoryStore((s) => s.stack);
-  if (stack.length >= 1) return stack[stack.length - 1].title;
-  return "Home";
+  const top = stack[stack.length - 1];
+  const { t } = useTranslation("sidebar");
+
+  return getBigPictureCurrentPageTitle(pathname, top, {
+    cloudSaves: t("cloud_saves", { defaultValue: "Cloud Saves" }),
+  });
 };
 
 function Header() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const pageTitle = useCurrentPageTitle();
+  const pageTitle = useCurrentPageTitle(pathname);
   const isOnCataloguePage =
     normalizeBigPicturePathname(pathname) === "/catalogue";
   const catalogueSearchValue = searchParams.get("title") ?? "";
@@ -70,6 +76,7 @@ function Header() {
   const inputRef = useRef<HTMLInputElement>(null);
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLFormElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const searchNavigationOverrides: FocusOverrides = {
     left: {
@@ -174,6 +181,40 @@ function Header() {
       inputRef.current?.focus();
     }
   }, [isSearchOpen]);
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    const headerContainer =
+      header?.querySelector<HTMLElement>(".header__container");
+    const bigPictureRoot = header?.closest<HTMLElement>("#big-picture");
+
+    if (!headerContainer || !bigPictureRoot) return;
+
+    const updateHeaderFootprint = () => {
+      const measuredHeight = headerContainer.getBoundingClientRect().height;
+      const footprint = resolveBigPictureHeaderFootprint(measuredHeight);
+
+      bigPictureRoot.style.setProperty(
+        "--big-picture-header-footprint",
+        `${footprint}px`
+      );
+    };
+
+    updateHeaderFootprint();
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateHeaderFootprint);
+
+    resizeObserver?.observe(headerContainer);
+    globalThis.window.addEventListener("resize", updateHeaderFootprint);
+
+    return () => {
+      resizeObserver?.disconnect();
+      globalThis.window.removeEventListener("resize", updateHeaderFootprint);
+      bigPictureRoot.style.removeProperty("--big-picture-header-footprint");
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSearchFocused && !isSearchVirtualKeyboardTarget) {
@@ -282,11 +323,12 @@ function Header() {
             b: closeSearchKeepingFocus,
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.activeShell }
   );
 
   return (
-    <div className="header">
+    <div ref={headerRef} className="header">
       <HorizontalFocusGroup regionId={BIG_PICTURE_HEADER_REGION_ID} asChild>
         <header className="header__container">
           <FocusItem id={HEADER_BACK_BUTTON_ID} asChild>
@@ -370,10 +412,6 @@ function Header() {
               onChange={(event) => handleSearchChange(event.target.value)}
             />
           </form>
-
-          <div className="header__profile">
-            <UserProfile />
-          </div>
         </header>
       </HorizontalFocusGroup>
     </div>

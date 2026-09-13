@@ -21,6 +21,7 @@ import { logger } from "../logger";
 import { SevenZip } from "../7zip";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
+import { emulatorConfigFile } from "./emulator-user-paths";
 
 /**
  * Resolve the 16-hex Wii U title id for a library game by reading the title's
@@ -94,7 +95,7 @@ const resolvePaths = async (): Promise<CemuPaths | null> => {
     installDir,
     dataDir,
     packsDir: path.join(dataDir, "graphicPacks", "downloadedGraphicPacks"),
-    settingsFile: path.join(dataDir, "settings.xml"),
+    settingsFile: emulatorConfigFile("cemu", installDir, "settings.xml"),
   };
 };
 

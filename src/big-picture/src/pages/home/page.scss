@@ -6,6 +6,8 @@
   min-height: calc(100% + var(--big-picture-header-height));
   overflow-x: hidden;
   overflow-y: auto;
+  scroll-padding-top: var(--big-picture-focus-scroll-clearance);
+  scroll-padding-bottom: 96px;
   background: var(--background);
   color: var(--text);
 }

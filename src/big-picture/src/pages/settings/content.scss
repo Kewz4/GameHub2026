@@ -4,3 +4,96 @@
   gap: calc(var(--spacing-unit) * 8);
   width: 100%;
 }
+
+.content-settings-section__content,
+.content-settings-section__capture {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing-unit) * 4);
+}
+
+.content-settings-section__capture-status {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing-unit) * 1.5);
+  padding: calc(var(--spacing-unit) * 4);
+  border: 1px solid var(--secondary-border);
+  border-radius: calc(var(--spacing-unit) * 2);
+  background: color-mix(in srgb, var(--surface) 92%, var(--background));
+  color: var(--text-secondary);
+
+  strong {
+    color: var(--text);
+  }
+
+  &--success {
+    border-color: color-mix(
+      in srgb,
+      var(--success) 45%,
+      var(--secondary-border)
+    );
+  }
+
+  &--danger {
+    border-color: color-mix(in srgb, var(--error) 50%, var(--secondary-border));
+  }
+}
+
+.content-settings-section__capture-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--spacing-unit) * 4);
+}
+
+.content-settings-section__capture-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.content-settings-section__output {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--spacing-unit) * 4);
+  padding: calc(var(--spacing-unit) * 4);
+  border: 1px solid var(--secondary-border);
+  border-radius: calc(var(--spacing-unit) * 2);
+  background: var(--background);
+}
+
+.content-settings-section__output-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-unit);
+  color: var(--text-secondary);
+  font-size: 12px;
+
+  strong {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.content-settings-section__output-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: calc(var(--spacing-unit) * 2);
+}
+
+@media (max-width: 860px) {
+  .content-settings-section__capture-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .content-settings-section__output {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

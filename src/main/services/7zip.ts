@@ -1,5 +1,7 @@
 import { app } from "electron";
 import Seven, { CommandLineSwitches } from "node-7z";
+import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { logger } from "./logger";
 
@@ -43,7 +45,7 @@ export class SevenZip {
     );
   }
 
-  public static extractFile(
+  public static async extractFile(
     {
       filePath,
       outputPath,
@@ -57,6 +59,9 @@ export class SevenZip {
     },
     onProgress?: (progress: ExtractionProgress) => void
   ): Promise<ExtractionResult> {
+    const destination = outputPath ?? cwd ?? process.cwd();
+    await fs.promises.mkdir(destination, { recursive: true });
+
     return new Promise((resolve, reject) => {
       let settled = false;
       let activeAttempt = 0;
@@ -74,24 +79,17 @@ export class SevenZip {
         const options: CommandLineSwitches = {
           $bin: this.binaryPath,
           $progress: true,
+          $defer: true,
           yes: true,
+          noWildcards: true,
           password: password || undefined,
         };
 
-        if (outputPath) {
-          options.outputDir = outputPath;
-        }
-
-        const stream = Seven.extractFull(filePath, outputPath || cwd || ".", {
-          ...options,
-          // windowsHide stops the 7-Zip child from flashing a console window on
-          // Windows (e.g. during headless mod extraction). node-7z forwards
-          // $spawnOptions to child_process.spawn, whose types are wider than
-          // node-7z declares — hence the cast.
-          $spawnOptions: {
-            windowsHide: true,
-            ...(cwd ? { cwd } : {}),
-          } as { cwd?: string },
+        const stream = Seven.extractFull(filePath, ".", options);
+        stream._childProcess = spawn(stream._bin, stream._args, {
+          cwd: destination,
+          detached: true,
+          windowsHide: true,
         });
 
         stream.on("progress", (progress) => {
@@ -149,6 +147,8 @@ export class SevenZip {
             reject(new Error(`Failed to extract file: ${filePath}`));
           }
         });
+
+        Seven.listen(stream);
       };
 
       tryPassword(0);
@@ -164,6 +164,7 @@ export class SevenZip {
 
       const options: CommandLineSwitches = {
         $bin: this.binaryPath,
+        noWildcards: true,
         password: password || undefined,
         $spawnOptions: { windowsHide: true } as { cwd?: string },
       };

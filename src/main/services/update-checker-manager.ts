@@ -9,8 +9,27 @@ import fs from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { logger } from "./logger";
+import {
+  CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+  drainCloudSavePostExitOperations,
+} from "./cloud-save/pending-post-exit";
 
 const { autoUpdater } = updater;
+
+/** Headers for GitHub API / asset requests.
+ *
+ *  The release repo is public, so these are unauthenticated. Earlier builds
+ *  embedded a read-only PAT here because releases were private; that shipped a
+ *  credential inside every installer, which is untenable now that the
+ *  installers themselves are publicly downloadable. */
+function githubHeaders(
+  extra: Record<string, string> = {}
+): Record<string, string> {
+  return {
+    "User-Agent": "GameHub-Updater/2.0",
+    ...extra,
+  };
+}
 
 export type UpdateCheckerEvent =
   | { type: "checking"; currentVersion: string }
@@ -31,6 +50,28 @@ export class UpdateCheckerManager {
   private static sendEventFn: ((event: UpdateCheckerEvent) => void) | null =
     null;
   private static portableExtractDir = "";
+
+  /**
+   * Events emitted before the splash renderer has subscribed are buffered and
+   * replayed once it signals ready. Without this, a post-update relaunch — where
+   * the GitHub check resolves almost instantly because electron-updater's feed
+   * is already warm — fires "checking"/"not-available" before the freshly
+   * created splash window has mounted its listener, so the splash stays stuck on
+   * "Checking for updates…". (A manual reopen's slower cold check wins the race,
+   * which is why it looked fine.)
+   */
+  private static eventBuffer: UpdateCheckerEvent[] = [];
+  private static rendererReady = false;
+
+  /** Called by the splash renderer (via IPC) once its event listener is set up:
+   *  flush anything that was emitted before it could hear it. */
+  static markRendererReady() {
+    this.rendererReady = true;
+    if (this.sendEventFn) {
+      for (const event of this.eventBuffer) this.sendEventFn(event);
+    }
+    this.eventBuffer = [];
+  }
 
   /**
    * True while the startup splash is actively checking. The periodic
@@ -91,6 +132,12 @@ export class UpdateCheckerManager {
   }
 
   private static sendEvent(event: UpdateCheckerEvent) {
+    // Until the renderer says it's listening, buffer (don't drop) events so a
+    // fast post-update check can't fire before anyone hears it.
+    if (!this.rendererReady) {
+      this.eventBuffer.push(event);
+      return;
+    }
     this.sendEventFn?.(event);
   }
 
@@ -98,7 +145,7 @@ export class UpdateCheckerManager {
     this.sendEvent({ type: "checking", currentVersion: app.getVersion() });
 
     logger.log(
-      `[updater] checking for updates — current v${app.getVersion()}, feed github:Kewz4/hydra, portable=${this.isPortable}`
+      `[updater] checking for updates — current v${app.getVersion()}, feed github:Kewz4/GameHub2026, portable=${this.isPortable}`
     );
 
     if (!app.isPackaged) {
@@ -211,8 +258,18 @@ export class UpdateCheckerManager {
     });
   }
 
-  static applyNsisUpdate(): void {
+  static async applyNsisUpdate(): Promise<void> {
     this.sendEvent({ type: "applying" });
+    const drain = await drainCloudSavePostExitOperations(
+      CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS
+    );
+    if (!drain.drained) {
+      logger.warn("[Cloud Save] Update drain reached its deadline", {
+        pending: drain.pending,
+        timeoutMs: CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+        updateKind: "nsis",
+      });
+    }
     this.isApplyingUpdate = true;
     // Delay before quitting to let the renderer flush — avoids ERROR 32.
     setTimeout(() => {
@@ -227,15 +284,19 @@ export class UpdateCheckerManager {
   }
 
   private static async downloadPortableUpdate(version: string): Promise<void> {
-    const apiUrl = `https://api.github.com/repos/Kewz4/hydra/releases/tags/v${version}`;
+    const apiUrl = `https://api.github.com/repos/Kewz4/GameHub2026/releases/tags/v${version}`;
     const apiRes = await fetch(apiUrl, {
-      headers: { "User-Agent": "GameHub-Updater/2.0" },
+      headers: githubHeaders({ Accept: "application/vnd.github+json" }),
     });
 
     if (!apiRes.ok) throw new Error(`GitHub API returned ${apiRes.status}`);
 
     const release = (await apiRes.json()) as {
-      assets: Array<{ name: string; browser_download_url: string }>;
+      assets: Array<{
+        name: string;
+        url: string;
+        browser_download_url: string;
+      }>;
     };
 
     const zipAsset = release.assets.find(
@@ -251,7 +312,13 @@ export class UpdateCheckerManager {
     const zipPath = path.join(tmpDir, "gamehub-update.zip");
     const extractDir = path.join(tmpDir, "gamehub-update");
 
-    const zipRes = await fetch(zipAsset.browser_download_url);
+    // Kept on the asset API endpoint rather than browser_download_url: with
+    // `Accept: octet-stream` GitHub answers with the binary (302 → CDN), and
+    // staying on api.github.com keeps this path identical for public and
+    // private releases, so it survives the repo ever going private again.
+    const zipRes = await fetch(zipAsset.url, {
+      headers: githubHeaders({ Accept: "application/octet-stream" }),
+    });
     const total = parseInt(zipRes.headers.get("content-length") ?? "0", 10);
     const reader = zipRes.body!.getReader();
     const chunks: Buffer[] = [];
@@ -318,8 +385,18 @@ export class UpdateCheckerManager {
     this.sendEvent({ type: "downloaded", version });
   }
 
-  static applyPortableUpdate(): void {
+  static async applyPortableUpdate(): Promise<void> {
     this.sendEvent({ type: "applying" });
+    const drain = await drainCloudSavePostExitOperations(
+      CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS
+    );
+    if (!drain.drained) {
+      logger.warn("[Cloud Save] Update drain reached its deadline", {
+        pending: drain.pending,
+        timeoutMs: CLOUD_SAVE_POST_EXIT_DRAIN_TIMEOUT_MS,
+        updateKind: "portable",
+      });
+    }
     this.isApplyingUpdate = true;
 
     const exeDir =

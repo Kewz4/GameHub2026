@@ -9,21 +9,16 @@ import {
   EXOPHASE_PARTITION,
 } from "./constants";
 import { ExophaseFetcher } from "./exophase-web";
+import {
+  isExophaseAuthPageUrl,
+  resolveExophaseProbeState,
+  type ExophaseAuthState,
+} from "./exophase-auth-state";
 
-export interface ExophaseAuthState {
-  authenticated: boolean;
-  username: string | null;
-}
-
-const isAuthPageUrl = (url: string): boolean => {
-  const u = url.toLowerCase();
-  return (
-    u.includes("/login") ||
-    u.includes("/register") ||
-    u.includes("/signup") ||
-    u.includes("/password")
-  );
-};
+export type {
+  ExophaseAuthState,
+  ExophaseAuthVerification,
+} from "./exophase-auth-state";
 
 /** Parses `window.me = { username: '...' }` out of raw account-page HTML, used
  *  as a fallback when we can't read the live `window.me` object. */
@@ -50,23 +45,52 @@ const patchPrefs = async (patch: Partial<UserPreferences>): Promise<void> => {
   );
 };
 
+const currentHydraAccountId = () =>
+  db
+    .get<string, { id?: string }>(levelKeys.user, { valueEncoding: "json" })
+    .then((user) => user?.id ?? null)
+    .catch(() => null);
+
 /**
  * Confirms whether the persisted Exophase session is still valid by loading the
  * account page in the Exophase partition and reading the username. Persists the
  * username when found.
  */
 export async function probeExophaseAuth(): Promise<ExophaseAuthState> {
+  const cachedUsername = (await getPrefs())?.exophaseUserId ?? null;
   const fetcher = new ExophaseFetcher();
   try {
     const html = await fetcher.fetchHtml(EXOPHASE_ACCOUNT_URL);
     const username =
       (await fetcher.readCurrentUsername()) ?? extractUsernameFromHtml(html);
-    if (!username) return { authenticated: false, username: null };
-    await patchPrefs({ exophaseUserId: username });
-    return { authenticated: true, username };
+    const currentUrl = fetcher.getCurrentUrl();
+    const state = resolveExophaseProbeState({
+      cachedUsername,
+      detectedUsername: username,
+      definitivelySignedOut: Boolean(
+        currentUrl && isExophaseAuthPageUrl(currentUrl)
+      ),
+    });
+
+    if (state.verification === "verified" && state.username) {
+      await patchPrefs({
+        exophaseUserId: state.username,
+        exophaseHydraAccountId: await currentHydraAccountId(),
+      });
+    } else if (state.verification === "cached") {
+      logger.warn(
+        "[Exophase] account probe was inconclusive; keeping the saved account"
+      );
+    }
+
+    return state;
   } catch (err) {
     logger.warn("[Exophase] auth probe failed", err);
-    return { authenticated: false, username: null };
+    return resolveExophaseProbeState({
+      cachedUsername,
+      detectedUsername: null,
+      definitivelySignedOut: false,
+    });
   } finally {
     fetcher.close();
   }
@@ -109,20 +133,24 @@ export function openExophaseLoginWindow(): Promise<ExophaseAuthState> {
       if (handled) return;
       handled = true;
       stopPolling();
-      await patchPrefs({ exophaseUserId: username, exophaseEnabled: true });
+      await patchPrefs({
+        exophaseUserId: username,
+        exophaseEnabled: true,
+        exophaseHydraAccountId: await currentHydraAccountId(),
+      });
       try {
         if (!win.isDestroyed()) win.close();
       } catch {
         /* ignore */
       }
-      resolve({ authenticated: true, username });
+      resolve({ authenticated: true, username, verification: "verified" });
     };
 
     const checkLoggedIn = async () => {
       if (handled || win.isDestroyed()) return;
       const url = win.webContents.getURL();
       // Don't probe while the user is still on an auth page (login/register).
-      if (!url || isAuthPageUrl(url)) return;
+      if (!url || isExophaseAuthPageUrl(url)) return;
       try {
         const username: string | null = await win.webContents.executeJavaScript(
           "(window.me && window.me.username) ? String(window.me.username) : null",
@@ -138,7 +166,11 @@ export function openExophaseLoginWindow(): Promise<ExophaseAuthState> {
       if (!handled) {
         handled = true;
         stopPolling();
-        resolve({ authenticated: false, username: null });
+        resolve({
+          authenticated: false,
+          username: null,
+          verification: "signed-out",
+        });
       }
     });
 
@@ -155,7 +187,11 @@ export function openExophaseLoginWindow(): Promise<ExophaseAuthState> {
       stopPolling();
       if (!handled) {
         handled = true;
-        resolve({ authenticated: false, username: null });
+        resolve({
+          authenticated: false,
+          username: null,
+          verification: "signed-out",
+        });
       }
     });
   });

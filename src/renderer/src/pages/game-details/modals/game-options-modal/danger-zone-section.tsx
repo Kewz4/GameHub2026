@@ -50,16 +50,11 @@ export function DangerZoneSection({
           {t("remove_from_library")}
         </Button>
 
-        {game.shop !== "custom" && (
+        {game.shop !== "custom" && hasAchievements && userDetails && (
           <Button
             onClick={onOpenResetAchievements}
             theme="danger"
-            disabled={
-              deleting ||
-              isDeletingAchievements ||
-              !hasAchievements ||
-              !userDetails
-            }
+            disabled={deleting || isDeletingAchievements}
           >
             {t("reset_achievements")}
           </Button>
@@ -69,13 +64,11 @@ export function DangerZoneSection({
           {t("update_game_playtime")}
         </Button>
 
-        {game.shop !== "custom" && (
+        {game.shop !== "custom" && game.download?.downloadPath && (
           <Button
             onClick={onOpenRemoveFiles}
             theme="danger"
-            disabled={
-              isGameDownloading || deleting || !game.download?.downloadPath
-            }
+            disabled={isGameDownloading || deleting}
           >
             {t("remove_files")}
           </Button>

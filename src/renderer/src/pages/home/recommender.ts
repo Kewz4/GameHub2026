@@ -260,13 +260,22 @@ export function explainRecommendation(
   // Only ever attribute to POSITIVE contributors — a disliked game contributes
   // negative weight to shared features, and must never surface as "Because you
   // played <the game you disliked>".
-  const names = [...byTitle.entries()]
+  const positives = [...byTitle.entries()]
     .filter(([, weight]) => weight > 0)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => b[1] - a[1]);
+
+  if (!positives.length) return null;
+
+  // Name a SECOND seed only when it contributed comparably to the first. A
+  // marginal shared feature (often a mis-tagged genre — e.g. a game wrongly
+  // labelled a dungeon-crawler by the metadata source) shouldn't produce
+  // "Because you played X and Y" when Y barely influenced the match. This keeps
+  // the explanation specific to the game that actually drove the recommendation.
+  const topWeight = positives[0][1];
+  const names = positives
+    .filter(([, weight], index) => index === 0 || weight >= topWeight * 0.5)
     .slice(0, 2)
     .map(([title]) => title);
-
-  if (!names.length) return null;
 
   const because =
     names.length === 1
@@ -309,6 +318,9 @@ export function rankRecommendations(
         const key = ownedKey(candidate.result);
         if (profile.ownedIds.has(key) || seen.has(key)) return false;
         if (excludeIds.has(key)) return false;
+        // Never recommend a game the user can't actually get: with no download
+        // source the card only shows "No downloads" and the rec is a dead end.
+        if (!candidate.result.downloadSources?.length) return false;
         if (isHeavilyOnline(candidate.result.genres, candidate.tags)) {
           return false;
         }

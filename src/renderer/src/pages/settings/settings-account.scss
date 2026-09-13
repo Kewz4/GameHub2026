@@ -17,6 +17,13 @@
     display: flex;
     gap: globals.$spacing-unit;
     margin-top: globals.$spacing-unit;
+    flex-wrap: wrap;
+  }
+
+  &__sync-description {
+    margin: 0 0 globals.$spacing-unit;
+    opacity: 0.7;
+    font-size: globals.$small-font-size;
   }
 
   &__subscription-info {
@@ -63,5 +70,11 @@
     padding: 0;
     display: flex;
     align-items: center;
+
+    &:focus-visible {
+      outline: 2px solid var(--color-text-bright);
+      outline-offset: 3px;
+      border-radius: 50%;
+    }
   }
 }

@@ -6,6 +6,12 @@ export interface PlaynitePlaytimeCacheEntry {
   objectId: string;
   title: string;
   playTimeInMilliseconds: number;
+  /** Original Playnite provider identifier, when available. */
+  sourceGameId?: string;
+  /** Compact title persisted for catalogue-independent future matching. */
+  normalizedTitle?: string;
+  /** False when Hydra had no catalogue match at import time. */
+  catalogueResolved?: boolean;
   /** When this playtime was last imported from Playnite. */
   updatedAt: number;
 }

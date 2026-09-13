@@ -7,32 +7,31 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    max-height: 80vh;
-
-    @media (min-width: 1024px) {
-      max-height: 70vh;
-    }
-
-    @media (min-width: 1280px) {
-      max-height: 60vh;
-    }
+    // Height is governed by the viewport (which sizes to the current image's
+    // aspect ratio, capped at 62vh) plus the preview strip — no fixed cap here,
+    // otherwise it would clip the ratio-driven viewport.
   }
 
   &__viewport {
     width: 100%;
-    height: 100%;
+    // Height follows the current image's aspect ratio (set inline from its
+    // natural size); this vh cap only kicks in for unusually tall art, where
+    // object-fit: contain then letterboxes rather than crops.
+    max-height: 62vh;
     position: relative;
     overflow: hidden;
     border-radius: 8px;
+    // Neutral backdrop behind any letterboxed image so the fit reads as
+    // intentional instead of a mismatched edge.
+    background-color: rgba(0, 0, 0, 0.4);
+    margin: 0 auto;
 
     @media (min-width: 1280px) {
       width: 60%;
-      max-height: 500px;
     }
 
     @media (min-width: 1536px) {
       width: 50%;
-      max-height: 600px;
     }
   }
 
@@ -54,7 +53,10 @@
     height: 100%;
     display: block;
     border-radius: 4px;
-    object-fit: cover;
+    // contain (not cover) so no screenshot or box render is ever cropped — the
+    // viewport is sized to the image's ratio, so contain normally fills it edge
+    // to edge and only letterboxes the rare out-of-ratio slide.
+    object-fit: contain;
   }
 
   &__video-wrapper {

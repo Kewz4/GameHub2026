@@ -5,6 +5,7 @@ import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import type { LibraryGame, ShortcutLocation } from "@types";
 import { FileIcon } from "@primer/octicons-react";
 import { HardDrive, X, FolderOpen } from "lucide-react";
+import type { SteamMatchSuggestion } from "@renderer/hooks/use-steam-match-search";
 
 interface DriveInfo {
   root: string;
@@ -35,13 +36,15 @@ interface GeneralSettingsSectionProps {
   onDeleteSteamShortcut: () => Promise<void>;
   onChangeGameTitle: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onBlurGameTitle: () => Promise<void>;
+  steamMatchSuggestions?: SteamMatchSuggestion[];
+  isSearchingSteamMatch?: boolean;
+  onSelectSteamMatch?: (suggestion: SteamMatchSuggestion) => void;
   onChangeLaunchOptions: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onClearLaunchOptions: () => Promise<void>;
   isTransferring: boolean;
   transferProgress: number;
   drives: DriveInfo[];
   onStartTransfer: (destPath: string) => Promise<void>;
-  onCancelDriveSelection: () => void;
   transferSpeed?: number;
   transferETA?: number;
   showCancelConfirm?: boolean;
@@ -81,7 +84,10 @@ const isBatchExecutable = (executablePath?: string | null) =>
   !!executablePath && /\.(bat|cmd)$/i.test(executablePath);
 
 const supportsTrackingExecutables = (executablePath?: string | null) =>
-  !!executablePath && /\.(bat|cmd|exe)$/i.test(executablePath);
+  !!executablePath &&
+  !/^[a-z][a-z0-9+.-]*:\/\//i.test(executablePath) &&
+  (window.electron.platform !== "win32" ||
+    /\.(bat|cmd|exe)$/i.test(executablePath));
 
 export function GeneralSettingsSection({
   game,
@@ -105,13 +111,15 @@ export function GeneralSettingsSection({
   onDeleteSteamShortcut,
   onChangeGameTitle,
   onBlurGameTitle,
+  steamMatchSuggestions = [],
+  isSearchingSteamMatch = false,
+  onSelectSteamMatch = () => {},
   onChangeLaunchOptions,
   onClearLaunchOptions,
   isTransferring,
   transferProgress,
   drives,
   onStartTransfer,
-  onCancelDriveSelection,
   transferSpeed = 0,
   transferETA = 0,
   showCancelConfirm = false,
@@ -192,7 +200,6 @@ export function GeneralSettingsSection({
     setSelectedDrive(null);
     setCustomPath("");
     setError(null);
-    onCancelDriveSelection();
   };
 
   const effectiveDest = selectedDrive || customPath.trim();
@@ -207,10 +214,53 @@ export function GeneralSettingsSection({
             placeholder={t("edit_game_modal_enter_title")}
             value={gameTitle}
             onChange={onChangeGameTitle}
-            onBlur={() => void onBlurGameTitle()}
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget as HTMLElement | null;
+              if (
+                nextTarget?.closest(
+                  ".game-options-modal__steam-match-suggestion"
+                )
+              ) {
+                return;
+              }
+              void onBlurGameTitle();
+            }}
             theme="dark"
             disabled={updatingGameTitle}
           />
+
+          {game.shop === "custom" &&
+            (isSearchingSteamMatch || steamMatchSuggestions.length > 0) && (
+              <div className="game-options-modal__steam-match-suggestions">
+                <span className="game-options-modal__steam-match-suggestions-title">
+                  {isSearchingSteamMatch
+                    ? t("custom_game_modal_match_searching", {
+                        ns: "sidebar",
+                      })
+                    : t("custom_game_modal_match_steam_title", {
+                        ns: "sidebar",
+                      })}
+                </span>
+                <ul className="game-options-modal__steam-match-suggestions-list">
+                  {steamMatchSuggestions.map((suggestion) => (
+                    <li key={suggestion.objectId}>
+                      <button
+                        type="button"
+                        className="game-options-modal__steam-match-suggestion"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => onSelectSteamMatch(suggestion)}
+                        disabled={updatingGameTitle}
+                      >
+                        {suggestion.iconUrl ? (
+                          <img src={suggestion.iconUrl} alt="" />
+                        ) : null}
+                        <span>{suggestion.title}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
         </div>
       )}
 
@@ -261,22 +311,19 @@ export function GeneralSettingsSection({
                   {t("open_folder")}
                 </Button>
               )}
-              {game.shop !== "custom" &&
-                window.electron.platform === "win32" && (
-                  <Button
-                    type="button"
-                    theme="outline"
-                    onClick={onOpenSaveFolder}
-                    disabled={loadingSaveFolder || !saveFolderPath}
-                  >
-                    <HardDrive size={14} />
-                    {loadingSaveFolder
-                      ? t("searching_save_folder")
-                      : saveFolderPath
-                        ? t("open_save_folder")
-                        : t("no_save_folder_found")}
-                  </Button>
-                )}
+              <Button
+                type="button"
+                theme="outline"
+                onClick={onOpenSaveFolder}
+                disabled={loadingSaveFolder || !saveFolderPath}
+              >
+                <HardDrive size={14} />
+                {loadingSaveFolder
+                  ? t("searching_save_folder")
+                  : saveFolderPath
+                    ? t("open_save_folder")
+                    : t("no_save_folder_found")}
+              </Button>
             </div>
           </div>
 
@@ -558,7 +605,11 @@ export function GeneralSettingsSection({
                 onClick={() => onCreateShortcut("start_menu")}
                 theme="outline"
               >
-                {t("create_start_menu_shortcut")}
+                {window.electron.platform === "linux"
+                  ? t("create_applications_menu_shortcut", {
+                      defaultValue: "Add to applications menu",
+                    })
+                  : t("create_start_menu_shortcut")}
               </Button>
             )}
           </div>

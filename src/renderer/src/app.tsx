@@ -3,7 +3,6 @@ import {
   DashIcon,
   ScreenFullIcon,
   ScreenNormalIcon,
-  VideoIcon,
   XIcon,
 } from "@primer/octicons-react";
 import {
@@ -39,6 +38,7 @@ import { ArchiveDeletionModal } from "./pages/downloads/archive-deletion-error-m
 import { AchievementSupportModal } from "./pages/downloads/achievement-support-modal";
 import { Onboarding } from "./pages/onboarding/onboarding";
 import { AddFriendModal } from "./pages/profile/profile-content/add-friend-modal";
+import { MusicMiniPlayer } from "./components/music-mini-player/music-mini-player";
 
 import type { GameShop, UserPreferences } from "@types";
 import "./app.scss";
@@ -48,8 +48,10 @@ import {
   injectCustomCss,
   removeCustomCss,
 } from "./helpers";
+import { buildExternalResourceUrl } from "./helpers/external-resources";
 import { levelDBService } from "./services/leveldb.service";
 import GameHubIcon from "@renderer/assets/icons/gamehub.svg?react";
+import { isDesktopSidebarVisible } from "./components/sidebar/sidebar-visibility";
 
 export interface AppProps {
   children: React.ReactNode;
@@ -66,11 +68,8 @@ export function App() {
 
   const { clearDownload, setLastPacket, lastPacket } = useDownload();
 
-  const {
-    fetchUserDetails,
-    updateUserDetails,
-    clearUserDetails,
-  } = useUserDetails();
+  const { fetchUserDetails, updateUserDetails, clearUserDetails } =
+    useUserDetails();
 
   const dispatch = useAppDispatch();
 
@@ -256,7 +255,10 @@ export function App() {
     if (!document.getElementById("external-resources")) {
       const $script = document.createElement("script");
       $script.id = "external-resources";
-      $script.src = `${import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL}/bundle.js?t=${Date.now()}`;
+      $script.src = `${buildExternalResourceUrl(
+        "/bundle.js",
+        import.meta.env.RENDERER_VITE_EXTERNAL_RESOURCES_URL
+      )}?t=${Date.now()}`;
       document.head.appendChild($script);
     }
   }, [fetchUserDetails, updateUserDetails, dispatch]);
@@ -343,6 +345,16 @@ export function App() {
       }),
       window.electron.onDownloadsUpdated(() => {
         updateLibrary();
+      }),
+      window.electron.onDownloadHalted((gameTitle) => {
+        updateLibrary();
+        showErrorToast(
+          t("download_halted_title", { ns: "downloads" }),
+          t("download_halted_description", {
+            ns: "downloads",
+            title: gameTitle,
+          })
+        );
       }),
       window.electron.onSignOut(() => clearUserDetails()),
       window.electron.onExtractionProgress((shop, objectId, progress) => {
@@ -512,15 +524,6 @@ export function App() {
           />
           <h4>GameHub</h4>
 
-          <button
-            type="button"
-            className="title-bar__big-picture"
-            onClick={() => globalThis.window.electron.openBigPictureWindow()}
-          >
-            <VideoIcon size={14} />
-            {t("big_picture", { ns: "sidebar" })}
-          </button>
-
           {window.electron.platform === "linux" && (
             <div className="title-bar__window-controls">
               <button
@@ -572,6 +575,8 @@ export function App() {
         duration={toast.duration}
       />
 
+      <MusicMiniPlayer />
+
       <ArchiveDeletionModal
         visible={showArchiveDeletionModal}
         archivePaths={archivePaths}
@@ -594,7 +599,7 @@ export function App() {
       <ClassicsScanModal />
 
       <main>
-        <Sidebar />
+        {isDesktopSidebarVisible(userPreferences) && <Sidebar />}
 
         <article className="container">
           <Header />

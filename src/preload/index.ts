@@ -1,6 +1,7 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 import { contextBridge, ipcRenderer } from "electron";
+import { randomUUID } from "node:crypto";
 
 import type {
   GameShop,
@@ -8,6 +9,8 @@ import type {
   UserPreferences,
   AppUpdaterEvent,
   StartGameDownloadPayload,
+  StartCustomDownloadPayload,
+  StartCustomDownloadResult,
   GameRunning,
   FriendRequestAction,
   UpdateProfileRequest,
@@ -26,9 +29,27 @@ import type {
   DownloadLayoutState,
   EmulatorSystem,
   ClassicsDiscUpdate,
+  GameRecorderCaptureCommand,
+  GameRecorderSegmentMetadata,
+  CloudSaveAutomaticSyncModeChangedEvent,
+  CloudSaveAutomaticSyncEvent,
+  CloudSaveConflictResolution,
+  CloudSaveOverview,
+  CloudSaveV2FileDetails,
+  CloudSaveV2LibraryEntry,
+  CloudSaveSyncIpcProgressPayload,
+  CloudSaveSyncProgressPayload,
+  SyncCloudSaveOnGamePageResult,
+  SyncGameCloudSaveResult,
+  SelectCloudSaveCustomPathResult,
+  CloudSaveCustomPathApproval,
+  CloudSaveModalSyncResult,
+  SelectCloudSaveCustomPathApprovalResult,
+  ConfirmCloudSaveCustomPathApprovalResult,
+  ConfirmCloudSaveCustomPathRebindApprovalResult,
+  DeleteAchievementSouvenirRequest,
 } from "@types";
 import type { AuthPage } from "@shared";
-import type { AxiosProgressEvent } from "axios";
 
 const fileExplorerApi = {
   readDirectory: (path: string) => ipcRenderer.invoke("readDirectory", path),
@@ -36,10 +57,214 @@ const fileExplorerApi = {
   listDrives: () => ipcRenderer.invoke("listDrives"),
 };
 
+const invokeCloudSaveOperation = async <TResult = SyncGameCloudSaveResult>(
+  channel:
+    | "syncGameCloudSave"
+    | "syncGameCloudSaveFromModal"
+    | "syncCloudSaveAfterCustomPathRebind"
+    | "resolveCloudSaveConflict"
+    | "removeCloudSaveCustomPath",
+  args: unknown[],
+  onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+) => {
+  const operationId = randomUUID();
+  const listener = (
+    _event: Electron.IpcRendererEvent,
+    progress: CloudSaveSyncIpcProgressPayload
+  ) => {
+    if (progress.operationId === operationId) onProgress?.(progress);
+  };
+
+  ipcRenderer.on("on-cloud-save-sync-progress", listener);
+  try {
+    return (await ipcRenderer.invoke(channel, operationId, ...args)) as TResult;
+  } finally {
+    ipcRenderer.removeListener("on-cloud-save-sync-progress", listener);
+  }
+};
+
 contextBridge.exposeInMainWorld("electron", {
+  /* Cloud saves V2 */
+  onCloudSaveAutomaticSyncModeChanged: (
+    callback: (event: CloudSaveAutomaticSyncModeChangedEvent) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: CloudSaveAutomaticSyncModeChangedEvent
+    ) => callback(payload);
+    ipcRenderer.on("on-cloud-save-automatic-sync-mode-changed", listener);
+    return () =>
+      ipcRenderer.removeListener(
+        "on-cloud-save-automatic-sync-mode-changed",
+        listener
+      );
+  },
+  onCloudSaveAutomaticSync: (
+    callback: (event: CloudSaveAutomaticSyncEvent) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: CloudSaveAutomaticSyncEvent
+    ) => callback(payload);
+    ipcRenderer.on("on-cloud-save-automatic-sync", listener);
+    return () =>
+      ipcRenderer.removeListener("on-cloud-save-automatic-sync", listener);
+  },
+  getCloudSaveOverview: (objectId: string, shop: GameShop) =>
+    ipcRenderer.invoke(
+      "getCloudSaveOverview",
+      objectId,
+      shop
+    ) as Promise<CloudSaveOverview>,
+  getCloudSaveV2FileDetails: (objectId: string, shop: GameShop) =>
+    ipcRenderer.invoke(
+      "getCloudSaveV2FileDetails",
+      objectId,
+      shop
+    ) as Promise<CloudSaveV2FileDetails>,
+  getCloudSaveV2Library: () =>
+    ipcRenderer.invoke("getCloudSaveV2Library") as Promise<
+      CloudSaveV2LibraryEntry[]
+    >,
+  deleteGameCloudSaveData: (objectId: string, shop: GameShop) =>
+    ipcRenderer.invoke(
+      "deleteGameCloudSaveData",
+      objectId,
+      shop
+    ) as Promise<void>,
+  selectCloudSaveCustomPath: (
+    objectId: string,
+    shop: GameShop,
+    selectedPath?: string
+  ) =>
+    ipcRenderer.invoke(
+      "selectCloudSaveCustomPath",
+      objectId,
+      shop,
+      selectedPath
+    ) as Promise<SelectCloudSaveCustomPathResult>,
+  createCloudSaveCustomPathRebindApproval: (
+    objectId: string,
+    shop: GameShop,
+    rawPath: string
+  ) =>
+    ipcRenderer.invoke(
+      "createCloudSaveCustomPathRebindApproval",
+      objectId,
+      shop,
+      rawPath
+    ) as Promise<CloudSaveCustomPathApproval>,
+  confirmCloudSaveCustomPathRebindApproval: (
+    approvalId: string,
+    objectId: string,
+    shop: GameShop
+  ) =>
+    ipcRenderer.invoke(
+      "confirmCloudSaveCustomPathRebindApproval",
+      approvalId,
+      objectId,
+      shop
+    ) as Promise<ConfirmCloudSaveCustomPathRebindApprovalResult>,
+  getPendingCloudSaveCustomPathApproval: (objectId: string, shop: GameShop) =>
+    ipcRenderer.invoke(
+      "getPendingCloudSaveCustomPathApproval",
+      objectId,
+      shop
+    ) as Promise<CloudSaveCustomPathApproval | null>,
+  selectCloudSaveCustomPathApproval: (
+    approvalId: string,
+    selectedPath?: string
+  ) =>
+    ipcRenderer.invoke(
+      "selectCloudSaveCustomPathApproval",
+      approvalId,
+      selectedPath
+    ) as Promise<SelectCloudSaveCustomPathApprovalResult>,
+  confirmCloudSaveCustomPathApproval: (approvalId: string) =>
+    ipcRenderer.invoke(
+      "confirmCloudSaveCustomPathApproval",
+      approvalId
+    ) as Promise<ConfirmCloudSaveCustomPathApprovalResult>,
+  dismissCloudSaveCustomPathApproval: (approvalId: string) =>
+    ipcRenderer.invoke(
+      "dismissCloudSaveCustomPathApproval",
+      approvalId
+    ) as Promise<void>,
+  removeCloudSaveCustomPath: (
+    objectId: string,
+    shop: GameShop,
+    rawPath: string,
+    onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+  ) =>
+    invokeCloudSaveOperation(
+      "removeCloudSaveCustomPath",
+      [objectId, shop, rawPath],
+      onProgress
+    ),
+  setCloudSaveAutomaticSyncEnabled: (
+    objectId: string,
+    shop: GameShop,
+    enabled: boolean
+  ) =>
+    ipcRenderer.invoke(
+      "setCloudSaveAutomaticSyncEnabled",
+      objectId,
+      shop,
+      enabled
+    ) as Promise<boolean>,
+  syncCloudSaveOnGamePage: (objectId: string, shop: GameShop) =>
+    ipcRenderer.invoke(
+      "syncCloudSaveOnGamePage",
+      objectId,
+      shop
+    ) as Promise<SyncCloudSaveOnGamePageResult>,
+  syncGameCloudSave: (
+    objectId: string,
+    shop: GameShop,
+    onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+  ) =>
+    invokeCloudSaveOperation("syncGameCloudSave", [objectId, shop], onProgress),
+  syncGameCloudSaveFromModal: (
+    objectId: string,
+    shop: GameShop,
+    approvalId: string | null,
+    onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+  ) =>
+    invokeCloudSaveOperation<CloudSaveModalSyncResult>(
+      "syncGameCloudSaveFromModal",
+      [objectId, shop, approvalId],
+      onProgress
+    ),
+  syncCloudSaveAfterCustomPathRebind: (
+    objectId: string,
+    shop: GameShop,
+    rawPath: string,
+    onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+  ) =>
+    invokeCloudSaveOperation(
+      "syncCloudSaveAfterCustomPathRebind",
+      [objectId, shop, rawPath],
+      onProgress
+    ),
+  resolveCloudSaveConflict: (
+    objectId: string,
+    shop: GameShop,
+    resolution: CloudSaveConflictResolution,
+    onProgress?: (progress: CloudSaveSyncProgressPayload) => void
+  ) =>
+    invokeCloudSaveOperation(
+      "resolveCloudSaveConflict",
+      [objectId, shop, resolution],
+      onProgress
+    ),
   /* Torrenting */
   startGameDownload: (payload: StartGameDownloadPayload) =>
     ipcRenderer.invoke("startGameDownload", payload),
+  startCustomDownload: (payload: StartCustomDownloadPayload) =>
+    ipcRenderer.invoke(
+      "startCustomDownload",
+      payload
+    ) as Promise<StartCustomDownloadResult>,
   addGameToQueue: (payload: StartGameDownloadPayload) =>
     ipcRenderer.invoke("addGameToQueue", payload),
   cancelGameDownload: (shop: GameShop, objectId: string) =>
@@ -108,6 +333,12 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("on-download-progress", listener);
     return () => ipcRenderer.removeListener("on-download-progress", listener);
   },
+  onDownloadHalted: (cb: (gameTitle: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, gameTitle: string) =>
+      cb(gameTitle);
+    ipcRenderer.on("on-download-halted", listener);
+    return () => ipcRenderer.removeListener("on-download-halted", listener);
+  },
   onHardDelete: (cb: () => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => cb();
     ipcRenderer.on("on-hard-delete", listener);
@@ -131,6 +362,10 @@ contextBridge.exposeInMainWorld("electron", {
   /* Catalogue */
   getGameShopDetails: (objectId: string, shop: GameShop, language: string) =>
     ipcRenderer.invoke("getGameShopDetails", objectId, shop, language),
+  getGamesMaturity: (
+    games: { shop: GameShop; objectId: string; title: string }[],
+    resolve: boolean
+  ) => ipcRenderer.invoke("getGamesMaturity", games, resolve),
   getRandomGame: () => ipcRenderer.invoke("getRandomGame"),
   getGameStats: (objectId: string, shop: GameShop) =>
     ipcRenderer.invoke("getGameStats", objectId, shop),
@@ -326,7 +561,10 @@ contextBridge.exposeInMainWorld("electron", {
     executablePath: string,
     iconUrl?: string,
     logoImageUrl?: string,
-    libraryHeroImageUrl?: string
+    libraryHeroImageUrl?: string,
+    coverImageUrl?: string,
+    libraryImageUrl?: string,
+    matchedSteamObjectId?: string | null
   ) =>
     ipcRenderer.invoke(
       "addCustomGameToLibrary",
@@ -334,7 +572,10 @@ contextBridge.exposeInMainWorld("electron", {
       executablePath,
       iconUrl,
       logoImageUrl,
-      libraryHeroImageUrl
+      libraryHeroImageUrl,
+      coverImageUrl,
+      libraryImageUrl,
+      matchedSteamObjectId
     ),
   copyCustomGameAsset: (
     sourcePath: string,
@@ -352,9 +593,12 @@ contextBridge.exposeInMainWorld("electron", {
     iconUrl?: string;
     logoImageUrl?: string;
     libraryHeroImageUrl?: string;
+    coverImageUrl?: string;
+    libraryImageUrl?: string;
     originalIconPath?: string;
     originalLogoPath?: string;
     originalHeroPath?: string;
+    matchedSteamObjectId?: string | null;
   }) => ipcRenderer.invoke("updateCustomGame", params),
   updateGameCustomAssets: (params: {
     shop: GameShop;
@@ -501,6 +745,8 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.invoke("extractGameDownload", shop, objectId),
   scanInstalledGames: (dryRun?: boolean) =>
     ipcRenderer.invoke("scanInstalledGames", dryRun),
+  checkLibraryInstallation: (writeThrough?: boolean) =>
+    ipcRenderer.invoke("checkLibraryInstallation", writeThrough),
   selectiveScanInstalledGames: (scanPaths: string[], dryRun?: boolean) =>
     ipcRenderer.invoke("selectiveScanInstalledGames", scanPaths, dryRun),
   confirmScanGames: (
@@ -509,6 +755,7 @@ contextBridge.exposeInMainWorld("electron", {
       executablePath: string;
       title?: string;
       isNew?: boolean;
+      emulatorSystem?: EmulatorSystem;
     }>
   ) => ipcRenderer.invoke("confirmScanGames", approvedGames),
   onScanProgress: (
@@ -531,8 +778,10 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("on-scan-progress", listener);
     return () => ipcRenderer.removeListener("on-scan-progress", listener);
   },
-  importPlaynitePlaytime: (dbPath?: string) =>
-    ipcRenderer.invoke("importPlaynitePlaytime", dbPath),
+  importPlaynitePlaytime: (
+    dbPath?: string,
+    options?: { syncCloud?: boolean }
+  ) => ipcRenderer.invoke("importPlaynitePlaytime", dbPath, options),
   getExclusionList: () => ipcRenderer.invoke("getExclusionList"),
   addGameToExclusionList: (shop: GameShop, objectId: string, title: string) =>
     ipcRenderer.invoke("addGameToExclusionList", shop, objectId, title),
@@ -564,13 +813,6 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on("on-library-batch-complete", listener);
     return () =>
       ipcRenderer.removeListener("on-library-batch-complete", listener);
-  },
-  onCloudArtifactsUpdated: (cb: (artifacts: any[]) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, artifacts: any[]) =>
-      cb(artifacts);
-    ipcRenderer.on("on-cloud-artifacts-updated", listener);
-    return () =>
-      ipcRenderer.removeListener("on-cloud-artifacts-updated", listener);
   },
   onDownloadsUpdated: (cb: () => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => cb();
@@ -644,84 +886,25 @@ contextBridge.exposeInMainWorld("electron", {
   getNetworkInterfaces: () => ipcRenderer.invoke("getNetworkInterfaces"),
 
   /* Cloud save */
-  uploadSaveGame: (
-    objectId: string,
-    shop: GameShop,
-    downloadOptionTitle: string | null
-  ) =>
-    ipcRenderer.invoke("uploadSaveGame", objectId, shop, downloadOptionTitle),
-  downloadGameArtifact: (
-    objectId: string,
-    shop: GameShop,
-    gameArtifactId: string
-  ) =>
-    ipcRenderer.invoke("downloadGameArtifact", objectId, shop, gameArtifactId),
-  getGameArtifacts: (objectId: string, shop: GameShop) =>
-    ipcRenderer.invoke("getGameArtifacts", objectId, shop),
-  getAllArtifacts: () => ipcRenderer.invoke("getAllArtifacts"),
-  deleteGameArtifact: (artifactId: string) =>
-    ipcRenderer.invoke("deleteGameArtifact", artifactId),
   scanLudusaviBackupFolder: (folderPath: string) =>
     ipcRenderer.invoke("scanLudusaviBackupFolder", folderPath),
   importLudusaviBackup: (
     backupFolderPath: string,
-    gameName: string,
     objectId: string,
-    shop: GameShop
+    shop: GameShop,
+    options?: {
+      dryRun?: boolean;
+      replaceExisting?: boolean;
+      expectedSnapshotId?: string;
+    }
   ) =>
     ipcRenderer.invoke(
       "importLudusaviBackup",
       backupFolderPath,
-      gameName,
       objectId,
-      shop
+      shop,
+      options
     ),
-  getGameBackupPreview: (objectId: string, shop: GameShop) =>
-    ipcRenderer.invoke("getGameBackupPreview", objectId, shop),
-  selectGameBackupPath: (
-    shop: GameShop,
-    objectId: string,
-    backupPath: string | null
-  ) => ipcRenderer.invoke("selectGameBackupPath", shop, objectId, backupPath),
-  onUploadComplete: (objectId: string, shop: GameShop, cb: () => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => cb();
-    ipcRenderer.on(`on-upload-complete-${objectId}-${shop}`, listener);
-    return () =>
-      ipcRenderer.removeListener(
-        `on-upload-complete-${objectId}-${shop}`,
-        listener
-      );
-  },
-  onBackupDownloadProgress: (
-    objectId: string,
-    shop: GameShop,
-    cb: (progress: AxiosProgressEvent) => void
-  ) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      progress: AxiosProgressEvent
-    ) => cb(progress);
-    ipcRenderer.on(`on-backup-download-progress-${objectId}-${shop}`, listener);
-    return () =>
-      ipcRenderer.removeListener(
-        `on-backup-download-progress-${objectId}-${shop}`,
-        listener
-      );
-  },
-  onBackupDownloadComplete: (
-    objectId: string,
-    shop: GameShop,
-    cb: (success: boolean) => void
-  ) => {
-    const listener = (_event: Electron.IpcRendererEvent, success: boolean) =>
-      cb(success);
-    ipcRenderer.on(`on-backup-download-complete-${objectId}-${shop}`, listener);
-    return () =>
-      ipcRenderer.removeListener(
-        `on-backup-download-complete-${objectId}-${shop}`,
-        listener
-      );
-  },
 
   /* Clipboard (renderer-side `navigator.clipboard.*` is deprecated in Electron 40+;
      direct `electron.clipboard` access from preload is also deprecated, so go through main via IPC) */
@@ -1215,6 +1398,7 @@ contextBridge.exposeInMainWorld("electron", {
   checkForUpdates: () => ipcRenderer.invoke("checkForUpdates"),
   restartAndInstallUpdate: () => ipcRenderer.invoke("restartAndInstallUpdate"),
   updateCheckerProceed: () => ipcRenderer.invoke("updateCheckerProceed"),
+  updateCheckerReady: () => ipcRenderer.invoke("updateCheckerReady"),
   updateCheckerApply: () => ipcRenderer.invoke("updateCheckerApply"),
   toggleConsoleWindow: () => ipcRenderer.invoke("toggleConsoleWindow"),
   onUpdateCheckerEvent: (cb: (event: unknown) => void) => {
@@ -1297,6 +1481,12 @@ contextBridge.exposeInMainWorld("electron", {
   loginRetroAchievements: (username: string, password: string) =>
     ipcRenderer.invoke("loginRetroAchievements", username, password),
   syncRalibretroLogin: () => ipcRenderer.invoke("syncRalibretroLogin"),
+  getAchievementSouvenirs: (ownerId: string) =>
+    ipcRenderer.invoke("getAchievementSouvenirs", ownerId),
+  deleteAchievementSouvenir: (request: DeleteAchievementSouvenirRequest) =>
+    ipcRenderer.invoke("deleteAchievementSouvenir", request),
+  openAchievementSouvenirsFolder: () =>
+    ipcRenderer.invoke("openAchievementSouvenirsFolder"),
 
   /* Auth */
   getAuth: () => ipcRenderer.invoke("getAuth"),
@@ -1448,6 +1638,8 @@ contextBridge.exposeInMainWorld("electron", {
     return () =>
       ipcRenderer.removeListener("on-combined-achievements-unlocked", listener);
   },
+  achievementNotificationRendererReady: () =>
+    ipcRenderer.send("achievement-notification-renderer-ready"),
   updateAchievementCustomNotificationWindow: () =>
     ipcRenderer.invoke("updateAchievementCustomNotificationWindow"),
   hideAchievementCustomNotificationWindow: () =>
@@ -1559,6 +1751,14 @@ contextBridge.exposeInMainWorld("electron", {
   cancelGameTransfer: (shop: GameShop, objectId: string) =>
     ipcRenderer.invoke("cancelGameTransfer", shop, objectId),
 
+  // Steam emulator integration (offline-play setup for custom games/repacks)
+  getSteamEmulatorStatus: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("getSteamEmulatorStatus", shop, objectId),
+  applySteamEmulator: (shop: GameShop, objectId: string) =>
+    ipcRenderer.invoke("applySteamEmulator", shop, objectId),
+  checkSteamEmulatorToolAvailability: () =>
+    ipcRenderer.invoke("checkSteamEmulatorToolAvailability"),
+
   // Add these to the electron object in contextBridge.exposeInMainWorld
   on: (channel: string, listener: (...args: any[]) => void) => {
     ipcRenderer.on(channel, listener);
@@ -1661,10 +1861,304 @@ contextBridge.exposeInMainWorld("electron", {
 
   searchMinervaCatalogue: (title: string, system?: EmulatorSystem) =>
     ipcRenderer.invoke("searchMinervaCatalogue", title, system),
-  getConsoleHowLongToBeat: (title: string) =>
-    ipcRenderer.invoke("getConsoleHowLongToBeat", title),
+  getConsoleHowLongToBeat: (title: string, system?: EmulatorSystem | "") =>
+    ipcRenderer.invoke("getConsoleHowLongToBeat", title, system),
   getConsoleGameMetadata: (title: string, objectId: string) =>
     ipcRenderer.invoke("getConsoleGameMetadata", title, objectId),
+
+  /* ── In-game overlay ────────────────────────────────────────────────── */
+  getOverlayContext: () =>
+    ipcRenderer.invoke("getOverlayContext") as Promise<
+      import("@types").HydraOverlayContext | null
+    >,
+  overlayRendererReady: () => ipcRenderer.invoke("overlayRendererReady"),
+  closeHydraOverlay: () => ipcRenderer.invoke("closeHydraOverlay"),
+  setOverlayPerformancePinned: (pinned: boolean) =>
+    ipcRenderer.invoke("setOverlayPerformancePinned", pinned),
+  getOverlayNote: () => ipcRenderer.invoke("getOverlayNote") as Promise<string>,
+  saveOverlayNote: (note: string) =>
+    ipcRenderer.invoke("saveOverlayNote", note),
+  onOverlayPerformance: (
+    cb: (value: import("@types").HydraOverlayPerformance) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      value: import("@types").HydraOverlayPerformance
+    ) => cb(value);
+    ipcRenderer.on("on-overlay-performance", listener);
+    return () => ipcRenderer.removeListener("on-overlay-performance", listener);
+  },
+  onOverlayMode: (cb: (mode: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, mode: string) =>
+      cb(mode);
+    ipcRenderer.on("on-overlay-mode", listener);
+    return () => ipcRenderer.removeListener("on-overlay-mode", listener);
+  },
+  onOverlayShown: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("on-overlay-shown", listener);
+    return () => ipcRenderer.removeListener("on-overlay-shown", listener);
+  },
+  onOverlayPerformancePin: (cb: (pinned: boolean) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, pinned: boolean) =>
+      cb(pinned);
+    ipcRenderer.on("on-overlay-performance-pin", listener);
+    return () =>
+      ipcRenderer.removeListener("on-overlay-performance-pin", listener);
+  },
+  onOverlayGamepadAction: (
+    cb: (action: import("@types").HydraOverlayGamepadAction) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      action: import("@types").HydraOverlayGamepadAction
+    ) => cb(action);
+    ipcRenderer.on("on-overlay-gamepad-action", listener);
+    return () =>
+      ipcRenderer.removeListener("on-overlay-gamepad-action", listener);
+  },
+  /* ── Active game process controls ───────────────────────────────────── */
+  getActiveGameProcessState: () =>
+    ipcRenderer.invoke("getActiveGameProcessState") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  pauseActiveGame: () =>
+    ipcRenderer.invoke("pauseActiveGame") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  resumeActiveGame: () =>
+    ipcRenderer.invoke("resumeActiveGame") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  closeActiveGame: () =>
+    ipcRenderer.invoke("closeActiveGame") as Promise<
+      import("@types").GameProcessControlState
+    >,
+  onGameProcessControlState: (
+    cb: (state: import("@types").GameProcessControlState) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: import("@types").GameProcessControlState
+    ) => cb(state);
+    ipcRenderer.on("on-game-process-control-state", listener);
+    return () =>
+      ipcRenderer.removeListener("on-game-process-control-state", listener);
+  },
+  /* ── Gameplay recorder / Instant Replay ─────────────────────────────── */
+  gameRecorderGetPreferences: () =>
+    ipcRenderer.invoke("gameRecorderGetPreferences"),
+  gameRecorderGetState: () => ipcRenderer.invoke("gameRecorderGetState"),
+  gameRecorderStart: () => ipcRenderer.invoke("gameRecorderStart"),
+  gameRecorderStop: () => ipcRenderer.invoke("gameRecorderStop"),
+  gameRecorderSaveReplay: () => ipcRenderer.invoke("gameRecorderSaveReplay"),
+  gameRecorderOpenOutputDirectory: () =>
+    ipcRenderer.invoke("gameRecorderOpenOutputDirectory"),
+  onGameRecorderState: (
+    cb: (state: import("@types").GameRecorderState) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: import("@types").GameRecorderState
+    ) => cb(state);
+    ipcRenderer.on("on-game-recorder-state", listener);
+    return () => ipcRenderer.removeListener("on-game-recorder-state", listener);
+  },
+  onGameRecorderCaptureCommand: (
+    cb: (command: GameRecorderCaptureCommand) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      command: GameRecorderCaptureCommand
+    ) => cb(command);
+    ipcRenderer.on("on-game-recorder-capture-command", listener);
+    return () =>
+      ipcRenderer.removeListener("on-game-recorder-capture-command", listener);
+  },
+  gameRecorderCommitSegment: (
+    metadata: GameRecorderSegmentMetadata,
+    payload: ArrayBuffer
+  ) => ipcRenderer.invoke("gameRecorderCommitSegment", metadata, payload),
+  gameRecorderCommitPcmChunk: (
+    metadata: import("@types").GameRecorderPcmChunkMetadata,
+    payload: ArrayBuffer
+  ) => ipcRenderer.invoke("gameRecorderCommitPcmChunk", metadata, payload),
+  gameRecorderCaptureError: (message: string) =>
+    ipcRenderer.invoke("gameRecorderCaptureError", message),
+  gameRecorderCaptureReady: () =>
+    ipcRenderer.invoke("gameRecorderCaptureReady"),
+
+  /* ── Spotify (overlay Now-playing) ──────────────────────────────────── */
+  spotifyGetStatus: () =>
+    ipcRenderer.invoke("spotifyGetStatus") as Promise<
+      import("@types").SpotifyStatus
+    >,
+  spotifyLogin: () =>
+    ipcRenderer.invoke("spotifyLogin") as Promise<
+      import("@types").SpotifyStatus
+    >,
+  spotifyLogout: () =>
+    ipcRenderer.invoke("spotifyLogout") as Promise<
+      import("@types").SpotifyStatus
+    >,
+  spotifyGetNowPlaying: () =>
+    ipcRenderer.invoke("spotifyGetNowPlaying") as Promise<
+      import("@types").SpotifyNowPlaying | null
+    >,
+  spotifyGetPlayback: () =>
+    ipcRenderer.invoke("spotifyGetPlayback") as Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPlaybackState | null
+      >
+    >,
+  spotifyGetDevices: () =>
+    ipcRenderer.invoke("spotifyGetDevices") as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyDevice[]>
+    >,
+  spotifyGetQueue: () =>
+    ipcRenderer.invoke("spotifyGetQueue") as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyQueue>
+    >,
+  spotifyGetHome: () =>
+    ipcRenderer.invoke("spotifyGetHome") as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifyHome>
+    >,
+  spotifySearch: (query: string) =>
+    ipcRenderer.invoke("spotifySearch", query) as Promise<
+      import("@types").SpotifyResult<import("@types").SpotifySearchResults>
+    >,
+  spotifyGetPlaylistItems: (playlistId: string, offset?: number) =>
+    ipcRenderer.invoke(
+      "spotifyGetPlaylistItems",
+      playlistId,
+      offset
+    ) as Promise<
+      import("@types").SpotifyResult<
+        import("@types").SpotifyPage<import("@types").SpotifyContentItem>
+      >
+    >,
+  spotifyPlaybackCommand: (command: import("@types").SpotifyPlaybackCommand) =>
+    ipcRenderer.invoke("spotifyPlaybackCommand", command) as Promise<
+      import("@types").SpotifyResult<true>
+    >,
+  spotifySetSaved: (uri: string, saved: boolean) =>
+    ipcRenderer.invoke("spotifySetSaved", uri, saved) as Promise<
+      import("@types").SpotifyResult<true>
+    >,
+  spotifyLibraryContains: (uris: string[]) =>
+    ipcRenderer.invoke("spotifyLibraryContains", uris) as Promise<
+      import("@types").SpotifyResult<Record<string, boolean>>
+    >,
+  spotifyOpenSettings: () =>
+    ipcRenderer.invoke("spotifyOpenSettings") as Promise<void>,
+  spotifyControl: (action: import("@types").SpotifyControlAction) =>
+    ipcRenderer.invoke("spotifyControl", action) as Promise<boolean>,
+  /* ── Shared music player (launcher + overlay, Deezer + yt-dlp) ───────── */
+  musicSearch: (query: string) =>
+    ipcRenderer.invoke("musicSearch", query) as Promise<
+      import("@types").MusicTrack[]
+    >,
+  musicGetState: () =>
+    ipcRenderer.invoke("musicGetState") as Promise<
+      import("@types").MusicPlayerState
+    >,
+  onMusicState: (cb: (state: import("@types").MusicPlayerState) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: import("@types").MusicPlayerState
+    ) => cb(state);
+    ipcRenderer.on("on-music-state", listener);
+    return () => ipcRenderer.removeListener("on-music-state", listener);
+  },
+  musicSetQueue: (tracks: import("@types").MusicTrack[], startIndex?: number) =>
+    ipcRenderer.invoke("musicSetQueue", tracks, startIndex),
+  musicAddToQueue: (track: import("@types").MusicTrack) =>
+    ipcRenderer.invoke("musicAddToQueue", track),
+  musicRemoveFromQueue: (index: number) =>
+    ipcRenderer.invoke("musicRemoveFromQueue", index),
+  musicClearQueue: () => ipcRenderer.invoke("musicClearQueue"),
+  musicPlay: (index?: number) =>
+    ipcRenderer.invoke("musicPlay", index) as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicPause: () => ipcRenderer.invoke("musicPause"),
+  musicResume: () =>
+    ipcRenderer.invoke("musicResume") as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicRefreshCurrent: () =>
+    ipcRenderer.invoke("musicRefreshCurrent") as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicStop: () => ipcRenderer.invoke("musicStop"),
+  musicNext: () =>
+    ipcRenderer.invoke("musicNext") as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicPrevious: () =>
+    ipcRenderer.invoke("musicPrevious") as Promise<
+      import("@types").MusicTrack | null
+    >,
+  musicSetShuffle: (enabled: boolean) =>
+    ipcRenderer.invoke("musicSetShuffle", enabled),
+  musicSetRepeat: (mode: import("@types").RepeatMode) =>
+    ipcRenderer.invoke("musicSetRepeat", mode),
+  musicSetVolume: (volume: number, muted?: boolean) =>
+    ipcRenderer.invoke("musicSetVolume", volume, muted),
+  musicSeek: (progressMs: number) =>
+    ipcRenderer.invoke("musicSeek", progressMs),
+  musicReportPlaybackProgress: (progressMs: number, durationMs: number) =>
+    ipcRenderer.invoke("musicReportPlaybackProgress", progressMs, durationMs),
+  musicGetPlaylists: () =>
+    ipcRenderer.invoke("musicGetPlaylists") as Promise<
+      import("@types").MusicPlaylist[]
+    >,
+  musicCreatePlaylist: (name: string) =>
+    ipcRenderer.invoke("musicCreatePlaylist", name) as Promise<
+      import("@types").MusicPlaylist
+    >,
+  musicDeletePlaylist: (id: string) =>
+    ipcRenderer.invoke("musicDeletePlaylist", id),
+  musicRenamePlaylist: (id: string, name: string) =>
+    ipcRenderer.invoke("musicRenamePlaylist", id, name),
+  musicAddToPlaylist: (
+    playlistId: string,
+    track: import("@types").MusicTrack
+  ) => ipcRenderer.invoke("musicAddToPlaylist", playlistId, track),
+  musicRemoveFromPlaylist: (playlistId: string, trackIndex: number) =>
+    ipcRenderer.invoke("musicRemoveFromPlaylist", playlistId, trackIndex),
+  musicPlayPlaylist: (playlistId: string, startIndex?: number) =>
+    ipcRenderer.invoke("musicPlayPlaylist", playlistId, startIndex) as Promise<
+      import("@types").MusicTrack | null
+    >,
+  /* ── Overlay pinned-apps launcher ───────────────────────────────────── */
+  getPinnedApps: () =>
+    ipcRenderer.invoke("getPinnedApps") as Promise<
+      import("@types").PinnedApp[]
+    >,
+  pickPinnedApp: () =>
+    ipcRenderer.invoke("pickPinnedApp") as Promise<
+      import("@types").PinnedApp[]
+    >,
+  removePinnedApp: (appPath: string) =>
+    ipcRenderer.invoke("removePinnedApp", appPath) as Promise<
+      import("@types").PinnedApp[]
+    >,
+  launchPinnedApp: (appPath: string) =>
+    ipcRenderer.invoke("launchPinnedApp", appPath) as Promise<string>,
+  /* ── Overlay volume mixer (per-app audio sessions) ──────────────────── */
+  getAudioSessions: () =>
+    ipcRenderer.invoke("getAudioSessions") as Promise<
+      import("@types").AudioSession[]
+    >,
+  setAudioSessionVolume: (pid: number, volume: number) =>
+    ipcRenderer.invoke(
+      "setAudioSessionVolume",
+      pid,
+      volume
+    ) as Promise<boolean>,
+  setAudioSessionMute: (pid: number, muted: boolean) =>
+    ipcRenderer.invoke("setAudioSessionMute", pid, muted) as Promise<boolean>,
   downloadSwitchKeys: () => ipcRenderer.invoke("downloadSwitchKeys"),
   searchMinervaGames: (query: string, limit?: number) =>
     ipcRenderer.invoke("searchMinervaGames", query, limit),
@@ -1673,28 +2167,39 @@ contextBridge.exposeInMainWorld("electron", {
     limit?: number,
     system?: EmulatorSystem
   ) => ipcRenderer.invoke("searchClassicsCatalogue", query, limit, system),
+  searchCatalogueGames: (query: string, limit?: number) =>
+    ipcRenderer.invoke("searchCatalogueGames", query, limit),
   getRandomClassics: (limit?: number) =>
     ipcRenderer.invoke("getRandomClassics", limit),
 
   // Cloud debugger
-  runCloudDebugger: () => ipcRenderer.invoke("runCloudDebugger"),
+  runCloudDebugger: (options?: { repair?: boolean }) =>
+    ipcRenderer.invoke("runCloudDebugger", options),
 
   // Debug console window
   openConsoleWindow: () => ipcRenderer.invoke("openConsoleWindow"),
-  onConsoleLog: (
-    cb: (entry: {
-      ts: number;
-      level: string;
-      scope: string;
-      text: string;
-    }) => void
+  getConsoleLogSnapshot: (afterId?: number) =>
+    ipcRenderer.invoke("getConsoleLogSnapshot", afterId) as Promise<
+      import("@shared").ConsoleLogSnapshot
+    >,
+  clearConsoleLogs: () =>
+    ipcRenderer.invoke("clearConsoleLogs") as Promise<
+      import("@shared").ConsoleLogSnapshot
+    >,
+  exportConsoleLogs: () =>
+    ipcRenderer.invoke("exportConsoleLogs") as Promise<{
+      canceled: boolean;
+      path: string | null;
+    }>,
+  onConsoleLogs: (
+    cb: (entries: import("@shared").ConsoleLogEntry[]) => void
   ): (() => void) => {
     const listener = (
       _: unknown,
-      entry: { ts: number; level: string; scope: string; text: string }
-    ) => cb(entry);
-    ipcRenderer.on("console:log", listener);
-    return () => ipcRenderer.off("console:log", listener);
+      entries: import("@shared").ConsoleLogEntry[]
+    ) => cb(entries);
+    ipcRenderer.on("console:logs", listener);
+    return () => ipcRenderer.off("console:logs", listener);
   },
 });
 

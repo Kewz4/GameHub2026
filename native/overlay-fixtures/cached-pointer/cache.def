@@ -1,0 +1,6 @@
+LIBRARY "gamehub-cached-pointer-cache64"
+EXPORTS
+    GameHubCachedPointerCacheCall
+    GameHubCachedPointerCacheInitialized
+    GameHubCachedPointerCachePreAttachProbeValue
+    GameHubCachedPointerCacheAddress

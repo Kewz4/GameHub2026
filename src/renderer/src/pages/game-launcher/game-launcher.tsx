@@ -130,13 +130,20 @@ export default function GameLauncher() {
     window.electron.closeGameLauncherWindow();
   };
 
-  const normalizedCoverImage =
-    gameAssets?.coverImageUrl?.replaceAll("\\", "/").trim() || "";
+  const normalizeImageUrl = (imageUrl?: string | null) =>
+    imageUrl?.replaceAll("\\", "/").trim() || "";
+
   const fallbackSteamCoverImage =
-    !normalizedCoverImage && shop === "steam" && objectId
+    shop === "steam" && objectId
       ? `https://shared.steamstatic.com/store_item_assets/steam/apps/${objectId}/library_600x900_2x.jpg`
       : "";
-  const coverImageSource = normalizedCoverImage || fallbackSteamCoverImage;
+  const coverImageSource =
+    normalizeImageUrl(game?.customLibraryImageUrl) ||
+    normalizeImageUrl(gameAssets?.coverImageUrl) ||
+    normalizeImageUrl(gameAssets?.libraryImageUrl) ||
+    normalizeImageUrl(game?.customIconUrl) ||
+    normalizeImageUrl(game?.iconUrl ?? gameAssets?.iconUrl) ||
+    fallbackSteamCoverImage;
   const gameTitle = game?.title ?? gameAssets?.title ?? "";
   const playTime = game?.playTimeInMilliseconds ?? 0;
   const achievementCount = game?.achievementCount ?? 0;
@@ -255,8 +262,11 @@ export default function GameLauncher() {
     };
   }, [isWindowsExecutable, objectId, shop]);
 
+  // A bad local or remote cover must not leave the launcher hidden forever.
   const isReady =
-    imageResolved && (coverImage ? imageLoaded : true) && colorExtracted;
+    imageResolved &&
+    (coverImage && !imageError ? imageLoaded : true) &&
+    colorExtracted;
 
   useEffect(() => {
     if (windowShown) return;
@@ -284,7 +294,7 @@ export default function GameLauncher() {
       {coverImage && (
         <div
           className="game-launcher__background"
-          style={{ backgroundImage: `url(${coverImage})` }}
+          style={{ backgroundImage: `url("${encodeURI(coverImage)}")` }}
         />
       )}
       <div className="game-launcher__overlay" />

@@ -1,24 +1,20 @@
 import { registerEvent } from "../register-event";
 import type { Download, StartGameDownloadPayload } from "@types";
-import {
-  DownloadManager,
-  DownloadOrchestrator,
-  HydraApi,
-  logger,
-} from "@main/services";
+import { DownloadOrchestrator, HydraApi, logger } from "@main/services";
 import { createGame } from "@main/services/library-sync";
 import { downloadsSublevel, gamesSublevel, levelKeys } from "@main/level";
 import {
   emulatorPlatformFolder,
+  getGlobalTrackers,
   handleDownloadError,
   isKnownDownloadError,
   prepareGameEntry,
 } from "@main/helpers";
 import path from "node:path";
 import type { EmulatorSystem } from "@types";
+import { Downloader } from "@shared";
 
-const startGameDownload = async (
-  _event: Electron.IpcMainInvokeEvent,
+export const startGameDownloadImpl = async (
   payload: StartGameDownloadPayload
 ) => {
   const {
@@ -34,6 +30,7 @@ const startGameDownload = async (
     targetFileName,
     alternateUris,
     emulatorSystem,
+    libraryOrigin,
   } = payload;
 
   // Console/emulator downloads are grouped under "Emulator Games/<platform>"
@@ -47,13 +44,21 @@ const startGameDownload = async (
     : payload.downloadPath;
 
   const gameKey = levelKeys.game(shop, objectId);
+  const customTrackers =
+    downloader === Downloader.Torrent ? await getGlobalTrackers() : undefined;
 
   logger.log(
     `[Downloads] Start requested for ${gameKey} (downloader=${downloader})`
   );
 
-  await prepareGameEntry({ gameKey, title, objectId, shop });
-  await DownloadManager.cancelDownload(gameKey);
+  await prepareGameEntry({
+    gameKey,
+    title,
+    objectId,
+    shop,
+    libraryOrigin:
+      libraryOrigin ?? (payload.customDownload ? "custom" : undefined),
+  });
 
   const download: Download = {
     shop,
@@ -78,10 +83,11 @@ const startGameDownload = async (
     alternateUris,
     fileSize: selectedFilesSize ?? null,
     emulatorSystem: emulatorSystem ?? null,
+    customDownload: payload.customDownload,
+    customTrackers,
   };
 
   try {
-    await downloadsSublevel.put(gameKey, download);
     await DownloadOrchestrator.startPreparedDownload(download);
 
     const updatedGame = await gamesSublevel.get(gameKey);
@@ -110,5 +116,10 @@ const startGameDownload = async (
     return handleDownloadError(err, downloader);
   }
 };
+
+const startGameDownload = async (
+  _event: Electron.IpcMainInvokeEvent,
+  payload: StartGameDownloadPayload
+) => startGameDownloadImpl(payload);
 
 registerEvent("startGameDownload", startGameDownload);

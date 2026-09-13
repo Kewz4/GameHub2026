@@ -1,0 +1,3744 @@
+// In-game overlay renderer. The BrowserWindow is transparent and sized to the
+// detected game client area, so only this workspace is painted over the game.
+body.overlay-window {
+  background: transparent !important;
+}
+
+body.overlay-widget-dragging,
+body.overlay-widget-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.overlay {
+  // Alias the legacy overlay names to GameHub's canonical, runtime-themeable
+  // design tokens. Active custom themes can therefore skin the overlay too.
+  // GameHub's own identity is predominantly ink/white; keep the app's surface,
+  // border and typography tokens while intentionally desaturating bright
+  // theme accents inside the overlay.
+  --overlay-highlight: color-mix(
+    in srgb,
+    var(--color-text-bright) 92%,
+    var(--color-background)
+  );
+  // App-level muted/faint tokens were designed for dense desktop UI and can
+  // fall below 4.5:1 over a game. The overlay is a 10-foot surface, so retain
+  // the current theme's foreground channel with accessible monochrome alpha.
+  --color-text-muted: rgba(var(--fg-rgb), 0.78);
+  --color-text-faint: rgba(var(--fg-rgb), 0.68);
+  --overlay-disabled-opacity: 0.72;
+  --color-primary: var(--overlay-highlight);
+  --color-accent: var(--overlay-highlight);
+  --ink: var(--color-text-bright);
+  --muted: var(--color-text-muted);
+  --faint: var(--color-text-faint);
+  --glass: color-mix(in srgb, var(--color-dark-background) 88%, transparent);
+  --glass-2: color-mix(in srgb, var(--color-background) 90%, transparent);
+  --brd: var(--color-border);
+  --accent: var(--overlay-highlight);
+  --good: var(--color-success);
+  --overlay-widget-surface: color-mix(
+    in srgb,
+    var(--color-background) 97%,
+    transparent
+  );
+  --overlay-elevation: 0 12px 32px rgba(0, 0, 0, 0.24);
+
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  font-family: "Noto Sans", system-ui, sans-serif;
+  color: var(--ink);
+
+  kbd {
+    font:
+      600 11px/1 ui-monospace,
+      Consolas,
+      monospace;
+    padding: 4px 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--brd);
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+    box-shadow: inset 0 -1px rgba(var(--bg-rgb), 0.35);
+  }
+
+  &--full {
+    display: flex;
+    background: color-mix(
+      in srgb,
+      var(--color-dark-background) 52%,
+      transparent
+    );
+  }
+
+  &--pinned,
+  &--toast {
+    background: transparent;
+    pointer-events: none;
+  }
+}
+
+.overlay-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-dark-background) 76%, transparent) 0,
+    transparent 18%,
+    transparent 82%,
+    color-mix(in srgb, var(--color-dark-background) 70%, transparent) 100%
+  );
+}
+
+.overlay-header {
+  position: relative;
+  z-index: 10000;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: color-mix(in srgb, var(--color-dark-background) 88%, transparent);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+
+  &__game {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+  &__cover {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    flex: none;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+    &--empty {
+      background: linear-gradient(
+        135deg,
+        var(--color-primary),
+        var(--color-accent)
+      );
+    }
+  }
+  &__title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 46ch;
+  }
+  &__meta {
+    margin: 3px 0 0;
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+  }
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  &__shortcut {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 4px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+  }
+  &__button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition:
+      color 120ms ease,
+      border-color 120ms ease,
+      background-color 120ms ease;
+
+    &:hover,
+    &.is-active {
+      color: var(--color-text-bright);
+      border-color: var(--color-border);
+      background: var(--color-surface-hover);
+    }
+  }
+}
+
+.overlay-close {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+  &:hover {
+    color: var(--color-text-bright);
+    background: var(--color-danger);
+  }
+}
+
+.overlay-grid {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin: 14px 18px 8px;
+}
+
+.overlay-col {
+  display: contents;
+}
+
+.overlay-card {
+  position: absolute;
+  background: var(--overlay-widget-surface);
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  box-shadow: var(--overlay-elevation);
+
+  &:focus-within {
+    outline: 1px solid var(--color-border);
+    outline-offset: 0;
+  }
+
+  &--perf {
+    width: clamp(250px, 18vw, 300px);
+    min-height: 174px;
+  }
+  &--ach {
+    width: clamp(290px, 22vw, 360px);
+    height: min(350px, calc(100% - 8px));
+  }
+  &--friends {
+    width: clamp(270px, 20vw, 330px);
+    max-height: min(310px, calc(100% - 8px));
+  }
+  &--music {
+    width: clamp(520px, 46vw, 720px);
+    height: min(590px, calc(100% - 8px));
+  }
+  &--capture {
+    width: clamp(390px, 34vw, 500px);
+    min-height: 196px;
+  }
+  &--mixer {
+    width: clamp(270px, 20vw, 330px);
+    max-height: min(285px, calc(100% - 8px));
+  }
+  &--pins {
+    width: clamp(330px, 28vw, 430px);
+    max-height: min(190px, calc(100% - 8px));
+  }
+  &--notes {
+    width: clamp(280px, 22vw, 340px);
+    height: min(185px, calc(100% - 8px));
+  }
+
+  &__head {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+
+    h2 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+      color: var(--color-text-bright);
+    }
+  }
+  &__title {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1;
+    flex-wrap: wrap;
+
+    h2 {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  &__icon {
+    width: 20px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    color: var(--color-text-muted);
+  }
+  &__count {
+    font:
+      500 11px/1.3 "Noto Sans",
+      system-ui,
+      sans-serif;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-faint);
+    white-space: nowrap;
+  }
+  &__tools {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+}
+
+.overlay-widget__drag {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  cursor: grab;
+  touch-action: none;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+
+  &:hover {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+
+  &.is-locked {
+    cursor: default;
+    opacity: 0.38;
+  }
+}
+
+.overlay-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+
+  input {
+    accent-color: var(--color-primary);
+  }
+}
+
+.overlay-perf {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+
+  &__fps {
+    font:
+      700 46px/0.9 ui-monospace,
+      "SF Mono",
+      Menlo,
+      monospace;
+    color: var(--overlay-highlight);
+    span {
+      display: block;
+      font: 600 11px/1 system-ui;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-top: 4px;
+    }
+  }
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+  }
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    color: var(--muted);
+    b {
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+}
+
+.overlay-ach {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+
+  &__item {
+    display: flex;
+    gap: 11px;
+    align-items: center;
+    opacity: 0.8;
+    img {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      flex: none;
+    }
+    p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    small {
+      color: var(--muted);
+      font-size: 11.5px;
+    }
+    &.is-unlocked {
+      opacity: 1;
+    }
+  }
+  &__empty {
+    color: var(--faint);
+    font-size: 12.5px;
+  }
+}
+
+.overlay-notes {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  &:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+}
+
+.overlay-foot {
+  text-align: center;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+// Pinned performance chip (top-left), non-interactive.
+.overlay-hud {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  display: flex;
+  gap: 14px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--glass);
+  border: 1px solid var(--brd);
+  backdrop-filter: blur(14px);
+
+  &__row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  &__label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  &__value {
+    font:
+      700 16px/1.1 ui-monospace,
+      monospace;
+    color: var(--overlay-highlight);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// Activation toast. Production bounds place this surface on the game window's
+// right edge; the final rules below provide the edge-connected entrance.
+.overlay-toast {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  max-width: 420px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--glass);
+  // No outline: the fill and shadow already separate it from the game.
+  border: none;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.7);
+
+  strong {
+    font-size: 14px;
+  }
+  p {
+    margin: 3px 0 0;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  &__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--good);
+    flex: none;
+    box-shadow: 0 0 12px var(--good);
+  }
+
+  &--error {
+    .overlay-toast__dot {
+      background: var(--color-danger);
+      box-shadow: 0 0 12px
+        color-mix(in srgb, var(--color-danger) 72%, transparent);
+    }
+  }
+}
+
+// Music player card.
+.overlay-card--music {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.overlay-music__tabs {
+  display: flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  padding: 2px;
+}
+.overlay-music__tab {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.overlay-music__tab:hover {
+  color: var(--ink);
+}
+.overlay-music__tab.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink);
+}
+
+// Now-playing.
+.overlay-music__np {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.overlay-music__np-top {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.overlay-music__np-art {
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  flex: none;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--brd) inset;
+}
+.overlay-music__np-art--empty {
+  background: linear-gradient(
+    145deg,
+    var(--color-primary),
+    var(--color-accent)
+  );
+}
+.overlay-music__np-body {
+  min-width: 0;
+  flex: 1;
+}
+.overlay-music__np-track {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__np-artist {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__np-album {
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__np-bar {
+  height: 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.overlay-music__np-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--good);
+}
+.overlay-music__np-time {
+  display: flex;
+  justify-content: space-between;
+  font:
+    600 11px/1 ui-monospace,
+    monospace;
+  color: var(--faint);
+  margin-top: -6px;
+}
+.overlay-music__np-ctrls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+.overlay-music__np-ctrls button {
+  background: none;
+  border: none;
+  color: var(--ink);
+  font-size: 15px;
+  cursor: pointer;
+  opacity: 0.92;
+}
+.overlay-music__np-ctrls button:hover {
+  opacity: 1;
+}
+.overlay-music__play {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-text-bright);
+  color: var(--color-dark-background);
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+}
+.overlay-music__mode {
+  font-size: 13px !important;
+}
+.overlay-music__mode.is-active {
+  opacity: 1 !important;
+  color: var(--good) !important;
+}
+
+// Queue.
+.overlay-music__queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--brd);
+  padding-top: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.overlay-music__queue-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.overlay-music__queue-clear {
+  background: none;
+  border: 1px solid var(--brd);
+  border-radius: 6px;
+  color: var(--faint);
+  font: inherit;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.overlay-music__queue-clear:hover {
+  color: var(--ink);
+}
+.overlay-music__queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  overflow-y: auto;
+}
+.overlay-music__queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background 0.1s;
+}
+.overlay-music__queue-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.overlay-music__queue-item.is-current {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.overlay-music__queue-art {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  flex: none;
+  object-fit: cover;
+}
+.overlay-music__queue-art--empty {
+  background: linear-gradient(
+    145deg,
+    var(--color-primary),
+    var(--color-accent)
+  );
+}
+.overlay-music__queue-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.overlay-music__queue-title {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__queue-artist {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__queue-rm {
+  background: none;
+  border: none;
+  color: var(--faint);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.overlay-music__queue-item:hover .overlay-music__queue-rm,
+.overlay-music__queue-item:focus-within .overlay-music__queue-rm,
+.overlay-music__queue-rm:focus-visible {
+  opacity: 1;
+}
+.overlay-music__queue-rm:hover {
+  color: var(--color-danger);
+}
+
+// Search.
+.overlay-music__search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+.overlay-music__search-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12.5px;
+}
+.overlay-music__search-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.overlay-music__search-input::placeholder {
+  color: var(--faint);
+}
+.overlay-music__search-results {
+  flex: 1;
+  overflow-y: auto;
+}
+.overlay-music__search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.overlay-music__search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  transition: background 0.1s;
+}
+.overlay-music__search-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.overlay-music__search-art {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex: none;
+  object-fit: cover;
+}
+.overlay-music__search-art--empty {
+  background: linear-gradient(
+    145deg,
+    var(--color-primary),
+    var(--color-accent)
+  );
+}
+.overlay-music__search-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.overlay-music__search-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__search-artist {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__search-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.overlay-music__search-add {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.overlay-music__search-add:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+// Playlists.
+.overlay-music__playlists {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+.overlay-music__plist-new {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--brd);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.overlay-music__plist-new:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.overlay-music__plist-create {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.overlay-music__plist-input {
+  flex: 1;
+  border-radius: 8px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+}
+.overlay-music__plist-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.overlay-music__plist-save,
+.overlay-music__plist-cancel {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.overlay-music__plist-save {
+  background: var(--good);
+  color: var(--color-dark-background);
+}
+.overlay-music__plist-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+.overlay-music__plist-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  overflow-y: auto;
+}
+.overlay-music__plist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.14);
+}
+.overlay-music__plist-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.overlay-music__plist-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-music__plist-count {
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.overlay-music__plist-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.overlay-music__plist-play,
+.overlay-music__plist-del {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.overlay-music__plist-play {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--good);
+}
+.overlay-music__plist-play:hover {
+  background: color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+.overlay-music__plist-del {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
+}
+.overlay-music__plist-del:hover {
+  background: color-mix(in srgb, var(--color-danger) 24%, transparent);
+}
+
+// Friends-online card.
+.overlay-friends {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+}
+.overlay-friend {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.overlay-friend__av {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex: none;
+  object-fit: cover;
+}
+.overlay-friend__av--empty {
+  background: linear-gradient(
+    150deg,
+    var(--color-primary),
+    var(--color-accent)
+  );
+}
+.overlay-friend__body {
+  flex: 1;
+  min-width: 0;
+}
+.overlay-friend__body p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-friend__body small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.overlay-friend__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+.overlay-friend__dot.is-online {
+  background: var(--good);
+  box-shadow: 0 0 8px var(--good);
+}
+
+// Pinned-apps quick launcher.
+.overlay-pins {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.overlay-pin-tile {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-radius: 11px;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    transform 0.1s,
+    background 0.15s;
+}
+.overlay-pin-tile:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+.overlay-pin-tile__glyph {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(
+    150deg,
+    var(--color-primary),
+    var(--color-accent)
+  );
+  color: var(--color-text-bright);
+  font-weight: 800;
+  font-size: 15px;
+}
+.overlay-pin-tile__icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+.overlay-pin-tile__label {
+  font-size: 10.5px;
+  color: var(--muted);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-pin-tile--add {
+  border-style: dashed;
+}
+.overlay-pin-tile--add .overlay-pin-tile__glyph {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+}
+
+// Per-app volume mixer.
+.overlay-mixer {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.overlay-mixer__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.overlay-mixer__row.is-muted {
+  opacity: 0.8;
+}
+.overlay-mixer__mute {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--brd);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.overlay-mixer__mute:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.overlay-mixer__body {
+  flex: 1;
+  min-width: 0;
+}
+.overlay-mixer__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.overlay-mixer__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.overlay-mixer__pct {
+  flex: none;
+  font:
+    600 11px/1 ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+.overlay-mixer__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+}
+.overlay-mixer__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(150deg, var(--accent), var(--overlay-highlight));
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+.overlay-mixer__slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+}
+
+// Final component-level theme alignment and controls added by the workspace UI.
+.overlay-foot {
+  position: relative;
+  z-index: 10000;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px 9px;
+  color: var(--color-text-faint);
+  background: color-mix(in srgb, var(--color-dark-background) 70%, transparent);
+}
+
+.overlay-notes {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border-radius: var(--radius-sm);
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text);
+
+  &::placeholder {
+    color: var(--color-text-faint);
+  }
+
+  &:focus {
+    outline-color: var(--color-accent);
+    border-color: color-mix(
+      in srgb,
+      var(--color-accent) 60%,
+      var(--color-border)
+    );
+  }
+}
+
+.overlay-perf__fps {
+  color: var(--color-primary);
+  text-shadow: none;
+}
+
+.overlay-perf__status {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 5px 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  line-height: 1.35;
+
+  svg {
+    flex: none;
+    margin-top: 1px;
+  }
+
+  &--permission-required,
+  &--error {
+    color: var(--color-warning);
+  }
+}
+
+.overlay-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  &__status {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    > div {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    strong {
+      color: var(--color-text-bright);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    small {
+      color: var(--color-text-muted);
+      font-size: 11.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &__dot {
+    width: 10px;
+    height: 10px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--color-text-faint);
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--color-text-faint) 12%, transparent);
+
+    &--buffering {
+      background: var(--color-text-bright);
+      box-shadow: 0 0 0 4px
+        color-mix(in srgb, var(--color-text-bright) 12%, transparent);
+    }
+
+    &--recording {
+      background: var(--color-danger);
+      box-shadow: 0 0 0 4px
+        color-mix(in srgb, var(--color-danger) 15%, transparent);
+      animation: overlay-capture-pulse 1.4s ease-in-out infinite;
+    }
+
+    &--error,
+    &--unavailable {
+      background: var(--color-warning);
+    }
+  }
+
+  &__buffer {
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--color-surface-hover);
+
+    span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--color-text-bright);
+      transform-origin: left center;
+      transition: transform 180ms ease;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  &__button,
+  &__folder {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font:
+      600 11.5px/1 "Noto Sans",
+      system-ui,
+      sans-serif;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease,
+      opacity 120ms ease;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      color: var(--color-text-bright);
+      border-color: color-mix(
+        in srgb,
+        var(--color-text-bright) 34%,
+        var(--color-border)
+      );
+      background: var(--color-surface-hover);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.38;
+    }
+  }
+
+  &__button {
+    padding: 0 12px;
+
+    &--primary {
+      flex: 1;
+      color: var(--color-dark-background);
+      background: var(--color-text-bright);
+      border-color: var(--color-text-bright);
+
+      &:hover:not(:disabled),
+      &:focus-visible {
+        color: var(--color-dark-background);
+        background: color-mix(
+          in srgb,
+          var(--color-text-bright) 86%,
+          var(--color-background)
+        );
+      }
+    }
+
+    &--recording {
+      color: var(--color-danger);
+      border-color: color-mix(
+        in srgb,
+        var(--color-danger) 45%,
+        var(--color-border)
+      );
+    }
+  }
+
+  &__folder {
+    width: 34px;
+    padding: 0;
+    flex: none;
+  }
+}
+
+@keyframes overlay-capture-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.overlay-hud {
+  inset: 8px;
+  width: auto;
+  height: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-dark-background) 88%, transparent);
+  border-color: var(--color-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+
+  &__row {
+    align-items: flex-start;
+  }
+
+  &__value {
+    color: var(--color-primary);
+  }
+}
+
+.overlay-toast {
+  inset: 18px;
+  width: auto;
+  max-width: none;
+  height: fit-content;
+  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-dark-background) 94%, transparent);
+  border: none;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+
+  &__dot {
+    background: var(--color-primary);
+    box-shadow: 0 0 14px
+      color-mix(in srgb, var(--color-primary) 70%, transparent);
+  }
+
+  // Title and hint share one baseline row so the toast stays a single line:
+  // stacking them made it tall, and the narrow window then wrapped and clipped
+  // the shortcut hint.
+  &__body {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
+
+    p {
+      margin: 0;
+    }
+  }
+
+  &--error &__body {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}
+
+.overlay-music__tabs {
+  width: 100%;
+  max-width: 100%;
+  gap: 3px;
+  padding: 0 0 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+.overlay-music__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+
+  &:hover {
+    color: var(--color-text-bright);
+    background: var(--color-surface-2);
+  }
+
+  &.is-active {
+    color: var(--color-text-bright);
+    background: transparent;
+    box-shadow: inset 0 -2px var(--color-primary);
+  }
+}
+
+.overlay-music__np-top {
+  padding: 4px;
+}
+
+.overlay-music__empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px 8px;
+  color: var(--color-text-muted);
+
+  h3,
+  p {
+    margin: 0;
+  }
+  h3 {
+    color: var(--color-text-bright);
+    font-size: 17px;
+  }
+  p {
+    max-width: 42ch;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  button {
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-dark-background);
+    background: var(--color-text-bright);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+      background: color-mix(
+        in srgb,
+        var(--color-text-bright) 86%,
+        var(--color-background)
+      );
+    }
+  }
+}
+
+.overlay-music__np-art {
+  width: 82px;
+  height: 82px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.overlay-music__np-art--empty,
+.overlay-music__queue-art--empty,
+.overlay-music__search-art--empty {
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    var(--color-accent)
+  );
+}
+
+.overlay-music__np-track {
+  font-size: 16px;
+  color: var(--color-text-bright);
+}
+
+.overlay-music__np-artist {
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.overlay-music__np-bar {
+  --track-progress: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  overflow: visible;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) 0 var(--track-progress),
+    var(--color-surface-hover) var(--track-progress) 100%
+  );
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid var(--color-dark-background);
+    background: var(--color-text-bright);
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.35);
+  }
+}
+
+.overlay-music__error,
+.overlay-music__notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  line-height: 1.35;
+
+  > span {
+    flex: 1;
+  }
+}
+
+.overlay-music__error {
+  color: color-mix(in srgb, var(--color-danger) 68%, var(--color-text-bright));
+  border: 1px solid color-mix(in srgb, var(--color-danger) 34%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 9%, transparent);
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 7px;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    background: var(--color-surface-hover);
+    cursor: pointer;
+  }
+}
+
+.overlay-music__notice {
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+
+  svg {
+    color: var(--color-primary);
+  }
+}
+
+.overlay-music__np-ctrls {
+  min-height: 42px;
+  justify-content: flex-start;
+  gap: 5px;
+
+  > button {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    color: var(--color-text);
+    opacity: 1;
+    transition:
+      color 120ms ease,
+      background-color 120ms ease,
+      transform 120ms ease;
+
+    &:hover {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+  }
+
+  .overlay-music__play {
+    width: 40px;
+    height: 40px;
+    margin: 0 2px;
+    color: var(--color-dark-background);
+    background: var(--color-text-bright);
+    box-shadow: 0 7px 18px
+      color-mix(in srgb, var(--color-primary) 26%, transparent);
+
+    &:hover {
+      color: var(--color-dark-background);
+      background: color-mix(
+        in srgb,
+        var(--color-text-bright) 88%,
+        var(--color-text-muted)
+      );
+      transform: scale(1.035);
+    }
+
+    &:disabled {
+      cursor: wait;
+      opacity: 0.8;
+    }
+  }
+}
+
+.overlay-music__spinner {
+  width: 17px;
+  height: 17px;
+  border: 2px solid rgba(255, 255, 255, 0.36);
+  border-top-color: var(--color-text-bright);
+  border-radius: 50%;
+  animation: overlay-spin 700ms linear infinite;
+}
+
+@keyframes overlay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.overlay-music__volume {
+  min-width: 128px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+
+  button {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  input {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 88px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-surface-hover);
+    cursor: pointer;
+
+    &::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--color-text-bright);
+    }
+  }
+}
+
+.overlay-music__queue {
+  border-top-color: var(--color-border);
+}
+
+.overlay-music__queue-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-faint);
+  background: var(--color-surface);
+
+  &:hover {
+    color: var(--color-danger);
+    background: var(--color-surface-hover);
+  }
+}
+
+.overlay-music__queue-item {
+  gap: 4px;
+
+  &:hover {
+    background: var(--color-surface);
+  }
+
+  &.is-current {
+    background: color-mix(
+      in srgb,
+      var(--color-primary) 10%,
+      var(--color-surface)
+    );
+    box-shadow: inset 2px 0 var(--color-primary);
+  }
+}
+
+.overlay-music__queue-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.overlay-music__queue-rm {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    color: var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  }
+}
+
+.overlay-music__search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-faint);
+  background: var(--color-surface);
+
+  &:focus-within {
+    color: var(--color-primary);
+    border-color: color-mix(
+      in srgb,
+      var(--color-primary) 54%,
+      var(--color-border)
+    );
+    outline: 2px solid color-mix(in srgb, var(--color-primary) 14%, transparent);
+  }
+}
+
+.overlay-music__search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 0;
+  border: 0;
+  outline: 0 !important;
+  background: transparent;
+  color: var(--color-text);
+}
+
+.overlay-music__search-item {
+  padding: 7px;
+
+  &:hover {
+    background: var(--color-surface);
+  }
+}
+
+.overlay-music__search-play,
+.overlay-music__search-add,
+.overlay-music__search-plist-btn {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+}
+
+.overlay-music__search-play {
+  color: var(--color-dark-background);
+  border-color: transparent;
+  background: var(--color-primary);
+
+  &:hover {
+    color: var(--color-dark-background);
+    background: color-mix(
+      in srgb,
+      var(--color-text-bright) 88%,
+      var(--color-text-muted)
+    );
+  }
+}
+
+.overlay-music__search-plist {
+  position: relative;
+}
+
+.overlay-music__search-plist-btn {
+  width: 30px;
+  padding: 0;
+}
+
+.overlay-music__search-plist-drop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 40;
+  width: 180px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-dark-background);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
+
+  button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+  }
+}
+
+.overlay-music__plist-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-style: solid;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+}
+
+.overlay-music__plist-input {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.overlay-music__plist-save {
+  color: var(--color-dark-background);
+  background: var(--color-primary);
+}
+
+.overlay-music__plist-cancel {
+  color: var(--color-text-muted);
+  background: var(--color-surface-hover);
+}
+
+.overlay-music__plist-item {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.overlay-music__plist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+}
+
+.overlay-music__plist-info {
+  flex: 1;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.overlay-music__plist-play {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
+}
+
+.overlay-music__plist-del {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 9%, transparent);
+}
+
+.overlay-music__plist-tracks {
+  padding: 0 7px 7px;
+  border-top: 1px solid var(--color-border);
+}
+
+.overlay-music__plist-track {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background: var(--color-surface-hover);
+  }
+}
+
+.overlay-music__plist-track-main {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) minmax(90px, 0.65fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 6px;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.overlay-music__plist-track-idx,
+.overlay-music__plist-track-artist {
+  color: var(--color-text-faint);
+  font-size: 10.5px;
+}
+
+.overlay-music__plist-track-title,
+.overlay-music__plist-track-artist {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlay-music__plist-track-title {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.overlay-music__plist-track-remove {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  }
+}
+
+.overlay-friend,
+.overlay-mixer__row {
+  padding: 5px;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background: var(--color-surface);
+  }
+}
+
+.overlay-friend__dot.is-online {
+  background: var(--color-primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 65%, transparent);
+}
+
+.overlay-pin-tile {
+  color: var(--color-text);
+  background: transparent;
+  border-color: transparent;
+
+  &:hover {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+    border-color: transparent;
+  }
+}
+
+.overlay-pin-tile__glyph {
+  color: var(--color-primary);
+  background: transparent;
+}
+
+.overlay-pin-tile--add .overlay-pin-tile__glyph {
+  border-color: var(--color-border);
+}
+
+body.overlay-controller-navigation
+  .overlay
+  :where(button, input, textarea, select, [tabindex]):focus-visible,
+body.overlay-controller-navigation
+  .overlay
+  :where(button, input, textarea, select, [tabindex]):focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+.overlay-mixer__mute:hover {
+  background: var(--color-surface-hover);
+}
+
+.overlay-mixer__slider {
+  background: var(--color-surface-hover);
+}
+
+.overlay-mixer__slider::-webkit-slider-thumb,
+.overlay-mixer__slider::-moz-range-thumb {
+  background: var(--color-primary);
+}
+
+@media (max-width: 1100px), (max-height: 720px) {
+  .overlay-header {
+    min-height: 64px;
+    padding-block: 8px;
+
+    &__cover {
+      width: 44px;
+      height: 44px;
+    }
+
+    &__shortcut span {
+      display: none;
+    }
+  }
+
+  .overlay-grid {
+    margin: 10px 12px 6px;
+  }
+
+  .overlay-card {
+    &--perf {
+      width: min(255px, calc(100% - 8px));
+    }
+
+    &--ach {
+      width: min(300px, calc(100% - 8px));
+      height: min(300px, calc(100% - 8px));
+    }
+
+    &--friends,
+    &--mixer {
+      width: min(280px, calc(100% - 8px));
+    }
+
+    &--music {
+      width: min(560px, calc(100% - 8px));
+      height: min(500px, calc(100% - 8px));
+    }
+
+    &--capture {
+      width: min(440px, calc(100% - 8px));
+    }
+
+    &--pins {
+      width: min(350px, calc(100% - 8px));
+    }
+
+    &--notes {
+      width: min(290px, calc(100% - 8px));
+      height: min(165px, calc(100% - 8px));
+    }
+  }
+
+  .overlay-music__np-art {
+    width: 66px;
+    height: 66px;
+  }
+}
+
+@media (max-width: 720px) {
+  .overlay-header__shortcut {
+    display: none;
+  }
+
+  .overlay-card--music {
+    width: calc(100% - 4px);
+  }
+
+  .overlay-music__search-actions {
+    .overlay-music__search-play,
+    .overlay-music__search-add {
+      span {
+        display: none;
+      }
+    }
+  }
+
+  .overlay-music__volume {
+    min-width: 30px;
+
+    input {
+      display: none;
+    }
+  }
+}
+
+// Freeform workspace: the game and action areas are compact floating docks,
+// leaving the full game window available for movable widgets.
+body.overlay-widget-resizing,
+body.overlay-widget-resizing * {
+  cursor: nwse-resize !important;
+  user-select: none !important;
+}
+
+.overlay-panel {
+  display: block;
+  background: none;
+}
+
+.overlay-header {
+  position: absolute;
+  inset: 12px 12px auto;
+  min-height: 0;
+  padding: 0;
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  pointer-events: none;
+
+  &__game,
+  &__actions {
+    pointer-events: auto;
+    border: 1px solid var(--color-border);
+    background: color-mix(
+      in srgb,
+      var(--color-dark-background) 91%,
+      transparent
+    );
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(22px) saturate(1.1);
+  }
+
+  &__game {
+    max-width: min(46vw, 580px);
+    padding: 7px 12px 7px 7px;
+    border-radius: var(--radius-lg);
+  }
+
+  &__identity {
+    min-width: 0;
+  }
+
+  &__clock {
+    flex: none;
+    display: grid;
+    gap: 2px;
+    margin-left: auto;
+    padding-left: 11px;
+    border-left: 1px solid var(--color-border);
+    color: var(--color-text-bright);
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+  }
+
+  &__clock-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    min-height: 14px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+
+    svg {
+      flex: none;
+      color: currentColor;
+      stroke-width: 1.8;
+    }
+
+    &--date {
+      color: var(--color-text-muted);
+      font-size: 10px;
+      font-weight: 600;
+    }
+  }
+
+  &__cover {
+    width: 38px;
+    height: 38px;
+  }
+
+  &__title {
+    max-width: 36ch;
+    font-size: 14px;
+  }
+
+  &__meta {
+    margin-top: 1px;
+    font-size: 11px;
+  }
+
+  &__actions {
+    position: relative;
+    gap: 5px;
+    padding: 5px;
+    border-radius: var(--radius-lg);
+  }
+
+  &__shortcut {
+    margin: 0 3px 0 4px;
+  }
+
+  &__button {
+    width: 32px;
+    height: 32px;
+  }
+
+  &__widget-button {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 650;
+    cursor: pointer;
+
+    &:hover,
+    &.is-active {
+      color: var(--color-text-bright);
+      border-color: var(--color-border);
+      background: var(--color-surface-hover);
+    }
+  }
+
+  &__process {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding-right: 4px;
+    border-right: 1px solid var(--color-border);
+  }
+
+  &__process-button {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+
+    &--danger:hover:not(:disabled) {
+      color: var(--color-danger);
+      background: color-mix(in srgb, var(--color-danger) 11%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+  }
+}
+
+.overlay-close {
+  width: 32px;
+  height: 32px;
+}
+
+.overlay-grid {
+  position: absolute;
+  inset: 0;
+  margin: 10px;
+}
+
+.overlay-card {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: none;
+  max-height: none;
+  padding: 14px;
+  container-type: size;
+  container-name: overlay-widget;
+
+  &--perf,
+  &--ach,
+  &--capture,
+  &--music,
+  &--friends,
+  &--mixer,
+  &--pins,
+  &--notes {
+    max-height: none;
+  }
+
+  &__head {
+    flex: none;
+    min-height: 32px;
+    align-items: flex-start;
+  }
+}
+
+// Editing is secondary to the widget's content. One labelled options control
+// keeps narrow headers readable; the menu remains in the overlay focus scope.
+.overlay-card[data-layout-locked="false"] .overlay-card__title {
+  cursor: grab;
+  touch-action: none;
+}
+
+.overlay-widget__options-trigger {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded="true"] {
+    background: var(--color-surface-hover);
+    color: var(--color-text-bright);
+  }
+}
+
+.overlay-widget-options {
+  position: fixed;
+  z-index: 12000;
+  width: min(220px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: var(--color-background);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+
+  p {
+    margin: 4px 6px 8px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+  }
+
+  button {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible {
+      background: var(--color-surface-hover);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+}
+
+.overlay-widget-menu-wrap {
+  position: relative;
+}
+
+.overlay-widget-menu {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 9px);
+  right: 0;
+  width: 270px;
+  padding: 8px;
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-dark-background) 97%, transparent);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
+
+  &__heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 7px 8px;
+    border-bottom: 1px solid var(--color-border);
+
+    strong {
+      color: var(--color-text-bright);
+      font-size: 12.5px;
+    }
+
+    small {
+      color: var(--color-text-faint);
+      font-size: 10.5px;
+    }
+  }
+
+  label {
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 7px;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 11.5px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--color-surface-hover);
+    }
+
+    &.is-disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    input {
+      accent-color: var(--color-text-bright);
+    }
+
+    span {
+      flex: 1;
+    }
+
+    small {
+      color: var(--color-text-faint);
+      font-size: 9.5px;
+    }
+  }
+
+  &__reset {
+    width: 100%;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 5px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+  }
+}
+
+.overlay-widget__tool {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+}
+
+.overlay-card--perf .overlay-pin span {
+  display: none;
+}
+
+.overlay-widget__resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: 0.92;
+
+  &:hover {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+    opacity: 1;
+  }
+
+  &.is-locked {
+    pointer-events: none;
+    opacity: 0;
+  }
+}
+
+.overlay-ach__filters {
+  display: flex;
+  gap: 2px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  flex: none;
+
+  button {
+    min-height: 30px;
+    padding: 0 8px;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-faint);
+    background: transparent;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 650;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover,
+    &.is-active {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+    }
+
+    &.is-active {
+      box-shadow: inset 0 -2px var(--color-text-bright);
+    }
+  }
+}
+
+.overlay-ach__item {
+  align-items: flex-start;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+
+  &:hover {
+    background: var(--color-surface);
+  }
+}
+
+.overlay-ach__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.overlay-ach__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+
+  em {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0;
+    border: none;
+    color: var(--color-text-faint);
+    background: transparent;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 650;
+
+    &.is-unlocked {
+      color: var(--color-text-bright);
+    }
+
+    &.is-missable {
+      color: var(--color-warning);
+    }
+  }
+}
+
+.overlay-capture__replay {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--color-text-muted);
+    font-size: 10.5px;
+  }
+
+  select {
+    min-height: 30px;
+    padding: 0 28px 0 9px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-bright);
+    background: var(--color-surface);
+    font: inherit;
+    font-size: 10.5px;
+    cursor: pointer;
+
+    &[data-controller-editing="true"] {
+      outline: 2px solid var(--color-text-bright);
+      outline-offset: 3px;
+    }
+  }
+}
+
+.overlay-mixer__adjust {
+  width: 100%;
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 5px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &[aria-expanded="true"] {
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+
+  svg {
+    color: var(--color-text-faint);
+  }
+}
+
+.overlay-mixer__mute {
+  color: var(--color-text-bright);
+  background: var(--color-surface);
+}
+
+.overlay-mixer__slider {
+  display: block;
+  width: calc(100% - 16px);
+  min-width: 0;
+  margin: 6px 8px 3px;
+
+  &[data-controller-editing="true"] {
+    outline: 2px solid var(--color-text-bright);
+    outline-offset: 5px;
+  }
+}
+
+.overlay-music__volume {
+  position: relative;
+  min-width: 0;
+  margin-left: auto;
+
+  .overlay-music__volume-trigger {
+    width: auto;
+    min-width: 58px;
+    padding: 0 8px;
+    display: inline-flex;
+    gap: 5px;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+
+    span {
+      font-size: 10px;
+      font-weight: 650;
+    }
+  }
+
+  &-panel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 40;
+    width: 170px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-dark-background);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.42);
+
+    input {
+      flex: 1;
+      min-width: 0;
+
+      &[data-controller-editing="true"] {
+        outline: 2px solid var(--color-text-bright);
+        outline-offset: 5px;
+      }
+    }
+  }
+}
+
+// Primary music controls use a light branded surface with dark glyphs. The
+// previous white-on-white combination made Play and queue actions disappear.
+.overlay-music__np-ctrls .overlay-music__play,
+.overlay-music__search-play,
+.overlay-music__plist-save {
+  color: var(--color-dark-background) !important;
+  border-color: var(--color-text-bright) !important;
+  background: var(--color-text-bright) !important;
+
+  &:hover {
+    color: var(--color-dark-background) !important;
+    background: color-mix(
+      in srgb,
+      var(--color-text-bright) 86%,
+      var(--color-background)
+    ) !important;
+  }
+}
+
+.overlay-music__search-add,
+.overlay-music__search-plist-btn {
+  color: var(--color-text-bright);
+  background: var(--color-surface);
+}
+
+.overlay-music__np-bar[data-controller-editing="true"] {
+  outline: 2px solid var(--color-text-bright);
+  outline-offset: 5px;
+}
+
+.overlay-foot {
+  display: none;
+}
+
+.overlay--toast {
+  overflow: hidden;
+}
+
+@keyframes overlay-toast-enter-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+
+  55% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.overlay-toast {
+  inset: 0;
+  box-sizing: border-box;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: auto;
+  min-height: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 14px;
+  overflow: hidden;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  background: color-mix(in srgb, var(--color-dark-background) 98%, transparent);
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  animation: overlay-toast-enter-from-right 280ms cubic-bezier(0.16, 1, 0.3, 1)
+    both;
+  transform-origin: right center;
+  will-change: transform, opacity;
+
+  &__dot {
+    box-shadow: none;
+  }
+
+  &__body {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+
+  strong {
+    flex: none;
+    white-space: nowrap;
+    line-height: 1.25;
+  }
+
+  p {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
+  }
+
+  &--error {
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+
+    strong {
+      min-width: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-capture__buffer span {
+    transition: none;
+  }
+
+  .overlay-toast {
+    animation-duration: 1ms;
+  }
+}
+
+@media (max-width: 639px) {
+  .overlay-toast {
+    align-items: center;
+
+    &__body {
+      flex-direction: column;
+      align-items: flex-start;
+      flex-wrap: nowrap;
+      gap: 4px;
+    }
+  }
+}
+
+@media (max-width: 900px), (max-height: 640px) {
+  .overlay-header {
+    inset: 8px 8px auto;
+  }
+
+  .overlay-header__game {
+    max-width: 42vw;
+  }
+
+  .overlay-header__clock {
+    gap: 1px;
+    padding-left: 8px;
+  }
+
+  .overlay-header__shortcut,
+  .overlay-header__widget-button span,
+  .overlay-header__process-button span {
+    display: none;
+  }
+
+  .overlay-grid {
+    margin: 7px;
+  }
+}
+
+// On compact game windows the freeform widgets keep their desktop positions,
+// but their normalized widths can be close to the minimum allowed size. Keep
+// header names and telemetry values ahead of optional metadata and chrome.
+@media (max-width: 1100px) {
+  .overlay-card {
+    gap: 8px;
+    padding: 9px;
+
+    &__head {
+      min-width: 0;
+      gap: 4px;
+    }
+
+    &__title {
+      flex: 1;
+      gap: 5px;
+
+      h2 {
+        flex: none;
+        overflow: visible;
+        font-size: 11px;
+      }
+    }
+
+    &__icon {
+      width: 22px;
+      height: 22px;
+    }
+
+    &__tools {
+      flex: none;
+      gap: 2px;
+    }
+  }
+
+  .overlay-card:not(.overlay-card--capture) .overlay-card__count {
+    display: none;
+  }
+
+  .overlay-card--capture .overlay-card__count {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .overlay-widget__tool,
+  .overlay-widget__drag {
+    width: 20px;
+    height: 20px;
+  }
+
+  .overlay-pin {
+    flex: none;
+  }
+
+  .overlay-card--perf .overlay-card__head {
+    flex-wrap: nowrap;
+  }
+
+  .overlay-ach__filters {
+    flex-wrap: wrap;
+    overflow-x: hidden;
+  }
+
+  .overlay-perf {
+    min-width: 0;
+    gap: 8px;
+
+    &__fps {
+      flex: none;
+      font-size: 38px;
+    }
+
+    &__rows {
+      flex: 1;
+      min-width: 0;
+      gap: 5px;
+      font-size: 11.5px;
+    }
+
+    &__row {
+      min-width: 0;
+      gap: 5px;
+
+      span {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      b {
+        flex: none;
+      }
+    }
+  }
+}
+
+// ── In-overlay select ───────────────────────────────────────────────────────
+// Replaces native <select>: an OS dropdown popup is a separate window and is
+// never composited into the offscreen surface painted into the game, so the
+// list appeared behind everything. The list itself is portaled to the overlay
+// root (see overlay-select.tsx) and positioned against the viewport.
+.overlay-select {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.overlay-select__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 9px;
+  border-radius: var(--radius-md, 8px);
+  border: none;
+  background: color-mix(in srgb, var(--color-text) 9%, transparent);
+  color: var(--color-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-text) 16%, transparent);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--overlay-highlight, #fff);
+    outline-offset: 1px;
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
+.overlay-select__value {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.overlay-select__caret {
+  flex: none;
+  font-size: 9px;
+  color: var(--color-text-muted);
+}
+
+.overlay-select__list {
+  position: fixed;
+  // Above every widget card and the overlay header.
+  z-index: 12000;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: var(--radius-md, 8px);
+  border: none;
+  background: color-mix(in srgb, var(--color-dark-background) 97%, transparent);
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px) saturate(1.2);
+}
+
+.overlay-select__option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &[data-active="true"] {
+    background: color-mix(in srgb, var(--color-text) 12%, transparent);
+  }
+  &.is-selected {
+    color: var(--overlay-highlight, #fff);
+    font-weight: 700;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--overlay-highlight, #fff);
+    outline-offset: -2px;
+  }
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.overlay-capture__replay-length {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: 10.5px;
+
+  .overlay-select {
+    flex: 0 1 auto;
+    max-width: 62%;
+  }
+}
+
+// ── Controller affordances ──────────────────────────────────────────────────
+// LB/RB chips sit at both ends of every tab strip so it is obvious the bumpers
+// switch tabs — the binding is otherwise invisible on a controller.
+.overlay-tab-bumper {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 6px;
+  border: none;
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+  color: var(--color-text-muted);
+  font:
+    700 9.5px/1 ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  user-select: none;
+  pointer-events: none;
+}
+
+.overlay-tab-bumper--left {
+  margin-right: 2px;
+}
+.overlay-tab-bumper--right {
+  margin-left: auto;
+}
+
+// While navigating with a controller, make the widget that owns focus obvious:
+// the focus ring alone is easy to lose across a screen-wide scatter of panels.
+body.overlay-controller-navigation .overlay-card:focus-within {
+  outline-color: color-mix(
+    in srgb,
+    var(--color-primary) 55%,
+    var(--color-border)
+  );
+  box-shadow: var(--overlay-elevation);
+}
+
+// ── Floating GameHub chrome ─────────────────────────────────────────────────
+// Keep the freeform workspace genuinely full-screen. Game identity and global
+// actions are compact glass pills, not a full-width bar that blocks widget
+// placement at the top of the game window.
+.overlay--full {
+  .overlay-panel {
+    display: block;
+  }
+
+  .overlay-header {
+    position: absolute;
+    inset: 12px 16px auto;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    pointer-events: none;
+
+    &__game,
+    &__actions {
+      pointer-events: auto;
+      border: none;
+      background: color-mix(
+        in srgb,
+        var(--color-dark-background) 94%,
+        transparent
+      );
+      box-shadow: var(--overlay-elevation);
+      backdrop-filter: none;
+    }
+
+    &__game {
+      min-height: 58px;
+      padding: 7px 10px;
+      border-radius: var(--radius-lg);
+    }
+
+    &__actions {
+      min-height: 48px;
+      padding: 6px;
+      border-radius: var(--radius-lg);
+    }
+
+    &__cover--empty {
+      background: var(--color-surface-hover);
+      box-shadow: inset 0 0 0 1px var(--color-border);
+    }
+  }
+
+  .overlay-grid {
+    position: absolute;
+    inset: 8px;
+    margin: 0;
+  }
+}
+
+// Drag and resize are real controls for non-pointer users. Pointer users still
+// drag the same handles; A/Enter engages an exact D-pad edit mode.
+.overlay-widget__drag,
+.overlay-widget__resize {
+  padding: 0;
+  border: 0;
+  font: inherit;
+
+  &[aria-pressed="true"] {
+    color: var(--color-dark-background);
+    background: var(--color-text-bright);
+    opacity: 1;
+  }
+}
+
+.overlay-widget__drag:disabled {
+  pointer-events: none;
+}
+
+[data-controller-focus-region] {
+  scroll-margin: 8px;
+
+  &:focus {
+    outline: none;
+  }
+
+  &[data-controller-editing="true"] {
+    outline: 2px solid var(--color-text-bright);
+    outline-offset: -2px;
+    box-shadow: inset 0 0 0 4px
+      color-mix(in srgb, var(--color-text-bright) 10%, transparent);
+  }
+}
+
+.overlay-confirm-backdrop {
+  position: fixed;
+  z-index: 13000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.overlay-confirm {
+  width: min(430px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-dark-background) 98%, transparent);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.68);
+
+  &__icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    color: var(--color-text-bright);
+    background: var(--color-surface-hover);
+  }
+
+  &__copy {
+    min-width: 0;
+
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--color-text-bright);
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    p {
+      margin-top: 7px;
+      color: var(--color-text-muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  }
+
+  &__actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+
+    button {
+      min-height: 38px;
+      padding: 0 15px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-text);
+      background: var(--color-surface-hover);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  }
+
+  &__danger {
+    border-color: var(--color-text-bright) !important;
+    color: var(--color-dark-background) !important;
+    background: var(--color-text-bright) !important;
+  }
+}
+
+.overlay-controller-keyboard-backdrop {
+  position: fixed;
+  z-index: 13100;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(10px);
+}
+
+.overlay-controller-keyboard {
+  width: min(920px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl, 18px);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-dark-background) 98%, transparent);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.7);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--color-text-bright);
+      font-size: 15px;
+    }
+
+    p {
+      margin-top: 2px;
+      color: var(--color-text-muted);
+      font-size: 10.5px;
+    }
+  }
+
+  &__preview {
+    min-height: 42px;
+    max-height: 86px;
+    display: block;
+    margin: 12px 0;
+    padding: 10px 12px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-bright);
+    background: var(--color-background);
+    font-size: 13px;
+
+    .is-placeholder {
+      color: var(--color-text-faint);
+    }
+  }
+
+  &__caret {
+    display: inline-block;
+    width: 2px;
+    height: 1.15em;
+    margin: 0 1px -0.18em;
+    border-radius: 2px;
+    background: var(--color-text-bright);
+    animation: overlay-keyboard-caret 900ms steps(1, end) infinite;
+  }
+
+  &__keys {
+    display: grid;
+    gap: 7px;
+  }
+
+  &__row {
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+
+    button {
+      min-width: 48px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 10px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      color: var(--color-text);
+      background: var(--color-surface-hover);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+
+      &[aria-pressed="true"] {
+        color: var(--color-dark-background);
+        background: var(--color-text-bright);
+      }
+    }
+
+    &--actions {
+      margin-top: 2px;
+
+      button {
+        min-width: 82px;
+      }
+    }
+  }
+
+  &__space {
+    flex: 1 1 240px;
+    max-width: 320px;
+  }
+
+  &__done {
+    color: var(--color-dark-background) !important;
+    background: var(--color-text-bright) !important;
+  }
+}
+
+@keyframes overlay-keyboard-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.overlay-controller-hints {
+  position: absolute;
+  z-index: 11900;
+  left: 50%;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-dark-background) 95%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+  font-size: 10.5px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+
+  kbd {
+    min-width: 22px;
+    padding: 3px 5px;
+    text-align: center;
+  }
+
+  &__tabs {
+    display: contents;
+  }
+}
+
+.overlay--full:has([data-widget="music"] :focus)
+  .overlay-controller-hints__tabs {
+  display: contents;
+}
+
+body.overlay-controller-navigation .overlay-controller-hints {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.overlay-pin-entry {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
+
+  .overlay-pin-tile {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  &__remove {
+    position: absolute;
+    z-index: 2;
+    top: 4px;
+    right: 4px;
+    width: 23px;
+    height: 23px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    background: color-mix(
+      in srgb,
+      var(--color-dark-background) 92%,
+      transparent
+    );
+    cursor: pointer;
+    opacity: 0.72;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--color-text-bright);
+      background: var(--color-surface-hover);
+      opacity: 1;
+    }
+  }
+}
+
+// Preserve a visibly unavailable state without washing labels/icons below the
+// Xbox contrast floor. Kept at the end so older widget-specific opacity rules
+// cannot accidentally make disabled tools disappear in light/custom themes.
+.overlay :where(button, input, select, textarea):disabled,
+.overlay [aria-disabled="true"],
+.overlay .is-disabled {
+  opacity: var(--overlay-disabled-opacity);
+}
+
+@media (max-width: 900px), (max-height: 650px) {
+  .overlay--full .overlay-header {
+    inset: 7px 7px auto;
+
+    &__game {
+      min-height: 48px;
+      padding: 4px 6px;
+    }
+
+    &__actions {
+      min-height: 42px;
+      padding: 3px;
+    }
+  }
+
+  .overlay-controller-hints {
+    bottom: 6px;
+    min-height: 30px;
+    max-width: calc(100% - 14px);
+    gap: 5px;
+    padding: 4px 7px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-controller-hints {
+    transition: none;
+  }
+
+  .overlay-controller-keyboard__caret {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .overlay {
+    --overlay-widget-surface: var(--color-background);
+  }
+
+  .overlay--full {
+    background: var(--color-dark-background);
+  }
+}

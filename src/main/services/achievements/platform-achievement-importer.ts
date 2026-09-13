@@ -23,7 +23,7 @@ import {
 import { getLegendaryConfigPath } from "@main/services/legendary";
 import { syncXboxGameAchievements } from "./get-xbox-achievements";
 import { achievementsLogger } from "@main/services/logger";
-import { WindowManager } from "@main/services/window-manager";
+import { persistImportedAchievements } from "./persist-imported-achievements";
 
 export interface AchievementImportResult {
   gamesProcessed: number;
@@ -51,46 +51,11 @@ const getLibraryGamesByShop = async (
 /** Persists imported achievements for a game, preserving any locally known
  * definitions when the platform didn't return them. */
 const storeAchievements = async (
-  gameKey: string,
   game: Game,
   achievements: SteamAchievement[] | null,
   unlocked: UnlockedAchievement[]
 ): Promise<void> => {
-  const existing = await gameAchievementsSublevel
-    .get(gameKey)
-    .catch(() => null);
-
-  const definitions =
-    achievements && achievements.length > 0
-      ? achievements
-      : (existing?.achievements ?? []);
-
-  // Merge with already unlocked achievements rather than dropping them
-  const known = new Set(
-    (existing?.unlockedAchievements ?? []).map((a) => a.name.toUpperCase())
-  );
-  const mergedUnlocked = [
-    ...(existing?.unlockedAchievements ?? []),
-    ...unlocked.filter((a) => !known.has(a.name.toUpperCase())),
-  ];
-
-  await gameAchievementsSublevel.put(gameKey, {
-    achievements: definitions,
-    unlockedAchievements: mergedUnlocked,
-    updatedAt: Date.now(),
-    language: existing?.language ?? "en",
-  });
-
-  await gamesSublevel.put(gameKey, {
-    ...game,
-    achievementCount: definitions.length || game.achievementCount,
-    unlockedAchievementCount: mergedUnlocked.length,
-  });
-
-  WindowManager.mainWindow?.webContents.send(
-    `on-update-achievements-${game.objectId}-${game.shop}`,
-    mergedUnlocked
-  );
+  await persistImportedAchievements(game, achievements, unlocked);
 };
 
 /* ───────────────────────── Steam ───────────────────────── */
@@ -114,7 +79,7 @@ export const importSteamAchievements =
       totalUnlocked: 0,
     };
 
-    for (const [gameKey, game] of games) {
+    for (const [, game] of games) {
       result.gamesProcessed++;
       try {
         const playerRes = await axios.get(
@@ -172,7 +137,7 @@ export const importSteamAchievements =
           .map((a) => ({ name: a.apiname, unlockTime: a.unlocktime }));
         if (unlocked.length === 0) continue;
 
-        await storeAchievements(gameKey, game, definitions, unlocked);
+        await storeAchievements(game, definitions, unlocked);
         result.gamesWithAchievements++;
         result.totalUnlocked += unlocked.length;
       } catch {
@@ -209,7 +174,7 @@ export const importGogAchievements =
       totalUnlocked: 0,
     };
 
-    for (const [gameKey, game] of games) {
+    for (const [, game] of games) {
       result.gamesProcessed++;
       try {
         const credentials = await getGogGameCredentials(game.objectId);
@@ -246,7 +211,7 @@ export const importGogAchievements =
             unlockTime: new Date(a.date_unlocked!).getTime() / 1000,
           }));
 
-        await storeAchievements(gameKey, game, definitions, unlocked);
+        await storeAchievements(game, definitions, unlocked);
         if (unlocked.length > 0) {
           result.gamesWithAchievements++;
           result.totalUnlocked += unlocked.length;
@@ -416,7 +381,7 @@ export const importEpicAchievements =
 
     const headers = { Authorization: `Bearer ${auth.accessToken}` };
 
-    for (const [gameKey, game] of games) {
+    for (const [, game] of games) {
       result.gamesProcessed++;
       try {
         const sandboxId = getEpicSandboxId(game.objectId);
@@ -474,7 +439,7 @@ export const importEpicAchievements =
               : 0,
           }));
 
-        await storeAchievements(gameKey, game, defs, unlocked);
+        await storeAchievements(game, defs, unlocked);
         if (unlocked.length > 0) {
           result.gamesWithAchievements++;
           result.totalUnlocked += unlocked.length;

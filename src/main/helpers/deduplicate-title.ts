@@ -24,7 +24,8 @@
 
 import { gamesSublevel, gameAchievementsSublevel } from "@main/level";
 import { logger } from "@main/services";
-import type { Game, UnlockedAchievement } from "@types";
+import type { Game } from "@types";
+import { persistAchievementRecordRekey } from "./achievement-record-rekey";
 import { normalizeGameTitle } from "./normalize-game-title";
 
 /**
@@ -46,34 +47,21 @@ async function mergeAchievementsIntoCanonical(
   // Nothing to fold in — just make sure the duplicate row is gone.
   if (!duplicate) return;
 
-  const dupUnlocked = duplicate.unlockedAchievements ?? [];
-
-  if (canonical) {
-    // Union the unlocked achievements by name, keeping the earliest unlockTime.
-    const byName = new Map<string, UnlockedAchievement>();
-    for (const a of [
-      ...(canonical.unlockedAchievements ?? []),
-      ...dupUnlocked,
-    ]) {
-      const key = (a.name ?? "").toUpperCase();
-      const prev = byName.get(key);
-      if (!prev || (a.unlockTime ?? 0) < (prev.unlockTime ?? 0)) {
-        byName.set(key, a);
-      }
+  // Write the survivor first. When the canonical key has no row yet (the usual
+  // custom -> Steam rekey), moving the complete source row is the only way to
+  // preserve local definitions, unlocks, and fractional progress. A later
+  // catalogue refresh may replace those definitions without reviving the
+  // source identity.
+  await persistAchievementRecordRekey(
+    canonicalKey,
+    duplicateKey,
+    canonical ?? null,
+    duplicate,
+    {
+      put: (key, record) => gameAchievementsSublevel.put(key, record),
+      remove: (key) => gameAchievementsSublevel.del(key),
     }
-
-    await gameAchievementsSublevel.put(canonicalKey, {
-      ...canonical,
-      unlockedAchievements: [...byName.values()],
-      updatedAt: Date.now(),
-    });
-  }
-  // If the canonical has no achievement record at all, we intentionally do NOT
-  // copy the duplicate's definitions over (they belong to the duplicate's
-  // shop/objectId and may not match). The breakdown will fall back to the
-  // library record's achievementCount for the survivor.
-
-  await gameAchievementsSublevel.del(duplicateKey).catch(() => {});
+  );
 }
 
 function canonicalScore(shop: Game["shop"]): number {

@@ -55,34 +55,10 @@
     }
   }
 
-  &__link {
-    text-align: start;
-    color: var(--color-text);
-    background: none;
-    border: none;
-    padding: 0;
-
-    &:hover {
-      text-decoration: underline;
-      cursor: pointer;
-    }
-
-    &--warning {
-      color: globals.$warning-color;
-    }
-  }
-
   &__grid {
     display: grid;
     gap: globals.$spacing-unit * 2;
-  }
-
-  &__grid--with-subscription {
     grid-template-columns: 3fr 1fr 1fr;
-  }
-
-  &__grid--without-subscription {
-    grid-template-columns: 3fr 2fr;
   }
 
   &__points-container {

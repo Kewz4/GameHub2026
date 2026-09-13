@@ -1,0 +1,9 @@
+LIBRARY "gamehub-wgi-qa-provider64"
+EXPORTS
+  RoGetActivationFactory=GameHubSyntheticRoGetActivationFactory @1
+  GameHubSyntheticWgiGetTopology @1001
+  GameHubSyntheticWgiGetProviderSnapshot @1002
+  GameHubSyntheticWgiSetFault @1003
+  GameHubSyntheticWgiMutateTopology @1004
+  GameHubSyntheticWgiSetNeutral @1005
+  GameHubSyntheticWgiExerciseOverRelease @1006

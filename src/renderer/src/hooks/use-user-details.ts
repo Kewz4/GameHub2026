@@ -61,7 +61,10 @@ export function useUserDetails() {
       const response = await globalThis.window.electron.updateProfile(values);
       return updateUserDetails({
         ...response,
-        username: userDetails?.username || "",
+        username:
+          userDetails?.username?.trim() ||
+          response.displayName ||
+          "GameHub user",
         subscription: userDetails?.subscription || null,
         workwondersJwt: userDetails?.workwondersJwt || "",
         karma: userDetails?.karma || 0,

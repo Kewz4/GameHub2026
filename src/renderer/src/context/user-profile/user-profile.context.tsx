@@ -1,11 +1,22 @@
 import { darkenColor, ensureArray } from "@renderer/helpers";
+import { mergeResolvedProfileImages } from "@shared";
 import { useAppSelector, useToast } from "@renderer/hooks";
-import type { Badge, UserProfile, UserStats, UserGame } from "@types";
+import type {
+  Badge,
+  ProfileAchievementSouvenir,
+  UserProfile,
+  UserStats,
+  UserGame,
+} from "@types";
 import { average } from "color.js";
 
-import { createContext, useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import {
+  mergeProfileGameCollections,
+  type ProfileGameSort,
+} from "@renderer/pages/profile/profile-content/profile-library-data";
 
 export interface UserProfileContext {
   userProfile: UserProfile | null;
@@ -27,6 +38,8 @@ export interface UserProfileContext {
   localLibraryCount: number | null;
   /** Total unlocked achievements across ALL local games — accurate for own profile, null otherwise */
   localAchievementSum: number | null;
+  souvenirs: ProfileAchievementSouvenir[];
+  refreshSouvenirs: () => Promise<void>;
 }
 
 export const DEFAULT_USER_PROFILE_BACKGROUND = "#151515B3";
@@ -48,6 +61,8 @@ export const userProfileContext = createContext<UserProfileContext>({
   isLoadingLibraryGames: false,
   localLibraryCount: null,
   localAchievementSum: null,
+  souvenirs: [],
+  refreshSouvenirs: async () => {},
 });
 
 const { Provider } = userProfileContext;
@@ -83,6 +98,9 @@ export function UserProfileContextProvider({
   const [localAchievementSum, setLocalAchievementSum] = useState<number | null>(
     null
   );
+  const [souvenirs, setSouvenirs] = useState<ProfileAchievementSouvenir[]>([]);
+  const profileRequestRef = useRef(0);
+  const libraryRequestRef = useRef(0);
 
   const isMe = userDetails?.id === userProfile?.id;
 
@@ -111,6 +129,21 @@ export function UserProfileContextProvider({
       .then((stats) => {
         setUserStats(stats);
       });
+  }, [userId]);
+
+  const refreshSouvenirs = useCallback(async () => {
+    const requestId = profileRequestRef.current;
+
+    try {
+      const result = await window.electron.getAchievementSouvenirs(userId);
+      if (requestId === profileRequestRef.current) {
+        setSouvenirs(result);
+      }
+    } catch {
+      if (requestId === profileRequestRef.current) {
+        setSouvenirs([]);
+      }
+    }
   }, [userId]);
 
   // Local games (including custom, Steam, GOG, Epic synced) only exist locally —
@@ -158,6 +191,8 @@ export function UserProfileContextProvider({
 
   const getUserLibraryGames = useCallback(
     async (sortBy?: string, reset = true) => {
+      const requestedSort = (sortBy ?? "playedRecently") as ProfileGameSort;
+      const requestId = ++libraryRequestRef.current;
       if (reset) {
         setLibraryPage(0);
         setHasMoreLibraryGames(true);
@@ -187,112 +222,51 @@ export function UserProfileContextProvider({
           ? await getLocalLibraryGames()
           : { library: [], pinned: [] };
 
-        // For the logged-in user, the server's per-game achievement counts only
-        // reflect linked-platform (Steam/PSN/Xbox) unlocks and ignore unlocks
-        // sourced through Hydra/Exophase. The local cache is the source of truth
-        // for those, so overlay the local counts (when higher) onto the
-        // server-driven profile cards. Keyed by `${shop}:${objectId}`.
-        const localAchievementCounts = new Map<
-          string,
-          {
-            unlockedAchievementCount: number;
-            achievementsPointsEarnedSum: number;
-          }
-        >();
         if (isOwnProfile) {
           const allLocal = await window.electron.getLibrary().catch(() => []);
           const activeLocal = allLocal.filter((g) => !g.isDeleted);
-          setLocalLibraryCount(activeLocal.length);
           setLocalAchievementSum(
             activeLocal.reduce(
               (acc, g) => acc + (g.unlockedAchievementCount ?? 0),
               0
             )
           );
-          for (const localGame of allLocal) {
-            localAchievementCounts.set(
-              `${localGame.shop}:${localGame.objectId}`,
-              {
-                unlockedAchievementCount:
-                  localGame.unlockedAchievementCount ?? 0,
-                achievementsPointsEarnedSum:
-                  localGame.achievementsPointsEarnedSum ?? 0,
-              }
-            );
-          }
         }
 
-        const overlayLocalAchievements = (game: UserGame): UserGame => {
-          const local = localAchievementCounts.get(
-            `${game.shop}:${game.objectId}`
-          );
-          if (!local) return game;
-          if (
-            local.unlockedAchievementCount <=
-            (game.unlockedAchievementCount ?? 0)
-          ) {
-            return game;
-          }
-          return {
-            ...game,
-            unlockedAchievementCount: local.unlockedAchievementCount,
-            achievementsPointsEarnedSum: local.achievementsPointsEarnedSum,
-          };
-        };
-
-        const sortGames = (games: UserGame[]): UserGame[] => {
-          if (!sortBy) return games;
-          return [...games].sort((a, b) => {
-            switch (sortBy) {
-              case "playtime":
-                return b.playTimeInSeconds - a.playTimeInSeconds;
-              case "achievementCount":
-                return (
-                  (b.unlockedAchievementCount ?? 0) -
-                  (a.unlockedAchievementCount ?? 0)
-                );
-              case "playedRecently": {
-                const aT = a.lastTimePlayed
-                  ? new Date(a.lastTimePlayed).getTime()
-                  : 0;
-                const bT = b.lastTimePlayed
-                  ? new Date(b.lastTimePlayed).getTime()
-                  : 0;
-                return bT - aT;
-              }
-              default:
-                return 0;
-            }
-          });
-        };
+        if (requestId !== libraryRequestRef.current) return;
 
         if (response) {
-          const serverLibrary = response.library.map(overlayLocalAchievements);
-          const serverPinned = response.pinnedGames.map(
-            overlayLocalAchievements
-          );
-          const serverIds = new Set(serverLibrary.map((g) => g.objectId));
-          const localUnique = localCustom.library.filter(
-            (g) => !serverIds.has(g.objectId)
-          );
-          const serverPinnedIds = new Set(serverPinned.map((g) => g.objectId));
-          const localPinnedUnique = localCustom.pinned.filter(
-            (g) => !serverPinnedIds.has(g.objectId)
-          );
-          setLibraryGames(sortGames([...localUnique, ...serverLibrary]));
-          setPinnedGames([...localPinnedUnique, ...serverPinned]);
+          const merged = mergeProfileGameCollections({
+            serverLibrary: response.library,
+            serverPinned: response.pinnedGames,
+            localLibrary: localCustom.library,
+            localPinned: localCustom.pinned,
+            sortBy: requestedSort,
+          });
+          setLibraryGames(merged.library);
+          setPinnedGames(merged.pinned);
           setHasMoreLibraryGames(response.library.length === 12);
         } else {
-          setLibraryGames(sortGames(localCustom.library));
-          setPinnedGames(localCustom.pinned);
+          const merged = mergeProfileGameCollections({
+            serverLibrary: [],
+            serverPinned: [],
+            localLibrary: localCustom.library,
+            localPinned: localCustom.pinned,
+            sortBy: requestedSort,
+          });
+          setLibraryGames(merged.library);
+          setPinnedGames(merged.pinned);
           setHasMoreLibraryGames(false);
         }
       } catch (error) {
+        if (requestId !== libraryRequestRef.current) return;
         setLibraryGames([]);
         setPinnedGames([]);
         setHasMoreLibraryGames(false);
       } finally {
-        setIsLoadingLibraryGames(false);
+        if (requestId === libraryRequestRef.current) {
+          setIsLoadingLibraryGames(false);
+        }
       }
     },
     [userId, userDetails?.id, getLocalLibraryGames]
@@ -306,6 +280,7 @@ export function UserProfileContextProvider({
 
       setIsLoadingLibraryGames(true);
       try {
+        const requestId = libraryRequestRef.current;
         const nextPage = libraryPage + 1;
         const params = new URLSearchParams();
         params.append("take", "12");
@@ -324,37 +299,33 @@ export function UserProfileContextProvider({
           pinnedGames: UserGame[];
         }>(url);
 
+        if (requestId !== libraryRequestRef.current) return false;
+
         if (response && response.library.length > 0) {
-          setLibraryGames((prev) => {
-            const existingIds = new Set(prev.map((game) => game.objectId));
-            const newGames = response.library.filter(
-              (game) => !existingIds.has(game.objectId)
-            );
-            const combined = [...prev, ...newGames];
-            if (!sortBy) return combined;
-            return [...combined].sort((a, b) => {
-              switch (sortBy) {
-                case "playtime":
-                  return b.playTimeInSeconds - a.playTimeInSeconds;
-                case "achievementCount":
-                  return (
-                    (b.unlockedAchievementCount ?? 0) -
-                    (a.unlockedAchievementCount ?? 0)
-                  );
-                case "playedRecently": {
-                  const aT = a.lastTimePlayed
-                    ? new Date(a.lastTimePlayed).getTime()
-                    : 0;
-                  const bT = b.lastTimePlayed
-                    ? new Date(b.lastTimePlayed).getTime()
-                    : 0;
-                  return bT - aT;
-                }
-                default:
-                  return 0;
-              }
-            });
-          });
+          const local =
+            userDetails?.id === userId
+              ? await getLocalLibraryGames()
+              : { library: [], pinned: [] };
+          const requestedSort = (sortBy ?? "playedRecently") as ProfileGameSort;
+          const nextPinned = mergeProfileGameCollections({
+            serverLibrary: [],
+            serverPinned: [...pinnedGames, ...response.pinnedGames],
+            localLibrary: [],
+            localPinned: local.pinned,
+            sortBy: requestedSort,
+          }).pinned;
+
+          setPinnedGames(nextPinned);
+          setLibraryGames(
+            (previous) =>
+              mergeProfileGameCollections({
+                serverLibrary: [...previous, ...response.library],
+                serverPinned: nextPinned,
+                localLibrary: local.library,
+                localPinned: local.pinned,
+                sortBy: requestedSort,
+              }).library
+          );
           setLibraryPage(nextPage);
           setHasMoreLibraryGames(response.library.length === 12);
           return true;
@@ -369,59 +340,82 @@ export function UserProfileContextProvider({
         setIsLoadingLibraryGames(false);
       }
     },
-    [userId, libraryPage, hasMoreLibraryGames, isLoadingLibraryGames]
+    [
+      userId,
+      userDetails?.id,
+      libraryPage,
+      hasMoreLibraryGames,
+      isLoadingLibraryGames,
+      getLocalLibraryGames,
+      pinnedGames,
+    ]
   );
 
   const getUserProfile = useCallback(async () => {
+    const requestId = ++profileRequestRef.current;
     getUserStats();
-    getUserLibraryGames();
+    void refreshSouvenirs();
+
+    // Start the R2/local image lookup alongside the API request. It must never
+    // block the profile itself, and null results must preserve a valid fallback.
+    const profileImagesPromise = window.electron
+      .getProfileImages(userId)
+      .catch(() => null);
 
     return window.electron.hydraApi
       .get<UserProfile>(`/users/${userId}`)
       .then(async (userProfile) => {
-        // HydraAPI rejects ucarecdn.com image URLs, so the user's own images
-        // live in userPreferences — overlay them when viewing own profile.
+        if (requestId !== profileRequestRef.current) return;
+
+        // getMe is overlaid in the main process with account-owned local/R2
+        // images. Reuse it instead of reading unscoped preferences here.
         if (userDetails?.id === userProfile.id) {
-          const prefs = await window.electron
-            .getUserPreferences()
-            .catch(() => null);
-          const localBg = prefs?.localBackgroundImageUrl;
-          // Normalize Windows backslashes to forward slashes so the local:
-          // protocol handler receives a valid URL on all platforms.
-          const localBgNorm = localBg?.replace(/\\/g, "/");
-          const resolvedBg = localBg
-            ? localBgNorm!.startsWith("http") ||
-              localBgNorm!.startsWith("file:")
-              ? localBgNorm!
-              : `local:${localBgNorm!}`
-            : userProfile.backgroundImageUrl;
           userProfile = {
             ...userProfile,
-            profileImageUrl:
-              prefs?.localProfileImageUrl ?? userProfile.profileImageUrl,
-            backgroundImageUrl: resolvedBg,
+            profileImageUrl: userDetails.profileImageUrl,
+            backgroundImageUrl: userDetails.backgroundImageUrl,
           };
         }
 
         setUserProfile(userProfile);
 
+        void profileImagesPromise.then((images) => {
+          if (!images || requestId !== profileRequestRef.current) return;
+          if (!images.profileImageUrl && !images.backgroundImageUrl) return;
+
+          setUserProfile((current) => {
+            return mergeResolvedProfileImages(current, userProfile.id, images);
+          });
+        });
+
         if (userProfile.profileImageUrl) {
-          getHeroBackgroundFromImageUrl(userProfile.profileImageUrl).then(
-            (color) => setHeroBackground(color)
-          );
+          void getHeroBackgroundFromImageUrl(userProfile.profileImageUrl)
+            .then((color) => {
+              if (requestId === profileRequestRef.current) {
+                setHeroBackground(color);
+              }
+            })
+            .catch(() => {
+              if (requestId === profileRequestRef.current) {
+                setHeroBackground(DEFAULT_USER_PROFILE_BACKGROUND);
+              }
+            });
         }
       })
       .catch(() => {
+        if (requestId !== profileRequestRef.current) return;
         showErrorToast(t("user_not_found"));
         navigate(-1);
       });
   }, [
     navigate,
     getUserStats,
-    getUserLibraryGames,
+    refreshSouvenirs,
     showErrorToast,
     userId,
+    userDetails?.backgroundImageUrl,
     userDetails?.id,
+    userDetails?.profileImageUrl,
     t,
   ]);
 
@@ -440,13 +434,24 @@ export function UserProfileContextProvider({
     setUserProfile(null);
     setLibraryGames([]);
     setPinnedGames([]);
+    setSouvenirs([]);
     setHeroBackground(DEFAULT_USER_PROFILE_BACKGROUND);
     setLibraryPage(0);
     setHasMoreLibraryGames(true);
 
-    getUserProfile();
-    getBadges();
+    void getUserProfile();
+    void getBadges();
+
+    return () => {
+      profileRequestRef.current += 1;
+    };
   }, [getUserProfile, getBadges]);
+
+  useEffect(() => {
+    if (userDetails?.id === userId) {
+      setLocalLibraryCount(libraryGames.length + pinnedGames.length);
+    }
+  }, [libraryGames.length, pinnedGames.length, userDetails?.id, userId]);
 
   return (
     <Provider
@@ -467,6 +472,8 @@ export function UserProfileContextProvider({
         isLoadingLibraryGames,
         localLibraryCount,
         localAchievementSum,
+        souvenirs,
+        refreshSouvenirs,
       }}
     >
       {children}

@@ -2,8 +2,6 @@ import type { LibraryGame } from "@types";
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { platformToSystem } from "@renderer/helpers";
-import { getGameExecutableFilters } from "@shared";
 import { useBigPictureToast } from "../../../../hooks";
 import {
   applyClassicsDiscUpdate,
@@ -78,24 +76,23 @@ export function useGameSettingsModalState({
   }, [game?.id, game?.title, visible]);
 
   useEffect(() => {
-    if (
-      !visible ||
-      !game ||
-      game.shop === "custom" ||
-      globalThis.window.electron.platform !== "win32"
-    ) {
+    if (!visible || !game) {
       setLoadingSaveFolder(false);
       setSaveFolderPath(null);
       return;
     }
 
+    let active = true;
     setLoadingSaveFolder(true);
     setSaveFolderPath(null);
     globalThis.window.electron
       .getGameSaveFolder(game.shop, game.objectId)
-      .then(setSaveFolderPath)
-      .catch(() => setSaveFolderPath(null))
-      .finally(() => setLoadingSaveFolder(false));
+      .then((folder) => active && setSaveFolderPath(folder))
+      .catch(() => active && setSaveFolderPath(null))
+      .finally(() => active && setLoadingSaveFolder(false));
+    return () => {
+      active = false;
+    };
   }, [game, visible]);
 
   useEffect(() => {
@@ -305,22 +302,8 @@ export function useGameSettingsModalState({
   }, [game, gameTitle, saveGameTitle, showErrorToast, t, updatingGameTitle]);
 
   const handleSelectCustomizationAsset = useCallback(
-    async (assetType: CustomAssetType) => {
+    async (assetType: CustomAssetType, sourcePath: string) => {
       if (!game) return;
-
-      const { filePaths } = await globalThis.window.electron.showOpenDialog({
-        properties: ["openFile"],
-        filters: [
-          {
-            name: "Image files",
-            extensions: ["jpg", "jpeg", "png", "gif", "webp"],
-          },
-        ],
-      });
-
-      const sourcePath = filePaths?.[0];
-
-      if (!sourcePath) return;
 
       try {
         const copiedAssetUrl =
@@ -387,95 +370,33 @@ export function useGameSettingsModalState({
     };
   }, [game, launchOptions, persistLaunchOptions, visible]);
 
-  const getDownloadsPath = useCallback(async () => {
-    const userPreferences = await globalThis.window.electron
-      .getUserPreferences()
-      .catch(() => null);
+  const handleChangeExecutableLocation = useCallback(
+    async (path: string) => {
+      if (!game) return;
 
-    return (
-      userPreferences?.downloadsPath ??
-      (await globalThis.window.electron.getDefaultDownloadsPath())
-    );
-  }, []);
+      const gameUsingPath =
+        await globalThis.window.electron.verifyExecutablePathInUse(path);
 
-  const selectGameExecutable = useCallback(async () => {
-    const downloadsPath = await getDownloadsPath();
-
-    // Console/emulated games: filter by the emulator's ROM types and, for
-    // folder-based systems like Cemu, allow selecting the game FOLDER.
-    if (game?.shop === "launchbox" && game.platform) {
-      const romConfig = await globalThis.window.electron
-        .getEmulatorRomFilters(game.platform)
-        .catch(() => ({ extensions: [] as string[], folderBased: false }));
-
-      const properties: Array<"openFile" | "openDirectory"> =
-        romConfig.folderBased ? ["openFile", "openDirectory"] : ["openFile"];
-      const romFilters = romConfig.extensions.length
-        ? [
-            {
-              name: t("game_rom", { defaultValue: "Game ROM" }),
-              extensions: romConfig.extensions,
-            },
-            { name: t("all_files"), extensions: ["*"] },
-          ]
-        : undefined;
-
-      const { filePaths } = await globalThis.window.electron.showOpenDialog({
-        properties,
-        defaultPath: downloadsPath,
-        filters: romFilters,
-      });
-      return filePaths && filePaths.length > 0 ? filePaths[0] : null;
-    }
-
-    const filters = getGameExecutableFilters(
-      globalThis.window.electron.platform,
-      {
-        executable: t("game_executable"),
-        allFiles: t("all_files"),
+      if (
+        gameUsingPath &&
+        (gameUsingPath.objectId !== game.objectId ||
+          gameUsingPath.shop !== game.shop)
+      ) {
+        showErrorToast(
+          t("executable_path_in_use", { game: gameUsingPath.title })
+        );
+        return;
       }
-    );
 
-    const { filePaths } = await globalThis.window.electron.showOpenDialog({
-      properties: ["openFile"],
-      defaultPath: downloadsPath,
-      filters,
-    });
-
-    if (filePaths && filePaths.length > 0) {
-      return filePaths[0];
-    }
-
-    return null;
-  }, [game, getDownloadsPath, t]);
-
-  const handleChangeExecutableLocation = useCallback(async () => {
-    if (!game) return;
-
-    const path = await selectGameExecutable();
-    if (!path) return;
-
-    const gameUsingPath =
-      await globalThis.window.electron.verifyExecutablePathInUse(path);
-
-    if (
-      gameUsingPath &&
-      (gameUsingPath.objectId !== game.objectId ||
-        gameUsingPath.shop !== game.shop)
-    ) {
-      showErrorToast(
-        t("executable_path_in_use", { game: gameUsingPath.title })
+      await globalThis.window.electron.updateExecutablePath(
+        game.shop,
+        game.objectId,
+        path
       );
-      return;
-    }
-
-    await globalThis.window.electron.updateExecutablePath(
-      game.shop,
-      game.objectId,
-      path
-    );
-    await updateGame();
-  }, [game, selectGameExecutable, showErrorToast, t, updateGame]);
+      await updateGame();
+    },
+    [game, showErrorToast, t, updateGame]
+  );
 
   const handleClearExecutablePath = useCallback(async () => {
     if (!game) return;
@@ -619,23 +540,12 @@ export function useGameSettingsModalState({
     [game, updateClassicsDisc]
   );
 
-  const handleAddDiscFile = useCallback(async () => {
-    if (!game) return;
-
-    const system = platformToSystem(game.platform);
-    const extensions = system
-      ? await globalThis.window.electron.getEmulatorRomExtensions(system)
-      : ["*"];
-    const result = await globalThis.window.electron.showOpenDialog({
-      properties: ["openFile"],
-      filters: [
-        { name: t("rom_file"), extensions },
-        { name: t("all_files"), extensions: ["*"] },
-      ],
-    });
-    if (result.canceled || !result.filePaths[0]) return;
-    await addDiscFromPath(result.filePaths[0]);
-  }, [addDiscFromPath, game, t]);
+  const handleAddDiscFile = useCallback(
+    async (path: string) => {
+      await addDiscFromPath(path);
+    },
+    [addDiscFromPath]
+  );
 
   const handleRemoveSelectedDisc = useCallback(async () => {
     if (!game || !selectedDisc) return;
@@ -700,8 +610,9 @@ export function useGameSettingsModalState({
       saveFolderPath,
       creatingSteamShortcut,
       steamShortcutExists,
-      shouldShowCreateStartMenuShortcut:
-        globalThis.window.electron.platform === "win32",
+      shouldShowCreateStartMenuShortcut: ["win32", "linux"].includes(
+        globalThis.window.electron.platform
+      ),
       onChangeExecutableLocation: handleChangeExecutableLocation,
       onClearExecutablePath: handleClearExecutablePath,
       onOpenSaveFolder: handleOpenSaveFolder,

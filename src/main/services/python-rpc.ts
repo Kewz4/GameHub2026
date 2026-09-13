@@ -16,6 +16,7 @@ interface GamePayload {
   total_size?: number;
   file_indices?: number[];
   metadata_timeout_ms?: number;
+  trackers?: string[];
 }
 
 const binaryNameByPlatform: Partial<Record<NodeJS.Platform, string>> = {
@@ -97,6 +98,7 @@ export class PythonRPC {
   private static stdoutBuffer = "";
   private static rpcPassword = "";
   private static pythonExecutable: string | null = null;
+  private static missingBinaryWarningShown = false;
   private static ready = false;
   private static readyPromise: Promise<void> | null = null;
   private static readyResolver: (() => void) | null = null;
@@ -322,12 +324,13 @@ export class PythonRPC {
       );
 
       if (!fs.existsSync(binaryPath)) {
-        dialog.showErrorBox(
-          "Fatal",
-          "GameHub Python Instance binary not found. Please check if it has been removed by Windows Defender."
-        );
-
-        app.quit();
+        if (!this.missingBinaryWarningShown) {
+          this.missingBinaryWarningShown = true;
+          dialog.showErrorBox(
+            "Torrent helper unavailable",
+            "GameHub's torrent helper is missing. Check whether Windows Defender removed it. The launcher, library, overlay, cloud saves, and HTTP downloads will continue to work."
+          );
+        }
         throw new Error(`Hydra Python RPC binary not found at ${binaryPath}`);
       }
 
@@ -374,19 +377,25 @@ export class PythonRPC {
       this.pythonProcess = childProcess;
     }
 
-    this.pythonProcess.once("error", (error) => {
+    const childProcess = this.pythonProcess;
+    if (!childProcess) {
+      throw new Error("Failed to start Python RPC process");
+    }
+
+    // An old child can emit `exit` after kill() has already installed a
+    // replacement. Never let that late event clear readiness or requests for
+    // the new RPC process.
+    childProcess.once("error", (error) => {
+      if (this.pythonProcess !== childProcess) return;
       this.handleProcessExit(String(error));
     });
 
-    this.pythonProcess.once("exit", (code, signal) => {
+    childProcess.once("exit", (code, signal) => {
+      if (this.pythonProcess !== childProcess) return;
       this.handleProcessExit(
         `code=${code ?? "null"} signal=${signal ?? "null"}`
       );
     });
-
-    if (!this.pythonProcess) {
-      throw new Error("Failed to start Python RPC process");
-    }
 
     await this.ensureReady();
   }
@@ -420,9 +429,10 @@ export class PythonRPC {
   }
 
   public static kill() {
-    if (this.pythonProcess) {
+    const childProcess = this.pythonProcess;
+    if (childProcess) {
       pythonRpcLogger.log("Killing python process");
-      this.pythonProcess.kill();
+      childProcess.kill();
     }
 
     this.handleProcessExit("killed");

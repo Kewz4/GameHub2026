@@ -13,11 +13,14 @@ export const hasLinuxNativeOrAppImageMatch = (
   executablePath: string,
   linuxProcesses: LinuxProcessInfo[]
 ) => {
-  const target = executablePath.toLowerCase();
+  const target = path.posix.normalize(executablePath);
 
   return linuxProcesses.some(
     (matchedProcess) =>
-      matchedProcess.exe === target || matchedProcess.appImagePath === target
+      (matchedProcess.exe &&
+        path.posix.normalize(matchedProcess.exe) === target) ||
+      (matchedProcess.appImagePath &&
+        path.posix.normalize(matchedProcess.appImagePath) === target)
   );
 };
 
@@ -31,13 +34,29 @@ export const processReferencesExecutable = (
   matchedProcess: ProcessLocation,
   executablePath: string
 ) => {
-  const target = executablePath.toLowerCase();
-  const gameDirectory = path.dirname(executablePath).toLowerCase();
+  const target = path.posix.normalize(executablePath);
+  const gameDirectory = path.posix.dirname(target);
+  const executable = matchedProcess.exe
+    ? path.posix.normalize(matchedProcess.exe)
+    : null;
+  const sameWineDirectory =
+    /\.exe$/i.test(target) &&
+    Boolean(
+      matchedProcess.cwd &&
+        path.posix.normalize(matchedProcess.cwd) === gameDirectory
+    ) &&
+    Boolean(
+      executable &&
+        /^wine(?:64)?(?:-preloader)?$/i.test(path.posix.basename(executable))
+    );
 
   return (
-    (matchedProcess.cwd ?? "").toLowerCase() === gameDirectory ||
-    (matchedProcess.exe ?? "").toLowerCase() === target ||
-    (matchedProcess.appImagePath ?? "").toLowerCase() === target
+    sameWineDirectory ||
+    executable === target ||
+    Boolean(
+      matchedProcess.appImagePath &&
+        path.posix.normalize(matchedProcess.appImagePath) === target
+    )
   );
 };
 

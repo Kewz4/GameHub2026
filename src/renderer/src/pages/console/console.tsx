@@ -1,269 +1,459 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  ArrowDownIcon,
+  DownloadIcon,
+  PauseIcon,
+  PlayIcon,
+  SearchIcon,
+  TrashIcon,
+} from "@primer/octicons-react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  CONSOLE_LOG_CHANNELS,
+  CONSOLE_OTHER_CHANNEL,
+  consoleLogChannelOf,
+  type ConsoleLogEntry,
+} from "@shared";
+
 import "./console.scss";
 
-interface LogEntry {
-  ts: number;
-  level: string;
-  scope: string;
-  text: string;
-}
+const MAX_VISIBLE_HISTORY = 20_000;
+const MAX_COLLAPSED_LOG_CHARS = 1_200;
 
 const LEVEL_COLORS: Record<string, string> = {
-  error: "#f87171",
-  warn: "#fb923c",
-  info: "#60a5fa",
-  verbose: "#a78bfa",
-  debug: "#94a3b8",
-  silly: "#64748b",
+  error: "#ff6b6b",
+  warn: "#f2b84b",
+  info: "#f5f5f5",
+  verbose: "#c8c8c8",
+  debug: "#9a9a9a",
+  silly: "#747474",
 };
 
-/**
- * Log "channels" — the console groups every entry into one of these subsystem
- * tabs so OS/cloud syncs, mod-manager work, achievement syncs, downloads, etc.
- * each read on their own tab instead of one interleaved stream. An entry is
- * routed by its logger scope first, then by a leading `[tag]` in its text.
- */
-interface Channel {
-  id: string;
-  label: string;
-  /** electron-log scopes that map here. */
-  scopes?: string[];
-  /** `[tag]` prefixes (lower-cased, without brackets) that map here. */
-  tags?: string[];
-}
-
-const CHANNELS: Channel[] = [
-  {
-    id: "mods",
-    label: "Mod Manager",
-    tags: ["ukmm", "mods", "botw-mod", "gamebanana", "bcml"],
-  },
-  {
-    id: "cloud",
-    label: "Cloud Saves",
-    tags: ["cloud", "cloud-sync", "ludusavi", "save-sync", "saves", "sync"],
-  },
-  {
-    id: "achievements",
-    label: "Achievements",
-    scopes: ["achievements"],
-    tags: ["achievement", "achievements"],
-  },
-  {
-    id: "downloads",
-    label: "Downloads",
-    tags: ["minerva", "download", "downloads", "torrent", "debrid", "http"],
-  },
-  {
-    id: "emulators",
-    label: "Emulators",
-    tags: ["emulator", "emulators", "cemu", "rpcs3", "dolphin", "rom", "roms"],
-  },
-  {
-    id: "network",
-    label: "Network",
-    scopes: ["network"],
-  },
-  {
-    id: "python-rpc",
-    label: "Python RPC",
-    scopes: ["python-rpc"],
-  },
-];
-
-const OTHER_CHANNEL = "other";
-
-/** Extract a leading `[tag]` (lower-cased) from a log line, if present. */
-function leadingTag(text: string): string | null {
-  const m = text.match(/^\s*\[([a-z0-9_-]+)\]/i);
-  return m ? m[1].toLowerCase() : null;
-}
-
-/** Route an entry to a channel id by scope, then by its `[tag]` prefix. */
-function channelOf(entry: LogEntry): string {
-  const scope = (entry.scope || "").toLowerCase();
-  for (const ch of CHANNELS) {
-    if (ch.scopes?.includes(scope)) return ch.id;
+const mergeEntries = (
+  current: ConsoleLogEntry[],
+  incoming: ConsoleLogEntry[]
+): ConsoleLogEntry[] => {
+  if (incoming.length === 0) return current;
+  const latest = current.at(-1)?.id ?? 0;
+  if (incoming.every((entry) => entry.id > latest)) {
+    return [...current, ...incoming].slice(-MAX_VISIBLE_HISTORY);
   }
-  const tag = leadingTag(entry.text);
-  if (tag) {
-    for (const ch of CHANNELS) {
-      if (ch.tags?.includes(tag)) return ch.id;
-    }
-  }
-  // A meaningful non-"main" scope becomes its own catch tag under Other, but we
-  // still surface it in Other so nothing is ever hidden.
-  return OTHER_CHANNEL;
-}
 
-function fmt(ts: number) {
-  const d = new Date(ts);
+  const merged = new Map(current.map((entry) => [entry.id, entry]));
+  for (const entry of incoming) merged.set(entry.id, entry);
+  return [...merged.values()]
+    .sort((left, right) => left.id - right.id)
+    .slice(-MAX_VISIBLE_HISTORY);
+};
+
+const formatTime = (timestamp: number): string => {
+  const date = new Date(timestamp);
   return (
-    d.getHours().toString().padStart(2, "0") +
+    date.getHours().toString().padStart(2, "0") +
     ":" +
-    d.getMinutes().toString().padStart(2, "0") +
+    date.getMinutes().toString().padStart(2, "0") +
     ":" +
-    d.getSeconds().toString().padStart(2, "0") +
+    date.getSeconds().toString().padStart(2, "0") +
     "." +
-    d.getMilliseconds().toString().padStart(3, "0")
+    date.getMilliseconds().toString().padStart(3, "0")
   );
-}
+};
 
 export default function ConsolePage() {
-  const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [entries, setEntries] = useState<ConsoleLogEntry[]>([]);
   const [filter, setFilter] = useState("");
-  const [levelFilter, setLevelFilter] = useState<string>("all");
-  const [activeTab, setActiveTab] = useState<string>("all");
+  const deferredFilter = useDeferredValue(filter.trim().toLowerCase());
+  const [levelFilter, setLevelFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("all");
   const [autoScroll, setAutoScroll] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [streamPaused, setStreamPaused] = useState(false);
+  const [pausedCount, setPausedCount] = useState(0);
+  const [droppedBeforeId, setDroppedBeforeId] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [expandedEntryIds, setExpandedEntryIds] = useState<Set<number>>(
+    () => new Set()
+  );
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const pausedRef = useRef(false);
+  const pausedEntriesRef = useRef<ConsoleLogEntry[]>([]);
 
-  useEffect(() => {
-    const unsub = window.electron.onConsoleLog((entry: LogEntry) => {
-      setEntries((prev) => {
-        const next = [...prev, entry];
-        return next.length > 5000 ? next.slice(-5000) : next;
-      });
-    });
-    return unsub;
-  }, []);
-
-  useEffect(() => {
-    if (autoScroll) {
-      bottomRef.current?.scrollIntoView({ behavior: "instant" });
+  const acceptBatch = useCallback((batch: ConsoleLogEntry[]) => {
+    if (pausedRef.current) {
+      pausedEntriesRef.current = mergeEntries(pausedEntriesRef.current, batch);
+      setPausedCount(pausedEntriesRef.current.length);
+      return;
     }
-  }, [entries, autoScroll]);
-
-  const handleScroll = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-    setAutoScroll(atBottom);
+    setEntries((current) => mergeEntries(current, batch));
   }, []);
 
-  // Tag every entry with its channel once (memoised on the entries array).
+  useEffect(() => {
+    let disposed = false;
+    const unsubscribe = window.electron.onConsoleLogs((batch) => {
+      if (!disposed) acceptBatch(batch);
+    });
+
+    window.electron
+      .getConsoleLogSnapshot()
+      .then((snapshot) => {
+        if (disposed) return;
+        setDroppedBeforeId(snapshot.droppedBeforeId);
+        acceptBatch(snapshot.entries);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [acceptBatch]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      } else if (event.key === "Escape") {
+        void window.electron.toggleConsoleWindow();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const tagged = useMemo(
-    () => entries.map((e) => ({ e, channel: channelOf(e) })),
+    () =>
+      entries.map((entry) => ({ entry, channel: consoleLogChannelOf(entry) })),
     [entries]
   );
 
-  // Per-channel counts for the tab badges (respecting level/text filters so the
-  // badge reflects what you'd actually see).
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: 0, [OTHER_CHANNEL]: 0 };
-    for (const ch of CHANNELS) c[ch.id] = 0;
-    const q = filter.toLowerCase();
-    for (const { e, channel } of tagged) {
-      if (levelFilter !== "all" && e.level !== levelFilter) continue;
-      if (
-        q &&
-        !e.text.toLowerCase().includes(q) &&
-        !e.scope.toLowerCase().includes(q)
-      )
-        continue;
-      c.all += 1;
-      c[channel] = (c[channel] ?? 0) + 1;
-    }
-    return c;
-  }, [tagged, levelFilter, filter]);
-
-  const filtered = tagged.filter(({ e, channel }) => {
-    if (activeTab !== "all" && channel !== activeTab) return false;
-    if (levelFilter !== "all" && e.level !== levelFilter) return false;
-    if (filter) {
-      const q = filter.toLowerCase();
+  const matchesTextAndLevel = useCallback(
+    (entry: ConsoleLogEntry) => {
+      if (levelFilter !== "all" && entry.level !== levelFilter) return false;
+      if (!deferredFilter) return true;
       return (
-        e.text.toLowerCase().includes(q) || e.scope.toLowerCase().includes(q)
+        entry.text.toLowerCase().includes(deferredFilter) ||
+        entry.scope.toLowerCase().includes(deferredFilter) ||
+        entry.level.toLowerCase().includes(deferredFilter)
       );
+    },
+    [deferredFilter, levelFilter]
+  );
+
+  const counts = useMemo(() => {
+    const result: Record<string, number> = {
+      all: 0,
+      [CONSOLE_OTHER_CHANNEL]: 0,
+    };
+    for (const channel of CONSOLE_LOG_CHANNELS) result[channel.id] = 0;
+    for (const { entry, channel } of tagged) {
+      if (!matchesTextAndLevel(entry)) continue;
+      result.all += 1;
+      result[channel] = (result[channel] ?? 0) + 1;
     }
-    return true;
+    return result;
+  }, [matchesTextAndLevel, tagged]);
+
+  const filtered = useMemo(
+    () =>
+      tagged
+        .filter(
+          ({ entry, channel }) =>
+            (activeTab === "all" || channel === activeTab) &&
+            matchesTextAndLevel(entry)
+        )
+        .map(({ entry }) => entry),
+    [activeTab, matchesTextAndLevel, tagged]
+  );
+
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => 24,
+    overscan: 24,
   });
 
-  const tabs: { id: string; label: string }[] = [
-    { id: "all", label: "All" },
-    ...CHANNELS.map((c) => ({ id: c.id, label: c.label })),
-    { id: OTHER_CHANNEL, label: "Other" },
-  ];
+  useEffect(() => {
+    if (autoScroll && filtered.length > 0) {
+      virtualizer.scrollToIndex(filtered.length - 1, { align: "end" });
+    }
+  }, [autoScroll, filtered.length, virtualizer]);
+
+  const handleScroll = useCallback(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const atBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+    setAutoScroll(atBottom);
+  }, []);
+
+  const togglePaused = useCallback(() => {
+    setStreamPaused((current) => {
+      const next = !current;
+      pausedRef.current = next;
+      if (!next && pausedEntriesRef.current.length > 0) {
+        const pending = pausedEntriesRef.current;
+        pausedEntriesRef.current = [];
+        setPausedCount(0);
+        setEntries((entriesNow) => mergeEntries(entriesNow, pending));
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleExpanded = useCallback((id: number) => {
+    setExpandedEntryIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const tabs = useMemo(
+    () => [
+      { id: "all", label: "All" },
+      ...CONSOLE_LOG_CHANNELS.map(({ id, label }) => ({ id, label })),
+      { id: CONSOLE_OTHER_CHANNEL, label: "Other" },
+    ],
+    []
+  );
+
+  const errorCount = entries.filter((entry) => entry.level === "error").length;
+  const warningCount = entries.filter((entry) => entry.level === "warn").length;
 
   return (
-    <div className="console">
+    <main className="console">
+      <header className="console__header">
+        <div className="console__heading">
+          <span className="console__eyebrow">GAMEHUB</span>
+          <div>
+            <h1 className="console__title">Diagnostics</h1>
+            <p className="console__subtitle">
+              Live session logs, retained while this window is closed
+            </p>
+          </div>
+        </div>
+
+        <div className="console__stats" aria-label="Log summary">
+          <span>{entries.length.toLocaleString()} entries</span>
+          <span className="console__stat--warn">{warningCount} warnings</span>
+          <span className="console__stat--error">{errorCount} errors</span>
+        </div>
+      </header>
+
       <div className="console__toolbar">
-        <span className="console__title">Debug Console</span>
+        <label className="console__search">
+          <SearchIcon size={15} aria-hidden="true" />
+          <input
+            ref={searchRef}
+            placeholder="Search message, scope, or level…"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            aria-label="Search diagnostics"
+          />
+          <kbd>Ctrl F</kbd>
+        </label>
+
         <select
           className="console__level-select"
           value={levelFilter}
-          onChange={(e) => setLevelFilter(e.target.value)}
+          onChange={(event) => setLevelFilter(event.target.value)}
+          aria-label="Filter by log level"
         >
           <option value="all">All levels</option>
-          <option value="error">error</option>
-          <option value="warn">warn</option>
-          <option value="info">info</option>
-          <option value="verbose">verbose</option>
-          <option value="debug">debug</option>
-          <option value="silly">silly</option>
+          <option value="error">Errors</option>
+          <option value="warn">Warnings</option>
+          <option value="info">Info</option>
+          <option value="verbose">Verbose</option>
+          <option value="debug">Debug</option>
+          <option value="silly">Silly</option>
         </select>
-        <input
-          className="console__filter"
-          placeholder="Filter…"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <button
-          className="console__clear-btn"
-          onClick={() => setEntries([])}
-          type="button"
-        >
-          Clear
-        </button>
-        <button
-          className={`console__scroll-btn ${autoScroll ? "console__scroll-btn--active" : ""}`}
-          onClick={() => {
-            setAutoScroll(true);
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-          }}
-          type="button"
-          title="Scroll to bottom"
-        >
-          ↓
-        </button>
+
+        <div className="console__actions">
+          <button
+            type="button"
+            className={streamPaused ? "console__action--active" : undefined}
+            onClick={togglePaused}
+            title={streamPaused ? "Resume live updates" : "Pause live updates"}
+          >
+            {streamPaused ? <PlayIcon /> : <PauseIcon />}
+            <span>{streamPaused ? "Resume" : "Pause"}</span>
+          </button>
+          <button
+            type="button"
+            disabled={exporting || entries.length === 0}
+            onClick={async () => {
+              setExporting(true);
+              await window.electron.exportConsoleLogs().catch(() => undefined);
+              setExporting(false);
+            }}
+            title="Export the redacted session log"
+          >
+            <DownloadIcon />
+            <span>{exporting ? "Exporting…" : "Export"}</span>
+          </button>
+          <button
+            type="button"
+            disabled={entries.length === 0}
+            onClick={async () => {
+              await window.electron.clearConsoleLogs().catch(() => undefined);
+              pausedEntriesRef.current = [];
+              setPausedCount(0);
+              setExpandedEntryIds(new Set());
+              setEntries([]);
+            }}
+            title="Clear retained session logs"
+          >
+            <TrashIcon />
+            <span>Clear</span>
+          </button>
+          <button
+            type="button"
+            className={autoScroll ? "console__action--active" : undefined}
+            disabled={filtered.length === 0}
+            onClick={() => {
+              setAutoScroll(true);
+              if (filtered.length > 0) {
+                virtualizer.scrollToIndex(filtered.length - 1, {
+                  align: "end",
+                });
+              }
+            }}
+            title="Follow the newest matching log"
+          >
+            <ArrowDownIcon />
+            <span>Latest</span>
+          </button>
+        </div>
       </div>
 
-      <div className="console__tabs">
+      <nav className="console__tabs" aria-label="Diagnostic categories">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={`console__tab ${activeTab === tab.id ? "console__tab--active" : ""}`}
+            className={
+              activeTab === tab.id ? "console__tab--active" : undefined
+            }
             onClick={() => setActiveTab(tab.id)}
+            aria-pressed={activeTab === tab.id}
           >
-            {tab.label}
+            <span>{tab.label}</span>
             <span className="console__tab-count">{counts[tab.id] ?? 0}</span>
           </button>
         ))}
-      </div>
+      </nav>
 
-      <div className="console__body" ref={containerRef} onScroll={handleScroll}>
-        {filtered.map(({ e }, i) => (
-          <div key={i} className={`console__line console__line--${e.level}`}>
-            <span className="console__ts">{fmt(e.ts)}</span>
-            <span className="console__scope">[{e.scope}]</span>
-            <span
-              className="console__level"
-              style={{ color: LEVEL_COLORS[e.level] ?? "#94a3b8" }}
-            >
-              {e.level.toUpperCase()}
-            </span>
-            <span className="console__text">{e.text}</span>
+      <div
+        className="console__body"
+        ref={containerRef}
+        onScroll={handleScroll}
+        role="log"
+        aria-label="GameHub diagnostic log"
+      >
+        {filtered.length === 0 ? (
+          <div className="console__empty">
+            <strong>No matching logs</strong>
+            <span>Adjust the category, level, or search filter.</span>
           </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-      <div className="console__statusbar">
-        {filtered.length} / {entries.length} entries
-        {!autoScroll && (
-          <span className="console__paused"> — scrolling paused</span>
+        ) : (
+          <div
+            className="console__virtual-list"
+            style={{ height: `${virtualizer.getTotalSize()}px` }}
+          >
+            {virtualizer.getVirtualItems().map((item) => {
+              const entry = filtered[item.index];
+              const isLong = entry.text.length > MAX_COLLAPSED_LOG_CHARS;
+              const isExpanded = expandedEntryIds.has(entry.id);
+              const displayedText =
+                isLong && !isExpanded
+                  ? `${entry.text.slice(0, MAX_COLLAPSED_LOG_CHARS)}…`
+                  : entry.text;
+              return (
+                <div
+                  key={entry.id}
+                  ref={virtualizer.measureElement}
+                  data-index={item.index}
+                  className={`console__line console__line--${entry.level}`}
+                  style={{ transform: `translateY(${item.start}px)` }}
+                >
+                  <time
+                    className="console__ts"
+                    dateTime={new Date(entry.ts).toISOString()}
+                  >
+                    {formatTime(entry.ts)}
+                  </time>
+                  <span className="console__scope" title={entry.scope}>
+                    {entry.scope}
+                  </span>
+                  <span
+                    className="console__level"
+                    style={{ color: LEVEL_COLORS[entry.level] ?? "#a8a8a8" }}
+                  >
+                    {entry.level.toUpperCase()}
+                  </span>
+                  {isLong ? (
+                    <button
+                      type="button"
+                      className="console__text console__text--expandable"
+                      aria-expanded={isExpanded}
+                      onClick={() => toggleExpanded(entry.id)}
+                      title={
+                        isExpanded
+                          ? "Collapse this log entry"
+                          : "Expand the retained text; complete oversized payloads remain in GameHub's on-disk logs"
+                      }
+                    >
+                      {displayedText}
+                      <span className="console__text-hint">
+                        {isExpanded
+                          ? "Collapse"
+                          : `Show ${(
+                              entry.text.length - MAX_COLLAPSED_LOG_CHARS
+                            ).toLocaleString()} more characters`}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="console__text">{displayedText}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
-    </div>
+
+      <footer className="console__statusbar">
+        <span>
+          Showing {filtered.length.toLocaleString()} of{" "}
+          {entries.length.toLocaleString()}
+        </span>
+        {streamPaused && (
+          <span className="console__paused">
+            Live updates paused{pausedCount ? ` · ${pausedCount} buffered` : ""}
+          </span>
+        )}
+        {!streamPaused && !autoScroll && (
+          <span className="console__paused">
+            Following paused while reviewing
+          </span>
+        )}
+        {droppedBeforeId > 0 && (
+          <span title="The oldest entries were removed to keep the console fast">
+            Bounded history active
+          </span>
+        )}
+        <span className="console__shortcut">Shift S · toggle</span>
+      </footer>
+    </main>
   );
 }

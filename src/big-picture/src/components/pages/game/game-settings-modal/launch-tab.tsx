@@ -2,17 +2,20 @@ import SteamLogo from "@renderer/assets/steam-logo.svg?react";
 import {
   getSkuRegion,
   getSkuRegionFlag,
+  platformToSystem,
   type SkuRegion,
 } from "@renderer/helpers";
+import { getGameExecutableFilters } from "@shared";
 import type { LibraryGame, ShortcutLocation } from "@types";
 import { DiscIcon } from "@phosphor-icons/react";
 import { FolderOpen, HardDrive, Monitor, Trash } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import {
   Button,
   Checkbox,
   DropdownSelect,
+  FileExplorerModal,
   FocusItem,
   HorizontalFocusGroup,
   Input,
@@ -80,7 +83,7 @@ export interface GameLaunchSettingsProps {
   creatingSteamShortcut: boolean;
   steamShortcutExists: boolean;
   shouldShowCreateStartMenuShortcut: boolean;
-  onChangeExecutableLocation: () => Promise<void>;
+  onChangeExecutableLocation: (path: string) => Promise<void>;
   onClearExecutablePath: () => Promise<void>;
   onOpenSaveFolder: () => Promise<void>;
   onChangeLaunchOptions: (value: string) => void;
@@ -91,7 +94,7 @@ export interface GameLaunchSettingsProps {
   onDeleteSteamShortcut: () => Promise<void>;
   onSelectDisc: (path: string) => Promise<void>;
   onToggleDontAskDiscSelection: (checked: boolean) => Promise<void>;
-  onAddDiscFile: () => Promise<void>;
+  onAddDiscFile: (path: string) => Promise<void>;
   onRemoveSelectedDisc: () => Promise<void>;
   onRemoveAllDiscs: () => Promise<void>;
 }
@@ -439,7 +442,11 @@ function ShortcutSection({
                 },
               }}
             >
-              {t("create_start_menu_shortcut")}
+              {globalThis.window.electron.platform === "linux"
+                ? t("create_applications_menu_shortcut", {
+                    defaultValue: "Add to applications menu",
+                  })
+                : t("create_start_menu_shortcut")}
             </Button>
           ) : null}
         </HorizontalFocusGroup>
@@ -551,12 +558,81 @@ export function GameLaunchSettingsTab({
     discs.find((disc) => disc.path === game.selectedDiscPath) ??
     discs[0] ??
     null;
-  const showSaveFolderButton =
-    !isCustomGame && globalThis.window.electron.platform === "win32";
+  const showSaveFolderButton = true;
   const saveFolderTooltipContent = getSaveFolderTooltipContent(
     loadingSaveFolder,
     saveFolderPath,
     t
+  );
+  const [picker, setPicker] = useState<{
+    kind: "executable" | "disc";
+    title: string;
+    extensions?: string[];
+    selectDirectory?: boolean;
+  } | null>(null);
+  const [preparingPicker, setPreparingPicker] = useState(false);
+
+  const openExecutablePicker = useCallback(async () => {
+    setPreparingPicker(true);
+    try {
+      if (game.shop === "launchbox" && game.platform) {
+        const romConfig = await globalThis.window.electron
+          .getEmulatorRomFilters(game.platform)
+          .catch(() => ({ extensions: [] as string[], folderBased: false }));
+        setPicker({
+          kind: "executable",
+          title: "Select game ROM",
+          extensions: romConfig.extensions,
+          selectDirectory: romConfig.folderBased,
+        });
+        return;
+      }
+
+      const filters = getGameExecutableFilters(
+        globalThis.window.electron.platform,
+        {
+          executable: t("game_executable"),
+          allFiles: t("all_files"),
+        }
+      );
+      setPicker({
+        kind: "executable",
+        title: "Select game executable",
+        extensions: filters.some((filter) => filter.extensions.includes("*"))
+          ? undefined
+          : filters.flatMap((filter) => filter.extensions),
+        selectDirectory: globalThis.window.electron.platform === "darwin",
+      });
+    } finally {
+      setPreparingPicker(false);
+    }
+  }, [game.platform, game.shop, t]);
+
+  const openDiscPicker = useCallback(async () => {
+    const system = platformToSystem(game.platform);
+    setPreparingPicker(true);
+    try {
+      const extensions = system
+        ? await globalThis.window.electron.getEmulatorRomExtensions(system)
+        : [];
+      setPicker({
+        kind: "disc",
+        title: "Select ROM or disc image",
+        extensions,
+      });
+    } finally {
+      setPreparingPicker(false);
+    }
+  }, [game.platform]);
+
+  const handlePickerSelect = useCallback(
+    async (path: string) => {
+      const kind = picker?.kind;
+      setPicker(null);
+      if (kind === "disc") await onAddDiscFile(path);
+      else if (kind === "executable") await onChangeExecutableLocation(path);
+    },
+    [onAddDiscFile, onChangeExecutableLocation, picker?.kind]
   );
 
   return (
@@ -567,7 +643,7 @@ export function GameLaunchSettingsTab({
           selectedDisc={selectedDisc}
           dontAskDiscSelection={game.dontAskDiscSelection}
           onSelectDisc={onSelectDisc}
-          onAddDiscFile={onAddDiscFile}
+          onAddDiscFile={openDiscPicker}
           onRemoveSelectedDisc={onRemoveSelectedDisc}
           onRemoveAllDiscs={onRemoveAllDiscs}
           onToggleDontAskDiscSelection={onToggleDontAskDiscSelection}
@@ -579,7 +655,7 @@ export function GameLaunchSettingsTab({
           saveFolderTooltipContent={saveFolderTooltipContent}
           loadingSaveFolder={loadingSaveFolder}
           saveFolderPath={saveFolderPath}
-          onChangeExecutableLocation={onChangeExecutableLocation}
+          onChangeExecutableLocation={openExecutablePicker}
           onClearExecutablePath={onClearExecutablePath}
           onOpenSaveFolder={onOpenSaveFolder}
         />
@@ -601,6 +677,40 @@ export function GameLaunchSettingsTab({
         onBlurLaunchOptions={onBlurLaunchOptions}
         onClearLaunchOptions={onClearLaunchOptions}
       />
+
+      <FileExplorerModal
+        visible={picker !== null}
+        title={picker?.title ?? "Select file"}
+        initialPath={
+          picker?.kind === "disc"
+            ? (selectedDisc?.path ?? game.executablePath ?? undefined)
+            : (game.executablePath ?? undefined)
+        }
+        filters={
+          picker?.extensions && picker.extensions.length > 0
+            ? [
+                {
+                  name:
+                    picker.kind === "disc"
+                      ? t("rom_file")
+                      : t("game_executable"),
+                  extensions: picker.extensions,
+                },
+              ]
+            : undefined
+        }
+        selectDirectory={picker?.selectDirectory}
+        onClose={() => setPicker(null)}
+        onSelect={(path) => {
+          void handlePickerSelect(path);
+        }}
+      />
+
+      {preparingPicker ? (
+        <span className="game-launch-settings-tab__picker-status" role="status">
+          Preparing file browser…
+        </span>
+      ) : null}
     </VerticalFocusGroup>
   );
 }

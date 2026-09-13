@@ -30,6 +30,7 @@ import {
 } from "..";
 import { useGameCollections, useToast, useUserDetails } from "@renderer/hooks";
 import { getGameOrigin } from "@renderer/helpers/game-origin";
+import { isOfflinePlaySetupEligible } from "@shared";
 
 interface GameContextMenuProps extends Omit<ContextMenuProps, "items"> {
   game: LibraryGame;
@@ -104,6 +105,7 @@ export function GameContextMenu({
     handleRemoveFromLibrary,
     handleRemoveFiles,
     handleOpenGameOptions,
+    handleApplySteamEmulator,
   } = useGameActions(game);
   const selectedCollectionId = searchParams.get("collection");
 
@@ -341,6 +343,25 @@ export function GameContextMenu({
                 label: t("open_folder"),
                 icon: <FileDirectoryIcon size={16} />,
                 onClick: handleOpenFolder,
+                disabled: isDeleting,
+              },
+            ]
+          : []),
+        ...(game.executablePath &&
+        isOfflinePlaySetupEligible({
+          shop: game.shop,
+          objectId: game.objectId,
+          libraryOrigin: getGameOrigin(game),
+          executablePath: game.executablePath,
+        })
+          ? [
+              {
+                id: "apply-steam-emulator",
+                label: t("apply_steam_emulator"),
+                icon: <GearIcon size={16} />,
+                onClick: () => {
+                  void handleApplySteamEmulator();
+                },
                 disabled: isDeleting,
               },
             ]

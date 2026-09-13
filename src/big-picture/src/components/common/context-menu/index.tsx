@@ -15,8 +15,11 @@ import {
 import { useNavigation, useNavigationScreenActions } from "../../../hooks";
 import { FocusRegionContext } from "../../context";
 import { FocusItem } from "../focus-item";
+import { MODAL_OWNED_OVERLAY_ATTRIBUTE } from "../modal";
 import { NavigationLayer } from "../navigation-layer";
 import { VerticalFocusGroup } from "../vertical-focus-group";
+import { shouldHandleOverlayEscape } from "../overlay-dismissal";
+import { NAVIGATION_SCREEN_ACTION_PRIORITY } from "../../../services";
 
 const CONTEXT_MENU_VIEWPORT_PADDING = 16;
 const SCROLL_LOCK_KEYS = new Set([
@@ -153,7 +156,7 @@ export function ContextMenu({
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (shouldHandleOverlayEscape(event)) {
         handleClose(true);
       }
     };
@@ -204,7 +207,8 @@ export function ContextMenu({
             b: () => handleClose(true),
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.floating }
   );
 
   if (!visible || globalThis.document === undefined) {
@@ -227,6 +231,7 @@ export function ContextMenu({
           className={cn("context-menu", className)}
           role="menu"
           aria-label={ariaLabel}
+          {...{ [MODAL_OWNED_OVERLAY_ATTRIBUTE]: "" }}
           style={{
             position: "fixed",
             left: resolvedPosition?.x ?? anchorPosition.x,
@@ -245,10 +250,21 @@ export function ContextMenu({
               const focusId = `${menuRegionId}-${item.id}`;
 
               return (
-                <FocusItem key={item.id} id={focusId} asChild>
+                <FocusItem
+                  key={item.id}
+                  id={focusId}
+                  actions={{
+                    primary: () => {
+                      void handleItemSelect(item);
+                    },
+                  }}
+                  navigationState={item.disabled ? "disabled" : "active"}
+                  asChild
+                >
                   <button
                     type="button"
                     role="menuitem"
+                    disabled={item.disabled}
                     aria-disabled={item.disabled || undefined}
                     className={cn("context-menu__item", {
                       "context-menu__item--danger": item.danger,

@@ -11,7 +11,7 @@ import {
   UserIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
-import { forwardRef, useMemo } from "react";
+import { forwardRef, useMemo, type Dispatch, type SetStateAction } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Divider,
@@ -22,7 +22,8 @@ import {
   VerticalFocusGroup,
 } from "../../components";
 import { IS_DESKTOP } from "../../constants";
-import { useLibrary, useSearch } from "../../hooks";
+import { useLibrary, useSearch, useUserDetails } from "../../hooks";
+import { resolveImageSource } from "../../helpers";
 import type { FocusOverrides } from "../../services";
 import {
   BIG_PICTURE_SIDEBAR_EXIT_ID,
@@ -35,38 +36,13 @@ import {
   getBigPictureSidebarItemIdFromPathname,
   normalizeBigPicturePathname,
 } from "../navigation";
+import { buildSidebarNavigationOverrides } from "./sidebar-navigation";
 import "./styles.scss";
 
-function SidebarRouter() {
-  const basePath = IS_DESKTOP ? "/big-picture" : "";
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const activeSidebarItemId = getBigPictureSidebarItemIdFromPathname(pathname);
-  const contentEntryTarget =
-    getBigPictureContentSidebarReturnTargetFromPathname(pathname);
-  const sidebarItemNavigationOverrides: FocusOverrides = {
-    left: {
-      type: "block",
-    },
-    right: contentEntryTarget,
-  };
-  const handleExitBigPicture = () => {
-    if (IS_DESKTOP) {
-      globalThis.close();
-      return;
-    }
-
-    navigate("/");
-  };
-
-  const routes = (
+const getSidebarRoutes = (basePath: string) =>
+  (
     [
-      {
-        key: "home",
-        label: "Home",
-        path: basePath,
-        icon: HouseIcon,
-      },
+      { key: "home", label: "Home", path: basePath, icon: HouseIcon },
       {
         key: "catalogue",
         label: "Catalogue",
@@ -87,7 +63,7 @@ function SidebarRouter() {
       },
       {
         key: "downloads",
-        label: "Download",
+        label: "Downloads",
         path: `${basePath}/downloads`,
         icon: DownloadSimpleIcon,
       },
@@ -121,25 +97,52 @@ function SidebarRouter() {
       path: string;
       icon: typeof HouseIcon;
     }>
-  ).filter((route) => {
-    if (import.meta.env.DEV) return true;
-    return route.key !== "componentLab";
-  });
+  ).filter((route) => import.meta.env.DEV || route.key !== "componentLab");
+
+interface SidebarRouterProps {
+  routes: ReturnType<typeof getSidebarRoutes>;
+  navigationOverrides: ReadonlyMap<string, FocusOverrides>;
+}
+
+function SidebarRouter({
+  routes,
+  navigationOverrides,
+}: Readonly<SidebarRouterProps>) {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { userDetails } = useUserDetails();
+  const profileImageUrl = resolveImageSource(userDetails?.profileImageUrl);
+  const activeSidebarItemId = getBigPictureSidebarItemIdFromPathname(pathname);
+  const handleExitBigPicture = () => {
+    if (IS_DESKTOP) {
+      globalThis.close();
+      return;
+    }
+
+    navigate("/");
+  };
 
   return (
     <div className="sidebar-router-container">
       {routes.map((route) => {
         const itemId = BIG_PICTURE_SIDEBAR_ITEM_IDS[route.key];
+        const routeIcon =
+          route.key === "profile" && profileImageUrl ? (
+            profileImageUrl
+          ) : (
+            <route.icon size={24} />
+          );
 
         return (
           <RouteAnchor
             key={route.label}
             label={route.label}
             href={route.path}
-            icon={<route.icon size={24} />}
+            icon={routeIcon}
             active={activeSidebarItemId === itemId}
             focusId={itemId}
-            focusNavigationOverrides={sidebarItemNavigationOverrides}
+            focusActions={{ primary: () => navigate(route.path) }}
+            focusNavigationOverrides={navigationOverrides.get(itemId)}
           />
         );
       })}
@@ -147,7 +150,10 @@ function SidebarRouter() {
       <div className="state-wrapper">
         <FocusItem
           id={BIG_PICTURE_SIDEBAR_EXIT_ID}
-          navigationOverrides={sidebarItemNavigationOverrides}
+          actions={{ primary: handleExitBigPicture }}
+          navigationOverrides={navigationOverrides.get(
+            BIG_PICTURE_SIDEBAR_EXIT_ID
+          )}
           asChild
         >
           <button
@@ -166,24 +172,23 @@ function SidebarRouter() {
   );
 }
 
-function SidebarLibrary() {
-  const { library } = useLibrary();
+interface SidebarLibraryProps {
+  games: ReturnType<typeof useLibrary>["library"];
+  search: string;
+  setSearch: Dispatch<SetStateAction<string>>;
+  navigationOverrides: ReadonlyMap<string, FocusOverrides>;
+}
+
+function SidebarLibrary({
+  games,
+  search,
+  setSearch,
+  navigationOverrides,
+}: Readonly<SidebarLibraryProps>) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const normalizedPathname = normalizeBigPicturePathname(pathname);
   const activeGameRoute = getBigPictureGameRouteMatch(normalizedPathname);
-  const contentEntryTarget =
-    getBigPictureContentSidebarReturnTargetFromPathname(pathname);
-
-  const sortedLibrary = useMemo(() => {
-    return [...library].sort(
-      (a, b) =>
-        (b.playTimeInMilliseconds ?? 0) - (a.playTimeInMilliseconds ?? 0)
-    );
-  }, [library]);
-
-  const { filteredItems, search, setSearch } = useSearch(sortedLibrary, [
-    "title",
-  ]);
 
   return (
     <div className="library-container">
@@ -209,7 +214,7 @@ function SidebarLibrary() {
         <VerticalFocusGroup regionId="sidebar-library-list">
           <ScrollArea>
             <ul className="library-list">
-              {filteredItems.map((game) => {
+              {games.map((game) => {
                 const desktopPath = `/big-picture/game/${game.shop}/${game.objectId}`;
                 const focusId = getBigPictureSidebarLibraryGameFocusId({
                   shop: game.shop,
@@ -230,9 +235,10 @@ function SidebarLibrary() {
                       isFavorite={game.favorite}
                       active={active}
                       focusId={focusId}
-                      focusNavigationOverrides={{
-                        right: contentEntryTarget,
-                      }}
+                      focusActions={{ primary: () => navigate(desktopPath) }}
+                      focusNavigationOverrides={navigationOverrides.get(
+                        focusId
+                      )}
                     />
                   </li>
                 );
@@ -268,13 +274,49 @@ const SidebarContainer = forwardRef<
 });
 
 function Sidebar() {
+  const { library } = useLibrary();
+  const { pathname } = useLocation();
+  const contentEntryTarget =
+    getBigPictureContentSidebarReturnTargetFromPathname(pathname);
+  const sortedLibrary = useMemo(() => {
+    return [...library].sort(
+      (a, b) =>
+        (b.playTimeInMilliseconds ?? 0) - (a.playTimeInMilliseconds ?? 0)
+    );
+  }, [library]);
+  const { filteredItems, search, setSearch } = useSearch(sortedLibrary, [
+    "title",
+  ]);
+  const libraryFocusIds = filteredItems.map((game) =>
+    getBigPictureSidebarLibraryGameFocusId({
+      shop: game.shop,
+      objectId: game.objectId,
+    })
+  );
+  const routes = getSidebarRoutes(IS_DESKTOP ? "/big-picture" : "");
+  const routeFocusIds = routes.map(
+    (route) => BIG_PICTURE_SIDEBAR_ITEM_IDS[route.key]
+  );
+  const navigationOverrides = buildSidebarNavigationOverrides(
+    [...routeFocusIds, BIG_PICTURE_SIDEBAR_EXIT_ID, ...libraryFocusIds],
+    contentEntryTarget
+  );
+
   return (
     <>
       <VerticalFocusGroup regionId={BIG_PICTURE_SIDEBAR_REGION_ID} asChild>
         <SidebarContainer>
-          <SidebarRouter />
+          <SidebarRouter
+            routes={routes}
+            navigationOverrides={navigationOverrides}
+          />
           <Divider />
-          <SidebarLibrary />
+          <SidebarLibrary
+            games={filteredItems}
+            search={search}
+            setSearch={setSearch}
+            navigationOverrides={navigationOverrides}
+          />
         </SidebarContainer>
       </VerticalFocusGroup>
       <div className="sidebar-spacer" />

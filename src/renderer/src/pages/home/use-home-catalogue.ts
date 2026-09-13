@@ -1,15 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { orderBy } from "lodash-es";
 
 import type {
   CatalogueSearchResult,
   DownloadSource,
+  GameShop,
   LibraryGame,
   ShopAssets,
   TrendingGame,
 } from "@types";
 import { CatalogueCategory } from "@shared";
 import { levelDBService } from "@renderer/services/leveldb.service";
+import { useAppSelector } from "@renderer/hooks";
 import { buildGameDetailsPath, ensureArray } from "@renderer/helpers";
 import type {
   EnrichedLibraryGame,
@@ -21,16 +23,15 @@ import { buildTasteProfile, rankRecommendations } from "./recommender";
 import { isMechanicTag, parseSearchVectorTagIds } from "./recommender-affinity";
 import { getAllFeedback } from "./recommendation-feedback";
 import { getRecommendedClassics } from "./recommender-classics";
+import {
+  type CatalogueRecommendationEdge,
+  selectCatalogueRecommendationEdge,
+  selectPcRecommendationGames,
+} from "@shared";
 import { externalResourcesInstance } from "@renderer/hooks/use-catalogue";
 
 /** A thumbs-up recommendation counts like a well-liked, moderately-played game. */
 const LIKE_SYNTHETIC_HOURS = 8;
-
-/**
- * A catalogue edge as the backend actually returns it — `searchVector` carries
- * the game's Steam tags as numeric ids and isn't in the shared type.
- */
-type CatalogueEdge = CatalogueSearchResult & { searchVector?: string | null };
 
 /** A "Because you played {anchor}" shelf for one of the user's taste clusters. */
 export interface BecauseYouPlayedRow {
@@ -137,6 +138,88 @@ function heroFallbackFrom(games: ShopAssets[]): TrendingGame[] {
     }));
 }
 
+/**
+ * The hero's fallback slides (topped up from Hot/Weekly) carry no description —
+ * only `/catalogue/featured` does — so every slide but the first showed just a
+ * logo/title. AFTER first paint, fetch a short description for each hero slide
+ * that lacks one (bounded concurrency; results are cached by the shop-details
+ * store, so it's a one-time cost per game and never blocks the initial render).
+ */
+async function enrichHeroDescriptions(
+  hero: TrendingGame[],
+  language: string
+): Promise<TrendingGame[]> {
+  const missing = hero
+    .map((game, index) => ({ game, index }))
+    .filter(({ game }) => !game.description?.trim());
+  if (!missing.length) return hero;
+
+  const next = [...hero];
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (cursor < missing.length) {
+      const { game, index } = missing[cursor++];
+      const details = await window.electron
+        .getGameShopDetails(game.objectId, game.shop, language)
+        .catch(() => null);
+      const desc = details?.short_description || details?.about_the_game || "";
+      if (desc.trim()) next[index] = { ...next[index], description: desc };
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(3, missing.length) }, worker)
+  );
+  return next;
+}
+
+/** Every game shown in the home ROWS (not the hero), deduped — the set the
+ *  "hide mature" filter classifies. */
+function collectHomeRowGames(
+  cat: HomeCatalogue
+): { shop: GameShop; objectId: string; title: string }[] {
+  const rows: ShopAssets[] = [
+    ...cat.recommended,
+    ...cat.becauseYouPlayed.flatMap((r) => r.games),
+    ...cat.recommendedClassics,
+    ...cat.hot,
+    ...cat.weekly,
+    ...cat.achievements,
+    ...cat.classics,
+  ];
+  const seen = new Set<string>();
+  const out: { shop: GameShop; objectId: string; title: string }[] = [];
+  for (const g of rows) {
+    const key = `${g.shop}:${g.objectId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ shop: g.shop, objectId: g.objectId, title: g.title });
+  }
+  return out;
+}
+
+/** Filter the home rows (not the hero) by a hide-set of `${shop}:${objectId}`. */
+function filterHomeRows(
+  cat: HomeCatalogue,
+  hideKeys: Set<string>
+): HomeCatalogue {
+  if (hideKeys.size === 0) return cat;
+  const keep = (games: ShopAssets[]) =>
+    games.filter((g) => !hideKeys.has(`${g.shop}:${g.objectId}`));
+  return {
+    ...cat,
+    recommended: keep(cat.recommended),
+    becauseYouPlayed: cat.becauseYouPlayed.map((r) => ({
+      ...r,
+      games: keep(r.games),
+    })),
+    recommendedClassics: keep(cat.recommendedClassics),
+    hot: keep(cat.hot),
+    weekly: keep(cat.weekly),
+    achievements: keep(cat.achievements),
+    classics: keep(cat.classics),
+  };
+}
+
 async function getClassics(): Promise<ShopAssets[]> {
   // Randomized, mixed-platform, artwork-only console games — a fresh shuffle
   // each load. The row hides itself when this is empty (see category-row).
@@ -163,7 +246,7 @@ async function getTagDictionary(language: string): Promise<TagDictionary> {
   try {
     const { data } = await externalResourcesInstance.get<
       Record<string, Record<string, number>>
-    >("/steam-user-tags.json");
+    >("/steam-user-tags.json", { timeout: 5_000 });
     const dict = data[language] ?? data["en"] ?? {};
     const nameToId = new Map<string, number>();
     const idToName = new Map<number, string>();
@@ -182,7 +265,7 @@ async function getTagDictionary(language: string): Promise<TagDictionary> {
 
 /** Decode a catalogue edge's real Steam tag NAMES from its searchVector. */
 function edgeTags(
-  edge: CatalogueEdge,
+  edge: CatalogueRecommendationEdge,
   idToName: Map<number, string>
 ): string[] {
   const names: string[] = [];
@@ -213,24 +296,18 @@ const baseSearchBody = (downloadSourceIds: string[]) => ({
 /** One `/catalogue/search` call, returning raw edges (incl. searchVector). */
 async function searchCatalogueEdges(
   data: Record<string, unknown>
-): Promise<CatalogueEdge[]> {
+): Promise<CatalogueRecommendationEdge[]> {
   return window.electron.hydraApi
-    .post<{ edges: CatalogueEdge[]; count: number }>("/catalogue/search", {
-      data,
-      needsAuth: false,
-    })
+    .post<{ edges: CatalogueRecommendationEdge[]; count: number }>(
+      "/catalogue/search",
+      { data, needsAuth: false }
+    )
     .then((r) => r.edges ?? [])
-    .catch(() => [] as CatalogueEdge[]);
+    .catch(() => [] as CatalogueRecommendationEdge[]);
 }
 
 /** Per-session cache of a game's real facets, keyed `${shop}:${objectId}`. */
 const facetsCache = new Map<string, { genres: string[]; tags: string[] }>();
-
-const normalizeTitle = (title: string) =>
-  title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
 
 /**
  * Look up a game's real genres + tags by matching it to a catalogue edge (whose
@@ -255,11 +332,8 @@ async function fetchGameFacets(
   });
   if (!edges.length) return null;
 
-  const wantTitle = normalizeTitle(game.title);
-  const match =
-    edges.find((e) => e.objectId === game.objectId && e.shop === game.shop) ??
-    edges.find((e) => normalizeTitle(e.title) === wantTitle) ??
-    edges[0];
+  const match = selectCatalogueRecommendationEdge(game, edges);
+  if (!match) return null;
 
   const facets = {
     genres: match.genres ?? [],
@@ -389,9 +463,10 @@ async function getRecommended(
   downloadSourceIds: string[],
   language: string
 ): Promise<RecommendationResult> {
-  const library = (await window.electron
+  const completeLibrary = (await window.electron
     .getLibrary()
     .catch(() => [])) as LibraryGame[];
+  const library = selectPcRecommendationGames(completeLibrary);
   if (!library.length) return EMPTY_RECOMMENDATIONS;
 
   const { nameToId, idToName } = await getTagDictionary(language);
@@ -434,7 +509,7 @@ async function getRecommended(
   //  - "dislike": enriched the same way but with NEGATIVE taste weight — shows
   //    LESS of that kind of game — and excluded from candidates.
   //  - "ignore": excluded from candidates ONLY. No taste-model effect at all.
-  const feedback = await getAllFeedback();
+  const feedback = selectPcRecommendationGames(await getAllFeedback());
   const libraryKeys = new Set(library.map((g) => `${g.shop}:${g.objectId}`));
   const dislikedIds = new Set(
     feedback
@@ -627,9 +702,30 @@ const recommendationSessionCache = new Map<string, RecommendationResult>();
  */
 let recommendedClassicsCache: ShopAssets[] | null = null;
 
+/**
+ * Session cache for the phase-1 "fast batch" (featured/hot/weekly/achievements).
+ * Without it, every navigation back to home re-fires those four network calls.
+ * Short TTL so content still refreshes; `classics` is deliberately NOT cached
+ * here so its random shuffle stays fresh on each visit.
+ */
+const FAST_BATCH_TTL_MS = 5 * 60 * 1000;
+interface FastBatchCache {
+  language: string;
+  at: number;
+  featured: TrendingGame[];
+  hot: ShopAssets[];
+  weekly: ShopAssets[];
+  achievements: ShopAssets[];
+}
+let fastBatchCache: FastBatchCache | null = null;
+
 export function useHomeCatalogue(language: string) {
   const [catalogue, setCatalogue] = useState<HomeCatalogue>(EMPTY_CATALOGUE);
   const [isLoading, setIsLoading] = useState(true);
+  const hideMatureGames = useAppSelector(
+    (state) => state.userPreferences.value?.hideMatureGames ?? false
+  );
+  const [hideKeys, setHideKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Thumbs up/down anywhere on home invalidates the cached shelves so the
@@ -704,29 +800,69 @@ export function useHomeCatalogue(language: string) {
             });
 
       // Phase 1: the fast batch — one request each. This is what makes home
-      // feel instant again; neither recommender is awaited here.
+      // feel instant again; neither recommender is awaited here. Reuse the
+      // session cache (if fresh) so navigating back to home doesn't re-fire the
+      // four category calls; `classics` is always re-fetched for a fresh shuffle.
+      const cachedFast =
+        fastBatchCache &&
+        fastBatchCache.language === language &&
+        Date.now() - fastBatchCache.at < FAST_BATCH_TTL_MS
+          ? fastBatchCache
+          : null;
+
       const [featured, hot, weekly, achievements, classics] = await Promise.all(
         [
-          getFeatured(language).catch(() => [] as TrendingGame[]),
-          getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Weekly, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
-          getCategory(CatalogueCategory.Achievements, downloadSourceIds).catch(
-            () => [] as ShopAssets[]
-          ),
+          cachedFast
+            ? Promise.resolve(cachedFast.featured)
+            : getFeatured(language).catch(() => [] as TrendingGame[]),
+          cachedFast
+            ? Promise.resolve(cachedFast.hot)
+            : getCategory(CatalogueCategory.Hot, downloadSourceIds).catch(
+                () => [] as ShopAssets[]
+              ),
+          cachedFast
+            ? Promise.resolve(cachedFast.weekly)
+            : getCategory(CatalogueCategory.Weekly, downloadSourceIds).catch(
+                () => [] as ShopAssets[]
+              ),
+          cachedFast
+            ? Promise.resolve(cachedFast.achievements)
+            : getCategory(
+                CatalogueCategory.Achievements,
+                downloadSourceIds
+              ).catch(() => [] as ShopAssets[]),
           getClassics().catch(() => [] as ShopAssets[]),
         ]
       );
 
-      // Keep the hero alive even when `/catalogue/featured` returns empty by
-      // seeding it from the Hot (then Weekly) row, which shares the same
-      // artwork fields the hero needs.
-      const resolvedFeatured = featured.length
-        ? featured
-        : heroFallbackFrom(hot.length ? hot : weekly);
+      // Cache the four category lists (not classics) for quick return visits.
+      if (!cachedFast && (featured.length || hot.length || weekly.length)) {
+        fastBatchCache = {
+          language,
+          at: Date.now(),
+          featured,
+          hot,
+          weekly,
+          achievements,
+        };
+      }
+
+      // Keep the hero carousel populated with MULTIPLE slides: `/catalogue/
+      // featured` on this fork's backend often returns empty or just a single
+      // game, which left the "carousel" with one static slide. Always top the
+      // featured list up from the Hot (then Weekly) row — which shares the same
+      // artwork fields — deduped by objectId (featured first) and capped so the
+      // carousel has several slides to rotate through.
+      const resolvedFeatured = (() => {
+        const seen = new Set<string>();
+        return [
+          ...featured,
+          ...heroFallbackFrom(hot),
+          ...heroFallbackFrom(weekly),
+        ]
+          .filter((g) => !seen.has(g.objectId) && (seen.add(g.objectId), true))
+          .slice(0, 8);
+      })();
 
       if (!isMounted) return;
 
@@ -785,6 +921,20 @@ export function useHomeCatalogue(language: string) {
           return fresh;
         });
       });
+
+      // Fill in descriptions for hero slides that came from the Hot/Weekly
+      // top-up (those have none) so every slide shows text, not just the first.
+      // Post-paint, cached, and persisted so the next launch is instant.
+      if (resolvedFeatured.some((g) => !g.description?.trim())) {
+        enrichHeroDescriptions(resolvedFeatured, language).then((withDesc) => {
+          if (!isMounted) return;
+          setCatalogue((prev) => {
+            const fresh: HomeCatalogue = { ...prev, featured: withDesc };
+            persistSnapshot(fresh);
+            return fresh;
+          });
+        });
+      }
     }
 
     loadCatalogue()
@@ -804,5 +954,54 @@ export function useHomeCatalogue(language: string) {
     };
   }, [language]);
 
-  return { catalogue, isLoading };
+  // A stable signature of the games currently shown in the rows, so the maturity
+  // resolver re-runs only when that set actually changes (not on every render).
+  const rowSignature = useMemo(
+    () =>
+      hideMatureGames
+        ? collectHomeRowGames(catalogue)
+            .map((g) => `${g.shop}:${g.objectId}`)
+            .join("|")
+        : "",
+    [hideMatureGames, catalogue]
+  );
+
+  // Resolve maturity for the home rows whenever the filter is on and that set
+  // changes. Phase 1 (cache-only) is instant and fail-closed — uncached Steam
+  // games are hidden immediately so nothing mature can flash; phase 2 fetches
+  // the uncached ratings (cached thereafter) and relaxes to the true verdicts.
+  useEffect(() => {
+    if (!hideMatureGames) {
+      setHideKeys(new Set());
+      return;
+    }
+    const games = collectHomeRowGames(catalogue);
+    if (!games.length) return;
+    let active = true;
+    window.electron
+      .getGamesMaturity(games, false)
+      .then((keys) => {
+        if (active) setHideKeys(new Set(keys));
+      })
+      .catch(() => {});
+    window.electron
+      .getGamesMaturity(games, true)
+      .then((keys) => {
+        if (active) setHideKeys(new Set(keys));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // `catalogue` is read via closure; `rowSignature` is what meaningfully
+    // changes the game set, so it's the real dependency here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hideMatureGames, rowSignature]);
+
+  const visibleCatalogue = useMemo(
+    () => (hideMatureGames ? filterHomeRows(catalogue, hideKeys) : catalogue),
+    [hideMatureGames, catalogue, hideKeys]
+  );
+
+  return { catalogue: visibleCatalogue, isLoading };
 }

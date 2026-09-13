@@ -1,31 +1,40 @@
 import "./account-privacy.scss";
 
-import type {
-  ProfileVisibility,
-  Subscription,
-  UserBlocks,
-  UserFriend,
-} from "@types";
+import {
+  CloudArrowDownIcon,
+  CloudArrowUpIcon,
+  EnvelopeSimpleIcon,
+  KeyIcon,
+} from "@phosphor-icons/react";
+import { AuthPage } from "@shared";
+import type { ProfileVisibility, UserBlocks, UserFriend } from "@types";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   Button,
   DropdownSelect,
+  HorizontalFocusGroup,
   type DropdownSelectOption,
 } from "../../components";
-import {
-  useBigPictureToast,
-  useDate,
-  useNavigation,
-  useUserDetails,
-} from "../../hooks";
+import { useBigPictureToast, useNavigation, useUserDetails } from "../../hooks";
+import { getBigPictureRoutePath } from "../../helpers";
 import type { FocusOverrides } from "../../services";
 import {
-  ACCOUNT_PRIVACY_HYDRA_CLOUD_BUTTON_ID,
+  ACCOUNT_PRIVACY_BACKUP_SETTINGS_BUTTON_ID,
+  ACCOUNT_PRIVACY_CLOUD_SAVES_BUTTON_ID,
   ACCOUNT_PRIVACY_PRIVACY_SELECT_ID,
+  ACCOUNT_PRIVACY_RESTORE_SETTINGS_BUTTON_ID,
+  ACCOUNT_PRIVACY_UPDATE_EMAIL_BUTTON_ID,
+  ACCOUNT_PRIVACY_UPDATE_PASSWORD_BUTTON_ID,
   getAccountPrivacyBlockedUserButtonFocusId,
   SETTINGS_HEADER_RETURN_TARGET,
 } from "./settings-navigation";
+import { GAMEHUB_CLOUD_SAVES_COPY } from "./account-privacy-cloud";
+import {
+  getSettingsBackupFeedback,
+  getSettingsRestoreFeedback,
+} from "./account-privacy-sync";
 import { SettingsSection } from "./settings-section";
 
 interface SettingsSectionProps {
@@ -47,56 +56,21 @@ function getProfileVisibilityLabel(value: ProfileVisibility) {
   }
 }
 
-function getHydraCloudSectionContent(
-  hasActiveSubscription: boolean,
-  subscription: Subscription | null,
-  formatDate: (date: string | Date | number) => string
-) {
-  const hasSubscribedBefore = Boolean(subscription?.expiresAt);
-  const isRenewalActive = subscription?.status === "active";
-
-  if (!hasSubscribedBefore) {
-    return {
-      description: ["Enjoy Hydra in the best possible way"],
-      callToAction: "Become Hydra Cloud",
-    };
-  }
-
-  if (hasActiveSubscription) {
-    return {
-      description: isRenewalActive
-        ? [
-            `Your subscription renews on ${formatDate(subscription!.expiresAt!)} and your next bill will be sent on this day.`,
-          ]
-        : [
-            "Automatic renewal is disabled",
-            `Your Hydra Cloud is active until ${formatDate(subscription!.expiresAt!)}`,
-          ],
-      callToAction: "Manage Subscription",
-    };
-  }
-
-  return {
-    description: [
-      `Your subscription expired at ${formatDate(subscription!.expiresAt!)}`,
-    ],
-    callToAction: "Renew Hydra Cloud",
-  };
-}
-
 export function AccountPrivacySettingsSection({
   className,
 }: Readonly<SettingsSectionProps>) {
-  const { formatDate } = useDate();
+  const navigate = useNavigate();
   const { showSuccessToast, showErrorToast } = useBigPictureToast();
   const { setFocus } = useNavigation();
-  const { userDetails, hasActiveSubscription, patchUser, unblockUser } =
-    useUserDetails();
+  const { userDetails, patchUser, unblockUser } = useUserDetails();
   const [profileVisibility, setProfileVisibility] =
     useState<ProfileVisibility>("PUBLIC");
   const [blockedUsers, setBlockedUsers] = useState<UserFriend[]>([]);
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
   const [unblockingUserId, setUnblockingUserId] = useState<string | null>(null);
+  const [settingsSyncOperation, setSettingsSyncOperation] = useState<
+    "backup" | "restore" | null
+  >(null);
 
   useEffect(() => {
     if (!userDetails?.profileVisibility) return;
@@ -135,14 +109,6 @@ export function AccountPrivacySettingsSection({
     ],
     []
   );
-
-  const hydraCloudContent = useMemo(() => {
-    return getHydraCloudSectionContent(
-      hasActiveSubscription,
-      userDetails?.subscription ?? null,
-      formatDate
-    );
-  }, [formatDate, hasActiveSubscription, userDetails?.subscription]);
 
   const blockedUserFocusIds = useMemo(
     () =>
@@ -197,7 +163,7 @@ export function AccountPrivacySettingsSection({
         ? getAccountPrivacyBlockedUserButtonFocusId(nextUser.id)
         : previousUser
           ? getAccountPrivacyBlockedUserButtonFocusId(previousUser.id)
-          : ACCOUNT_PRIVACY_HYDRA_CLOUD_BUTTON_ID;
+          : ACCOUNT_PRIVACY_CLOUD_SAVES_BUTTON_ID;
 
       setUnblockingUserId(userId);
 
@@ -214,9 +180,84 @@ export function AccountPrivacySettingsSection({
     [blockedUsers, fetchBlockedUsers, setFocus, unblockUser]
   );
 
-  const hydraCloudButtonOverrides = useMemo<FocusOverrides>(
+  const restoreActionFocus = useCallback(
+    (focusId: string) => {
+      globalThis.window.requestAnimationFrame(() => {
+        setFocus(focusId);
+      });
+    },
+    [setFocus]
+  );
+
+  const handleSettingsBackup = useCallback(async () => {
+    if (settingsSyncOperation) return;
+
+    setSettingsSyncOperation("backup");
+
+    try {
+      const result = await globalThis.window.electron.backupSettingsToCloud();
+      const feedback = getSettingsBackupFeedback(result);
+      const showToast = feedback.success ? showSuccessToast : showErrorToast;
+
+      showToast(feedback.title, {
+        ...SETTINGS_TOAST_OPTIONS,
+        message: feedback.message,
+      });
+    } catch {
+      const feedback = getSettingsBackupFeedback(null);
+      showErrorToast(feedback.title, {
+        ...SETTINGS_TOAST_OPTIONS,
+        message: feedback.message,
+      });
+    } finally {
+      setSettingsSyncOperation(null);
+      restoreActionFocus(ACCOUNT_PRIVACY_BACKUP_SETTINGS_BUTTON_ID);
+    }
+  }, [
+    restoreActionFocus,
+    settingsSyncOperation,
+    showErrorToast,
+    showSuccessToast,
+  ]);
+
+  const handleSettingsRestore = useCallback(async () => {
+    if (settingsSyncOperation) return;
+
+    setSettingsSyncOperation("restore");
+
+    try {
+      const result =
+        await globalThis.window.electron.restoreSettingsFromCloud();
+      const feedback = getSettingsRestoreFeedback(result);
+      const showToast = feedback.success ? showSuccessToast : showErrorToast;
+
+      showToast(feedback.title, {
+        ...SETTINGS_TOAST_OPTIONS,
+        message: feedback.message,
+      });
+    } catch {
+      const feedback = getSettingsRestoreFeedback(null);
+      showErrorToast(feedback.title, {
+        ...SETTINGS_TOAST_OPTIONS,
+        message: feedback.message,
+      });
+    } finally {
+      setSettingsSyncOperation(null);
+      restoreActionFocus(ACCOUNT_PRIVACY_RESTORE_SETTINGS_BUTTON_ID);
+    }
+  }, [
+    restoreActionFocus,
+    settingsSyncOperation,
+    showErrorToast,
+    showSuccessToast,
+  ]);
+
+  const cloudSavesButtonOverrides = useMemo<FocusOverrides>(
     () => ({
-      up: { type: "item", itemId: ACCOUNT_PRIVACY_PRIVACY_SELECT_ID },
+      up: {
+        type: "item",
+        itemId: ACCOUNT_PRIVACY_BACKUP_SETTINGS_BUTTON_ID,
+      },
       down: blockedUserFocusIds[0]
         ? {
             type: "item",
@@ -242,7 +283,7 @@ export function AccountPrivacySettingsSection({
               ? { type: "item", itemId: previousItem.focusId }
               : {
                   type: "item",
-                  itemId: ACCOUNT_PRIVACY_HYDRA_CLOUD_BUTTON_ID,
+                  itemId: ACCOUNT_PRIVACY_CLOUD_SAVES_BUTTON_ID,
                 },
             down: nextItem
               ? { type: "item", itemId: nextItem.focusId }
@@ -278,7 +319,7 @@ export function AccountPrivacySettingsSection({
               up: SETTINGS_HEADER_RETURN_TARGET,
               down: {
                 type: "item",
-                itemId: ACCOUNT_PRIVACY_HYDRA_CLOUD_BUTTON_ID,
+                itemId: ACCOUNT_PRIVACY_UPDATE_EMAIL_BUTTON_ID,
               },
             }}
             onValueChange={(value) => {
@@ -288,39 +329,53 @@ export function AccountPrivacySettingsSection({
         </div>
       </SettingsSection>
 
-      {/* <SettingsSection
+      <SettingsSection
         title="Account"
         description="Review your current account details and update your security settings."
       >
         <div className="account-privacy-settings-section__section-content account-privacy-settings-section__section-content--account">
           <div className="account-privacy-settings-section__detail-grid">
-            <Input
-              className="account-privacy-settings-section__readonly-field"
-              label="Username"
-              value={userDetails.username}
-              readOnly
-              focusNavigationState="disabled"
-            />
+            <div className="account-privacy-settings-section__detail">
+              <p className="account-privacy-settings-section__detail-label">
+                Username
+              </p>
+              <p className="account-privacy-settings-section__detail-value">
+                {userDetails.username.trim() || userDetails.displayName}
+              </p>
+            </div>
 
-            <Input
-              className="account-privacy-settings-section__readonly-field"
-              label="Current Email"
-              value={userDetails.email ?? "You have not set an email yet"}
-              readOnly
-              focusNavigationState="disabled"
-            />
+            <div className="account-privacy-settings-section__detail">
+              <p className="account-privacy-settings-section__detail-label">
+                Current Email
+              </p>
+              <p className="account-privacy-settings-section__detail-value">
+                {userDetails.email ?? "You have not set an email yet"}
+              </p>
+            </div>
           </div>
 
-          <HorizontalFocusGroup
-            className="account-privacy-settings-section__actions"
-            asChild
-          >
+          <HorizontalFocusGroup asChild>
             <div className="account-privacy-settings-section__actions">
               <Button
                 className="account-privacy-settings-section__action-button"
                 variant="secondary"
+                icon={<EnvelopeSimpleIcon size={22} />}
                 focusId={ACCOUNT_PRIVACY_UPDATE_EMAIL_BUTTON_ID}
-                focusNavigationOverrides={updateEmailButtonOverrides}
+                focusNavigationOverrides={{
+                  up: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_PRIVACY_SELECT_ID,
+                  },
+                  down: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_BACKUP_SETTINGS_BUTTON_ID,
+                  },
+                  left: { type: "block" },
+                  right: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_UPDATE_PASSWORD_BUTTON_ID,
+                  },
+                }}
                 onClick={() => {
                   void globalThis.window.electron.openAuthWindow(
                     AuthPage.UpdateEmail
@@ -333,8 +388,23 @@ export function AccountPrivacySettingsSection({
               <Button
                 className="account-privacy-settings-section__action-button"
                 variant="secondary"
+                icon={<KeyIcon size={22} />}
                 focusId={ACCOUNT_PRIVACY_UPDATE_PASSWORD_BUTTON_ID}
-                focusNavigationOverrides={updatePasswordButtonOverrides}
+                focusNavigationOverrides={{
+                  up: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_PRIVACY_SELECT_ID,
+                  },
+                  down: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_RESTORE_SETTINGS_BUTTON_ID,
+                  },
+                  left: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_UPDATE_EMAIL_BUTTON_ID,
+                  },
+                  right: { type: "block" },
+                }}
                 onClick={() => {
                   void globalThis.window.electron.openAuthWindow(
                     AuthPage.UpdatePassword
@@ -346,33 +416,106 @@ export function AccountPrivacySettingsSection({
             </div>
           </HorizontalFocusGroup>
         </div>
-      </SettingsSection> */}
+      </SettingsSection>
 
       <SettingsSection
-        title="GameHub Cloud"
-        description="Check your subscription status and manage your Hydra Cloud plan."
+        title="Settings Backup"
+        description="Keep this device's GameHub settings in your configured R2 storage and restore them after a reinstall."
+      >
+        <div className="account-privacy-settings-section__section-content">
+          <p className="account-privacy-settings-section__subscription-line">
+            Your local settings remain available on this device. Cloud backup is
+            optional and does not require a subscription.
+          </p>
+
+          <HorizontalFocusGroup asChild>
+            <div className="account-privacy-settings-section__actions">
+              <Button
+                className="account-privacy-settings-section__action-button"
+                variant="secondary"
+                icon={<CloudArrowUpIcon size={22} />}
+                loading={settingsSyncOperation === "backup"}
+                disabled={settingsSyncOperation !== null}
+                focusId={ACCOUNT_PRIVACY_BACKUP_SETTINGS_BUTTON_ID}
+                focusNavigationOverrides={{
+                  up: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_UPDATE_EMAIL_BUTTON_ID,
+                  },
+                  down: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_CLOUD_SAVES_BUTTON_ID,
+                  },
+                  left: { type: "block" },
+                  right: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_RESTORE_SETTINGS_BUTTON_ID,
+                  },
+                }}
+                onClick={() => {
+                  void handleSettingsBackup();
+                }}
+              >
+                {settingsSyncOperation === "backup"
+                  ? "Backing Up…"
+                  : "Back Up Settings"}
+              </Button>
+
+              <Button
+                className="account-privacy-settings-section__action-button"
+                variant="secondary"
+                icon={<CloudArrowDownIcon size={22} />}
+                loading={settingsSyncOperation === "restore"}
+                disabled={settingsSyncOperation !== null}
+                focusId={ACCOUNT_PRIVACY_RESTORE_SETTINGS_BUTTON_ID}
+                focusNavigationOverrides={{
+                  up: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_UPDATE_PASSWORD_BUTTON_ID,
+                  },
+                  down: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_CLOUD_SAVES_BUTTON_ID,
+                  },
+                  left: {
+                    type: "item",
+                    itemId: ACCOUNT_PRIVACY_BACKUP_SETTINGS_BUTTON_ID,
+                  },
+                  right: { type: "block" },
+                }}
+                onClick={() => {
+                  void handleSettingsRestore();
+                }}
+              >
+                {settingsSyncOperation === "restore"
+                  ? "Restoring…"
+                  : "Restore Settings"}
+              </Button>
+            </div>
+          </HorizontalFocusGroup>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title={GAMEHUB_CLOUD_SAVES_COPY.title}
+        description={GAMEHUB_CLOUD_SAVES_COPY.description}
       >
         <div className="account-privacy-settings-section__section-content">
           <div className="account-privacy-settings-section__subscription-copy">
-            {hydraCloudContent.description.map((line) => (
-              <p
-                key={line}
-                className="account-privacy-settings-section__subscription-line"
-              >
-                {line}
-              </p>
-            ))}
+            <p className="account-privacy-settings-section__subscription-line">
+              {GAMEHUB_CLOUD_SAVES_COPY.status}
+            </p>
           </div>
 
           <Button
             className="account-privacy-settings-section__cloud-button"
-            focusId={ACCOUNT_PRIVACY_HYDRA_CLOUD_BUTTON_ID}
-            focusNavigationOverrides={hydraCloudButtonOverrides}
+            focusId={ACCOUNT_PRIVACY_CLOUD_SAVES_BUTTON_ID}
+            focusNavigationOverrides={cloudSavesButtonOverrides}
             onClick={() => {
-              void globalThis.window.electron.openCheckout();
+              navigate(getBigPictureRoutePath("/cloud-saves"));
             }}
           >
-            {hydraCloudContent.callToAction}
+            {GAMEHUB_CLOUD_SAVES_COPY.action}
           </Button>
         </div>
       </SettingsSection>

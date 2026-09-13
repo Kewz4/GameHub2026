@@ -7,6 +7,9 @@ on:
 
 jobs:
   update-aur:
+    # This inherited workflow owns Hydra's upstream AUR package, not GameHub.
+    # Never publish a GameHub version into that separate project's package.
+    if: github.repository == 'hydralauncher/hydra'
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest

@@ -2,6 +2,7 @@ import { downloadsSublevel, levelKeys } from "@main/level";
 import { DownloadManager } from "./download/download-manager";
 import { WindowManager } from "./window-manager";
 import { logger } from "./logger";
+import { shouldReconnectDownloadAfterNetworkStatus } from "./download-network-policy";
 import {
   DEFAULT_DOWNLOAD_LAYOUT_STATE,
   getBigPictureDownloadView,
@@ -99,8 +100,10 @@ export class DownloadOrchestrator {
   static onNetworkStatusChanged(payload: {
     online: boolean;
     switched?: boolean;
+    forceReconnect?: boolean;
   }) {
     const { online } = payload;
+    const wasOnline = this.isOnline;
 
     if (!DownloadManager.isJsDownloadActive) {
       this.isOnline = online;
@@ -135,6 +138,21 @@ export class DownloadOrchestrator {
 
     this.isOnline = true;
     this.clearReconnectGrace();
+
+    // Chromium's Network Information API may emit `change` while a healthy
+    // transfer is flowing (for example when its bandwidth estimate changes).
+    // Aborting on every online notification repeatedly restarted large files.
+    // Reconnect only after a real offline→online transition, or an explicit
+    // power-resume signal where the old socket cannot be trusted.
+    if (
+      !shouldReconnectDownloadAfterNetworkStatus({
+        wasOnline,
+        online,
+        forceReconnect: payload.forceReconnect,
+      })
+    ) {
+      return;
+    }
 
     const now = Date.now();
     if (now - this.lastReconnectAt < RECONNECT_DEBOUNCE_MS) return;
@@ -389,7 +407,20 @@ export class DownloadOrchestrator {
     return this.runExclusive(() => this.startPreparedDownloadImpl(download));
   }
 
+  private static async installPreparedDownload(download: Download) {
+    const downloadKey = getGameKey(download);
+
+    // Explicit replacement is serialized with every other layout mutation.
+    // Cancel/invalidate the old same-key runtime before exposing the new row;
+    // DownloadManager also serializes this boundary with JS/Python status
+    // persistence, so an in-flight old poll cannot overwrite the replacement.
+    await DownloadManager.installDownloadReplacement(downloadKey, () =>
+      downloadsSublevel.put(downloadKey, download)
+    );
+  }
+
   private static async startPreparedDownloadImpl(download: Download) {
+    await this.installPreparedDownload(download);
     const { downloads } = await this.getDownloadsWithLayout();
     const currentActiveDownload =
       downloads.find(
@@ -417,6 +448,7 @@ export class DownloadOrchestrator {
   }
 
   private static async enqueuePreparedDownloadImpl(download: Download) {
+    await this.installPreparedDownload(download);
     await this.queueDownload(download);
     WindowManager.sendDownloadsUpdated();
 

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import type { EmulatorSystem, Game } from "@types";
-import { systemForGame } from "@renderer/pages/library/console-filter";
+import {
+  systemForGame,
+  resolveEffectiveSystem,
+} from "@renderer/pages/library/console-filter";
 import {
   PLATFORM_LOGOS,
   PLATFORM_LABELS,
@@ -17,7 +20,15 @@ function resolveSystem(
 ): EmulatorSystem | null {
   if (objectId?.startsWith("minerva:")) {
     const seg = objectId.split(":")[1] as EmulatorSystem;
-    if (seg in PLATFORM_LABELS) return seg;
+    if (seg in PLATFORM_LABELS) {
+      // The merged gb_gba_gbc catalogue bakes "gba" into every Game Boy
+      // objectId; if a ROM is bound, its extension is the real console.
+      const effective = resolveEffectiveSystem(
+        seg,
+        game?.selectedDiscPath ?? game?.discs?.[0]?.path
+      );
+      if (effective && effective in PLATFORM_LABELS) return effective;
+    }
   }
   if (game) {
     const s = systemForGame(game);

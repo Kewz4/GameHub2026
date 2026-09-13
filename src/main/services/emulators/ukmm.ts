@@ -29,7 +29,10 @@ import { logger } from "../logger";
 import { SevenZip } from "../7zip";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
-import { resolveWiiuTitleId, setGraphicPackEnabled } from "./cemu-graphic-packs";
+import {
+  resolveWiiuTitleId,
+  setGraphicPackEnabled,
+} from "./cemu-graphic-packs";
 import { WindowManager } from "../window-manager";
 
 /** Push a mod-install phase to the renderer for the progress modal. */
@@ -64,8 +67,7 @@ const isWindows = process.platform === "win32";
 // The deployed Cemu graphic-pack folder + the rules.txt path (relative to the
 // Cemu data dir) that acts as the master "mods enabled" switch.
 const UKMM_PACK_DIR = "BreathOfTheWild_UKMM";
-const ukmmPackRulesId = () =>
-  `graphicPacks/${UKMM_PACK_DIR}/rules.txt`;
+const ukmmPackRulesId = () => `graphicPacks/${UKMM_PACK_DIR}/rules.txt`;
 
 interface UkmmPaths {
   installDir: string;
@@ -150,7 +152,10 @@ export const ensureUkmm = (): boolean => {
   } catch (err) {
     // If the copy failed because the old exe is locked/running, fall back to it.
     if (existsSync(paths.exe)) {
-      logger.warn("[ukmm] couldn't replace existing binary, using current", err);
+      logger.warn(
+        "[ukmm] couldn't replace existing binary, using current",
+        err
+      );
       return true;
     }
     logger.error("[ukmm] couldn't provision bundled binary", err);
@@ -188,7 +193,11 @@ const runUkmm = (
 ): Promise<{ ok: boolean; stdout: string; stderr: string }> => {
   const exe = resolveExe();
   if (!exe) {
-    return Promise.resolve({ ok: false, stdout: "", stderr: "UKMM not installed" });
+    return Promise.resolve({
+      ok: false,
+      stdout: "",
+      stderr: "UKMM not installed",
+    });
   }
   const full = ["--portable", ...(deploy ? ["--deploy"] : []), ...args];
   logger.log(`[ukmm] run: ukmm ${full.join(" ")}`);
@@ -520,7 +529,9 @@ const writeUkmmSettings = (paths: UkmmPaths, cemu: CemuGamePaths): void => {
     cemu.updateDir
       ? `      update_dir: ${yamlPath(cemu.updateDir)}`
       : "      update_dir: null",
-    cemu.aocDir ? `      aoc_dir: ${yamlPath(cemu.aocDir)}` : "      aoc_dir: null",
+    cemu.aocDir
+      ? `      aoc_dir: ${yamlPath(cemu.aocDir)}`
+      : "      aoc_dir: null",
     // CRITICAL: the Endian enum is serde-renamed — Wii U => "Wii U" (NOT "Big").
     // Any other value fails to deserialize and silently voids the ENTIRE
     // wiiu_config, which is exactly the "No config for current platform" error.
@@ -673,10 +684,16 @@ export const prepareBnpInstall = async (
   filePath: string,
   meta: { gbModId: number; name: string; thumbnailUrl: string | null }
 ): Promise<ModInstallPrep> => {
-  const tempDir = path.join(os.tmpdir(), `gh-bnp-${Date.now()}-${++bnpStagingSeq}`);
+  const tempDir = path.join(
+    os.tmpdir(),
+    `gh-bnp-${Date.now()}-${++bnpStagingSeq}`
+  );
   mkdirSync(tempDir, { recursive: true });
   try {
-    const extraction = await SevenZip.extractFile({ filePath, outputPath: tempDir });
+    const extraction = await SevenZip.extractFile({
+      filePath,
+      outputPath: tempDir,
+    });
     if (!extraction.success) {
       rmSync(tempDir, { recursive: true, force: true });
       return { ok: false, reason: "Couldn't read the mod archive" };
@@ -692,7 +709,13 @@ export const prepareBnpInstall = async (
 
   const optionGroups = parseBnpOptions(root);
   if (optionGroups.length > 0) {
-    return { ok: true, needsOptions: true, stagingId, name: meta.name, optionGroups };
+    return {
+      ok: true,
+      needsOptions: true,
+      stagingId,
+      name: meta.name,
+      optionGroups,
+    };
   }
   return { ok: true, stagingId };
 };
@@ -880,10 +903,10 @@ export const exportModpack = async (
     const installed = await getInstalled(shop, objectId);
     const manifest = path.join(configDir, "gamehub-modpack.json");
     writeFileSync(manifest, JSON.stringify({ installed }), "utf-8");
-    await tar.create(
-      { gzip: true, file: destPath, cwd: configDir },
-      ["storage", "gamehub-modpack.json"]
-    );
+    await tar.create({ gzip: true, file: destPath, cwd: configDir }, [
+      "storage",
+      "gamehub-modpack.json",
+    ]);
     try {
       unlinkSync(manifest);
     } catch {

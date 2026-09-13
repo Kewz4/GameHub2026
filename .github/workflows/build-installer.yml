@@ -19,7 +19,89 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      should_release: ${{ steps.config.outputs.should_release }}
+      tag: ${{ steps.config.outputs.tag }}
+      version: ${{ steps.config.outputs.version }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release configuration
+        id: config
+        shell: bash
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_RELEASE: ${{ startsWith(github.event.head_commit.message, 'release:') }}
+          VERSION_OVERRIDE: ${{ github.event.inputs.version }}
+        run: |
+          SHOULD_RELEASE=false
+          if [ "$IS_TAG" = "true" ] || [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$COMMIT_RELEASE" = "true" ]; then
+            SHOULD_RELEASE=true
+          fi
+
+          if [ "$IS_TAG" = "true" ]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          else
+            VERSION="$VERSION_OVERRIDE"
+            if [ -z "$VERSION" ]; then VERSION=$(node -p "require('./package.json').version"); fi
+            VERSION="${VERSION#v}"
+            TAG="v${VERSION}"
+          fi
+
+          {
+            echo "should_release=$SHOULD_RELEASE"
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify release version matches package.json
+        if: steps.config.outputs.should_release == 'true'
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.config.outputs.version }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "Release version $RELEASE_VERSION does not match package.json version $PACKAGE_VERSION."
+            echo "Update package.json and use a matching tag or workflow-dispatch version."
+            exit 1
+          fi
+
+      - name: Prepare private draft release
+        if: steps.config.outputs.should_release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.config.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+            if [ "$IS_DRAFT" != "true" ]; then
+              echo "Release $TAG is already published; refusing to replace it."
+              exit 1
+            fi
+
+            RELEASE_ID=$(gh release view "$TAG" --json databaseId --jq '.databaseId')
+            while read -r ASSET_ID; do
+              if [ -n "$ASSET_ID" ]; then
+                gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID"
+              fi
+            done < <(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq '.[].id')
+            gh release edit "$TAG" --draft --target "$GITHUB_SHA" --title "GameHub $TAG"
+          else
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "GameHub $TAG" --generate-notes
+          fi
+
   build:
+    needs: prepare_release
     strategy:
       matrix:
         include:
@@ -30,7 +112,6 @@ jobs:
               dist/*.exe
               dist/*.zip
               dist/latest.yml
-              dist/latest.yml.blockmap
           - os: ubuntu-latest
             build_cmd: yarn build:linux -- --publish never
             artifact_name: hydra-linux
@@ -60,10 +141,78 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Linux native and mod build dependencies
+        if: runner.os == 'Linux'
+        run: bash scripts/install-linux-build-deps.sh
+
+      - name: Validate release R2 credential broker
+        if: needs.prepare_release.outputs.should_release == 'true'
+        shell: bash
+        env:
+          R2_CREDENTIALS_URL: ${{ vars.MAIN_VITE_R2_CREDENTIALS_URL }}
+        run: |
+          if [ -z "$R2_CREDENTIALS_URL" ]; then
+            echo "MAIN_VITE_R2_CREDENTIALS_URL must be configured before publishing a release."
+            exit 1
+          fi
+          node -e 'const url = new URL(process.env.R2_CREDENTIALS_URL); if (url.protocol !== "https:") process.exit(1); const health = new URL("/health", url); fetch(health, { headers: { Accept: "application/json", "Cache-Control": "no-store" } }).then(async response => { const body = await response.json().catch(() => null); if (!response.ok || body?.ok !== true) throw new Error(`R2 credential broker is not ready (${response.status})`); }).catch(error => { console.error(error.message); process.exit(1); });'
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.9"
+
+      - name: Install .NET SDK (Steam emulator CLI build)
+        if: matrix.os == 'windows-2022'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # Cache the Cargo registry + our own native addon's incremental build
+      # output. Keyed on its Cargo.lock, so an unchanged addon skips almost
+      # all of `cargo build` (postinstall's build:native, re-run again by
+      # build:win/mac/linux) instead of recompiling from scratch every run.
+      - name: Cache Rust dependencies (hydra-native)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/hydra-native/target
+          key: ${{ runner.os }}-cargo-hydra-native-${{ hashFiles('native/hydra-native/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-hydra-native-
+
+      # UKMM is a full third-party Rust GUI app cloned + compiled from scratch
+      # on every build, even though it's pinned to a fixed upstream commit that
+      # only changes when scripts/build-ukmm.cjs itself is edited. Caching the
+      # OUTPUT binary (not the build) lets build-ukmm.cjs's own idempotency
+      # check (`if outPath already exists, skip`) short-circuit the entire
+      # clone/patch/compile — this is the single biggest Windows build cost.
+      - name: Cache UKMM binary (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: binaries/ukmm.exe
+          key: ${{ runner.os }}-ukmm-${{ hashFiles('scripts/build-ukmm.cjs', 'native/ukmm/ukmm-headless-install-bnp.patch') }}
+
+      - name: Cache UKMM binary (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: binaries/ukmm
+          key: ${{ runner.os }}-ukmm-${{ hashFiles('scripts/build-ukmm.cjs', 'native/ukmm/ukmm-headless-install-bnp.patch') }}
+
+      # Cache node_modules itself (not just yarn's download cache, which
+      # setup-node's `cache: yarn` above already covers) so an unchanged
+      # yarn.lock skips most of the package extract/link work too.
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-node-modules-
 
       - name: Install Node dependencies
         run: yarn --frozen-lockfile
@@ -74,9 +223,34 @@ jobs:
       - name: Build Python RPC
         run: python python_rpc/setup.py build
 
+      - name: Run release test gates (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          yarn format-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          yarn lint --no-fix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/run-parity-tests.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path native/hydra-native/Cargo.toml --lib --bins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Linux runs every deterministic recorder/container test. The real
+      # Electron MediaRecorder capture is covered by the Windows gate above
+      # and is skipped automatically on unsupported platforms.
+      - name: Run shared release tests (Linux)
+        if: runner.os == 'Linux'
+        run: node scripts/run-parity-tests.cjs
+
       - name: Build (${{ matrix.os }})
         run: ${{ matrix.build_cmd }}
         env:
+          # The Vite production build renders ~10k modules + large sourcemaps and
+          # overruns Node's default ~2 GB heap ("Ineffective mark-compacts near
+          # heap limit / JavaScript heap out of memory"). Runners have ~16 GB, so
+          # give the build an 8 GB heap.
+          NODE_OPTIONS: --max-old-space-size=8192
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
           MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL || 'https://hydra-api-us-east-1.losbroxas.org' }}
@@ -84,6 +258,9 @@ jobs:
           MAIN_VITE_CHECKOUT_URL: ${{ vars.MAIN_VITE_CHECKOUT_URL || 'https://checkout.hydralauncher.gg' }}
           MAIN_VITE_WS_URL: ${{ vars.MAIN_VITE_WS_URL || 'wss://ws.hydralauncher.gg' }}
           MAIN_VITE_NIMBUS_API_URL: ${{ vars.MAIN_VITE_NIMBUS_API_URL || '' }}
+          MAIN_VITE_R2_CREDENTIALS_URL: ${{ vars.MAIN_VITE_R2_CREDENTIALS_URL || '' }}
+          MAIN_VITE_R2_ENDPOINT: ${{ vars.MAIN_VITE_R2_ENDPOINT || '' }}
+          MAIN_VITE_R2_BUCKET: ${{ vars.MAIN_VITE_R2_BUCKET || 'gamehub' }}
           RENDERER_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
           MAIN_VITE_EXTERNAL_RESOURCES_URL: ${{ vars.EXTERNAL_RESOURCES_URL || 'https://assets.hydralauncher.gg' }}
 
@@ -98,7 +275,7 @@ jobs:
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
         run: |
           cd web-setup-electron
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npx electron-builder --win portable --config electron-builder.yml
           if (-not (Test-Path "../dist/GameHub-WebSetup.exe")) { throw "web setup exe missing" }
 
@@ -110,42 +287,100 @@ jobs:
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
         run: |
           cd web-setup-electron
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npx electron-builder --linux AppImage --config electron-builder.yml
           if [ ! -f ../dist/GameHub-WebSetup.AppImage ]; then echo "web setup AppImage missing"; exit 1; fi
 
-      - name: Upload artifact
+      - name: Upload release assets to private draft
+        if: needs.prepare_release.outputs.should_release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare_release.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ASSETS=(dist/*.exe dist/*.zip dist/latest.yml)
+          else
+            ASSETS=(dist/*.AppImage dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.sh dist/latest-linux.yml)
+          fi
+
+          if [ "${#ASSETS[@]}" -eq 0 ]; then
+            echo "No release assets were produced for ${{ runner.os }}."
+            exit 1
+          fi
+          for ASSET in "${ASSETS[@]}"; do
+            if [ ! -s "$ASSET" ]; then
+              echo "Release asset is empty: $ASSET"
+              exit 1
+            fi
+          done
+
+          printf 'Uploading %s release assets to private draft %s\n' "${#ASSETS[@]}" "$TAG"
+          gh release upload "$TAG" "${ASSETS[@]}" --clobber
+
+      - name: Upload ordinary CI artifact
+        if: needs.prepare_release.outputs.should_release != 'true'
+        # Convenience downloads for non-release builds remain non-fatal because
+        # repository artifact quota must not invalidate an otherwise good build.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_glob }}
-          retention-days: 30
+          # Short retention so per-branch installer artifacts (~150 MB × 2
+          # platforms × every push) don't refill the account storage quota.
+          retention-days: 5
 
-      - name: Resolve release tag
-        id: reltag
+  release:
+    # Each matrix runner uploads to a private draft. Only a successful complete
+    # matrix can reach this job and make that draft public, so neither a platform
+    # failure nor Actions artifact quota can create a partial public release.
+    needs: [prepare_release, build]
+    if: needs.prepare_release.outputs.should_release == 'true' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Verify complete draft release
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare_release.outputs.tag }}
+          VERSION: ${{ needs.prepare_release.outputs.version }}
         run: |
-          if [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          else
-            V="${{ github.event.inputs.version }}"
-            if [ -z "$V" ]; then V=$(node -p "require('./package.json').version"); fi
-            echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft')
+          if [ "$IS_DRAFT" != "true" ]; then
+            echo "Expected $TAG to remain private until matrix verification."
+            exit 1
           fi
 
-      - name: Create/update GitHub release
-        # Tag pushes and manual dispatches always release; branch pushes
-        # release when the head commit message is marked "release:" (the
-        # remote session can't push tags or dispatch workflows).
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: false
-          name: GameHub ${{ steps.reltag.outputs.tag }}
-          tag_name: ${{ steps.reltag.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          generate_release_notes: true
-          files: ${{ matrix.artifact_glob }}
+          REQUIRED_ASSETS=(
+            "GameHub-${VERSION}-win.zip"
+            "GameHub-Setup-${VERSION}.exe"
+            "GameHub-WebSetup.exe"
+            "GameHub-WebSetup.AppImage"
+            "hydralauncher-${VERSION}.AppImage"
+            "hydralauncher-${VERSION}.x86_64.rpm"
+            "hydralauncher_${VERSION}_amd64.deb"
+            "latest.yml"
+            "latest-linux.yml"
+          )
+          ASSET_NAMES=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+          for REQUIRED_ASSET in "${REQUIRED_ASSETS[@]}"; do
+            if ! grep -Fqx "$REQUIRED_ASSET" <<< "$ASSET_NAMES"; then
+              echo "Draft release is missing required asset: $REQUIRED_ASSET"
+              exit 1
+            fi
+          done
+
+      - name: Publish verified release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare_release.outputs.tag }}
+        run: |
+          gh release edit "$TAG" --draft=false --latest --target "$GITHUB_SHA" --title "GameHub $TAG"

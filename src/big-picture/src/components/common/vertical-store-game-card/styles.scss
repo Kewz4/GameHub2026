@@ -9,7 +9,7 @@ button.vertical-store-game-card {
 }
 
 .vertical-store-game-card {
-  width: min(350px, 100%);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: calc(var(--spacing-unit) * 5);
@@ -27,7 +27,7 @@ button.vertical-store-game-card {
   &__cover {
     position: relative;
     width: 100%;
-    aspect-ratio: 268 / 400;
+    aspect-ratio: 2 / 3;
     border-radius: var(--spacing-unit);
     overflow: hidden;
     background-color: var(--surface);
@@ -40,7 +40,15 @@ button.vertical-store-game-card {
     }
 
     img {
+      position: absolute;
+      inset: 0;
       object-fit: cover;
+      object-position: center;
+      visibility: hidden;
+
+      &[data-artwork-ready] {
+        visibility: visible;
+      }
     }
 
     &::before {
@@ -83,7 +91,8 @@ button.vertical-store-game-card {
     flex-direction: column;
     gap: var(--spacing-unit);
     padding: 0 0 calc(var(--spacing-unit) * 2);
-    transition: padding 0.2s ease-in-out;
+    transform: translateX(0);
+    transition: transform 0.2s ease-in-out;
   }
 
   &__title,
@@ -122,7 +131,7 @@ button.vertical-store-game-card {
     }
 
     .vertical-store-game-card__body {
-      padding-inline: calc(var(--spacing-unit) * 2);
+      transform: translateX(calc(var(--spacing-unit) * 2));
     }
   }
 

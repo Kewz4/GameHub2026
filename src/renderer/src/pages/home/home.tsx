@@ -8,7 +8,7 @@ import type { Steam250Game } from "@types";
 
 import flameIconAnimated from "@renderer/assets/icons/flame-animated.gif";
 import starsIconAnimated from "@renderer/assets/icons/stars-animated.gif";
-import { CalendarIcon } from "@primer/octicons-react";
+import { CalendarIcon, SparkleFillIcon } from "@primer/octicons-react";
 import TrophyIcon from "@renderer/assets/icons/trophy.svg?react";
 import GamepadIcon from "@renderer/assets/icons/gamepad.svg?react";
 
@@ -72,9 +72,7 @@ export default function Home() {
         <div className="home__rows">
           <CategoryRow
             title={t("recommended", { defaultValue: "Recommended for you" })}
-            icon={
-              <img src={starsIconAnimated} alt="" className="home__row-flame" />
-            }
+            icon={<SparkleFillIcon size={20} className="home__row-icon" />}
             games={catalogue.recommended}
             isLoading={isLoading}
             enableFeedback

@@ -27,6 +27,12 @@ export interface DownloadProgress {
   download: Download;
   batchFilesTotal?: number;
   batchFilesDownloaded?: number;
+  /** TorBox server-side phase before local bytes begin transferring. */
+  preparationPhase?:
+    | "checking-cache"
+    | "cached"
+    | "preparing"
+    | "direct-fallback";
 }
 
 /* TorBox */
@@ -63,6 +69,8 @@ export interface TorBoxTorrentInfo {
   size: number;
   active: boolean;
   cached: boolean;
+  download_present?: boolean;
+  download_finished?: boolean;
   auth_id: string;
   download_state:
     | "downloading"
@@ -81,6 +89,7 @@ export interface TorBoxTorrentInfo {
   name: string;
   eta: number;
   files: TorBoxFile[];
+  alternative_hashes?: string[];
 }
 
 export interface TorBoxTorrentInfoRequest {

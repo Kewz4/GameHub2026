@@ -71,7 +71,18 @@ export function ReviewReplyItem({
 
   return (
     <div className="game-details__reply-item">
-      <div className="game-details__reply-header">
+      <div
+        className={`game-details__reply-header${reply.user.backgroundImageUrl ? " game-details__reply-header--has-bg" : ""}`}
+      >
+        {reply.user.backgroundImageUrl && (
+          <img
+            src={reply.user.backgroundImageUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="game-details__review-banner"
+          />
+        )}
         <button
           onClick={() => navigate(`/profile/${reply.user.id}`)}
           title={reply.user.displayName}

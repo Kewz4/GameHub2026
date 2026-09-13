@@ -32,6 +32,7 @@ import "./hero.scss";
 
 interface LibraryHeroProps {
   lastPlayedGames: LibraryGame[];
+  onDownloadGame: (game: LibraryGame) => void;
   onToggleFavorite?: (game: LibraryGame) => Promise<void> | void;
   favoriteLoadingGameId?: string | null;
 }
@@ -48,17 +49,14 @@ function getLastPlayedLabel(lastTimePlayed: Date | string | null | undefined) {
 
 export function LibraryHero({
   lastPlayedGames,
+  onDownloadGame,
   onToggleFavorite,
   favoriteLoadingGameId = null,
 }: Readonly<LibraryHeroProps>) {
   const [featuredGameIndex, setFeaturedGameIndex] = useState(0);
   const heroRef = useRef<HTMLElement | null>(null);
   const featuredGame = lastPlayedGames[featuredGameIndex] ?? null;
-  const launchGame = useLibraryLaunchGame(
-    useCallback(() => {
-      console.log("library-hero download");
-    }, [])
-  );
+  const launchGame = useLibraryLaunchGame(onDownloadGame);
   const getHeroScrollAnchor = useCallback(() => heroRef.current, []);
   const dominantColor = useDominantColor(
     featuredGame?.libraryHeroImageUrl ?? null
@@ -96,8 +94,7 @@ export function LibraryHero({
   // (launchbox) game with its discs present — the same predicate the game page
   // hero uses, so last-played classics show "Launch Game", not "Download".
   const isPlayableClassicsGame =
-    featuredGame?.shop === "launchbox" &&
-    (featuredGame.discs?.length ?? 0) > 0;
+    featuredGame?.shop === "launchbox" && (featuredGame.discs?.length ?? 0) > 0;
   const isPlayable =
     Boolean(featuredGame?.executablePath) ||
     featuredGame?.isInstalledLocally === true ||
@@ -105,6 +102,12 @@ export function LibraryHero({
 
   const handlePlayOrDownloadClick = () => {
     if (!featuredGame) return;
+
+    if (!isPlayable) {
+      onDownloadGame(featuredGame);
+      return;
+    }
+
     void launchGame(featuredGame);
   };
 

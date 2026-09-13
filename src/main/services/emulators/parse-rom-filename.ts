@@ -113,17 +113,19 @@ export function displayRomTitle(title: string): string {
  * form normalize to the SAME key — lookups work with either.
  */
 export function normalizeRomTitle(title: string): string {
-  return title
-    .toLowerCase()
-    // Fold accents to their base letter (é→e, ū→u) BEFORE stripping non-alnum,
-    // so "Pokémon Y" and "Pokemon Y" normalize identically ("pokemony").
-    // Without this the accented char is deleted outright ("pokmony") and the
-    // metadata-dataset lookup misses.
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/,\s*(the|an|a)\b/g, "")
-    .replace(/^(the|an|a)\s+/, "")
-    .replace(/[^a-z0-9]/g, "");
+  return (
+    title
+      .toLowerCase()
+      // Fold accents to their base letter (é→e, ū→u) BEFORE stripping non-alnum,
+      // so "Pokémon Y" and "Pokemon Y" normalize identically ("pokemony").
+      // Without this the accented char is deleted outright ("pokmony") and the
+      // metadata-dataset lookup misses.
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/,\s*(the|an|a)\b/g, "")
+      .replace(/^(the|an|a)\s+/, "")
+      .replace(/[^a-z0-9]/g, "")
+  );
 }
 
 export function parseRomFilename(fileName: string): ParsedRomFilename {

@@ -5,41 +5,12 @@ import { useAppDispatch } from "@renderer/hooks";
 import { levelDBService } from "@renderer/services/leveldb.service";
 import type { UserBlocks, UserPreferences } from "@types";
 import { useSearchParams } from "react-router-dom";
+import {
+  resolveSettingsCategoryId,
+  type SettingsCategoryId,
+} from "./settings-navigation";
 
-export type SettingsCategoryId =
-  | "general"
-  | "downloads"
-  | "notifications"
-  | "content_gameplay"
-  | "integrations"
-  | "achievements"
-  | "compatibility"
-  | "big_picture"
-  | "emulation"
-  | "account_privacy";
-
-const legacyTabMap: Record<number, SettingsCategoryId> = {
-  0: "general",
-  1: "content_gameplay",
-  2: "downloads",
-  3: "general",
-  4: "integrations",
-  5: "account_privacy",
-};
-
-const isSettingsCategoryId = (value: string): value is SettingsCategoryId => {
-  return [
-    "general",
-    "downloads",
-    "notifications",
-    "content_gameplay",
-    "integrations",
-    "achievements",
-    "compatibility",
-    "emulation",
-    "account_privacy",
-  ].includes(value);
-};
+export type { SettingsCategoryId } from "./settings-navigation";
 
 export interface SettingsContext {
   updateUserPreferences: (values: Partial<UserPreferences>) => Promise<void>;
@@ -118,17 +89,8 @@ export function SettingsContextProvider({
   }, [defaultSourceUrl]);
 
   useEffect(() => {
-    if (defaultTab) {
-      if (isSettingsCategoryId(defaultTab)) {
-        setCurrentCategoryId(defaultTab);
-        return;
-      }
-
-      const idx = Number(defaultTab);
-      if (!Number.isNaN(idx) && legacyTabMap[idx]) {
-        setCurrentCategoryId(legacyTabMap[idx]);
-      }
-    }
+    const categoryId = resolveSettingsCategoryId(defaultTab);
+    if (categoryId) setCurrentCategoryId(categoryId);
   }, [defaultTab]);
 
   useEffect(() => {
@@ -178,19 +140,22 @@ export function SettingsContextProvider({
 
   const clearSourceUrl = () => setSourceUrl(null);
 
-  const updateUserPreferences = async (values: Partial<UserPreferences>) => {
-    await window.electron.updateUserPreferences(values);
-    levelDBService
-      .get("userPreferences", null, "json")
-      .then((userPreferences) => {
-        dispatch(
-          setUserPreferences(
-            (userPreferences as UserPreferences | null) ??
-              ({} as UserPreferences)
-          )
-        );
-      });
-  };
+  const updateUserPreferences = useCallback(
+    async (values: Partial<UserPreferences>) => {
+      await window.electron.updateUserPreferences(values);
+      const userPreferences = await levelDBService.get(
+        "userPreferences",
+        null,
+        "json"
+      );
+      dispatch(
+        setUserPreferences(
+          (userPreferences as UserPreferences | null) ?? ({} as UserPreferences)
+        )
+      );
+    },
+    [dispatch]
+  );
 
   return (
     <Provider

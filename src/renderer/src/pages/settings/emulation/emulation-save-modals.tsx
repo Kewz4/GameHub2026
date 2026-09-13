@@ -55,7 +55,7 @@ export function RestoreModal({
   onRestored,
 }: Readonly<RestoreModalProps>) {
   const { t } = useTranslation("settings");
-  const { showSuccessToast, showErrorToast } = useToast();
+  const { showSuccessToast, showErrorToast, showWarningToast } = useToast();
   const [targets, setTargets] = useState<MemcardRestoreTarget[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,8 +98,18 @@ export function RestoreModal({
         selected
       );
       if (res.ok) {
-        showSuccessToast(t("cloud_restore_success"));
-        onRestored();
+        if (res.requiresManualImport) {
+          showWarningToast(
+            t("cloud_restore_exported_title"),
+            t("cloud_restore_exported_description", {
+              path: res.exportedPath ?? "",
+            }),
+            12_000
+          );
+        } else {
+          showSuccessToast(t("cloud_restore_success"));
+          onRestored();
+        }
         onClose();
       } else {
         showErrorToast(t("cloud_restore_failed"));
@@ -113,6 +123,7 @@ export function RestoreModal({
     platform,
     showSuccessToast,
     showErrorToast,
+    showWarningToast,
     t,
     onRestored,
     onClose,

@@ -106,23 +106,36 @@ export function useBpRomScan() {
 
   const start = useCallback(
     async (system: EmulatorSystem, folders: BpScanFolderInput[]) => {
-      const language = i18n.language.split("-")[0] || "en";
-      const { requestId } =
-        await globalThis.window.electron.importLaunchboxRoms(
+      try {
+        const language = i18n.language.split("-")[0] || "en";
+        const { requestId } =
+          await globalThis.window.electron.importLaunchboxRoms(
+            system,
+            folders.map((folder) => ({
+              path: folder.path,
+              scanSubfolders: folder.scanSubfolders,
+            })),
+            language
+          );
+        requestIdRef.current = requestId;
+        setScan({
+          ...INITIAL_STATE,
+          phase: "scanning",
           system,
-          folders.map((folder) => ({
-            path: folder.path,
-            scanSubfolders: folder.scanSubfolders,
-          })),
-          language
-        );
-      requestIdRef.current = requestId;
-      setScan({
-        ...INITIAL_STATE,
-        phase: "scanning",
-        system,
-        requestId,
-      });
+          requestId,
+        });
+      } catch (error) {
+        requestIdRef.current = null;
+        setScan({
+          ...INITIAL_STATE,
+          phase: "error",
+          system,
+          error:
+            error instanceof Error
+              ? error.message
+              : "The ROM scan could not be started.",
+        });
+      }
     },
     []
   );

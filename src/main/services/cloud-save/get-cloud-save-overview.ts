@@ -1,0 +1,89 @@
+import type { CloudSaveOverview, GameShop } from "@types";
+
+import {
+  getCloudSaveAccountScopeKey,
+  runWithCloudSaveAccountSession,
+} from "./account-session";
+import { analyzeCloudSaveState } from "./analyze-cloud-save-state";
+import {
+  buildCloudSaveObservationKey,
+  recordLatestCloudSaveObservation,
+} from "./automatic-sync-observation";
+import { getCloudSaveAutomaticSyncEnabled } from "./automatic-sync-settings";
+import { assertCloudSaveSubscription } from "./cloud-save-access";
+import { getCachedCloudSaveOverview } from "./cloud-save-overview-cache";
+import { cloudSaveFileKey } from "./cloud-save-contract";
+import { getUnconfiguredCloudSaveCustomPathCandidates } from "./custom-path-approval-policy";
+import { getFirstSyncState, getSuggestedCloudSaveAction } from "./sync-game";
+import { getEmulatorCloudSaveMappingIssue } from "./emulator-cloud-save-support";
+
+const loadCloudSaveOverview = async (
+  objectId: string,
+  shop: GameShop
+): Promise<CloudSaveOverview> => {
+  assertCloudSaveSubscription();
+
+  const [analysis, isAutomaticSyncEnabled] = await Promise.all([
+    analyzeCloudSaveState(objectId, shop),
+    getCloudSaveAutomaticSyncEnabled(objectId, shop),
+  ]);
+  const state =
+    analysis.state.state === "untracked"
+      ? getFirstSyncState(analysis)
+      : analysis.state.state;
+  const unresolvedEntryIds = new Set([
+    ...(analysis.anchor?.unresolvedRemoteEntryIds ?? []),
+    ...analysis.merge.unresolvedRemoteEntryIds,
+  ]);
+  const unconfiguredCustomPathCount =
+    getUnconfiguredCloudSaveCustomPathCandidates(
+      analysis.remoteManifest?.files ?? [],
+      [
+        ...analysis.customPathBindings.ready,
+        ...analysis.customPathBindings.unresolved,
+      ].map(({ rawPath }) => rawPath)
+    ).length;
+  const mappingIssue =
+    analysis.customPathBindings.ready.length > 0
+      ? null
+      : await getEmulatorCloudSaveMappingIssue(objectId, shop);
+  recordLatestCloudSaveObservation(
+    objectId,
+    shop,
+    buildCloudSaveObservationKey(analysis),
+    getCloudSaveAccountScopeKey()
+  );
+
+  return {
+    ...analysis.state,
+    state,
+    hasChanged: state !== "synced",
+    isAutomaticSyncEnabled,
+    suggestedAction: getSuggestedCloudSaveAction(
+      state,
+      analysis.merge.restoreEntryIds.length +
+        analysis.merge.deleteLocalEntryIds.length
+    ),
+    discoveredVariantCount: analysis.localSnapshot.variants.length,
+    unresolvedRemoteVariantCount: new Set(
+      (analysis.remoteManifest?.files ?? [])
+        .filter((file) => unresolvedEntryIds.has(cloudSaveFileKey(file)))
+        .map((file) => file.variantId)
+    ).size,
+    unconfiguredCustomPathCount,
+    warnings: analysis.localSnapshot.coverage.filter(
+      (item) => item.warningCodes.length > 0
+    ),
+    mappingIssue,
+  };
+};
+
+export const getCloudSaveOverview = (
+  objectId: string,
+  shop: GameShop
+): Promise<CloudSaveOverview> =>
+  runWithCloudSaveAccountSession(() =>
+    getCachedCloudSaveOverview(objectId, shop, () =>
+      loadCloudSaveOverview(objectId, shop)
+    )
+  );

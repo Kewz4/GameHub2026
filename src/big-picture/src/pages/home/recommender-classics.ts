@@ -1,4 +1,5 @@
 import type { CatalogueSearchResult, LibraryGame, ShopAssets } from "@types";
+import { systemForGame } from "@renderer/pages/library/console-filter";
 import { getAllFeedback } from "./recommendation-feedback";
 
 /**
@@ -54,6 +55,28 @@ const normalize = (title: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+/**
+ * Local classics searches are relevance ordered, so their first result is not
+ * necessarily the queried game. Resolve the anchor by identity or exact
+ * normalized title before learning genres from it.
+ */
+export function selectClassicsCatalogueResultForGame(
+  game: Pick<LibraryGame, "shop" | "objectId" | "title">,
+  results: readonly CatalogueSearchResult[]
+): CatalogueSearchResult | null {
+  const identityMatch = results.find(
+    (result) => result.shop === game.shop && result.objectId === game.objectId
+  );
+  if (identityMatch) return identityMatch;
+
+  const wantedTitle = normalize(game.title);
+  if (!wantedTitle) return null;
+
+  return (
+    results.find((result) => normalize(result.title) === wantedTitle) ?? null
+  );
+}
 
 /**
  * Derive the series stem of a title: take the part before a subtitle separator
@@ -131,7 +154,7 @@ export async function getRecommendedClassics(
   const anchorGenreLookups: Promise<void>[] = [];
   for (const { game, hours } of played) {
     const weight = Math.log2(1 + hours) + 0.2;
-    const system = systemOf(game.objectId);
+    const system = systemForGame(game);
     if (system) {
       systemWeight.set(system, (systemWeight.get(system) ?? 0) + weight);
     }
@@ -142,9 +165,7 @@ export async function getRecommendedClassics(
         window.electron
           .searchClassicsCatalogue(game.title, 3)
           .then((results) => {
-            const self = results.find(
-              (r) => normalize(r.title) === normalize(game.title)
-            );
+            const self = selectClassicsCatalogueResultForGame(game, results);
             for (const genre of self?.genres ?? []) {
               genreWeight.set(genre, (genreWeight.get(genre) ?? 0) + weight);
             }
@@ -186,7 +207,7 @@ export async function getRecommendedClassics(
         if (seriesStem(sibling.title) !== stem) continue;
         // Same-series entries dominate; nudge same-console siblings up a bit.
         const sameSystem =
-          systemOf(sibling.objectId) === systemOf(game.objectId) ? 0.3 : 0;
+          systemOf(sibling.objectId) === systemForGame(game) ? 0.3 : 0;
         pushCandidate(
           sibling,
           3 * anchorWeight + sameSystem,

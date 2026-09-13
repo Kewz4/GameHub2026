@@ -135,6 +135,9 @@ export function CatalogueSidebar({
             asChild
           >
             <div
+              data-catalogue-filter={filterKey}
+              data-catalogue-filter-count={length}
+              data-catalogue-filter-state={catalogueData[filterKey].status}
               className={`catalogue__sidebar__filter ${
                 openFilters[filterKey]
                   ? "catalogue__sidebar__filter--open"
@@ -144,7 +147,15 @@ export function CatalogueSidebar({
               <Accordion
                 open
                 focusId={getCatalogueFilterHeaderFocusId(filterKey)}
-                hint={`${length} Available`}
+                hint={
+                  catalogueData[filterKey].status === "loading"
+                    ? "Loading…"
+                    : catalogueData[filterKey].status === "unavailable"
+                      ? "Unavailable"
+                      : catalogueData[filterKey].status === "partial"
+                        ? `${length} on this page`
+                        : `${length} Available`
+                }
                 title={catalogueData[filterKey].label}
                 icon={<ColorDot color={catalogueData[filterKey].color} />}
                 onOpenChange={(isOpen) =>
@@ -173,6 +184,7 @@ export function CatalogueSidebar({
                       filterListRefs.current[filterKey] = handle;
                     }}
                     name={filterKey}
+                    status={catalogueData[filterKey].status}
                     items={filteredItems[filterKey]}
                     values={values}
                     updateSearchParams={updateSearchParams}

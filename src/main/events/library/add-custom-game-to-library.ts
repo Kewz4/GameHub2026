@@ -6,6 +6,14 @@ import { HydraApi } from "@main/services";
 import { fetchBestAssets } from "@main/helpers/fetch-best-assets";
 import { deduplicateTitle } from "@main/helpers/deduplicate-title";
 import { normalizeGameTitle } from "@main/helpers/normalize-game-title";
+import { normalizeExplicitSteamAppId } from "./custom-game-catalogue-match";
+
+interface CatalogueMatch {
+  objectId: string;
+  shop: GameShop;
+  title: string;
+  libraryImageUrl?: string | null;
+}
 
 export const addCustomGameToLibraryInternal = async (
   title: string,
@@ -14,11 +22,14 @@ export const addCustomGameToLibraryInternal = async (
   logoImageUrl?: string,
   libraryHeroImageUrl?: string,
   coverImageUrl?: string,
-  libraryImageUrl?: string
+  libraryImageUrl?: string,
+  matchedSteamObjectId?: string | null
 ) => {
   const objectId = randomUUID();
   const shop: GameShop = "custom";
   const gameKey = levelKeys.game(shop, objectId);
+  const explicitSteamObjectId =
+    normalizeExplicitSteamAppId(matchedSteamObjectId);
 
   const existingGames = await gamesSublevel.iterator().all();
   const existingByPath = existingGames.find(
@@ -38,11 +49,12 @@ export const addCustomGameToLibraryInternal = async (
       !game.isDeleted && normalizeGameTitle(game.title) === titleNorm
   );
 
-  if (existingByTitle) {
+  if (existingByTitle && !explicitSteamObjectId) {
     const [existingKey, existingGame] = existingByTitle;
     const mergedGame = {
       ...existingGame,
       executablePath,
+      isInstalledLocally: true,
       iconUrl: iconUrl || existingGame.iconUrl || null,
       logoImageUrl: logoImageUrl || existingGame.logoImageUrl || null,
       libraryHeroImageUrl:
@@ -54,97 +66,112 @@ export const addCustomGameToLibraryInternal = async (
     return mergedGame;
   }
 
-  // Search the Hydra API catalogue by title — if found, use that entry's
-  // objectId/shop so the game gets full catalogue metadata (achievements, stats, etc.)
-  try {
-    const catalogueResponse = await HydraApi.post<{
-      edges: CatalogueSearchResult[];
-      count: number;
-    }>(
-      "/catalogue/search",
-      {
+  // Search the catalogue by title when the user did not choose a specific
+  // Steam result. An explicit selection is canonical and never depends on a
+  // second fuzzy search returning the same result.
+  let match: CatalogueMatch | undefined = explicitSteamObjectId
+    ? {
+        objectId: explicitSteamObjectId,
+        shop: "steam",
         title,
-        sortBy: "popularity",
-        sortOrder: "desc",
-        downloadSourceFingerprints: [],
-        tags: [],
-        publishers: [],
-        genres: [],
-        developers: [],
-        protondbSupportBadges: [],
-        deckCompatibility: [],
-        take: 5,
-        skip: 0,
-      },
-      { needsAuth: false }
-    );
-
-    const match = catalogueResponse?.edges?.find(
-      (r) => normalizeGameTitle(r.title) === titleNorm
-    );
-
-    if (match) {
-      const catalogueKey = levelKeys.game(match.shop, match.objectId);
-      // Check if that catalogue entry already exists in the library
-      const existingCatalogue = await gamesSublevel
-        .get(catalogueKey)
-        .catch(() => null);
-      if (existingCatalogue && !existingCatalogue.isDeleted) {
-        // Merge exe into existing catalogue entry
-        const merged = {
-          ...existingCatalogue,
-          executablePath,
-          iconUrl: iconUrl || existingCatalogue.iconUrl || null,
-          logoImageUrl: logoImageUrl || existingCatalogue.logoImageUrl || null,
-          libraryHeroImageUrl:
-            libraryHeroImageUrl ||
-            existingCatalogue.libraryHeroImageUrl ||
-            null,
-        };
-        await gamesSublevel.put(catalogueKey, merged);
-        await deduplicateTitle(match.title).catch(() => {});
-        return merged;
+        libraryImageUrl,
       }
-      // Create a new entry using the catalogue's objectId/shop
-      const catalogueGame = {
-        title: match.title,
-        iconUrl: iconUrl || null,
-        logoImageUrl: logoImageUrl || null,
-        libraryHeroImageUrl: libraryHeroImageUrl || null,
-        objectId: match.objectId,
-        shop: match.shop,
-        remoteId: null,
-        isDeleted: false,
-        playTimeInMilliseconds: 0,
-        lastTimePlayed: null,
-        addedToLibraryAt: new Date(),
-        libraryOrigin: "custom" as const,
-        executablePath,
-        launchOptions: null,
-        favorite: false,
-        automaticCloudSync: true,
-        hasManuallyUpdatedPlaytime: false,
-      };
-      const catalogueAssets = {
-        updatedAt: Date.now(),
-        objectId: match.objectId,
-        shop: match.shop,
-        title: match.title,
-        iconUrl: iconUrl || null,
-        libraryHeroImageUrl: libraryHeroImageUrl || match.libraryImageUrl || "",
-        libraryImageUrl: match.libraryImageUrl || iconUrl || "",
-        logoImageUrl: logoImageUrl || "",
-        logoPosition: null,
-        coverImageUrl: match.libraryImageUrl || iconUrl || "",
-        downloadSources: [],
-      };
-      await gamesShopAssetsSublevel.put(catalogueKey, catalogueAssets);
-      await gamesSublevel.put(catalogueKey, catalogueGame);
-      await deduplicateTitle(match.title).catch(() => {});
-      return catalogueGame;
+    : undefined;
+
+  if (!match) {
+    try {
+      const catalogueResponse = await HydraApi.post<{
+        edges: CatalogueSearchResult[];
+        count: number;
+      }>(
+        "/catalogue/search",
+        {
+          title,
+          sortBy: "popularity",
+          sortOrder: "desc",
+          downloadSourceFingerprints: [],
+          tags: [],
+          publishers: [],
+          genres: [],
+          developers: [],
+          protondbSupportBadges: [],
+          deckCompatibility: [],
+          take: 5,
+          skip: 0,
+        },
+        { needsAuth: false }
+      );
+
+      match = catalogueResponse?.edges?.find(
+        (result) => normalizeGameTitle(result.title) === titleNorm
+      );
+    } catch {
+      // Catalogue lookup is optional for an unmatched manual game.
     }
-  } catch {
-    // Catalogue search failed — fall through to custom entry creation
+  }
+
+  if (match) {
+    const catalogueKey = levelKeys.game(match.shop, match.objectId);
+    const existingCatalogue = await gamesSublevel
+      .get(catalogueKey)
+      .catch(() => null);
+
+    if (existingCatalogue) {
+      const merged = {
+        ...existingCatalogue,
+        isDeleted: false,
+        isInstalledLocally: true,
+        libraryOrigin: explicitSteamObjectId
+          ? ("custom" as const)
+          : (existingCatalogue.libraryOrigin ?? ("custom" as const)),
+        executablePath,
+        iconUrl: iconUrl || existingCatalogue.iconUrl || null,
+        logoImageUrl: logoImageUrl || existingCatalogue.logoImageUrl || null,
+        libraryHeroImageUrl:
+          libraryHeroImageUrl || existingCatalogue.libraryHeroImageUrl || null,
+      };
+      await gamesSublevel.put(catalogueKey, merged);
+      await deduplicateTitle(match.title).catch(() => {});
+      return merged;
+    }
+
+    const catalogueGame = {
+      title: match.title,
+      iconUrl: iconUrl || null,
+      logoImageUrl: logoImageUrl || null,
+      libraryHeroImageUrl: libraryHeroImageUrl || null,
+      objectId: match.objectId,
+      shop: match.shop,
+      remoteId: null,
+      isDeleted: false,
+      playTimeInMilliseconds: 0,
+      lastTimePlayed: null,
+      addedToLibraryAt: new Date(),
+      libraryOrigin: "custom" as const,
+      isInstalledLocally: true,
+      executablePath,
+      launchOptions: null,
+      favorite: false,
+      automaticCloudSync: true,
+      hasManuallyUpdatedPlaytime: false,
+    };
+    const catalogueAssets = {
+      updatedAt: Date.now(),
+      objectId: match.objectId,
+      shop: match.shop,
+      title: match.title,
+      iconUrl: iconUrl || null,
+      libraryHeroImageUrl: libraryHeroImageUrl || match.libraryImageUrl || "",
+      libraryImageUrl: match.libraryImageUrl || iconUrl || "",
+      logoImageUrl: logoImageUrl || "",
+      logoPosition: null,
+      coverImageUrl: coverImageUrl || match.libraryImageUrl || iconUrl || "",
+      downloadSources: [],
+    };
+    await gamesShopAssetsSublevel.put(catalogueKey, catalogueAssets);
+    await gamesSublevel.put(catalogueKey, catalogueGame);
+    await deduplicateTitle(match.title).catch(() => {});
+    return catalogueGame;
   }
 
   // For truly custom (no catalogue match): try to enrich with SGDB artwork.
@@ -185,6 +212,7 @@ export const addCustomGameToLibraryInternal = async (
     lastTimePlayed: null,
     addedToLibraryAt: new Date(),
     libraryOrigin: "custom" as const,
+    isInstalledLocally: true,
     executablePath,
     launchOptions: null,
     favorite: false,
@@ -206,7 +234,8 @@ const addCustomGameToLibrary = (
   logoImageUrl?: string,
   libraryHeroImageUrl?: string,
   coverImageUrl?: string,
-  libraryImageUrl?: string
+  libraryImageUrl?: string,
+  matchedSteamObjectId?: string | null
 ) =>
   addCustomGameToLibraryInternal(
     title,
@@ -215,7 +244,8 @@ const addCustomGameToLibrary = (
     logoImageUrl,
     libraryHeroImageUrl,
     coverImageUrl,
-    libraryImageUrl
+    libraryImageUrl,
+    matchedSteamObjectId
   );
 
 registerEvent("addCustomGameToLibrary", addCustomGameToLibrary);

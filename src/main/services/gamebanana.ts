@@ -147,7 +147,9 @@ export const getModDetail = async (
       id: Number(f._idRow),
       fileName: String(f._sFile ?? `mod-${f._idRow}`),
       sizeBytes: Number(f._nFilesize ?? 0),
-      downloadUrl: String(f._sDownloadUrl ?? `https://gamebanana.com/dl/${f._idRow}`),
+      downloadUrl: String(
+        f._sDownloadUrl ?? `https://gamebanana.com/dl/${f._idRow}`
+      ),
     }));
     return {
       id: Number(d._idRow ?? modId),

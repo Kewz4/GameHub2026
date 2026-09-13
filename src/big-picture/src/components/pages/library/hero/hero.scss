@@ -86,10 +86,14 @@
 }
 
 .hero__logo__fallback {
+  align-self: flex-end;
   max-width: 100%;
-  font-size: 48px;
+  font-size: clamp(32px, 2.25vw, 40px);
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
   color: var(--primary);
 }
 

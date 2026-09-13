@@ -1,0 +1,12 @@
+LIBRARY "gamehub-overlay-qa-directinput-bootstrap64"
+EXPORTS
+    GameHubDiQaGetBootstrapSnapshot
+    GameHubDiQaBeginBlock
+    GameHubDiQaRequestClose
+    GameHubDiQaObserveRelease
+    GameHubDiQaInvalidateTopology
+    GameHubDiQaRevalidate
+    GameHubDiQaRearm
+    GameHubDiQaDetach
+    GameHubDiQaAttachLateForNegativeControl
+    GameHubDiQaSetHotCallPauseForStress

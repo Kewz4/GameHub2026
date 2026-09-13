@@ -1,0 +1,8 @@
+LIBRARY gamehub-overlay-qa-dxgi-d3d12-bootstrap64
+EXPORTS
+  GameHubDxgiD3d12QaGetSnapshot @1
+  GameHubDxgiD3d12QaRegisterSwapChain @2
+  GameHubDxgiD3d12QaSetPresentGate @3
+  GameHubDxgiD3d12QaSetPauseInFlight @4
+  GameHubDxgiD3d12QaDetach @5
+  GameHubDxgiD3d12QaArmFault @6

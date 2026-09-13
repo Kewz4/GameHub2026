@@ -92,6 +92,6 @@ lookups will miss.
 ## Hosting
 
 The runtime base URL is
-`https://raw.githubusercontent.com/Kewz4/hydra/dev/sources/gamehub-meta` (env
+`https://raw.githubusercontent.com/Kewz4/GameHub2026/dev/sources/gamehub-meta` (env
 override: `GAMEHUB_META_BASE_URL`). Generated files must be committed to `dev`
 for users to receive them. Systems without a generated file are skipped silently.

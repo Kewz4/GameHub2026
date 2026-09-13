@@ -10,8 +10,13 @@ export interface CheckboxFieldProps
   label: string | React.ReactNode;
 }
 
-export function CheckboxField({ label, ...props }: CheckboxFieldProps) {
-  const id = useId();
+export function CheckboxField({
+  label,
+  id: providedId,
+  ...props
+}: CheckboxFieldProps) {
+  const generatedId = useId();
+  const id = providedId ?? generatedId;
 
   return (
     <div className="checkbox-field">
@@ -26,6 +31,7 @@ export function CheckboxField({ label, ...props }: CheckboxFieldProps) {
         />
         <span
           className={`checkbox-field__icon ${props.checked ? "checked" : ""}`}
+          aria-hidden="true"
         >
           <CheckIcon />
         </span>

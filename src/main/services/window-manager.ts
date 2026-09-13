@@ -3,7 +3,11 @@ import { isStaging } from "@main/constants";
 import { db, gamesSublevel, levelKeys } from "@main/level";
 import icon from "@resources/icon.png?asset";
 import trayIcon from "@resources/tray-icon.png?asset";
-import { AuthPage, generateAchievementCustomNotificationTest } from "@shared";
+import {
+  AuthPage,
+  generateAchievementCustomNotificationTest,
+  type ConsoleLogEntry,
+} from "@shared";
 import type {
   AchievementCustomNotificationPosition,
   AchievementNotificationInfo,
@@ -27,8 +31,11 @@ import { orderBy, slice } from "lodash-es";
 import path from "node:path";
 import UserAgent from "user-agents";
 import { AUTH_REBRAND_CSS, AUTH_REBRAND_JS } from "./auth-rebrand";
+import { CoalescedWindowCreation } from "./coalesced-window-creation";
 import { HydraApi } from "./hydra-api";
-import { setConsoleWindowSender, type ConsoleLogEntry } from "./logger";
+import { setConsoleWindowSender } from "./logger";
+import { supportsDesktopGameCapture } from "./desktop-capture-capability";
+import { NativeAddon } from "./native-addon";
 
 export class WindowManager {
   public static mainWindow: Electron.BrowserWindow | null = null;
@@ -41,20 +48,28 @@ export class WindowManager {
   private static friendsWindow: Electron.BrowserWindow | null = null;
   private static authWindow: Electron.BrowserWindow | null = null;
   private static deferredMainMaximize = false;
+  private static mainWindowCreation: Promise<void> | null = null;
+  private static startMainInBigPicture = false;
+  private static readonly notificationWindowCreation =
+    new CoalescedWindowCreation<Electron.BrowserWindow>();
 
   private static readonly AUTH_WINDOW_WIDTH = 600;
   private static readonly AUTH_WINDOW_HEIGHT = 640;
   private static readonly AUTH_WINDOW_TITLE_BAR_HEIGHT = 34;
   private static readonly AUTH_WINDOW_BORDER = 1;
+  private static readonly DEFAULT_WINDOW_WIDTH = 1200;
+  private static readonly DEFAULT_WINDOW_HEIGHT = 860;
+  private static readonly MIN_WINDOW_WIDTH = 1024;
+  private static readonly MIN_WINDOW_HEIGHT = 600;
 
   private static readonly editorWindows: Map<string, BrowserWindow> = new Map();
 
   private static initialConfigInitializationMainWindow: Electron.BrowserWindowConstructorOptions =
     {
-      width: 1200,
-      height: 860,
-      minWidth: 1024,
-      minHeight: 860,
+      width: WindowManager.DEFAULT_WINDOW_WIDTH,
+      height: WindowManager.DEFAULT_WINDOW_HEIGHT,
+      minWidth: WindowManager.MIN_WINDOW_WIDTH,
+      minHeight: WindowManager.MIN_WINDOW_HEIGHT,
       backgroundColor: "#1c1c1c",
       titleBarStyle: process.platform === "linux" ? "default" : "hidden",
       icon,
@@ -72,17 +87,26 @@ export class WindowManager {
       show: false,
     };
 
-  private static async loadWindowURL(window: BrowserWindow, hash: string = "") {
+  // Public so the overlay-manager can load the `#/overlay` renderer route into
+  // can load the `#/overlay` renderer route into their own BrowserWindows.
+  public static async loadWindowURL(window: BrowserWindow, hash: string = "") {
+    if (!app.isPackaged && process.env.GAMEHUB_BACKGROUND_QA === "true") {
+      window.setOpacity(0);
+      window.setFocusable(false);
+      window.setIgnoreMouseEvents(true);
+      window.setSkipTaskbar(true);
+      window.webContents.setBackgroundThrottling(false);
+    }
     // HMR for renderer base on electron-vite cli.
     // Load the remote URL for development or the local html file for production.
     if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-      window.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}#/${hash}`);
+      return window.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}#/${hash}`);
     } else {
       // This fork ships the renderer bundled inside the app. Upstream Hydra
       // hosts a per-version renderer on a CDN subdomain, but we don't deploy
       // there — loading that remote URL would show a blank window — so always
       // load the local file in production.
-      window.loadFile(path.join(__dirname, "../renderer/index.html"), {
+      return window.loadFile(path.join(__dirname, "../renderer/index.html"), {
         hash,
       });
     }
@@ -143,6 +167,45 @@ export class WindowManager {
     return data ?? { isMaximized: false, height: 860, width: 1200 };
   }
 
+  private static fitToWorkArea<
+    T extends { x?: number; y?: number; width?: number; height?: number },
+  >(bounds: T) {
+    const savedWidth = bounds.width ?? this.DEFAULT_WINDOW_WIDTH;
+    const savedHeight = bounds.height ?? this.DEFAULT_WINDOW_HEIGHT;
+    const savedX = bounds.x;
+    const savedY = bounds.y;
+    const hasSavedPosition = savedX !== undefined && savedY !== undefined;
+    const { workArea } = hasSavedPosition
+      ? screen.getDisplayMatching({
+          x: savedX,
+          y: savedY,
+          width: savedWidth,
+          height: savedHeight,
+        })
+      : screen.getPrimaryDisplay();
+    const minWidth = Math.min(this.MIN_WINDOW_WIDTH, workArea.width);
+    const minHeight = Math.min(this.MIN_WINDOW_HEIGHT, workArea.height);
+    const width = Math.max(minWidth, Math.min(savedWidth, workArea.width));
+    const height = Math.max(minHeight, Math.min(savedHeight, workArea.height));
+
+    if (!hasSavedPosition) {
+      return { ...bounds, minWidth, minHeight, width, height };
+    }
+
+    const maxX = Math.max(workArea.x, workArea.x + workArea.width - width);
+    const maxY = Math.max(workArea.y, workArea.y + workArea.height - height);
+
+    return {
+      ...bounds,
+      minWidth,
+      minHeight,
+      width,
+      height,
+      x: Math.min(Math.max(savedX, workArea.x), maxX),
+      y: Math.min(Math.max(savedY, workArea.y), maxY),
+    };
+  }
+
   private static updateInitialConfig(
     newConfig: Partial<Electron.BrowserWindowConstructorOptions>
   ) {
@@ -152,9 +215,18 @@ export class WindowManager {
     };
   }
 
-  public static async createMainWindow() {
-    if (this.mainWindow) return;
+  public static async createMainWindow(options: { bigPicture?: boolean } = {}) {
+    if (options.bigPicture) this.startMainInBigPicture = true;
+    if (this.mainWindowCreation) return this.mainWindowCreation;
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) return;
+    const creation = this.createMainWindowInternal().finally(() => {
+      if (this.mainWindowCreation === creation) this.mainWindowCreation = null;
+    });
+    this.mainWindowCreation = creation;
+    return creation;
+  }
 
+  private static async createMainWindowInternal() {
     const userPreferences = await db
       .get<string, UserPreferences | null>(levelKeys.userPreferences, {
         valueEncoding: "json",
@@ -164,7 +236,7 @@ export class WindowManager {
     const { isMaximized = false, ...configWithoutMaximized } =
       await this.loadScreenConfig();
 
-    this.updateInitialConfig(configWithoutMaximized);
+    this.updateInitialConfig(this.fitToWorkArea(configWithoutMaximized));
 
     this.mainWindow = new BrowserWindow(
       this.initialConfigInitializationMainWindow
@@ -172,7 +244,7 @@ export class WindowManager {
 
     this.deferredMainMaximize = false;
 
-    if (userPreferences?.launchInBigPicture) {
+    if (this.startMainInBigPicture || userPreferences?.launchInBigPicture) {
       this.mainWindow.setOpacity(0);
       this.mainWindow.setSkipTaskbar(true);
       if (isMaximized) {
@@ -284,9 +356,13 @@ export class WindowManager {
     });
 
     this.mainWindow.on("ready-to-show", () => {
-      if (!app.isPackaged || isStaging)
+      if (
+        (!app.isPackaged || isStaging) &&
+        process.env.GAMEHUB_BACKGROUND_QA !== "true"
+      )
         WindowManager.mainWindow?.webContents.openDevTools();
-      if (userPreferences?.launchInBigPicture) {
+      if (this.startMainInBigPicture || userPreferences?.launchInBigPicture) {
+        this.startMainInBigPicture = false;
         void WindowManager.openBigPictureWindow();
       } else {
         WindowManager.mainWindow?.show();
@@ -334,7 +410,12 @@ export class WindowManager {
   }
 
   public static async openBigPictureWindow() {
-    if (this.bigPicture) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      await this.createMainWindow({ bigPicture: true });
+    }
+    if (this.bigPicture && !this.bigPicture.isDestroyed()) {
+      if (this.bigPicture.isMinimized()) this.bigPicture.restore();
+      this.bigPicture.show();
       this.bigPicture.focus();
       return;
     }
@@ -365,7 +446,10 @@ export class WindowManager {
 
     this.bigPicture.removeMenu();
 
-    if (!app.isPackaged || isStaging) {
+    if (
+      (!app.isPackaged || isStaging) &&
+      process.env.GAMEHUB_BACKGROUND_QA !== "true"
+    ) {
       this.bigPicture.webContents.openDevTools();
     }
 
@@ -698,13 +782,19 @@ export class WindowManager {
    */
   private static async raiseAndShowOverlay(): Promise<Electron.BrowserWindow | null> {
     if (process.platform === "darwin") return null;
-
-    if (!this.notificationWindow || this.notificationWindow.isDestroyed()) {
-      this.notificationWindow = null;
-      await this.createNotificationWindow();
+    if (
+      process.platform === "linux" &&
+      (!supportsDesktopGameCapture(process.platform) ||
+        !NativeAddon.isDesktopCompositionAvailable())
+    ) {
+      // Re-check cached windows if the compositor stopped after creation.
+      if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+        this.notificationWindow.hide();
+      }
+      return null;
     }
 
-    const win = this.notificationWindow;
+    const win = await this.createNotificationWindow();
     if (!win || win.isDestroyed()) return null;
 
     this.raiseOverFullscreen(win);
@@ -719,7 +809,11 @@ export class WindowManager {
     achievements: AchievementNotificationInfo[]
   ): Promise<boolean> {
     const win = await this.raiseAndShowOverlay();
-    if (!win) return false;
+    if (!win)
+      return (
+        process.platform === "linux" &&
+        this.sendAchievementToFocusedWindow(position, achievements)
+      );
     win.webContents.send("on-achievement-unlocked", position, achievements);
     return true;
   }
@@ -761,11 +855,27 @@ export class WindowManager {
     return false;
   }
 
-  public static async createNotificationWindow() {
-    if (this.notificationWindow) return;
+  public static createNotificationWindow() {
+    return this.notificationWindowCreation.getOrCreate(
+      () => {
+        if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+          return this.notificationWindow;
+        }
+        this.notificationWindow = null;
+        return null;
+      },
+      () => this.createNotificationWindowInternal()
+    );
+  }
 
-    if (process.platform === "darwin" || process.platform === "linux") {
-      return;
+  private static async createNotificationWindowInternal(): Promise<Electron.BrowserWindow | null> {
+    if (
+      process.platform === "darwin" ||
+      (process.platform === "linux" &&
+        (!supportsDesktopGameCapture(process.platform) ||
+          !NativeAddon.isDesktopCompositionAvailable()))
+    ) {
+      return null;
     }
 
     const userPreferences = await db.get<string, UserPreferences | undefined>(
@@ -779,14 +889,14 @@ export class WindowManager {
       userPreferences?.achievementNotificationsEnabled === false ||
       userPreferences?.achievementCustomNotificationsEnabled === false
     ) {
-      return;
+      return null;
     }
 
     const { x, y } = await this.getNotificationWindowPosition(
       userPreferences?.achievementCustomNotificationPosition
     );
 
-    this.notificationWindow = new BrowserWindow({
+    const notificationWindow = new BrowserWindow({
       transparent: true,
       maximizable: false,
       autoHideMenuBar: true,
@@ -805,14 +915,55 @@ export class WindowManager {
         sandbox: false,
       },
     });
-    this.notificationWindow.setIgnoreMouseEvents(true);
-
-    this.notificationWindow.setAlwaysOnTop(true, "screen-saver", 1);
-    this.loadWindowURL(this.notificationWindow, "achievement-notification");
-
-    this.notificationWindow.once("ready-to-show", () => {
-      // Window stays hidden until a notification is actually sent.
+    this.notificationWindow = notificationWindow;
+    notificationWindow.once("closed", () => {
+      if (this.notificationWindow === notificationWindow) {
+        this.notificationWindow = null;
+      }
     });
+    notificationWindow.setIgnoreMouseEvents(true);
+    notificationWindow.setAlwaysOnTop(true, "screen-saver", 1);
+
+    // `did-finish-load` is too early: React effects may not have subscribed to
+    // the unlock channels yet. Wait for a renderer message sent only after the
+    // listeners are installed, so the very first unlock cannot be dropped.
+    const rendererReady = new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (ready: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        notificationWindow.webContents.removeListener(
+          "ipc-message",
+          onIpcMessage
+        );
+        notificationWindow.removeListener("closed", onClosedBeforeReady);
+        resolve(ready);
+      };
+      const onIpcMessage = (_event: Electron.Event, channel: string) => {
+        if (channel === "achievement-notification-renderer-ready") {
+          finish(true);
+        }
+      };
+      const onClosedBeforeReady = () => finish(false);
+      const timeout = setTimeout(() => finish(false), 5_000);
+      notificationWindow.webContents.on("ipc-message", onIpcMessage);
+      notificationWindow.once("closed", onClosedBeforeReady);
+    });
+
+    try {
+      await this.loadWindowURL(notificationWindow, "achievement-notification");
+    } catch {
+      if (!notificationWindow.isDestroyed()) notificationWindow.destroy();
+      await rendererReady;
+      return null;
+    }
+
+    if (!(await rendererReady)) {
+      if (!notificationWindow.isDestroyed()) notificationWindow.destroy();
+      return null;
+    }
+    return notificationWindow;
   }
 
   public static async showAchievementTestNotification() {
@@ -837,24 +988,34 @@ export class WindowManager {
       }),
     ];
 
-    if (process.platform === "linux") {
+    if (
+      process.platform === "linux" &&
+      (!supportsDesktopGameCapture(process.platform) ||
+        !NativeAddon.isDesktopCompositionAvailable())
+    ) {
       this.sendAchievementToFocusedWindow(position, testAchievements);
       return;
     }
 
-    this.notificationWindow?.show();
-    this.notificationWindow?.webContents.send(
-      "on-achievement-unlocked",
-      position,
-      testAchievements
-    );
+    await this.showAchievementNotification(position, testAchievements);
   }
 
   public static async closeNotificationWindow() {
-    if (this.notificationWindow) {
-      this.notificationWindow.close();
+    const currentWindow = this.notificationWindow;
+    if (currentWindow && !currentWindow.isDestroyed()) {
+      currentWindow.close();
+    }
+    if (this.notificationWindow === currentWindow) {
       this.notificationWindow = null;
     }
+
+    // Creation may still be awaiting preferences or renderer readiness. Let it
+    // settle, then close a window it published after the first check.
+    await this.notificationWindowCreation.waitForPending();
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.close();
+    }
+    this.notificationWindow = null;
   }
 
   /**
@@ -991,7 +1152,10 @@ export class WindowManager {
       this.gameLauncherWindow = null;
     });
 
-    if (!app.isPackaged || isStaging) {
+    if (
+      (!app.isPackaged || isStaging) &&
+      process.env.GAMEHUB_BACKGROUND_QA !== "true"
+    ) {
       this.gameLauncherWindow.webContents.openDevTools();
     }
   }
@@ -1208,7 +1372,10 @@ export class WindowManager {
 
     this.friendsWindow.once("ready-to-show", () => {
       this.friendsWindow?.show();
-      if (!app.isPackaged || isStaging) {
+      if (
+        (!app.isPackaged || isStaging) &&
+        process.env.GAMEHUB_BACKGROUND_QA !== "true"
+      ) {
         this.friendsWindow?.webContents.openDevTools();
       }
     });
@@ -1260,7 +1427,10 @@ export class WindowManager {
     this.consoleWindow = new BrowserWindow({
       width: 900,
       height: 600,
-      minWidth: 600,
+      // Keep the diagnostics window usable beside a game or download manager.
+      // The compact responsive layout starts below 560px, so a 600px minimum
+      // made that layout impossible to reach through normal window resizing.
+      minWidth: 480,
       minHeight: 300,
       title: "GameHub Console",
       backgroundColor: "#0d0d0d",
@@ -1270,9 +1440,9 @@ export class WindowManager {
       },
     });
 
-    setConsoleWindowSender((entry: ConsoleLogEntry) => {
+    setConsoleWindowSender((entries: ConsoleLogEntry[]) => {
       if (this.consoleWindow && !this.consoleWindow.isDestroyed()) {
-        this.consoleWindow.webContents.send("console:log", entry);
+        this.consoleWindow.webContents.send("console:logs", entries);
       }
     });
 

@@ -16,8 +16,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@renderer": resolve(__dirname, "../renderer/src"),
       "@shared": resolve(__dirname, "../../src/shared"),
       "@locales": resolve(__dirname, "../../src/locales"),
+      "@types": resolve(__dirname, "../../src/types/index.ts"),
     },
   },
   plugins: [react()],

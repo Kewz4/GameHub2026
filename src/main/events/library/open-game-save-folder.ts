@@ -13,8 +13,14 @@ const openGameSaveFolder = async (
 
   try {
     if (fs.existsSync(saveFolderPath)) {
-      await shell.openPath(saveFolderPath);
-      return true;
+      const stat = fs.statSync(saveFolderPath);
+      if (stat.isFile()) {
+        shell.showItemInFolder(saveFolderPath);
+        return true;
+      }
+      if (stat.isDirectory()) {
+        return (await shell.openPath(saveFolderPath)) === "";
+      }
     }
   } catch {
     return false;

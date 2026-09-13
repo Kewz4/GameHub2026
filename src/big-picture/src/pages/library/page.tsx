@@ -4,6 +4,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -16,9 +17,13 @@ import {
 import {
   useBigPictureToast,
   useGameCollections,
+  useGamepad,
   useLibrary,
   useNavigation,
 } from "../../hooks";
+import { NavigationService } from "../../services";
+import { useVirtualKeyboardStore } from "../../stores";
+import { GamepadButtonType } from "../../types";
 import {
   isBuiltinLibraryTab,
   type LibraryViewMode,
@@ -27,6 +32,8 @@ import {
   LibraryFocusList,
   LibraryGameContextMenu,
   LibraryHero,
+  Button,
+  EmptyState,
   VerticalFocusGroup,
   LIBRARY_SECONDARY_FILTER_STORAGE_KEY,
   LIBRARY_SORT_BY_STORAGE_KEY,
@@ -44,13 +51,22 @@ import {
 import { ConfirmationModal, DownloadGameModal } from "../../components/modals";
 import {
   LIBRARY_FILTERS_SEARCH_INPUT_ID,
+  LIBRARY_EMPTY_REFRESH_BUTTON_ID,
+  LIBRARY_FILTERED_EMPTY_RESET_BUTTON_ID,
+  LIBRARY_HERO_LAUNCH_BUTTON_ID,
   LIBRARY_PAGE_REGION_ID,
+  getLibraryFiltersTabFocusId,
 } from "../../components/pages/library/navigation";
 import {
   ScanFlowModal,
   type FoundGame,
 } from "../../components/pages/library/scan-flow-modal";
 import { logger } from "@renderer/logger";
+import {
+  canHandleLibraryBumperInput,
+  getAdjacentLibraryTab,
+  getLibraryTabOrder,
+} from "./library-controller";
 
 import "./page.scss";
 
@@ -116,8 +132,9 @@ export default function LibraryPage() {
   const downloadModalRestoreFocusIdRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const { setFocus } = useNavigation();
+  const { onButtonPressed, isActiveGamepadEvent } = useGamepad();
   const { showSuccessToast } = useBigPictureToast();
-  const { library, updateLibrary } = useLibrary();
+  const { library, updateLibrary, isLoading, loadError } = useLibrary();
   const { collections, loadCollections } = useGameCollections();
   const [selectedFilterTab, setSelectedFilterTab] =
     useState<LibraryFilterTab>("all");
@@ -142,6 +159,18 @@ export default function LibraryPage() {
     useState<PendingLibraryAction | null>(null);
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [showScanModal, setShowScanModal] = useState(false);
+  const libraryTabOrder = useMemo(
+    () => getLibraryTabOrder(collections),
+    [collections]
+  );
+  const canHandleBumperInput = useCallback(
+    () =>
+      canHandleLibraryBumperInput(
+        NavigationService.getInstance().getDebugSnapshot().activeLayerId,
+        Boolean(useVirtualKeyboardStore.getState().target)
+      ),
+    []
+  );
   const { favoriteLoadingGameId, toggleFavorite } =
     useLibraryFavorite(updateLibrary);
   const {
@@ -162,6 +191,29 @@ export default function LibraryPage() {
   const shouldAnimateContentChange =
     hasMountedContentRef.current &&
     previousContentTransitionKeyRef.current !== contentTransitionKey;
+
+  const resetLibraryFilters = useCallback(() => {
+    setSelectedFilterTab("all");
+    setSearch("");
+    setFilterBy("all_games");
+  }, []);
+
+  const selectAdjacentLibraryTab = useCallback(
+    (direction: -1 | 1) => {
+      const nextTab = getAdjacentLibraryTab(
+        libraryTabOrder,
+        selectedFilterTab,
+        direction
+      );
+      if (!nextTab) return;
+
+      setSelectedFilterTab(nextTab);
+      globalThis.window.requestAnimationFrame(() => {
+        setFocus(getLibraryFiltersTabFocusId(String(nextTab)));
+      });
+    },
+    [libraryTabOrder, selectedFilterTab, setFocus]
+  );
 
   const refreshLibraryData = useCallback(async () => {
     await Promise.all([updateLibrary(), loadCollections()]);
@@ -195,8 +247,7 @@ export default function LibraryPage() {
     useState<LibraryGame | null>(null);
 
   const openDownloadModalFromContextMenu = useCallback(
-    (game: LibraryGame) => {
-      const restoreFocusId = contextMenuState.restoreFocusId;
+    (game: LibraryGame, restoreFocusId = contextMenuState.restoreFocusId) => {
       downloadModalRestoreFocusIdRef.current = restoreFocusId;
 
       globalThis.window.requestAnimationFrame(() => {
@@ -204,6 +255,13 @@ export default function LibraryPage() {
       });
     },
     [contextMenuState.restoreFocusId]
+  );
+
+  const openDownloadModalFromHero = useCallback(
+    (game: LibraryGame) => {
+      openDownloadModalFromContextMenu(game, LIBRARY_HERO_LAUNCH_BUTTON_ID);
+    },
+    [openDownloadModalFromContextMenu]
   );
 
   const handleCloseDownloadModal = useCallback(() => {
@@ -228,6 +286,9 @@ export default function LibraryPage() {
           executablePath: g.executablePath,
           title: g.title,
           isNew: g.isNew,
+          // Forward emulatorSystem so console ROMs are bound as emulator discs,
+          // not raw executables (which shell-open the ROM).
+          emulatorSystem: g.emulatorSystem,
         }))
       );
       await refreshLibraryData();
@@ -353,20 +414,47 @@ export default function LibraryPage() {
   }, [pendingAction, refreshLibraryData, setFocus, showSuccessToast]);
 
   useEffect(() => {
-    updateLibrary();
+    const removeLeftBumper = onButtonPressed(
+      GamepadButtonType.LEFT_BUMPER,
+      (event) => {
+        if (
+          !canHandleBumperInput() ||
+          !isActiveGamepadEvent(event) ||
+          !getAdjacentLibraryTab(libraryTabOrder, selectedFilterTab, -1)
+        ) {
+          return;
+        }
 
-    if (!IS_DESKTOP) return;
+        selectAdjacentLibraryTab(-1);
+      }
+    );
+    const removeRightBumper = onButtonPressed(
+      GamepadButtonType.RIGHT_BUMPER,
+      (event) => {
+        if (
+          !canHandleBumperInput() ||
+          !isActiveGamepadEvent(event) ||
+          !getAdjacentLibraryTab(libraryTabOrder, selectedFilterTab, 1)
+        ) {
+          return;
+        }
 
-    const unsubscribe = globalThis.window.electron.onLibraryBatchComplete(
-      () => {
-        updateLibrary();
+        selectAdjacentLibraryTab(1);
       }
     );
 
     return () => {
-      unsubscribe();
+      removeLeftBumper();
+      removeRightBumper();
     };
-  }, [updateLibrary]);
+  }, [
+    canHandleBumperInput,
+    isActiveGamepadEvent,
+    libraryTabOrder,
+    onButtonPressed,
+    selectAdjacentLibraryTab,
+    selectedFilterTab,
+  ]);
 
   useEffect(() => {
     try {
@@ -421,9 +509,35 @@ export default function LibraryPage() {
     return (
       <section className="library-page">
         <VerticalFocusGroup regionId={LIBRARY_PAGE_REGION_ID}>
-          <div className="library-page__empty">
-            <p>No games in library</p>
-          </div>
+          <EmptyState
+            className="library-page__empty"
+            role={loadError ? "alert" : "status"}
+            title={
+              isLoading
+                ? "Loading library…"
+                : loadError
+                  ? "Library could not be loaded"
+                  : "No games in library"
+            }
+            description={
+              loadError
+                ? "Check the connection to GameHub's local data and try again."
+                : isLoading
+                  ? "GameHub is reading your installed and saved games."
+                  : "Add a game or scan this device, then refresh the library."
+            }
+            actions={
+              !isLoading ? (
+                <Button
+                  focusId={LIBRARY_EMPTY_REFRESH_BUTTON_ID}
+                  variant="secondary"
+                  onClick={() => void updateLibrary()}
+                >
+                  Refresh
+                </Button>
+              ) : null
+            }
+          />
         </VerticalFocusGroup>
       </section>
     );
@@ -436,6 +550,7 @@ export default function LibraryPage() {
           <LibraryHero
             favoriteLoadingGameId={favoriteLoadingGameId}
             lastPlayedGames={lastPlayedGames}
+            onDownloadGame={openDownloadModalFromHero}
             onToggleFavorite={toggleFavorite}
           />
 
@@ -479,7 +594,21 @@ export default function LibraryPage() {
                   : undefined
               }
             >
-              {viewMode === "list" ? (
+              {filteredLibrary.length === 0 ? (
+                <EmptyState
+                  title="No games match these filters"
+                  description="Clear the current search and filters to show your library again."
+                  actions={
+                    <Button
+                      focusId={LIBRARY_FILTERED_EMPTY_RESET_BUTTON_ID}
+                      variant="secondary"
+                      onClick={resetLibraryFilters}
+                    >
+                      Clear filters
+                    </Button>
+                  }
+                />
+              ) : viewMode === "list" ? (
                 <LibraryFocusList
                   games={filteredLibrary}
                   contextMenuGameId={

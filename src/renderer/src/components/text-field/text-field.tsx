@@ -34,11 +34,13 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       containerProps,
       rightContent = null,
       error,
+      id: providedId,
       ...props
     },
     ref
   ) => {
-    const id = useId();
+    const generatedId = useId();
+    const id = providedId ?? generatedId;
     const [isFocused, setIsFocused] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const { t } = useTranslation("forms");
@@ -47,11 +49,7 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       props.type === "password" && isPasswordVisible
         ? "text"
         : (props.type ?? "text");
-    const hintContent = error ? (
-      <small className="text-field-container__error-label">{error}</small>
-    ) : hint ? (
-      <small>{hint}</small>
-    ) : null;
+    const descriptionId = error || hint ? `${id}-description` : undefined;
     const handleFocus: React.FocusEventHandler<HTMLInputElement> = (event) => {
       setIsFocused(true);
       props.onFocus?.(event);
@@ -84,6 +82,12 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
                   props.readOnly,
               })}
               {...props}
+              aria-describedby={
+                [props["aria-describedby"], descriptionId]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
+              aria-invalid={props["aria-invalid"] ?? hasError}
               onFocus={handleFocus}
               onBlur={handleBlur}
               type={inputType}
@@ -96,16 +100,25 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
                 aria-label={t("toggle_password_visibility")}
               >
                 {isPasswordVisible ? (
-                  <EyeClosedIcon size={16} />
+                  <EyeClosedIcon size={16} aria-hidden="true" />
                 ) : (
-                  <EyeIcon size={16} />
+                  <EyeIcon size={16} aria-hidden="true" />
                 )}
               </button>
             )}
           </div>
           {rightContent}
         </div>
-        {hintContent}
+        {error ? (
+          <small
+            id={descriptionId}
+            className="text-field-container__error-label"
+          >
+            {error}
+          </small>
+        ) : hint ? (
+          <small id={descriptionId}>{hint}</small>
+        ) : null}
       </div>
     );
   }

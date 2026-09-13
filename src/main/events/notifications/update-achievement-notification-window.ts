@@ -13,13 +13,13 @@ const updateAchievementCustomNotificationWindow = async (
     }
   );
 
-  WindowManager.closeNotificationWindow();
+  await WindowManager.closeNotificationWindow();
 
   if (
     userPreferences.achievementNotificationsEnabled !== false &&
     userPreferences.achievementCustomNotificationsEnabled !== false
   ) {
-    WindowManager.createNotificationWindow();
+    await WindowManager.createNotificationWindow();
   }
 };
 

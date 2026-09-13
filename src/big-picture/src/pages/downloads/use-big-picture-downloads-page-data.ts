@@ -383,7 +383,14 @@ export function useBigPictureDownloadsPageData() {
     } else if (lastPacket?.isDownloadingMetadata) {
       // For debrid/TorBox this is the server-side caching phase — nothing is on
       // disk yet, so "Preparing" reads truthfully (vs a stalled-looking 0 B/s).
-      statusLabel = "Preparing download";
+      statusLabel =
+        lastPacket.preparationPhase === "checking-cache"
+          ? "Checking TorBox cache"
+          : lastPacket.preparationPhase === "cached"
+            ? "Cached on TorBox"
+            : lastPacket.preparationPhase === "direct-fallback"
+              ? "TorBox unavailable — downloading direct"
+              : "Preparing on TorBox";
     } else {
       statusLabel = "In progress";
     }
@@ -414,7 +421,13 @@ export function useBigPictureDownloadsPageData() {
       progress,
       progressLabel: formatProgress(progress),
       transferLabel: isPreparing
-        ? "Caching…"
+        ? lastPacket?.preparationPhase === "cached"
+          ? "Starting…"
+          : lastPacket?.preparationPhase === "checking-cache"
+            ? "Checking…"
+            : lastPacket?.preparationPhase === "direct-fallback"
+              ? "Direct source…"
+              : "Caching…"
         : (formatTransfer(bytesDownloaded, sizeInBytes) ??
           formatBytes(bytesDownloaded)),
       speedLabel,

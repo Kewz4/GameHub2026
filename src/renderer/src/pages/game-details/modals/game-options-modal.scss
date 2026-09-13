@@ -74,6 +74,56 @@
     gap: calc(globals.$spacing-unit * 1.5);
   }
 
+  &__steam-match-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: globals.$spacing-unit;
+  }
+
+  &__steam-match-suggestions-title {
+    color: var(--color-text-muted);
+    font-size: globals.$small-font-size;
+  }
+
+  &__steam-match-suggestions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 180px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  &__steam-match-suggestion {
+    display: flex;
+    align-items: center;
+    gap: calc(globals.$spacing-unit * 1.5);
+    width: 100%;
+    min-height: 40px;
+    padding: globals.$spacing-unit;
+    border: 0;
+    border-radius: 5px;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background-color: rgba(var(--fg-rgb), 0.08);
+    }
+
+    img {
+      width: 24px;
+      height: 24px;
+      flex: 0 0 24px;
+      border-radius: 4px;
+      object-fit: cover;
+    }
+  }
+
   &__header {
     display: flex;
     flex-direction: column;
@@ -94,6 +144,13 @@
     display: flex;
     gap: globals.$spacing-unit;
     flex-wrap: wrap;
+  }
+
+  &__lookup-status {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: globals.$small-font-size;
+    line-height: 1.5;
   }
 
   &__tool-button-wrapper {
@@ -538,45 +595,5 @@
     padding: 10px 24px;
     font-size: 14px;
     font-weight: 500;
-  }
-}
-
-.game-options-modal__lookup {
-  padding: 16px 0 8px;
-  border-top: 1px solid rgba(var(--fg-rgb), 0.08);
-  margin-top: 8px;
-
-  h3 {
-    margin: 0 0 6px;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  p {
-    margin: 0 0 12px;
-    font-size: 13px;
-    opacity: 0.7;
-    line-height: 1.5;
-  }
-
-  &-button {
-    padding: 8px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    border-radius: 6px;
-    cursor: pointer;
-    background: var(--color-primary, #1a9fff);
-    color: var(--color-text-bright);
-    border: none;
-
-    &:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-  }
-
-  &-status {
-    margin-top: 8px !important;
-    font-size: 12px !important;
   }
 }

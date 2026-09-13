@@ -1,0 +1,11 @@
+LIBRARY "gamehub-xinput-qa-cache64"
+EXPORTS
+    GameHubXInputQaGetCacheSnapshot
+    GameHubXInputQaGetProviderSnapshot
+    GameHubXInputQaCallGetState
+    GameHubXInputQaCallGetStateEx
+    GameHubXInputQaCallGetKeystroke
+    GameHubXInputQaCallEnable
+    GameHubXInputQaCallSetState
+    GameHubXInputQaSetPhysical
+    GameHubXInputQaQueueKeystrokes

@@ -1,11 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
-import { SyncIcon } from "@primer/octicons-react";
+import { ChevronRightIcon, DownloadIcon } from "@primer/octicons-react";
 import { Link } from "../link/link";
 import "./auto-update-header.scss";
 import type { AppUpdaterEvent } from "@types";
 
-export const releasesPageUrl = "https://github.com/Kewz4/hydra/releases/latest";
+export const releasesPageUrl =
+  "https://github.com/Kewz4/GameHub2026/releases/latest";
 
 export function AutoUpdateSubHeader() {
   const [isReadyToInstall, setIsReadyToInstall] = useState(false);
@@ -42,6 +43,25 @@ export function AutoUpdateSubHeader() {
 
   if (!newVersion) return null;
 
+  const content = (description: string) => (
+    <>
+      <DownloadIcon
+        className="auto-update-sub-header__new-version-icon"
+        size={18}
+      />
+      <span className="auto-update-sub-header__copy">
+        <strong>
+          {t("update_available_title", {
+            version: newVersion,
+            defaultValue: "GameHub {{version}} is available",
+          })}
+        </strong>
+        <span>{description}</span>
+      </span>
+      <ChevronRightIcon className="auto-update-sub-header__chevron" size={16} />
+    </>
+  );
+
   if (!isAutoInstallAvailable) {
     return (
       <header className="auto-update-sub-header">
@@ -49,11 +69,11 @@ export function AutoUpdateSubHeader() {
           to={releasesPageUrl}
           className="auto-update-sub-header__new-version-link"
         >
-          <SyncIcon
-            className="auto-update-sub-header__new-version-icon"
-            size={12}
-          />
-          {t("version_available_download", { version: newVersion })}
+          {content(
+            t("view_release", {
+              defaultValue: "View the release and download the update",
+            })
+          )}
         </Link>
       </header>
     );
@@ -67,11 +87,11 @@ export function AutoUpdateSubHeader() {
           className="auto-update-sub-header__new-version-button"
           onClick={handleClickInstallUpdate}
         >
-          <SyncIcon
-            className="auto-update-sub-header__new-version-icon"
-            size={12}
-          />
-          {t("version_available_install", { version: newVersion })}
+          {content(
+            t("restart_to_install", {
+              defaultValue: "Restart to install the update",
+            })
+          )}
         </button>
       </header>
     );

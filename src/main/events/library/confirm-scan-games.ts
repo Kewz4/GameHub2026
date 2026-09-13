@@ -67,9 +67,56 @@ const confirmScanGames = async (
   const newGames = approvedGames.filter((g) => g.isNew);
   const existingGames = approvedGames.filter((g) => !g.isNew);
 
-  for (const { key, executablePath } of existingGames) {
+  for (const { key, executablePath, emulatorSystem } of existingGames) {
     const game = await gamesSublevel.get(key).catch(() => null);
     if (!game) continue;
+
+    if (game.shop === "launchbox") {
+      // Console/emulator game already in the library — bind the discovered ROM
+      // as a DISC so it launches through its emulator (openClassicsGame).
+      // Setting executablePath to the raw ROM makes the library Play button
+      // shell-open the file (the "Select an app to open this .gbc file"
+      // dialog). This also repairs entries a pre-fix scan stored with a raw
+      // executablePath and no discs. Mirrors bind-downloaded-rom.ts.
+      const alreadyBound = game.discs?.some(
+        (d) => d.path?.toLowerCase() === executablePath.toLowerCase()
+      );
+      const disc = {
+        path: executablePath,
+        label: path.basename(executablePath),
+        fileName: path.basename(executablePath),
+      };
+      // Correct a mis-detected platform from a pre-fix scan (e.g. a Game Boy /
+      // Game Boy Color ROM a folder-name heuristic bug previously stamped as
+      // Game Boy Advance — see scan-executables.ts). The console badge,
+      // achievements lookup, and emulator launch args all resolve the system
+      // from THIS field (with priority over the record's key/objectId), so a
+      // fresh, correctly-detected system always wins over whatever is stored —
+      // this is what makes a plain re-scan self-heal an already-broken entry
+      // instead of requiring the user to delete and re-add it.
+      const correctedPlatform = emulatorSystem
+        ? (SYSTEM_DISPLAY_PLATFORM[emulatorSystem] ?? game.platform)
+        : game.platform;
+      await gamesSublevel.put(key, {
+        ...game,
+        isDeleted: false,
+        isInstalledLocally: true,
+        executablePath: null,
+        platform: correctedPlatform,
+        discs: alreadyBound ? game.discs : [...(game.discs ?? []), disc],
+        selectedDiscPath: game.selectedDiscPath ?? executablePath,
+      });
+      if (correctedPlatform !== game.platform) {
+        logger.info(
+          `[ConfirmScanGames] Corrected platform for ${key}: ${game.platform} -> ${correctedPlatform}`
+        );
+      }
+      logger.info(
+        `[ConfirmScanGames] Confirmed launchbox ${key} as disc: ${executablePath}`
+      );
+      continue;
+    }
+
     await gamesSublevel.put(key, {
       ...game,
       // Resurrect previously-deleted records — the user just confirmed the game
@@ -125,13 +172,16 @@ const confirmScanGames = async (
         const existing = await gamesSublevel.get(gameKey).catch(() => null);
         if (existing) {
           // Already in library (maybe soft-deleted) — resurrect and (re)bind the
-          // ROM as a disc so it launches via the emulator.
+          // ROM as a disc so it launches via the emulator. Trust the freshly
+          // detected `platform` over whatever is stored (not just fill-when-
+          // null) so a self-corrected system (e.g. Game Boy vs Game Boy
+          // Advance) actually overwrites a stale mis-detection.
           await gamesSublevel.put(gameKey, {
             ...existing,
             isDeleted: false,
             isInstalledLocally: true,
             executablePath: null,
-            platform: existing.platform ?? platform,
+            platform,
             discs:
               existing.discs && existing.discs.length > 0
                 ? existing.discs
@@ -157,7 +207,10 @@ const confirmScanGames = async (
             discs: [disc],
             selectedDiscPath: game.executablePath,
             isInstalledLocally: true,
-            libraryOrigin: "custom" as const,
+            // No store origin — this is a console/emulated game, surfaced under
+            // Console mode by its shop ("launchbox"), NOT the custom tab. (The
+            // import-launchbox-roms path likewise leaves this unset; stamping
+            // "custom" here is what leaked scanned ROMs into the custom tab.)
           });
         }
         logger.info(

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Button, HorizontalFocusGroup } from "../../components";
 import { useNavigationScreenActions } from "../../hooks";
+import { NAVIGATION_SCREEN_ACTION_PRIORITY } from "../../services";
 import {
   CATALOGUE_PAGINATION_FIRST_ID,
   CATALOGUE_PAGINATION_LAST_ID,
@@ -19,34 +20,12 @@ import {
   getCataloguePaginationPageFocusId,
 } from "./navigation";
 import { useCataloguePaginationNavigation } from "./use-catalogue-pagination-navigation";
+import { getVisibleCataloguePageRange } from "./pagination-range";
 
 interface CataloguePaginationProps {
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
-}
-
-interface VisiblePageRange {
-  start: number;
-  end: number;
-  isLastThree: boolean;
-}
-
-function getVisiblePageRange(page: number, totalPages: number) {
-  const visiblePages = 3;
-  const isLastThree = totalPages > visiblePages && page >= totalPages - 2;
-  let start = Math.max(1, page - 1);
-  let end = start + visiblePages - 1;
-
-  if (isLastThree) {
-    start = Math.max(1, totalPages - 2);
-    end = totalPages;
-  } else if (end > totalPages) {
-    end = totalPages;
-    start = Math.max(1, end - visiblePages + 1);
-  }
-
-  return { start, end, isLastThree } satisfies VisiblePageRange;
 }
 
 function PaginationArrow({
@@ -78,13 +57,13 @@ export function CataloguePagination({
   const [isJumpOpen, setIsJumpOpen] = useState(false);
   const [jumpValue, setJumpValue] = useState("");
   const jumpInputRef = useRef<HTMLInputElement | null>(null);
-  const range = getVisiblePageRange(page, totalPages);
+  const range = getVisibleCataloguePageRange(page, totalPages);
   const pageNumbers = Array.from(
     { length: range.end - range.start + 1 },
     (_, index) => range.start + index
   );
   const showLeadingJump = range.isLastThree && range.start > 1;
-  const showTrailingJump = !range.isLastThree && page < totalPages - 1;
+  const showTrailingJump = range.showTrailingJump;
   const itemIds = useMemo(
     () => [
       ...(range.start > 1 ? [CATALOGUE_PAGINATION_FIRST_ID] : []),
@@ -129,7 +108,8 @@ export function CataloguePagination({
             b: closeJump,
           },
         }
-      : {}
+      : {},
+    { priority: NAVIGATION_SCREEN_ACTION_PRIORITY.activeShell }
   );
 
   if (totalPages <= 1) return null;

@@ -1,12 +1,30 @@
 .settings-page {
-  margin-top: calc(-1 * var(--big-picture-header-height));
+  --settings-page-inline-padding: calc(var(--spacing-unit) * 16);
+  --settings-page-tab-rail-height: 56px;
+  --settings-page-content-top-clearance: calc(var(--spacing-unit) * 3);
+  // The scrolling page already reserves the header in its top padding.
+  // Sticky insets are relative to that padding edge, so adding it again
+  // pushes the tabs down and over the first section.
+  --settings-page-tab-rail-top: 0px;
+  --settings-page-focus-scroll-clearance: calc(
+    var(--big-picture-header-footprint, var(--big-picture-header-height)) +
+      var(--settings-page-tab-rail-height) + var(--spacing-unit) * 9
+  );
+  margin-top: calc(
+    -1 * var(--big-picture-header-footprint, var(--big-picture-header-height))
+  );
   display: flex;
+  position: relative;
   align-items: flex-start;
   justify-content: center;
   width: 100%;
   min-width: 0;
-  height: calc(100% + var(--big-picture-header-height));
-  min-height: calc(100% + var(--big-picture-header-height));
+  height: calc(
+    100% + var(--big-picture-header-footprint, var(--big-picture-header-height))
+  );
+  min-height: calc(
+    100% + var(--big-picture-header-footprint, var(--big-picture-header-height))
+  );
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -14,8 +32,13 @@
   background: var(--background);
   color: var(--text);
   box-sizing: border-box;
-  padding: calc(var(--spacing-unit) * 24) calc(var(--spacing-unit) * 16)
-    calc(var(--spacing-unit) * 12);
+  scroll-padding-top: var(--settings-page-focus-scroll-clearance);
+  scroll-padding-bottom: calc(var(--spacing-unit) * 16);
+  padding: calc(
+      var(--big-picture-header-footprint, var(--big-picture-header-height)) +
+        var(--spacing-unit) * 4
+    )
+    var(--settings-page-inline-padding) calc(var(--spacing-unit) * 12);
 
   &::-webkit-scrollbar {
     display: none;
@@ -26,9 +49,10 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: calc(var(--spacing-unit) * 8);
+  gap: calc(var(--spacing-unit) * 6);
   min-height: 100%;
-  width: max-content;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -39,9 +63,17 @@
 }
 
 .settings-page__tabs-wrap {
+  position: sticky;
+  top: var(--settings-page-tab-rail-top);
+  z-index: 70;
   flex-shrink: 0;
-  width: max-content;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
+  padding: calc(var(--spacing-unit) * 3) calc(var(--spacing-unit) * 2)
+    calc(var(--spacing-unit) * 2);
+  border-radius: calc(var(--spacing-unit) * 2);
+  background: var(--background);
 }
 
 .settings-page__bumper {
@@ -61,11 +93,34 @@
 
 .settings-page__content {
   flex: 0 0 auto;
-  width: 0;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
+  // The rail already occupies normal flow. Only compensate for displacement
+  // caused by its sticky position, never its full height a second time.
+  padding-top: var(--settings-page-content-top-clearance);
   padding-inline: calc(var(--spacing-unit) * 18);
   box-sizing: border-box;
+}
+
+@media (max-width: 1280px) {
+  .settings-page {
+    --settings-page-inline-padding: calc(var(--spacing-unit) * 8);
+  }
+
+  .settings-page__content {
+    padding-inline: calc(var(--spacing-unit) * 10);
+  }
+}
+
+@media (max-width: 1024px) {
+  .settings-page {
+    --settings-page-inline-padding: calc(var(--spacing-unit) * 5);
+  }
+
+  .settings-page__content {
+    padding-inline: calc(var(--spacing-unit) * 5);
+  }
 }
 
 .settings-page__copy {

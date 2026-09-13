@@ -1,0 +1,3 @@
+LIBRARY "gamehub-cached-pointer-target64"
+EXPORTS
+    GameHubCachedPointerTarget

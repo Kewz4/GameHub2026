@@ -1,4 +1,5 @@
 import type { EmulatorBinary, EmulatorSystem } from "@types";
+import { getKnownBinaryLabel } from "./known-binary-labels";
 
 import pcsx2Logo from "@renderer/assets/emulation/logos/pcsx2.svg?url";
 import rpcs3Logo from "@renderer/assets/emulation/logos/rpcs3.svg?url";
@@ -27,7 +28,9 @@ export interface EmulatorEntry {
 export const EMULATORS: EmulatorEntry[] = [
   {
     binary: "ralibretro",
-    name: "RALibretro",
+    get name() {
+      return getKnownBinaryLabel("ralibretro");
+    },
     systems: ["ps1", "n64", "psp", "nds", "dsi", "gba", "gb", "gbc"],
     hasRetroAchievements: true,
     logo: raLogo,

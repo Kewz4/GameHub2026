@@ -15,12 +15,17 @@ import { FocusItem } from "../focus-item";
 import { Tooltip } from "../tooltip";
 import type { FocusOverrides, NavigationNodeState } from "../../../services";
 import type { FocusItemActions } from "../../../types";
+import {
+  getUserDiskUsagePresentation,
+  type UserDiskUsageState,
+} from "./user-disk-item-presentation";
 
 export interface UserDiskItemProps {
   title: string;
   path: string;
   freeBytes: number;
   totalBytes: number;
+  usageState?: UserDiskUsageState;
   isSelected?: boolean;
   showSelectedIndicator?: boolean;
   onClick?: () => void;
@@ -32,14 +37,12 @@ export interface UserDiskItemProps {
   topRightContent?: ReactNode;
 }
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
-
 export function UserDiskItem({
   title,
   path,
   freeBytes,
   totalBytes,
+  usageState = "ready",
   isSelected = false,
   showSelectedIndicator = false,
   onClick,
@@ -50,11 +53,8 @@ export function UserDiskItem({
   className,
   topRightContent,
 }: Readonly<UserDiskItemProps>) {
-  const safeFreeBytes = Math.max(freeBytes, 0);
-  const safeTotalBytes = Math.max(totalBytes, 0);
-  const usedBytes = Math.max(safeTotalBytes - safeFreeBytes, 0);
-  const usedRatio =
-    safeTotalBytes > 0 ? clamp(usedBytes / safeTotalBytes, 0, 1) : 0;
+  const { safeFreeBytes, safeTotalBytes, usedRatio, statusText, statusRole } =
+    getUserDiskUsagePresentation(usageState, freeBytes, totalBytes);
   const pathRef = useRef<HTMLParagraphElement | null>(null);
   const [isPathTruncated, setIsPathTruncated] = useState(false);
   const rootClassName = cn("user-disk-item", className, {
@@ -147,24 +147,41 @@ export function UserDiskItem({
       </div>
 
       <div className="user-disk-item__usage">
-        <div className="user-disk-item__track" aria-hidden="true">
+        <div
+          className={cn("user-disk-item__track", {
+            "user-disk-item__track--loading": usageState === "loading",
+            "user-disk-item__track--unavailable": usageState === "unavailable",
+          })}
+          aria-hidden="true"
+        >
           <div
             className="user-disk-item__fill"
-            style={{ width: `${usedRatio * 100}%` }}
+            style={{
+              width: usageState === "ready" ? `${usedRatio * 100}%` : undefined,
+            }}
           />
         </div>
 
-        <div className="user-disk-item__metrics">
-          <p className="user-disk-item__metric">
-            <span>{formatBytes(safeFreeBytes)}</span>
-            <span>Free</span>
-          </p>
+        {usageState === "ready" ? (
+          <div className="user-disk-item__metrics">
+            <p className="user-disk-item__metric">
+              <span>{formatBytes(safeFreeBytes)}</span>
+              <span>Free</span>
+            </p>
 
-          <p className="user-disk-item__metric user-disk-item__metric--secondary">
-            <span>{formatBytes(safeTotalBytes)}</span>
-            <span>Total</span>
+            <p className="user-disk-item__metric user-disk-item__metric--secondary">
+              <span>{formatBytes(safeTotalBytes)}</span>
+              <span>Total</span>
+            </p>
+          </div>
+        ) : (
+          <p
+            className="user-disk-item__usage-status"
+            role={statusRole ?? undefined}
+          >
+            {statusText}
           </p>
-        </div>
+        )}
       </div>
     </>
   );

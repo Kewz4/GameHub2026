@@ -76,12 +76,37 @@ export const syncAllLibraries = async () => {
 };
 
 export const startMainLoop = async () => {
+  // One-time Steam emulator readiness diagnostic at startup: is the CLI
+  // bundled, is the config patched, and what does each installed game's
+  // setup status look like? Logs make the offline-play flow auditable.
+  void (async () => {
+    try {
+      const { isEmulatorToolAvailable, ensureEmulatorToolConfig } =
+        await import("./steam-emulator/steam-emulator");
+      logger.log("Steam emulator tool readiness", {
+        toolAvailable: isEmulatorToolAvailable(),
+        configReady: (await ensureEmulatorToolConfig()) !== null,
+      });
+    } catch (error) {
+      logger.error("Steam emulator tool readiness check failed", error);
+    }
+  })();
+
   wrapInLoop(() => watchProcesses(), INTERVALS.processWatcher);
   wrapInLoop(() => DownloadManager.watchDownloads(), INTERVALS.downloadWatcher);
   wrapInLoop(
     () => AchievementWatcherManager.watchAchievements(),
     INTERVALS.achievementWatcher
   );
+
+  // Keep the global Goldberg save folders alive so the achievement watcher
+  // (which polls GSE Saves / Goldberg SteamEmu Saves) always sees new files.
+  wrapInLoop(async () => {
+    const { ensureGoldbergSaveFolders } = await import(
+      "./steam-emulator/steam-emulator"
+    );
+    ensureGoldbergSaveFolders();
+  }, INTERVALS.achievementWatcher);
   wrapInLoop(
     () => RaWatcherManager.watch(),
     INTERVALS.retroAchievementsWatcher

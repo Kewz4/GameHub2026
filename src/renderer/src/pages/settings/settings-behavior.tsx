@@ -322,7 +322,7 @@ export function SettingsBehavior() {
         }
       />
 
-      {window.electron.platform === "win32" && (
+      {["win32", "linux"].includes(window.electron.platform) && (
         <CheckboxField
           label={t("create_shortcuts_on_download")}
           checked={form.createStartMenuShortcut}

@@ -5,6 +5,7 @@ import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FocusItem } from "..";
 import type { FocusOverrides } from "../../../services";
+import type { FocusItemActions } from "../../../types";
 
 export interface RouteAnchorProps
   extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> {
@@ -16,6 +17,7 @@ export interface RouteAnchorProps
   isFavorite?: boolean;
   focusId?: string;
   focusNavigationOverrides?: FocusOverrides;
+  focusActions?: FocusItemActions;
 }
 
 export const RouteAnchor = ({
@@ -27,6 +29,7 @@ export const RouteAnchor = ({
   isFavorite = false,
   focusId,
   focusNavigationOverrides,
+  focusActions,
   ...props
 }: Readonly<RouteAnchorProps>) => {
   const isGameIcon = typeof icon === "string";
@@ -35,7 +38,11 @@ export const RouteAnchor = ({
     <div
       className={`state-wrapper ${disabled ? "state-wrapper--disabled" : ""} ${active ? "state-wrapper--active" : ""}`}
     >
-      <FocusItem id={focusId} navigationOverrides={focusNavigationOverrides}>
+      <FocusItem
+        id={focusId}
+        actions={focusActions}
+        navigationOverrides={focusNavigationOverrides}
+      >
         <Link to={href} {...props}>
           <div
             className={`route-anchor ${active ? "route-anchor--active" : ""} ${!isGameIcon ? "route-anchor--extra-padding" : ""}`}

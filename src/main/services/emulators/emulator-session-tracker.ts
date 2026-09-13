@@ -3,7 +3,9 @@ import { gamesSublevel, levelKeys } from "@main/level";
 import type { Game, EmulatorSystem, GameShop } from "@types";
 import { logger } from "../logger";
 import { setEmulatorGameRunning } from "../process-watcher";
-import { CloudSync } from "../cloud-sync";
+import { runAutomaticCloudSaveAfterExit } from "../cloud-save/automatic-sync-lifecycle";
+import { markCloudSaveLaunchSessionRunning } from "../cloud-save/launch-guard";
+import { createSingleRunFinalizer } from "./single-run-finalizer";
 
 interface SessionOptions {
   game: Game;
@@ -26,10 +28,20 @@ export const startEmulatorSession = async (
   // Mark the game as running so the Play button becomes Close while open.
   activeSessions.set(key, child);
   setEmulatorGameRunning(key, true);
+  const cloudSaveSessionToken = markCloudSaveLaunchSessionRunning(
+    game.objectId,
+    game.shop
+  )?.token;
 
-  child.once("exit", async () => {
-    activeSessions.delete(key);
-    setEmulatorGameRunning(key, false);
+  const finalize = createSingleRunFinalizer(async () => {
+    // A failed spawn can emit both error and exit/close. The same child must
+    // never add playtime or run a post-exit cloud upload twice.
+    const isCurrentSession = activeSessions.get(key) === child;
+    if (isCurrentSession) {
+      activeSessions.delete(key);
+      setEmulatorGameRunning(key, false);
+    }
+
     try {
       const stored = await gamesSublevel.get(key).catch(() => null);
       if (!stored) return;
@@ -40,25 +52,32 @@ export const startEmulatorSession = async (
         lastTimePlayed: new Date(),
       });
 
-      // Automatic cloud sync: back up the emulator save on close (previously
-      // only scanned PC processes got this — emulator sessions never did).
-      // Skips instantly when the save folders haven't changed.
-      if (stored.automaticCloudSync) {
-        CloudSync.uploadSaveGameIfChanged(
+      // If a newer session replaced this child, let that session own the final
+      // upload so saves are never scanned while the emulator is still writing.
+      if (isCurrentSession) {
+        await runAutomaticCloudSaveAfterExit(
           stored.objectId,
           stored.shop,
-          CloudSync.getBackupLabel(true)
-        ).catch((err) => {
-          logger.error(
-            `[cloud-sync] automatic emulator-save upload failed for ${key}`,
-            err
-          );
-        });
+          cloudSaveSessionToken
+        );
       }
     } catch (err) {
-      logger.error("Failed to persist emulator session playtime", err);
+      logger.error("Failed to finalize emulator session", {
+        gameKey: key,
+        errorName: err instanceof Error ? err.name : "UnknownError",
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
     }
   });
+
+  const scheduleFinalize = () => void finalize();
+  child.once("exit", scheduleFinalize);
+  child.once("error", scheduleFinalize);
+
+  // Handle a child which terminated before the listeners were attached.
+  if (child.exitCode !== null || child.signalCode !== null) {
+    scheduleFinalize();
+  }
 };
 
 /**
@@ -87,7 +106,7 @@ export const closeEmulatorSession = (
   } catch (err) {
     logger.error("Failed to close emulator session", err);
   }
-  activeSessions.delete(key);
-  setEmulatorGameRunning(key, false);
+  // Keep the session registered until its terminal event so the single
+  // finalizer can persist playtime and run the selected cloud-save backend.
   return true;
 };
