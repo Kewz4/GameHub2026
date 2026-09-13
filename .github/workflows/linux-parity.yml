@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: linux-parity-${{ github.ref }}
+  group: linux-parity-${{ github.ref }}-${{ inputs.verify_retroarch && 'retroarch' || 'main' }}
   cancel-in-progress: true
 
 jobs:
