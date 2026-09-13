@@ -182,9 +182,10 @@ export async function provisionLinuxRetroArch({
       maxBuffer: 4 * 1024 * 1024,
       env: process.env,
     });
-  } catch {
+  } catch (error) {
     throw new Error(
-      "RetroArch Flatpak installation did not complete. Check your connection and user Flatpak configuration, then retry. No administrator command or permission override was used."
+      "RetroArch Flatpak installation did not complete. Check your connection and user Flatpak configuration, then retry. No administrator command or permission override was used.",
+      { cause: error }
     );
   }
   const dataHome =

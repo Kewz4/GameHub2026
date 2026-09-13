@@ -16,7 +16,10 @@ async function main() {
   assert.equal(process.env.GAMEHUB_LINUX_NATIVE_QA, "1");
   const [windowId, directory] = process.argv.slice(2);
   assert.ok(/^\d+$/.test(windowId));
-  const artifactRoot = path.resolve(__dirname, "../artifacts/linux-parity");
+  const artifactRoot = path.resolve(
+    import.meta.dirname,
+    "../artifacts/linux-parity"
+  );
   const relative = path.relative(artifactRoot, path.resolve(directory));
   assert.ok(
     relative && !relative.startsWith("..") && !path.isAbsolute(relative)

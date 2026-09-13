@@ -156,6 +156,7 @@ deb:
     - libsdl2-2.0-0
     - pulseaudio-utils
     - ffmpeg
+    - python3 (>= 3.10)
 rpm:
   depends:
     - gtk3
@@ -170,6 +171,7 @@ rpm:
     - SDL2
     - pulseaudio-utils
     - /usr/bin/ffmpeg
+    - python3 >= 3.10
 npmRebuild: false
 publish:
   provider: github

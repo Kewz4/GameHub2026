@@ -61,6 +61,50 @@ idempotent retry, and preservation of existing user files. No Flatpak package or
 real core was installed on the Windows development host. Actual Linux Flatpak
 and gameplay acceptance must be recorded separately before claiming it tested.
 
+## Opt-in native Linux provisioning smoke
+
+`scripts/qa-linux-retroarch-provisioning.ts` runs only for a non-root Linux
+GitHub Actions user with `CI=true`, `GITHUB_ACTIONS=true`, and explicit
+`GAMEHUB_LINUX_RETROARCH_QA=1`. It refuses Windows and ordinary user sessions
+before installing anything.
+
+Install CI prerequisites in the workflow, not in the harness:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y flatpak p7zip-full dbus-x11 xvfb libgl1-mesa-dri
+```
+
+Then run after the repository's regular Node dependencies are installed:
+
+```sh
+GAMEHUB_LINUX_RETROARCH_QA=1 xvfb-run -a dbus-run-session -- \
+  node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.web.json \
+  scripts/qa-linux-retroarch-provisioning.ts
+```
+
+Use a separate optional job with at least 25 minutes available. The smoke has a
+20-minute deadline and targets only its own detached process group on timeout.
+It creates fresh HOME/XDG/Flatpak directories in a child-only environment; the
+parent's HOME and environment are not modified. Ownership markers and resolved
+paths are checked before cleanup. Existing user Flatpak data is never reset,
+uninstalled, copied, or deleted.
+
+The actual provisioner performs the user installation and core preparation,
+using the system 7-Zip CLI as its archive adapter. The smoke then verifies the
+installed Flatpak origin/ref, all eight expected core paths and ELF headers,
+and executes the installed application's `--version` inside its ordinary
+Flatpak sandbox. It uses no ROMs, BIOS, accounts, or permission overrides.
+
+Evidence is written to
+`artifacts/linux-retroarch-provisioning/<timestamp>/provisioning-report.json`,
+including setup steps even after failure. Upload that directory with
+`if: always()` in CI. Namespace, D-Bus, network, or runtime denials are reported
+as `external-runtime-blocked` with a failing exit code; the smoke must not
+disable AppArmor, adjust namespace sysctls, or add sandbox bypass flags to make
+them pass. A timeout preserves its isolated CI directory rather than deleting
+files while an external helper might still be finishing.
+
 Sources checked for this implementation:
 [Flatpak user installation and flatpakrefs](https://docs.flatpak.org/en/latest/using-flatpak.html),
 [official RetroArch Flatpak manifest](https://github.com/flathub/org.libretro.RetroArch/blob/master/org.libretro.RetroArch.json),

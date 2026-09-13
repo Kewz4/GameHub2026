@@ -241,6 +241,59 @@ test("rejects duplicate sources and destinations before touching saves", (t) => 
   assert.equal(fs.readFileSync(destinationTwo, "utf8"), "original-two");
 });
 
+test("rejects canonical duplicate destinations through an in-root directory alias before any move", (t) => {
+  const root = fixture(t);
+  const staging = path.join(root, "staging");
+  const saves = path.join(root, "saves");
+  const real = path.join(saves, "real");
+  const alias = path.join(saves, "alias");
+  fs.mkdirSync(staging);
+  fs.mkdirSync(real, { recursive: true });
+  fs.symlinkSync(
+    real,
+    alias,
+    process.platform === "win32" ? "junction" : "dir"
+  );
+  const sourceOne = path.join(staging, "one.sav");
+  const sourceTwo = path.join(staging, "two.sav");
+  fs.writeFileSync(sourceOne, "one");
+  fs.writeFileSync(sourceTwo, "two");
+  for (const name of ["existing.sav", path.join("missing", "new.sav")]) {
+    const destinationOne = path.join(real, name);
+    const destinationTwo = path.join(alias, name);
+    if (name === "existing.sav") fs.writeFileSync(destinationOne, "original");
+    const jobs = [
+      { sourcePath: sourceOne, destinationPath: destinationOne },
+      { sourcePath: sourceTwo, destinationPath: destinationTwo },
+    ];
+    assert.throws(
+      () => planSaveRestoreJobs(jobs, [saves], staging),
+      /Duplicate save artifact destination/
+    );
+    let moves = 0;
+    assert.throws(
+      () =>
+        commitSaveRestoreJobs(
+          jobs.map((job) => ({ ...job, rebased: false })),
+          {
+            moveFile: () => {
+              moves++;
+            },
+          }
+        ),
+      /Duplicate save artifact destination/
+    );
+    assert.equal(moves, 0);
+  }
+  assert.equal(
+    fs.readFileSync(path.join(real, "existing.sav"), "utf8"),
+    "original"
+  );
+  assert.equal(fs.existsSync(path.join(real, "missing")), false);
+  assert.equal(fs.readFileSync(sourceOne, "utf8"), "one");
+  assert.equal(fs.readFileSync(sourceTwo, "utf8"), "two");
+});
+
 test("rejects directory, symlink, and escaped artifact sources", (t) => {
   const root = fixture(t);
   const staging = path.join(root, "staging");

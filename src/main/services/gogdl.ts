@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { findExecutableOnPath, installLauncherBinary } from "./launcher-binary";
 import { SystemPath } from "./system-path";
 import { logger } from "./logger";
+import { getLauncherInvocation } from "./launcher-invocation";
 
 // This is GOG's public OAuth2 client ID — hardcoded in heroic-gogdl
 const GOG_CLIENT_ID = "46899977096215655";
@@ -63,7 +64,8 @@ export const writeGogdlAuthConfig = (
   refreshToken: string
 ): string => {
   const configDir = path.join(SystemPath.getPath("userData"), "gogdl-config");
-  fs.mkdirSync(configDir, { recursive: true });
+  fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  if (process.platform !== "win32") fs.chmodSync(configDir, 0o700);
   const authPath = path.join(configDir, "auth.json");
 
   const config = {
@@ -75,7 +77,8 @@ export const writeGogdlAuthConfig = (
     },
   };
 
-  fs.writeFileSync(authPath, JSON.stringify(config, null, 2));
+  fs.writeFileSync(authPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+  if (process.platform !== "win32") fs.chmodSync(authPath, 0o600);
   return authPath;
 };
 
@@ -115,28 +118,34 @@ export function spawnGogdlInstall(
     return () => {};
   }
 
-  const authConfigPath = writeGogdlAuthConfig(accessToken, refreshToken);
-
-  const child = spawn(
-    binary,
-    [
-      "--auth-config-path",
-      authConfigPath,
-      "download",
-      gameId,
-      "--platform",
-      "windows",
-      "--path",
-      downloadPath,
-      "--skip-dlcs",
-      "--max-workers",
-      "4",
-    ],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, PYTHONUNBUFFERED: "1" },
-    }
-  );
+  let invocation: ReturnType<typeof getLauncherInvocation>;
+  try {
+    const authConfigPath = writeGogdlAuthConfig(accessToken, refreshToken);
+    invocation = getLauncherInvocation(
+      binary,
+      [
+        "--auth-config-path",
+        authConfigPath,
+        "download",
+        gameId,
+        "--platform",
+        "windows",
+        "--path",
+        downloadPath,
+        "--skip-dlcs",
+        "--max-workers",
+        "4",
+      ],
+      { ...process.env, PYTHONUNBUFFERED: "1" }
+    );
+  } catch (error) {
+    onError(error instanceof Error ? error.message : String(error));
+    return () => {};
+  }
+  const child = spawn(invocation.command, invocation.args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: invocation.env,
+  });
 
   // heroic-gogdl emits human-readable progress lines, for example:
   //   [PROGRESS] INFO: = Progress: 0.61 52428800/8550960053, Running for: 00:00:13, ETA: 00:36:14

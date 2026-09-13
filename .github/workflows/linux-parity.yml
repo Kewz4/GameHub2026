@@ -2,6 +2,11 @@ name: Linux parity verification
 
 on:
   workflow_dispatch:
+    inputs:
+      verify_retroarch:
+        description: Install and verify the official user-scoped RetroArch runtime in an isolated CI profile
+        type: boolean
+        default: false
   push:
     branches: [codex/cloud-saves-v2]
   pull_request:
@@ -21,7 +26,7 @@ concurrency:
 
 jobs:
   linux:
-    if: github.event_name != 'pull_request' || github.head_ref != 'codex/cloud-saves-v2'
+    if: (github.event_name != 'pull_request' || github.head_ref != 'codex/cloud-saves-v2') && !inputs.verify_retroarch
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     env:
@@ -63,8 +68,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           node scripts/download-launcher-binaries.cjs linux
-          binaries/bin/legendary --version
-          binaries/bin/gogdl --version
+          node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.node.json scripts/verify-launcher-binaries.ts
       - name: Test complete shared suite on Linux
         if: ${{ !cancelled() }}
         run: xvfb-run -a node scripts/run-parity-tests.cjs
@@ -85,4 +89,31 @@ jobs:
             artifacts/linux-parity/**
             artifacts/qa-big-picture-settings/**
             artifacts/overlay/**
+          retention-days: 5
+
+  retroarch:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_retroarch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.21.0
+          cache: yarn
+      - name: Install test and user-runtime prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak p7zip-full dbus-x11 xvfb libgl1-mesa-dri
+          yarn --frozen-lockfile --ignore-scripts
+      - name: Provision and validate RetroArch in a fresh unprivileged profile
+        env:
+          GAMEHUB_LINUX_RETROARCH_QA: "1"
+        run: xvfb-run -a dbus-run-session -- node node_modules/tsx/dist/cli.mjs --tsconfig tsconfig.web.json scripts/qa-linux-retroarch-provisioning.ts
+      - name: Store provisioning evidence, including external failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-retroarch-evidence
+          path: artifacts/linux-retroarch-provisioning/**
           retention-days: 5

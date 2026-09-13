@@ -159,6 +159,19 @@ const isCanonicallyContained = (
   );
 };
 
+/** Two lexical names can reference one physical save through a directory
+ * symlink/junction. Deduplicate by the same projected canonical path used for
+ * containment, including a tail which does not exist before the first restore. */
+const canonicalRestoreDestinationKey = (destinationPath: string): string => {
+  const key = projectThroughExistingAncestor(destinationPath);
+  if (!key) {
+    throw new Error(
+      `Unsafe or foreign save artifact destination: ${destinationPath}`
+    );
+  }
+  return key;
+};
+
 /** Permit an exact mapped file, a mapped glob, or descendants of a save root. */
 export const isSaveRestoreDestinationAllowed = (
   destinationPath: string,
@@ -407,7 +420,7 @@ export const planSaveRestoreJobs = (
         `Unsafe or ambiguous save artifact destination: ${job.destinationPath}`
       );
     }
-    const destinationKey = comparable(destinationPath);
+    const destinationKey = canonicalRestoreDestinationKey(destinationPath);
     if (destinationPaths.has(destinationKey)) {
       throw new Error(
         `Duplicate save artifact destination: ${destinationPath}`
@@ -450,7 +463,7 @@ export const commitSaveRestoreJobs = (
   const destinationPaths = new Set<string>();
   for (const job of jobs) {
     const sourceKey = comparable(job.sourcePath);
-    const destinationKey = comparable(job.destinationPath);
+    const destinationKey = canonicalRestoreDestinationKey(job.destinationPath);
     if (sourcePaths.has(sourceKey)) {
       throw new Error(`Duplicate save artifact source: ${job.sourcePath}`);
     }

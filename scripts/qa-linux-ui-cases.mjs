@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
+import { readElectronMainWithRetry } from "./qa-electron-read.mjs";
 
 const HD = { id: "hd", width: 1280, height: 720 };
 const FULL_HD = { id: "full-hd", width: 1920, height: 1080 };
@@ -39,16 +40,40 @@ export async function runLinuxUiCases({
     "linux",
     "Linux evidence requires a native Linux runtime"
   );
-  const runtime = await electronApp.evaluate(({ app }) => ({
-    platform: process.platform,
-    userData: app.getPath("userData"),
-    xdgData: process.env.XDG_DATA_HOME,
-    display: Boolean(process.env.DISPLAY),
-    wayland: Boolean(process.env.WAYLAND_DISPLAY),
-  }));
-  assert.equal(runtime.platform, "linux");
-  assert.equal(path.resolve(runtime.userData), path.resolve(isolatedData));
-  assert.ok(runtime.xdgData?.startsWith(path.dirname(isolatedData) + path.sep));
+  let runtime;
+  const runtimeReadPassed = await runCase(
+    "linux-parity-main-runtime-read",
+    evidence,
+    async () => {
+      const retries = [];
+      runtime = await readElectronMainWithRetry(
+        () =>
+          electronApp.evaluate(({ app }) => ({
+            platform: process.platform,
+            userData: app.getPath("userData"),
+            xdgData: process.env.XDG_DATA_HOME,
+            display: Boolean(process.env.DISPLAY),
+            wayland: Boolean(process.env.WAYLAND_DISPLAY),
+          })),
+        (attempt) => {
+          retries.push(attempt);
+          console.log(
+            `Linux runtime read: retry ${attempt} after inspector promise GC`
+          );
+        }
+      );
+      assert.equal(runtime.platform, "linux");
+      assert.equal(path.resolve(runtime.userData), path.resolve(isolatedData));
+      assert.ok(
+        runtime.xdgData?.startsWith(path.dirname(isolatedData) + path.sep)
+      );
+      return {
+        inspectorReadRetries: retries.length,
+        actualPlatform: runtime.platform,
+      };
+    }
+  );
+  if (!runtimeReadPassed) return;
 
   const fixtureRoot = path.join(isolatedData, "linux-ui-fixture");
   const saveFolder = path.join(fixtureRoot, "saves");
@@ -68,23 +93,28 @@ export async function runLinuxUiCases({
     { name: "gamehub-manual:steam:620", files: [saveFolder], registry: [] },
   ];
   fs.writeFileSync(configFile, YAML.stringify(config));
-  await electronApp.evaluate(async ({ shell }, file) => {
-    const games = globalThis.__levelSublevels.gamesSublevel;
-    const game = await games.get("steam:620");
-    await games.put("steam:620", {
-      ...game,
-      executablePath: file,
-      isInstalledLocally: true,
-      platform: "Linux",
-    });
-    // Spy only on the OS file-manager handoff, so Xvfb doesn't need a file
-    // manager. Path resolution and production IPC still execute normally.
-    globalThis.__linuxUiShellPaths = [];
-    globalThis.__linuxUiOriginalOpenPath = shell.openPath;
-    shell.openPath = async (target) => {
-      globalThis.__linuxUiShellPaths.push(target);
-      return "";
-    };
+  await electronApp.evaluate(({ shell }, file) => {
+    // Retain this mutation's Promise in the target process. Unlike the read
+    // above, this operation must never be blindly retried if a reply is lost.
+    globalThis.__linuxUiSetupOperation = (async () => {
+      const games = globalThis.__levelSublevels.gamesSublevel;
+      const game = await games.get("steam:620");
+      await games.put("steam:620", {
+        ...game,
+        executablePath: file,
+        isInstalledLocally: true,
+        platform: "Linux",
+      });
+      // Spy only on the OS file-manager handoff, so Xvfb doesn't need a file
+      // manager. Path resolution and production IPC still execute normally.
+      globalThis.__linuxUiShellPaths = [];
+      globalThis.__linuxUiOriginalOpenPath = shell.openPath;
+      shell.openPath = async (target) => {
+        globalThis.__linuxUiShellPaths.push(target);
+        return "";
+      };
+    })();
+    return globalThis.__linuxUiSetupOperation;
   }, executable);
 
   try {
@@ -420,6 +450,7 @@ export async function runLinuxUiCases({
         shell.openPath = globalThis.__linuxUiOriginalOpenPath;
       delete globalThis.__linuxUiOriginalOpenPath;
       delete globalThis.__linuxUiShellPaths;
+      delete globalThis.__linuxUiSetupOperation;
     });
   }
 }

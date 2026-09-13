@@ -5,6 +5,7 @@ import fs from "node:fs";
 import { findExecutableOnPath, installLauncherBinary } from "./launcher-binary";
 import { SystemPath } from "./system-path";
 import { logger } from "./logger";
+import { getLauncherInvocation } from "./launcher-invocation";
 
 const execFileAsync = promisify(execFile);
 
@@ -94,9 +95,10 @@ const runLegendary = async (
   binary: string,
   args: string[]
 ): Promise<string> => {
-  const { stdout } = await execFileAsync(binary, args, {
+  const invocation = getLauncherInvocation(binary, args, legendaryEnv());
+  const { stdout } = await execFileAsync(invocation.command, invocation.args, {
     timeout: 60_000,
-    env: legendaryEnv(),
+    env: invocation.env,
   });
   return stdout;
 };
@@ -157,7 +159,8 @@ export const getLegendaryConfigPath = (): string => {
     SystemPath.getPath("userData"),
     "legendary-config"
   );
-  fs.mkdirSync(configPath, { recursive: true });
+  fs.mkdirSync(configPath, { recursive: true, mode: 0o700 });
+  if (process.platform !== "win32") fs.chmodSync(configPath, 0o700);
   return configPath;
 };
 
@@ -191,11 +194,15 @@ export const authenticateLegendary = async (
   const binary = findLegendaryBinary(binaryPath);
   if (!binary) throw new Error("legendary binary not found");
 
-  await execFileAsync(
+  const invocation = getLauncherInvocation(
     binary,
     [...legendaryBaseArgs(), "auth", "--code", code.trim()],
-    { timeout: 30_000, env: legendaryEnv() }
+    legendaryEnv()
   );
+  await execFileAsync(invocation.command, invocation.args, {
+    timeout: 30_000,
+    env: invocation.env,
+  });
 };
 
 export const getLegendaryGameCoverUrl = (
@@ -249,22 +256,29 @@ export function spawnLegendaryInstall(
     return () => {};
   }
 
-  const child = spawn(
-    binary,
-    [
-      ...legendaryBaseArgs(),
-      "install",
-      appName,
-      "--base-path",
-      downloadPath,
-      "--yes",
-      "--skip-sdl",
-    ],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: legendaryEnv(),
-    }
-  );
+  let invocation: ReturnType<typeof getLauncherInvocation>;
+  try {
+    invocation = getLauncherInvocation(
+      binary,
+      [
+        ...legendaryBaseArgs(),
+        "install",
+        appName,
+        "--base-path",
+        downloadPath,
+        "--yes",
+        "--skip-sdl",
+      ],
+      legendaryEnv()
+    );
+  } catch (error) {
+    onError(error instanceof Error ? error.message : String(error));
+    return () => {};
+  }
+  const child = spawn(invocation.command, invocation.args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: invocation.env,
+  });
 
   // Legendary actual output format (from DLManager):
   //   [DLManager] INFO: = Progress: 4.52% (55/1218), Running for 00:00:13, ETA: 00:04:38
