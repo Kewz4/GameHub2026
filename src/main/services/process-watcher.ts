@@ -320,33 +320,41 @@ const hasLinuxCompatibilityProcessMatch = (
 
   const executableName = path.basename(executablePath).toLowerCase();
   const executableNameWithoutExtension = executableName.replace(/\.exe$/i, "");
-  const executableDirectory = path.dirname(executablePath).toLowerCase();
+  const executableDirectory = path.posix.dirname(
+    path.posix.normalize(executablePath)
+  );
   const expectedWinePrefix = Wine.getEffectivePrefixPath(
     game.winePrefixPath,
     game.objectId
-  )?.toLowerCase();
+  );
 
   return linuxProcesses.some((process) => {
-    if (process.cwd !== executableDirectory) {
+    if (
+      !process.cwd ||
+      path.posix.normalize(process.cwd) !== executableDirectory
+    ) {
       return false;
     }
 
     if (
       expectedWinePrefix &&
       process.steamCompatDataPath &&
-      process.steamCompatDataPath !== expectedWinePrefix
+      path.posix.normalize(process.steamCompatDataPath) !==
+        path.posix.normalize(expectedWinePrefix)
     ) {
       return false;
     }
 
     if (
-      process.name === executableName ||
-      process.name === executableNameWithoutExtension
+      process.name.toLowerCase() === executableName ||
+      process.name.toLowerCase() === executableNameWithoutExtension
     ) {
       return true;
     }
 
-    const processRunsUnderWine = process.exe.includes("wine");
+    const processRunsUnderWine = /^wine(?:64)?(?:-preloader)?$/i.test(
+      path.posix.basename(process.exe)
+    );
 
     return processRunsUnderWine && process.name.length > 0;
   });
@@ -486,8 +494,11 @@ export const watchProcesses = async () => {
       const processPaths = processMap.get(executable);
       if (
         processPaths &&
-        [...processPaths].some(
-          (processPath) => processPath.toLowerCase() === matchPath.toLowerCase()
+        [...processPaths].some((processPath) =>
+          platform === "linux"
+            ? path.posix.normalize(processPath) ===
+              path.posix.normalize(matchPath)
+            : processPath.toLowerCase() === matchPath.toLowerCase()
         )
       ) {
         return true;

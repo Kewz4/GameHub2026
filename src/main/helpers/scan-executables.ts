@@ -1,5 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import {
+  isLinuxLaunchableFile,
+  linuxGameRoots,
+  linuxSteamRoots,
+} from "./linux-game-discovery";
 import { cleanGameFolderName } from "./clean-game-folder-name";
 import { getExeGameTitle } from "./exe-metadata";
 import { logger } from "@main/services/logger";
@@ -15,16 +21,17 @@ import type { EmulatorSystem } from "@types";
  * install (primary root + every library declared in libraryfolders.vdf).
  */
 function steamCommonDirs(): string[] {
-  if (process.platform !== "win32") return [];
-
   const programFilesX86 =
     process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
   const programFiles = process.env["ProgramFiles"] ?? "C:\\Program Files";
-  const roots = [
-    path.join(programFilesX86, "Steam"),
-    path.join(programFiles, "Steam"),
-    "C:\\Steam",
-  ];
+  const roots =
+    process.platform === "linux"
+      ? linuxSteamRoots()
+      : [
+          path.join(programFilesX86, "Steam"),
+          path.join(programFiles, "Steam"),
+          "C:\\Steam",
+        ];
 
   const root = roots.find((r) => fs.existsSync(path.join(r, "steamapps")));
   if (!root) return [];
@@ -89,6 +96,10 @@ export function discoverScanDirectories(extra: string[] = []): string[] {
     candidates.add(path.join(programFilesX86, "GOG Galaxy", "Games"));
 
     for (const dir of steamCommonDirs()) candidates.add(dir);
+  }
+  if (process.platform === "linux") {
+    for (const dir of [...linuxGameRoots(), ...steamCommonDirs()])
+      candidates.add(dir);
   }
 
   return [...candidates].filter((dir) => {
@@ -167,7 +178,7 @@ const NON_GAME_FOLDER_RE =
 
 function isLikelyGameExe(name: string): boolean {
   const lower = name.toLowerCase();
-  if (!lower.endsWith(".exe")) return false;
+  if (process.platform !== "linux" && !lower.endsWith(".exe")) return false;
   return !NON_GAME_EXE_PATTERNS.some((p) => lower.includes(p));
 }
 
@@ -201,6 +212,12 @@ async function bestExeForFolder(
           ? (entry as unknown as { path: string }).path
           : folder;
     const full = path.join(parentPath, entry.name);
+    if (
+      process.platform === "linux" &&
+      !entry.name.toLowerCase().endsWith(".exe") &&
+      !isLinuxLaunchableFile(full)
+    )
+      continue;
     if (NON_GAME_FOLDER_RE.test(full)) continue;
     const rel = path.relative(folder, full);
     candidates.push({
@@ -306,6 +323,9 @@ export function discoverGameLibraryRoots(extra: string[] = []): string[] {
     }
 
     candidates.add(path.join(programFilesX86, "DODI-Repacks"));
+  }
+  if (process.platform === "linux") {
+    for (const dir of linuxGameRoots()) candidates.add(dir);
   }
 
   return [...candidates].filter((dir) => {
@@ -541,8 +561,6 @@ export async function discoverRomFiles(
   onProgress?: (current: number, total: number, title: string) => void,
   onlyExtraDirs = false
 ): Promise<DiscoveredRom[]> {
-  if (process.platform !== "win32") return [];
-
   // Build the list of ROM root directories to scan.
   const roots = new Set<string>(extraDirs);
   // A SELECTIVE scan (onlyExtraDirs) searches exactly the folders the user
@@ -551,6 +569,16 @@ export async function discoverRomFiles(
   // silently ran a full deep scan. Only a deep scan (no scoped dirs) adds those
   // drive-wide roots.
   if (!onlyExtraDirs) {
+    if (process.platform === "linux") {
+      for (const name of [
+        ...ROM_ROOT_NAMES,
+        "Emulation/roms",
+        "roms",
+        "Games",
+      ]) {
+        roots.add(path.join(os.homedir(), name));
+      }
+    }
     for (const d of fixedDriveLetters()) {
       for (const name of ROM_ROOT_NAMES) {
         roots.add(`${d}:\\${name}`);
@@ -601,7 +629,8 @@ export async function discoverRomFiles(
             ? (entry as unknown as { path: string }).path
             : root;
       const fullPath = path.join(parentPath, entry.name);
-      const fullPathLower = fullPath.toLowerCase();
+      const fullPathLower =
+        process.platform === "win32" ? fullPath.toLowerCase() : fullPath;
       if (seenPaths.has(fullPathLower)) continue;
       // Skip files inside store-managed paths (Steam/Epic/etc.).
       if (isStoreManagedPath(fullPath)) continue;

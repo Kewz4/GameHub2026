@@ -34,6 +34,8 @@ import { AUTH_REBRAND_CSS, AUTH_REBRAND_JS } from "./auth-rebrand";
 import { CoalescedWindowCreation } from "./coalesced-window-creation";
 import { HydraApi } from "./hydra-api";
 import { setConsoleWindowSender } from "./logger";
+import { supportsDesktopGameCapture } from "./desktop-capture-capability";
+import { NativeAddon } from "./native-addon";
 
 export class WindowManager {
   public static mainWindow: Electron.BrowserWindow | null = null;
@@ -780,6 +782,17 @@ export class WindowManager {
    */
   private static async raiseAndShowOverlay(): Promise<Electron.BrowserWindow | null> {
     if (process.platform === "darwin") return null;
+    if (
+      process.platform === "linux" &&
+      (!supportsDesktopGameCapture(process.platform) ||
+        !NativeAddon.isDesktopCompositionAvailable())
+    ) {
+      // Re-check cached windows if the compositor stopped after creation.
+      if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+        this.notificationWindow.hide();
+      }
+      return null;
+    }
 
     const win = await this.createNotificationWindow();
     if (!win || win.isDestroyed()) return null;
@@ -796,7 +809,11 @@ export class WindowManager {
     achievements: AchievementNotificationInfo[]
   ): Promise<boolean> {
     const win = await this.raiseAndShowOverlay();
-    if (!win) return false;
+    if (!win)
+      return (
+        process.platform === "linux" &&
+        this.sendAchievementToFocusedWindow(position, achievements)
+      );
     win.webContents.send("on-achievement-unlocked", position, achievements);
     return true;
   }
@@ -852,7 +869,12 @@ export class WindowManager {
   }
 
   private static async createNotificationWindowInternal(): Promise<Electron.BrowserWindow | null> {
-    if (process.platform === "darwin" || process.platform === "linux") {
+    if (
+      process.platform === "darwin" ||
+      (process.platform === "linux" &&
+        (!supportsDesktopGameCapture(process.platform) ||
+          !NativeAddon.isDesktopCompositionAvailable()))
+    ) {
       return null;
     }
 
@@ -966,7 +988,11 @@ export class WindowManager {
       }),
     ];
 
-    if (process.platform === "linux") {
+    if (
+      process.platform === "linux" &&
+      (!supportsDesktopGameCapture(process.platform) ||
+        !NativeAddon.isDesktopCompositionAvailable())
+    ) {
       this.sendAchievementToFocusedWindow(position, testAchievements);
       return;
     }

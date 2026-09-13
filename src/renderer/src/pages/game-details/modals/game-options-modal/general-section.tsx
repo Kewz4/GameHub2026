@@ -84,7 +84,10 @@ const isBatchExecutable = (executablePath?: string | null) =>
   !!executablePath && /\.(bat|cmd)$/i.test(executablePath);
 
 const supportsTrackingExecutables = (executablePath?: string | null) =>
-  !!executablePath && /\.(bat|cmd|exe)$/i.test(executablePath);
+  !!executablePath &&
+  !/^[a-z][a-z0-9+.-]*:\/\//i.test(executablePath) &&
+  (window.electron.platform !== "win32" ||
+    /\.(bat|cmd|exe)$/i.test(executablePath));
 
 export function GeneralSettingsSection({
   game,
@@ -308,22 +311,19 @@ export function GeneralSettingsSection({
                   {t("open_folder")}
                 </Button>
               )}
-              {game.shop !== "custom" &&
-                window.electron.platform === "win32" && (
-                  <Button
-                    type="button"
-                    theme="outline"
-                    onClick={onOpenSaveFolder}
-                    disabled={loadingSaveFolder || !saveFolderPath}
-                  >
-                    <HardDrive size={14} />
-                    {loadingSaveFolder
-                      ? t("searching_save_folder")
-                      : saveFolderPath
-                        ? t("open_save_folder")
-                        : t("no_save_folder_found")}
-                  </Button>
-                )}
+              <Button
+                type="button"
+                theme="outline"
+                onClick={onOpenSaveFolder}
+                disabled={loadingSaveFolder || !saveFolderPath}
+              >
+                <HardDrive size={14} />
+                {loadingSaveFolder
+                  ? t("searching_save_folder")
+                  : saveFolderPath
+                    ? t("open_save_folder")
+                    : t("no_save_folder_found")}
+              </Button>
             </div>
           </div>
 
@@ -605,7 +605,11 @@ export function GeneralSettingsSection({
                 onClick={() => onCreateShortcut("start_menu")}
                 theme="outline"
               >
-                {t("create_start_menu_shortcut")}
+                {window.electron.platform === "linux"
+                  ? t("create_applications_menu_shortcut", {
+                      defaultValue: "Add to applications menu",
+                    })
+                  : t("create_start_menu_shortcut")}
               </Button>
             )}
           </div>

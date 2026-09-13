@@ -13,6 +13,8 @@ import {
   parseNativeRecorderSegmentListEntry,
   type NativeRecorderEncoder,
 } from "./game-recorder-native-ffmpeg";
+import { buildLinuxRecorderFfmpegArguments } from "./linux-recorder-ffmpeg";
+import type { LinuxRecorderEncoder } from "./linux-recorder-encoder";
 
 export type NativeRecorderCompletedSegment = {
   path: string;
@@ -25,6 +27,11 @@ export type NativeRecorderCompletedSegment = {
 type NativeRecorderSessionOptions = {
   ffmpegPath: string;
   encoder: NativeRecorderEncoder;
+  linux?: {
+    display: string;
+    pulseMonitor: string | null;
+    encoder?: LinuxRecorderEncoder;
+  };
   configuration: GameRecorderPreferences;
   captureSessionId: number;
   windowHandle: string;
@@ -63,7 +70,7 @@ export const probeNativeRecorderEncoder = (
 
 export class NativeRecorderSession {
   public readonly captureSessionId: number;
-  public readonly encoder: NativeRecorderEncoder;
+  public readonly encoder: NativeRecorderEncoder | LinuxRecorderEncoder["name"];
   public readonly dimensions: { width: number; height: number };
   public readonly targetVideoBitrate: number;
   public readonly outputFps: number;
@@ -87,42 +94,36 @@ export class NativeRecorderSession {
   constructor(options: NativeRecorderSessionOptions) {
     this.options = options;
     this.captureSessionId = options.captureSessionId;
-    this.encoder = options.encoder;
+    this.encoder = options.linux
+      ? (options.linux.encoder?.name ?? "libx264")
+      : options.encoder;
     this.startedAt = Date.now();
-    this.hasAudio = options.configuration.captureGameAudio;
+    this.hasAudio = options.linux
+      ? Boolean(
+          options.configuration.captureGameAudio && options.linux.pulseMonitor
+        )
+      : options.configuration.captureGameAudio;
     this.outputFps = options.configuration.fps;
     this.prefix = `native-${String(options.captureSessionId).padStart(8, "0")}`;
     this.outputPattern = path.join(
       options.segmentDirectory,
       `${this.prefix}-%08d.mp4`
     );
-    const built = buildNativeRecorderFfmpegArguments({
-      configuration: options.configuration,
-      encoder: options.encoder,
-      ffmpegWindowHandle: options.windowHandle,
-      sourceWidth: options.sourceWidth,
-      sourceHeight: options.sourceHeight,
-      outputPattern: this.outputPattern,
-      includeAudio: this.hasAudio,
-    });
+    const built = this.buildArguments();
     this.dimensions = built.dimensions;
     this.targetVideoBitrate = built.targetBitrate;
   }
 
   public start() {
     if (this.child) throw new Error("The native recorder is already running.");
-    const built = buildNativeRecorderFfmpegArguments({
-      configuration: this.options.configuration,
-      encoder: this.options.encoder,
-      ffmpegWindowHandle: this.options.windowHandle,
-      sourceWidth: this.options.sourceWidth,
-      sourceHeight: this.options.sourceHeight,
-      outputPattern: this.outputPattern,
-      includeAudio: this.hasAudio,
-    });
+    const built = this.buildArguments();
     const child = spawn(this.options.ffmpegPath, built.args, {
       windowsHide: true,
-      stdio: [this.hasAudio ? "pipe" : "ignore", "pipe", "pipe"],
+      stdio: [
+        this.hasAudio && !this.options.linux ? "pipe" : "ignore",
+        "pipe",
+        "pipe",
+      ],
     }) as ChildProcessWithoutNullStreams;
     this.child = child;
     this.completion = new Promise<void>((resolve) => {
@@ -172,7 +173,7 @@ export class NativeRecorderSession {
     metadata: GameRecorderPcmChunkMetadata,
     payload: ArrayBuffer | Uint8Array
   ) {
-    if (!this.hasAudio) return;
+    if (!this.hasAudio || this.options.linux) return;
     if (metadata.captureSessionId !== this.captureSessionId) {
       throw new Error("Recorder PCM belongs to an inactive capture session.");
     }
@@ -219,6 +220,16 @@ export class NativeRecorderSession {
     if (!child) return this.completion;
     child.stdin?.end();
     child.kill();
+    if (this.options.linux) {
+      // A failed driver/encoder may ignore graceful termination. Bound teardown
+      // of this owned FFmpeg child before trying a software replacement.
+      const forceStop = setTimeout(() => {
+        if (child.exitCode === null && child.signalCode === null)
+          child.kill("SIGKILL");
+      }, 2000);
+      forceStop.unref();
+      void this.completion.finally(() => clearTimeout(forceStop));
+    }
     return this.completion;
   }
 
@@ -334,5 +345,29 @@ export class NativeRecorderSession {
   private clearStartupTimeout() {
     if (this.startupTimeout) clearTimeout(this.startupTimeout);
     this.startupTimeout = null;
+  }
+
+  private buildArguments() {
+    const options = this.options;
+    if (options.linux)
+      return buildLinuxRecorderFfmpegArguments({
+        configuration: options.configuration,
+        windowId: options.windowHandle,
+        display: options.linux.display,
+        pulseMonitor: this.hasAudio ? options.linux.pulseMonitor : null,
+        encoder: options.linux.encoder,
+        sourceWidth: options.sourceWidth,
+        sourceHeight: options.sourceHeight,
+        outputPattern: this.outputPattern,
+      });
+    return buildNativeRecorderFfmpegArguments({
+      configuration: options.configuration,
+      encoder: options.encoder,
+      ffmpegWindowHandle: options.windowHandle,
+      sourceWidth: options.sourceWidth,
+      sourceHeight: options.sourceHeight,
+      outputPattern: this.outputPattern,
+      includeAudio: this.hasAudio,
+    });
   }
 }

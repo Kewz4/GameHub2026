@@ -76,24 +76,23 @@ export function useGameSettingsModalState({
   }, [game?.id, game?.title, visible]);
 
   useEffect(() => {
-    if (
-      !visible ||
-      !game ||
-      game.shop === "custom" ||
-      globalThis.window.electron.platform !== "win32"
-    ) {
+    if (!visible || !game) {
       setLoadingSaveFolder(false);
       setSaveFolderPath(null);
       return;
     }
 
+    let active = true;
     setLoadingSaveFolder(true);
     setSaveFolderPath(null);
     globalThis.window.electron
       .getGameSaveFolder(game.shop, game.objectId)
-      .then(setSaveFolderPath)
-      .catch(() => setSaveFolderPath(null))
-      .finally(() => setLoadingSaveFolder(false));
+      .then((folder) => active && setSaveFolderPath(folder))
+      .catch(() => active && setSaveFolderPath(null))
+      .finally(() => active && setLoadingSaveFolder(false));
+    return () => {
+      active = false;
+    };
   }, [game, visible]);
 
   useEffect(() => {
@@ -611,8 +610,9 @@ export function useGameSettingsModalState({
       saveFolderPath,
       creatingSteamShortcut,
       steamShortcutExists,
-      shouldShowCreateStartMenuShortcut:
-        globalThis.window.electron.platform === "win32",
+      shouldShowCreateStartMenuShortcut: ["win32", "linux"].includes(
+        globalThis.window.electron.platform
+      ),
       onChangeExecutableLocation: handleChangeExecutableLocation,
       onClearExecutablePath: handleClearExecutablePath,
       onOpenSaveFolder: handleOpenSaveFolder,

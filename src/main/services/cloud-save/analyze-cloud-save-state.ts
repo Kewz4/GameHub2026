@@ -123,6 +123,7 @@ export const analyzeCloudSaveState = async (
     context,
     {
       customPathBindings,
+      identityFiles: remoteManifest?.files,
       scanStoreUserContext: remoteManifest
         ? storeUserContextWithSnapshotAccounts(
             context.pathContext.storeUserContext,

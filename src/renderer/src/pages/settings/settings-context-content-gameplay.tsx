@@ -24,6 +24,7 @@ import {
   getGameRecorderVideoBitrate,
 } from "@shared";
 import { getSettingsRecorderBackendPresentation } from "./settings-recorder-presentation";
+import { getDesktopCaptureUiCapabilities } from "@renderer/helpers/desktop-capture-ui";
 
 import "./settings-behavior.scss";
 
@@ -64,6 +65,10 @@ export function SettingsContextContentGameplay() {
   );
   const spotifySystemAudioBlocked =
     userPreferences?.musicProvider === "spotify";
+  const captureCapabilities = getDesktopCaptureUiCapabilities(
+    recorderState,
+    window.electron.platform
+  );
 
   useEffect(() => {
     let active = true;
@@ -249,7 +254,7 @@ export function SettingsContextContentGameplay() {
             defaultValue: "Capture achievement souvenirs",
           })}
           checked={form.enableAchievementSouvenirs}
-          disabled={window.electron.platform === "linux"}
+          disabled={!captureCapabilities.screenshots}
           onChange={() =>
             handleChange({
               enableAchievementSouvenirs: !form.enableAchievementSouvenirs,
@@ -257,11 +262,17 @@ export function SettingsContextContentGameplay() {
           }
         />
         <HelperText>
-          {window.electron.platform === "linux"
-            ? t("achievement_souvenirs_linux_unavailable", {
-                defaultValue:
-                  "Souvenir capture is paused on Linux until portal-safe capture is available.",
-              })
+          {!captureCapabilities.screenshots
+            ? t(
+                captureCapabilities.checking
+                  ? "achievement_souvenirs_checking"
+                  : "achievement_souvenirs_session_unavailable",
+                {
+                  defaultValue: captureCapabilities.checking
+                    ? "Checking screenshot capture support for this desktop session."
+                    : "Automatic capture needs an X11 game window on Linux. Native Wayland capture is not available yet. Existing local and cloud souvenirs remain available in your profile.",
+                }
+              )
             : t("achievement_souvenirs_description", {
                 defaultValue:
                   "Captures the foreground game before the achievement toast, keeps a local copy, and mirrors it to your private GameHub R2 storage. No subscription is required.",
@@ -508,6 +519,20 @@ export function SettingsContextContentGameplay() {
                 "Last completed segment used compatibility capture. Capture is currently paused or inactive.",
             })}
           </HelperText>
+        ) : recorderBackendPresentation === "x11_active_verified" ? (
+          <HelperText>
+            Active capture verified by a completed segment: native X11 H.264.
+          </HelperText>
+        ) : recorderBackendPresentation === "x11_historical" ? (
+          <HelperText>
+            Last completed segment used native X11 H.264. Capture is currently
+            paused or inactive.
+          </HelperText>
+        ) : recorderBackendPresentation === "x11_active_pending" ? (
+          <HelperText>
+            Native X11 H.264 capture is active. Waiting for a completed segment
+            to verify the backend.
+          </HelperText>
         ) : recorderBackendPresentation === "native_active_pending" ? (
           <HelperText>
             {t("native_recorder_active_pending", {
@@ -522,12 +547,22 @@ export function SettingsContextContentGameplay() {
                 "Compatibility capture is active. Waiting for a completed segment before confirming the backend from diagnostics.",
             })}
           </HelperText>
-        ) : recorderBackendPresentation === "windows_unavailable" ? (
+        ) : recorderBackendPresentation === "capture_unavailable" ? (
           <HelperText tone="danger">
-            {t("recorder_windows_only", {
-              defaultValue:
-                "Gameplay capture is currently available on Windows.",
-            })}
+            {recorderState?.errorMessage ??
+              recorderState?.statusMessage ??
+              t("recorder_capture_unavailable", {
+                defaultValue:
+                  "Gameplay capture is unavailable in this desktop session. No recording is active.",
+              })}
+          </HelperText>
+        ) : window.electron.platform === "linux" ? (
+          <HelperText>
+            {recorderBackendPresentation === "native_machine_available"
+              ? "Machine check: native X11 H.264 capture is available. The active game backend is verified after a completed segment."
+              : recorderBackendPresentation === "native_machine_unavailable"
+                ? "Native X11 H.264 capture is unavailable; compatibility capture requires a safe game-window source."
+                : "Checking the Linux capture backend."}
           </HelperText>
         ) : recorderBackendPresentation === "native_machine_available" ? (
           <HelperText>
@@ -577,9 +612,15 @@ export function SettingsContextContentGameplay() {
           id="settings-game-recorder-capture-audio"
           label={t("capture_game_audio")}
           checked={
-            spotifySystemAudioBlocked ? false : form.gameRecorderCaptureAudio
+            spotifySystemAudioBlocked || !captureCapabilities.systemAudio
+              ? false
+              : form.gameRecorderCaptureAudio
           }
-          disabled={!form.gameRecorderEnabled || spotifySystemAudioBlocked}
+          disabled={
+            !form.gameRecorderEnabled ||
+            spotifySystemAudioBlocked ||
+            !captureCapabilities.systemAudio
+          }
           onChange={() =>
             handleChange({
               gameRecorderCaptureAudio: !form.gameRecorderCaptureAudio,
@@ -587,10 +628,15 @@ export function SettingsContextContentGameplay() {
           }
         />
         <HelperText>
-          {t("capture_system_audio_scope", {
-            defaultValue:
-              "This records the Windows system mix—not only game audio—while the detected game is foreground. Audio capture pauses when you switch to another app.",
-          })}
+          {!captureCapabilities.systemAudio
+            ? t("capture_video_only_session", {
+                defaultValue:
+                  "This capture backend records video only. System audio capture is unavailable in this desktop session.",
+              })
+            : t("capture_system_audio_scope_cross_platform", {
+                defaultValue:
+                  "When supported by the capture backend, this records system audio—not only game audio—while the detected game is foreground. Audio capture pauses when you switch to another app.",
+              })}
         </HelperText>
         {spotifySystemAudioBlocked && (
           <HelperText tone="danger">

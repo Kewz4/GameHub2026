@@ -282,6 +282,7 @@ export interface MemcardRestoreTarget {
 export type EmulatorInstallKind =
   | "windows-installer"
   | "linux-appimage"
+  | "linux-flatpak"
   | "windows-archive"
   | "link";
 

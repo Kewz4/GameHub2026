@@ -32,6 +32,17 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Linux native and mod build dependencies
+        if: runner.os == 'Linux'
+        run: bash scripts/install-linux-build-deps.sh
+
+      - name: Cache Linux mod helper
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: binaries/ukmm
+          key: ${{ runner.os }}-ukmm-${{ hashFiles('scripts/build-ukmm.cjs', 'native/ukmm/ukmm-headless-install-bnp.patch') }}
+
       - name: Install dependencies
         run: yarn --frozen-lockfile
 

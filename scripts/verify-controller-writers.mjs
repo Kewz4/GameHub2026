@@ -101,10 +101,10 @@ const pc = pcsx2PadSection(P);
 const pcChecks = [
   "[Pad1]",
   "Type = DualShock2",
-  "Cross = SDL-0/A",
-  "Circle = SDL-0/B",
-  "Square = SDL-0/X",
-  "Triangle = SDL-0/Y",
+  "Cross = SDL-0/FaceSouth",
+  "Circle = SDL-0/FaceEast",
+  "Square = SDL-0/FaceWest",
+  "Triangle = SDL-0/FaceNorth",
   "L2 = SDL-0/+LeftTrigger",
   "Select = SDL-0/Back",
   "LLeft = SDL-0/-LeftX",
@@ -115,21 +115,25 @@ if (pcMiss.length === 0)
 else fail("PCSX2 missing lines", pcMiss.join(" | "));
 
 // ── RPCS3 ─────────────────────────────────────────────────────────────────────
-console.log("\n[C3] RPCS3 Default.yml (XInput handler)");
+console.log("\n[C3] RPCS3 Default.yml (platform-native handler)");
 const rp = rpcs3Yaml(P);
 const rpChecks = [
   "Player 1 Input:",
-  "Handler: XInput",
-  "Cross: A",
-  "Circle: B",
-  "Square: X",
-  "Triangle: Y",
+  ...(process.platform === "win32"
+    ? ["Handler: XInput", "Cross: A", "Circle: B", "Square: X", "Triangle: Y"]
+    : [
+        "Handler: SDL",
+        "Cross: South",
+        "Circle: East",
+        "Square: West",
+        "Triangle: North",
+      ]),
   "L1: LB",
   "R2: RT",
   "Left Stick Left: LS X-",
 ];
 const rpMiss = rpChecks.filter((c) => !rp.includes(c));
-if (rpMiss.length === 0) ok("RPCS3 YAML has correct XInput bindings");
+if (rpMiss.length === 0) ok("RPCS3 YAML has correct platform-native bindings");
 else fail("RPCS3 missing lines", rpMiss.join(" | "));
 
 // ── Dolphin ───────────────────────────────────────────────────────────────────
@@ -156,7 +160,7 @@ const remapped = {
 };
 const ra2 = ralibretroBindings(remapped);
 const pc2 = pcsx2PadSection(remapped);
-if (ra2.J0_B === "J0 y" && pc2.includes("Cross = SDL-0/Y"))
+if (ra2.J0_B === "J0 y" && pc2.includes("Cross = SDL-0/FaceNorth"))
   ok("remap of 'a'→y shows in RALibretro (J0_B) and PCSX2 (Cross)");
 else fail("remap did not propagate", `${ra2.J0_B} / PCSX2`);
 

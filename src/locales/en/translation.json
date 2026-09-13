@@ -464,6 +464,7 @@
     "cloud_save_v2_no_cloud_saves_description": "No saves have been uploaded to the cloud.",
     "cloud_save_v2_mapping_issue_emulator-unavailable": "GameHub cannot find the configured emulator. Install or reconnect it before using automatic cloud saves for this game.",
     "cloud_save_v2_mapping_issue_shared-memory-card": "Automatic per-game sync is unavailable because this emulator uses a shared memory card. Use the Memory Card cloud-save manager, or add a safe game-specific location manually.",
+    "cloud_save_v2_mapping_issue_shared-nand": "Automatic per-game sync is unavailable for shared DSi NAND or SD images. Do not map the whole image to one game; export this title's save and add that exact game-specific location manually.",
     "cloud_save_v2_mapping_issue_gamecube-gci-unavailable": "Automatic GameCube sync needs Dolphin's GCI Folder mode and a raw ISO/GCM with a readable game code. Shared .raw cards, custom GCI paths, and compressed RVZ/GCZ images are left untouched; add a specific location manually if needed.",
     "cloud_save_v2_mapping_issue_title-identity-unavailable": "GameHub could not prove a safe save location for this emulated title. Nothing will be uploaded automatically; add the exact game-specific location manually.",
     "cloud_save_v2_manage_save_locations": "Manage save locations",

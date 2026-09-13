@@ -6,7 +6,7 @@ import { systemFromObjectId, platformToSystem } from "@main/helpers";
 import { levelKeys, gamesSublevel } from "@main/level";
 import { getEmulatorConfig } from "./emulators-repository";
 import { KNOWN_BINARIES } from "./known-binaries";
-import { cemuDataDir, edenDataDir } from "./emulator-portable";
+import { edenDataDir } from "./emulator-portable";
 import { resolveWiiuTitleId } from "./cemu-graphic-packs";
 import { getPs2MemcardDirs } from "./ps2-memcard-dirs";
 import { getPs1MemcardDirs } from "./ps1-memcard-dirs";
@@ -26,6 +26,20 @@ import {
   resolveStoredGameRomPath,
 } from "./emulator-save-paths";
 import { getEmulatorCloudSaveStrategy } from "./emulator-cloud-save-strategy";
+import { cemuMlcDir, emulatorUserPaths } from "./emulator-user-paths";
+import { retroArchSaveRoots } from "./retroarch-linux";
+import { LIBRETRO_CORE_MAP } from "./libretro-core-map";
+import {
+  libretroSramTargetsOverlap,
+  planLibretroSramAlias,
+  type LibretroSramAliasPolicy,
+} from "./libretro-sram-alias";
+import {
+  buildPspRestorePatterns,
+  findPspSaveDirectories,
+  normalizePspDiscId,
+  readPspDiscId,
+} from "./psp-save-paths";
 import {
   buildDolphinGciRestorePatterns,
   findDolphinGciFilesForGame,
@@ -75,23 +89,24 @@ export const getEmulatorSaveRoots = (
   switch (binary ?? KNOWN_BINARIES[system]?.binary) {
     case "azahar":
       return [
-        path.join(installDir, "user", "sdmc"),
-        path.join(installDir, "user", "nand"),
+        path.join(emulatorUserPaths("azahar", installDir).data, "sdmc"),
+        path.join(emulatorUserPaths("azahar", installDir).data, "nand"),
       ];
     case "cemu":
-      return [path.join(cemuDataDir(installDir), "mlc01", "usr", "save")];
+      return [path.join(cemuMlcDir(installDir), "usr", "save")];
     case "dolphin":
       return system === "gc"
-        ? [path.join(installDir, "User", "GC")]
-        : [path.join(installDir, "User", "Wii")];
+        ? [path.join(emulatorUserPaths("dolphin", installDir).data, "GC")]
+        : [path.join(emulatorUserPaths("dolphin", installDir).data, "Wii")];
     case "rpcs3": {
       // Enumerate every RPCS3 home profile instead of silently ignoring saves
       // outside the default 00000001 account. Preserve a creatable default for
       // the open-folder UI when RPCS3 has not created a profile yet.
-      const profileRoots = findRpcs3ProfileSaveRoots(installDir);
+      const dataDir = emulatorUserPaths("rpcs3", installDir).data;
+      const profileRoots = findRpcs3ProfileSaveRoots(dataDir);
       return profileRoots.length > 0
         ? profileRoots
-        : [path.join(installDir, "dev_hdd0", "home", "00000001", "savedata")];
+        : [path.join(dataDir, "dev_hdd0", "home", "00000001", "savedata")];
     }
     case "pcsx2": {
       // The memcard resolvers filter to dirs that EXIST, so before PCSX2 has
@@ -100,16 +115,32 @@ export const getEmulatorSaveRoots = (
       // memcards dir so an installed-but-unused PCSX2 still has a valid,
       // creatable save folder.
       const dirs = getPs2MemcardDirs(executablePath ?? null);
-      return dirs.length ? dirs : [path.join(installDir, "memcards")];
+      return dirs.length
+        ? dirs
+        : [path.join(emulatorUserPaths("pcsx2", installDir).data, "memcards")];
     }
     case "duckstation": {
       const dirs = getPs1MemcardDirs();
-      return dirs.length ? dirs : [path.join(installDir, "memcards")];
+      return dirs.length
+        ? dirs
+        : [
+            path.join(
+              emulatorUserPaths("duckstation", installDir).data,
+              "memcards"
+            ),
+          ];
     }
-    case "ralibretro":
+    case "ralibretro": {
       // Shared discovery root. The backup resolver narrows this to the current
       // ROM's exact file(s); it is never registered wholesale.
-      return [path.join(installDir, "Saves")];
+      const roots =
+        process.platform === "linux"
+          ? retroArchSaveRoots(installDir, null, system)
+          : [path.join(installDir, "Saves")];
+      return system === "psp"
+        ? roots.map((root) => path.join(root, "PSP", "SAVEDATA"))
+        : roots;
+    }
     case "eden":
       // Eden (Yuzu/Sudachi derivative): in portable mode ALL data roots under
       // <install>/user (edenDataDir), so saves live at
@@ -148,6 +179,85 @@ export interface EmulatorSaveLocation {
   folders: string[];
 }
 
+export const resolveEmulatorSramAliasPolicy = async (
+  loc: EmulatorSaveLocation,
+  shop: GameShop,
+  objectId: string,
+  platform: "windows" | "linux" | "mac"
+): Promise<LibretroSramAliasPolicy | undefined> => {
+  if (loc.binary !== "ralibretro" || loc.system === "psp") return undefined;
+  const game = await gamesSublevel
+    .get(levelKeys.game(shop, objectId))
+    .catch(() => null);
+  let windowsSramLayout = "S";
+  if (platform === "windows") {
+    const file = path.join(path.dirname(loc.executablePath), "RALibretro.json");
+    if (fs.existsSync(file)) {
+      try {
+        windowsSramLayout =
+          JSON.parse(fs.readFileSync(file, "utf8"))?.saves?.sramPath ?? "S";
+      } catch {
+        return {
+          unsupportedReason:
+            "The RALibretro save layout cannot be read safely. Correct its configuration before cross-frontend SRAM restore.",
+        };
+      }
+    }
+  }
+  const policy = planLibretroSramAlias({
+    platform,
+    system: loc.system,
+    core:
+      LIBRETRO_CORE_MAP[loc.system as keyof typeof LIBRETRO_CORE_MAP]?.core ??
+      "",
+    romPath: resolveStoredGameRomPath(game),
+    saveRoots: loc.folders,
+    windowsSramLayout,
+  });
+  if (platform === "linux" && policy.plan) {
+    const expected = path.basename(policy.plan.targetPath);
+    for (const [key, other] of await gamesSublevel.iterator().all()) {
+      if (key === levelKeys.game(shop, objectId) || other.isDeleted) continue;
+      const otherSystem =
+        systemFromObjectId(other.objectId) ?? platformToSystem(other.platform);
+      if (
+        !otherSystem ||
+        LIBRETRO_CORE_MAP[otherSystem as keyof typeof LIBRETRO_CORE_MAP]
+          ?.core !== policy.plan.core
+      )
+        continue;
+      const otherRom = resolveStoredGameRomPath(other);
+      if (
+        !otherRom ||
+        `${path.basename(otherRom, path.extname(otherRom))}.srm` !== expected
+      )
+        continue;
+      const otherConfig = await getEmulatorConfig(otherSystem).catch(
+        () => null
+      );
+      if (!otherConfig?.executablePath || otherConfig.binary !== "ralibretro")
+        continue;
+      const otherRoot = retroArchSaveRoots(
+        path.dirname(otherConfig.executablePath),
+        otherRom,
+        otherSystem
+      )[0];
+      if (
+        libretroSramTargetsOverlap(
+          path.join(otherRoot, expected),
+          policy.plan.targetPath
+        )
+      )
+        return {
+          blockRestore: true,
+          unsupportedReason:
+            "Another library game uses the same RetroArch SRAM filename and save directory. Give the ROMs distinct names or enable per-content-directory save sorting before restoring; no save was overwritten.",
+        };
+    }
+  }
+  return policy;
+};
+
 /**
  * Resolve the emulator save folders for a console game. Returns null ONLY when
  * the game's emulator system can't be determined or the emulator isn't
@@ -170,12 +280,24 @@ export const resolveEmulatorSaveLocation = async (
   const installDir = path.dirname(config.executablePath);
   // Keep every configured root, even if it doesn't exist yet — a game that
   // hasn't been played has no save folder, but the location is still known.
-  const folders = getEmulatorSaveRoots(
+  let folders = getEmulatorSaveRoots(
     system,
     installDir,
     config.binary,
     config.executablePath
   );
+  if (process.platform === "linux" && config.binary === "ralibretro") {
+    const game = await gamesSublevel
+      .get(levelKeys.game(shop, objectId))
+      .catch(() => null);
+    folders = retroArchSaveRoots(
+      installDir,
+      resolveStoredGameRomPath(game),
+      system
+    );
+    if (system === "psp")
+      folders = folders.map((root) => path.join(root, "PSP", "SAVEDATA"));
+  }
   if (folders.length === 0) return null;
 
   return {
@@ -220,6 +342,21 @@ const resolvePs3SaveSubfolders = async (
     }
   }
   return subfolders;
+};
+
+const resolvePspIdentity = async (
+  shop: GameShop,
+  objectId: string
+): Promise<string | null> => {
+  const game = await gamesSublevel
+    .get(levelKeys.game(shop, objectId))
+    .catch(() => null);
+  const romPath = resolveStoredGameRomPath(game);
+  if (!romPath) return null;
+  return (
+    readPspDiscId(romPath) ??
+    normalizePspDiscId(game?.discs?.find((disc) => disc.path === romPath)?.sku)
+  );
 };
 
 const resolvePs3TitleId = async (
@@ -298,6 +435,13 @@ export const resolveEmulatorGameSaveFolder = async (
 ): Promise<string | null> => {
   const loc = await resolveEmulatorSaveLocation(shop, objectId);
   if (!loc) return null;
+  if (loc.binary === "ralibretro" && loc.system === "psp") {
+    const identity = await resolvePspIdentity(shop, objectId);
+    const folders = identity
+      ? findPspSaveDirectories(loc.folders, identity)
+      : [];
+    if (folders.length) return folders[0];
+  }
 
   if (loc.binary === "ralibretro") {
     const game = await gamesSublevel
@@ -391,6 +535,12 @@ export const resolveEmulatorBackupFolders = async (
   if (!loc) return [];
 
   const strategy = getEmulatorCloudSaveStrategy(loc.system, loc.binary);
+  if (loc.binary === "ralibretro" && loc.system === "psp") {
+    const identity = await resolvePspIdentity(shop, objectId);
+    return identity
+      ? findPspSaveDirectories(loc.folders, identity).filter(pathContainsFile)
+      : [];
+  }
 
   // RALibretro's Saves directory is shared by every core and game. Register
   // only this ROM's exact save payload; if it has not saved yet, there is
@@ -478,6 +628,10 @@ export const resolveEmulatorRestorePatterns = async (
   const loc = await resolveEmulatorSaveLocation(shop, objectId);
   if (!loc) return [];
   const strategy = getEmulatorCloudSaveStrategy(loc.system, loc.binary);
+  if (loc.binary === "ralibretro" && loc.system === "psp") {
+    const identity = await resolvePspIdentity(shop, objectId);
+    return identity ? buildPspRestorePatterns(loc.folders, identity) : [];
+  }
   if (strategy === "dedicated-memory-card-manager") {
     return [];
   }

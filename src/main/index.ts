@@ -22,11 +22,15 @@ import {
 // ── Early startup log — written before any async work so crashes are visible ──
 function appendStartupLog(message: string): void {
   try {
-    const logDir = path.join(
-      process.env.APPDATA ??
-        path.join(os.homedir(), app.isPackaged ? "AppData/Roaming" : "."),
-      "GameHub"
-    );
+    const stateRoot =
+      process.platform === "linux"
+        ? process.env.XDG_STATE_HOME &&
+          path.posix.isAbsolute(process.env.XDG_STATE_HOME)
+          ? process.env.XDG_STATE_HOME
+          : path.join(os.homedir(), ".local", "state")
+        : (process.env.APPDATA ??
+          path.join(os.homedir(), app.isPackaged ? "AppData/Roaming" : "."));
+    const logDir = path.join(stateRoot, "GameHub");
     fs.mkdirSync(logDir, { recursive: true });
     fs.appendFileSync(
       path.join(logDir, "startup.log"),
@@ -58,6 +62,17 @@ process.on("unhandledRejection", (reason) => {
 // Ensure app name matches productName so electron-updater uses
 // "GameHub-updater" instead of "hydralauncher-updater" for its temp dir.
 app.setName("GameHub");
+if (process.platform === "linux") {
+  // Electron 40 reads package.desktopName into CHROME_DESKTOP internally.
+  // Set it for direct development entrypoints as well; app.setDesktopName is
+  // not part of this pinned Electron version's public API.
+  process.env.CHROME_DESKTOP = "io.gamehub.launcher.desktop";
+  const features = new Set(
+    app.commandLine.getSwitchValue("enable-features").split(",").filter(Boolean)
+  );
+  features.add("GlobalShortcutsPortal");
+  app.commandLine.appendSwitch("enable-features", [...features].join(","));
+}
 
 // Screenshot acceptance can launch the development build against a cloned
 // portable profile. Keep that explicitly opted-in process read-only: IPC and

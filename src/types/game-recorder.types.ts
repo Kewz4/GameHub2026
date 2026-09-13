@@ -13,6 +13,7 @@ export type GameRecorderQualityPreset = "performance" | "balanced" | "quality";
 
 export type GameRecorderCaptureBackend =
   | "media_recorder"
+  | "native_ffmpeg_x11"
   | "native_ffmpeg_nvenc";
 
 export interface GameRecorderPreferences {
@@ -67,12 +68,12 @@ export interface GameRecorderState {
    * still required before the UI describes that backend as session-verified. */
   activeCaptureBackend: GameRecorderCaptureBackend | null;
   captureDiagnostics: GameRecorderCaptureDiagnostics | null;
-  /** GPU process capability, not a claim that this exact encoder is active. */
+  /** Successful hardware probe (Linux) or GPU/native capability (Windows),
+   * not a claim that this exact encoder has captured a completed game segment. */
   hardwareVideoEncodingAvailable: boolean | null;
-  /** Result of GameHub's bundled FFmpeg NVIDIA encoder probe. Unlike the
-   * Electron GPU flag, this proves that the native NVENC executable path can
-   * initialize on this machine, but not that a particular game window can be
-   * captured through it. */
+  /** Result of the platform FFmpeg encoder probe (Windows NVENC / Linux
+   * NVENC, VA-API, or software x264). This is not itself a hardware claim and does not
+   * prove that a particular game window can be captured through that encoder. */
   nativeVideoEncodingAvailable: boolean | null;
   gameTitle: string | null;
   lastSavedClipPath: string | null;

@@ -46,6 +46,13 @@ import {
   type NativeRecorderCompletedSegment,
 } from "./game-recorder-native-session";
 import { captureWindowsGameWindowFrame } from "./windows-game-capture";
+import { resolveMediaToolPath } from "./media-tool-path";
+import { probeLinuxRecorder } from "./linux-recorder-ffmpeg";
+import { linuxAudioMixer } from "./linux-audio-mixer";
+import {
+  selectLinuxRecorderEncoder,
+  type LinuxRecorderEncoder,
+} from "./linux-recorder-encoder";
 import {
   supportsDesktopGameCapture,
   desktopCaptureUnavailableMessage,
@@ -149,6 +156,10 @@ export class GameRecorderManager {
   private static nativeProbe: Promise<boolean> | null = null;
   private static nativeEncoderAvailable: boolean | null = null;
   private static nativeFailureTargetKey: string | null = null;
+  private static linuxPulseInputAvailable = false;
+  private static linuxPulseMonitor: string | null = null;
+  private static linuxEncoder: LinuxRecorderEncoder | null = null;
+  private static linuxEncoderFallbackPending = false;
   private static captureSessionSequence = 0;
   private static captureReconcile: Promise<void> | null = null;
   private static captureReconcileRequested = false;
@@ -322,7 +333,12 @@ export class GameRecorderManager {
     else if (this.errorMessage) status = "error";
     else if (this.saving) status = "saving";
     else if (this.recordingStartedAt !== null) status = "recording";
-    else if (!this.activeGame || !this.targetPid) status = "waiting";
+    else if (
+      !this.activeGame ||
+      !this.targetPid ||
+      (process.platform === "linux" && !this.targetWindowId)
+    )
+      status = "waiting";
     else if (
       this.preferences.instantReplayEnabled &&
       (this.captureActive || bufferedSeconds > 0)
@@ -335,7 +351,11 @@ export class GameRecorderManager {
     return {
       status,
       desktopCaptureAvailable: platformSupported,
-      systemAudioCaptureAvailable: process.platform === "win32",
+      systemAudioCaptureAvailable:
+        process.platform === "win32" ||
+        (this.linuxPulseInputAvailable &&
+          this.linuxPulseMonitor !== null &&
+          this.nativeFailureTargetKey !== this.currentTargetKey()),
       configuration: { ...this.preferences },
       resolvedOutputDirectory:
         this.preferences.outputDirectory ?? defaultOutput,
@@ -344,11 +364,13 @@ export class GameRecorderManager {
       captureActive: this.captureActive,
       activeCaptureBackend: this.captureActive ? this.captureBackend : null,
       hardwareVideoEncodingAvailable:
-        this.nativeEncoderAvailable === true
-          ? true
-          : videoEncodeStatus === undefined
-            ? null
-            : videoEncodeStatus === "enabled",
+        process.platform === "linux"
+          ? (this.linuxEncoder?.hardware ?? null)
+          : this.nativeEncoderAvailable === true
+            ? true
+            : videoEncodeStatus === undefined
+              ? null
+              : videoEncodeStatus === "enabled",
       nativeVideoEncodingAvailable: this.nativeEncoderAvailable,
       captureDiagnostics: newestSegment
         ? {
@@ -384,7 +406,9 @@ export class GameRecorderManager {
       gameTitle: this.activeGame?.title ?? null,
       lastSavedClipPath: this.lastSavedClipPath,
       statusMessage:
-        this.statusMessage ??
+        (!platformSupported
+          ? desktopCaptureUnavailableMessage(process.platform)
+          : this.statusMessage) ??
         (!platformSupported
           ? desktopCaptureUnavailableMessage(process.platform)
           : !this.preferences.enabled
@@ -399,7 +423,7 @@ export class GameRecorderManager {
                     ? "Instant replay pauses while the game is in the background."
                     : this.spotifySystemAudioBlocked
                       ? "System audio is disabled while Spotify Connect is selected, so Spotify music cannot enter gameplay recordings."
-                      : process.platform === "linux"
+                      : process.platform === "linux" && !this.linuxPulseMonitor
                         ? "X11 game-window capture is video-only; system audio is not captured."
                         : null),
       errorMessage: this.errorMessage,
@@ -413,7 +437,7 @@ export class GameRecorderManager {
     this.spotifySystemAudioBlocked = Boolean(
       userPreferences?.musicProvider === "spotify" && resolved.captureGameAudio
     );
-    return this.spotifySystemAudioBlocked || process.platform === "linux"
+    return this.spotifySystemAudioBlocked
       ? { ...resolved, captureGameAudio: false }
       : resolved;
   }
@@ -684,7 +708,10 @@ export class GameRecorderManager {
       targetVideoBitrate: session.targetVideoBitrate,
       encodedVideoFrames: completed.encodedVideoFrames,
       container: "mp4",
-      backend: "native_ffmpeg_nvenc",
+      backend:
+        process.platform === "linux"
+          ? "native_ffmpeg_x11"
+          : "native_ffmpeg_nvenc",
       encoderName: session.encoder,
     });
   }
@@ -699,11 +726,38 @@ export class GameRecorderManager {
       "Native gameplay capture failed; switching to compatibility capture",
       { message, captureSessionId, target: this.currentTargetKey() }
     );
-    this.nativeFailureTargetKey = this.currentTargetKey();
+    const failedTarget = this.currentTargetKey();
+    const trySoftware =
+      process.platform === "linux" && this.linuxEncoder?.hardware === true;
+    this.linuxEncoderFallbackPending = trySoftware;
+    this.nativeFailureTargetKey = failedTarget;
     await this.stopCaptureEngine(true);
+    if (trySoftware) {
+      const fallback = await selectLinuxRecorderEncoder(
+        this.resolveFfmpegPath(),
+        { softwareOnly: true }
+      );
+      this.linuxEncoderFallbackPending = false;
+      if (this.currentTargetKey() !== failedTarget) {
+        await this.reconcileCapture();
+        return;
+      }
+      if (fallback && this.currentTargetKey() === failedTarget) {
+        this.linuxEncoder = fallback;
+        this.nativeEncoderAvailable = true;
+        this.nativeFailureTargetKey = null;
+        this.errorMessage = null;
+        this.statusMessage =
+          "Hardware encoder unavailable; continuing X11 capture with software encoding…";
+        await this.reconcileCapture();
+        return;
+      }
+    }
     this.errorMessage = null;
     this.statusMessage =
-      "Native encoder unavailable; using compatibility capture…";
+      process.platform === "linux"
+        ? "Native X11 capture unavailable; using video-only compatibility capture…"
+        : "Native encoder unavailable; using compatibility capture…";
     await this.reconcileCapture().catch((error) => {
       this.errorMessage = `Gameplay capture could not start: ${String(error)}`;
       this.publishState();
@@ -712,7 +766,7 @@ export class GameRecorderManager {
 
   public static handleCaptureError(senderId: number, message: string) {
     if (this.captureWindow?.webContents.id !== senderId) return;
-    if (this.captureBackend === "native_ffmpeg_nvenc" && this.nativeSession) {
+    if (this.nativeSession) {
       void this.handleNativeCaptureFailure(
         this.nativeSession.captureSessionId,
         message
@@ -1042,10 +1096,12 @@ export class GameRecorderManager {
   }
 
   private static resolveFfmpegPath() {
-    if (app.isPackaged) {
-      return path.join(process.resourcesPath, "ffmpeg", "ffmpeg.exe");
-    }
-    return path.join(app.getAppPath(), "ffmpeg", "ffmpeg.exe");
+    return resolveMediaToolPath({
+      platform: process.platform,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      isPackaged: app.isPackaged,
+    });
   }
 
   private static startTargetPolling() {
@@ -1157,10 +1213,11 @@ export class GameRecorderManager {
     return (
       wantsCapture &&
       supportsDesktopGameCapture(process.platform) &&
-      // A window id is no longer required: capture prefers the display the
-      // game occupies, and an exclusive-fullscreen game often exposes no
-      // per-window source at all.
+      !this.linuxEncoderFallbackPending &&
+      // Windows can capture the game-occupied display. Linux always requires
+      // the exact X11 client: never substitute the root desktop or coordinates.
       Boolean(this.activeGame && this.targetPid) &&
+      (process.platform !== "linux" || Boolean(this.targetWindowId)) &&
       gameIsForeground &&
       Date.now() >= this.captureRetryAfter
     );
@@ -1183,7 +1240,7 @@ export class GameRecorderManager {
     if (!this.canCaptureCurrentForegroundTarget() || this.captureActive) return;
 
     if (useNativeCapture) {
-      if (this.preferences.captureGameAudio) {
+      if (process.platform === "win32" && this.preferences.captureGameAudio) {
         const captureWindow = await this.ensureCaptureWindow();
         if (captureWindow.isDestroyed()) return;
         if (!this.captureRendererReady) {
@@ -1207,11 +1264,17 @@ export class GameRecorderManager {
     this.captureBackend = "media_recorder";
     this.captureActive = true;
     this.errorMessage = null;
-    this.statusMessage = "Starting compatibility game-window capture…";
+    this.statusMessage =
+      process.platform === "linux"
+        ? "Starting video-only compatibility game-window capture…"
+        : "Starting compatibility game-window capture…";
     this.sendCaptureCommand({
       type: "start",
       backend: "media_recorder",
-      configuration: this.preferences,
+      configuration:
+        process.platform === "linux"
+          ? { ...this.preferences, captureGameAudio: false }
+          : this.preferences,
     });
     this.publishState();
   }
@@ -1328,6 +1391,24 @@ export class GameRecorderManager {
   }
 
   private static async probeNativeEncoder() {
+    if (process.platform === "linux") {
+      if (!supportsDesktopGameCapture(process.platform)) return false;
+      if (!this.nativeProbe) {
+        this.nativeProbe = probeLinuxRecorder(this.resolveFfmpegPath()).then(
+          async (capability) => {
+            this.nativeEncoderAvailable = capability.available;
+            this.linuxEncoder = capability.encoder;
+            this.linuxPulseInputAvailable =
+              capability.available && capability.pulse;
+            this.linuxPulseMonitor = this.linuxPulseInputAvailable
+              ? await linuxAudioMixer.getMonitorSource()
+              : null;
+            return capability.available;
+          }
+        );
+      }
+      return this.nativeProbe;
+    }
     if (process.platform !== "win32") {
       this.nativeEncoderAvailable = false;
       return false;
@@ -1353,14 +1434,17 @@ export class GameRecorderManager {
 
   private static async shouldUseNativeCapture() {
     if (
-      process.platform !== "win32" ||
+      !["win32", "linux"].includes(process.platform) ||
       !this.targetWindowId ||
       this.nativeFailureTargetKey === this.currentTargetKey()
     ) {
       return false;
     }
     if (this.nativeEncoderAvailable === null) {
-      this.statusMessage = "Checking the hardware video encoder…";
+      this.statusMessage =
+        process.platform === "linux"
+          ? "Checking the X11 video encoder and system-output monitor…"
+          : "Checking the hardware video encoder…";
       this.publishState();
     }
     return this.probeNativeEncoder();
@@ -1382,10 +1466,33 @@ export class GameRecorderManager {
     ) {
       return;
     }
+    const linuxMonitor =
+      process.platform === "linux" && this.linuxPulseInputAvailable
+        ? await linuxAudioMixer.getMonitorSource()
+        : null;
+    const linux =
+      process.platform === "linux"
+        ? {
+            display: process.env.DISPLAY ?? "",
+            encoder: this.linuxEncoder ?? undefined,
+            pulseMonitor: this.preferences.captureGameAudio
+              ? linuxMonitor
+              : null,
+          }
+        : undefined;
+    if (linux) this.linuxPulseMonitor = linuxMonitor;
+    // An audio-server lookup is asynchronous: revalidate the active game after it.
+    if (
+      this.targetPid !== targetPid ||
+      this.targetWindowId !== targetWindowId ||
+      !this.canCaptureCurrentForegroundTarget()
+    )
+      return;
     const captureSessionId = ++this.captureSessionSequence;
     const session = new NativeRecorderSession({
       ffmpegPath: this.resolveFfmpegPath(),
       encoder: "h264_nvenc",
+      linux,
       configuration: this.preferences,
       captureSessionId,
       windowHandle: targetWindowId,
@@ -1398,12 +1505,16 @@ export class GameRecorderManager {
         this.handleNativeCaptureFailure(captureSessionId, message),
     });
     this.nativeSession = session;
-    this.captureBackend = "native_ffmpeg_nvenc";
+    this.captureBackend = linux ? "native_ffmpeg_x11" : "native_ffmpeg_nvenc";
     this.captureActive = true;
     this.errorMessage = null;
-    this.statusMessage = "Recording through NVIDIA NVENC…";
+    this.statusMessage = linux
+      ? session.hasAudio
+        ? "Recording the X11 game window and system-output monitor…"
+        : "Recording the X11 game window (video only)…"
+      : "Recording through NVIDIA NVENC…";
     session.start();
-    if (this.preferences.captureGameAudio) {
+    if (!linux && this.preferences.captureGameAudio) {
       this.sendCaptureCommand({
         type: "start",
         backend: "native_ffmpeg_nvenc",
@@ -1540,7 +1651,8 @@ export class GameRecorderManager {
             });
             callback({
               video: source,
-              ...(this.preferences.captureGameAudio
+              ...(process.platform === "win32" &&
+              this.preferences.captureGameAudio
                 ? { audio: "loopback" as const }
                 : {}),
             });

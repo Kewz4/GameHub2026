@@ -13,6 +13,9 @@ import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
 import { resolveLaunchCommand } from "./resolve-launch-command";
 import { resolveEffectiveSystem } from "./index";
+import { buildRetroArchLaunch } from "@main/services/emulators/retroarch-linux";
+import { emulatorUserPaths } from "@main/services/emulators/emulator-user-paths";
+import { LIBRETRO_CORE_MAP } from "@main/services/emulators/libretro-core-map";
 
 export class EmulatorNotConfiguredError extends Error {
   code = "EMULATOR_NOT_CONFIGURED" as const;
@@ -50,16 +53,7 @@ export interface LaunchClassicsGameOptions {
  */
 const RALIBRETRO_LAUNCH: Partial<
   Record<EmulatorSystem, { core: string; systemId: number }>
-> = {
-  ps1: { core: "mednafen_psx_libretro", systemId: 12 },
-  psp: { core: "ppsspp_libretro", systemId: 41 },
-  gba: { core: "mgba_libretro", systemId: 5 },
-  gb: { core: "mgba_libretro", systemId: 4 },
-  gbc: { core: "mgba_libretro", systemId: 6 },
-  n64: { core: "mupen64plus_next_libretro", systemId: 2 },
-  nds: { core: "melondsds_libretro", systemId: 18 },
-  dsi: { core: "melondsds_libretro", systemId: 78 },
-};
+> = LIBRETRO_CORE_MAP;
 
 const buildEmulatorArgs = (
   binary: EmulatorBinary,
@@ -161,7 +155,26 @@ export const launchClassicsGame = async (
     });
   }
 
-  const baseArgs = buildEmulatorArgs(config.binary, discPath, system);
+  const baseArgs =
+    process.platform === "linux" && config.binary === "ralibretro"
+      ? buildRetroArchLaunch(
+          path.dirname(config.executablePath),
+          resolveEffectiveSystem(system, discPath) ?? system,
+          discPath,
+          {
+            username: userPreferences?.retroAchievementsUsername,
+            token: userPreferences?.retroAchievementsToken,
+          }
+        )
+      : buildEmulatorArgs(config.binary, discPath, system);
+  if (
+    process.platform === "linux" &&
+    config.binary === "pcsx2" &&
+    path.extname(config.executablePath).toLowerCase() === ".appimage" &&
+    emulatorUserPaths("pcsx2", path.dirname(config.executablePath)).portable
+  ) {
+    baseArgs.unshift("-portable");
+  }
   const executablePath = path.normalize(config.executablePath);
   const executableTarget =
     emulators.resolveEmulatorExecutableTarget(executablePath);

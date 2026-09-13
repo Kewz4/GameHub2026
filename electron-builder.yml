@@ -7,6 +7,11 @@ extraResources:
   - hydra-python-rpc
   - hydra-native
   - seeds
+  - from: binaries/bin
+    to: bin
+    filter:
+      - legendary*
+      - gogdl*
   # Bundle the console metadata + ROM catalogue so they load from disk instead
   # of depending on a live GitHub fetch (which left games with no art/desc).
   - from: sources/gamehub-meta
@@ -116,20 +121,55 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  executableName: io.gamehub.launcher
+  icon: build/icon.png
   extraResources:
     - from: binaries/7zzs
     - from: binaries/umu/umu-run
+    - from: binaries
+      to: .
+      filter:
+        - ukmm
   target:
     - AppImage
     - snap
     - deb
     - rpm
-  maintainer: electronjs.org
+  maintainer: GameHub
+  vendor: GameHub
   category: Game
   mimeTypes:
     - x-scheme-handler/hydralauncher
 appImage:
   artifactName: ${name}-${version}.${ext}
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libsdl2-2.0-0
+    - pulseaudio-utils
+    - ffmpeg
+rpm:
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libXScrnSaver
+    - (libXtst or libXtst6)
+    - xdg-utils
+    - at-spi2-core
+    - (libuuid or libuuid1)
+    - libsecret
+    - SDL2
+    - pulseaudio-utils
+    - /usr/bin/ffmpeg
 npmRebuild: false
 publish:
   provider: github

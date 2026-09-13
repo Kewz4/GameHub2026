@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { buildPspRestorePatterns } from "./psp-save-paths";
 
 interface StoredRomGame {
   selectedDiscPath?: string | null;
@@ -33,7 +34,7 @@ export const resolveStoredGameRomPath = (
 };
 
 const RALIBRETRO_SAVE_SUFFIX =
-  /^(?:sram|srm|sav|dsv|rtc|eep|fla|sra|mpk|mcd|mcr)(?:\.\d+)?$/i;
+  /^(?:sram|srm|sav|dsv|rtc|eep|fla|sra|mpk|mcd|mcr|public\.sav|private\.sav|banner\.sav)(?:\.\d+)?$/i;
 
 const RALIBRETRO_SAVE_EXTENSIONS = [
   "sram",
@@ -47,6 +48,9 @@ const RALIBRETRO_SAVE_EXTENSIONS = [
   "mpk",
   "mcd",
   "mcr",
+  "public.sav",
+  "private.sav",
+  "banner.sav",
 ] as const;
 
 interface EmulatorRestorePatternOptions {
@@ -150,6 +154,8 @@ export const buildEmulatorRestorePatterns = ({
   romPath,
   identity,
 }: EmulatorRestorePatternOptions): string[] => {
+  if (binary === "ralibretro" && system === "psp")
+    return identity ? buildPspRestorePatterns(roots, identity) : [];
   if (binary === "ralibretro") {
     if (!romPath) return [];
     const names = [
@@ -227,8 +233,10 @@ export const findRalibretroSaveFiles = (
   roots: string[],
   romPath: string
 ): string[] => {
-  const romFile = path.basename(romPath).toLowerCase();
-  const romStem = path.basename(romPath, path.extname(romPath)).toLowerCase();
+  const comparable = (value: string) =>
+    process.platform === "win32" ? value.toLowerCase() : value;
+  const romFile = comparable(path.basename(romPath));
+  const romStem = comparable(path.basename(romPath, path.extname(romPath)));
   if (!romFile || !romStem) return [];
 
   const exact: string[] = [];
@@ -265,7 +273,7 @@ export const findRalibretroSaveFiles = (
       }
       if (!entry.isFile()) continue;
 
-      const lower = entry.name.toLowerCase();
+      const lower = comparable(entry.name);
       const exactPrefix = `${romFile}.`;
       if (
         lower.startsWith(exactPrefix) &&

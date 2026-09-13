@@ -504,7 +504,13 @@ async function startReadOnlyHydraApiProxy(upstreamApiUrl) {
       const tags = Array.isArray(searchBody.tags)
         ? searchBody.tags.filter((tag) => Number.isFinite(Number(tag)))
         : [];
-      state.catalogueSearches.push({ title, genres, tags });
+      state.catalogueSearches.push({
+        title,
+        genres,
+        tags,
+        protondbSupportBadges: searchBody.protondbSupportBadges ?? [],
+        deckCompatibility: searchBody.deckCompatibility ?? [],
+      });
 
       let edges = catalogue.all;
       if (title) {
@@ -727,7 +733,9 @@ const electronExecutable = path.join(
   "node_modules",
   "electron",
   "dist",
-  "electron.exe"
+  ...(process.platform === "darwin"
+    ? ["Electron.app", "Contents", "MacOS", "Electron"]
+    : [process.platform === "win32" ? "electron.exe" : "electron"])
 );
 const mainEntry = path.join(repositoryRoot, "out", "main", "index.js");
 const runId = new Date().toISOString().replaceAll(/[-:.TZ]/g, "");
@@ -2669,7 +2677,9 @@ async function putQaEmulatorState(electronApp, config, configured) {
       const next = {
         ...fixture.config,
         executablePath: fixture.configured
-          ? `${process.env.WINDIR ?? "C:\\Windows"}\\System32\\where.exe`
+          ? process.platform === "win32"
+            ? `${process.env.WINDIR ?? "C:\\Windows"}\\System32\\where.exe`
+            : process.execPath
           : null,
         detectedVersion: fixture.configured ? "QA" : null,
         detectedAt: fixture.configured ? Date.now() : null,
@@ -2771,6 +2781,13 @@ try {
       APPDATA: isolatedPortableRoot,
       LOCALAPPDATA: isolatedPortableRoot,
       PORTABLE_EXECUTABLE_DIR: isolatedPortableRoot,
+      ...(process.platform === "linux"
+        ? {
+            XDG_CONFIG_HOME: path.join(isolatedPortableRoot, "xdg-config"),
+            XDG_DATA_HOME: path.join(isolatedPortableRoot, "xdg-data"),
+            XDG_CACHE_HOME: path.join(isolatedPortableRoot, "xdg-cache"),
+          }
+        : {}),
       ELECTRON_DISABLE_SECURITY_WARNINGS: "true",
       GAMEHUB_READ_ONLY_VISUAL_QA: "true",
       GAMEHUB_R2_CREDENTIALS_URL: r2CredentialsUrl,
@@ -2849,6 +2866,29 @@ try {
     EMULATOR_SYSTEMS.every((system) => fixture.emulatorConfigs[system.id]),
     "The emulator configuration map is not exhaustive."
   );
+
+  if (process.env.GAMEHUB_QA_LINUX_PARITY === "true") {
+    ensure(
+      USE_SYNTHETIC_PROFILE,
+      "Linux parity smoke must use synthetic account data."
+    );
+    const { runLinuxUiCases } = await import("./qa-linux-ui-cases.mjs");
+    await runLinuxUiCases({
+      page,
+      electronApp,
+      runCase,
+      fixture,
+      navigateHash,
+      captureViewport,
+      applyViewport,
+      pressGamepadButton,
+      installMockXboxGamepad,
+      focusNavigationItem,
+      qaApiState: qaApiProxy.state,
+      artifactRoot,
+      isolatedData,
+    });
+  }
 
   // A real populated profile may restore its last Desktop route instead of
   // opening Home. Force a clean Library -> Home transition so this acceptance

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
-import axios from "axios";
+import { findExecutableOnPath, installLauncherBinary } from "./launcher-binary";
 import { SystemPath } from "./system-path";
 import { logger } from "./logger";
 
@@ -24,78 +24,29 @@ export const findGogdlBinary = (customPath?: string | null): string | null => {
     "resources",
     "bin"
   );
-  for (const dir of [resourcesBin, execAdjacentBin]) {
+  for (const dir of [
+    resourcesBin,
+    execAdjacentBin,
+    path.join(__dirname, "..", "..", "binaries", "bin"),
+  ]) {
     const candidate = path.join(dir, `gogdl${ext}`);
     if (fs.existsSync(candidate)) return candidate;
   }
   const installPath = getGogdlInstallPath();
   if (fs.existsSync(installPath)) return installPath;
-  try {
-    const whichCmd = process.platform === "win32" ? "where" : "which";
-    const { stdout } = require("node:child_process").execSync(
-      `${whichCmd} gogdl`,
-      { encoding: "utf8", timeout: 3000 }
-    );
-    const bin = stdout.trim().split("\n")[0].trim();
-    if (bin && fs.existsSync(bin)) return bin;
-  } catch {
-    // intentional
-  }
-  return null;
+  return findExecutableOnPath("gogdl");
 };
-
-interface GitHubRelease {
-  assets: { name: string; browser_download_url: string }[];
-}
 
 export const downloadGogdl = async (
   onProgress?: (pct: number) => void
 ): Promise<string> => {
-  const response = await axios.get<GitHubRelease>(
-    "https://api.github.com/repos/Heroic-Games-Launcher/heroic-gogdl/releases/latest",
-    { headers: { Accept: "application/vnd.github+json" } }
+  const destination = await installLauncherBinary(
+    "gogdl",
+    getGogdlInstallPath(),
+    onProgress
   );
-
-  const assets = response.data.assets;
-  const arch = process.arch === "arm64" ? "arm64" : "x86_64";
-  let assetName: string;
-  if (process.platform === "win32") {
-    assetName = `gogdl_windows_${arch}.exe`;
-  } else if (process.platform === "darwin") {
-    assetName = `gogdl_macos_${arch}`;
-  } else {
-    assetName = `gogdl_linux_${arch}`;
-  }
-
-  const asset =
-    assets.find((a) => a.name === assetName) ??
-    assets.find(
-      (a) => a.name.startsWith("gogdl_windows") && a.name.endsWith(".exe")
-    ) ??
-    assets.find(
-      (a) =>
-        a.name.startsWith("gogdl") &&
-        !a.name.endsWith(".tar.gz") &&
-        !a.name.endsWith(".zip")
-    );
-  if (!asset) throw new Error(`No gogdl binary found for ${process.platform}`);
-
-  const destPath = getGogdlInstallPath();
-  const downloadResponse = await axios.get<ArrayBuffer>(
-    asset.browser_download_url,
-    {
-      responseType: "arraybuffer",
-      onDownloadProgress: (evt) => {
-        if (evt.total && onProgress)
-          onProgress(Math.round((evt.loaded / evt.total) * 100));
-      },
-    }
-  );
-
-  fs.writeFileSync(destPath, Buffer.from(downloadResponse.data));
-  if (process.platform !== "win32") fs.chmodSync(destPath, 0o755);
-  logger.log(`gogdl downloaded to ${destPath}`);
-  return destPath;
+  logger.log(`gogdl downloaded to ${destination}`);
+  return destination;
 };
 
 /**

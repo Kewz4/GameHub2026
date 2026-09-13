@@ -1,0 +1,62 @@
+{
+  "legendary": {
+    "repository": "derrod/legendary",
+    "version": "0.21.1",
+    "assets": {
+      "linux-x64": {
+        "name": "legendary_linux_x64",
+        "sha256": "dbed33bbe96031e65858233e4badf0a1d401bb6cb0cc995d1237cf3a0c826a45"
+      },
+      "linux-arm64": {
+        "name": "legendary_linux_arm64",
+        "sha256": "e901cb52ada10d5cef6ffb2a0985099958124457bfb455a571023d1e042143d9"
+      },
+      "win32-x64": {
+        "name": "legendary_windows_x64.exe",
+        "sha256": "6be77857dc0a6dd33ea7442ce8b5291944ec6da53757f81ca95b57ce794baf5b"
+      },
+      "win32-arm64": {
+        "name": "legendary_windows_arm64.exe",
+        "sha256": "5ca178d75713cb92ee24daa5df1905c75f05b8b403383669ca7aa32a5809fba3"
+      },
+      "darwin-x64": {
+        "name": "legendary_macOS_x64",
+        "sha256": "3dfab50277284b5bb0104f8710e4ff1d9ff00c992e44f5843fd0c977c5cc99c4"
+      },
+      "darwin-arm64": {
+        "name": "legendary_macOS_arm64",
+        "sha256": "d87978321dba9cb731fab40c72f0a30bed55baca8b5341ab21024c5733cd837e"
+      }
+    }
+  },
+  "gogdl": {
+    "repository": "Heroic-Games-Launcher/heroic-gogdl",
+    "version": "v1.3.0",
+    "assets": {
+      "linux-x64": {
+        "name": "gogdl_linux_x86_64",
+        "sha256": "cba013d42767c808237c437335ab1d56f58405d07e8f37b3324d264ea5c49655"
+      },
+      "linux-arm64": {
+        "name": "gogdl_linux_arm64",
+        "sha256": "c49e1519146523ec94f33e2d21eedcc9a167004d7da218621e6d5fb84a7a0f4c"
+      },
+      "win32-x64": {
+        "name": "gogdl_windows_x86_64.exe",
+        "sha256": "69ea54467371803f681d6c39805992e3a4b8ddccb44ac8a1de7b1e3c80deaeec"
+      },
+      "win32-arm64": {
+        "name": "gogdl_windows_arm64.exe",
+        "sha256": "a3dbb818530d21caad40f56136d3520966c151c7b205dd835bdbd53b63467e73"
+      },
+      "darwin-x64": {
+        "name": "gogdl_macos_x86_64",
+        "sha256": "a3d1e20f09371eb9032a4837eb576b585456728a6f2f420e6877e5cccd4c434d"
+      },
+      "darwin-arm64": {
+        "name": "gogdl_macos_arm64",
+        "sha256": "a85ae9ef80a3e7840b19a416dd4b3c5db2054508c6147315f1c22faa63a29b38"
+      }
+    }
+  }
+}

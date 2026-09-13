@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { emulatorConfigFile } from "./emulator-user-paths";
 
 export {
   getEmulatorConfig,
@@ -30,6 +31,12 @@ export const duckstationConfigCandidates = (): string[] => {
     ];
   }
   return [
+    emulatorConfigFile("duckstation", "/usr/bin", "settings.ini"),
+    emulatorConfigFile(
+      "duckstation",
+      "/var/lib/flatpak/exports/bin",
+      "settings.ini"
+    ),
     path.join(os.homedir(), ".local", "share", "duckstation", "settings.ini"),
     path.join(os.homedir(), ".config", "duckstation", "settings.ini"),
   ];
@@ -39,6 +46,11 @@ export const pcsx2ConfigCandidates = (
   executablePath?: string | null
 ): string[] => {
   const candidates: string[] = [];
+  if (process.platform === "linux" && executablePath) {
+    return [
+      emulatorConfigFile("pcsx2", path.dirname(executablePath), "PCSX2.ini"),
+    ];
+  }
 
   // Portable mode: if portable.ini exists next to the exe, PCSX2 reads its
   // config from <exe_dir>/inis/PCSX2.ini and writes memcards to
@@ -69,6 +81,12 @@ export const pcsx2ConfigCandidates = (
     );
   } else {
     candidates.push(
+      emulatorConfigFile(
+        "pcsx2",
+        executablePath ? path.dirname(executablePath) : "/usr/bin",
+        "PCSX2.ini"
+      ),
+      emulatorConfigFile("pcsx2", "/var/lib/flatpak/exports/bin", "PCSX2.ini"),
       path.join(os.homedir(), ".local", "share", "PCSX2", "inis", "PCSX2.ini"),
       path.join(os.homedir(), ".config", "PCSX2", "inis", "PCSX2.ini")
     );

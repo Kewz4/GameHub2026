@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { emulatorConfigFile } from "./emulator-user-paths";
 
 import type {
   EmulationCloudSave,
@@ -171,7 +172,7 @@ export const assembleMcsBuffer = (contents: Buffer): Buffer => contents;
 const getGamesYmlPath = (executablePath: string | null): string | null => {
   if (!executablePath) return null;
   const dir = path.dirname(executablePath);
-  return path.join(dir, "games.yml");
+  return emulatorConfigFile("rpcs3", dir, "games.yml");
 };
 
 export const readGamesYml = async (

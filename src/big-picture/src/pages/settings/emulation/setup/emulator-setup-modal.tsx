@@ -794,7 +794,7 @@ function InstallStep({ binary, onInstalled }: Readonly<InstallStepProps>) {
         } else if (payload.phase === "extracting") {
           setProgressText("Extracting…");
         } else if (payload.phase === "running") {
-          setProgressText("Installing…");
+          setProgressText(payload.reason ?? "Installing…");
         }
       }
     );
@@ -869,7 +869,9 @@ function InstallStep({ binary, onInstalled }: Readonly<InstallStepProps>) {
             >
               {isInstalling
                 ? (progressText ?? "Installing…")
-                : `Install with GameHub · ${label}`}
+                : option.kind === "linux-flatpak"
+                  ? "Install RetroArch + cores (user Flatpak)"
+                  : `Install with GameHub · ${label}`}
             </Button>
           );
         })}

@@ -27,6 +27,8 @@ const identityFor = (system: EmulatorSystem) => {
       return "524d4345";
     case "ps3":
       return "BLES12345";
+    case "psp":
+      return "ULUS12345";
     default:
       return null;
   }
@@ -51,7 +53,11 @@ const saveRootsFor = (system: EmulatorSystem, installDir: string): string[] => {
     case "pcsx2":
       return [path.join(installDir, "memcards")];
     case "ralibretro":
-      return [path.join(installDir, "Saves")];
+      return [
+        system === "psp"
+          ? path.join(installDir, "Saves", "PSP", "SAVEDATA")
+          : path.join(installDir, "Saves"),
+      ];
     case "eden":
       return [path.join(installDir, "user", "nand", "user", "save")];
     default:
@@ -83,6 +89,8 @@ const isolatedTitlePathFor = (
       return path.join(root, "title", "00010000", identity);
     case "ps3":
       return path.join(root, `${identity}-PROFILE`);
+    case "psp":
+      return path.join(root, `${identity}DATA00`);
     default:
       throw new Error(`no isolated title layout for ${system}`);
   }
@@ -114,20 +122,20 @@ describe("Cloud Saves V2 emulator coverage matrix", () => {
       [...strategies]
         .filter(([, strategy]) => strategy === "per-rom-files")
         .map(([system]) => system),
-      ["ps1", "psp", "nds", "dsi", "n64", "gb", "gbc", "gba"]
+      ["ps1", "nds", "dsi", "n64", "gb", "gbc", "gba"]
     );
     assert.deepEqual(
       [...strategies]
         .filter(([, strategy]) => strategy === "per-title-directory")
         .map(([system]) => system),
-      ["ps3", "n3ds", "wiiu", "wii", "switch"]
+      ["ps3", "psp", "n3ds", "wiiu", "wii", "switch"]
     );
   });
 
   it("provides a defined save-root layout for every configured console", () => {
     for (const system of ALL_SYSTEMS) {
       const binary = KNOWN_BINARIES[system].binary;
-      const installDir = path.join("C:\\GameHub", binary);
+      const installDir = path.resolve("GameHub", binary);
       const roots = saveRootsFor(system, installDir);
       assert.ok(roots.length > 0, `${system}:${binary}`);
       assert.ok(roots.every(path.isAbsolute), `${system}:${binary}:absolute`);
@@ -208,7 +216,9 @@ describe("Cloud Saves V2 emulator coverage matrix", () => {
         saveRoots: sourceRoots,
         backupPaths: [sourcePath],
         restorePatterns:
-          strategy === "per-rom-files" ? sourceRestorePatterns : [],
+          strategy === "per-rom-files" || system === "psp"
+            ? sourceRestorePatterns
+            : [],
       });
       assert.equal(uploaded.length, 1, `${system}:upload`);
 
@@ -222,7 +232,9 @@ describe("Cloud Saves V2 emulator coverage matrix", () => {
         saveRoots: targetRoots,
         backupPaths: [],
         restorePatterns:
-          strategy === "per-rom-files" || strategy === "per-title-files"
+          strategy === "per-rom-files" ||
+          strategy === "per-title-files" ||
+          system === "psp"
             ? targetRestorePatterns
             : [targetPath],
         remoteFiles: [

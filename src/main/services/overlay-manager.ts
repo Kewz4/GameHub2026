@@ -690,9 +690,10 @@ export class OverlayManager {
 
   /**
    * Require real foreground ownership before exposing interactive controls.
-   * The native helper only performs normal Win32 focus hand-off; it never
-   * modifies the game. If a game keeps display ownership, activation closes
-   * and asks for Borderless or Windowed mode.
+   * The native helper performs Win32/X11 focus hand-off; it never modifies the
+   * game. Foreground ownership is not proof that every controller backend in
+   * the game stops reading background input. That limitation is shared across
+   * Windows and Linux after removing the injected input gate.
    */
   private static async claimForeground(overlayWindow: BrowserWindow) {
     if (!["win32", "linux"].includes(process.platform)) return true;
@@ -723,8 +724,8 @@ export class OverlayManager {
           claimed && foregroundPid === process.pid && overlayWindow.isFocused();
 
         // Report the outcome rather than assume it. If the game keeps the
-        // foreground, it also keeps keyboard, mouse and controller input, and
-        // that is invisible from the app side without this.
+        // foreground, normal input still routes to it. This check verifies
+        // focus ownership, not exclusive ownership of global controller APIs.
         logger[won || attempt >= OVERLAY_FOREGROUND_ATTEMPTS ? "info" : "warn"](
           "Overlay foreground claim",
           {
@@ -995,6 +996,9 @@ export class OverlayManager {
         : [];
       return evaluateOverlayWindowMode({
         platform: process.platform,
+        desktopCompositionAvailable:
+          process.platform !== "linux" ||
+          NativeAddon.isDesktopCompositionAvailable(),
         targetWindowId,
         exactWindowSourceAvailable: Boolean(
           targetWindowId &&

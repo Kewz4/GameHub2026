@@ -15,6 +15,7 @@ export const classifyEmulatorCloudSaveMappingIssue = (
   strategy: EmulatorCloudSaveStrategy,
   system: string
 ): CloudSaveMappingIssue => {
+  if (system === "dsi") return "shared-nand";
   if (strategy === "dedicated-memory-card-manager") {
     return "shared-memory-card";
   }

@@ -29,6 +29,7 @@ export const Checkbox = ({
   const isChecked = props.checked ?? false;
 
   const handleChange = (checked: boolean) => {
+    if (props.disabled) return;
     props.onChange?.(checked);
   };
 

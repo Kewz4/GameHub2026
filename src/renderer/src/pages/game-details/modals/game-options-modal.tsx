@@ -206,15 +206,18 @@ export function GameOptionsModal({
   }, [visible]);
 
   useEffect(() => {
-    if (visible && window.electron.platform === "win32") {
-      setLoadingSaveFolder(true);
-      setSaveFolderPath(null);
-      window.electron
-        .getGameSaveFolder(game.shop, game.objectId)
-        .then(setSaveFolderPath)
-        .catch(() => setSaveFolderPath(null))
-        .finally(() => setLoadingSaveFolder(false));
-    }
+    let active = true;
+    if (!visible) return;
+    setLoadingSaveFolder(true);
+    setSaveFolderPath(null);
+    window.electron
+      .getGameSaveFolder(game.shop, game.objectId)
+      .then((folder) => active && setSaveFolderPath(folder))
+      .catch(() => active && setSaveFolderPath(null))
+      .finally(() => active && setLoadingSaveFolder(false));
+    return () => {
+      active = false;
+    };
   }, [visible, game.shop, game.objectId]);
 
   useEffect(() => {
@@ -825,8 +828,9 @@ export function GameOptionsModal({
   useEffect(() => {
     if (visible) setSelectedCategory(initialCategory ?? "general");
   }, [initialCategory, visible]);
-  const shouldShowCreateStartMenuShortcut =
-    window.electron.platform === "win32";
+  const shouldShowCreateStartMenuShortcut = ["win32", "linux"].includes(
+    window.electron.platform
+  );
 
   const handleResetAchievements = async () => {
     setIsDeletingAchievements(true);

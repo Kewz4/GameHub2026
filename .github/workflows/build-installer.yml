@@ -141,6 +141,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Linux native and mod build dependencies
+        if: runner.os == 'Linux'
+        run: bash scripts/install-linux-build-deps.sh
+
       - name: Validate release R2 credential broker
         if: needs.prepare_release.outputs.should_release == 'true'
         shell: bash
@@ -192,6 +196,13 @@ jobs:
           path: binaries/ukmm.exe
           key: ${{ runner.os }}-ukmm-${{ hashFiles('scripts/build-ukmm.cjs', 'native/ukmm/ukmm-headless-install-bnp.patch') }}
 
+      - name: Cache UKMM binary (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: binaries/ukmm
+          key: ${{ runner.os }}-ukmm-${{ hashFiles('scripts/build-ukmm.cjs', 'native/ukmm/ukmm-headless-install-bnp.patch') }}
+
       # Cache node_modules itself (not just yarn's download cache, which
       # setup-node's `cache: yarn` above already covers) so an unchanged
       # yarn.lock skips most of the package extract/link work too.
@@ -217,26 +228,20 @@ jobs:
         shell: pwsh
         run: |
           yarn format-check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           yarn lint --no-fix
-          yarn test:spotify
-          yarn test:r2-credentials
-          yarn test:downloads
-          yarn test:upstream-parity
-          yarn test:python-rpc
-          yarn test:steam-emulator
-          yarn test:overlay
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/run-parity-tests.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --manifest-path native/hydra-native/Cargo.toml --lib --bins
-          yarn test:recorder
-          yarn test:cloud-sync
-          yarn test:cloud-save-v2
-          yarn test:features
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # Linux runs every deterministic recorder/container test. The real
       # Electron MediaRecorder capture is covered by the Windows gate above
       # and is skipped automatically on unsupported platforms.
-      - name: Run deterministic recorder tests (Linux)
+      - name: Run shared release tests (Linux)
         if: runner.os == 'Linux'
-        run: yarn test:recorder
+        run: node scripts/run-parity-tests.cjs
 
       - name: Build (${{ matrix.os }})
         run: ${{ matrix.build_cmd }}

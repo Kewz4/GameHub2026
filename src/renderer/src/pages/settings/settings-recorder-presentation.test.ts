@@ -38,6 +38,35 @@ const makeDiagnostics = (backend: GameRecorderCaptureBackend) => ({
 });
 
 describe("desktop recorder settings presentation", () => {
+  it("keeps Linux native capture distinct from NVENC and compatibility capture", () => {
+    assert.equal(
+      getSettingsRecorderBackendPresentation(
+        makeRecorderState({
+          captureActive: true,
+          activeCaptureBackend: "native_ffmpeg_x11",
+        })
+      ),
+      "x11_active_pending"
+    );
+    assert.equal(
+      getSettingsRecorderBackendPresentation(
+        makeRecorderState({
+          captureDiagnostics: makeDiagnostics("native_ffmpeg_x11"),
+        })
+      ),
+      "x11_historical"
+    );
+    assert.equal(
+      getSettingsRecorderBackendPresentation(
+        makeRecorderState({
+          captureActive: true,
+          activeCaptureBackend: "native_ffmpeg_x11",
+          captureDiagnostics: makeDiagnostics("native_ffmpeg_x11"),
+        })
+      ),
+      "x11_active_verified"
+    );
+  });
   it("labels inactive diagnostics as a historical segment", () => {
     assert.equal(
       getSettingsRecorderBackendPresentation(
@@ -95,7 +124,7 @@ describe("desktop recorder settings presentation", () => {
       getSettingsRecorderBackendPresentation(
         makeRecorderState({ status: "unavailable" })
       ),
-      "windows_unavailable"
+      "capture_unavailable"
     );
     assert.equal(
       getSettingsRecorderBackendPresentation(null),

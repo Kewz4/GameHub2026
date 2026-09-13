@@ -77,23 +77,13 @@ import { EmulatorSetupModal } from "./setup/emulator-setup-modal";
 
 import "./styles.scss";
 
-const BINARY_LABELS: Record<EmulatorBinary, string> = {
-  duckstation: "DuckStation",
-  pcsx2: "PCSX2",
-  rpcs3: "RPCS3",
-  ppsspp: "PPSSPP",
-  azahar: "Azahar",
-  ralibretro: "RALibretro",
-  raproject64: "RAProject64",
-  ravba: "RAVBA",
-  cemu: "Cemu",
-  dolphin: "Dolphin",
-  eden: "Eden",
-};
+import { getKnownBinaryLabel } from "@renderer/pages/settings/emulation/known-binary-labels";
 
 const RA_USERNAME_FOCUS_ID = "emulation-ra-username";
 const RA_APIKEY_FOCUS_ID = "emulation-ra-apikey";
 const RA_SAVE_FOCUS_ID = "emulation-ra-save";
+const RA_PASSWORD_FOCUS_ID = "emulation-ra-password";
+const RA_SIGN_IN_FOCUS_ID = "emulation-ra-sign-in";
 const EMULATION_DETAIL_CONTROLLER_BUTTON_ID =
   "emulation-detail-controller-button";
 const EMULATION_DETAIL_SETUP_BUTTON_ID = "emulation-detail-setup-button";
@@ -142,7 +132,7 @@ function EmulationDetail({
   const [removeEmulatorOpen, setRemoveEmulatorOpen] = useState(false);
   const [cloudRefreshKey, setCloudRefreshKey] = useState(0);
   const systemLabel = BIG_PICTURE_EMULATOR_SYSTEM_LABELS[config.system];
-  const binaryLabel = BINARY_LABELS[config.binary];
+  const binaryLabel = getKnownBinaryLabel(config.binary);
   const supportsMemoryCards = supportsBigPictureMemoryCards(config.system);
   const configured = isBigPictureEmulatorConfigured(config);
   const runtimeStatus = getBigPictureEmulatorRuntimeStatus(
@@ -678,7 +668,7 @@ function ConsoleOverviewCard({
     executableExists
   );
   const ready = runtimeStatus === "ready" || runtimeStatus === "checking";
-  const binaryLabel = BINARY_LABELS[config.binary];
+  const binaryLabel = getKnownBinaryLabel(config.binary);
 
   return (
     <FocusItem id={focusId} actions={{ primary: onSelect }} asChild>
@@ -767,6 +757,8 @@ function RetroAchievementsBpSection() {
   const [username, setUsername] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [password, setPassword] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
     if (!userPreferences) return;
@@ -789,13 +781,44 @@ function RetroAchievementsBpSection() {
     }
   };
 
+  const handleEmulatorSignIn = async () => {
+    if (isSigningIn || !username.trim() || !password) return;
+    setIsSigningIn(true);
+    try {
+      const result = await globalThis.window.electron.loginRetroAchievements(
+        username.trim(),
+        password
+      );
+      if (!result.success || !result.token) {
+        showErrorToast(result.error ?? "RetroAchievements sign-in failed");
+        return;
+      }
+      await globalThis.window.electron.updateUserPreferences({
+        retroAchievementsUsername: username.trim(),
+        retroAchievementsToken: result.token,
+      });
+      await globalThis.window.electron
+        .syncRalibretroLogin()
+        .catch(() => undefined);
+      setPassword("");
+      showSuccessToast("Emulator sign-in saved for the next GameHub launch");
+    } catch {
+      showErrorToast(
+        "RetroAchievements could not complete sign-in. Check your connection and try again."
+      );
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   return (
     <VerticalFocusGroup regionId="emulation-retroachievements-region" asChild>
       <section className="emulation-settings__retroachievements">
         <h2 className="emulation-settings__title">RetroAchievements</h2>
         <p className="emulation-settings__description">
-          Connect your account so supported emulators can report unlocks while
-          you play.
+          {globalThis.window.electron.platform === "linux"
+            ? "The Web API key lets GameHub retrieve achievements. Use Emulator sign-in below for the next RetroArch launch, or sign in directly in RetroArch under Settings → Achievements."
+            : "Connect your account so supported emulators can report unlocks while you play."}
         </p>
         <Input
           label="Username"
@@ -823,6 +846,29 @@ function RetroAchievementsBpSection() {
           disabled={!username.trim() || !apiKey.trim()}
         >
           Save
+        </Button>
+        <Input
+          label="Emulator sign-in password"
+          type="password"
+          value={password}
+          placeholder="RetroAchievements password"
+          focusId={RA_PASSWORD_FOCUS_ID}
+          autoComplete="off"
+          onChange={(event) => setPassword(event.target.value)}
+        />
+        <p className="emulation-settings__description">
+          Your password is exchanged for an emulator login token and is not
+          stored.
+        </p>
+        <Button
+          focusId={RA_SIGN_IN_FOCUS_ID}
+          onClick={() => {
+            void handleEmulatorSignIn();
+          }}
+          loading={isSigningIn}
+          disabled={isSigningIn || !username.trim() || !password}
+        >
+          Sign in to emulator
         </Button>
       </section>
     </VerticalFocusGroup>
@@ -927,7 +973,7 @@ export function EmulationSettingsSection() {
       seen.add(config.binary);
       result.push({
         binary: config.binary,
-        label: BINARY_LABELS[config.binary],
+        label: getKnownBinaryLabel(config.binary),
       });
     }
     return result;

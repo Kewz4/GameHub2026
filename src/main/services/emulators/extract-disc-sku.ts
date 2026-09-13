@@ -7,6 +7,7 @@ import { resolveSniffTarget } from "./sniff-disc-platform";
 import { readChdLeadingData } from "./chd-reader";
 import { readCsoLeadingData } from "./cso-reader";
 import { normalize } from "./sku-normalize";
+import { readPspDiscId } from "./psp-save-paths";
 import {
   BOOT_SKU_RE,
   ISO_FILENAME_SKU_RE,
@@ -418,6 +419,7 @@ export const extractDiscSku = async (
   primaryPath: string,
   system: EmulatorSystem
 ): Promise<string | null> => {
+  if (system === "psp") return readPspDiscId(primaryPath);
   if (system === "ps3") return extractPs3TitleId(primaryPath);
   return extractPs12Sku(primaryPath);
 };

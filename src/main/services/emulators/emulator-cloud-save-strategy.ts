@@ -16,6 +16,7 @@ export const getEmulatorCloudSaveStrategy = (
   system: EmulatorSystem,
   binary: EmulatorBinary
 ): EmulatorCloudSaveStrategy => {
+  if (binary === "ralibretro" && system === "psp") return "per-title-directory";
   if (binary === "ralibretro") return "per-rom-files";
   if (binary === "pcsx2" || binary === "duckstation") {
     return "dedicated-memory-card-manager";

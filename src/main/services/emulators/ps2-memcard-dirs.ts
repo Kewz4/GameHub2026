@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import { readFileSync } from "node:fs";
+import { emulatorUserPaths } from "./emulator-user-paths";
 
 import { pcsx2ConfigCandidates, findExistingConfig } from "./emulator-config";
 
@@ -25,6 +26,11 @@ const DEFAULT_DIRS = (): string[] => {
     ];
   }
   return [
+    path.join(emulatorUserPaths("pcsx2", "/usr/bin").data, "memcards"),
+    path.join(
+      emulatorUserPaths("pcsx2", "/var/lib/flatpak/exports/bin").data,
+      "memcards"
+    ),
     path.join(os.homedir(), ".local", "share", "PCSX2", "memcards"),
     path.join(os.homedir(), ".config", "PCSX2", "memcards"),
   ];
@@ -36,7 +42,11 @@ const memcardDirFromIni = (executablePath?: string | null): string | null => {
   try {
     const content = readFileSync(iniPath, "utf-8");
     const m = /^\s*MemcardDirectory\s*=\s*(.+)$/im.exec(content);
-    return m ? m[1].trim() || null : null;
+    const folders = /^\s*MemoryCards\s*=\s*(.+)$/im.exec(content);
+    const configured = (folders?.[1] ?? m?.[1])?.trim();
+    return configured
+      ? path.resolve(path.dirname(path.dirname(iniPath)), configured)
+      : null;
   } catch {
     return null;
   }
@@ -48,6 +58,15 @@ export const getPs2MemcardDirs = (executablePath?: string | null): string[] => {
   // 1. MemcardDirectory from PCSX2.ini (now resolves portable configs too)
   const iniDir = memcardDirFromIni(executablePath);
   if (iniDir) dirs.push(iniDir);
+  if (process.platform === "linux" && executablePath) {
+    dirs.push(
+      path.join(
+        emulatorUserPaths("pcsx2", path.dirname(executablePath)).data,
+        "memcards"
+      )
+    );
+    return Array.from(new Set(dirs)).filter((dir) => existsSync(dir));
+  }
 
   // 2. Portable mode: <exe_dir>/memcards (created by writePortableSetup)
   if (executablePath) {

@@ -1,4 +1,5 @@
 import { ShopDetails } from "@types";
+import { selectGameRequirements } from "@renderer/helpers/game-requirements";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { normalizeRequirementsHtml } from "../../../../helpers";
 import type { FocusOverrides } from "../../../../services";
@@ -66,6 +67,17 @@ export function RequirementsToPlay({
   const isFocused = useNavigationIsFocused(focusId ?? "");
   const { onButtonPressed, isActiveGamepadEvent } = useGamepad();
   const selectedTabIndex = activeRequirement === "minimum" ? 0 : 1;
+  const { requirements, source } = useMemo(
+    () =>
+      selectGameRequirements(shopDetails, globalThis.window.electron.platform),
+    [shopDetails]
+  );
+  const requirementsTitle =
+    globalThis.window.electron.platform === "linux"
+      ? source === "linux"
+        ? "Linux requirements"
+        : "Windows requirements (Proton)"
+      : "System Requirements";
 
   const selectRequirementByIndex = useCallback((index: number) => {
     setActiveRequirement(index <= 0 ? "minimum" : "recommended");
@@ -74,11 +86,11 @@ export function RequirementsToPlay({
   const normalizedHtml = useMemo(() => {
     const raw =
       activeRequirement === "minimum"
-        ? shopDetails.pc_requirements.minimum
-        : shopDetails.pc_requirements.recommended;
+        ? requirements.minimum
+        : requirements.recommended;
 
     return normalizeRequirementsHtml(raw);
-  }, [activeRequirement, shopDetails.pc_requirements]);
+  }, [activeRequirement, requirements]);
 
   const requirementRows = useMemo(
     () => parseRequirementRows(normalizedHtml),
@@ -86,11 +98,9 @@ export function RequirementsToPlay({
   );
   const hasRequirements = useMemo(
     () =>
-      Boolean(normalizeRequirementsHtml(shopDetails.pc_requirements.minimum)) ||
-      Boolean(
-        normalizeRequirementsHtml(shopDetails.pc_requirements.recommended)
-      ),
-    [shopDetails.pc_requirements]
+      Boolean(normalizeRequirementsHtml(requirements.minimum)) ||
+      Boolean(normalizeRequirementsHtml(requirements.recommended)),
+    [requirements]
   );
 
   useEffect(() => {
@@ -147,12 +157,12 @@ export function RequirementsToPlay({
     >
       <section
         className="game-page__sidebar-section game-page__requirements-to-play"
-        aria-label="System Requirements"
+        aria-label={requirementsTitle}
         data-empty={requirementRows.length === 0}
       >
         <div className="game-page__requirements-to-play-header">
           <div className="game-page__requirements-to-play-title">
-            <Typography>System Requirements</Typography>
+            <Typography>{requirementsTitle}</Typography>
           </div>
 
           <div className="game-page__requirements-to-play-tabs">

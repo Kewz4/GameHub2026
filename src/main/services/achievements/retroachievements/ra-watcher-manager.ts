@@ -302,7 +302,8 @@ export class RaWatcherManager {
     // X11 may use the external toast when a compositor is actually available.
     const shownInOverlay =
       customEnabled &&
-      (process.platform === "linux" && !supportsDesktopGameCapture(process.platform)
+      (process.platform === "linux" &&
+      !supportsDesktopGameCapture(process.platform)
         ? WindowManager.sendAchievementToFocusedWindow(
             position,
             achievementsInfo

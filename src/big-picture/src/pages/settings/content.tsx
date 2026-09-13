@@ -32,6 +32,7 @@ import {
   SETTINGS_HEADER_RETURN_TARGET,
 } from "./settings-navigation";
 import { SettingsSection } from "./settings-section";
+import { getDesktopCaptureUiCapabilities } from "@renderer/helpers/desktop-capture-ui";
 
 interface SettingsSectionProps {
   className?: string;
@@ -58,6 +59,8 @@ interface ContentItem {
   focusId: string;
   label: string;
   checked: boolean;
+  disabled?: boolean;
+  secondaryText?: string;
   onChange: (checked: boolean) => void;
 }
 
@@ -183,6 +186,10 @@ export function ContentSettingsSection({
     setForm((currentForm) => ({ ...currentForm, ...values }));
     void globalThis.window.electron.updateUserPreferences(values);
   };
+  const captureCapabilities = getDesktopCaptureUiCapabilities(
+    recorderState,
+    globalThis.window.electron.platform
+  );
 
   const items = useMemo<ContentItem[]>(() => {
     return [
@@ -218,22 +225,24 @@ export function ContentSettingsSection({
         onChange: (checked) =>
           updateUserPreferences({ enableSteamAchievements: checked }),
       },
-      ...(globalThis.window.electron.platform !== "linux"
-        ? [
-            {
-              id: "enable-achievement-souvenirs",
-              focusId: CONTENT_ITEM_FOCUS_IDS.enableAchievementSouvenirs,
-              label: "Capture achievement souvenirs",
-              checked: form.enableAchievementSouvenirs,
-              onChange: (checked: boolean) =>
-                updateUserPreferences({
-                  enableAchievementSouvenirs: checked,
-                }),
-            },
-          ]
-        : []),
+      {
+        id: "enable-achievement-souvenirs",
+        focusId: CONTENT_ITEM_FOCUS_IDS.enableAchievementSouvenirs,
+        label: "Capture achievement souvenirs",
+        checked: form.enableAchievementSouvenirs,
+        disabled: !captureCapabilities.screenshots,
+        secondaryText: !captureCapabilities.screenshots
+          ? captureCapabilities.checking
+            ? "Checking screenshot capture support for this desktop session."
+            : "Automatic capture needs an X11 game window on Linux. Native Wayland capture is not available yet. Existing local and cloud souvenirs remain available in your profile."
+          : "Save an achievement screenshot locally and in your private cloud storage.",
+        onChange: (checked: boolean) =>
+          updateUserPreferences({
+            enableAchievementSouvenirs: checked,
+          }),
+      },
     ];
-  }, [form]);
+  }, [form, captureCapabilities.screenshots, captureCapabilities.checking]);
 
   const spotifySystemAudioBlocked =
     userPreferences?.musicProvider === "spotify";
@@ -251,7 +260,7 @@ export function ContentSettingsSection({
           ...(instantReplayEnabled
             ? [CONTENT_CAPTURE_FOCUS_IDS.replayDuration]
             : []),
-          ...(!spotifySystemAudioBlocked
+          ...(!spotifySystemAudioBlocked && captureCapabilities.systemAudio
             ? [CONTENT_CAPTURE_FOCUS_IDS.audio]
             : []),
         ]
@@ -260,7 +269,7 @@ export function ContentSettingsSection({
     ...(recorderEnabled ? [CONTENT_CAPTURE_FOCUS_IDS.openDirectory] : []),
   ];
   const navigationOverridesByFocusId = buildNavigationOverrides([
-    ...items.map((item) => item.focusId),
+    ...items.filter((item) => !item.disabled).map((item) => item.focusId),
     ...captureFocusIds,
   ]);
   const recorderConfiguration = {
@@ -281,7 +290,11 @@ export function ContentSettingsSection({
     getGameRecorderEstimatedBufferBytes(recorderConfiguration) / 1_000_000
   );
   const status = useMemo(
-    () => getGameRecorderStatusPresentation(recorderState),
+    () =>
+      getGameRecorderStatusPresentation(
+        recorderState,
+        globalThis.window.electron.platform
+      ),
     [recorderState]
   );
   const resolvedOutputDirectory =
@@ -309,6 +322,8 @@ export function ContentSettingsSection({
                 id={item.id}
                 label={item.label}
                 checked={item.checked}
+                disabled={item.disabled}
+                secondaryText={item.secondaryText}
                 focusId={item.focusId}
                 navigationOverrides={navigationOverridesByFocusId[item.focusId]}
                 block
@@ -447,14 +462,20 @@ export function ContentSettingsSection({
               secondaryText={
                 spotifySystemAudioBlocked
                   ? "Unavailable while Spotify Connect is selected, keeping Spotify audio out of recordings."
-                  : "Records the Windows system mix while the game is in the foreground."
+                  : !captureCapabilities.systemAudio
+                    ? "This capture backend records video only; system audio is unavailable in this desktop session."
+                    : "Records system audio while the game is in the foreground, when supported by the capture backend."
               }
               checked={
-                spotifySystemAudioBlocked
+                spotifySystemAudioBlocked || !captureCapabilities.systemAudio
                   ? false
                   : form.gameRecorderCaptureAudio
               }
-              disabled={!recorderEnabled || spotifySystemAudioBlocked}
+              disabled={
+                !recorderEnabled ||
+                spotifySystemAudioBlocked ||
+                !captureCapabilities.systemAudio
+              }
               navigationOverrides={
                 navigationOverridesByFocusId[CONTENT_CAPTURE_FOCUS_IDS.audio]
               }

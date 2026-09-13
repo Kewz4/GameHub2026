@@ -442,7 +442,11 @@ function ShortcutSection({
                 },
               }}
             >
-              {t("create_start_menu_shortcut")}
+              {globalThis.window.electron.platform === "linux"
+                ? t("create_applications_menu_shortcut", {
+                    defaultValue: "Add to applications menu",
+                  })
+                : t("create_start_menu_shortcut")}
             </Button>
           ) : null}
         </HorizontalFocusGroup>
@@ -554,8 +558,7 @@ export function GameLaunchSettingsTab({
     discs.find((disc) => disc.path === game.selectedDiscPath) ??
     discs[0] ??
     null;
-  const showSaveFolderButton =
-    !isCustomGame && globalThis.window.electron.platform === "win32";
+  const showSaveFolderButton = true;
   const saveFolderTooltipContent = getSaveFolderTooltipContent(
     loadingSaveFolder,
     saveFolderPath,
@@ -595,9 +598,9 @@ export function GameLaunchSettingsTab({
       setPicker({
         kind: "executable",
         title: "Select game executable",
-        extensions: filters[0]?.extensions.filter(
-          (extension) => extension !== "*"
-        ),
+        extensions: filters.some((filter) => filter.extensions.includes("*"))
+          ? undefined
+          : filters.flatMap((filter) => filter.extensions),
         selectDirectory: globalThis.window.electron.platform === "darwin",
       });
     } finally {

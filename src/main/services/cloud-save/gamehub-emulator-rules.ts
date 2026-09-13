@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { buildPspCloudSaveRules } from "./psp-cloud-save-rules";
+import type { LibretroSramAliasPolicy } from "../emulators/libretro-sram-alias";
 
 import type {
   CloudSavePathContext,
@@ -39,6 +41,10 @@ export interface BuildGameHubEmulatorRulesInput {
   backupPaths: readonly string[];
   restorePatterns: readonly string[];
   remoteFiles?: readonly EmulatorRemoteFile[];
+  /** Existing remote identity used while building a local snapshot, not a
+   * restriction on newly-created local save files. */
+  identityFiles?: readonly EmulatorRemoteFile[];
+  sramAlias?: LibretroSramAliasPolicy;
 }
 
 const pathApiFor = (
@@ -104,11 +110,36 @@ const stableDescriptor = (
     );
   if (matchingRoots.length !== 1) return null;
 
-  const rootDescriptor = relativeWithin(
+  const portableRootDescriptor = relativeWithin(
     input.emulatorInstallDir,
     matchingRoots[0].root,
     input.platform
   );
+  // Native/Flatpak Linux saves are outside /usr/bin or the AppImage directory.
+  // Keep existing portable v2 identities unchanged and map only recognized
+  // emulator roots to their equivalent portable semantic identity.
+  const normalizedRoot = matchingRoots[0].root
+    .replaceAll("\\", "/")
+    .toLowerCase();
+  const externalRootDescriptor = () => {
+    if (input.binary === "ralibretro") return "saves";
+    if (input.binary === "azahar" && /\/(sdmc|nand)$/.test(normalizedRoot))
+      return `user/${pathApiFor(input.platform).basename(normalizedRoot)}`;
+    if (input.binary === "dolphin" && /\/(wii|gc)$/.test(normalizedRoot))
+      return `user/${pathApiFor(input.platform).basename(normalizedRoot)}`;
+    if (input.binary === "cemu" && /\/usr\/save$/.test(normalizedRoot))
+      return "portable/mlc01/usr/save";
+    if (input.binary === "eden" && /\/nand\/user\/save$/.test(normalizedRoot))
+      return "user/nand/user/save";
+    if (input.binary === "rpcs3")
+      return (
+        /(?:^|\/)(dev_hdd0\/home\/\d{8}\/savedata)$/.exec(
+          normalizedRoot
+        )?.[1] ?? null
+      );
+    return null;
+  };
+  const rootDescriptor = portableRootDescriptor ?? externalRootDescriptor();
   if (!rootDescriptor) return null;
 
   // RALibretro's portable Saves root is stable but an optional core
@@ -276,7 +307,7 @@ const candidateForRemoteFile = (
   return api.join(parent, portableRelativePath);
 };
 
-const buildFileRules = (
+const buildUnaliasedFileRules = (
   input: BuildGameHubEmulatorRulesInput
 ): CloudSaveRule[] => {
   const backupPaths = sortedUniquePaths(input.backupPaths, input.platform);
@@ -335,6 +366,123 @@ const buildFileRules = (
   return rules;
 };
 
+const buildFileRules = (
+  input: BuildGameHubEmulatorRulesInput
+): CloudSaveRule[] => {
+  const policy = input.sramAlias;
+  if (!policy) return buildUnaliasedFileRules(input);
+  const remote = (input.remoteFiles ?? input.identityFiles)?.filter((file) =>
+    file.rawPath.startsWith(`<gamehubEmulator>/${input.shop}/`)
+  );
+  if (!policy.plan) {
+    const foreignSram = remote?.some((file) =>
+      policy.blockRestore
+        ? /\.(sram|srm)$/i.test(file.relativePath)
+        : input.platform === "linux"
+          ? /\.sram$/i.test(file.relativePath)
+          : /\.srm$/i.test(file.relativePath)
+    );
+    const inactiveLocal = input.backupPaths.some((file) =>
+      input.platform === "linux" ? /\.sram$/i.test(file) : /\.srm$/i.test(file)
+    );
+    if (foreignSram || inactiveLocal)
+      throw new Error(
+        policy.unsupportedReason ?? "Cross-frontend SRAM format is not verified"
+      );
+    return buildUnaliasedFileRules(input);
+  }
+  const plan = policy.plan;
+  const api = pathApiFor(input.platform);
+  const equalName = (left: string, right: string) =>
+    input.platform === "windows"
+      ? left.toLowerCase() === right.toLowerCase()
+      : left === right;
+  const isAlias = (filename: string) =>
+    plan.filenames.some((name) => equalName(name, filename));
+  if (
+    remote?.some(
+      (file) =>
+        /\.(sram|srm)$/i.test(file.relativePath) && !isAlias(file.relativePath)
+    )
+  ) {
+    throw new Error(
+      "The cloud SRAM filename does not match this exact ROM identity. Check the selected ROM and filename before restoring; no save was overwritten."
+    );
+  }
+  const local = sortedUniquePaths(
+    input.backupPaths.filter((candidate) => isAlias(api.basename(candidate))),
+    input.platform
+  );
+  if (local.length > 1)
+    throw new Error(
+      "Multiple SRAM aliases exist for this game. Compare and keep the intended save before syncing; no file was overwritten."
+    );
+  if (
+    local.length === 1 &&
+    comparablePath(local[0], input.platform) !==
+      comparablePath(plan.targetPath, input.platform)
+  ) {
+    throw new Error(
+      `This save uses an inactive frontend filename. The current emulator loads ${api.basename(plan.targetPath)}. Copy the intended same-core save to that filename before syncing; the original was preserved.`
+    );
+  }
+  if (
+    input.saveRoots.filter(
+      (root) => relativeWithin(root, plan.targetPath, input.platform) !== null
+    ).length !== 1
+  )
+    throw new Error("SRAM alias destination is outside the selected save root");
+  const virtualPath = (filename: string) =>
+    api.join(api.dirname(plan.targetPath), filename);
+  const identityCandidates = [
+    ...new Map(
+      (remote ?? [])
+        .filter(
+          (file) =>
+            isAlias(file.relativePath) &&
+            (gameHubStableEmulatorRawPath(
+              input,
+              virtualPath(file.relativePath),
+              "file"
+            ) === file.rawPath ||
+              (/\/[a-f0-9]{64}$/.test(file.rawPath) &&
+                isKnownLegacyRawPath(file.rawPath, input.shop, input.objectId)))
+        )
+        .map((file) => [file.rawPath, file])
+    ).values(),
+  ];
+  if (identityCandidates.length > 1)
+    throw new Error(
+      "This cloud snapshot contains multiple SRAM identities for one game. Resolve the conflicting saves before syncing; no file was overwritten."
+    );
+  const existing = identityCandidates[0];
+  const canonicalName = existing?.relativePath ?? plan.canonicalFilename;
+  const rawPath =
+    existing?.rawPath ??
+    gameHubStableEmulatorRawPath(input, virtualPath(canonicalName), "file");
+  if (!rawPath)
+    throw new Error("The SRAM alias has no safe game-bound identity");
+  const remaining = buildUnaliasedFileRules({
+    ...input,
+    sramAlias: undefined,
+    backupPaths: input.backupPaths.filter(
+      (candidate) => !isAlias(api.basename(candidate))
+    ),
+    remoteFiles: input.remoteFiles?.filter(
+      (file) => !isAlias(file.relativePath)
+    ),
+  });
+  if (input.remoteFiles !== undefined && !existing) return remaining;
+  if (input.remoteFiles === undefined && local.length === 0) return remaining;
+  return [
+    ...remaining,
+    {
+      ...ruleForPath(rawPath, plan.targetPath, input.platform, "file"),
+      canonicalRelativePath: canonicalName,
+    },
+  ];
+};
+
 const isProfileBased = (input: BuildGameHubEmulatorRulesInput) =>
   input.system === "switch" ||
   input.system === "n3ds" ||
@@ -349,6 +497,8 @@ const isProfileBased = (input: BuildGameHubEmulatorRulesInput) =>
 export const buildGameHubEmulatorRules = (
   input: BuildGameHubEmulatorRulesInput
 ): CloudSaveRule[] => {
+  if (input.system === "psp" && input.binary === "ralibretro")
+    return buildPspCloudSaveRules(input);
   if (
     input.binary === "ralibretro" ||
     (input.binary === "dolphin" && input.system === "gc")

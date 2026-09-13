@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { emulatorUserPaths } from "./emulator-user-paths";
 
 const GCI_FOLDER_DEVICE = "8";
 const GAMECUBE_REGIONS = ["USA", "JAP", "EUR", "DEV"] as const;
@@ -61,16 +62,17 @@ export const resolveDolphinGciCardFolders = (
 ): string[] => {
   if (!/^[A-Z0-9]{6}$/.test(gameCode)) return [];
 
-  const configRoot = path.join(installDir, "User", "Config");
+  const roots = emulatorUserPaths("dolphin", installDir);
+  const configRoot = roots.config;
   const globalCore = readIniSection(
     path.join(configRoot, "Dolphin.ini"),
     "Core"
   );
   const gameCore = readIniSection(
-    path.join(installDir, "User", "GameSettings", `${gameCode}.ini`),
+    path.join(roots.data, "GameSettings", `${gameCode}.ini`),
     "Core"
   );
-  const gcRoot = path.join(installDir, "User", "GC");
+  const gcRoot = path.join(roots.data, "GC");
   const folders: string[] = [];
 
   for (const [slot, defaultFolderMode] of [

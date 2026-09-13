@@ -145,10 +145,9 @@ export function useGameActions(game: LibraryGame) {
     try {
       setCreatingShortcut(true);
 
-      const locations =
-        window.electron.platform === "win32"
-          ? (["desktop", "start_menu"] as const)
-          : (["desktop"] as const);
+      const locations = ["win32", "linux"].includes(window.electron.platform)
+        ? (["desktop", "start_menu"] as const)
+        : (["desktop"] as const);
 
       for (const location of locations) {
         const success = await window.electron.createGameShortcut(

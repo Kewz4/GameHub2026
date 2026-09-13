@@ -515,7 +515,7 @@ export function Header() {
         </section>
 
         <section className="header__section">
-          {isOnLibraryPage && window.electron.platform === "win32" && (
+          {isOnLibraryPage && (
             <>
               <button
                 type="button"
@@ -587,7 +587,7 @@ export function Header() {
 
       <Tooltip id={sidebarToggleTooltipId} style={HEADER_TOOLTIP_STYLE} />
 
-      {isOnLibraryPage && window.electron.platform === "win32" && (
+      {isOnLibraryPage && (
         <>
           <Tooltip id={scanButtonTooltipId} style={HEADER_TOOLTIP_STYLE} />
           <Tooltip id={refreshButtonTooltipId} style={HEADER_TOOLTIP_STYLE} />

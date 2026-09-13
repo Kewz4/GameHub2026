@@ -28,6 +28,30 @@ function makeState(
 }
 
 describe("Big Picture gameplay capture status", () => {
+  it("describes Linux native encoding without claiming NVENC", () => {
+    const result = getGameRecorderStatusPresentation(
+      makeState({ nativeVideoEncodingAvailable: true }),
+      "linux"
+    );
+    assert.match(result.diagnostics ?? "", /native X11 H\.264/);
+    assert.doesNotMatch(result.diagnostics ?? "", /NVENC/);
+  });
+  it("does not promise fallback recording when the desktop session cannot capture", () => {
+    const result = getGameRecorderStatusPresentation(
+      makeState({
+        status: "unavailable",
+        nativeVideoEncodingAvailable: false,
+        statusMessage:
+          "This desktop session does not expose a safe game capture source.",
+      })
+    );
+    assert.equal(
+      result.detail,
+      "This desktop session does not expose a safe game capture source."
+    );
+    assert.equal(result.diagnostics, null);
+    assert.equal(result.tone, "danger");
+  });
   it("exposes rolling-buffer progress without requiring pointer hover", () => {
     const result = getGameRecorderStatusPresentation(
       makeState({ status: "buffering", bufferedSeconds: 18 })

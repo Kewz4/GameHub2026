@@ -121,6 +121,24 @@ export class LinuxAudioMixer {
     return [...sessions.values()];
   }
 
+  /** Resolve an actual output monitor; never the default microphone/source. */
+  async getMonitorSource(): Promise<string | null> {
+    try {
+      const [defaultSink, sinks, sources] = await Promise.all([
+        this.run(["get-default-sink"]),
+        this.run(["--format=json", "list", "sinks"]),
+        this.run(["--format=json", "list", "sources"]),
+      ]);
+      return selectPulseMonitorSource(
+        defaultSink.trim(),
+        JSON.parse(sinks),
+        JSON.parse(sources)
+      );
+    } catch {
+      return null;
+    }
+  }
+
   private async write(pid: number, command: string, value: string) {
     if (!Number.isSafeInteger(pid) || pid <= 1) return false;
     // Resolve the current server stream IDs on every write. A cached ID can
@@ -158,3 +176,29 @@ export class LinuxAudioMixer {
 }
 
 export const linuxAudioMixer = new LinuxAudioMixer();
+
+export const selectPulseMonitorSource = (
+  sinkName: string,
+  sinks: unknown,
+  sources: unknown
+): string | null => {
+  if (!sinkName || !Array.isArray(sinks) || !Array.isArray(sources))
+    return null;
+  const sink = sinks.find(
+    (candidate) =>
+      candidate?.name === sinkName &&
+      Number.isSafeInteger(candidate?.index) &&
+      candidate.index >= 0
+  );
+  if (!sink) return null;
+  const source = sources.find(
+    (candidate) =>
+      candidate &&
+      finiteNumber(candidate.monitor_of_sink) === sink.index &&
+      typeof candidate.name === "string" &&
+      candidate.name.length <= 512 &&
+      candidate.name !== "default" &&
+      !/[\u0000-\u001f\u007f]/.test(candidate.name)
+  );
+  return source?.name ?? null;
+};

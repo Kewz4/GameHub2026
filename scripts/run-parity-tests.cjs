@@ -17,6 +17,7 @@ const suites = [
   "test:cloud-save-v2",
   "test:features",
   "test:maintenance",
+  "test:linux-parity",
 ];
 const results = [];
 for (const suite of suites) {

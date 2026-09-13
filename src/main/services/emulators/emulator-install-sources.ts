@@ -8,6 +8,10 @@ import type {
 import { logger } from "../logger";
 import { KNOWN_BINARIES, primarySystemForBinary } from "./known-binaries";
 import type { EmulatorInstallSource } from "./known-binaries";
+import {
+  RETROARCH_FLATPAK_OPTION_ID,
+  RETROARCH_FLATPAK_REF,
+} from "./linux-retroarch-provisioner";
 
 const isWindows = process.platform === "win32";
 const isLinux = process.platform === "linux";
@@ -203,6 +207,20 @@ export const getEmulatorInstallOptions = async (
   const options: ResolvedInstallOption[] = [];
 
   // A fixed vendor URL (RALibretro) wins over the GitHub API path.
+  if (isLinux && binary === "ralibretro") {
+    options.push({
+      id: RETROARCH_FLATPAK_OPTION_ID,
+      binary,
+      kind: "linux-flatpak",
+      channel: "release",
+      downloadUrl: RETROARCH_FLATPAK_REF,
+      fileName: null,
+      version: null,
+      htmlUrl: "https://flathub.org/apps/org.libretro.RetroArch",
+      linkUrl: null,
+      linkKind: "flatpak",
+    });
+  }
   const direct =
     resolveDirectOption(binary, source) ??
     (await resolveGithubOption(binary, source));

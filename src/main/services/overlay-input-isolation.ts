@@ -1,5 +1,8 @@
 import type { OverlayInputGateReadiness } from "./overlay-input-gate";
 
+// Historical injected-gate QA contract. The production borderless/windowed
+// overlay does not import this module and does not promise input isolation.
+
 /**
  * A ready toast is a promise that the overlay can take input without leaking
  * it to the game. Only the positively acknowledged injected gate satisfies

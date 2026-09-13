@@ -2,6 +2,8 @@ import { registerEvent } from "../register-event";
 import createDesktopShortcut from "create-desktop-shortcuts";
 import path from "node:path";
 import fs from "node:fs";
+import crypto from "node:crypto";
+import { execFile } from "node:child_process";
 import { app } from "electron";
 import axios from "axios";
 import sharp from "sharp";
@@ -13,6 +15,11 @@ import { SystemPath } from "@main/services/system-path";
 import { ASSETS_PATH } from "@main/constants";
 import { getGameAssets } from "../catalogue/get-game-assets";
 import { logger } from "@main/services";
+import {
+  buildLinuxGameDesktopEntry,
+  getLinuxApplicationsDirectory,
+  getLinuxLauncherExecutable,
+} from "@main/services/linux-desktop-entry";
 
 const isValidUrl = (url: string | null | undefined): url is string => {
   return (
@@ -44,7 +51,11 @@ const downloadIcon = async (
     .replace(/[^a-zA-Z0-9]/g, "")
     .substring(0, 16);
   const iconDir = path.join(ASSETS_PATH, `${shop}-${objectId}`);
-  const iconPath = path.join(iconDir, `icon-${urlHash}.ico`);
+  const useIco = process.platform === "win32";
+  const iconPath = path.join(
+    iconDir,
+    `icon-${urlHash}.${useIco ? "ico" : "png"}`
+  );
 
   try {
     if (fs.existsSync(iconPath)) {
@@ -72,7 +83,7 @@ const downloadIcon = async (
       }
 
       // If source is already ICO, use it directly
-      if (isIcoUrl(iconUrl)) {
+      if (useIco && isIcoUrl(iconUrl)) {
         fs.writeFileSync(iconPath, imageBuffer);
         logger.log(`Copied ICO directly to: ${iconPath}`);
         return iconPath;
@@ -83,8 +94,10 @@ const downloadIcon = async (
         .resize(256, 256, { fit: "cover" })
         .png()
         .toBuffer();
-      const icoBuffer = await pngToIco(pngBuffer);
-      fs.writeFileSync(iconPath, icoBuffer);
+      fs.writeFileSync(
+        iconPath,
+        useIco ? await pngToIco(pngBuffer) : pngBuffer
+      );
 
       logger.log(`Successfully created icon at: ${iconPath}`);
       return iconPath;
@@ -224,7 +237,10 @@ const createGameShortcut = async (
     throw new Error("Could not find this game in your library.");
   }
 
-  if (location === "start_menu" && process.platform !== "win32") {
+  if (
+    location === "start_menu" &&
+    !["win32", "linux"].includes(process.platform)
+  ) {
     throw new Error("Start Menu shortcuts are only available on Windows.");
   }
 
@@ -235,7 +251,9 @@ const createGameShortcut = async (
   const outputPath =
     process.platform === "win32"
       ? getWindowsOutputPath(location)
-      : SystemPath.getPath("desktop");
+      : process.platform === "linux" && location === "start_menu"
+        ? getLinuxApplicationsDirectory(SystemPath.getPath("home"))
+        : SystemPath.getPath("desktop");
 
   if (!outputPath) {
     throw new Error("Could not resolve the shortcut output folder.");
@@ -266,6 +284,37 @@ const createGameShortcut = async (
       );
     }
 
+    return true;
+  }
+
+  if (process.platform === "linux") {
+    const id = crypto
+      .createHash("sha256")
+      .update(gameKey)
+      .digest("hex")
+      .slice(0, 20);
+    const shortcut = path.join(outputPath, `io.gamehub.game-${id}.desktop`);
+    const args =
+      process.defaultApp && process.argv[1]
+        ? [path.resolve(process.argv[1]), deepLink]
+        : [deepLink];
+    fs.writeFileSync(
+      shortcut,
+      buildLinuxGameDesktopEntry({
+        name: game.title,
+        executable: getLinuxLauncherExecutable(process.execPath),
+        args,
+        icon: iconPath,
+      }),
+      { mode: 0o755 }
+    );
+    if (location === "desktop") {
+      // GNOME requires trust metadata for desktop launchers. Other desktops
+      // can use the generated executable .desktop file without this helper.
+      execFile("gio", ["set", shortcut, "metadata::trusted", "true"], () => {});
+    } else {
+      execFile("update-desktop-database", [outputPath], () => {});
+    }
     return true;
   }
 

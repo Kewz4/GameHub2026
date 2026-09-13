@@ -8,6 +8,7 @@ import { GB_FAMILY_SYSTEMS, gbFamilySystemFromPath } from "@main/helpers";
 import { scanRomFolder } from "./scan-rom-folder";
 import { getEmulatorConfig } from "./emulators-repository";
 import { cemuDataDir } from "./emulator-portable";
+import { emulatorUserPaths } from "./emulator-user-paths";
 import { installNspIntoEden } from "./nsp-installer";
 import { resolveWiiuTitleId } from "./cemu-graphic-packs";
 import { logger } from "../logger";
@@ -233,7 +234,7 @@ async function installCiaIntoAzahar(ciaPath: string): Promise<void> {
   // Timed out — on Windows this usually means the install FINISHED and Azahar
   // is showing its result message box (which blocks exit). Verify via sdmc.
   const userDirs = [
-    path.join(path.dirname(exe), "user", "sdmc"),
+    path.join(emulatorUserPaths("azahar", path.dirname(exe)).data, "sdmc"),
     process.env.APPDATA
       ? path.join(process.env.APPDATA, "Azahar", "sdmc")
       : null,

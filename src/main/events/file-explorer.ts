@@ -2,8 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { registerEvent } from "./register-event";
-
-const MAX_VISIBLE_ENTRIES = 10_000;
+import { readFileExplorerDirectory } from "../helpers/read-file-explorer-directory";
 
 function requireAbsolutePath(input: string) {
   if (typeof input !== "string" || !input.trim()) {
@@ -15,43 +14,7 @@ function requireAbsolutePath(input: string) {
 
 registerEvent("readDirectory", async (_event, inputPath: string) => {
   const directoryPath = requireAbsolutePath(inputPath);
-  const entries = await fs.promises.readdir(directoryPath, {
-    withFileTypes: true,
-  });
-
-  const visibleEntries = entries
-    .filter((entry) => entry.isDirectory() || entry.isFile())
-    .sort((left, right) => {
-      if (left.isDirectory() !== right.isDirectory()) {
-        return left.isDirectory() ? -1 : 1;
-      }
-      return left.name.localeCompare(right.name, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-    })
-    .slice(0, MAX_VISIBLE_ENTRIES);
-
-  return Promise.all(
-    visibleEntries.map(async (entry) => {
-      const entryPath = path.join(directoryPath, entry.name);
-      const size = entry.isFile()
-        ? await fs.promises
-            .stat(entryPath)
-            .then((stats) => stats.size)
-            .catch(() => 0)
-        : 0;
-
-      return {
-        name: entry.name,
-        path: entryPath,
-        isDirectory: entry.isDirectory(),
-        isFile: entry.isFile(),
-        extension: path.extname(entry.name).slice(1).toLowerCase(),
-        size,
-      };
-    })
-  );
+  return readFileExplorerDirectory(directoryPath);
 });
 
 registerEvent("getPathInfo", async (_event, inputPath: string) => {

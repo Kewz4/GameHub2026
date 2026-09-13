@@ -38,7 +38,7 @@ import {
   pcsx2ConfigCandidates,
 } from "./emulator-config";
 import { getEmulatorConfig } from "./emulators-repository";
-import { cemuDataDir } from "./emulator-portable";
+import { emulatorConfigFile } from "./emulator-user-paths";
 
 // ── INI helpers ──────────────────────────────────────────────────────────────
 
@@ -222,7 +222,7 @@ function configureCemu(
   //    portable Cemu install reads, on every OS. Always (re)write it.
   if (executablePath) {
     const installDir = path.dirname(executablePath);
-    candidates.add(path.join(cemuDataDir(installDir), "settings.xml"));
+    candidates.add(emulatorConfigFile("cemu", installDir, "settings.xml"));
   }
   // 2. Windows per-user default (non-portable Cemu).
   if (process.platform === "win32" && process.env.APPDATA) {
@@ -246,7 +246,7 @@ function configureCemu(
   // that already exists (so a pre-existing user Cemu is updated too, but we
   // don't spam empty config dirs for emulators the user doesn't have).
   const portable = executablePath
-    ? path.join(cemuDataDir(path.dirname(executablePath)), "settings.xml")
+    ? emulatorConfigFile("cemu", path.dirname(executablePath), "settings.xml")
     : null;
   for (const cfgPath of candidates) {
     if (cfgPath === portable || existsSync(cfgPath)) {
@@ -345,7 +345,11 @@ function configureRpcs3(
   executablePath: string | null
 ): void {
   if (!executablePath) return;
-  const ymlPath = path.join(path.dirname(executablePath), "games.yml");
+  const ymlPath = emulatorConfigFile(
+    "rpcs3",
+    path.dirname(executablePath),
+    "games.yml"
+  );
 
   // Read existing entries
   const existing = new Map<string, string>();

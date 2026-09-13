@@ -45,7 +45,7 @@ export function getParentPath(path: string): string | null {
     return WINDOWS_DRIVE_RE.test(parent) ? `${parent}\\` : parent || null;
   }
 
-  const normalized = path.replace(/\/$/, "");
+  const normalized = path.replace(/\/+$/, "") || "/";
 
   if (normalized === "/") return null;
 
@@ -79,17 +79,20 @@ export function normalizeFilters(
     (extension) => extension !== "*"
   );
 
-  if (specificExtensions.length > 0) {
-    return {
-      allowAll: false,
-      extensions: new Set(specificExtensions),
-    };
-  }
-
+  // Unlike Electron's native dialog, this explorer combines the supplied
+  // filters rather than offering a filter picker. An All files option must
+  // therefore include extensionless Linux binaries as well as known suffixes.
   if (normalizedExtensions.includes("*")) {
     return {
       allowAll: true,
       extensions: new Set<string>(),
+    };
+  }
+
+  if (specificExtensions.length > 0) {
+    return {
+      allowAll: false,
+      extensions: new Set(specificExtensions),
     };
   }
 
@@ -106,5 +109,5 @@ export function matchesFilters(
   if (!filters) return true;
   if (filters.allowAll) return true;
 
-  return filters.extensions.has(entry.extension);
+  return filters.extensions.has(entry.extension.toLowerCase());
 }

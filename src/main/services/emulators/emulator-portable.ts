@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { EmulatorBinary } from "@types";
 import { logger } from "../logger";
+import { emulatorUserPaths } from "./emulator-user-paths";
 
 /**
  * TRUE portable setup for the emulators GameHub installs. Out of the box several
@@ -39,6 +40,8 @@ const ensureFile = (file: string, contents = "") => {
  * files Cemu does.
  */
 export const cemuDataDir = (installDir: string): string => {
+  if (process.platform === "linux")
+    return emulatorUserPaths("cemu", installDir).data;
   const portable = path.join(installDir, "portable");
   // Must be an actual DIRECTORY, not just "exists" — if a stray file named
   // "portable" ever ends up there (e.g. corrupted install, manual copy), every
@@ -62,7 +65,7 @@ export const cemuDataDir = (installDir: string): string => {
  * root or the emulator reads its OS-default AppData and never sees our files.
  */
 export const edenDataDir = (installDir: string): string =>
-  path.join(installDir, "user");
+  emulatorUserPaths("eden", installDir).data;
 
 /** A seed Cemu settings.xml so portable mode + graphic-pack downloads are on. */
 const CEMU_SEED_SETTINGS = `<?xml version="1.0" encoding="UTF-8"?>
@@ -92,6 +95,10 @@ export const writePortableSetup = (
   try {
     switch (binary) {
       case "pcsx2": {
+        // Linux AppImage executable roots are temporary mounts; an adjacent
+        // marker would be ignored and falsely point save/settings discovery at
+        // empty directories. Use the native XDG profile for managed Linux builds.
+        if (process.platform === "linux") break;
         ensureFile(path.join(installDir, "portable.ini"));
         ensureDir(path.join(installDir, "inis"));
         ensureDir(path.join(installDir, "memcards"));

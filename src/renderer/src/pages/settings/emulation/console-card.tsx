@@ -4,7 +4,7 @@ import { ChevronRightIcon, GearIcon, AlertIcon } from "@primer/octicons-react";
 
 import type { EmulatorConfig } from "@types";
 
-import { KNOWN_BINARY_LABELS } from "./known-binary-labels";
+import { getKnownBinaryLabel } from "./known-binary-labels";
 import { formatRelativeShort } from "./relative-time";
 import ps1Art from "@renderer/assets/emulation/ps1.png";
 import ps2Art from "@renderer/assets/emulation/ps2.png";
@@ -76,7 +76,7 @@ export function ConsoleCard({
     };
   }, [config.system, config.executablePath]);
 
-  const binaryName = KNOWN_BINARY_LABELS[config.binary];
+  const binaryName = getKnownBinaryLabel(config.binary);
   const isConfigured = config.executablePath !== null;
   const pathMissing = isConfigured && !executableExists;
   const hasRomFolders = config.romFolders.length > 0;

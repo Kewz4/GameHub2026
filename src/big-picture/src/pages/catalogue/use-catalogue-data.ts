@@ -14,6 +14,11 @@ import {
   useState,
 } from "react";
 import { useSearchParams } from "react-router-dom";
+import {
+  hasCatalogueCompatibilityFilters,
+  readCatalogueCompatibilityFilters,
+  type CatalogueCompatibilityFilters,
+} from "./compatibility-filters";
 
 const DEFAULT_PAGE_SIZE = 20;
 const WIDE_PAGE_SIZE = 30;
@@ -56,7 +61,8 @@ export interface CatalogueData {
   [FilterType.Publishers]: CatalogueFacet<string[]>;
 }
 
-export interface SearchGamesFormValues {
+export interface SearchGamesFormValues
+  extends Partial<CatalogueCompatibilityFilters> {
   title?: string;
   sortBy?: CatalogueSearchPayload["sortBy"];
   sortOrder?: CatalogueSearchPayload["sortOrder"];
@@ -217,6 +223,7 @@ export function useCatalogueData() {
       downloadSourceFingerprints: parseStringArrayParam(
         searchParams.get("downloadSourceFingerprints")
       ),
+      ...readCatalogueCompatibilityFilters(searchParams),
     };
   }, [searchParams]);
 
@@ -237,6 +244,10 @@ export function useCatalogueData() {
         if (next) params.set("platform", next);
         else params.delete("platform");
         params.delete("consoleSystem");
+        if (next === "console") {
+          params.delete("protondbSupportBadges");
+          params.delete("deckCompatibility");
+        }
         return params;
       });
     },
@@ -266,6 +277,8 @@ export function useCatalogueData() {
     values.sortBy,
     values.sortOrder,
     values.tags,
+    values.protondbSupportBadges,
+    values.deckCompatibility,
     pageSize,
     platform,
     consoleSystem,
@@ -417,8 +430,8 @@ export function useCatalogueData() {
           publishers: values.publishers ?? [],
           genres: values.genres ?? [],
           developers: values.developers ?? [],
-          protondbSupportBadges: [],
-          deckCompatibility: [],
+          protondbSupportBadges: values.protondbSupportBadges ?? [],
+          deckCompatibility: values.deckCompatibility ?? [],
         };
 
         const isConsoleOnly = platform === "console";
@@ -431,7 +444,11 @@ export function useCatalogueData() {
           (values.tags?.length ?? 0) > 0 ||
           (values.publishers?.length ?? 0) > 0 ||
           (values.developers?.length ?? 0) > 0 ||
-          (values.downloadSourceFingerprints?.length ?? 0) > 0;
+          (values.downloadSourceFingerprints?.length ?? 0) > 0 ||
+          hasCatalogueCompatibilityFilters({
+            protondbSupportBadges: values.protondbSupportBadges,
+            deckCompatibility: values.deckCompatibility,
+          });
         const wantClassics =
           !isPcOnly &&
           page === 1 &&
@@ -514,6 +531,8 @@ export function useCatalogueData() {
     values.sortBy,
     values.sortOrder,
     values.tags,
+    values.protondbSupportBadges,
+    values.deckCompatibility,
     downloadSourceIds,
     page,
     pageSize,

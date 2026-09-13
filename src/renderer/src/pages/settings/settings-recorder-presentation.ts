@@ -6,8 +6,11 @@ export type SettingsRecorderBackendPresentation =
   | "compatibility_active_verified"
   | "compatibility_historical"
   | "native_active_pending"
+  | "x11_active_verified"
+  | "x11_historical"
+  | "x11_active_pending"
   | "compatibility_active_pending"
-  | "windows_unavailable"
+  | "capture_unavailable"
   | "native_machine_available"
   | "native_machine_unavailable"
   | "capability_pending";
@@ -23,6 +26,7 @@ export function getSettingsRecorderBackendPresentation(
   const diagnosticBackend = state?.captureDiagnostics?.backend;
 
   if (diagnosticBackend && !state?.captureActive) {
+    if (diagnosticBackend === "native_ffmpeg_x11") return "x11_historical";
     return diagnosticBackend === "native_ffmpeg_nvenc"
       ? "native_historical"
       : "compatibility_historical";
@@ -33,18 +37,21 @@ export function getSettingsRecorderBackendPresentation(
     state?.captureActive &&
     state.activeCaptureBackend === diagnosticBackend
   ) {
+    if (diagnosticBackend === "native_ffmpeg_x11") return "x11_active_verified";
     return diagnosticBackend === "native_ffmpeg_nvenc"
       ? "native_active_verified"
       : "compatibility_active_verified";
   }
 
   if (state?.captureActive && state.activeCaptureBackend) {
+    if (state.activeCaptureBackend === "native_ffmpeg_x11")
+      return "x11_active_pending";
     return state.activeCaptureBackend === "native_ffmpeg_nvenc"
       ? "native_active_pending"
       : "compatibility_active_pending";
   }
 
-  if (state?.status === "unavailable") return "windows_unavailable";
+  if (state?.status === "unavailable") return "capture_unavailable";
   if (state?.nativeVideoEncodingAvailable === true) {
     return "native_machine_available";
   }

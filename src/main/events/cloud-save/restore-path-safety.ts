@@ -35,7 +35,9 @@ const pathApiFor = (value: string): typeof path.win32 | typeof path.posix =>
 
 const comparable = (value: string): string => {
   const api = pathApiFor(value);
-  const normalized = api.normalize(api.resolve(value)).replace(/[\\/]+$/, "");
+  const normalized = api
+    .normalize(api.resolve(value))
+    .replace(api === path.win32 ? /[\\/]+$/ : /\/+$/, "");
   return api === path.win32 ? normalized.toLowerCase() : normalized;
 };
 
@@ -48,8 +50,12 @@ const globRegex = (pattern: string, includeDescendants: boolean): RegExp => {
   const normalized = api.normalize(pattern);
   const root = api.parse(normalized).root;
   const relative = normalized.slice(root.length);
-  const patternSegments = relative.split(/[\\/]+/).filter(Boolean);
-  const separator = "[\\\\/]";
+  const windows = api === path.win32;
+  const patternSegments = relative
+    .split(windows ? /[\\/]+/ : /\/+/)
+    .filter(Boolean);
+  const separator = windows ? "[\\\\/]" : "/";
+  const segmentCharacter = windows ? "[^\\\\/]" : "[^/]";
   const segmentRegex = (segment: string): string => {
     let result = "";
     for (let index = 0; index < segment.length; index++) {
@@ -58,9 +64,9 @@ const globRegex = (pattern: string, includeDescendants: boolean): RegExp => {
         result += ".*";
         index++;
       } else if (char === "*") {
-        result += "[^\\\\/]*";
+        result += segmentCharacter + "*";
       } else if (char === "?") {
-        result += "[^\\\\/]";
+        result += segmentCharacter;
       } else {
         result += escapeRegex(char);
       }
@@ -77,7 +83,7 @@ const globRegex = (pattern: string, includeDescendants: boolean): RegExp => {
     const segment = patternSegments[index];
     if (segment === "**") {
       // A whole globstar segment consumes zero or more complete directories.
-      source += `(?:[^\\\\/]+${separator})*`;
+      source += "(?:" + segmentCharacter + "+" + separator + ")*";
       continue;
     }
     source += segmentRegex(segment);
@@ -85,7 +91,7 @@ const globRegex = (pattern: string, includeDescendants: boolean): RegExp => {
   }
 
   return new RegExp(
-    `^${source}${includeDescendants ? "(?:[\\\\/].*)?" : ""}$`,
+    "^" + source + (includeDescendants ? "(?:" + separator + ".*)?" : "") + "$",
     WINDOWS_ABSOLUTE.test(pattern) ? "i" : undefined
   );
 };
@@ -114,6 +120,9 @@ const pathBeforeGlob = (pattern: string): string | null => {
 /** Resolve existing junctions/symlinks while preserving a not-yet-created tail. */
 const projectThroughExistingAncestor = (value: string): string | null => {
   const api = pathApiFor(value);
+  // A foreign snapshot path is only an input for rebasing, never a local destination.
+  if ((api === path.win32) !== (process.platform === "win32")) return null;
+  if (!api.isAbsolute(value)) return null;
   const target = api.normalize(api.resolve(value));
   let current = target;
 
@@ -190,11 +199,13 @@ export const isSaveRestoreDestinationAllowed = (
   });
 };
 
-const segments = (value: string): string[] =>
-  pathApiFor(value)
+const segments = (value: string): string[] => {
+  const api = pathApiFor(value);
+  return api
     .normalize(value)
-    .split(/[\\/]+/)
+    .split(api === path.win32 ? /[\\/]+/ : /\/+/)
     .filter(Boolean);
+};
 
 const normalizeSegment = (value: string, windows: boolean) => {
   const normalized = windows ? value.toLowerCase() : value;

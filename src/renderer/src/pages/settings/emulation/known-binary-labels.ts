@@ -13,3 +13,12 @@ export const KNOWN_BINARY_LABELS: Record<EmulatorBinary, string> = {
   dolphin: "Dolphin",
   eden: "Eden",
 };
+
+export function getKnownBinaryLabel(
+  binary: EmulatorBinary,
+  platform = globalThis.window?.electron?.platform
+) {
+  return platform === "linux" && binary === "ralibretro"
+    ? "RetroArch"
+    : KNOWN_BINARY_LABELS[binary];
+}

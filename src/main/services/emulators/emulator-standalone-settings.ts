@@ -6,7 +6,7 @@ import type { EmulatorBinary, EmulatorSystem } from "@types";
 import { logger } from "../logger";
 import { getEmulatorConfig } from "./emulators-repository";
 import { KNOWN_BINARIES } from "./known-binaries";
-import { cemuDataDir, edenDataDir } from "./emulator-portable";
+import { emulatorConfigFile } from "./emulator-user-paths";
 import type { SettingDef, SettingValue } from "./setting-types";
 
 /**
@@ -163,9 +163,7 @@ const dolphinSectionFor = (key: string): string => {
 };
 const dolphinFileFor = (installDir: string, key: string): string =>
   path.join(
-    installDir,
-    "User",
-    "Config",
+    path.dirname(emulatorConfigFile("dolphin", installDir, "Dolphin.ini")),
     DOLPHIN_CORE_KEYS.has(key) ? "Dolphin.ini" : "GFX.ini"
   );
 
@@ -191,13 +189,14 @@ const cemuParentFor = (key: string): string =>
 const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
   pcsx2: {
     format: "ini",
-    file: (d) => path.join(d, "inis", "PCSX2.ini"),
+    file: (d) => emulatorConfigFile("pcsx2", d, "PCSX2.ini"),
     section: () => "EmuCore/GS",
-    markers: (d) => [path.join(d, "portable.ini")],
+    markers: (d) =>
+      process.platform === "linux" ? [] : [path.join(d, "portable.ini")],
   },
   azahar: {
     format: "ini",
-    file: (d) => path.join(d, "user", "config", "qt-config.ini"),
+    file: (d) => emulatorConfigFile("azahar", d, "qt-config.ini"),
     section: (key) => AZAHAR_SECTION[key] ?? "Renderer",
     // Citra/Azahar only honours a value when its `\default` twin is false.
     companions: (key) => ({ [`${key}\\default`]: "false" }),
@@ -206,16 +205,17 @@ const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
     format: "ini",
     file: dolphinFileFor,
     section: dolphinSectionFor,
-    markers: (d) => [path.join(d, "portable.txt")],
+    markers: (d) =>
+      process.platform === "linux" ? [] : [path.join(d, "portable.txt")],
   },
   rpcs3: {
     format: "yaml",
-    file: (d) => path.join(d, "config.yml"),
+    file: (d) => emulatorConfigFile("rpcs3", d, "config.yml"),
     pathOf: (key) => key.split("/"),
   },
   cemu: {
     format: "xml",
-    file: (d) => path.join(cemuDataDir(d), "settings.xml"),
+    file: (d) => emulatorConfigFile("cemu", d, "settings.xml"),
     parent: cemuParentFor,
   },
   eden: {
@@ -223,7 +223,7 @@ const CONFIG: Partial<Record<EmulatorBinary, ConfigSpec>> = {
     // root. The trigger is the existence of the `user/` DIRECTORY (not a marker
     // file) — writing the config file creates user/config/, which satisfies it.
     format: "ini",
-    file: (d) => path.join(edenDataDir(d), "config", "qt-config.ini"),
+    file: (d) => emulatorConfigFile("eden", d, "qt-config.ini"),
     section: edenSectionFor,
   },
 };

@@ -2,6 +2,7 @@ import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 
 import type { EmulatorSystem } from "@types";
+import { retroArchSystemDirectory } from "./retroarch-linux";
 
 import {
   duckstationConfigCandidates,
@@ -65,6 +66,9 @@ export const resolvePs1BiosDirs = async (
   executablePath: string | null
 ): Promise<string[]> => {
   const dirs: string[] = [];
+  if (process.platform === "linux" && executablePath) {
+    dirs.push(retroArchSystemDirectory(path.dirname(executablePath)));
+  }
   const iniPath = findExistingConfig(duckstationConfigCandidates());
   if (iniPath) {
     const override = await readIniBiosDir(

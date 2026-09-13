@@ -6,6 +6,7 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -30,6 +31,11 @@ import { SevenZip } from "../7zip";
 import { ALL_SYSTEMS, KNOWN_BINARIES } from "./known-binaries";
 import { resolveInstallOptionById } from "./emulator-install-sources";
 import { writePortableSetup } from "./emulator-portable";
+import { installPreservingEmulatorData } from "./install-preserving-data";
+import {
+  provisionLinuxRetroArch,
+  RETROARCH_FLATPAK_OPTION_ID,
+} from "./linux-retroarch-provisioner";
 import {
   getEmulatorConfig,
   updateEmulatorConfig,
@@ -82,9 +88,10 @@ async function writeRalibretroPrefs(
   }
 
   let prefs: Record<string, unknown> = {};
-  if (existsSync(prefsSrc)) {
+  const prefsBase = existsSync(prefsDest) ? prefsDest : prefsSrc;
+  if (existsSync(prefsBase)) {
     try {
-      prefs = JSON.parse(readFileSync(prefsSrc, "utf-8"));
+      prefs = JSON.parse(readFileSync(prefsBase, "utf-8"));
     } catch {
       prefs = {};
     }
@@ -123,6 +130,9 @@ async function ensureRaIntegration(installDir: string): Promise<void> {
  * (not only on a fresh install). No-op if RALibretro isn't installed.
  */
 export async function syncRalibretroLogin(): Promise<boolean> {
+  // Linux RetroArch reads the saved login2 token into its private append-config
+  // on the next launch. Never write Windows RAPrefs beside /usr/bin/retroarch.
+  if (process.platform === "linux") return true;
   const config = await getEmulatorConfig("n64").catch(() => null);
   const exe = config?.executablePath;
   if (config?.binary !== "ralibretro" || !exe || !existsSync(exe)) return false;
@@ -147,11 +157,15 @@ async function preSetupRalibretro(installDir: string): Promise<void> {
   // Cores + N64 system files (safe to overwrite — they're our pinned versions).
   const coresSrc = path.join(assets, "Cores");
   if (existsSync(coresSrc)) {
-    cpSync(coresSrc, path.join(installDir, "Cores"), { recursive: true });
+    installPreservingEmulatorData(coresSrc, path.join(installDir, "Cores"));
   }
   const systemSrc = path.join(assets, "System");
   if (existsSync(systemSrc)) {
-    cpSync(systemSrc, path.join(installDir, "System"), { recursive: true });
+    cpSync(systemSrc, path.join(installDir, "System"), {
+      recursive: true,
+      force: false,
+      errorOnExist: false,
+    });
   }
 
   // Runtime dirs RALibretro expects.
@@ -161,7 +175,10 @@ async function preSetupRalibretro(installDir: string): Promise<void> {
 
   // Global config (bindings incl. F11 fullscreen) — refresh to our defaults.
   const cfgSrc = path.join(assets, "config", "RALibretro.json");
-  if (existsSync(cfgSrc)) {
+  if (
+    existsSync(cfgSrc) &&
+    !existsSync(path.join(installDir, "RALibretro.json"))
+  ) {
     copyFileSync(cfgSrc, path.join(installDir, "RALibretro.json"));
   }
 
@@ -249,19 +266,38 @@ export const installEmulator = async (
     phase: EmulatorInstallProgress["phase"],
     extra?: Partial<EmulatorInstallProgress>
   ) => onProgress({ binary, optionId, phase, ...extra });
+  let stagingDir: string | null = null;
 
   try {
     const option = await resolveInstallOptionById(binary, optionId);
+    if (option?.kind === "linux-flatpak") {
+      if (binary !== "ralibretro" || optionId !== RETROARCH_FLATPAK_OPTION_ID)
+        throw new Error("Unsupported Flatpak installation option.");
+      const installed = await provisionLinuxRetroArch({
+        archiveTools: SevenZip,
+        onStatus: (reason) => emit("running", { reason }),
+      });
+      for (const system of systemsForBinary(binary)) {
+        await updateEmulatorConfig(system, (current) => ({
+          ...current,
+          binary,
+          executablePath: installed.executablePath,
+          detectedAt: Date.now(),
+        }));
+      }
+      emit("done", { path: installed.executablePath });
+      return { ok: true, path: installed.executablePath };
+    }
     if (!option || !option.downloadUrl) {
       return { ok: false, reason: "No downloadable asset for this option" };
     }
 
-    const installDir = path.join(emulatorsInstallPath, binary);
-    // Fresh install — clear any previous build so stale executables don't win.
-    if (existsSync(installDir)) {
-      rmSync(installDir, { recursive: true, force: true });
-    }
-    mkdirSync(installDir, { recursive: true });
+    const managedDir = path.join(emulatorsInstallPath, binary);
+    mkdirSync(emulatorsInstallPath, { recursive: true });
+    const installDir = mkdtempSync(
+      path.join(emulatorsInstallPath, `_staging-${binary}-`)
+    );
+    stagingDir = installDir;
 
     const fileName = option.fileName ?? `${binary}-download`;
     const archivePath = path.join(installDir, fileName);
@@ -306,6 +342,12 @@ export const installEmulator = async (
 
     if (!executablePath || !existsSync(executablePath)) {
       return { ok: false, reason: "Could not locate the emulator executable" };
+    }
+    const relativeExecutable = path.relative(installDir, executablePath);
+    installPreservingEmulatorData(installDir, managedDir);
+    executablePath = path.join(managedDir, relativeExecutable);
+    if (!existsSync(executablePath) || !statSync(executablePath).isFile()) {
+      throw new Error("The staged emulator executable could not be installed");
     }
 
     // Make the install TRULY portable: drop the portable-mode marker + data
@@ -393,5 +435,14 @@ export const installEmulator = async (
     logger.error(`Emulator install failed for ${binary}`, err);
     emit("error", { reason: String(err) });
     return { ok: false, reason: String(err) };
+  } finally {
+    if (
+      stagingDir &&
+      path.dirname(path.resolve(stagingDir)) ===
+        path.resolve(emulatorsInstallPath) &&
+      path.basename(stagingDir).startsWith(`_staging-${binary}-`)
+    ) {
+      rmSync(stagingDir, { recursive: true, force: true });
+    }
   }
 };

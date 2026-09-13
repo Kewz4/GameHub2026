@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getKnownBinaryLabel } from "@renderer/pages/settings/emulation/known-binary-labels";
 import { Button } from "@renderer/components";
 import { CheckCircleFillIcon, DownloadIcon } from "@primer/octicons-react";
 import type {
@@ -99,7 +100,9 @@ const EMULATORS: EmulatorSetup[] = [
     // One RALibretro install serves all six of these consoles (it's downloaded
     // and pre-set-up with the bundled cores + configs automatically).
     binary: "ralibretro",
-    name: "RALibretro",
+    get name() {
+      return getKnownBinaryLabel("ralibretro");
+    },
     systems: ["ps1", "n64", "psp", "nds", "dsi", "gba", "gb", "gbc"],
     consoleLabel: "PS1 · N64 · PSP · DS/DSi · GB/GBC/GBA",
     hasRetroAchievements: true,
@@ -280,7 +283,9 @@ export function OnboardingEmulators() {
       if (current.phase === "running") return "Finishing…";
     }
     if (current?.phase === "error") return "Retry";
-    return "Install";
+    return window.electron.platform === "linux" && emu.binary === "ralibretro"
+      ? "Set up"
+      : "Install";
   };
 
   const remaining = EMULATORS.filter((e) => !isInstalled(e)).length;

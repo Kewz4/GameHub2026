@@ -7,7 +7,7 @@ import {
 
 import type { EmulatorConfig } from "@types";
 
-import { KNOWN_BINARY_LABELS } from "../known-binary-labels";
+import { getKnownBinaryLabel } from "../known-binary-labels";
 
 interface Props {
   config: EmulatorConfig;
@@ -23,7 +23,7 @@ export function SetupStepFindEmulator({
   onShowDownloadHelp,
 }: Readonly<Props>) {
   const { t } = useTranslation("settings");
-  const name = KNOWN_BINARY_LABELS[config.binary];
+  const name = getKnownBinaryLabel(config.binary);
   const found = config.executablePath !== null;
 
   return (

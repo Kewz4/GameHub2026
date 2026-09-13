@@ -2,6 +2,7 @@
   "name": "hydralauncher",
   "version": "1.1.49",
   "description": "GameHub",
+  "desktopName": "io.gamehub.launcher.desktop",
   "main": "./out/main/index.js",
   "author": "Los Broxas",
   "repository": {
@@ -21,6 +22,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test:spotify": "node --test scripts/tests/spotify-helpers.test.ts",
+    "test:linux-parity": "tsx --tsconfig tsconfig.node.json --test src/main/services/linux-auto-launch.test.ts src/main/services/linux-audio-mixer.test.ts src/main/services/linux-native-parity.test.ts src/main/services/linux-recorder-ffmpeg.test.ts src/main/services/linux-recorder-encoder.test.ts src/main/services/media-tool-path.test.ts src/main/services/process-path-identity.test.ts src/main/services/launcher-binary.test.ts src/main/services/linux-desktop-entry.test.ts src/main/services/emulators/emulator-user-paths.test.ts src/main/services/emulators/retroarch-linux.test.ts src/main/services/emulators/linux-retroarch-provisioner.test.ts src/main/services/emulators/psp-save-paths.test.ts src/main/services/emulators/install-preserving-data.test.ts src/main/helpers/linux-game-discovery.test.ts src/main/helpers/read-file-explorer-directory.test.ts src/main/services/cloud-save/linux-emulator-rule-roots.test.ts && tsx --tsconfig tsconfig.web.json --test src/renderer/src/helpers/desktop-capture-ui.test.ts src/renderer/src/helpers/game-requirements.test.ts src/renderer/src/pages/settings/emulation/known-binary-labels.test.ts src/big-picture/src/pages/catalogue/compatibility-filters.test.ts src/big-picture/src/components/common/file-explorer-modal/utils.test.ts && node --test web-setup-electron/linux-install.test.cjs web-setup-electron/renderer.test.cjs scripts/tests/download-launcher-binaries.test.cjs",
     "test:maintenance": "tsx --tsconfig tsconfig.web.json --test src/main/services/launcher-intent.test.ts src/main/services/overlay-shortcut.test.ts src/main/services/spotify-read-cache.test.ts src/main/services/achievements/metadata-export/metadata-export.test.ts src/big-picture/src/pages/catalogue/pagination-range.test.ts src/renderer/src/pages/settings/emulation/handheld-controller-diagram.test.tsx && node --test web-setup-electron/download.test.cjs",
     "test:overlay": "tsx --tsconfig tsconfig.web.json --test src/renderer/src/pages/overlay/overlay-controller.test.ts src/renderer/src/pages/overlay/overlay-contrast.test.ts src/renderer/src/pages/overlay/use-overlay-layout.test.ts src/renderer/src/pages/overlay/overlay-recorder-presentation.test.ts src/renderer/src/pages/overlay/overlay-unavailable.test.ts src/renderer/src/components/achievements/notification/achievement-notification-icon.test.ts src/renderer/src/components/sidebar/sidebar-visibility.test.ts scripts/tests/overlay-performance-metrics.test.ts scripts/tests/overlay-activation-policy.test.ts scripts/tests/overlay-controller-accessibility.test.ts && tsx --tsconfig tsconfig.node.json --test src/main/services/coalesced-window-creation.test.ts src/main/services/overlay-active-game.test.ts src/main/services/overlay-window-lifecycle.test.ts src/main/services/overlay-window-mode.test.ts src/main/services/overlay-runtime-policy.test.ts src/main/services/screenshot-size.test.ts src/main/services/screenshot-frame-validation.test.ts src/main/services/screenshot-encoding.test.ts && node --test scripts/tests/qa-live-overlay-acceptance.test.mjs scripts/tests/qa-live-overlay-policy.test.mjs",
     "test:hero-description": "tsx --tsconfig tsconfig.web.json --test src/big-picture/src/components/pages/game/hero/hero-description-state.test.ts",
@@ -45,7 +47,7 @@
     "download-emulator-tool": "node scripts/download-emulator-tool.cjs",
     "build:win": "npm run build:native && npm run build:python-rpc && node scripts/download-ffmpeg.cjs && node scripts/download-launcher-binaries.cjs win32 && node scripts/build-ukmm.cjs win32 && node scripts/download-emulator-tool.cjs && npm run build && electron-builder --win",
     "build:mac": "npm run build:native && npm run build:python-rpc && node scripts/download-launcher-binaries.cjs darwin && npm run build && electron-builder --mac",
-    "build:linux": "npm run build:native && npm run build:python-rpc && node scripts/download-launcher-binaries.cjs linux && npm run build && electron-builder --linux",
+    "build:linux": "npm run build:native && npm run build:python-rpc && node scripts/download-launcher-binaries.cjs linux && node scripts/build-ukmm.cjs linux --required && npm run build && electron-builder --linux",
     "dev:big-picture": "vite dev src/big-picture",
     "prepare": "husky",
     "protoc": "npx protoc --ts_out src/main/generated --proto_path proto proto/*.proto"
@@ -165,6 +167,7 @@
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^4.6.0",
     "husky": "^9.1.7",
+    "playwright": "1.62.1",
     "prettier": "^3.4.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -90,8 +90,16 @@ export const getOverlayRecorderTechnicalSummary = (
   const backend =
     diagnostics.backend === "native_ffmpeg_nvenc"
       ? "NVENC"
-      : diagnostics.backend === "media_recorder"
-        ? "Compatibility"
-        : null;
+      : diagnostics.backend === "native_ffmpeg_x11"
+        ? diagnostics.encoderName === "h264_nvenc"
+          ? "X11/NVENC"
+          : diagnostics.encoderName === "h264_vaapi"
+            ? "X11/VA-API"
+            : diagnostics.encoderName === "libx264"
+              ? "X11/libx264"
+              : "X11"
+        : diagnostics.backend === "media_recorder"
+          ? "Compatibility"
+          : null;
   return `${preset} · ${backend ? `${backend} ` : ""}${codec} · ${resolution} · ${cadence} · ${encodedMbps.toFixed(1)} Mbps`;
 };

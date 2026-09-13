@@ -199,12 +199,12 @@ function buildMaps(processes) {
     if (platform === 'linux') {
       const appImagePath = proc.environ && proc.environ.APPIMAGE;
       linuxProcesses.push({
-        name: key,
-        cwd: (proc.cwd || '').toLowerCase(),
-        exe: (proc.exe || '').toLowerCase(),
+        name: proc.name,
+        cwd: proc.cwd || '',
+        exe: proc.exe || '',
         pid: proc.pid,
-        appImagePath: appImagePath ? appImagePath.toLowerCase() : null,
-        steamCompatDataPath: steamCompatDataPath ? steamCompatDataPath.toLowerCase() : null,
+        appImagePath: appImagePath || null,
+        steamCompatDataPath: steamCompatDataPath || null,
       });
     }
 
@@ -456,7 +456,11 @@ export class NativeAddon {
 
   public static isDesktopCompositionAvailable(): boolean {
     if (process.platform === "win32") return true;
-    try { return this.load().isDesktopCompositionAvailable(); } catch { return false; }
+    try {
+      return this.load().isDesktopCompositionAvailable();
+    } catch {
+      return false;
+    }
   }
 
   public static isCurrentProcessElevated(): boolean {

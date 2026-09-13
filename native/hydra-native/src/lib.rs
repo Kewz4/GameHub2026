@@ -1144,12 +1144,12 @@ pub fn focus_process_window(_pid: u32) -> bool {
 
 /// Force the overlay window to become the foreground window.
 ///
-/// This is what actually stops the game reacting to the controller while the
-/// overlay is open. XInput 1.4 gates input on window focus by itself — per
-/// Microsoft, XInputEnable is "Deprecated [on Windows 10 or later], as game
-/// controller input is automatically enabled/disabled by the system based on
-/// the application window focus" — so an unfocused game reads neutral state
-/// without anything being hooked or suspended.
+/// Foreground ownership routes ordinary UI input to the overlay. Modern
+/// Windows XInput may also honor focus, but this is NOT a universal controller
+/// isolation mechanism: legacy/background raw input, HID, middleware, and games
+/// configured to read background controllers can continue receiving input.
+/// Linux SDL observation has the same product-level limitation. No production
+/// input grab, process suspension, driver filter, or injected hook is used.
 ///
 /// Electron's `BrowserWindow.focus()` is not enough over a fullscreen game:
 /// Windows' foreground lock makes SetForegroundWindow fail for a process that
@@ -1810,6 +1810,7 @@ fn mime_type_from_image_format(format: Option<ImageFormat>) -> Option<&'static s
 // Overlay input gate
 // ---------------------------------------------------------------------------
 //
+// HISTORICAL QA ONLY; this feature is absent from production builds.
 // Focus is not enough to stop a game reading input — measured, not assumed: the
 // overlay reliably wins Win32 foreground and games keep responding, because
 // XInput 1.3, GetAsyncKeyState and RIDEV_INPUTSINK raw input all ignore focus.

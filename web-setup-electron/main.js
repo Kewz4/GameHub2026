@@ -3,11 +3,18 @@ const path = require("path");
 const https = require("https");
 const fs = require("fs");
 const os = require("os");
-const { exec, execFile, spawn } = require("child_process");
+const { execFile } = require("child_process");
 const { promisify } = require("util");
 const { downloadReleaseAsset } = require("./download.js");
+const {
+  getLinuxInstallPaths,
+  resolveLinuxPackageManager,
+  getLinuxPackageCommand,
+  installLinuxAppImage,
+  findLinuxAsset,
+  launchLinuxAppImage,
+} = require("./linux-install.js");
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 const REPO = "Kewz4/GameHub2026";
@@ -23,6 +30,7 @@ const MAX_HTTPS_REDIRECTS = 5;
 let mainWindow = null;
 let verifiedRelease = null;
 let operationInProgress = false;
+let completedExecutable = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -155,28 +163,6 @@ function findAsset(assets, pattern, exclude) {
   );
 }
 
-function resolveLinuxPackageManager() {
-  let distribution = "";
-  try {
-    distribution = fs.readFileSync("/etc/os-release", "utf8").toLowerCase();
-  } catch {}
-
-  if (fs.existsSync("/usr/bin/apt-get")) return "apt";
-  if (fs.existsSync("/usr/bin/dnf")) return "dnf";
-  if (fs.existsSync("/usr/bin/zypper")) return "zypper";
-
-  if (
-    /(?:^|\n)(?:id|id_like)=.*(?:debian|ubuntu|mint|pop)/m.test(distribution)
-  ) {
-    return "apt";
-  }
-  if (/(?:^|\n)(?:id|id_like)=.*(?:fedora|rhel|centos)/m.test(distribution)) {
-    return "dnf";
-  }
-  if (/(?:^|\n)(?:id|id_like)=.*suse/m.test(distribution)) return "zypper";
-  return "appimage";
-}
-
 async function extractZip(zipPath, destDir) {
   const quote = (value) => `'${value.replace(/'/g, "''")}'`;
   const script = `$ErrorActionPreference = 'Stop'; Expand-Archive -LiteralPath ${quote(zipPath)} -DestinationPath ${quote(destDir)}`;
@@ -228,82 +214,69 @@ async function performInstall(event, release) {
     if (error) throw new Error(`The installer could not open: ${error}`);
     event.reply("setup:done", { mode: "install", handedOff: true });
   } else if (platform === "linux") {
-    const debAsset = findAsset(release.assets, "\\.deb$");
-    const rpmAsset = findAsset(release.assets, "\\.rpm$");
-    const appImageAsset = findAsset(release.assets, "\\.appimage$", "websetup");
-    const packageManager = resolveLinuxPackageManager();
-
-    if (packageManager === "apt" && debAsset) {
-      const debPath = path.join(tmpDir, debAsset.name);
-      event.reply("setup:status", `Downloading ${debAsset.name}...`);
-      await downloadFile(debAsset.url, debPath, (progress) => {
-        event.reply("setup:progress", progress);
-      });
-      event.reply("setup:status", "Installing (needs sudo)...");
-      await execAsync(`sudo apt-get install -y "${debPath}"`);
-      event.reply("setup:done", { mode: "install" });
-    } else if (
-      (packageManager === "dnf" || packageManager === "zypper") &&
-      rpmAsset
-    ) {
-      const rpmPath = path.join(tmpDir, rpmAsset.name);
-      event.reply("setup:status", `Downloading ${rpmAsset.name}...`);
-      await downloadFile(rpmAsset.url, rpmPath, (progress) => {
-        event.reply("setup:progress", progress);
-      });
-      event.reply("setup:status", "Installing (needs sudo)...");
-      await execAsync(
-        packageManager === "zypper"
-          ? `sudo zypper --non-interactive install "${rpmPath}"`
-          : `sudo dnf install -y "${rpmPath}"`
+    let distribution = "";
+    try {
+      distribution = fs.readFileSync("/etc/os-release", "utf8");
+    } catch {}
+    const manager = resolveLinuxPackageManager({ release: distribution });
+    const packageAsset =
+      manager === "apt"
+        ? findLinuxAsset(release.assets, "deb")
+        : ["dnf", "zypper"].includes(manager)
+          ? findLinuxAsset(release.assets, "rpm")
+          : null;
+    const packagePath = packageAsset
+      ? path.join(tmpDir, packageAsset.name)
+      : null;
+    const plan = packagePath
+      ? getLinuxPackageCommand(manager, packagePath)
+      : null;
+    if (plan) {
+      event.reply("setup:status", `Downloading ${packageAsset.name}...`);
+      await downloadFile(packageAsset.url, packagePath, (progress) =>
+        event.reply("setup:progress", progress)
       );
-      event.reply("setup:done", { mode: "install" });
-    } else if (appImageAsset) {
-      const appPath = path.join(
-        os.homedir(),
-        ".local",
-        "share",
-        "GameHub",
-        "GameHub.AppImage"
+      event.reply(
+        "setup:status",
+        "Approve the desktop permission prompt to install GameHub."
       );
-      const binDir = path.join(os.homedir(), ".local", "bin");
-      fs.mkdirSync(path.dirname(appPath), { recursive: true });
-      fs.mkdirSync(binDir, { recursive: true });
-      fs.mkdirSync(path.join(os.homedir(), ".local", "share", "applications"), {
-        recursive: true,
-      });
-
-      event.reply("setup:status", `Downloading ${appImageAsset.name}...`);
-      await downloadFile(appImageAsset.url, appPath, (progress) => {
-        event.reply("setup:progress", progress);
-      });
-      fs.chmodSync(appPath, 0o755);
-
-      const symlinkPath = path.join(binDir, "gamehub");
-      if (fs.existsSync(symlinkPath)) fs.unlinkSync(symlinkPath);
-      fs.symlinkSync(appPath, symlinkPath);
-
-      const desktopEntry = `[Desktop Entry]
-Name=GameHub
-Exec=${appPath} %U
-Terminal=false
-Type=Application
-Categories=Game;
-MimeType=x-scheme-handler/hydralauncher;`;
-      fs.writeFileSync(
-        path.join(
-          os.homedir(),
-          ".local",
-          "share",
-          "applications",
-          "gamehub.desktop"
-        ),
-        desktopEntry
-      );
-
+      try {
+        await execFileAsync(plan.command, plan.args, {
+          timeout: 600_000,
+          maxBuffer: 4 * 1024 * 1024,
+        });
+      } catch {
+        throw new Error(
+          "Linux package installation was cancelled or failed. Retry, or choose Portable to install without administrator access."
+        );
+      }
       event.reply("setup:done", { mode: "install" });
     } else {
-      throw new Error("No Linux package found in release " + release.tag);
+      const asset = findLinuxAsset(release.assets, "appimage");
+      if (!asset)
+        throw new Error(
+          "No compatible Linux package found in release " + release.tag
+        );
+      event.reply("setup:status", `Downloading ${asset.name}...`);
+      const result = await installLinuxAppImage({
+        directory: getLinuxInstallPaths().directory,
+        iconSource: path.join(__dirname, "assets", "icon.png"),
+        download: (destination) =>
+          downloadFile(asset.url, destination, (progress) =>
+            event.reply("setup:progress", progress)
+          ),
+      });
+      completedExecutable = result.executable;
+      await execFileAsync("update-desktop-database", [
+        getLinuxInstallPaths().applications,
+      ]).catch(() => {});
+      event.reply("setup:done", {
+        mode: "install",
+        path: result.directory,
+        executable: result.executable,
+        desktopEntryCreated: result.desktopEntryCreated,
+        warnings: result.warnings,
+      });
     }
   }
 }
@@ -350,24 +323,30 @@ async function performPortable(event, release, targetDir) {
       fs.unlinkSync(zipPath);
     } catch {}
 
-    event.reply("setup:done", { mode: "portable", path: targetDir });
-  } else if (platform === "linux") {
-    const asset = findAsset(release.assets, "\\.appimage$", "websetup");
-    if (!asset) throw new Error("No AppImage found in release " + release.tag);
-
-    const appPath = path.join(targetDir, "GameHub.AppImage");
-    fs.mkdirSync(targetDir, { recursive: true });
-
-    event.reply("setup:status", `Downloading ${asset.name}...`);
-    await downloadFile(asset.url, appPath, (progress) => {
-      event.reply("setup:progress", progress);
+    completedExecutable = exePath;
+    event.reply("setup:done", {
+      mode: "portable",
+      path: targetDir,
+      executable: exePath,
     });
-    fs.chmodSync(appPath, 0o755);
-
-    const markerPath = path.join(targetDir, "portable");
-    fs.writeFileSync(markerPath, "");
-
-    event.reply("setup:done", { mode: "portable", path: targetDir });
+  } else if (platform === "linux") {
+    const asset = findLinuxAsset(release.assets, "appimage");
+    if (!asset) throw new Error("No AppImage found in release " + release.tag);
+    event.reply("setup:status", `Downloading ${asset.name}...`);
+    const result = await installLinuxAppImage({
+      directory: targetDir,
+      portable: true,
+      download: (destination) =>
+        downloadFile(asset.url, destination, (progress) =>
+          event.reply("setup:progress", progress)
+        ),
+    });
+    completedExecutable = result.executable;
+    event.reply("setup:done", {
+      mode: "portable",
+      path: targetDir,
+      executable: result.executable,
+    });
   }
 }
 
@@ -422,11 +401,27 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.on("setup:launch", (_event, targetPath) => {
-    if (targetPath && fs.existsSync(targetPath)) {
-      shell.openPath(targetPath);
+  ipcMain.on("setup:launch", async (event, targetPath) => {
+    if (
+      operationInProgress ||
+      !completedExecutable ||
+      targetPath !== completedExecutable
+    )
+      return;
+    operationInProgress = true;
+    try {
+      if (process.platform === "linux")
+        await launchLinuxAppImage(completedExecutable);
+      else {
+        const error = await shell.openPath(completedExecutable);
+        if (error) throw new Error(error);
+      }
+      app.quit();
+    } catch (error) {
+      event.reply("setup:error", error.message);
+    } finally {
+      operationInProgress = false;
     }
-    app.quit();
   });
 
   ipcMain.on("setup:quit", () => {

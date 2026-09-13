@@ -43,6 +43,51 @@ describe("overlay instant replay presentation", () => {
 });
 
 describe("overlay recorder technical summary", () => {
+  it("shows the actual probed Linux hardware encoder and keeps unknown encoders generic", () => {
+    for (const [encoderName, label] of [
+      ["h264_nvenc", "X11/NVENC"],
+      ["h264_vaapi", "X11/VA-API"],
+      ["unknown", "X11"],
+    ]) {
+      const summary = getOverlayRecorderTechnicalSummary(
+        {
+          backend: "native_ffmpeg_x11",
+          encoderName,
+          mimeType: "video/mp4",
+          outputWidth: 1920,
+          outputHeight: 1080,
+          outputFps: 60,
+          encodedFps: 59.9,
+          targetVideoBitrate: 20_000_000,
+          recentEncodedBitrate: 18_000_000,
+          hasAudio: true,
+        },
+        { resolution: "1080p", fps: 60, qualityPreset: "quality" }
+      );
+      assert.ok(summary.includes(`${label} H.264`));
+      if (encoderName === "unknown")
+        assert.doesNotMatch(summary, /NVENC|VA-API|libx264/);
+    }
+  });
+  it("labels native Linux recording as X11 H.264 rather than NVENC", () => {
+    const summary = getOverlayRecorderTechnicalSummary(
+      {
+        backend: "native_ffmpeg_x11",
+        encoderName: "libx264",
+        mimeType: "video/mp4",
+        outputWidth: 1280,
+        outputHeight: 720,
+        outputFps: 30,
+        encodedFps: 29.9,
+        targetVideoBitrate: 8_000_000,
+        recentEncodedBitrate: 7_000_000,
+        hasAudio: false,
+      },
+      { resolution: "720p", fps: 30, qualityPreset: "balanced" }
+    );
+    assert.match(summary, /X11\/libx264 H\.264/);
+    assert.doesNotMatch(summary, /NVENC|Compatibility/);
+  });
   it("distinguishes negotiated capture settings from encoded throughput", () => {
     assert.equal(
       getOverlayRecorderTechnicalSummary(

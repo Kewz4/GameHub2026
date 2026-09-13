@@ -1,4 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { selectGameRequirements } from "@renderer/helpers/game-requirements";
 import {
   computeHardwareRating,
   type HardwareInfo,
@@ -109,8 +110,11 @@ export function GameDetailsContent() {
   }, []);
 
   const hwRating = useMemo((): RatingResult | null => {
-    if (!hardwareInfo || !shopDetails?.pc_requirements) return null;
-    const reqs = shopDetails.pc_requirements as Record<string, string>;
+    if (!hardwareInfo || !shopDetails) return null;
+    const { requirements: reqs } = selectGameRequirements(
+      shopDetails,
+      window.electron.platform
+    );
     const result = computeHardwareRating(
       hardwareInfo,
       reqs.minimum,

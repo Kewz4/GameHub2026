@@ -22,6 +22,9 @@ export interface CloudSaveRule {
    * included in the remote snapshot identity.
    */
   preferredPath?: string;
+  /** JS-only stable file identity for a verified byte-identical frontend SRAM
+   * filename alias. Removed before native scanning; never changes disk bytes. */
+  canonicalRelativePath?: string;
 }
 
 export type CloudSaveCustomPathPlatform = "windows" | "linux" | "mac";
@@ -325,6 +328,7 @@ export interface CloudSaveOverview extends CloudSaveStateResult {
 export type CloudSaveMappingIssue =
   | "emulator-unavailable"
   | "shared-memory-card"
+  | "shared-nand"
   | "gamecube-gci-unavailable"
   | "title-identity-unavailable";
 

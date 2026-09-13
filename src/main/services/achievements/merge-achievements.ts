@@ -207,7 +207,10 @@ export const mergeAchievements = async (
         gameIcon: game.iconUrl,
       });
 
-    if (process.platform === "linux" && !supportsDesktopGameCapture(process.platform)) {
+    if (
+      process.platform === "linux" &&
+      !supportsDesktopGameCapture(process.platform)
+    ) {
       const shownInApp =
         customEnabled &&
         WindowManager.sendAchievementToFocusedWindow(

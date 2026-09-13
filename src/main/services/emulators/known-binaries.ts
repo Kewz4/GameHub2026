@@ -62,11 +62,15 @@ const RALIBRETRO_INSTALL: EmulatorInstallSource = {
   // libretro cores we bundle. The non-x64 (RALibretro.zip) frontend is 32-bit
   // and CANNOT load those cores, so it must not be used here.
   directDownloadUrl: "https://retroachievements.org/bin/RALibretro-x64.zip",
+  flatpakInstallId: "org.libretro.RetroArch",
+  ...(process.platform === "linux"
+    ? { releasePageUrl: "https://www.retroarch.com/?page=platforms" }
+    : {}),
   // No releasePageUrl: RALibretro installs automatically (bundled cores +
   // configs); we never fall back to opening a downloads page for it.
 };
 const RALIBRETRO_WIN_NAMES = ["RALibretro.exe", "RALibretro-x64.exe"];
-const RALIBRETRO_LINUX_NAMES = ["RALibretro", "ralibretro"];
+const RALIBRETRO_LINUX_NAMES = ["retroarch", "RetroArch"];
 
 /** Build a RALibretro-backed KnownBinary for one of its systems. */
 const ralibretro = (
@@ -75,12 +79,12 @@ const ralibretro = (
 ): KnownBinary => ({
   system,
   binary: "ralibretro",
-  displayName: "RALibretro",
+  displayName: process.platform === "linux" ? "RetroArch" : "RALibretro",
   systems: RALIBRETRO_SYSTEMS,
   hasRetroAchievements: true,
   linuxNames: RALIBRETRO_LINUX_NAMES,
   windowsNames: RALIBRETRO_WIN_NAMES,
-  flatpakIds: [],
+  flatpakIds: ["org.libretro.RetroArch"],
   versionFlags: ["--version"],
   romExtensions,
   romDirectoryMarkers: [],

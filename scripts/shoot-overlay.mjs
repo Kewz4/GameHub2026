@@ -18,7 +18,9 @@ const electronExecutable = path.join(
   "node_modules",
   "electron",
   "dist",
-  "electron.exe"
+  ...(process.platform === "darwin"
+    ? ["Electron.app", "Contents", "MacOS", "Electron"]
+    : [process.platform === "win32" ? "electron.exe" : "electron"])
 );
 const host = path.join(
   repositoryRoot,
@@ -64,7 +66,7 @@ await fs.promises.mkdir(path.dirname(output), { recursive: true });
 
 const electronApp = await electron.launch({
   executablePath: electronExecutable,
-  args: [host],
+  args: [host, ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
   env: {
     ...process.env,
     ELECTRON_DISABLE_SECURITY_WARNINGS: "true",
@@ -72,14 +74,19 @@ const electronApp = await electron.launch({
 });
 
 try {
-  const nativeIconDataUrl = await electronApp.evaluate(
-    async ({ app }, executablePath) => {
+  const nativeIconDataUrl = await electronApp
+    .evaluate(async ({ app }, executablePath) => {
       const image = await app.getFileIcon(executablePath, { size: "large" });
       return image.toDataURL();
-    },
-    electronExecutable
-  );
-  if (!nativeIconDataUrl.startsWith("data:image/")) {
+    }, electronExecutable)
+    .catch((error) => {
+      if (process.platform === "win32") throw error;
+      return "";
+    });
+  if (
+    process.platform === "win32" &&
+    !nativeIconDataUrl.startsWith("data:image/")
+  ) {
     throw new Error("Electron did not resolve a native executable icon.");
   }
 
@@ -483,580 +490,588 @@ try {
     return results;
   };
 
-  await page.addInitScript(() => {
-    window.localStorage.removeItem("gamehub.overlay.layout.v4");
-    window.localStorage.setItem("gamehub.overlay.layout-locked.v1", "false");
-    window.localStorage.setItem(
-      "gamehub.overlay.layout.v3",
-      JSON.stringify({
-        friends: {
-          x: 1,
-          y: 0.18,
-          z: 4,
-          width: 0.21,
-          height: 0.31,
-          visible: true,
-        },
-        mixer: {
-          x: 1,
-          y: 0.48,
-          z: 5,
-          width: 0.21,
-          height: 0.28,
-          visible: true,
-        },
-      })
-    );
-    const qaGamepad = {
-      id: "GameHub Playwright standard controller",
-      index: 0,
-      connected: true,
-      mapping: "standard",
-      timestamp: 0,
-      axes: [0, 0, 0, 0],
-      buttons: Array.from({ length: 17 }, () => ({
-        pressed: false,
-        touched: false,
-        value: 0,
-      })),
-      vibrationActuator: null,
-    };
-    window.__qaGamepad = qaGamepad;
-    window.__qaGamepadPollCount = 0;
-    window.__setQaGamepadButton = (index, pressed) => {
-      qaGamepad.buttons[index] = {
-        pressed,
-        touched: pressed,
-        value: pressed ? 1 : 0,
-      };
-      qaGamepad.timestamp = performance.now();
-    };
-    window.__setQaGamepadAxis = (index, value) => {
-      qaGamepad.axes[index] = value;
-      qaGamepad.timestamp = performance.now();
-    };
-    Object.defineProperty(navigator, "getGamepads", {
-      configurable: true,
-      value: () => {
-        window.__qaGamepadPollCount += 1;
-        return [qaGamepad, null, null, null];
-      },
-    });
-    const achievementIcon =
-      "data:image/svg+xml," +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#171717"/><path d="M20 16h24v8c0 9-5 15-12 18-7-3-12-9-12-18v-8Zm12 26v7m-9 0h18" fill="none" stroke="#f4f4f4" stroke-width="4" stroke-linecap="round"/></svg>'
+  await page.addInitScript(
+    ({ platform }) => {
+      window.localStorage.removeItem("gamehub.overlay.layout.v4");
+      window.localStorage.setItem("gamehub.overlay.layout-locked.v1", "false");
+      window.localStorage.setItem(
+        "gamehub.overlay.layout.v3",
+        JSON.stringify({
+          friends: {
+            x: 1,
+            y: 0.18,
+            z: 4,
+            width: 0.21,
+            height: 0.31,
+            visible: true,
+          },
+          mixer: {
+            x: 1,
+            y: 0.48,
+            z: 5,
+            width: 0.21,
+            height: 0.28,
+            visible: true,
+          },
+        })
       );
-    const discordIcon =
-      "data:image/svg+xml," +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#5865f2"/><path d="M20 20c8-4 16-4 24 0 4 6 6 13 5 21-4 4-8 6-12 7l-3-4c2 0 4-1 6-2-6 3-12 3-18 0 2 1 4 2 6 2l-3 4c-4-1-8-3-12-7-1-8 1-15 5-21Z" fill="#fff"/><circle cx="25" cy="33" r="3" fill="#5865f2"/><circle cx="39" cy="33" r="3" fill="#5865f2"/></svg>'
-      );
-    const obsIcon =
-      "data:image/svg+xml," +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#161616"/><circle cx="32" cy="32" r="22" fill="none" stroke="#f4f4f4" stroke-width="3"/><path d="M31 11c8 5 11 11 8 18-2 5-7 7-13 6 5-4 7-8 5-13-2-4-5-7-9-8 3-2 6-3 9-3Zm19 28c-8 4-15 4-20-2-4-4-3-9 0-14 1 6 4 9 9 10 5 0 9-1 12-4 1 3 1 7-1 10ZM18 48c0-9 4-15 11-16 5-1 9 2 12 7-6-2-10-1-13 3-3 4-4 8-2 13-3-1-6-4-8-7Z" fill="#f4f4f4"/></svg>'
-      );
-    const now = Date.now();
-    const context = {
-      game: {
-        title: "The First Berserker: Khazan",
-        objectId: "2680010",
-        shop: "steam",
-        iconUrl: null,
-        logoImageUrl: null,
-        heroImageUrl: null,
-        coverImageUrl: null,
-        playTimeInMilliseconds: 7_620_000,
-        sessionStartedAt: now - 3_847_000,
-      },
-      user: {
-        displayName: "Kenneth",
-        profileImageUrl: null,
-      },
-      achievements: [
-        {
-          name: "first_step",
-          displayName: "A Warrior Reborn",
-          description: "Complete the opening battle.",
-          icon: achievementIcon,
-          icongray: achievementIcon,
-          hidden: false,
-          unlocked: true,
-          unlockTime: now - 3_000_000,
-        },
-        {
-          name: "edge_of_death",
-          displayName: "At Death's Door",
-          description: "Defeat a boss with less than 10% vitality.",
-          icon: achievementIcon,
-          icongray: achievementIcon,
-          hidden: false,
-          missable: true,
-          unlocked: true,
-          unlockTime: now - 600_000,
-        },
-        {
-          name: "mastery",
-          displayName: "Weapon Mastery",
-          description: "Unlock every skill in one weapon tree.",
-          icon: achievementIcon,
-          icongray: achievementIcon,
-          hidden: false,
-          unlocked: false,
-          unlockTime: null,
-        },
-        {
-          name: "secret_ending",
-          displayName: "A Crown in Shadow",
-          description: "Discover the hidden ending.",
-          icon: achievementIcon,
-          icongray: achievementIcon,
-          hidden: true,
-          unlocked: false,
-          unlockTime: null,
-        },
-      ],
-      shortcut: "Shift+F3",
-      controllerShortcut: "Guide",
-      performance: {
-        fps: 117,
-        averageFps: 112,
-        onePercentLow: 88,
-        frameTimeMs: 8.5,
-        updatedAt: now,
-        captureStatus: "capturing",
-        captureMessage: "PresentMon • DXGI • Hardware: Independent Flip",
-      },
-      performancePinned: true,
-      settings: {
-        performanceEnabled: true,
-        performanceRows: {
-          fps: true,
-          averageFps: true,
-          frameTime: true,
-          onePercentLow: true,
-        },
-      },
-    };
-    let recorderState = {
-      status: "buffering",
-      configuration: {
-        enabled: true,
-        resolution: "1080p",
-        fps: 60,
-        qualityPreset: "quality",
-        instantReplayEnabled: true,
-        replayDurationSeconds: 30,
-        captureGameAudio: true,
-        outputDirectory: null,
-      },
-      resolvedOutputDirectory: "C:\\Users\\Player\\Videos\\GameHub",
-      recordingStartedAt: null,
-      bufferedSeconds: 30,
-      captureActive: true,
-      hardwareVideoEncodingAvailable: true,
-      captureDiagnostics: {
-        mimeType: 'video/mp4;codecs="avc1.640034,mp4a.40.2"',
-        outputWidth: 1920,
-        outputHeight: 1080,
-        outputFps: 59.94,
-        encodedFps: 59.7,
-        targetVideoBitrate: 55_987_200,
-        recentEncodedBitrate: 24_600_000,
-        hasAudio: true,
-      },
-      gameTitle: context.game.title,
-      lastSavedClipPath: null,
-      statusMessage: null,
-      errorMessage: null,
-    };
-    const musicTrack = {
-      id: "track-1",
-      title: "Black Sea",
-      artist: "GameHub Mix",
-      album: "Focus Mode",
-      coverArt: null,
-      duration: 236,
-    };
-    const musicState = {
-      queue: [
-        musicTrack,
-        {
-          ...musicTrack,
-          id: "track-2",
-          title: "Ashen Crown",
-          artist: "Night Signal",
-        },
-      ],
-      currentIndex: 0,
-      nowPlaying: musicTrack,
-      state: "paused",
-      shuffle: false,
-      repeat: "none",
-      progressMs: 74_000,
-      durationMs: 236_000,
-      audioUrl: null,
-      audioSource: "youtube",
-      playbackError: null,
-      playbackNotice: null,
-      playbackId: 1,
-      preloadedNextIndex: 1,
-      preloadedAudioUrl: "https://example.invalid/preloaded-track",
-      preloadedAudioSource: "youtube",
-      volume: 0.8,
-      muted: false,
-      seekId: 0,
-    };
-    const spotifyCover =
-      "data:image/svg+xml," +
-      encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1ed760"/><stop offset=".48" stop-color="#163c25"/><stop offset="1" stop-color="#080808"/></linearGradient></defs><rect width="320" height="320" fill="url(#g)"/><circle cx="160" cy="160" r="82" fill="#080808" fill-opacity=".82"/><circle cx="160" cy="160" r="22" fill="#1ed760"/><path d="M64 238c52-31 116-42 192-16" fill="none" stroke="#f4f4f4" stroke-opacity=".8" stroke-width="10" stroke-linecap="round"/></svg>'
-      );
-    const spotifyTrack = {
-      id: "spotify-track-1",
-      uri: "spotify:track:spotify-track-1",
-      type: "track",
-      title: "Nocturne in Black",
-      subtitle: "The GameHub Sessions",
-      description: null,
-      imageUrl: spotifyCover,
-      externalUrl: "https://open.spotify.com/track/spotify-track-1",
-      durationMs: 238_000,
-      itemCount: null,
-      contextUri: "spotify:album:gamehub-sessions",
-      playable: true,
-      explicit: false,
-    };
-    const spotifyPlaylist = {
-      id: "spotify-playlist-1",
-      uri: "spotify:playlist:spotify-playlist-1",
-      type: "playlist",
-      title: "Boss Fight Focus",
-      subtitle: "Kenneth",
-      description: "High-intensity tracks for the next encounter.",
-      imageUrl: spotifyCover,
-      externalUrl: "https://open.spotify.com/playlist/spotify-playlist-1",
-      durationMs: null,
-      itemCount: 42,
-      contextUri: "spotify:playlist:spotify-playlist-1",
-      playable: true,
-      explicit: false,
-    };
-    const spotifyEpisode = {
-      id: "spotify-episode-1",
-      uri: "spotify:episode:spotify-episode-1",
-      type: "episode",
-      title: "How combat systems create flow",
-      subtitle: "Game Design Radio",
-      description: "A conversation about responsive action games.",
-      imageUrl: spotifyCover,
-      externalUrl: "https://open.spotify.com/episode/spotify-episode-1",
-      durationMs: 2_760_000,
-      itemCount: null,
-      contextUri: "spotify:show:game-design-radio",
-      playable: true,
-      explicit: false,
-    };
-    const spotifyPage = (items) => ({
-      items,
-      total: items.length,
-      limit: 50,
-      offset: 0,
-      nextOffset: null,
-    });
-    const spotifyPlayback = {
-      isPlaying: true,
-      progressMs: 96_000,
-      repeatState: "off",
-      shuffleState: false,
-      contextUri: spotifyPlaylist.uri,
-      item: spotifyTrack,
-      device: {
-        id: "spotify-device-1",
-        name: "Kenneth's PC",
-        type: "Computer",
-        isActive: true,
-        isPrivateSession: false,
-        isRestricted: false,
-        volumePercent: 72,
-        supportsVolume: true,
-      },
-      disallows: [],
-    };
-    const spotifyHome = {
-      forYou: [spotifyTrack, spotifyPlaylist],
-      playlists: spotifyPage([spotifyPlaylist]),
-      savedTracks: spotifyPage([spotifyTrack]),
-      savedShows: spotifyPage([]),
-      savedEpisodes: spotifyPage([spotifyEpisode]),
-      topTracks: spotifyPage([spotifyTrack]),
-      recentTracks: spotifyPage([spotifyTrack]),
-    };
-    let userPreferences = {
-      language: "en",
-      themeMode: "dark",
-      musicProvider: "spotify",
-    };
-
-    const listeners = () => () => undefined;
-    const overlayListeners = new Map();
-    const subscribeOverlay = (channel) => (callback) => {
-      const callbacks = overlayListeners.get(channel) ?? new Set();
-      callbacks.add(callback);
-      overlayListeners.set(channel, callbacks);
-      return () => callbacks.delete(callback);
-    };
-    window.__emitOverlayEvent = (channel, ...args) => {
-      for (const callback of overlayListeners.get(channel) ?? []) {
-        callback(...args);
-      }
-    };
-    window.__overlayContextDelayMs = 0;
-    window.__overlayRendererReadyCount = 0;
-    const api = {
-      platform: "win32",
-      isWayland: false,
-      getVersion: async () => "1.1.20",
-      isStaging: async () => false,
-      updateUserPreferences: async (preferences) => {
-        userPreferences = { ...userPreferences, ...preferences };
-        if (preferences.gameRecorderReplayDurationSeconds) {
-          recorderState = {
-            ...recorderState,
-            configuration: {
-              ...recorderState.configuration,
-              replayDurationSeconds:
-                preferences.gameRecorderReplayDurationSeconds,
-            },
-          };
-        }
-      },
-      onCustomThemeUpdated: listeners,
-      onUserPreferencesUpdated: listeners,
-      leveldb: {
-        get: async (key) =>
-          key === "userPreferences" ? userPreferences : null,
-        put: async () => undefined,
-        del: async () => undefined,
-        clear: async () => undefined,
-        values: async () => [],
-        iterator: async () => [],
-      },
-      getLibrary: async () => [],
-      getOverlayContext: async () => {
-        if (window.__overlayContextDelayMs) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, window.__overlayContextDelayMs)
-          );
-        }
-        return context;
-      },
-      overlayRendererReady: async () => {
-        window.__overlayRendererReadyCount += 1;
-      },
-      getOverlayNote: async () =>
-        "Boss phase two: dodge inward, then punish the overhead swing.",
-      saveOverlayNote: async () => undefined,
-      closeHydraOverlay: async () => undefined,
-      setOverlayPerformancePinned: async () => undefined,
-      onOverlayMode: subscribeOverlay("mode"),
-      onOverlayShown: subscribeOverlay("shown"),
-      onOverlayPerformance: listeners,
-      onOverlayPerformancePin: listeners,
-      onOverlayGamepadAction: (callback) => {
-        window.__emitOverlayGamepad = callback;
-        return () => {
-          delete window.__emitOverlayGamepad;
-        };
-      },
-      getActiveGameProcessState: async () => ({
-        status: "running",
-        shop: "steam",
-        objectId: context.game.objectId,
-        gameTitle: context.game.title,
-        rootPid: 8420,
-        processCount: 2,
-        canPause: true,
-        canResume: false,
-        canClose: true,
-        message: null,
-        updatedAt: Date.now(),
-      }),
-      onGameProcessControlState: listeners,
-      pauseActiveGame: async () => undefined,
-      resumeActiveGame: async () => undefined,
-      closeActiveGame: async () => undefined,
-      gameRecorderGetState: async () => recorderState,
-      gameRecorderStart: async () => ({
-        ...recorderState,
-        status: "recording",
-        recordingStartedAt: Date.now(),
-      }),
-      gameRecorderStop: async () => ({
-        ok: true,
-        path: "C:\\Users\\Player\\Videos\\GameHub\\recording.webm",
-        error: null,
-      }),
-      gameRecorderSaveReplay: async () => ({
-        ok: true,
-        path: "C:\\Users\\Player\\Videos\\GameHub\\replay.webm",
-        error: null,
-      }),
-      gameRecorderOpenOutputDirectory: async () => undefined,
-      onGameRecorderState: listeners,
-      musicGetState: async () => musicState,
-      onMusicState: listeners,
-      musicGetPlaylists: async () => [],
-      musicSearch: async () => [],
-      musicRefreshCurrent: async () => undefined,
-      musicSetVolume: async () => undefined,
-      musicSeek: async () => undefined,
-      spotifyGetStatus: async () => ({
-        configured: true,
+      const qaGamepad = {
+        id: "GameHub Playwright standard controller",
+        index: 0,
         connected: true,
-        redirectUri: "http://127.0.0.1/callback",
-        scopes: [],
-        secureStorage: "available",
-        account: {
-          id: "spotify-account-1",
+        mapping: "standard",
+        timestamp: 0,
+        axes: [0, 0, 0, 0],
+        buttons: Array.from({ length: 17 }, () => ({
+          pressed: false,
+          touched: false,
+          value: 0,
+        })),
+        vibrationActuator: null,
+      };
+      window.__qaGamepad = qaGamepad;
+      window.__qaGamepadPollCount = 0;
+      window.__setQaGamepadButton = (index, pressed) => {
+        qaGamepad.buttons[index] = {
+          pressed,
+          touched: pressed,
+          value: pressed ? 1 : 0,
+        };
+        qaGamepad.timestamp = performance.now();
+      };
+      window.__setQaGamepadAxis = (index, value) => {
+        qaGamepad.axes[index] = value;
+        qaGamepad.timestamp = performance.now();
+      };
+      Object.defineProperty(navigator, "getGamepads", {
+        configurable: true,
+        value: () => {
+          window.__qaGamepadPollCount += 1;
+          return [qaGamepad, null, null, null];
+        },
+      });
+      const achievementIcon =
+        "data:image/svg+xml," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#171717"/><path d="M20 16h24v8c0 9-5 15-12 18-7-3-12-9-12-18v-8Zm12 26v7m-9 0h18" fill="none" stroke="#f4f4f4" stroke-width="4" stroke-linecap="round"/></svg>'
+        );
+      const discordIcon =
+        "data:image/svg+xml," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#5865f2"/><path d="M20 20c8-4 16-4 24 0 4 6 6 13 5 21-4 4-8 6-12 7l-3-4c2 0 4-1 6-2-6 3-12 3-18 0 2 1 4 2 6 2l-3 4c-4-1-8-3-12-7-1-8 1-15 5-21Z" fill="#fff"/><circle cx="25" cy="33" r="3" fill="#5865f2"/><circle cx="39" cy="33" r="3" fill="#5865f2"/></svg>'
+        );
+      const obsIcon =
+        "data:image/svg+xml," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#161616"/><circle cx="32" cy="32" r="22" fill="none" stroke="#f4f4f4" stroke-width="3"/><path d="M31 11c8 5 11 11 8 18-2 5-7 7-13 6 5-4 7-8 5-13-2-4-5-7-9-8 3-2 6-3 9-3Zm19 28c-8 4-15 4-20-2-4-4-3-9 0-14 1 6 4 9 9 10 5 0 9-1 12-4 1 3 1 7-1 10ZM18 48c0-9 4-15 11-16 5-1 9 2 12 7-6-2-10-1-13 3-3 4-4 8-2 13-3-1-6-4-8-7Z" fill="#f4f4f4"/></svg>'
+        );
+      const now = Date.now();
+      const context = {
+        game: {
+          title: "The First Berserker: Khazan",
+          objectId: "2680010",
+          shop: "steam",
+          iconUrl: null,
+          logoImageUrl: null,
+          heroImageUrl: null,
+          coverImageUrl: null,
+          playTimeInMilliseconds: 7_620_000,
+          sessionStartedAt: now - 3_847_000,
+        },
+        user: {
           displayName: "Kenneth",
-          imageUrl: null,
-          externalUrl: "https://open.spotify.com/user/spotify-account-1",
+          profileImageUrl: null,
         },
-        authorizedAt: Date.now() - 86_400_000,
-        reauthorizationAt: Date.now() + 150 * 86_400_000,
-        needsReauth: false,
-        lastError: null,
-      }),
-      spotifyGetPlayback: async () => ({
-        ok: true,
-        data: spotifyPlayback,
-      }),
-      spotifyGetDevices: async () => ({
-        ok: true,
-        data: [spotifyPlayback.device],
-      }),
-      spotifyGetQueue: async () => ({
-        ok: true,
-        data: {
-          currentlyPlaying: spotifyTrack,
-          queue: Array.from({ length: 18 }, (_, index) => ({
-            ...(index % 3 === 0 ? spotifyEpisode : spotifyTrack),
-            uri: `${index % 3 === 0 ? spotifyEpisode.uri : spotifyTrack.uri}:qa-${index}`,
-            title: `${index % 3 === 0 ? spotifyEpisode.title : spotifyTrack.title} ${index + 1}`,
-          })),
+        achievements: [
+          {
+            name: "first_step",
+            displayName: "A Warrior Reborn",
+            description: "Complete the opening battle.",
+            icon: achievementIcon,
+            icongray: achievementIcon,
+            hidden: false,
+            unlocked: true,
+            unlockTime: now - 3_000_000,
+          },
+          {
+            name: "edge_of_death",
+            displayName: "At Death's Door",
+            description: "Defeat a boss with less than 10% vitality.",
+            icon: achievementIcon,
+            icongray: achievementIcon,
+            hidden: false,
+            missable: true,
+            unlocked: true,
+            unlockTime: now - 600_000,
+          },
+          {
+            name: "mastery",
+            displayName: "Weapon Mastery",
+            description: "Unlock every skill in one weapon tree.",
+            icon: achievementIcon,
+            icongray: achievementIcon,
+            hidden: false,
+            unlocked: false,
+            unlockTime: null,
+          },
+          {
+            name: "secret_ending",
+            displayName: "A Crown in Shadow",
+            description: "Discover the hidden ending.",
+            icon: achievementIcon,
+            icongray: achievementIcon,
+            hidden: true,
+            unlocked: false,
+            unlockTime: null,
+          },
+        ],
+        shortcut: "Shift+F3",
+        controllerShortcut: "Guide",
+        performance: {
+          fps: 117,
+          averageFps: 112,
+          onePercentLow: 88,
+          frameTimeMs: 8.5,
+          updatedAt: now,
+          captureStatus: "capturing",
+          captureMessage: "PresentMon • DXGI • Hardware: Independent Flip",
         },
-      }),
-      spotifyGetHome: async () => ({
-        ok: true,
-        data: spotifyHome,
-      }),
-      spotifySearch: async () => ({
-        ok: true,
-        data: {
-          tracks: spotifyPage([spotifyTrack]),
-          playlists: spotifyPage([spotifyPlaylist]),
-          shows: spotifyPage([]),
-          episodes: spotifyPage([spotifyEpisode]),
+        performancePinned: true,
+        settings: {
+          performanceEnabled: true,
+          performanceRows: {
+            fps: true,
+            averageFps: true,
+            frameTime: true,
+            onePercentLow: true,
+          },
         },
-      }),
-      spotifyGetPlaylistItems: async () => ({
-        ok: true,
-        data: spotifyPage([spotifyTrack, spotifyEpisode]),
-      }),
-      spotifyPlaybackCommand: async () => ({ ok: true, data: true }),
-      spotifySetSaved: async () => ({ ok: true, data: true }),
-      spotifyLibraryContains: async (uris) => ({
-        ok: true,
-        data: Object.fromEntries(uris.map((uri) => [uri, true])),
-      }),
-      spotifyOpenSettings: async () => undefined,
-      spotifyControl: async () => true,
-      spotifyGetNowPlaying: async () => ({
+      };
+      let recorderState = {
+        status: "buffering",
+        configuration: {
+          enabled: true,
+          resolution: "1080p",
+          fps: 60,
+          qualityPreset: "quality",
+          instantReplayEnabled: true,
+          replayDurationSeconds: 30,
+          captureGameAudio: platform === "win32",
+          outputDirectory: null,
+        },
+        resolvedOutputDirectory:
+          platform === "win32"
+            ? "C:\\Users\\Player\\Videos\\GameHub"
+            : "/home/player/Videos/GameHub",
+        desktopCaptureAvailable: true,
+        systemAudioCaptureAvailable: platform === "win32",
+        recordingStartedAt: null,
+        bufferedSeconds: 30,
+        captureActive: true,
+        hardwareVideoEncodingAvailable: true,
+        captureDiagnostics: {
+          mimeType: 'video/mp4;codecs="avc1.640034,mp4a.40.2"',
+          outputWidth: 1920,
+          outputHeight: 1080,
+          outputFps: 59.94,
+          encodedFps: 59.7,
+          targetVideoBitrate: 55_987_200,
+          recentEncodedBitrate: 24_600_000,
+          hasAudio: platform === "win32",
+        },
+        gameTitle: context.game.title,
+        lastSavedClipPath: null,
+        statusMessage: null,
+        errorMessage: null,
+      };
+      const musicTrack = {
+        id: "track-1",
+        title: "Black Sea",
+        artist: "GameHub Mix",
+        album: "Focus Mode",
+        coverArt: null,
+        duration: 236,
+      };
+      const musicState = {
+        queue: [
+          musicTrack,
+          {
+            ...musicTrack,
+            id: "track-2",
+            title: "Ashen Crown",
+            artist: "Night Signal",
+          },
+        ],
+        currentIndex: 0,
+        nowPlaying: musicTrack,
+        state: "paused",
+        shuffle: false,
+        repeat: "none",
+        progressMs: 74_000,
+        durationMs: 236_000,
+        audioUrl: null,
+        audioSource: "youtube",
+        playbackError: null,
+        playbackNotice: null,
+        playbackId: 1,
+        preloadedNextIndex: 1,
+        preloadedAudioUrl: "https://example.invalid/preloaded-track",
+        preloadedAudioSource: "youtube",
+        volume: 0.8,
+        muted: false,
+        seekId: 0,
+      };
+      const spotifyCover =
+        "data:image/svg+xml," +
+        encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1ed760"/><stop offset=".48" stop-color="#163c25"/><stop offset="1" stop-color="#080808"/></linearGradient></defs><rect width="320" height="320" fill="url(#g)"/><circle cx="160" cy="160" r="82" fill="#080808" fill-opacity=".82"/><circle cx="160" cy="160" r="22" fill="#1ed760"/><path d="M64 238c52-31 116-42 192-16" fill="none" stroke="#f4f4f4" stroke-opacity=".8" stroke-width="10" stroke-linecap="round"/></svg>'
+        );
+      const spotifyTrack = {
+        id: "spotify-track-1",
+        uri: "spotify:track:spotify-track-1",
+        type: "track",
+        title: "Nocturne in Black",
+        subtitle: "The GameHub Sessions",
+        description: null,
+        imageUrl: spotifyCover,
+        externalUrl: "https://open.spotify.com/track/spotify-track-1",
+        durationMs: 238_000,
+        itemCount: null,
+        contextUri: "spotify:album:gamehub-sessions",
+        playable: true,
+        explicit: false,
+      };
+      const spotifyPlaylist = {
+        id: "spotify-playlist-1",
+        uri: "spotify:playlist:spotify-playlist-1",
+        type: "playlist",
+        title: "Boss Fight Focus",
+        subtitle: "Kenneth",
+        description: "High-intensity tracks for the next encounter.",
+        imageUrl: spotifyCover,
+        externalUrl: "https://open.spotify.com/playlist/spotify-playlist-1",
+        durationMs: null,
+        itemCount: 42,
+        contextUri: "spotify:playlist:spotify-playlist-1",
+        playable: true,
+        explicit: false,
+      };
+      const spotifyEpisode = {
+        id: "spotify-episode-1",
+        uri: "spotify:episode:spotify-episode-1",
+        type: "episode",
+        title: "How combat systems create flow",
+        subtitle: "Game Design Radio",
+        description: "A conversation about responsive action games.",
+        imageUrl: spotifyCover,
+        externalUrl: "https://open.spotify.com/episode/spotify-episode-1",
+        durationMs: 2_760_000,
+        itemCount: null,
+        contextUri: "spotify:show:game-design-radio",
+        playable: true,
+        explicit: false,
+      };
+      const spotifyPage = (items) => ({
+        items,
+        total: items.length,
+        limit: 50,
+        offset: 0,
+        nextOffset: null,
+      });
+      const spotifyPlayback = {
         isPlaying: true,
-        trackName: spotifyTrack.title,
-        artists: spotifyTrack.subtitle,
-        albumName: "GameHub Sessions",
-        albumImageUrl: spotifyCover,
-        durationMs: spotifyTrack.durationMs,
-        progressMs: spotifyPlayback.progressMs,
-        trackUrl: spotifyTrack.externalUrl,
-        deviceName: spotifyPlayback.device.name,
-        contentType: "track",
-        uri: spotifyTrack.uri,
-      }),
-      openExternal: async () => undefined,
-      getPinnedApps: async () => [
-        {
-          name: "Discord",
-          path: "C:\\Apps\\Discord.exe",
-          iconUrl: discordIcon,
+        progressMs: 96_000,
+        repeatState: "off",
+        shuffleState: false,
+        contextUri: spotifyPlaylist.uri,
+        item: spotifyTrack,
+        device: {
+          id: "spotify-device-1",
+          name: "Kenneth's PC",
+          type: "Computer",
+          isActive: true,
+          isPrivateSession: false,
+          isRestricted: false,
+          volumePercent: 72,
+          supportsVolume: true,
         },
-        {
-          name: "OBS Studio",
-          path: "C:\\Apps\\obs64.exe",
-          iconUrl: obsIcon,
+        disallows: [],
+      };
+      const spotifyHome = {
+        forYou: [spotifyTrack, spotifyPlaylist],
+        playlists: spotifyPage([spotifyPlaylist]),
+        savedTracks: spotifyPage([spotifyTrack]),
+        savedShows: spotifyPage([]),
+        savedEpisodes: spotifyPage([spotifyEpisode]),
+        topTracks: spotifyPage([spotifyTrack]),
+        recentTracks: spotifyPage([spotifyTrack]),
+      };
+      let userPreferences = {
+        language: "en",
+        themeMode: "dark",
+        musicProvider: "spotify",
+      };
+
+      const listeners = () => () => undefined;
+      const overlayListeners = new Map();
+      const subscribeOverlay = (channel) => (callback) => {
+        const callbacks = overlayListeners.get(channel) ?? new Set();
+        callbacks.add(callback);
+        overlayListeners.set(channel, callbacks);
+        return () => callbacks.delete(callback);
+      };
+      window.__emitOverlayEvent = (channel, ...args) => {
+        for (const callback of overlayListeners.get(channel) ?? []) {
+          callback(...args);
+        }
+      };
+      window.__overlayContextDelayMs = 0;
+      window.__overlayRendererReadyCount = 0;
+      const api = {
+        platform,
+        isWayland: false,
+        getVersion: async () => "1.1.20",
+        isStaging: async () => false,
+        updateUserPreferences: async (preferences) => {
+          userPreferences = { ...userPreferences, ...preferences };
+          if (preferences.gameRecorderReplayDurationSeconds) {
+            recorderState = {
+              ...recorderState,
+              configuration: {
+                ...recorderState.configuration,
+                replayDurationSeconds:
+                  preferences.gameRecorderReplayDurationSeconds,
+              },
+            };
+          }
         },
-      ],
-      pickPinnedApp: async () => [],
-      removePinnedApp: async () => [],
-      launchPinnedApp: async () => "",
-      getAudioSessions: async () => [
-        {
-          pid: 8120,
-          name: "Khazan",
-          volume: 0.82,
-          muted: false,
+        onCustomThemeUpdated: listeners,
+        onUserPreferencesUpdated: listeners,
+        leveldb: {
+          get: async (key) =>
+            key === "userPreferences" ? userPreferences : null,
+          put: async () => undefined,
+          del: async () => undefined,
+          clear: async () => undefined,
+          values: async () => [],
+          iterator: async () => [],
         },
-        {
-          pid: 2240,
-          name: "GameHub Music",
-          volume: 0.58,
-          muted: false,
+        getLibrary: async () => [],
+        getOverlayContext: async () => {
+          if (window.__overlayContextDelayMs) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, window.__overlayContextDelayMs)
+            );
+          }
+          return context;
         },
-      ],
-      setAudioSessionVolume: async () => true,
-      setAudioSessionMute: async () => true,
-      hydraApi: {
-        get: async () => ({
-          friends: [
-            {
-              id: "friend-1",
-              displayName: "Nova",
-              profileImageUrl: null,
-              isOnline: true,
-              currentGame: { title: "Hades II" },
-            },
-            {
-              id: "friend-2",
-              displayName: "Valkyrie",
-              profileImageUrl: null,
-              isOnline: true,
-              currentGame: null,
-            },
-            {
-              id: "friend-3",
-              displayName: "Ash",
-              profileImageUrl: null,
-              isOnline: false,
-              currentGame: null,
-            },
-          ],
+        overlayRendererReady: async () => {
+          window.__overlayRendererReadyCount += 1;
+        },
+        getOverlayNote: async () =>
+          "Boss phase two: dodge inward, then punish the overhead swing.",
+        saveOverlayNote: async () => undefined,
+        closeHydraOverlay: async () => undefined,
+        setOverlayPerformancePinned: async () => undefined,
+        onOverlayMode: subscribeOverlay("mode"),
+        onOverlayShown: subscribeOverlay("shown"),
+        onOverlayPerformance: listeners,
+        onOverlayPerformancePin: listeners,
+        onOverlayGamepadAction: (callback) => {
+          window.__emitOverlayGamepad = callback;
+          return () => {
+            delete window.__emitOverlayGamepad;
+          };
+        },
+        getActiveGameProcessState: async () => ({
+          status: "running",
+          shop: "steam",
+          objectId: context.game.objectId,
+          gameTitle: context.game.title,
+          rootPid: 8420,
+          processCount: 2,
+          canPause: true,
+          canResume: false,
+          canClose: true,
+          message: null,
+          updatedAt: Date.now(),
         }),
-      },
-    };
-    Object.defineProperty(window, "electron", {
-      configurable: false,
-      value: new Proxy(api, {
-        get(target, property) {
-          if (property in target) return target[property];
-          if (String(property).startsWith("on")) return listeners;
-          return async () => undefined;
+        onGameProcessControlState: listeners,
+        pauseActiveGame: async () => undefined,
+        resumeActiveGame: async () => undefined,
+        closeActiveGame: async () => undefined,
+        gameRecorderGetState: async () => recorderState,
+        gameRecorderStart: async () => ({
+          ...recorderState,
+          status: "recording",
+          recordingStartedAt: Date.now(),
+        }),
+        gameRecorderStop: async () => ({
+          ok: true,
+          path: "C:\\Users\\Player\\Videos\\GameHub\\recording.webm",
+          error: null,
+        }),
+        gameRecorderSaveReplay: async () => ({
+          ok: true,
+          path: "C:\\Users\\Player\\Videos\\GameHub\\replay.webm",
+          error: null,
+        }),
+        gameRecorderOpenOutputDirectory: async () => undefined,
+        onGameRecorderState: listeners,
+        musicGetState: async () => musicState,
+        onMusicState: listeners,
+        musicGetPlaylists: async () => [],
+        musicSearch: async () => [],
+        musicRefreshCurrent: async () => undefined,
+        musicSetVolume: async () => undefined,
+        musicSeek: async () => undefined,
+        spotifyGetStatus: async () => ({
+          configured: true,
+          connected: true,
+          redirectUri: "http://127.0.0.1/callback",
+          scopes: [],
+          secureStorage: "available",
+          account: {
+            id: "spotify-account-1",
+            displayName: "Kenneth",
+            imageUrl: null,
+            externalUrl: "https://open.spotify.com/user/spotify-account-1",
+          },
+          authorizedAt: Date.now() - 86_400_000,
+          reauthorizationAt: Date.now() + 150 * 86_400_000,
+          needsReauth: false,
+          lastError: null,
+        }),
+        spotifyGetPlayback: async () => ({
+          ok: true,
+          data: spotifyPlayback,
+        }),
+        spotifyGetDevices: async () => ({
+          ok: true,
+          data: [spotifyPlayback.device],
+        }),
+        spotifyGetQueue: async () => ({
+          ok: true,
+          data: {
+            currentlyPlaying: spotifyTrack,
+            queue: Array.from({ length: 18 }, (_, index) => ({
+              ...(index % 3 === 0 ? spotifyEpisode : spotifyTrack),
+              uri: `${index % 3 === 0 ? spotifyEpisode.uri : spotifyTrack.uri}:qa-${index}`,
+              title: `${index % 3 === 0 ? spotifyEpisode.title : spotifyTrack.title} ${index + 1}`,
+            })),
+          },
+        }),
+        spotifyGetHome: async () => ({
+          ok: true,
+          data: spotifyHome,
+        }),
+        spotifySearch: async () => ({
+          ok: true,
+          data: {
+            tracks: spotifyPage([spotifyTrack]),
+            playlists: spotifyPage([spotifyPlaylist]),
+            shows: spotifyPage([]),
+            episodes: spotifyPage([spotifyEpisode]),
+          },
+        }),
+        spotifyGetPlaylistItems: async () => ({
+          ok: true,
+          data: spotifyPage([spotifyTrack, spotifyEpisode]),
+        }),
+        spotifyPlaybackCommand: async () => ({ ok: true, data: true }),
+        spotifySetSaved: async () => ({ ok: true, data: true }),
+        spotifyLibraryContains: async (uris) => ({
+          ok: true,
+          data: Object.fromEntries(uris.map((uri) => [uri, true])),
+        }),
+        spotifyOpenSettings: async () => undefined,
+        spotifyControl: async () => true,
+        spotifyGetNowPlaying: async () => ({
+          isPlaying: true,
+          trackName: spotifyTrack.title,
+          artists: spotifyTrack.subtitle,
+          albumName: "GameHub Sessions",
+          albumImageUrl: spotifyCover,
+          durationMs: spotifyTrack.durationMs,
+          progressMs: spotifyPlayback.progressMs,
+          trackUrl: spotifyTrack.externalUrl,
+          deviceName: spotifyPlayback.device.name,
+          contentType: "track",
+          uri: spotifyTrack.uri,
+        }),
+        openExternal: async () => undefined,
+        getPinnedApps: async () => [
+          {
+            name: "Discord",
+            path: "C:\\Apps\\Discord.exe",
+            iconUrl: discordIcon,
+          },
+          {
+            name: "OBS Studio",
+            path: "C:\\Apps\\obs64.exe",
+            iconUrl: obsIcon,
+          },
+        ],
+        pickPinnedApp: async () => [],
+        removePinnedApp: async () => [],
+        launchPinnedApp: async () => "",
+        getAudioSessions: async () => [
+          {
+            pid: 8120,
+            name: "Khazan",
+            volume: 0.82,
+            muted: false,
+          },
+          {
+            pid: 2240,
+            name: "GameHub Music",
+            volume: 0.58,
+            muted: false,
+          },
+        ],
+        setAudioSessionVolume: async () => true,
+        setAudioSessionMute: async () => true,
+        hydraApi: {
+          get: async () => ({
+            friends: [
+              {
+                id: "friend-1",
+                displayName: "Nova",
+                profileImageUrl: null,
+                isOnline: true,
+                currentGame: { title: "Hades II" },
+              },
+              {
+                id: "friend-2",
+                displayName: "Valkyrie",
+                profileImageUrl: null,
+                isOnline: true,
+                currentGame: null,
+              },
+              {
+                id: "friend-3",
+                displayName: "Ash",
+                profileImageUrl: null,
+                isOnline: false,
+                currentGame: null,
+              },
+            ],
+          }),
         },
-      }),
-    });
-  });
+      };
+      Object.defineProperty(window, "electron", {
+        configurable: false,
+        value: new Proxy(api, {
+          get(target, property) {
+            if (property in target) return target[property];
+            if (String(property).startsWith("on")) return listeners;
+            return async () => undefined;
+          },
+        }),
+      });
+    },
+    { platform: process.platform }
+  );
 
   const rendererUrl = pathToFileURL(renderer).href;
   await page.goto(`${rendererUrl}#/`);
@@ -2154,6 +2169,8 @@ try {
   console.log(
     JSON.stringify(
       {
+        runtimePlatform: process.platform,
+        dataSource: "synthetic overlay fixtures; controller inputs simulated",
         output,
         firstOpenOutput,
         secondOpenOutput,

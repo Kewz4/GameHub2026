@@ -1,15 +1,22 @@
-import path from "node:path";
+import {
+  isProcessPathWithinDirectory,
+  isWindowsProcessPath,
+  normalizeProcessPath,
+  processPathBasename,
+  processPathDirectory,
+} from "./process-path-identity";
 
 export type OverlayProcess = {
   exe: string | null;
   pid: number;
   name: string;
   startTime?: number;
+  cwd?: string | null;
 };
 
 export type OverlayProcessCandidate = OverlayProcess & { score: number };
 
-const normalizePath = (value: string) => path.normalize(value).toLowerCase();
+const normalizePath = normalizeProcessPath;
 const PROTOCOL_PATH = /^[a-z][a-z\d+.-]*:\/\//i;
 const UNREAL_SHIPPING_EXECUTABLE = /(?:^|-)(?:win64|wingdk)-shipping\.exe$/i;
 const LAUNCH_HELPER_EXECUTABLE =
@@ -26,7 +33,7 @@ export const isOverlayLaunchHelperProcess = (
   process: Pick<OverlayProcess, "exe" | "name">
 ) =>
   LAUNCH_HELPER_EXECUTABLE.test(
-    path.basename(process.exe ? normalizePath(process.exe) : process.name)
+    processPathBasename(process.exe ? normalizePath(process.exe) : process.name)
   );
 
 /**
@@ -91,15 +98,7 @@ export const selectUnambiguousOverlayRenderProcess = <
   return current ?? null;
 };
 
-const isWithinDirectory = (candidate: string, directory: string) => {
-  const relative = path.relative(directory, candidate);
-  return (
-    relative.length > 0 &&
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  );
-};
+const isWithinDirectory = isProcessPathWithinDirectory;
 
 export const rankOverlayGameProcesses = (
   processes: OverlayProcess[],
@@ -114,7 +113,7 @@ export const rankOverlayGameProcesses = (
   const installRoots = [
     ...new Set(
       normalizedTargets
-        .map((target) => path.dirname(target))
+        .map((target) => processPathDirectory(target))
         .filter((directory) => directory && directory !== ".")
     ),
   ];
@@ -122,22 +121,50 @@ export const rankOverlayGameProcesses = (
   return processes
     .map((candidate): OverlayProcessCandidate | null => {
       const executable = candidate.exe ? normalizePath(candidate.exe) : null;
-      const processName = candidate.name.toLowerCase();
       let score = 0;
 
       for (const [index, target] of normalizedTargets.entries()) {
-        const targetName = path.basename(target);
+        const targetName = processPathBasename(target);
+        const windowsTarget = isWindowsProcessPath(target);
+        const processName = windowsTarget
+          ? candidate.name.toLowerCase()
+          : candidate.name;
+        const targetDirectory = processPathDirectory(target);
+        const candidateIsInTargetDirectory = Boolean(
+          executable && isWithinDirectory(executable, targetDirectory)
+        );
+        const wineNameMatch =
+          !windowsTarget &&
+          /\.exe$/i.test(targetName) &&
+          candidate.name.toLowerCase() === targetName.toLowerCase() &&
+          Boolean(
+            executable &&
+              /^wine(?:64)?(?:-preloader)?$/i.test(
+                processPathBasename(executable)
+              )
+          ) &&
+          Boolean(
+            candidate.cwd && normalizePath(candidate.cwd) === targetDirectory
+          );
         if (executable === target) {
           score = Math.max(score, 10_000 - index * 10);
-        } else if (executable && path.basename(executable) === targetName) {
+        } else if (
+          executable &&
+          processPathBasename(executable) === targetName &&
+          (windowsTarget || candidateIsInTargetDirectory)
+        ) {
           score = Math.max(score, 2_000 - index * 10);
-        } else if (processName === targetName) {
+        } else if (
+          (processName === targetName &&
+            (windowsTarget || candidateIsInTargetDirectory)) ||
+          wineNameMatch
+        ) {
           score = Math.max(score, 1_500 - index * 10);
         }
       }
 
       if (score === 0 && executable) {
-        const executableName = path.basename(executable);
+        const executableName = processPathBasename(executable);
         const isSameInstall =
           !AUXILIARY_EXECUTABLE.test(executableName) &&
           installRoots.some((directory) =>
@@ -165,7 +192,7 @@ export const rankOverlayGameProcesses = (
         score += FOREGROUND_PROCESS_BONUS;
         if (
           executable &&
-          UNREAL_SHIPPING_EXECUTABLE.test(path.basename(executable))
+          UNREAL_SHIPPING_EXECUTABLE.test(processPathBasename(executable))
         ) {
           score += UNREAL_FOREGROUND_RENDER_BONUS;
         }

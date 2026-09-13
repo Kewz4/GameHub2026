@@ -15,6 +15,7 @@ const withTempDir = async (
 ) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "dolphin-gci-"));
   try {
+    await fs.writeFile(path.join(directory, "portable.txt"), "");
     await run(directory);
   } finally {
     await fs.rm(directory, { recursive: true, force: true });

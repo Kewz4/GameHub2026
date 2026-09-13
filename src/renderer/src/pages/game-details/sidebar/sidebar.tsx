@@ -1,4 +1,5 @@
 import { lazy, Suspense, useContext, useEffect, useState } from "react";
+import { selectGameRequirements } from "@renderer/helpers/game-requirements";
 import type {
   EmulatorSystem,
   HowLongToBeatCategory,
@@ -135,9 +136,19 @@ export function Sidebar({
   const { t } = useTranslation("game_details");
   const { formatDateTime } = useDate();
   const { numberFormatter } = useFormat();
-  const hasRequirements = hasRenderableRequirements(
-    shopDetails?.pc_requirements
+  const { requirements, source: requirementsSource } = selectGameRequirements(
+    shopDetails,
+    window.electron.platform
   );
+  const hasRequirements = hasRenderableRequirements(requirements);
+  const requirementsTitle =
+    window.electron.platform === "linux"
+      ? requirementsSource === "linux"
+        ? t("linux_requirements", { defaultValue: "Linux requirements" })
+        : t("windows_requirements_proton", {
+            defaultValue: "Windows requirements (Proton)",
+          })
+      : t("requirements");
 
   useEffect(() => {
     // Console/emulated games aren't in the Hydra backend, so resolve HLTB live
@@ -338,7 +349,7 @@ export function Sidebar({
       {/* PC system requirements are meaningless for emulated/console games —
           the requirement is the emulator's, not the game's. */}
       {shop !== "launchbox" && hasRequirements && (
-        <SidebarSection title={t("requirements")}>
+        <SidebarSection title={requirementsTitle}>
           <div className="requirement__button-container">
             <Button
               className="requirement__button"
@@ -363,7 +374,7 @@ export function Sidebar({
             className="requirement__details"
             dangerouslySetInnerHTML={{
               __html:
-                shopDetails?.pc_requirements?.[activeRequirement] ??
+                requirements[activeRequirement] ??
                 t(`no_${activeRequirement}_requirements`, {
                   gameTitle,
                 }),

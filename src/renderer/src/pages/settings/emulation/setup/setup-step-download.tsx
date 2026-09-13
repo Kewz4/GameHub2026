@@ -14,7 +14,7 @@ import type {
 } from "@types";
 
 import { EMULATOR_ICONS } from "../emulator-icons";
-import { KNOWN_BINARY_LABELS } from "../known-binary-labels";
+import { getKnownBinaryLabel } from "../known-binary-labels";
 import { ArchIcon, FlatpakIcon, GitHubIcon } from "./brand-icons";
 import { firmwarePageUrl } from "./ps-firmware-url";
 
@@ -57,7 +57,9 @@ const extractSemver = (value: string | null): string | undefined =>
 
 export function SetupStepDownload({ binary }: Readonly<Props>) {
   const { t, i18n } = useTranslation("settings");
-  const name = KNOWN_BINARY_LABELS[binary];
+  const name = getKnownBinaryLabel(binary);
+  const isLinuxRetroArch =
+    window.electron.platform === "linux" && binary === "ralibretro";
   const icon = EMULATOR_ICONS[binary];
 
   const [options, setOptions] = useState<ResolvedInstallOption[] | null>(null);
@@ -131,9 +133,11 @@ export function SetupStepDownload({ binary }: Readonly<Props>) {
       return t("setup_install_downloading", { percent });
     }
     if (current.phase === "extracting") return t("setup_install_extracting");
-    if (current.phase === "running") return t("setup_install_running");
+    if (current.phase === "running")
+      return current.reason ?? t("setup_install_running");
     if (current.phase === "done") return t("setup_install_done");
-    if (current.phase === "error") return t("setup_install_failed");
+    if (current.phase === "error")
+      return current.reason ?? t("setup_install_failed");
     return t("setup_install_with_hydra_desc", { name });
   };
 
@@ -211,12 +215,26 @@ export function SetupStepDownload({ binary }: Readonly<Props>) {
       <button
         type="button"
         className="setup-modal__website-link"
-        onClick={() => openUrl(OFFICIAL_WEBSITES[binary])}
+        onClick={() =>
+          openUrl(
+            isLinuxRetroArch
+              ? "https://www.retroarch.com/?page=platforms"
+              : OFFICIAL_WEBSITES[binary]
+          )
+        }
       >
         <GlobeIcon size={14} />
         <span>{t("setup_official_website")}</span>
         <LinkExternalIcon size={12} />
       </button>
+
+      {isLinuxRetroArch && (
+        <p className="setup-modal__body-intro">
+          Use native RetroArch or its Flatpak package. Install the libretro
+          cores for your consoles and any required BIOS files, then detect the
+          emulator again.
+        </p>
+      )}
 
       <div className="setup-modal__download-grid">
         {options === null && (
@@ -251,7 +269,9 @@ export function SetupStepDownload({ binary }: Readonly<Props>) {
                 </div>
                 <div className="setup-modal__download-card-main">
                   <span className="setup-modal__download-card-title">
-                    {t("setup_install_with_hydra")}
+                    {option.kind === "linux-flatpak"
+                      ? "Install RetroArch + cores (user Flatpak)"
+                      : t("setup_install_with_hydra")}
                     {label ? ` · ${label}` : ""}
                     {option.channel !== "prerelease" && (
                       <span className="setup-modal__recommended-pill">
@@ -320,14 +340,23 @@ export function SetupStepDownload({ binary }: Readonly<Props>) {
         <button
           type="button"
           className="setup-modal__download-card setup-modal__download-card--guide"
-          data-open-article={ARTICLE_KEYS[binary]}
+          data-open-article={
+            isLinuxRetroArch ? undefined : ARTICLE_KEYS[binary]
+          }
+          onClick={
+            isLinuxRetroArch
+              ? () => openUrl("https://docs.libretro.com/guides/install-gnu/")
+              : undefined
+          }
         >
           <div className="setup-modal__download-card-badge">
             <BookIcon size={20} />
           </div>
           <div className="setup-modal__download-card-main">
             <span className="setup-modal__download-card-title">
-              {t("setup_install_guide_workwonders")}
+              {isLinuxRetroArch
+                ? "Read RetroArch's Linux guide"
+                : t("setup_install_guide_workwonders")}
             </span>
             <span className="setup-modal__download-card-desc">
               {t("setup_install_guide_desc", { name })}

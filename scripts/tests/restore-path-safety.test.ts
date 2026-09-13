@@ -48,56 +48,104 @@ test("allows descendants of one title folder but rejects a sibling title", (t) =
   );
 });
 
-test("matches Ludusavi globs without crossing into a sibling mapping", () => {
-  const allowed = [
-    String.raw`C:\Users\Player\AppData\Local\Game\Profiles\*\Saves`,
-  ];
+test("matches Ludusavi globs without crossing into a sibling mapping", (t) => {
+  const root = fixture(t);
+  const allowed = [path.join(root, "Game", "Profiles", "*", "Saves")];
   assert.equal(
     isSaveRestoreDestinationAllowed(
-      String.raw`C:\Users\Player\AppData\Local\Game\Profiles\42\Saves\slot.dat`,
+      path.join(root, "Game", "Profiles", "42", "Saves", "slot.dat"),
       allowed
     ),
     true
   );
   assert.equal(
     isSaveRestoreDestinationAllowed(
-      String.raw`C:\Users\Player\AppData\Local\Game\Profiles\42\Other\slot.dat`,
+      path.join(root, "Game", "Profiles", "42", "Other", "slot.dat"),
       allowed
     ),
     false
   );
 });
 
-test("rebases a same-drive portable save onto the unique current mapper root", () => {
+test("rebases a Windows portable save onto the unique current mapper root", (t) => {
+  const root = fixture(t);
+  const source = path.join(root, "staging", "slot1.sav");
+  const current = path.join(root, "SteamLibrary", "Hades II", "Saves");
   const jobs = planSaveRestoreJobs(
     [
       {
-        sourcePath: String.raw`C:\staging\slot1.sav`,
-        destinationPath: String.raw`C:\Games\Hades II\Saves\slot1.sav`,
+        sourcePath: source,
+        destinationPath: path.win32.join(
+          "C:/",
+          "Games",
+          "Hades II",
+          "Saves",
+          "slot1.sav"
+        ),
       },
     ],
-    [String.raw`C:\SteamLibrary\Hades II\Saves`]
+    [current]
   );
-
   assert.deepEqual(jobs, [
     {
-      sourcePath: String.raw`C:\staging\slot1.sav`,
-      destinationPath: String.raw`C:\SteamLibrary\Hades II\Saves\slot1.sav`,
+      sourcePath: source,
+      destinationPath: path.join(current, "slot1.sav"),
       rebased: true,
     },
   ]);
 });
 
-test("rebases a moved portable profile through the current Ludusavi glob", () => {
-  const destination = rebaseSaveRestoreDestination(
-    String.raw`C:\Games\Portable\Profiles\42\Saves\slot.dat`,
-    [String.raw`C:\SteamLibrary\Portable\Profiles\*\Saves`]
-  );
+test("rebases a moved portable profile through the current Ludusavi glob", (t) => {
+  const root = fixture(t);
+  const current = path.join(root, "SteamLibrary", "Portable", "Profiles");
   assert.equal(
-    destination,
-    String.raw`C:\SteamLibrary\Portable\Profiles\42\Saves\slot.dat`
+    rebaseSaveRestoreDestination(
+      path.win32.join(
+        "C:/",
+        "Games",
+        "Portable",
+        "Profiles",
+        "42",
+        "Saves",
+        "slot.dat"
+      ),
+      [path.join(current, "*", "Saves")]
+    ),
+    path.join(current, "42", "Saves", "slot.dat")
   );
 });
+
+test(
+  "Linux restore keeps case and literal backslashes distinct and rejects foreign roots",
+  { skip: process.platform === "win32" },
+  (t) => {
+    const root = fixture(t);
+    assert.equal(
+      isSaveRestoreDestinationAllowed(path.join(root, "Game", "save.dat"), [
+        path.join(root, "game"),
+      ]),
+      false
+    );
+    const disguised = path.join(
+      root,
+      "Profiles",
+      ["42", "Saves", "slot.dat"].join(String.fromCharCode(92))
+    );
+    assert.equal(
+      isSaveRestoreDestinationAllowed(disguised, [
+        path.join(root, "Profiles", "*", "Saves"),
+      ]),
+      false
+    );
+    const foreign = path.win32.join("C:/", "Games", "Game", "Saves");
+    assert.equal(
+      isSaveRestoreDestinationAllowed(path.win32.join(foreign, "slot.sav"), [
+        foreign,
+      ]),
+      false
+    );
+  }
+);
 
 test("rejects the entire plan when one artifact path is contaminated", () => {
   assert.throws(

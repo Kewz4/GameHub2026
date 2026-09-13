@@ -31,6 +31,14 @@ describe("production overlay runtime policy", () => {
     }
     assert.match(manager, /resolveWindowModeEligibility/u);
     assert.match(manager, /overlay-unavailable/u);
+    assert.doesNotMatch(
+      manager,
+      /(?:NativeAddon|GameProcessControlManager)\.(?:controlProcessTree|pause)\(/u
+    );
+    const linuxControllers = read(
+      "native/hydra-native/src/linux_native/controllers.rs"
+    );
+    assert.doesNotMatch(linuxControllers, /EVIOCGRAB|uinput|libevdev_grab/u);
   });
 
   it("does not build or package the historical DLL and broker", () => {

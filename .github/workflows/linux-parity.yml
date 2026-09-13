@@ -39,7 +39,7 @@ jobs:
       - name: Install Linux runtime and test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev libudev-dev libx11-dev libxi-dev libxtst-dev libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libatk-bridge2.0-0 xvfb openbox xcompmgr dbus-x11 libsdl2-2.0-0 pulseaudio-utils pulseaudio ffmpeg desktop-file-utils
+          sudo apt-get install -y pkg-config libssl-dev libudev-dev libx11-dev libxi-dev libxtst-dev libgtk-3-0 libnss3 libasound2t64 libgbm1 libxss1 libatk-bridge2.0-0 xvfb openbox xcompmgr x11-utils dbus-x11 libsdl2-2.0-0 pulseaudio-utils pulseaudio ffmpeg desktop-file-utils
       - uses: actions/cache@v4
         with:
           path: |
@@ -52,18 +52,37 @@ jobs:
         run: |
           yarn --frozen-lockfile
           pip install -r requirements.txt
+      - name: Configure Electron's Linux sandbox helper in this isolated runner
+        run: |
+          test -f node_modules/electron/dist/chrome-sandbox
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - name: Test native Linux backend
         run: cargo test --manifest-path native/hydra-native/Cargo.toml --lib --bins
+      - name: Verify bundled launcher executables
+        if: ${{ !cancelled() }}
+        run: |
+          node scripts/download-launcher-binaries.cjs linux
+          binaries/bin/legendary --version
+          binaries/bin/gogdl --version
       - name: Test complete shared suite on Linux
         if: ${{ !cancelled() }}
         run: xvfb-run -a node scripts/run-parity-tests.cjs
       - name: Build production renderers and backend
         if: ${{ !cancelled() }}
         run: yarn build
+      - name: Verify real X11 native, recording and renderer paths
+        if: ${{ !cancelled() }}
+        env:
+          GAMEHUB_LINUX_NATIVE_QA: "1"
+        run: xvfb-run -a -s "-screen 0 3840x2160x24" dbus-run-session -- bash scripts/qa-linux-session.sh
       - name: Store test evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: linux-parity-evidence
-          path: artifacts/linux-parity/**
+          path: |
+            artifacts/linux-parity/**
+            artifacts/qa-big-picture-settings/**
+            artifacts/overlay/**
           retention-days: 5

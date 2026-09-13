@@ -12,12 +12,21 @@ function getBackendLabel(
 ) {
   return backend === "native_ffmpeg_nvenc"
     ? "Native NVIDIA NVENC"
-    : backend === "media_recorder"
-      ? "Compatibility capture"
-      : null;
+    : backend === "native_ffmpeg_x11"
+      ? "Native X11 H.264"
+      : backend === "media_recorder"
+        ? "Compatibility capture"
+        : null;
 }
 
-function getCapabilityDetail(state: GameRecorderState) {
+function getCapabilityDetail(state: GameRecorderState, platform: string) {
+  if (platform === "linux") {
+    return state.nativeVideoEncodingAvailable === true
+      ? "Machine check: native X11 H.264 capture is available; the active game backend is verified after a completed segment."
+      : state.nativeVideoEncodingAvailable === false
+        ? "Machine check: native X11 H.264 capture is unavailable; compatibility capture is used only when a safe game-window source is available."
+        : "Checking the Linux capture backend.";
+  }
   if (state.nativeVideoEncodingAvailable === true) {
     return "Machine check: bundled FFmpeg can initialize NVIDIA NVENC; the active game backend is verified after a completed segment.";
   }
@@ -41,7 +50,8 @@ const STATUS_TITLES: Record<GameRecorderState["status"], string> = {
 };
 
 export function getGameRecorderStatusPresentation(
-  state: GameRecorderState | null
+  state: GameRecorderState | null,
+  platform = "win32"
 ): GameRecorderStatusPresentation {
   if (!state) {
     return {
@@ -73,7 +83,10 @@ export function getGameRecorderStatusPresentation(
         .join(" · ")
     : null;
   const activeBackend = getBackendLabel(state.activeCaptureBackend);
-  let diagnosticsText = getCapabilityDetail(state);
+  let diagnosticsText: string | null =
+    state.status === "unavailable"
+      ? null
+      : getCapabilityDetail(state, platform);
 
   if (
     state.captureActive &&

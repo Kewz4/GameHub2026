@@ -11,6 +11,7 @@ export interface OverlayWindowModeEvidence {
   targetWindowId: string | null;
   exactWindowSourceAvailable: boolean;
   displaySized: boolean;
+  desktopCompositionAvailable?: boolean;
 }
 
 /**
@@ -26,9 +27,13 @@ export const evaluateOverlayWindowMode = ({
   targetWindowId,
   exactWindowSourceAvailable,
   displaySized,
+  desktopCompositionAvailable,
 }: OverlayWindowModeEvidence): OverlayWindowModeEligibility => {
   if (platform !== "win32" && platform !== "linux") {
     return { allowed: true, mode: "windowed-or-borderless" };
+  }
+  if (platform === "linux" && desktopCompositionAvailable !== true) {
+    return { allowed: false, reason: "window-compositor-unavailable" };
   }
 
   if (targetWindowId && exactWindowSourceAvailable) {
@@ -37,9 +42,10 @@ export const evaluateOverlayWindowMode = ({
 
   return {
     allowed: false,
-    reason: platform === "win32" && displaySized
-      ? "exclusive-fullscreen"
-      : "window-compositor-unavailable",
+    reason:
+      platform === "win32" && displaySized
+        ? "exclusive-fullscreen"
+        : "window-compositor-unavailable",
   };
 };
 

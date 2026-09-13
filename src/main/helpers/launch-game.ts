@@ -19,6 +19,7 @@ import { parseExecutablePath } from "../events/helpers/parse-executable-path";
 import { isGamemodeAvailable } from "./is-gamemode-available";
 import { isMangohudAvailable } from "./is-mangohud-available";
 import { resolveLaunchCommand } from "./resolve-launch-command";
+import { wineLaunchEnvironment } from "./wine-launch-environment";
 import {
   buildWindowsBatchCommand,
   isWindowsBatchFile,
@@ -156,7 +157,8 @@ const launchWithWine = async (
   executablePath: string,
   launchOptions?: string | null,
   useMangohud = false,
-  useGamemode = false
+  useGamemode = false,
+  winePrefixPath: string | null = null
 ): Promise<boolean> => {
   const workingDirectory = path.dirname(executablePath);
   const resolvedLaunchCommand = resolveLaunchCommand({
@@ -178,10 +180,11 @@ const launchWithWine = async (
         detached: true,
         stdio: "ignore",
         cwd: workingDirectory,
-        env: {
-          ...process.env,
-          ...resolvedLaunchCommand.env,
-        },
+        env: wineLaunchEnvironment(
+          process.env,
+          resolvedLaunchCommand.env,
+          winePrefixPath
+        ),
       }
     );
 
@@ -299,7 +302,8 @@ const launchWindowsBinaryOnLinux = async (
     parsedPath,
     launchOptions,
     useMangohud,
-    useGamemode
+    useGamemode,
+    winePrefixPath
   );
 
   if (launchedWithWine) {
@@ -457,6 +461,10 @@ export const launchGame = async (
       );
 
       if (launched) return null;
+      throw new NativeGameLaunchError(
+        parsedPath,
+        "Neither Proton nor Wine could launch this Windows game. Install a compatible runner and verify the selected prefix."
+      );
     }
 
     const pid = await launchNatively(

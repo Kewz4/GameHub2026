@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   resolveEmulatorRestorePatterns,
   resolveEmulatorSaveLocation,
+  resolveEmulatorSramAliasPolicy,
   systemForGame,
 } from "@main/services/emulators/emulator-save-dirs";
 import { resolveSaveBackupPlan } from "@main/services/save-backup-plan";
@@ -43,7 +44,8 @@ export const getGameHubSavePlanRules = async (
   objectId: string,
   shop: GameShop,
   pathContext: CloudSavePathContext,
-  remoteFiles?: readonly EmulatorRemoteFile[]
+  remoteFiles?: readonly EmulatorRemoteFile[],
+  identityFiles?: readonly EmulatorRemoteFile[]
 ): Promise<CloudSaveRule[]> => {
   const manual = await Ludusavi.getManualCustomGame(shop, objectId);
   const emulatorSystem = manual?.files.length
@@ -103,5 +105,12 @@ export const getGameHubSavePlanRules = async (
     backupPaths: plan.status === "ready" ? plan.paths : [],
     restorePatterns,
     remoteFiles,
+    identityFiles,
+    sramAlias: await resolveEmulatorSramAliasPolicy(
+      location,
+      shop,
+      objectId,
+      pathContext.platform
+    ),
   });
 };

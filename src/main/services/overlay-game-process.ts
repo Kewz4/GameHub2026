@@ -40,7 +40,7 @@ export const findOverlayGameProcesses = async (
     preferredPid,
     lockPreferredPid
   );
-  if (process.platform !== "win32") return ranked;
+  if (!["win32", "linux"].includes(process.platform)) return ranked;
   const visiblePids = new Set(
     ranked
       .filter((candidate) =>

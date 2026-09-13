@@ -122,17 +122,29 @@ window.setup.onDone((data) => {
       : "GameHub is installed.";
     doneMessage.textContent = data.handedOff
       ? "Your download is ready. Follow the GameHub installer's steps to finish setup."
-      : "GameHub is ready. You can open it from your applications menu.";
+      : data.desktopEntryCreated === false
+        ? "GameHub is ready. Use Launch GameHub below or open the installed AppImage."
+        : "GameHub is ready. You can open it from your applications menu.";
     document.getElementById("btn-launch").style.display = "none";
+    if (data.executable && !data.handedOff) {
+      launchPath = data.executable;
+      document.getElementById("btn-launch").style.display = "inline-block";
+    }
   } else if (data.mode === "portable") {
     doneTitle.textContent = "Ready to play.";
     doneMessage.textContent = "GameHub is ready in: " + data.path;
-    if (window.setup.platform === "win32") {
+    if (data.executable) {
+      launchPath = data.executable;
+    } else if (window.setup.platform === "win32") {
       launchPath = data.path + "\\GameHub.exe";
     } else {
       launchPath = data.path + "/GameHub.AppImage";
     }
     document.getElementById("btn-launch").style.display = "inline-block";
+  }
+
+  if (Array.isArray(data.warnings) && data.warnings.length) {
+    doneMessage.textContent += " " + data.warnings.join(" ");
   }
 
   showScreen("done");

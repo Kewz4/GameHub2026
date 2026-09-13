@@ -12,11 +12,14 @@ import { getCloudSaveGameContext } from "./cloud-save-game-context";
 import { getUsableCloudSaveCustomPathBindings } from "./custom-path-overlap";
 import { customPathToCloudSaveRule } from "./custom-path-store";
 import { getGameHubSavePlanRules } from "./gamehub-save-plan-rules";
+import type { EmulatorRemoteFile } from "./gamehub-emulator-rules";
+import { canonicalizeEmulatorSnapshot } from "./canonicalize-emulator-snapshot";
 import { getAuthoritativeCloudSaveCustomPathRawPaths } from "./authoritative-custom-paths";
 
 interface BuildLocalGameSnapshotContextOptions {
   scanStoreUserContext?: StoreUserContext;
   customPathBindings?: CloudSaveCustomPathBindings;
+  identityFiles?: readonly EmulatorRemoteFile[];
 }
 
 export const buildLocalGameSnapshotContext = async (
@@ -34,7 +37,13 @@ export const buildLocalGameSnapshotContext = async (
     options.customPathBindings
       ? Promise.resolve(options.customPathBindings)
       : getUsableCloudSaveCustomPathBindings(objectId, shop, context),
-    getGameHubSavePlanRules(objectId, shop, context.pathContext),
+    getGameHubSavePlanRules(
+      objectId,
+      shop,
+      context.pathContext,
+      undefined,
+      options.identityFiles
+    ),
   ]);
   const customRules = customPathBindings.ready.map(customPathToCloudSaveRule);
   const customPathRawPaths = getAuthoritativeCloudSaveCustomPathRawPaths(
@@ -56,7 +65,9 @@ export const buildLocalGameSnapshotContext = async (
       remoteId: game?.remoteId ?? undefined,
       userDataPath: SystemPath.getPath("userData"),
       hashCache,
-      extraRules,
+      extraRules: extraRules.map(
+        ({ canonicalRelativePath: _, ...rule }) => rule
+      ),
     });
 
   if (updatedHashCache.length === 0) {
@@ -66,7 +77,12 @@ export const buildLocalGameSnapshotContext = async (
   }
 
   return {
-    ...snapshot,
+    ...canonicalizeEmulatorSnapshot(
+      snapshot,
+      gameHubRules,
+      pathContext.platform,
+      (input) => NativeAddon.buildSnapshotAggregateHash(input)
+    ),
     environmentId,
     pathContext,
     customPathRawPaths,

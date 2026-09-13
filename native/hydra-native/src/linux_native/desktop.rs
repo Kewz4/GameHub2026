@@ -185,9 +185,15 @@ pub fn foreground_pid() -> u32 {
         .unwrap_or(0)
 }
 pub fn has_compositor() -> bool {
-    with_desktop(|desktop| desktop.connection.get_selection_owner(desktop.compositor)
-        .ok().and_then(|request| request.reply().ok()).is_some_and(|reply| reply.owner != 0))
-        .unwrap_or(false)
+    with_desktop(|desktop| {
+        desktop
+            .connection
+            .get_selection_owner(desktop.compositor)
+            .ok()
+            .and_then(|request| request.reply().ok())
+            .is_some_and(|reply| reply.owner != 0)
+    })
+    .unwrap_or(false)
 }
 pub fn bounds(pid: u32) -> Option<NativeWindowBounds> {
     with_desktop(|desktop| desktop.bounds(pid)).flatten()
